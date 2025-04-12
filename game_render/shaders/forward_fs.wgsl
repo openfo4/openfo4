@@ -202,6 +202,7 @@ fn get_normal(in: FragInput) -> vec3<f32> {
     let tbn = mat3x3(tangent_norm, bitangent, normal_norm);
 
     var normal = textureSample(normal_texture, linear_sampler, in.uv).rgb;
+    normal.g = 1.0 - normal.g;
     normal = normalize(normal * 2.0 - 1.0);
     normal = normalize(tbn * normal);
 
@@ -209,9 +210,9 @@ fn get_normal(in: FragInput) -> vec3<f32> {
     // Without this step the lighting direction will be inversed
     // for back-facing triangles.
     if in.front_facing {
-        return normal;
-    } else {
         return -normal;
+    } else {
+        return normal;
     }
 }
 
