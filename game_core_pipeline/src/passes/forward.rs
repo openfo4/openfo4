@@ -26,9 +26,8 @@ use parking_lot::{Mutex, RwLock};
 use crate::camera::CameraUniform;
 use crate::entities::{CameraId, SceneId};
 
-use super::{DEPTH_FORMAT, HDR_FORMAT, State};
+use super::{DEPTH_FORMAT, HDR_FORMAT, MeshStateImpl, State};
 
-const VS_SHADER: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/shaders/forward_vs.slang");
 const FS_SHADER: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/shaders/forward_frag.slang");
 
 const MS_SHADER: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/shaders/forward_mesh.slang");
@@ -208,38 +207,43 @@ impl ForwardPass {
                 ],
             });
 
-        let instance_buffer = state.mesh.instances.buffer(ctx.queue);
+        let mesh_state = match &mut state.mesh {
+            MeshStateImpl::Mesh(state) => state,
+            _ => unreachable!(),
+        };
+
+        let instance_buffer = mesh_state.instances.buffer(ctx.queue);
 
         let mesh_descriptor = ctx.queue.create_descriptor_set(&DescriptorSetDescriptor {
             layout: &state.mesh_descriptor_layout,
             entries: &[
                 DescriptorSetEntry {
                     binding: 0,
-                    resource: BindingResource::Buffer(state.mesh.positions.buffer()),
+                    resource: BindingResource::Buffer(mesh_state.positions.buffer()),
                 },
                 DescriptorSetEntry {
                     binding: 1,
-                    resource: BindingResource::Buffer(state.mesh.normals.buffer()),
+                    resource: BindingResource::Buffer(mesh_state.normals.buffer()),
                 },
                 DescriptorSetEntry {
                     binding: 2,
-                    resource: BindingResource::Buffer(state.mesh.uvs.buffer()),
+                    resource: BindingResource::Buffer(mesh_state.uvs.buffer()),
                 },
                 DescriptorSetEntry {
                     binding: 3,
-                    resource: BindingResource::Buffer(state.mesh.tangents.buffer()),
+                    resource: BindingResource::Buffer(mesh_state.tangents.buffer()),
                 },
                 DescriptorSetEntry {
                     binding: 4,
-                    resource: BindingResource::Buffer(state.mesh.vertex_indices.buffer()),
+                    resource: BindingResource::Buffer(mesh_state.vertex_indices.buffer()),
                 },
                 DescriptorSetEntry {
                     binding: 5,
-                    resource: BindingResource::Buffer(state.mesh.triangle_indices.buffer()),
+                    resource: BindingResource::Buffer(mesh_state.triangle_indices.buffer()),
                 },
                 DescriptorSetEntry {
                     binding: 6,
-                    resource: BindingResource::Buffer(state.mesh.meshlets.buffer()),
+                    resource: BindingResource::Buffer(mesh_state.meshlets.buffer()),
                 },
                 DescriptorSetEntry {
                     binding: 7,
