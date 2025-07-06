@@ -1,0 +1,10 @@
+[package]
+name = "openfo4_core"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+hecs = "0.10.5"
+
+[lints]
+workspace = true

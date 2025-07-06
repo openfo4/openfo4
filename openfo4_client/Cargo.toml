@@ -1,0 +1,47 @@
+[package]
+name = "openfo4_client"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+game_window = { version = "0.1.0", path = "../game_window" }
+game_render = { version = "0.1.0", path = "../game_render" }
+game_tasks = { version = "0.1.0", path = "../game_tasks" }
+game_core = { version = "0.1.0", path = "../game_core", features = ["tracy"] }
+game_common = { version = "0.1.0", path = "../game_common" }
+game_tracing = { version = "0.1.0", path = "../game_tracing" }
+game_input = { version = "0.1.0", path = "../game_input" }
+game_crash_handler = { version = "0.1.0", path = "../game_crash_handler", features = ["tracy"] }
+game_ui = { version = "0.1.0", path = "../game_ui" }
+game_core_pipeline = { version = "0.1.0", path = "../game_core_pipeline" }
+game_gizmos = { version = "0.1.0", path = "../game_gizmos" }
+
+openfo4_nif = { version = "0.1.0", path = "../openfo4_nif" }
+openfo4_esp = { version = "0.1.0", path = "../openfo4_esp" }
+openfo4_dds = { version = "0.1.0", path = "../openfo4_dds" }
+openfo4_hkx = { version = "0.1.0", path = "../openfo4_hkx" }
+openfo4_core = { version = "0.1.0", path = "../openfo4_core" }
+openfo4_physics = { version = "0.1.0", path = "../openfo4_physics" }
+openfo4_animation = { version = "0.1.0", path = "../openfo4_animation" }
+openfo4_asset = { version = "0.1.0", path = "../openfo4_asset" }
+
+glam = { version = "0.28.0", features = ["bytemuck"] }
+hecs = "0.10.5"
+bytes = "1.10.1"
+tracing = "0.1.41"
+thiserror = "2.0.12"
+crossbeam = "0.8.4"
+async-channel = "2.3.1"
+parking_lot = "0.12.3"
+async-lock = "3.4.0"
+hashbrown = "0.15.4"
+slab = "0.4.10"
+
+# DDS support for image crate
+# See https://github.com/image-rs/image/pull/225
+image = { git = "https://github.com/RunDevelopment/image.git", rev = "637cf43ad5195c1c9085c60102d5dafebb85f843" }
+
+futures-lite = "2.6.0"
+
+[lints]
+workspace = true

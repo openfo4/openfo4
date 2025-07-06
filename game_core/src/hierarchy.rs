@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use game_common::collections::arena::{self, Arena};
 use game_common::collections::vec_map::VecMap;
@@ -16,6 +16,7 @@ pub struct Hierarchy<T> {
     nodes: Arena<T>,
     children: HashMap<Key, Vec<Key>>,
     parents: VecMap<arena::Key, arena::Key>,
+    root: HashSet<Key>,
 }
 
 impl<T> Hierarchy<T> {
@@ -24,6 +25,7 @@ impl<T> Hierarchy<T> {
             nodes: Arena::new(),
             children: HashMap::new(),
             parents: VecMap::new(),
+            root: HashSet::new(),
         }
     }
 
@@ -43,6 +45,8 @@ impl<T> Hierarchy<T> {
 
             self.parents.insert(key.0, parent.0);
             self.children.entry(parent).or_default().push(key);
+        } else {
+            self.root.insert(key);
         }
 
         key
@@ -50,6 +54,7 @@ impl<T> Hierarchy<T> {
 
     pub fn remove(&mut self, key: Key) {
         self.nodes.remove(key.0);
+        self.root.remove(&key);
 
         if let Some(parent) = self.parents.remove(key.0) {
             if let Some(children) = self.children.get_mut(&Key(parent)) {
@@ -91,6 +96,10 @@ impl<T> Hierarchy<T> {
         self.nodes.values()
     }
 
+    pub fn parent_key(&self, key: Key) -> Option<Key> {
+        self.parents.get(key.0).map(|parent| Key(*parent))
+    }
+
     pub fn parent(&self, key: Key) -> Option<&T> {
         let parent = self.parents.get(key.0)?;
         Some(self.nodes.get(*parent).unwrap())
@@ -102,6 +111,10 @@ impl<T> Hierarchy<T> {
             let node = self.nodes.get(key.0).unwrap();
             (*key, node)
         }))
+    }
+
+    pub fn root_keys(&self) -> impl Iterator<Item = Key> + '_ {
+        self.root.iter().copied()
     }
 
     /// Converts a `Hierarchy<T>` into a `Hierarchy<U>`, retaining the existing hierarchy.
@@ -117,6 +130,7 @@ impl<T> Hierarchy<T> {
         let mut nodes = Arena::with_capacity(self.nodes.len());
         let mut parents = VecMap::new();
         let mut children = HashMap::with_capacity(self.children.len());
+        let mut root = HashSet::with_capacity(self.root.len());
 
         let mut old_to_new_keys = HashMap::new();
 
@@ -141,10 +155,16 @@ impl<T> Hierarchy<T> {
             children.insert(Key(*new_key), new_children);
         }
 
+        for old_key in &self.root {
+            let new_key = *old_to_new_keys.get(&old_key.0).unwrap();
+            root.insert(Key(new_key));
+        }
+
         Hierarchy {
             nodes,
             children,
             parents,
+            root,
         }
     }
 }

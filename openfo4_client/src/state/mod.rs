@@ -1,0 +1,293 @@
+pub mod actions;
+pub mod animation;
+pub mod animation_test;
+pub mod asset;
+pub mod esp;
+pub mod level;
+pub mod skinning;
+pub mod spawner;
+pub mod terrain;
+
+use std::f32::consts::PI;
+use std::fs::File;
+use std::io::{BufRead, BufReader};
+use std::sync::Arc;
+
+use asset::{Instance, NifLoader};
+use esp::EspLoader;
+use game_common::components::Transform;
+use game_common::world::control_frame;
+use game_core::time::Time;
+use game_input::keyboard::KeyCode;
+use game_tasks::{Task, TaskPool};
+use game_tracing::trace_span;
+use game_window::events::WindowEvent;
+use glam::{IVec2, Quat, Vec2, Vec3};
+use hecs::{CommandBuffer, With, World};
+use level::{Level, Streamer};
+use openfo4_animation::skeleton::SkeletonInstance;
+use openfo4_asset::AssetLoader;
+use openfo4_core::events::EventBus;
+use openfo4_esp::{EspFile, FormId, RecordChildren};
+use openfo4_physics::PhysicsPipeline;
+
+use crate::assets::nif_v2::NifLoaderContext;
+use crate::assets::{AssetServer, FileLoadContext};
+use crate::cell::CellId;
+use crate::components::{Camera, NiTransform};
+use crate::events::Event;
+use crate::loader::{FileLoader, Reader};
+use crate::shared::SharedState;
+use crate::systems;
+
+// Load cell
+// Instantiate entity
+
+pub struct GameState {
+    pool: Arc<TaskPool>,
+    world: World,
+    tasks: Vec<Task<Vec<Instance>>>,
+    shared: Arc<SharedState>,
+    loader: Arc<FileLoader>,
+    level: Level,
+    physics: PhysicsPipeline,
+    events: Vec<Event>,
+    anim_event: Option<&'static str>,
+    assets: AssetServer,
+    nif_loader: NifLoader,
+    asset_loader: AssetLoader,
+    event_bus: EventBus,
+}
+
+impl GameState {
+    pub fn new(shared: Arc<SharedState>, pool: Arc<TaskPool>) -> Self {
+        let mut file =
+            EspFile::new(BufReader::new(File::open("../../Fallout4.esm").unwrap())).unwrap();
+        let mut loader = EspLoader::new();
+        let file_loader = Arc::new(FileLoader::new([""]));
+        loader.push(file);
+        let mut assets = AssetServer::new(file_loader.clone(), pool.clone());
+        let mut nif_loader = NifLoader::new(file_loader.clone(), shared.clone());
+
+        let asset_loader = AssetLoader::new();
+        asset_loader.register::<crate::assets::nif_v2::NifScene>(NifLoaderContext::new(
+            assets.clone(),
+            shared.entities.clone(),
+        ));
+        asset_loader.register::<crate::assets::texture::FileImageHandle>(FileLoadContext {
+            server: assets.clone(),
+            entities: shared.entities.clone(),
+        });
+        asset_loader.register::<crate::assets::material::BgsmMaterial>(FileLoadContext {
+            server: assets.clone(),
+            entities: shared.entities.clone(),
+        });
+
+        let actions = futures_lite::future::block_on(actions::Actions::load(&loader));
+        dbg!(&actions);
+
+        let level = Level::new(
+            loader,
+            asset_loader.clone(),
+            pool.clone(),
+            file_loader.clone(),
+            shared.clone(),
+        );
+
+        Self {
+            pool,
+            world: World::new(),
+            tasks: Vec::new(),
+            shared,
+            level,
+            loader: file_loader.clone(),
+            physics: PhysicsPipeline::new(),
+            events: Vec::new(),
+            anim_event: None,
+            assets,
+            nif_loader,
+            asset_loader,
+            event_bus: EventBus::new(),
+        }
+    }
+
+    // pub fn load_test(&mut self) {
+    //     let reader = self.loader.open("meshes/ammo/10mm/10mmammo.nif").unwrap();
+    //     let fut = load_nif(self.loader.clone(), self.shared.clone(), reader);
+    //     self.tasks.push(self.pool.spawn(fut));
+    // }
+
+    pub fn init_camera(&mut self) {
+        let distance = std::env::var("OF4_DIST")
+            .map(|v| v.parse().unwrap())
+            .unwrap_or(0);
+
+        // let offset = Vec2::new(2.0, 7.0) * 4096.0 * NIF_TO_METERS;
+        let offset = CellId(IVec2::new(2, 7)).min();
+        let offset = NiTransform::from_translation(offset.extend(0.0));
+        self.world.spawn((
+            Transform::from(offset).looking_at(Vec3::ZERO, Vec3::Y),
+            Camera { fov: PI / 4.0 },
+            Streamer { distance },
+        ));
+    }
+
+    pub fn update(&mut self, time: &Time) {
+        let _span = trace_span!("GameState::update").entered();
+
+        // self.level.update(&mut self.world, &mut self.events);
+
+        self.tasks.retain_mut(|task| {
+            let Some(instances) = task.get_output() else {
+                return true;
+            };
+
+            for instance in instances {
+                self.world.spawn((instance.transform, instance));
+            }
+
+            false
+        });
+
+        animation_test::animation_test(
+            &self.loader,
+            &self.shared,
+            &mut self.world,
+            &self.assets,
+            &self.nif_loader,
+            &self.asset_loader,
+        );
+
+        systems::ni_transform::compute_transform_from_ni_transform(&mut self.world);
+        systems::ni_transform::compute_cell_ids_from_ni_transform(&mut self.world);
+        systems::hierarchy::compute_global_transform(&mut self.world);
+
+        openfo4_animation::systems::drive_animations(&mut self.world, time, self.anim_event.take());
+
+        // self.physics.step(&mut self.world);
+
+        skinning::mesh_skinning(&mut self.world, &self.shared);
+
+        systems::hierarchy::compute_global_transform(&mut self.world);
+    }
+
+    pub fn world(&self) -> &World {
+        &self.world
+    }
+
+    pub fn send_event(&mut self, event: WindowEvent) {
+        match event {
+            WindowEvent::MouseMotion(event) => {
+                for (_, (transform, _)) in self.world.query_mut::<(&mut Transform, &Camera)>() {
+                    let yaw = event.delta.x * 0.001;
+                    let pitch = event.delta.y * 0.001;
+
+                    let q1 = Quat::from_axis_angle(Vec3::Y, -yaw);
+                    let q2 = Quat::from_axis_angle(Vec3::X, -pitch);
+
+                    transform.rotation = q1 * transform.rotation;
+                    transform.rotation = transform.rotation * q2;
+                    transform.rotation = transform.rotation.normalize();
+                }
+            }
+            WindowEvent::KeyboardInput(event) => {
+                let mut direction = Vec3::ZERO;
+                if event.key_code == Some(KeyCode::W) {
+                    direction -= Vec3::Z;
+                }
+                if event.key_code == Some(KeyCode::S) {
+                    direction += Vec3::Z;
+                }
+                if event.key_code == Some(KeyCode::A) {
+                    direction -= Vec3::X;
+                }
+                if event.key_code == Some(KeyCode::D) {
+                    direction += Vec3::X;
+                }
+
+                for (_, (transform, _)) in self.world.query_mut::<(&mut Transform, &Camera)>() {
+                    transform.translation += transform.rotation * direction;
+                }
+
+                if event.key_code == Some(KeyCode::L) && event.state.is_pressed() {
+                    let s: game_render::mesh::Mesh = game_render::shape::Box {
+                        min_x: -30.0,
+                        max_x: 30.0,
+                        min_y: -30.0,
+                        max_y: 30.0,
+                        min_z: -30.0,
+                        max_z: 30.0,
+                    }
+                    .into();
+                    let mesh = openfo4_physics::components::ColliderShape::TriMesh(
+                        openfo4_physics::components::TriMesh::new_convex(
+                            s.positions().to_vec(),
+                            s.indicies().unwrap().into_u32(),
+                        ),
+                    );
+
+                    let mut transform = Transform::default();
+                    for (_, (t, _)) in self.world.query::<(&Transform, &Camera)>().iter() {
+                        transform = *t;
+                        break;
+                    }
+
+                    self.world.spawn((
+                        transform,
+                        openfo4_physics::components::Collider {
+                            friction: 1.0,
+                            restitution: 1.0,
+                            shape: mesh,
+                        },
+                        openfo4_physics::components::RigidBody {
+                            kind: openfo4_physics::components::RigidBodyKind::Dynamic,
+                            linvel: Vec3::ZERO,
+                            angvel: Vec3::ZERO,
+                        },
+                    ));
+                }
+
+                if event.key_code == Some(KeyCode::O) {
+                    // self.anim_event = Some("g_weapForceEquip");
+                    self.anim_event = Some("MoveStart");
+                }
+                if event.key_code == Some(KeyCode::P) {
+                    // self.anim_event = Some("weapUnequip");
+                    self.anim_event = Some("CameraSneakStart");
+                }
+                if event.key_code == Some(KeyCode::I) {
+                    // self.anim_event = Some("attackStart");
+                    self.anim_event = Some("CameraSneakStop");
+                }
+                if event.key_code == Some(KeyCode::U) {
+                    // self.anim_event = Some("attackEnd");
+                    // self.anim_event = Some("moveStartForward");
+                    self.anim_event = Some("CameraMoveStartSlave");
+                }
+                if event.key_code == Some(KeyCode::J) {
+                    // self.anim_event = Some("attackStartAuto");
+                    // self.anim_event = Some("moveStop");
+                    self.anim_event = Some("CameraMoveStopSlave");
+                }
+                if event.key_code == Some(KeyCode::K) {
+                    // self.anim_event = Some("attackRelease");
+                    self.anim_event = Some("speedup");
+                }
+                if event.key_code == Some(KeyCode::L) {
+                    // self.anim_event = Some("PerkCannibalFeed");
+                    self.anim_event = Some("speeddown");
+                }
+                if event.key_code == Some(KeyCode::G) {
+                    self.anim_event = Some("EssentialDownStart");
+                }
+                if event.key_code == Some(KeyCode::H) {
+                    self.anim_event = Some("EssentialDownExit");
+                }
+                if event.key_code == Some(KeyCode::E) {
+                    self.anim_event = Some("dump");
+                }
+            }
+            _ => (),
+        }
+    }
+}

@@ -38,6 +38,16 @@ members = [
     "tools/builder",
     "game_prefab",
     "game_core_pipeline",
+    "openfo4_animation",
+    "openfo4_client",
+    "openfo4_core",
+    "openfo4_dds",
+    "openfo4_esp",
+    "openfo4_esp_derive",
+    "openfo4_hkx",
+    "openfo4_hkx_derive",
+    "openfo4_nif",
+    "openfo4_physics", "openfo4_asset", "openfo4_pex",
 ]
 
 resolver = "2"
@@ -141,6 +151,7 @@ opt-level = 0
 lto = "off"
 debug-assertions = true
 overflow-checks = true
+panic = "abort"
 
 [profile.release]
 debug-assertions = false
@@ -149,3 +160,4 @@ opt-level = 3
 lto = "fat"
 codegen-units = 1
 panic = "abort"
+debug = true
