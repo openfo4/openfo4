@@ -13,7 +13,6 @@ use game_tracing::trace_span;
 use glam::{EulerRot, Quat, UVec2, Vec2, Vec3};
 use hecs::World;
 use openfo4_asset::{AssetLoader, Handle};
-use openfo4_core::events::{ComponentChanged, EventBus};
 use openfo4_core::hierarchy::Children;
 use openfo4_esp::records::{Cell, LandLandTexture, LandTextureAlphaLayerPoint, Quadrant};
 use openfo4_esp::{FormId, RecordChildren, RecordData, RecordKind};

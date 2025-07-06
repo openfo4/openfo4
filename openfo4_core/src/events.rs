@@ -3,11 +3,6 @@ use std::collections::HashMap;
 use std::iter::FusedIterator;
 use std::marker::PhantomData;
 
-<<<<<<< HEAD
-=======
-use hecs::Entity;
-
->>>>>>> openfo4
 #[derive(Debug, Default)]
 pub struct EventBus {
     events: HashMap<TypeId, Vec<Box<dyn Any>>>,

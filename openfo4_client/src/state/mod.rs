@@ -135,7 +135,7 @@ impl GameState {
     pub fn update(&mut self, time: &Time) {
         let _span = trace_span!("GameState::update").entered();
 
-        // self.level.update(&mut self.world, &mut self.events);
+        self.level.update(&mut self.world, &mut self.events);
 
         self.tasks.retain_mut(|task| {
             let Some(instances) = task.get_output() else {
