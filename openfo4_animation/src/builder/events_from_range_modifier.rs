@@ -6,12 +6,13 @@ use openfo4_hkx::behavior::{EventRangeMode, EventsFromRangeModifier};
 
 use crate::builder::{BuildNode, Error, GraphBuilderState, UnknownVariableName};
 use crate::{
-    Node, NodeInner, PerFrameCommands, SendEvent, SetVariableStmt, Statement, Value,
-    ValueExpression, parse_event,
+    Command, Listener, ListenerEvent, Node, NodeInner, SetVariable, Value, ValueExpression,
+    parse_event,
 };
 
 impl BuildNode for EventsFromRangeModifier {
     fn build(&self, state: &mut GraphBuilderState<'_>) -> Result<Option<Node>, Error> {
+        let mut enable = ValueExpression::Const(Value::Bool(self.parent.enable));
         let mut input_value = ValueExpression::Const(Value::F32(self.input_value));
         let mut lower_bound = ValueExpression::Const(Value::F32(self.lower_bound));
 
@@ -22,6 +23,9 @@ impl BuildNode for EventsFromRangeModifier {
                     .unwrap();
 
                 match &*binding.member_path {
+                    "enable" => {
+                        enable = ValueExpression::Variable(variable);
+                    }
                     "inputValue" => {
                         input_value = ValueExpression::Variable(variable);
                     }
@@ -38,7 +42,8 @@ impl BuildNode for EventsFromRangeModifier {
             }
         }
 
-        let mut stmts = Vec::new();
+        let mut listeners = Vec::new();
+        let mut on_update = Vec::new();
 
         for range in &*self.event_ranges.event_data {
             let upper_bound = ValueExpression::Const(Value::F32(range.upper_bound));
@@ -75,36 +80,87 @@ impl BuildNode for EventsFromRangeModifier {
                         )),
                     );
 
-                    stmts.push(Statement::SendEvent(SendEvent {
-                        event,
-                        condition: on_enter_condition.clone(),
-                    }));
-                    stmts.push(Statement::SetVariable(SetVariableStmt {
-                        variable: active,
-                        condition: on_enter_condition,
-                        value: ValueExpression::Const(Value::Bool(true)),
-                    }));
-
                     let on_leave_condition = ValueExpression::CmpEq(
                         Box::new(condition),
                         Box::new(ValueExpression::Const(Value::Bool(false))),
                     );
 
-                    stmts.push(Statement::SetVariable(SetVariableStmt {
-                        variable: active,
-                        condition: on_leave_condition,
-                        value: ValueExpression::Const(Value::Bool(false)),
-                    }));
+                    let commands = vec![
+                        // Equivalent to:
+                        // if enable && !active && condition {
+                        //    send_event(..);
+                        //    active = true;
+                        // }
+                        Command::Conditional(
+                            ValueExpression::And(
+                                Box::new(enable.clone()),
+                                Box::new(on_enter_condition),
+                            ),
+                            vec![
+                                Command::SendEvent(event),
+                                Command::SetVariable(SetVariable {
+                                    variable: active,
+                                    condition: ValueExpression::Const(Value::Bool(true)),
+                                    value: ValueExpression::Const(Value::Bool(true)),
+                                }),
+                            ],
+                        ),
+                        // Equivalent to:
+                        // if (active && !condition) || !enable {
+                        //     active = false;
+                        // }
+                        // Note that we always want to reset the state if the enable value
+                        // changes to false.
+                        Command::Conditional(
+                            ValueExpression::Or(
+                                Box::new(on_leave_condition),
+                                Box::new(ValueExpression::Not(Box::new(enable.clone()))),
+                            ),
+                            vec![Command::SetVariable(SetVariable {
+                                variable: active,
+                                condition: ValueExpression::Const(Value::Bool(true)),
+                                value: ValueExpression::Const(Value::Bool(false)),
+                            })],
+                        ),
+                    ];
+
+                    if let ValueExpression::Variable(variable) = input_value {
+                        listeners.push(Listener {
+                            event: ListenerEvent::Variable(variable),
+                            reaction: commands.clone(),
+                        });
+                    }
+
+                    if let ValueExpression::Variable(variable) = lower_bound {
+                        listeners.push(Listener {
+                            event: ListenerEvent::Variable(variable),
+                            reaction: commands.clone(),
+                        });
+                    }
+
+                    if let ValueExpression::Variable(variable) = enable {
+                        listeners.push(Listener {
+                            event: ListenerEvent::Variable(variable),
+                            reaction: commands,
+                        });
+                    }
                 }
                 EventRangeMode::WhenInRange => {
-                    stmts.push(Statement::SendEvent(SendEvent { event, condition }));
+                    on_update.push(Command::Conditional(
+                        ValueExpression::And(Box::new(enable.clone()), Box::new(condition)),
+                        vec![Command::SendEvent(event)],
+                    ));
                 }
             }
         }
 
         Ok(Some(Node {
             name: self.parent.node.name.clone(),
-            inner: NodeInner::PerFrameCommands(PerFrameCommands { stmts }),
+            inner: NodeInner::Nop,
+            on_update,
+            on_activate: Vec::new(),
+            on_deactivate: Vec::new(),
+            listeners,
         }))
     }
 }

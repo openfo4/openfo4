@@ -16,9 +16,9 @@ fn main() {
     // let p =
     //     "../../archive/raw/Data/meshes/actors/shared/behaviors/aliensharedcorewrappingbehavior.hkx";
     // let p = "../../archive/raw/Data/meshes/actors/character/behaviors/usespinetrackingfurniturewrappingbehavior.hkx";
-    // let p = "../../archive/raw/Data/meshes/actors/character/behaviors/weaponbehavior.hkx";
+    let p = "../../archive/raw/Data/meshes/actors/character/behaviors/weaponbehavior.hkx";
     // let p = "../../archive/raw/Data/meshes/actors/character/behaviors/mtbehavior.hkx";
-    let p = "../../archive/raw/Data/meshes/actors/character/behaviors/dialoguebehavior.hkx";
+    //let p = "../../archive/raw/Data/meshes/actors/character/behaviors/dialoguebehavior.hkx";
     // let p = "../../archive/raw/Data/meshes/actors/turret/behaviors/turretstandingrootbehavior.hkx";
     // let p = "../../archive/raw/Data/meshes/actors/turret/behaviors/turretsharedbehavior.hkx";
     let x = std::fs::read(p).unwrap();

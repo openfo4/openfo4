@@ -58,6 +58,10 @@ impl BuildNode for LayerGenerator {
             let off_node = state.nodes.insert(Node {
                 name: "".to_owned(),
                 inner: NodeInner::List(Vec::new()),
+                listeners: Vec::new(),
+                on_activate: Vec::new(),
+                on_deactivate: Vec::new(),
+                on_update: Vec::new(),
             });
 
             let states = vec![
@@ -113,6 +117,10 @@ impl BuildNode for LayerGenerator {
                     start_state,
                     state_variable: None,
                 }),
+                listeners: Vec::new(),
+                on_activate: Vec::new(),
+                on_deactivate: Vec::new(),
+                on_update: Vec::new(),
             });
 
             layers.push(state_machine);
@@ -121,6 +129,10 @@ impl BuildNode for LayerGenerator {
         Ok(Some(Node {
             name: self.parent.node.name.clone(),
             inner: NodeInner::List(layers),
+            listeners: Vec::new(),
+            on_activate: Vec::new(),
+            on_deactivate: Vec::new(),
+            on_update: Vec::new(),
         }))
     }
 }

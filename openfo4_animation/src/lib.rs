@@ -652,7 +652,6 @@ impl AnimationGraph {
                     }
                 }
                 NodeInner::Clip(_) => {}
-                NodeInner::SetVariables(_) => {}
                 NodeInner::Blend(node) => {
                     for node in &node.children {
                         let t = graph.add_node(GraphNode {
@@ -666,9 +665,8 @@ impl AnimationGraph {
                     }
                 }
                 NodeInner::VariableChangeTracker(_) => {}
-                NodeInner::PerFrameCommands(_) => {}
                 NodeInner::Timer(_) => {}
-                NodeInner::Listener(_) => {}
+                NodeInner::Nop => {}
             }
         }
 
@@ -774,33 +772,36 @@ pub enum TransitionEffect {
     Blend(Duration),
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct Node {
     pub name: String,
     pub inner: NodeInner,
+    pub on_activate: Vec<Command>,
+    pub on_deactivate: Vec<Command>,
+    pub on_update: Vec<Command>,
+    pub listeners: Vec<Listener>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub enum NodeInner {
+    #[default]
+    Nop,
     /// A list where all nodes are active.
     List(Vec<NodeId>),
     StateMachine(StateMachine),
     Clip(Clip),
-    SetVariables(SetVariables),
     Blend(Blend),
     VariableChangeTracker(VariableChangeTracker),
-    PerFrameCommands(PerFrameCommands),
     Timer(Timer),
-    Listener(Listener),
 }
 
 #[derive(Clone, Debug)]
 pub struct Listener {
     pub event: ListenerEvent,
-    pub reaction: Command,
+    pub reaction: Vec<Command>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub enum ListenerEvent {
     Variable(VariableId),
     Event(i64),
@@ -961,6 +962,8 @@ pub enum ValueExpression {
     CmpGt(Box<ValueExpression>, Box<ValueExpression>),
     CmpGe(Box<ValueExpression>, Box<ValueExpression>),
     And(Box<ValueExpression>, Box<ValueExpression>),
+    Or(Box<ValueExpression>, Box<ValueExpression>),
+    Not(Box<ValueExpression>),
 }
 
 impl ValueExpression {
@@ -1003,6 +1006,12 @@ impl ValueExpression {
                 let rhs = rhs.eval(set).to_bool().unwrap();
                 Value::Bool(lhs && rhs)
             }
+            Self::Or(lhs, rhs) => {
+                let lhs = lhs.eval(set).to_bool().unwrap();
+                let rhs = rhs.eval(set).to_bool().unwrap();
+                Value::Bool(lhs || rhs)
+            }
+            Self::Not(value) => Value::Bool(!value.eval(set).to_bool().unwrap()),
         }
     }
 }
@@ -1061,12 +1070,14 @@ pub enum Command {
     Conditional(ValueExpression, Vec<Command>),
     SetVariable(SetVariable),
     SendEvent(Event),
+    /// Activates the node. Does nothing if the node is already active.
     ActivateNode(NodeId),
+    /// Deactivate the node. Does nothing if the node is already inactive.
     DeactivateNode(NodeId),
 }
 
 impl Command {
-    fn run(&self, variables: &mut VariableSet, events: &mut VecDeque<Event>) {
+    fn run(&self, variables: &mut VariableSet, events: &mut VecDeque<DriverEvent>) {
         match self {
             Self::Conditional(condition, commands) => {
                 if condition.eval(&variables).to_bool() == Some(true) {
@@ -1076,13 +1087,32 @@ impl Command {
                 }
             }
             Self::SetVariable(cmd) => {
-                variables.variables[cmd.variable] = cmd.value.eval(&variables);
+                let old_value = &variables.variables[cmd.variable];
+                let new_value = cmd.value.eval(&variables);
+
+                if old_value != &new_value {
+                    variables.variables[cmd.variable] = cmd.value.eval(&variables);
+                    events.push_back(DriverEvent::VariableChanged(cmd.variable));
+                }
             }
             Self::SendEvent(cmd) => {
-                events.push_back(cmd.clone());
+                events.push_back(DriverEvent::HandleEvent(cmd.clone()));
             }
-            Self::ActivateNode(_) => todo!(),
-            Self::DeactivateNode(_) => todo!(),
+            Self::ActivateNode(id) => {
+                events.push_back(DriverEvent::ActivateNode(*id));
+            }
+            Self::DeactivateNode(id) => {
+                events.push_back(DriverEvent::DeactivateNode(*id));
+            }
         }
     }
+}
+
+#[derive(Clone, Debug)]
+pub enum DriverEvent {
+    UpdateNode(NodeId),
+    HandleEvent(Event),
+    ActivateNode(NodeId),
+    DeactivateNode(NodeId),
+    VariableChanged(VariableId),
 }

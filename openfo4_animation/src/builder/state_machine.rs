@@ -203,6 +203,10 @@ impl BuildNode for openfo4_hkx::behavior::StateMachine {
                 start_state,
                 state_variable,
             }),
+            listeners: Vec::new(),
+            on_activate: Vec::new(),
+            on_deactivate: Vec::new(),
+            on_update: Vec::new(),
         }))
     }
 }
@@ -233,9 +237,6 @@ fn generator_transition(
     // and insert an event that will cause our state to transition forward.
     for node in find_leaf_nodes(&builder_state.nodes, node) {
         match &mut builder_state.nodes[node].inner {
-            // `SetVariables` is a leaf node, however it has no
-            // runtime duration and we cannot insert a trigger.
-            NodeInner::SetVariables(_) => (),
             NodeInner::Clip(clip) => {
                 clip.triggers.push(ClipTrigger {
                     local_time: blend_out,
@@ -310,12 +311,10 @@ fn find_leaf_nodes(nodes: &Slab<Node>, root: NodeId) -> Vec<NodeId> {
 
                 false
             }
-            NodeInner::SetVariables(_) => true,
             NodeInner::Clip(_) => true,
             NodeInner::VariableChangeTracker(_) => true,
-            NodeInner::PerFrameCommands(_) => true,
             NodeInner::Timer(_) => true,
-            NodeInner::Listener(_) => true,
+            NodeInner::Nop => true,
         };
 
         if is_leaf {

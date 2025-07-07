@@ -3,7 +3,7 @@
 use openfo4_hkx::OpaquePtr;
 
 use crate::builder::{BuildNode, Error, GraphBuilderState, UnknownVariableName};
-use crate::{Node, NodeInner, SetVariable, SetVariables, Value, ValueExpression};
+use crate::{Command, Node, NodeInner, SetVariable, Value, ValueExpression};
 
 impl BuildNode for openfo4_hkx::behavior::BSAssignVariablesModifier {
     fn children(&self, _state: &mut GraphBuilderState<'_>) -> Result<Vec<OpaquePtr>, Error> {
@@ -15,6 +15,7 @@ impl BuildNode for openfo4_hkx::behavior::BSAssignVariablesModifier {
             return Ok(None);
         };
 
+        let mut enable = ValueExpression::Const(Value::Bool(self.parent.enable));
         let mut float_variables = [None; 20];
         let mut float_values = [None; 20];
         let mut int_variables = [None; 4];
@@ -26,6 +27,10 @@ impl BuildNode for openfo4_hkx::behavior::BSAssignVariablesModifier {
                 .unwrap();
 
             let slot = match binding.member_path.as_str() {
+                "enable" => {
+                    enable = ValueExpression::Variable(variable);
+                    continue;
+                }
                 "floatVariable1" => &mut float_variables[0],
                 "floatVariable2" => &mut float_variables[1],
                 "floatVariable3" => &mut float_variables[2],
@@ -85,7 +90,7 @@ impl BuildNode for openfo4_hkx::behavior::BSAssignVariablesModifier {
             *slot = Some(variable);
         }
 
-        let mut on_activate = Vec::new();
+        let mut commands = Vec::new();
         for (index, (var, val)) in float_variables.iter().zip(float_values).enumerate() {
             // If no variable binding is set the write is equivalent
             // to a no-op, so we can skip it.
@@ -120,11 +125,11 @@ impl BuildNode for openfo4_hkx::behavior::BSAssignVariablesModifier {
                 },
             };
 
-            on_activate.push(SetVariable {
+            commands.push(Command::SetVariable(SetVariable {
                 variable,
                 condition: ValueExpression::Const(Value::Bool(true)),
                 value,
-            });
+            }));
         }
 
         for (index, (var, val)) in int_variables.iter().zip(int_values).enumerate() {
@@ -145,19 +150,22 @@ impl BuildNode for openfo4_hkx::behavior::BSAssignVariablesModifier {
                 },
             };
 
-            on_activate.push(SetVariable {
+            commands.push(Command::SetVariable(SetVariable {
                 variable,
                 condition: ValueExpression::Const(Value::Bool(true)),
                 value,
-            });
+            }));
         }
+
+        let on_update = vec![Command::Conditional(enable, commands)];
 
         Ok(Some(Node {
             name: format!("[BSAssignVariablesModifier] {}", self.parent.node.name),
-            inner: NodeInner::SetVariables(SetVariables {
-                on_activate,
-                on_deactivate: Vec::new(),
-            }),
+            on_activate: Vec::new(),
+            on_deactivate: Vec::new(),
+            on_update,
+            inner: NodeInner::Nop,
+            listeners: Vec::new(),
         }))
     }
 }

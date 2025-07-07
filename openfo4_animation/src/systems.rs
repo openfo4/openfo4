@@ -39,7 +39,6 @@ pub fn drive_animations(world: &mut World, time: &Time, event: Option<&'static s
             crate::debug::update(&driver);
         } else {
             let var = driver.get_variable_mut("SpeedSmoothed").unwrap();
-            dbg!(&var);
 
             if event == Some("speedup") {
                 *var = Value::F32(var.to_f32().unwrap() + 5.0);

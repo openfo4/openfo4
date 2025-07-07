@@ -59,6 +59,10 @@ impl BuildNode for ManualSelectorGenerator {
             return Ok(Some(Node {
                 name: self.parent.node.name.clone(),
                 inner: NodeInner::List(vec![node]),
+                listeners: Vec::new(),
+                on_activate: Vec::new(),
+                on_deactivate: Vec::new(),
+                on_update: Vec::new(),
             }));
         }
 
@@ -87,6 +91,10 @@ impl BuildNode for ManualSelectorGenerator {
                     start_state: StartState::Expression(start_state),
                     state_variable: None,
                 }),
+                listeners: Vec::new(),
+                on_activate: Vec::new(),
+                on_deactivate: Vec::new(),
+                on_update: Vec::new(),
             }));
         }
 
@@ -130,15 +138,27 @@ impl BuildNode for ManualSelectorGenerator {
                 start_state: StartState::Expression(start_state),
                 state_variable: None,
             }),
+            listeners: Vec::new(),
+            on_activate: Vec::new(),
+            on_deactivate: Vec::new(),
+            on_update: Vec::new(),
         });
         let tracker = state.nodes.insert(Node {
             name: "".to_owned(),
             inner: NodeInner::VariableChangeTracker(VariableChangeTracker { trackers }),
+            listeners: Vec::new(),
+            on_activate: Vec::new(),
+            on_deactivate: Vec::new(),
+            on_update: Vec::new(),
         });
 
         Ok(Some(Node {
             name: self.parent.node.name.clone(),
             inner: NodeInner::List(vec![state_machine, tracker]),
+            listeners: Vec::new(),
+            on_activate: Vec::new(),
+            on_deactivate: Vec::new(),
+            on_update: Vec::new(),
         }))
     }
 }

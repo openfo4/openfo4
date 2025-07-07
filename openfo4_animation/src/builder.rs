@@ -6,6 +6,7 @@ mod bs_is_active_modifier;
 mod bs_modify_once_modifier;
 mod bs_random_alarm_modifier;
 mod bs_timer_modifier;
+mod bsi_state_tagging_generator;
 mod event_driven_modifier;
 mod events_from_range_modifier;
 mod layer_generator;
@@ -32,6 +33,10 @@ use crate::{
 pub enum Error {
     #[error(transparent)]
     UnknownVariableName(UnknownVariableName),
+    #[error("unknown variable id: {0}")]
+    UnknownVariableId(VariableId),
+    #[error("unknown variable id: {0}")]
+    UnknownEventId(i64),
 }
 
 #[derive(Copy, Clone, Debug)]
@@ -227,10 +232,18 @@ impl BuildNode for HkObject {
             Self::BSEventEveryNEventsModifier(node) => Ok(Vec::new()),
             Self::EventsFromRangeModifier(node) => Ok(Vec::new()),
             Self::BSEventOnDeactivateModifier(node) => Ok(Vec::new()),
-            Self::BSiStateTaggingGenerator(node) => Ok(Vec::new()),
+            Self::BSiStateTaggingGenerator(node) => node.children(state),
             Self::BSCyclicBlendTransitionGenerator(node) => Ok(Vec::new()),
             Self::BSTimerModifier(node) => Ok(Vec::new()),
             Self::BSRandomAlarmModifier(node) => node.children(state),
+            Self::BSInterpValueModifier(node) => Ok(Vec::new()),
+            Self::BSEventOnFalseToTrueModifier(node) => Ok(Vec::new()),
+            Self::TwistModifier(node) => Ok(Vec::new()),
+            Self::BSDirectAtCapturePoseModifier(node) => Ok(Vec::new()),
+            Self::ReferencePoseGenerator(node) => Ok(Vec::new()),
+            Self::GetHandleOnBoneModifier(node) => Ok(Vec::new()),
+            Self::HandIkControlsModifier(node) => Ok(Vec::new()),
+            Self::BSRootTwistModifier(node) => Ok(Vec::new()),
             x => todo!("{:?}", x),
             _ => todo!(),
         }
@@ -266,10 +279,18 @@ impl BuildNode for HkObject {
             Self::BSEventEveryNEventsModifier(node) => Ok(None),
             Self::EventsFromRangeModifier(node) => Ok(None),
             Self::BSEventOnDeactivateModifier(node) => Ok(None),
-            Self::BSiStateTaggingGenerator(node) => Ok(None),
+            Self::BSiStateTaggingGenerator(node) => node.build(state),
             Self::BSCyclicBlendTransitionGenerator(node) => Ok(None),
             Self::BSTimerModifier(node) => node.build(state),
             Self::BSRandomAlarmModifier(node) => node.build(state),
+            Self::BSInterpValueModifier(node) => Ok(None),
+            Self::BSEventOnFalseToTrueModifier(node) => Ok(None),
+            Self::TwistModifier(node) => Ok(None),
+            Self::BSDirectAtCapturePoseModifier(node) => Ok(None),
+            Self::ReferencePoseGenerator(node) => Ok(None),
+            Self::GetHandleOnBoneModifier(node) => Ok(None),
+            Self::HandIkControlsModifier(node) => Ok(None),
+            Self::BSRootTwistModifier(node) => Ok(None),
             _ => todo!(),
         }
     }
@@ -294,6 +315,10 @@ impl BuildNode for openfo4_hkx::behavior::ModifierGenerator {
         Ok(Some(Node {
             name: self.parent.node.name.clone(),
             inner: NodeInner::List(list),
+            listeners: Vec::new(),
+            on_activate: Vec::new(),
+            on_deactivate: Vec::new(),
+            on_update: Vec::new(),
         }))
     }
 }
@@ -315,6 +340,10 @@ impl BuildNode for openfo4_hkx::behavior::ModifierList {
         Ok(Some(Node {
             name: self.parent.node.name.clone(),
             inner: NodeInner::List(list),
+            listeners: Vec::new(),
+            on_activate: Vec::new(),
+            on_deactivate: Vec::new(),
+            on_update: Vec::new(),
         }))
     }
 }
@@ -365,6 +394,10 @@ impl BuildNode for openfo4_hkx::behavior::ClipGenerator {
                 looping: matches!(self.mode, PlaybackMode::Looping),
                 speed,
             }),
+            listeners: Vec::new(),
+            on_activate: Vec::new(),
+            on_deactivate: Vec::new(),
+            on_update: Vec::new(),
         }))
     }
 }
@@ -386,6 +419,10 @@ impl BuildNode for BSBehaviorGraphSwapGenerator {
         Ok(Some(Node {
             name: self.parent.node.name.clone(),
             inner: NodeInner::List(nodes),
+            listeners: Vec::new(),
+            on_activate: Vec::new(),
+            on_deactivate: Vec::new(),
+            on_update: Vec::new(),
         }))
     }
 }

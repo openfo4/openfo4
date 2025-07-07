@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -7,8 +7,8 @@ use rand::Rng;
 
 use crate::animation::{AnimationClipFlags, Annotation};
 use crate::{
-    AnimationGraph, AnimationSet, Event, ListenerEvent, Node, NodeId, NodeInner, StartState,
-    Statement, TransitionEffect, Value, VariableSet,
+    AnimationGraph, AnimationSet, DriverEvent, Event, Listener, ListenerEvent, NodeId, NodeInner,
+    StartState, TransitionEffect, Value, VariableSet,
 };
 
 #[derive(Clone, Debug)]
@@ -23,6 +23,7 @@ pub struct AnimationDriver {
     variables: VariableSet,
     update_blend_factors: bool,
     sync_groups: HashMap<NodeId, SyncGroup>,
+    listeners: HashMap<ListenerEvent, HashMap<NodeId, Listener>>,
 }
 
 impl AnimationDriver {
@@ -39,6 +40,7 @@ impl AnimationDriver {
             states: HashMap::new(),
             update_blend_factors: false,
             sync_groups: HashMap::new(),
+            listeners: HashMap::new(),
         }
     }
 
@@ -51,69 +53,300 @@ impl AnimationDriver {
     ) {
         let _span = trace_span!("AnimationDriver::update").entered();
 
-        // let delta = delta.mul_f32(0.1);
-
-        let mut activate_nodes = Vec::new();
-        let mut deactivate_nodes = Vec::new();
         let mut set_blend_factor = VecDeque::new();
+
+        let mut queue = VecDeque::new();
 
         if !self.is_init {
             self.is_init = true;
 
             if let Some(root) = self.graph.root {
-                activate_nodes.push(root);
+                queue.push_back(DriverEvent::ActivateNode(root));
             }
         }
 
-        while let Some(event) = self.events.pop_front() {
-            for (id, state) in &mut self.states {
-                match &self.graph.nodes[*id].inner {
-                    NodeInner::StateMachine(node) => {
-                        let NodeStateInner::StateMachine(sm_state) = &mut state.inner else {
-                            unreachable!();
-                        };
+        for id in self.states.keys() {
+            queue.push_back(DriverEvent::UpdateNode(*id));
+        }
+        for event in self.events.drain(..) {
+            queue.push_back(DriverEvent::HandleEvent(event));
+        }
 
-                        let Some(transition) = node.transitions.iter().find(|transition| {
-                            transition.event_id == event.id
-                                && transition
-                                    .from
-                                    .is_none_or(|from| Some(from) == sm_state.latest_state)
-                        }) else {
-                            continue;
-                        };
-
-                        let from = sm_state.latest_state;
-                        let to = transition.to;
-
-                        // Don't do a transition if the state doesn't change.
-                        if from.unwrap() == to {
-                            // This can only happen if `from` was `None`, since we
-                            // already filter out transitions that are noops.
-                            debug_assert!(transition.from.is_none());
-                            continue;
-                        }
-
-                        sm_state.transitions.push(ActiveTransitionEffect {
-                            is_init: false,
-                            time: Duration::ZERO,
-                            effect: transition.effect.clone(),
-                            to_state: to,
-                        });
-
-                        sm_state.latest_state = Some(to);
+        while let Some(event) = queue.pop_front() {
+            match event {
+                DriverEvent::ActivateNode(id) => {
+                    let node = &self.graph.nodes[id];
+                    for cmd in &node.on_activate {
+                        cmd.run(&mut self.variables, &mut queue);
                     }
-                    NodeInner::List(_) => (),
-                    NodeInner::Clip(_) => (),
-                    NodeInner::SetVariables(_) => (),
-                    NodeInner::Blend(_) => (),
-                    NodeInner::VariableChangeTracker(_) => (),
-                    NodeInner::PerFrameCommands(_) => (),
-                    NodeInner::Timer(_) => (),
-                    NodeInner::Listener(listener) => {
-                        if let ListenerEvent::Event(e) = listener.event {
-                            if e == event.id {
-                                listener.reaction.run(&mut self.variables, &mut self.events);
+
+                    let inner = match &self.graph.nodes[id].inner {
+                        NodeInner::StateMachine(sm) => {
+                            let state_index = match &sm.start_state {
+                                StartState::None => None,
+                                StartState::Index(state) => Some(*state),
+                                StartState::Expression(expr) => {
+                                    Some(expr.eval(&self.variables).to_usize().unwrap_or(0))
+                                }
+                                StartState::Random => todo!(),
+                            };
+
+                            // TODO: Figure out whether state.enter_events is triggered.
+
+                            if let Some(state_index) = state_index {
+                                let state = &sm.states[state_index];
+                                queue.push_back(DriverEvent::ActivateNode(state.node));
                             }
+
+                            NodeStateInner::StateMachine(StateMachineState {
+                                latest_state: state_index,
+                                transitions: Vec::new(),
+                                active_state: state_index,
+                            })
+                        }
+                        NodeInner::List(list) => {
+                            for id in list {
+                                queue.push_back(DriverEvent::ActivateNode(*id));
+                            }
+                            NodeStateInner::None
+                        }
+                        NodeInner::Clip(_) => NodeStateInner::Clip(AnimationPlaybackState {
+                            time: Duration::ZERO,
+                        }),
+                        NodeInner::Blend(node) => {
+                            for c in &node.children {
+                                queue.push_back(DriverEvent::ActivateNode(c.node));
+                            }
+
+                            NodeStateInner::None
+                        }
+                        NodeInner::VariableChangeTracker(_) => NodeStateInner::None,
+                        NodeInner::Timer(timer) => NodeStateInner::Timer(TimerState {
+                            remaining: timer.min_time,
+                            running: true,
+                        }),
+                        NodeInner::Nop => NodeStateInner::None,
+                    };
+
+                    self.states.insert(
+                        id,
+                        NodeState {
+                            blend_factor: 1.0,
+                            global_blend_factor: 1.0,
+                            sync_group: None,
+                            inner,
+                        },
+                    );
+
+                    for listener in &node.listeners {
+                        self.listeners
+                            .entry(listener.event)
+                            .or_default()
+                            .insert(id, listener.clone());
+                    }
+                }
+                DriverEvent::DeactivateNode(id) => {
+                    if !self.states.contains_key(&id) {
+                        continue;
+                    }
+
+                    let node = &self.graph.nodes[id];
+                    for cmd in &node.on_deactivate {
+                        cmd.run(&mut self.variables, &mut queue);
+                    }
+
+                    for listener in &node.listeners {
+                        self.listeners.get_mut(&listener.event).unwrap().remove(&id);
+                    }
+
+                    match &self.graph.nodes[id].inner {
+                        NodeInner::StateMachine(sm) => {
+                            let sm_state = self.states.get(&id).unwrap();
+                            let NodeStateInner::StateMachine(sm_state) = &sm_state.inner else {
+                                unreachable!();
+                            };
+
+                            if let Some(state) = sm_state.latest_state {
+                                let state = &sm.states[state];
+
+                                // TODO: Figure out whether state.exit_events is triggered by
+                                // state machine destruction.
+
+                                queue.push_back(DriverEvent::DeactivateNode(state.node));
+                            }
+                        }
+                        NodeInner::List(list) => {
+                            for id in list {
+                                queue.push_back(DriverEvent::DeactivateNode(*id));
+                            }
+                        }
+                        NodeInner::Blend(node) => {
+                            for c in &node.children {
+                                queue.push_back(DriverEvent::DeactivateNode(c.node));
+                            }
+                        }
+                        _ => (),
+                    }
+
+                    self.states.remove(&id);
+                    self.sync_groups.remove(&id);
+                }
+                DriverEvent::UpdateNode(id) => {
+                    if !self.states.contains_key(&id) {
+                        continue;
+                    }
+
+                    let node = &self.graph.nodes[id];
+                    for cmd in &node.on_update {
+                        cmd.run(&mut self.variables, &mut queue);
+                    }
+
+                    let state = self.states.get_mut(&id).unwrap();
+                    match &self.graph.nodes[id].inner {
+                        NodeInner::StateMachine(sm) => {
+                            let NodeStateInner::StateMachine(sm_state) = &mut state.inner else {
+                                unreachable!();
+                            };
+
+                            let mut remaining_time = delta;
+
+                            let Some(mut active_state) = sm_state.active_state else {
+                                continue;
+                            };
+
+                            while let Some(transition) = sm_state.transitions.first_mut() {
+                                debug_assert_ne!(active_state, transition.to_state);
+
+                                let old_state = &sm.states[active_state];
+                                let new_state = &sm.states[transition.to_state];
+
+                                if !transition.is_init {
+                                    transition.is_init = true;
+
+                                    for event in &new_state.enter_events {
+                                        queue.push_back(DriverEvent::HandleEvent(event.clone()));
+                                    }
+
+                                    queue.push_back(DriverEvent::ActivateNode(new_state.node));
+                                }
+
+                                transition.time += remaining_time;
+
+                                let is_done = match transition.effect {
+                                    TransitionEffect::None => true,
+                                    TransitionEffect::Blend(dur) => {
+                                        debug_assert!(!dur.is_zero());
+
+                                        // Clamp the time at the maximum duration to prevent
+                                        // blend factors to go over 1.0.
+                                        transition.time = transition.time.min(dur);
+
+                                        let new_weight =
+                                            transition.time.as_secs_f32() / dur.as_secs_f32();
+                                        let old_weight = 1.0 - new_weight;
+
+                                        debug_assert!(old_weight <= 1.0);
+                                        debug_assert!(new_weight <= 1.0);
+                                        debug_assert!(old_weight + new_weight <= 1.0);
+
+                                        set_blend_factor.push_back((old_state.node, old_weight));
+                                        set_blend_factor.push_back((new_state.node, new_weight));
+
+                                        if transition.time >= dur {
+                                            remaining_time -= transition.time - dur;
+                                            true
+                                        } else {
+                                            false
+                                        }
+                                    }
+                                };
+
+                                if !is_done {
+                                    break;
+                                }
+
+                                set_blend_factor.push_back((new_state.node, 1.0));
+
+                                queue.push_back(DriverEvent::DeactivateNode(old_state.node));
+
+                                for event in &old_state.exit_events {
+                                    queue.push_back(DriverEvent::HandleEvent(event.clone()));
+                                }
+
+                                active_state = transition.to_state;
+                                sm_state.active_state = Some(transition.to_state);
+                                sm_state.transitions.remove(0);
+
+                                if let Some(variable) = sm.state_variable {
+                                    self.variables.variables[variable] =
+                                        Value::I32(sm_state.active_state.unwrap() as i32);
+                                }
+                            }
+                        }
+                        _ => (),
+                    }
+                }
+                DriverEvent::HandleEvent(event) => {
+                    events.push(event.clone());
+
+                    if let Some(listeners) = self.listeners.get(&ListenerEvent::Event(event.id)) {
+                        for listener in listeners.values() {
+                            for cmd in &listener.reaction {
+                                cmd.run(&mut self.variables, &mut queue);
+                            }
+                        }
+                    }
+
+                    for (id, state) in self.states.iter_mut() {
+                        match &self.graph.nodes[*id].inner {
+                            NodeInner::StateMachine(node) => {
+                                let NodeStateInner::StateMachine(sm_state) = &mut state.inner
+                                else {
+                                    unreachable!();
+                                };
+
+                                let Some(transition) = node.transitions.iter().find(|transition| {
+                                    transition.event_id == event.id
+                                        && transition
+                                            .from
+                                            .is_none_or(|from| Some(from) == sm_state.latest_state)
+                                }) else {
+                                    continue;
+                                };
+
+                                let from = sm_state.latest_state;
+                                let to = transition.to;
+
+                                // Don't do a transition if the state doesn't change.
+                                if from.unwrap() == to {
+                                    // This can only happen if `from` was `None`, since we
+                                    // already filter out transitions that are noops.
+                                    debug_assert!(transition.from.is_none());
+                                    continue;
+                                }
+
+                                sm_state.transitions.push(ActiveTransitionEffect {
+                                    is_init: false,
+                                    time: Duration::ZERO,
+                                    effect: transition.effect.clone(),
+                                    to_state: to,
+                                });
+
+                                sm_state.latest_state = Some(to);
+                            }
+                            _ => (),
+                        }
+                    }
+                }
+                DriverEvent::VariableChanged(variable) => {
+                    let Some(listeners) = self.listeners.get(&ListenerEvent::Variable(variable))
+                    else {
+                        continue;
+                    };
+
+                    for listener in listeners.values() {
+                        for cmd in &listener.reaction {
+                            cmd.run(&mut self.variables, &mut queue);
                         }
                     }
                 }
@@ -193,81 +426,7 @@ impl AnimationDriver {
         for (node, state) in &mut self.states {
             match &self.graph.nodes[*node].inner {
                 NodeInner::List(_) => (),
-                NodeInner::StateMachine(sm) => {
-                    let NodeStateInner::StateMachine(sm_state) = &mut state.inner else {
-                        unreachable!();
-                    };
-
-                    let mut remaining_time = delta;
-
-                    let Some(active_state) = sm_state.active_state else {
-                        continue;
-                    };
-
-                    while let Some(transition) = sm_state.transitions.first_mut() {
-                        debug_assert_ne!(active_state, transition.to_state);
-
-                        let old_state = &sm.states[active_state];
-                        let new_state = &sm.states[transition.to_state];
-
-                        if !transition.is_init {
-                            transition.is_init = true;
-
-                            // FIXME: These events are not processed in this frame, causing a
-                            // 1 frame delay. We should process them in this frame.
-                            self.events.extend(new_state.enter_events.clone());
-
-                            activate_nodes.push(new_state.node);
-                        }
-
-                        transition.time += remaining_time;
-
-                        let is_done = match transition.effect {
-                            TransitionEffect::None => true,
-                            TransitionEffect::Blend(dur) => {
-                                debug_assert!(!dur.is_zero());
-
-                                // Clamp the time at the maximum duration to prevent
-                                // blend factors to go over 1.0.
-                                transition.time = transition.time.min(dur);
-
-                                let new_weight = transition.time.as_secs_f32() / dur.as_secs_f32();
-                                let old_weight = 1.0 - new_weight;
-
-                                debug_assert!(old_weight <= 1.0);
-                                debug_assert!(new_weight <= 1.0);
-                                debug_assert!(old_weight + new_weight <= 1.0);
-
-                                set_blend_factor.push_back((old_state.node, old_weight));
-                                set_blend_factor.push_back((new_state.node, new_weight));
-
-                                if transition.time >= dur {
-                                    remaining_time -= transition.time - dur;
-                                    true
-                                } else {
-                                    false
-                                }
-                            }
-                        };
-
-                        if !is_done {
-                            break;
-                        }
-
-                        set_blend_factor.push_back((new_state.node, 1.0));
-
-                        deactivate_nodes.push(old_state.node);
-                        self.events.extend(old_state.exit_events.clone());
-
-                        sm_state.active_state = Some(transition.to_state);
-                        sm_state.transitions.remove(0);
-
-                        if let Some(variable) = sm.state_variable {
-                            self.variables.variables[variable] =
-                                Value::I32(sm_state.active_state.unwrap() as i32);
-                        }
-                    }
-                }
+                NodeInner::StateMachine(_) => (),
                 NodeInner::Clip(clip) => {
                     let NodeStateInner::Clip(clip_state) = &mut state.inner else {
                         unreachable!();
@@ -392,14 +551,6 @@ impl AnimationDriver {
                             None => anim_duration,
                         };
 
-                        dbg!(
-                            leader_start_time,
-                            leader_end_time,
-                            start_time,
-                            end_time,
-                            sync_location
-                        );
-
                         let time = start_time + (end_time - start_time).mul_f32(sync_location);
                         clip_state.time = time;
                     } else {
@@ -441,10 +592,8 @@ impl AnimationDriver {
                         }
                     }
                 }
-                NodeInner::SetVariables(_) => (),
                 NodeInner::Blend(_) => (),
                 NodeInner::VariableChangeTracker(_) => (),
-                NodeInner::PerFrameCommands(_) => (),
                 NodeInner::Timer(timer) => {
                     let NodeStateInner::Timer(state) = &mut state.inner else {
                         unreachable!();
@@ -462,126 +611,8 @@ impl AnimationDriver {
                         }
                     }
                 }
-                NodeInner::Listener(_) => (),
+                NodeInner::Nop => (),
             }
-        }
-
-        while let Some(id) = deactivate_nodes.pop() {
-            match &self.graph.nodes[id].inner {
-                NodeInner::StateMachine(sm) => {
-                    let sm_state = self.states.get(&id).unwrap();
-                    let NodeStateInner::StateMachine(sm_state) = &sm_state.inner else {
-                        unreachable!();
-                    };
-
-                    if let Some(state) = sm_state.latest_state {
-                        let state = &sm.states[state];
-
-                        // TODO: Figure out whether state.exit_events is triggered by
-                        // state machine destruction.
-
-                        deactivate_nodes.push(state.node);
-                    }
-                }
-                NodeInner::List(list) => {
-                    deactivate_nodes.extend(list);
-                }
-                NodeInner::Clip(_) => {}
-                NodeInner::SetVariables(node) => {
-                    for var in &node.on_deactivate {
-                        if var.condition.eval(&self.variables) != Value::Bool(true) {
-                            continue;
-                        }
-
-                        let value = var.value.eval(&self.variables);
-
-                        self.variables.variables[var.variable] = value;
-                    }
-                }
-                NodeInner::Blend(node) => {
-                    for c in &node.children {
-                        deactivate_nodes.push(c.node);
-                    }
-                }
-                NodeInner::VariableChangeTracker(_) => (),
-                NodeInner::PerFrameCommands(_) => (),
-                NodeInner::Timer(_) => (),
-                NodeInner::Listener(_) => (),
-            }
-
-            self.sync_groups.remove(&id);
-            self.states.remove(&id);
-        }
-
-        while let Some(id) = activate_nodes.pop() {
-            let inner = match &self.graph.nodes[id].inner {
-                NodeInner::StateMachine(sm) => {
-                    let state_index = match &sm.start_state {
-                        StartState::None => None,
-                        StartState::Index(state) => Some(*state),
-                        StartState::Expression(expr) => {
-                            Some(expr.eval(&self.variables).to_usize().unwrap_or(0))
-                        }
-                        StartState::Random => todo!(),
-                    };
-
-                    // TODO: Figure out whether state.enter_events is triggered.
-
-                    if let Some(state_index) = state_index {
-                        let state = &sm.states[state_index];
-                        activate_nodes.push(state.node);
-                    }
-
-                    NodeStateInner::StateMachine(StateMachineState {
-                        latest_state: state_index,
-                        transitions: Vec::new(),
-                        active_state: state_index,
-                    })
-                }
-                NodeInner::List(list) => {
-                    activate_nodes.extend(list);
-                    NodeStateInner::None
-                }
-                NodeInner::Clip(_) => NodeStateInner::Clip(AnimationPlaybackState {
-                    time: Duration::ZERO,
-                }),
-                NodeInner::SetVariables(node) => {
-                    for var in &node.on_activate {
-                        if var.condition.eval(&self.variables) != Value::Bool(true) {
-                            continue;
-                        }
-
-                        let value = var.value.eval(&self.variables);
-                        self.variables.variables[var.variable] = value;
-                    }
-
-                    NodeStateInner::None
-                }
-                NodeInner::Blend(node) => {
-                    for c in &node.children {
-                        activate_nodes.push(c.node);
-                    }
-
-                    NodeStateInner::None
-                }
-                NodeInner::VariableChangeTracker(_) => NodeStateInner::None,
-                NodeInner::PerFrameCommands(_) => NodeStateInner::None,
-                NodeInner::Timer(timer) => NodeStateInner::Timer(TimerState {
-                    remaining: rng.random_range(timer.min_time..=timer.max_time),
-                    running: true,
-                }),
-                NodeInner::Listener(_) => NodeStateInner::None,
-            };
-
-            self.states.insert(
-                id,
-                NodeState {
-                    blend_factor: 1.0,
-                    global_blend_factor: 1.0,
-                    inner,
-                    sync_group: None,
-                },
-            );
         }
 
         self.update_blend_factors |= !set_blend_factor.is_empty();
@@ -599,9 +630,6 @@ impl AnimationDriver {
             self.update_blend_factors();
         }
 
-        self.handle_variable_changes();
-        self.run_per_frame_cmds();
-
         events.extend(self.events.clone());
     }
 
@@ -618,54 +646,6 @@ impl AnimationDriver {
         self.states.clear();
 
         self.is_init = false;
-    }
-
-    fn handle_variable_changes(&mut self) {
-        for node in self.states.keys() {
-            let node = &self.graph.nodes[*node];
-            match &node.inner {
-                NodeInner::VariableChangeTracker(node) => {
-                    for tracker in &node.trackers {
-                        if let Value::Bool(value) = tracker.expr.eval(&self.variables) {
-                            if value {
-                                self.events.push_back(tracker.event.clone());
-                            }
-                        }
-                    }
-                }
-                _ => (),
-            }
-        }
-    }
-
-    fn run_per_frame_cmds(&mut self) {
-        for node in self.states.keys() {
-            let node = &self.graph.nodes[*node];
-            match &node.inner {
-                NodeInner::PerFrameCommands(cmd) => {
-                    for stmt in &cmd.stmts {
-                        match stmt {
-                            Statement::SetVariable(stmt) => {
-                                if stmt.condition.eval(&self.variables).to_bool() != Some(true) {
-                                    continue;
-                                }
-
-                                let value = stmt.value.eval(&self.variables);
-                                self.variables.variables[stmt.variable] = value;
-                            }
-                            Statement::SendEvent(stmt) => {
-                                if stmt.condition.eval(&self.variables).to_bool() != Some(true) {
-                                    continue;
-                                }
-
-                                self.events.push_back(stmt.event.clone());
-                            }
-                        }
-                    }
-                }
-                _ => (),
-            }
-        }
     }
 
     fn update_blend_factors(&mut self) {
@@ -704,7 +684,6 @@ impl AnimationDriver {
                         queue.push_back((*node, blend_factor, sync_group));
                     }
                 }
-                NodeInner::SetVariables(_) => (),
                 NodeInner::Clip(clip) => {}
                 NodeInner::Blend(node) => {
                     if node.is_parametric {
@@ -814,9 +793,8 @@ impl AnimationDriver {
                     }
                 }
                 NodeInner::VariableChangeTracker(_) => (),
-                NodeInner::PerFrameCommands(_) => (),
                 NodeInner::Timer(_) => (),
-                NodeInner::Listener(_) => (),
+                NodeInner::Nop => (),
             }
         }
     }

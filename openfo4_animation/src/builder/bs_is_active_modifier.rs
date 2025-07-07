@@ -3,7 +3,7 @@
 use std::collections::HashMap;
 
 use crate::builder::{BuildNode, Error, GraphBuilderState, UnknownVariableName};
-use crate::{Node, NodeInner, SetVariable, SetVariables, Value, ValueExpression};
+use crate::{Command, Node, NodeInner, SetVariable, Value, ValueExpression};
 
 impl BuildNode for openfo4_hkx::behavior::BSIsActiveModifier {
     fn build(&self, state: &mut GraphBuilderState<'_>) -> Result<Option<Node>, Error> {
@@ -22,8 +22,6 @@ impl BuildNode for openfo4_hkx::behavior::BSIsActiveModifier {
                 .unwrap();
 
             let invert = match binding.member_path.as_str() {
-                "userData" => continue,
-                "name" => continue,
                 "enable" => {
                     enable = ValueExpression::Variable(variable);
                     continue;
@@ -48,28 +46,33 @@ impl BuildNode for openfo4_hkx::behavior::BSIsActiveModifier {
 
         let on_activate = on_enable
             .into_iter()
-            .map(|(variable, value)| SetVariable {
-                variable,
-                condition: enable.clone(),
-                value: ValueExpression::Const(value),
+            .map(|(variable, value)| {
+                Command::SetVariable(SetVariable {
+                    variable,
+                    condition: enable.clone(),
+                    value: ValueExpression::Const(value),
+                })
             })
             .collect();
 
         let on_deactivate = on_disable
             .into_iter()
-            .map(|(variable, value)| SetVariable {
-                variable,
-                condition: enable.clone(),
-                value: ValueExpression::Const(value),
+            .map(|(variable, value)| {
+                Command::SetVariable(SetVariable {
+                    variable,
+                    condition: enable.clone(),
+                    value: ValueExpression::Const(value),
+                })
             })
             .collect();
 
         Ok(Some(Node {
             name: format!("[BSIsActiveModifier] {}", self.parent.node.name),
-            inner: NodeInner::SetVariables(SetVariables {
-                on_activate,
-                on_deactivate,
-            }),
+            on_activate,
+            on_deactivate,
+            on_update: Vec::new(),
+            inner: NodeInner::Nop,
+            listeners: Vec::new(),
         }))
     }
 }

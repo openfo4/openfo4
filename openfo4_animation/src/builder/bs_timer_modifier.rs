@@ -35,6 +35,10 @@ impl BuildNode for BSTimerModifier {
                 event,
                 repeat,
             }),
+            on_activate: Vec::new(),
+            on_deactivate: Vec::new(),
+            on_update: Vec::new(),
+            listeners: Vec::new(),
         }))
     }
 }
