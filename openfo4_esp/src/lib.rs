@@ -1,8 +1,11 @@
-mod fields;
 pub mod records;
+pub mod vmad;
+
+mod fields;
 
 use fields::FieldMap;
 use flate2::read::ZlibDecoder;
+use glam::Vec3;
 use hashbrown::HashMap;
 use serde::Serialize;
 use thiserror::Error;
@@ -1836,5 +1839,36 @@ where
         let b = T::decode(&mut buf)?;
 
         Ok(Self { r, g, b })
+    }
+}
+
+impl Decode for Vec3 {
+    type Error = Error;
+
+    fn decode<B>(buf: B) -> Result<Self, Self::Error>
+    where
+        B: Buf,
+    {
+        <[f32; 3]>::decode(buf).map(Self::from_array)
+    }
+}
+
+#[derive(Clone, Debug)]
+pub(crate) struct U16String(pub String);
+
+impl Decode for U16String {
+    type Error = Error;
+
+    fn decode<B>(mut buf: B) -> Result<Self, Self::Error>
+    where
+        B: Buf,
+    {
+        let len = u16::decode(&mut buf)?;
+        let buf = (0..len)
+            .map(|_| u8::decode(&mut buf))
+            .collect::<Result<_, _>>()?;
+        String::from_utf8(buf)
+            .map(Self)
+            .map_err(Error::InvalidString)
     }
 }

@@ -25,10 +25,14 @@ fn main() {
     // let record = file.validate().unwrap();
     // dbg!(record.len());
 
-    dbg!(file.lookup(None, FormId(0x17f6d)));
-    dbg!(file.lookup(None, FormId(0xb1f08)));
-    dbg!(file.lookup(None, FormId(0x166729)));
+    // dbg!(file.lookup(None, FormId(0x17f6d)));
+    // dbg!(file.lookup(None, FormId(0xb1f08)));
+    // dbg!(file.lookup(None, FormId(0x166729)));
+    // dbg!(file.lookup(None, FormId(0x3c0f0)));
     // todo!()
+    dbg!(file.lookup(None, FormId(0x80e)));
+
+    return;
 
     let anims = file
         .lookup_all(Some(RecordKind::Animation))

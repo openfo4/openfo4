@@ -1,8 +1,10 @@
 use bitflags::bitflags;
 use bytes::Buf;
+use glam::Vec3;
 use openfo4_esp_derive::{BinaryStruct, Record};
 
 use crate::fields::{FieldMap, Read, SubRecordArray, SubRecordSection};
+use crate::vmad::VirtualMachineAdapter;
 use crate::{Decode, Error, FormId, LString, Rgb, RgbPadded, Text, ZString};
 
 macro_rules! impl_decode_bitflags {
@@ -1147,7 +1149,7 @@ pub struct Activator {
     pub id: ZString,
     // TODO
     #[record("VMAD")]
-    pub virtual_machine_adapter: Option<VMAD>,
+    pub virtual_machine_adapter: Option<VirtualMachineAdapter>,
     #[record("OBND")]
     pub object_bounds: Bounds,
     #[record("PTRN")]
@@ -1475,7 +1477,7 @@ pub struct Container {
     #[record("EDID")]
     pub id: ZString,
     #[record("VMAD")]
-    pub virtual_machine_adapter: Option<VMAD>,
+    pub virtual_machine_adapter: Option<VirtualMachineAdapter>,
     #[record("OBND")]
     pub object_bounds: Bounds,
     #[record("PTRN")]
@@ -1513,10 +1515,6 @@ pub struct Container {
     pub filter_list: Option<FormId>,
 }
 
-#[derive(Copy, Clone, Debug, BinaryStruct)]
-#[cfg_attr(feature = "serde", derive(Serialize))]
-pub struct VMAD {}
-
 /// An item reference contained in a [`Container`].
 #[derive(Copy, Clone, Debug, BinaryStruct)]
 pub struct ContainerItem {
@@ -1549,12 +1547,11 @@ bitflags! {
 impl_decode_bitflags!(ContainerDataFlags: u8);
 
 #[derive(Clone, Debug, Record)]
-#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct DOOR {
     #[record("EDID")]
     pub edid: ZString,
     #[record("VMAD")]
-    pub vmad: Option<VMAD>,
+    pub vmad: Option<VirtualMachineAdapter>,
     #[record("OBND")]
     pub obnd: Bounds,
     #[record("FULL")]
@@ -1575,12 +1572,11 @@ pub struct DOOR {
 }
 
 #[derive(Clone, Debug, Record)]
-#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct INGR {
     #[record("EDID")]
     pub edid: ZString,
     #[record("VMAD")]
-    pub vmad: Option<VMAD>,
+    pub vmad: Option<VirtualMachineAdapter>,
     #[record("OBND")]
     pub obnd: Bounds,
     #[record("FULL")]
@@ -1685,7 +1681,7 @@ pub struct Light {
     #[record("EDID")]
     pub id: ZString,
     #[record("VMAD")]
-    pub virtual_machine_adapter: Option<VMAD>,
+    pub virtual_machine_adapter: Option<VirtualMachineAdapter>,
     #[record("OBND")]
     pub object_bounds: Bounds,
     #[record("PTRN")]
@@ -1771,7 +1767,7 @@ pub struct MiscObject {
     #[record("EDID")]
     pub id: ZString,
     #[record("VMAD")]
-    pub virtual_machine_adapter: Option<VMAD>,
+    pub virtual_machine_adapter: Option<VirtualMachineAdapter>,
     #[record("PTRN")]
     pub preview_tranform: Option<FormId>,
     #[record("OBND")]
@@ -1818,14 +1814,13 @@ pub struct MiscObjectComponents {
 }
 
 #[derive(Clone, Debug, Record)]
-#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct STAT {
     #[record("EDID")]
     pub id: ZString,
     #[record("OBND")]
     pub object_bounds: Bounds,
     #[record("VMAD")]
-    pub virtual_machine_adapter: Option<VMAD>,
+    pub virtual_machine_adapter: Option<VirtualMachineAdapter>,
     #[record("MODL")]
     pub modl: Model,
     #[record("DNAM")]
@@ -1833,7 +1828,6 @@ pub struct STAT {
 }
 
 #[derive(Copy, Clone, Debug, BinaryStruct)]
-#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct STAT_DNAM {
     pub max_angle: f32,
     pub directional_material: FormId,
@@ -1896,7 +1890,6 @@ pub struct MSTT {
 }
 
 #[derive(Clone, Debug, Record)]
-#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct GRAS {
     #[record("EDID")]
     pub edid: ZString,
@@ -1910,7 +1903,6 @@ pub struct GRAS {
 }
 
 #[derive(Copy, Clone, Debug, BinaryStruct)]
-#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct GRAS_DATA {
     pub density: u8,
     pub min_slope: u8,
@@ -1929,12 +1921,11 @@ pub struct GRAS_DATA {
 }
 
 #[derive(Clone, Debug, Record)]
-#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct FLOR {
     #[record("EDID")]
     pub edid: ZString,
     #[record("VMAD")]
-    pub vmad: Option<VMAD>,
+    pub vmad: Option<VirtualMachineAdapter>,
     #[record("OBND")]
     pub obnd: Bounds,
     #[record("FULL")]
@@ -1964,12 +1955,11 @@ pub struct FLOR {
 }
 
 #[derive(Clone, Debug, Record)]
-#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct Furniture {
     #[record("EDID")]
     pub id: ZString,
     #[record("VMAD")]
-    pub virtual_machine_adapter: Option<VMAD>,
+    pub virtual_machine_adapter: Option<VirtualMachineAdapter>,
     #[record("OBND")]
     pub object_bounds: Bounds,
     #[record("FULL")]
@@ -2033,7 +2023,7 @@ pub struct Weapon {
     #[record("EDID")]
     pub id: ZString,
     #[record("VMAD")]
-    pub virtual_machine_adapter: Option<VMAD>,
+    pub virtual_machine_adapter: Option<VirtualMachineAdapter>,
     #[record("OBND")]
     pub object_bounds: Option<Bounds>,
     #[record("PTRN")]
@@ -2269,12 +2259,11 @@ pub struct AMMO_DNAM {
 pub struct DEST {}
 
 #[derive(Clone, Debug, Record)]
-#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct Npc {
     #[record("EDID")]
     pub id: ZString,
     #[record("VMAD")]
-    pub virtual_machine_adapter: Option<VMAD>,
+    pub virtual_machine_adapter: Option<VirtualMachineAdapter>,
     #[record("OBND")]
     pub object_bounds: Bounds,
     #[record("ACBS")]
@@ -2631,12 +2620,11 @@ pub struct FilterKeywordChances {
 }
 
 #[derive(Clone, Debug, Record)]
-#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct Key {
     #[record("EDID")]
     pub id: ZString,
     #[record("VMAD")]
-    pub virtual_machine_adapter: Option<VMAD>,
+    pub virtual_machine_adapter: Option<VirtualMachineAdapter>,
     #[record("OBND")]
     pub object_bounds: Bounds,
     #[record("FULL")]
@@ -2765,12 +2753,11 @@ bitflags! {
 impl_decode_bitflags!(IdleMarkerFlags: u8);
 
 #[derive(Clone, Debug, Record)]
-#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct Note {
     #[record("EDID")]
     pub id: ZString,
     #[record("VMAD")]
-    pub virtual_machine_adapter: Option<VMAD>,
+    pub virtual_machine_adapter: Option<VirtualMachineAdapter>,
     #[record("OBND")]
     pub object_bounds: Bounds,
     #[record("PTRN")]
@@ -2975,7 +2962,7 @@ pub struct Terminal {
     #[record("EDID")]
     pub id: Option<ZString>,
     #[record("VMAD")]
-    pub virtual_machine_adapter: Option<VMAD>,
+    pub virtual_machine_adapter: Option<VirtualMachineAdapter>,
     #[record("OBND")]
     pub object_bounds: Option<Bounds>,
     #[record("PTRN")]
@@ -3014,7 +3001,7 @@ pub struct Tree {
     #[record("EDID")]
     pub id: Option<ZString>,
     #[record("VMAD")]
-    pub virtual_machine_adapter: Option<VMAD>,
+    pub virtual_machine_adapter: Option<VirtualMachineAdapter>,
     #[record("OBND")]
     pub object_bounds: Option<Bounds>,
     #[record("MODL")]
@@ -3620,12 +3607,11 @@ pub struct Vec3Padded<T> {
 }
 
 #[derive(Clone, Debug, Record)]
-#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct PlacedNpc {
     #[record("EDID")]
     pub id: Option<ZString>,
     #[record("VMAD")]
-    pub virtual_machine_adapter: Option<VMAD>,
+    pub virtual_machine_adapter: Option<VirtualMachineAdapter>,
     #[record("NAME")]
     pub base_npc: FormId,
     #[record("XEZN")]
@@ -3701,7 +3687,7 @@ pub struct PlacedObject {
     #[record("EDID")]
     pub id: Option<ZString>,
     #[record("VMAD")]
-    pub virtual_machine_adapter: Option<VMAD>,
+    pub virtual_machine_adapter: Option<VirtualMachineAdapter>,
     #[record("NAME")]
     pub base_object: FormId,
     #[record("XMBO")]
@@ -3916,12 +3902,11 @@ pub struct PlacedGrenade {
 }
 
 #[derive(Clone, Debug, Record)]
-#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct PlacedHazard {
     #[record("EDID")]
     pub id: Option<ZString>,
     #[record("VMAD")]
-    pub virtual_machine_adapter: Option<VMAD>,
+    pub virtual_machine_adapter: Option<VirtualMachineAdapter>,
     #[record("DATA")]
     pub position: PositionRotation,
 }
@@ -4151,7 +4136,7 @@ pub struct PlacedMissile {
     #[record("EDID")]
     pub id: Option<ZString>,
     #[record("VMAD")]
-    pub virtual_machine_adapter: Option<VMAD>,
+    pub virtual_machine_adapter: Option<VirtualMachineAdapter>,
     #[record("NAME")]
     pub base_projectile: FormId,
     #[record("XEZN")]
@@ -4210,6 +4195,8 @@ impl_decode_bitflags!(EnableParentFlags: u8);
 pub struct Quest {
     #[record("EDID")]
     pub id: Option<ZString>,
+    #[record("VMAD")]
+    pub virtual_machine_adapter: Option<VirtualMachineAdapter>,
 }
 
 #[derive(Clone, Debug, Record)]
@@ -4240,6 +4227,8 @@ pub struct DialogueInfo {
 pub struct Animation {
     #[record("EDID")]
     pub id: Option<ZString>,
+    #[record("CTDA")]
+    pub conditions: SubRecordArray<Condition>,
     #[record("DNAM")]
     pub behavior_graph: Option<ZString>,
     #[record("ENAM")]
@@ -4613,12 +4602,33 @@ pub struct ObjectModification {
 pub struct MaterialSwap {
     #[record("EDID")]
     pub id: Option<ZString>,
+    #[record("BNAM")]
+    pub replacements: SubRecordArray<MaterialSwapReplacement>,
+}
+
+#[derive(Clone, Debug, Record)]
+pub struct MaterialSwapReplacement {
+    #[record("BNAM")]
+    pub original_material: ZString,
+    #[record("SNAM")]
+    pub replacement_material: ZString,
 }
 
 #[derive(Clone, Debug, Record)]
 pub struct Zoom {
     #[record("EDID")]
     pub id: Option<ZString>,
+    #[record("GNAM")]
+    pub data: ZoomData,
+}
+
+#[derive(Clone, Debug, BinaryStruct)]
+pub struct ZoomData {
+    pub fov_mult: f32,
+    pub overlay: u32,
+    /// Reference to an [`ImageSpace`].
+    pub imagespace_modifier: FormId,
+    pub camera_offset: Vec3,
 }
 
 #[derive(Clone, Debug, Record)]
@@ -4685,4 +4695,139 @@ pub struct GodRays {
 pub struct ObjectVisibilityManager {
     #[record("EDID")]
     pub id: Option<ZString>,
+}
+
+#[derive(Clone, Debug, Record)]
+pub struct Condition {
+    #[record("CTDA")]
+    pub data: ConditionData,
+    #[record("CIS1")]
+    pub parameter1: Option<ZString>,
+    #[record("CIS2")]
+    pub parameter2: Option<ZString>,
+}
+
+///
+/// This should be read as `$object.$function($parameter1, $parameter2, $parameter3) $comparator $value`,
+/// for example `Subject.HasKeyword(0x1234) == 0`.
+#[derive(Copy, Clone, Debug, BinaryStruct)]
+pub struct ConditionData {
+    pub comparator: u8,
+    _pad0: [u8; 3],
+    pub value: f32,
+    pub function: u16,
+    _pad1: [u8; 2],
+    pub parameter1: (),
+    pub parameter2: (),
+    /// The object on which the function should be run on.
+    pub object: ConditionDataObject,
+    pub reference: FormId,
+    pub parameter3: (),
+}
+
+#[derive(Copy, Clone, Debug, BinaryStruct)]
+#[primitive(u32)]
+pub enum ConditionDataObject {
+    Subject = 0,
+    Target = 1,
+    Reference = 2,
+    CombatTarget = 3,
+    LinkedReference = 4,
+    QuestAlias = 5,
+    PackageData = 6,
+    EventData = 7,
+    CommandTarget = 8,
+    EventCameraRef = 9,
+    MyKiller = 10,
+}
+
+#[derive(Copy, Clone, Debug)]
+pub enum ConditionFunction {
+    GetWantBlocking,
+    GetDistance(FormId),
+    GetLocked,
+    GetPos(i32),
+    GetAngle(i32),
+    GetStartingPos(u32),
+    GetStartingAngle(u32),
+    GetValue(FormId),
+    GetCurrentTime,
+    GetScale,
+    IsMoving,
+    IsTurning,
+    GetLineOfSight(FormId),
+    GetInSameCell(FormId),
+    GetDisabled,
+    MenuMode(i32),
+    GetDisease,
+    GetClothingValue,
+    SameFaction(FormId),
+    SameRace(FormId),
+    SameSex(FormId),
+    GetDetected(FormId),
+    GetDead,
+    GetItemCount(FormId),
+    GetGold,
+    GetSleeping,
+    GetTalkedToPc,
+    GetQuestRunning(FormId),
+    GetStage(FormId),
+    GetStageDone(FormId, u32),
+    GetFactionRankDifference(FormId, FormId),
+    GetAlarmed,
+    IsRaining,
+    GetAttacked,
+    GetIsCreature,
+    GetLockLevel,
+    GetShouldAttack(FormId),
+    GetInCell(FormId),
+    GetIsClass(FormId),
+    GetIsRace(FormId),
+    GetIsSex(i32),
+    GetInFaction(FormId),
+    GetIsId(FormId),
+    GetFactionRank(FormId),
+    GetGlobalValue(FormId),
+    IsSnowing,
+    WouldBeStealing(FormId),
+    GetLevel,
+    IsRotating,
+    GetDeadCount(FormId),
+    GetIsAlerted,
+    GetPlayerControlsDisabled(i32, i32, i32),
+    GetHeadingAngle(FormId),
+    IsWeaponMagicOut,
+    IsTorchOut,
+    IsShieldOut,
+    IsFacingUp,
+    GetKockedState,
+    GetWeaponAnimType,
+    IsWeaponSkillType(FormId),
+    GetCurrentAiPackage,
+    IsWaiting,
+    IsIdlePlaying,
+    IsIntimidatedByPlayer,
+    IsPlayerInRegion(FormId),
+    GetActorAggroRadiusViolated,
+    GetCrime(FormId, i32),
+    IsGreetingPlayer,
+    IsGuard,
+    HasBeenEaten,
+    GetStaminaPercentage,
+    HasBeenRead,
+    GetDying,
+    GetSceneActionPercent(FormId, i32),
+    WouldRefuseCommand(FormId),
+    SameFactionAsPc,
+    SameRaceAsPc,
+    SameSexAsPc,
+    GetIsReference(FormId),
+    IsTalking,
+    GetComponentCount(FormId),
+    GetCurrentAiProdecure,
+    GetTrespassWarningLevel,
+    IsTrespassing,
+    IsInMyOwnedCell,
+    GetWindSpeed,
+    GetCurrentWeatherPercent,
 }
