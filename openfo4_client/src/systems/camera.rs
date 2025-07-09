@@ -8,7 +8,10 @@ use openfo4_animation::skeleton::SkeletonInstance;
 use crate::components::Camera;
 
 #[derive(Copy, Clone, Debug)]
-pub struct CameraOffset(pub Transform);
+pub struct CameraOffset {
+    pub transform: Transform,
+    pub rotation: Quat,
+}
 
 #[derive(Copy, Clone, Debug)]
 pub struct PlayerControlled;
@@ -33,7 +36,19 @@ pub fn attach_camera(world: &mut World, entity: Entity) {
     let transform = *skeleton.bones_bind_pose.get(&bone_index).unwrap();
     drop(skeleton);
 
-    world.insert_one(entity, CameraOffset(transform)).unwrap();
+    world
+        .insert_one(
+            entity,
+            CameraOffset {
+                transform: Transform {
+                    translation: transform.translation,
+                    rotation: transform.rotation,
+                    scale: Vec3::ONE,
+                },
+                rotation: Quat::IDENTITY,
+            },
+        )
+        .unwrap();
     world.insert_one(entity, PlayerControlled).unwrap();
 
     // for (_, camera) in world.query_mut::<&mut Camera>() {
@@ -108,7 +123,12 @@ pub fn update_camera_transform(world: &mut World) {
         let offset = world.get::<&CameraOffset>(parent).ok();
 
         let parent_transform = world.get::<&GlobalTransform>(parent).unwrap();
-        let transform = parent_transform.0 * offset.map(|v| v.0).unwrap_or_default();
+        let mut transform = parent_transform.0;
+
+        if let Some(offset) = offset {
+            transform *= offset.transform;
+            transform.rotation *= offset.rotation;
+        }
 
         buffer.insert(entity, (transform, GlobalTransform(transform)));
     }

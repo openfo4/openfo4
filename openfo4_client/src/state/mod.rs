@@ -183,6 +183,7 @@ impl GameState {
 
     pub fn send_event(&mut self, event: WindowEvent) {
         systems::camera::handle_free_camera(&mut self.world, &event);
+        systems::controller::handle_inputs(&mut self.world, &event);
 
         match event {
             WindowEvent::KeyboardInput(event) => {

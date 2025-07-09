@@ -4,6 +4,7 @@ use std::sync::Arc;
 
 use crossbeam::queue::SegQueue;
 use game_common::components::Transform;
+use game_core::hierarchy::Hierarchy;
 use game_core_pipeline::material::StandardMaterial;
 use game_render::backend::TextureFormat;
 use game_render::mesh::{Indices, Mesh};
@@ -18,7 +19,7 @@ use openfo4_esp::records::{Cell, LandLandTexture, LandTextureAlphaLayerPoint, Qu
 use openfo4_esp::{FormId, RecordChildren, RecordData, RecordHeaderFlags, RecordKind};
 use openfo4_hkx::behavior::EventBase;
 use openfo4_nif::bgsm::Bgsm;
-use openfo4_physics::components::{Collider, ColliderShape, TriMesh};
+use openfo4_physics::components::{Collider, ColliderShape, RigidBody, RigidBodyKind, TriMesh};
 use tracing::instrument;
 
 use crate::assets::nif_v2::{Instantiate, NifScene};
@@ -26,6 +27,7 @@ use crate::cell::{CELL_SIZE, CellId};
 use crate::components::{NiTransform, Root};
 use crate::events::{Event, UnloadCell};
 use crate::loader::FileLoader;
+use crate::render::RenderObject;
 use crate::shared::SharedState;
 
 use super::asset::load_image_buffer;
@@ -156,6 +158,18 @@ impl Level {
 
                     event.scene.instantiate(event.transform.into(), world);
                 }
+                SpawnEvent::SpawnTerrain(transform, object, collider) => {
+                    world.spawn((
+                        transform,
+                        object,
+                        collider,
+                        RigidBody {
+                            kind: RigidBodyKind::Fixed,
+                            linvel: Vec3::ZERO,
+                            angvel: Vec3::ZERO,
+                        },
+                    ));
+                }
             }
         }
 
@@ -217,6 +231,7 @@ impl Level {
 #[derive(Clone, Debug)]
 enum SpawnEvent {
     SpawnEntity(SpawnEntity),
+    SpawnTerrain(Transform, RenderObject, Collider),
 }
 
 #[derive(Clone, Debug)]
@@ -287,6 +302,7 @@ async fn load_cell(
                 }
                 RecordData::Land(land) => {
                     return;
+
                     let positions: Vec<Vec3> = land
                         .vertex_height
                         .unwrap()
@@ -419,6 +435,12 @@ async fn load_cell(
                         restitution: 1.0,
                         shape: ColliderShape::TriMesh(TriMesh::new(positions, indices)),
                     };
+
+                    events.push(SpawnEvent::SpawnTerrain(
+                        Transform::from(NiTransform::from_translation(offset.extend(0.0))),
+                        RenderObject { mesh, material },
+                        collider,
+                    ));
 
                     // events.push(SpawnEvent::SpawnEntity(SpawnEntity {
                     //     transform: NiTransform::from_translation(offset.extend(0.0)),

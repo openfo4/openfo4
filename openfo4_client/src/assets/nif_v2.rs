@@ -29,12 +29,12 @@ pub struct NifScene {
     /// List of materials that are referenced by the scene.
     ///
     /// This exists to keep all the handles alive while this `NifScene` is alive.
-    _materials: Vec<Handle<BgsmMaterial>>,
+    pub _materials: Vec<Handle<BgsmMaterial>>,
     /// List of textures that are referenced by the scene.
     ///
     /// This exists to keep all the handles alive while this `NifScene` is alive to prevent loading
     /// the same textures into memory twice.
-    _textures: Vec<Handle<FileImageHandle>>,
+    pub _textures: Vec<Handle<FileImageHandle>>,
 }
 
 // Note that this is a trait because we wan't to implement
