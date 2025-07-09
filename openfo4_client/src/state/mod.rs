@@ -39,6 +39,7 @@ use crate::events::Event;
 use crate::loader::{FileLoader, Reader};
 use crate::shared::SharedState;
 use crate::systems;
+use crate::systems::camera::CameraMode;
 
 // Load cell
 // Instantiate entity
@@ -127,7 +128,10 @@ impl GameState {
         let offset = NiTransform::from_translation(offset.extend(0.0));
         self.world.spawn((
             Transform::from(offset).looking_at(Vec3::ZERO, Vec3::Y),
-            Camera { fov: PI / 4.0 },
+            Camera {
+                fov: PI / 4.0,
+                mode: CameraMode::Free,
+            },
             Streamer { distance },
         ));
     }
@@ -169,6 +173,8 @@ impl GameState {
         skinning::mesh_skinning(&mut self.world, &self.shared);
 
         systems::hierarchy::compute_global_transform(&mut self.world);
+
+        systems::camera::update_camera_transform(&mut self.world);
     }
 
     pub fn world(&self) -> &World {
@@ -176,39 +182,10 @@ impl GameState {
     }
 
     pub fn send_event(&mut self, event: WindowEvent) {
+        systems::camera::handle_free_camera(&mut self.world, &event);
+
         match event {
-            WindowEvent::MouseMotion(event) => {
-                for (_, (transform, _)) in self.world.query_mut::<(&mut Transform, &Camera)>() {
-                    let yaw = event.delta.x * 0.001;
-                    let pitch = event.delta.y * 0.001;
-
-                    let q1 = Quat::from_axis_angle(Vec3::Y, -yaw);
-                    let q2 = Quat::from_axis_angle(Vec3::X, -pitch);
-
-                    transform.rotation = q1 * transform.rotation;
-                    transform.rotation = transform.rotation * q2;
-                    transform.rotation = transform.rotation.normalize();
-                }
-            }
             WindowEvent::KeyboardInput(event) => {
-                let mut direction = Vec3::ZERO;
-                if event.key_code == Some(KeyCode::W) {
-                    direction -= Vec3::Z;
-                }
-                if event.key_code == Some(KeyCode::S) {
-                    direction += Vec3::Z;
-                }
-                if event.key_code == Some(KeyCode::A) {
-                    direction -= Vec3::X;
-                }
-                if event.key_code == Some(KeyCode::D) {
-                    direction += Vec3::X;
-                }
-
-                for (_, (transform, _)) in self.world.query_mut::<(&mut Transform, &Camera)>() {
-                    transform.translation += transform.rotation * direction;
-                }
-
                 if event.key_code == Some(KeyCode::L) && event.state.is_pressed() {
                     let s: game_render::mesh::Mesh = game_render::shape::Box {
                         min_x: -30.0,

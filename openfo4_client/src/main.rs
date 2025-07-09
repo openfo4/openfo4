@@ -1,5 +1,4 @@
 mod assets;
-mod camera;
 mod cell;
 mod components;
 mod events;

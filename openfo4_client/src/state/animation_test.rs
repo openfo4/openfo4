@@ -260,6 +260,8 @@ pub fn animation_test(
             )
             .unwrap();
 
+        crate::systems::camera::attach_camera(world, root);
+
         // world.spawn((
         //     Transform {
         //         translation: Transform::from(offset).translation,

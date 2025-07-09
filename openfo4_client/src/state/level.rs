@@ -15,7 +15,7 @@ use hecs::World;
 use openfo4_asset::{AssetLoader, Handle};
 use openfo4_core::hierarchy::Children;
 use openfo4_esp::records::{Cell, LandLandTexture, LandTextureAlphaLayerPoint, Quadrant};
-use openfo4_esp::{FormId, RecordChildren, RecordData, RecordKind};
+use openfo4_esp::{FormId, RecordChildren, RecordData, RecordHeaderFlags, RecordKind};
 use openfo4_hkx::behavior::EventBase;
 use openfo4_nif::bgsm::Bgsm;
 use openfo4_physics::components::{Collider, ColliderShape, TriMesh};
@@ -464,6 +464,10 @@ async fn load_cell(
                     return;
                 }
             };
+
+            if base.flags.contains(RecordHeaderFlags::IS_MARKER) {
+                return;
+            }
 
             let model = match base.data {
                 RecordData::STAT(data) => data.modl.model,

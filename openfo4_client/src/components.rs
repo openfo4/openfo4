@@ -4,8 +4,11 @@ use game_common::components::Transform;
 use glam::{Mat3, Mat4, Quat, Vec3};
 use openfo4_hkx::mesh::TriMesh;
 
+use crate::systems::camera::CameraMode;
+
 #[derive(Copy, Clone, Debug)]
 pub struct Camera {
+    pub mode: CameraMode,
     pub fov: f32,
 }
 
