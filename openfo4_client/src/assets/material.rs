@@ -73,7 +73,7 @@ impl Asset for BgsmMaterial {
                 .load::<FileImageHandle, _>(&grayscale_palette.grayscale_texture)
                 .await?;
 
-            material.grayscale = Some(handle.0.clone());
+            // material.grayscale = Some(handle.0.clone());
             textures.push(handle);
         }
 

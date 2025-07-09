@@ -21,7 +21,8 @@ use crate::assets::{AssetServer, Error};
 use crate::components::Root;
 use crate::loader::fix_path;
 use crate::render::RenderObject;
-use crate::state::asset::NIF_TO_METERS;
+
+pub const NIF_TO_METERS: f32 = 1.0 / 69.99125;
 
 #[derive(Clone, Debug)]
 pub struct NifScene {
@@ -29,12 +30,12 @@ pub struct NifScene {
     /// List of materials that are referenced by the scene.
     ///
     /// This exists to keep all the handles alive while this `NifScene` is alive.
-    pub _materials: Vec<Handle<BgsmMaterial>>,
+    _materials: Vec<Handle<BgsmMaterial>>,
     /// List of textures that are referenced by the scene.
     ///
     /// This exists to keep all the handles alive while this `NifScene` is alive to prevent loading
     /// the same textures into memory twice.
-    pub _textures: Vec<Handle<FileImageHandle>>,
+    _textures: Vec<Handle<FileImageHandle>>,
 }
 
 // Note that this is a trait because we wan't to implement
@@ -329,11 +330,32 @@ impl Asset for NifScene {
                     let skin = match node.skin {
                         Some(skin) => match nif.get(skin) {
                             Some(Block::BSSkinInstance(skin)) => {
+                                let bone_data = match nif.get(skin.data) {
+                                    Some(Block::BSSkinBoneData(data)) => data
+                                        .bones
+                                        .iter()
+                                        .map(|bone| Transform {
+                                            translation: bone.translation,
+                                            rotation: Quat::from_mat3(&bone.rotation).conjugate(),
+                                            scale: Vec3::splat(bone.scale),
+                                        })
+                                        .collect::<Vec<_>>(),
+                                    _ => todo!(),
+                                };
+
                                 let mut bones = Vec::new();
+                                let mut bone_transforms = Vec::new();
+
                                 for bone in &skin.bones {
                                     match nif.get(*bone) {
                                         Some(Block::NiNode(node)) => {
-                                            bones.push(node.name.to_lowercase());
+                                            bones.push(node.name.clone());
+                                            bone_transforms.push(Transform {
+                                                translation: node.translation,
+                                                rotation: Quat::from_mat3(&node.rotation)
+                                                    .conjugate(),
+                                                scale: Vec3::splat(node.scale),
+                                            });
                                         }
                                         _ => todo!(),
                                     }
@@ -343,13 +365,45 @@ impl Asset for NifScene {
                                     todo!();
                                 };
 
-                                let weights =
+                                let weights: Vec<_> =
                                     skinning.bone_weights.iter().map(|v| v.as_vec4()).collect();
-                                let indices = skinning.bone_indices.iter().map(|v| *v).collect();
+                                let indices: Vec<_> =
+                                    skinning.bone_indices.iter().map(|v| *v).collect();
+
+                                let mut mesh = build_mesh(node);
+
+                                let mut positions = vec![Vec3::ZERO; mesh.positions().len()];
+
+                                for i in 0..weights.len() {
+                                    let weights = weights[i];
+                                    let indices = indices[i];
+                                    let pos = mesh.positions()[i];
+
+                                    let i0 = indices[0] as usize;
+                                    let i1 = indices[1] as usize;
+                                    let i2 = indices[2] as usize;
+                                    let i3 = indices[3] as usize;
+
+                                    let x =
+                                        (bone_transforms[i0] * bone_data[i0]).transform_point(pos);
+                                    let y =
+                                        (bone_transforms[i1] * bone_data[i1]).transform_point(pos);
+                                    let z =
+                                        (bone_transforms[i2] * bone_data[i2]).transform_point(pos);
+                                    let w =
+                                        (bone_transforms[i3] * bone_data[i3]).transform_point(pos);
+
+                                    positions[i] = x * weights.x
+                                        + y * weights.y
+                                        + z * weights.z
+                                        + w * weights.w;
+                                }
+
+                                mesh.set_positions(positions);
 
                                 Some(Skin {
                                     bones,
-                                    mesh: build_mesh(node),
+                                    mesh,
                                     weights,
                                     indices,
                                 })

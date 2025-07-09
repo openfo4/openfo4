@@ -18,10 +18,8 @@ use glam::{UVec2, Vec3};
 use hashbrown::HashMap;
 use hecs::{Entity, World};
 
-use crate::cell::CellId;
-use crate::components::{Camera as CameraComp, NiTransform};
-use crate::shared::{ImageAsset, MaterialAsset, MeshAsset, SharedState};
-use crate::state::asset::Instance;
+use crate::components::Camera as CameraComp;
+use crate::shared::SharedState;
 
 pub struct RenderState {
     entities: Entities,
@@ -40,7 +38,7 @@ pub struct RenderState {
 
 impl RenderState {
     pub fn new(
-        mut renderer: Renderer,
+        renderer: Renderer,
         target: RenderTarget,
         shared: Arc<SharedState>,
         entities: Entities,

@@ -8,7 +8,6 @@ use openfo4_core::hierarchy::Children;
 use openfo4_physics::components::Collider;
 
 use crate::render::RenderObject;
-use crate::state::asset::NifHandle;
 
 static KNOWN_COMPONENTS: LazyLock<HashSet<TypeId>> = LazyLock::new(|| {
     [
@@ -16,7 +15,6 @@ static KNOWN_COMPONENTS: LazyLock<HashSet<TypeId>> = LazyLock::new(|| {
         TypeId::of::<GlobalTransform>(),
         TypeId::of::<RenderObject>(),
         TypeId::of::<Children>(),
-        TypeId::of::<NifHandle>(),
         TypeId::of::<Collider>(),
     ]
     .into_iter()
@@ -73,10 +71,6 @@ impl Scene {
 
             if let Some(object) = entity.get::<&RenderObject>() {
                 world.insert_one(world_entity, (*object).clone()).unwrap();
-            }
-
-            if let Some(handle) = entity.get::<&NifHandle>() {
-                world.insert_one(world_entity, (*handle).clone()).unwrap();
             }
 
             if let Some(collider) = entity.get::<&Collider>() {

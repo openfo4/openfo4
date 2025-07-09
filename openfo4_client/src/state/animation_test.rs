@@ -4,7 +4,7 @@ use std::sync::{Arc, OnceLock};
 
 use game_core_pipeline::entities::MaterialHandle;
 use game_render::mesh::Mesh;
-use glam::{IVec2, Vec3, Vec4};
+use glam::{IVec2, Vec4};
 use hecs::{Entity, World};
 use openfo4_animation::AnimationSet;
 use openfo4_animation::builder::animation_graph;
@@ -14,14 +14,12 @@ use openfo4_asset::AssetLoader;
 use openfo4_hkx::HkxFile;
 
 use crate::assets::AssetServer;
-use crate::assets::nif_v2::Instantiate;
+use crate::assets::nif_v2::{Instantiate, NifScene};
 use crate::cell::CellId;
 use crate::components::NiTransform;
 use crate::loader::FileLoader;
 use crate::shared::SharedState;
 use crate::state::animation::{SkeletonConfig, load_anim};
-
-use super::asset::NifLoader;
 
 pub struct SkinInstance {
     pub mesh: Mesh,
@@ -39,7 +37,6 @@ pub fn animation_test(
     shared: &SharedState,
     world: &mut World,
     server: &AssetServer,
-    nif_loader: &NifLoader,
     asset_loader: &AssetLoader,
 ) {
     static ONCE: OnceLock<()> = OnceLock::new();
@@ -195,7 +192,9 @@ pub fn animation_test(
             world.insert_one(*entity, BoneMarker).unwrap();
         }
 
-        let skin_scene = futures_lite::future::block_on(nif_loader.load(skin_path)).unwrap();
+        // let skin_scene = futures_lite::future::block_on(nif_loader.load(skin_path)).unwrap();
+        let skin_scene =
+            futures_lite::future::block_on(asset_loader.load::<NifScene, _>(skin_path)).unwrap();
 
         let mut skin_instances = Vec::new();
 

@@ -12,8 +12,6 @@ use openfo4_hkx::{HkObject, HkxFile};
 use crate::assets::AssetServer;
 use crate::assets::nif_v2::NifScene;
 use crate::loader::{FileLoader, fix_path};
-use crate::state::asset::NifLoader;
-use crate::systems::skeleton;
 
 pub struct AnimationLoader {
     file_loader: Arc<FileLoader>,
@@ -266,42 +264,4 @@ fn merge_skeletons(nif: &NifScene, hkx: &Skeleton) -> Skeleton {
     }
 
     skeleton
-}
-
-#[cfg(test)]
-mod tests {
-    use game_core::hierarchy::Hierarchy;
-
-    use crate::state::asset::{NifScene, Node};
-
-    #[test]
-    fn merge_skeletons_disjunct() {
-        let mut nodes = Hierarchy::new();
-        let root = nodes.append(
-            None,
-            Node {
-                name: "root".to_owned(),
-                ..Default::default()
-            },
-        );
-        let a = nodes.append(
-            Some(root),
-            Node {
-                name: "a".to_owned(),
-                ..Default::default()
-            },
-        );
-        let b = nodes.append(
-            Some(a),
-            Node {
-                name: "b".to_owned(),
-                ..Default::default()
-            },
-        );
-
-        let mut nif = NifScene {
-            handle: None,
-            nodes,
-        };
-    }
 }

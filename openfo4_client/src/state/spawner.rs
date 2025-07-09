@@ -10,7 +10,6 @@ use openfo4_esp::{FormId, RecordData, ZString};
 use crate::cell::CellId;
 use crate::loader::FileLoader;
 
-use super::asset::Instance;
 use super::esp::EspLoader;
 
 #[derive(Clone, Debug)]
@@ -66,9 +65,4 @@ async fn load_record(loader: &EspLoader, file_loader: &FileLoader, id: FormId) -
     if let Some(model) = model {}
 
     buffer
-}
-
-#[derive(Clone, Debug)]
-pub struct Instances {
-    instances: HashMap<ZString, Vec<Instance>>,
 }

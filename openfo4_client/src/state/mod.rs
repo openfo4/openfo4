@@ -10,25 +10,22 @@ pub mod terrain;
 
 use std::f32::consts::PI;
 use std::fs::File;
-use std::io::{BufRead, BufReader};
+use std::io::BufReader;
 use std::sync::Arc;
 
-use asset::{Instance, NifLoader};
 use esp::EspLoader;
 use game_common::components::Transform;
-use game_common::world::control_frame;
 use game_core::time::Time;
 use game_input::keyboard::KeyCode;
-use game_tasks::{Task, TaskPool};
+use game_tasks::TaskPool;
 use game_tracing::trace_span;
 use game_window::events::WindowEvent;
-use glam::{IVec2, Quat, Vec2, Vec3};
-use hecs::{CommandBuffer, With, World};
+use glam::{IVec2, Vec3};
+use hecs::World;
 use level::{Level, Streamer};
-use openfo4_animation::skeleton::SkeletonInstance;
 use openfo4_asset::AssetLoader;
 use openfo4_core::events::EventBus;
-use openfo4_esp::{EspFile, FormId, RecordChildren};
+use openfo4_esp::EspFile;
 use openfo4_physics::PhysicsPipeline;
 
 use crate::assets::nif_v2::NifLoaderContext;
@@ -36,7 +33,7 @@ use crate::assets::{AssetServer, FileLoadContext};
 use crate::cell::CellId;
 use crate::components::{Camera, NiTransform};
 use crate::events::Event;
-use crate::loader::{FileLoader, Reader};
+use crate::loader::FileLoader;
 use crate::shared::SharedState;
 use crate::systems;
 use crate::systems::camera::CameraMode;
@@ -47,7 +44,6 @@ use crate::systems::camera::CameraMode;
 pub struct GameState {
     pool: Arc<TaskPool>,
     world: World,
-    tasks: Vec<Task<Vec<Instance>>>,
     shared: Arc<SharedState>,
     loader: Arc<FileLoader>,
     level: Level,
@@ -55,7 +51,6 @@ pub struct GameState {
     events: Vec<Event>,
     anim_event: Option<&'static str>,
     assets: AssetServer,
-    nif_loader: NifLoader,
     asset_loader: AssetLoader,
     event_bus: EventBus,
 }
@@ -68,7 +63,6 @@ impl GameState {
         let file_loader = Arc::new(FileLoader::new([""]));
         loader.push(file);
         let mut assets = AssetServer::new(file_loader.clone(), pool.clone());
-        let mut nif_loader = NifLoader::new(file_loader.clone(), shared.clone());
 
         let asset_loader = AssetLoader::new();
         asset_loader.register::<crate::assets::nif_v2::NifScene>(NifLoaderContext::new(
@@ -98,7 +92,6 @@ impl GameState {
         Self {
             pool,
             world: World::new(),
-            tasks: Vec::new(),
             shared,
             level,
             loader: file_loader.clone(),
@@ -106,17 +99,10 @@ impl GameState {
             events: Vec::new(),
             anim_event: None,
             assets,
-            nif_loader,
             asset_loader,
             event_bus: EventBus::new(),
         }
     }
-
-    // pub fn load_test(&mut self) {
-    //     let reader = self.loader.open("meshes/ammo/10mm/10mmammo.nif").unwrap();
-    //     let fut = load_nif(self.loader.clone(), self.shared.clone(), reader);
-    //     self.tasks.push(self.pool.spawn(fut));
-    // }
 
     pub fn init_camera(&mut self) {
         let distance = std::env::var("OF4_DIST")
@@ -141,24 +127,11 @@ impl GameState {
 
         self.level.update(&mut self.world, &mut self.events);
 
-        self.tasks.retain_mut(|task| {
-            let Some(instances) = task.get_output() else {
-                return true;
-            };
-
-            for instance in instances {
-                self.world.spawn((instance.transform, instance));
-            }
-
-            false
-        });
-
         animation_test::animation_test(
             &self.loader,
             &self.shared,
             &mut self.world,
             &self.assets,
-            &self.nif_loader,
             &self.asset_loader,
         );
 
