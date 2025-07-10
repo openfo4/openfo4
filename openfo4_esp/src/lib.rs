@@ -17,12 +17,12 @@ use std::mem::MaybeUninit;
 
 use bytes::Buf;
 use records::{
-    Action, Activator, Ammo, Armor, Book, Cell, Climate, Container, Empty, Furniture, GameSetting,
-    Hazard, IdleMarker, Ingestible, Key, Keyword, Land, LandTexture, LeveledActor, LeveledItem,
-    Light, LocationReferenceType, MiscObject, Note, Npc, PlacedGrenade, PlacedHazard, PlacedNpc,
-    PlacedObject, Projectile, Race, ShaderParticleGeometry, StaticCollection, Tes4, TextureSet,
-    VisualEffect, Weather, Worldspace, ASPC, CLAS, CMPO, DMGT, DOOR, ENCH, FACT, FLOR, GLOB, GRAS,
-    HDPT, INGR, MGEF, MSTT, SOUN, SPEL, STAT, TACT, TRNS,
+    AcousticSpace, Action, Activator, Ammo, Armor, Book, Cell, Climate, Container, Empty,
+    Furniture, GameSetting, Hazard, IdleMarker, Ingestible, Key, Keyword, Land, LandTexture,
+    LeveledActor, LeveledItem, Light, LocationReferenceType, MiscObject, Note, Npc, PlacedGrenade,
+    PlacedHazard, PlacedNpc, PlacedObject, Projectile, Race, ShaderParticleGeometry,
+    StaticCollection, Tes4, TextureSet, VisualEffect, Weather, Worldspace, CLAS, CMPO, DMGT, DOOR,
+    ENCH, FACT, FLOR, GLOB, GRAS, HDPT, INGR, MGEF, MSTT, SOUN, SPEL, STAT, TACT, TRNS,
 };
 
 use crate::records::{
@@ -351,7 +351,7 @@ where
             HeadPart => HDPT,
             Race => Race,
             Sound => SOUN,
-            AcousticSpace => ASPC,
+            AcousticSpace => AcousticSpace,
             MagicEffect => MGEF,
             LandTexture => LandTexture,
             Enchantment => ENCH,
@@ -555,7 +555,7 @@ pub enum RecordData {
     HDPT(HDPT),
     Race(Race),
     SOUN(SOUN),
-    ASPC(ASPC),
+    AcousticSpace(AcousticSpace),
     MGEF(MGEF),
     LandTexture(LandTexture),
     ENCH(ENCH),
@@ -710,7 +710,7 @@ as_record_kind_impl! {
     HDPT => RecordKind::HeadPart,
     Race => RecordKind::Race,
     SOUN => RecordKind::Sound,
-    ASPC => RecordKind::AcousticSpace,
+    AcousticSpace => RecordKind::AcousticSpace,
     MGEF => RecordKind::MagicEffect,
     LandTexture => RecordKind::LandTexture,
     ENCH => RecordKind::Enchantment,

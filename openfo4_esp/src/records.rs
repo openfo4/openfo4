@@ -924,18 +924,33 @@ pub struct SOUN {
     pub sdsc: FormId,
 }
 
+/// An acoustic Space defines the ambient sounds played in a cell.
 #[derive(Clone, Debug, Record)]
-pub struct ASPC {
+pub struct AcousticSpace {
     #[record("EDID")]
-    pub edid: ZString,
+    pub id: ZString,
     #[record("OBND")]
-    pub obnd: Bounds,
+    pub object_bounds: Bounds,
+    /// Looping ambient sound.
+    ///
+    /// Reference to a [`SoundDescriptor`] record.
     #[record("SNAM")]
-    pub snam: Option<FormId>,
+    pub looping_sound: Option<FormId>,
+    /// Use the sound from a region.
+    ///
+    /// Reference to a [`Region`] record.
     #[record("TDAT")]
-    pub tdat: Option<FormId>,
+    pub region_sound: Option<FormId>,
+    /// Reveberation data to use.
+    ///
+    /// Reference to a [`ReverbParameters`] record.
     #[record("BNAM")]
-    pub bnam: Option<FormId>,
+    pub environment_type: Option<FormId>,
+    #[record("XTRI")]
+    pub is_interior: Option<bool>,
+    /// Attenuation in db as a factor of 100.
+    #[record("WNAM")]
+    pub weather_attenuation: Option<u16>,
 }
 
 #[derive(Clone, Debug, Record)]
@@ -4596,12 +4611,12 @@ pub struct ConditionData {
     pub value: f32,
     pub function: u16,
     _pad1: [u8; 2],
-    pub parameter1: (),
-    pub parameter2: (),
+    pub parameter1: u32,
+    pub parameter2: u32,
     /// The object on which the function should be run on.
     pub object: ConditionDataObject,
     pub reference: FormId,
-    pub parameter3: (),
+    pub parameter3: u32,
 }
 
 #[derive(Copy, Clone, Debug, BinaryStruct)]
