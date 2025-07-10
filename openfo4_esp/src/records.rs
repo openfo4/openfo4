@@ -4,7 +4,7 @@ use glam::Vec3;
 use openfo4_esp_derive::{BinaryStruct, Record};
 
 use crate::fields::{FieldMap, Read, SubRecordArray, SubRecordSection};
-use crate::vmad::VirtualMachineAdapter;
+use crate::vmad::{QuestFragments, VirtualMachineAdapter};
 use crate::{Decode, Error, FormId, LString, Rgb, RgbPadded, Text, ZString};
 
 macro_rules! impl_decode_bitflags {
@@ -4086,7 +4086,7 @@ pub struct Quest {
     #[record("EDID")]
     pub id: Option<ZString>,
     #[record("VMAD")]
-    pub virtual_machine_adapter: Option<VirtualMachineAdapter>,
+    pub virtual_machine_adapter: Option<VirtualMachineAdapter<QuestFragments>>,
 }
 
 #[derive(Clone, Debug, Record)]

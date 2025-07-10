@@ -31,8 +31,18 @@ fn main() {
     // dbg!(file.lookup(None, FormId(0x3c0f0)));
     // todo!()
     dbg!(file.lookup(None, FormId(0x80e)));
+    dbg!(file.lookup(None, FormId(0x3648)));
 
-    return;
+    // return;
+
+    let anims = file
+        .lookup_all(Some(RecordKind::Animation))
+        .collect::<Result<Vec<_>, _>>()
+        .unwrap();
+
+    file.lookup_all(None)
+        .collect::<Result<Vec<_>, _>>()
+        .unwrap();
 
     let anims = file
         .lookup_all(Some(RecordKind::Animation))

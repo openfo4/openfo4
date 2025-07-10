@@ -3,11 +3,15 @@ use bytes::Buf;
 use crate::{Decode, Error, FormId, U16String};
 
 #[derive(Clone, Debug)]
-pub struct VirtualMachineAdapter {
+pub struct VirtualMachineAdapter<T = ()> {
     pub scripts: Vec<Script>,
+    pub fragments: Option<T>,
 }
 
-impl Decode for VirtualMachineAdapter {
+impl<T> Decode for VirtualMachineAdapter<T>
+where
+    T: DecodeScriptSection<Error = Error>,
+{
     type Error = Error;
 
     fn decode<B>(mut buf: B) -> Result<Self, Self::Error>
@@ -23,10 +27,16 @@ impl Decode for VirtualMachineAdapter {
 
         let num_scripts = u16::decode(&mut buf)?;
         let scripts = (0..num_scripts)
-            .map(|_| Script::decode(&mut buf, object_format))
+            .map(|_| Script::decode_section(&mut buf, version, object_format))
             .collect::<Result<_, _>>()?;
 
-        Ok(Self { scripts })
+        let fragments = if buf.has_remaining() {
+            Some(T::decode_section(&mut buf, version, object_format)?)
+        } else {
+            None
+        };
+
+        Ok(Self { scripts, fragments })
     }
 }
 
@@ -37,8 +47,14 @@ pub struct Script {
     pub properties: Vec<Property>,
 }
 
-impl Script {
-    fn decode<B>(mut buf: B, object_format: ObjectFormat) -> Result<Self, Error>
+impl DecodeScriptSection for Script {
+    type Error = Error;
+
+    fn decode_section<B>(
+        mut buf: B,
+        version: u16,
+        object_format: ObjectFormat,
+    ) -> Result<Self, Error>
     where
         B: Buf,
     {
@@ -47,7 +63,7 @@ impl Script {
 
         let num_properties = u16::decode(&mut buf)?;
         let properties = (0..num_properties)
-            .map(|_| Property::decode(&mut buf, object_format))
+            .map(|_| Property::decode_section(&mut buf, version, object_format))
             .collect::<Result<_, _>>()?;
 
         Ok(Self {
@@ -64,8 +80,14 @@ pub struct Property {
     pub value: Value,
 }
 
-impl Property {
-    fn decode<B>(mut buf: B, object_format: ObjectFormat) -> Result<Self, Error>
+impl DecodeScriptSection for Property {
+    type Error = Error;
+
+    fn decode_section<B>(
+        mut buf: B,
+        version: u16,
+        object_format: ObjectFormat,
+    ) -> Result<Self, Error>
     where
         B: Buf,
     {
@@ -76,7 +98,7 @@ impl Property {
             // Reduce step
             while let Some(prop) = stack.pop() {
                 let can_reduce = match &prop.value {
-                    Value::Object(_, _) => true,
+                    Value::Object(_) => true,
                     Value::String(_) => true,
                     Value::Int(_) => true,
                     Value::Float(_) => true,
@@ -121,24 +143,8 @@ impl Property {
                     let value = match ty {
                         // Object
                         1 => {
-                            let (form, alias) = match object_format {
-                                ObjectFormat::V1 => {
-                                    let form = FormId::decode(&mut buf)?;
-                                    let alias = u16::decode(&mut buf)?;
-                                    u16::decode(&mut buf)?;
-                                    (form, alias)
-                                }
-                                ObjectFormat::V2 => {
-                                    u16::decode(&mut buf)?;
-                                    let alias = u16::decode(&mut buf)?;
-                                    let form = FormId::decode(&mut buf)?;
-                                    (form, alias)
-                                }
-                            };
-
-                            let alias = (alias != u16::MAX).then_some(alias);
-
-                            Value::Object(form, alias)
+                            let value = Object::decode_section(&mut buf, version, object_format)?;
+                            Value::Object(value)
                         }
                         // String
                         2 => {
@@ -229,24 +235,8 @@ impl Property {
 
                     let value = match ty {
                         ValueType::Object => {
-                            let (form, alias) = match object_format {
-                                ObjectFormat::V1 => {
-                                    let form = FormId::decode(&mut buf)?;
-                                    let alias = u16::decode(&mut buf)?;
-                                    u16::decode(&mut buf)?;
-                                    (form, alias)
-                                }
-                                ObjectFormat::V2 => {
-                                    u16::decode(&mut buf)?;
-                                    let alias = u16::decode(&mut buf)?;
-                                    let form = FormId::decode(&mut buf)?;
-                                    (form, alias)
-                                }
-                            };
-
-                            let alias = (alias != u16::MAX).then_some(alias);
-
-                            Value::Object(form, alias)
+                            let value = Object::decode_section(&mut buf, version, object_format)?;
+                            Value::Object(value)
                         }
                         // String
                         ValueType::String => {
@@ -304,13 +294,50 @@ impl Property {
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Value {
-    Object(FormId, Option<u16>),
+    Object(Object),
     String(String),
     Int(i32),
     Float(f32),
     Bool(bool),
     Array(Vec<Value>, u32),
     Struct(Vec<Property>, u32),
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Object {
+    pub form: FormId,
+    pub alias: Option<u16>,
+}
+
+impl DecodeScriptSection for Object {
+    type Error = Error;
+
+    fn decode_section<B>(
+        mut buf: B,
+        _version: u16,
+        object_format: ObjectFormat,
+    ) -> Result<Self, Self::Error>
+    where
+        B: Buf,
+    {
+        let (form, alias) = match object_format {
+            ObjectFormat::V1 => {
+                let form = FormId::decode(&mut buf)?;
+                let alias = u16::decode(&mut buf)?;
+                u16::decode(&mut buf)?;
+                (form, alias)
+            }
+            ObjectFormat::V2 => {
+                u16::decode(&mut buf)?;
+                let alias = u16::decode(&mut buf)?;
+                let form = FormId::decode(&mut buf)?;
+                (form, alias)
+            }
+        };
+
+        let alias = (alias != u16::MAX).then_some(alias);
+        Ok(Self { form, alias })
+    }
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
@@ -336,9 +363,144 @@ enum ValueType {
     Struct,
 }
 
+trait DecodeScriptSection: Sized {
+    type Error;
+
+    fn decode_section<B>(
+        buf: B,
+        version: u16,
+        object_format: ObjectFormat,
+    ) -> Result<Self, Self::Error>
+    where
+        B: Buf;
+}
+
+impl<T> DecodeScriptSection for T
+where
+    T: Decode,
+{
+    type Error = T::Error;
+
+    fn decode_section<B>(
+        buf: B,
+        _version: u16,
+        _object_format: ObjectFormat,
+    ) -> Result<Self, Self::Error>
+    where
+        B: Buf,
+    {
+        T::decode(buf)
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct QuestFragments {
+    pub script: Script,
+    pub fragments: Vec<QuestFragment>,
+    pub aliases: Vec<QuestAlias>,
+}
+
+impl DecodeScriptSection for QuestFragments {
+    type Error = Error;
+
+    fn decode_section<B>(
+        mut buf: B,
+        version: u16,
+        object_format: ObjectFormat,
+    ) -> Result<Self, Self::Error>
+    where
+        B: Buf,
+    {
+        u8::decode(&mut buf)?; // Unknwon?
+        let fragment_count = u16::decode(&mut buf)?;
+
+        let script = Script::decode_section(&mut buf, version, object_format)?;
+
+        let fragments = (0..fragment_count)
+            .map(|_| QuestFragment::decode(&mut buf))
+            .collect::<Result<_, _>>()?;
+
+        let alias_count = u16::decode(&mut buf)?;
+        let aliases = (0..alias_count)
+            .map(|_| QuestAlias::decode_section(&mut buf, version, object_format))
+            .collect::<Result<_, _>>()?;
+
+        Ok(Self {
+            script,
+            fragments,
+            aliases,
+        })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct QuestFragment {
+    pub quest_stage: i16,
+    pub quest_stage_index: u32,
+    pub script_name: String,
+    pub fragment_name: String,
+}
+
+impl Decode for QuestFragment {
+    type Error = Error;
+
+    fn decode<B>(mut buf: B) -> Result<Self, Self::Error>
+    where
+        B: Buf,
+    {
+        let quest_stage = i16::decode(&mut buf)?;
+        u16::decode(&mut buf)?; // Unknown?
+        let quest_stage_index = u32::decode(&mut buf)?;
+        u8::decode(&mut buf)?; // Unknown?
+        let script_name = U16String::decode(&mut buf)?;
+        let fragment_name = U16String::decode(&mut buf)?;
+
+        dbg!(&script_name, &fragment_name);
+
+        Ok(Self {
+            quest_stage,
+            quest_stage_index,
+            script_name: script_name.0,
+            fragment_name: fragment_name.0,
+        })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct QuestAlias {
+    pub object: Object,
+    pub scripts: Vec<Script>,
+}
+
+impl DecodeScriptSection for QuestAlias {
+    type Error = Error;
+
+    fn decode_section<B>(
+        mut buf: B,
+        version: u16,
+        object_format: ObjectFormat,
+    ) -> Result<Self, Self::Error>
+    where
+        B: Buf,
+    {
+        let object = Object::decode_section(&mut buf, version, object_format)?;
+
+        // VMAD version and object format again?
+        u16::decode(&mut buf)?;
+        u16::decode(&mut buf)?;
+
+        let script_count = u16::decode(&mut buf)?;
+        let scripts = (0..script_count)
+            .map(|_| Script::decode_section(&mut buf, version, object_format))
+            .collect::<Result<_, _>>()?;
+
+        Ok(Self { object, scripts })
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{ObjectFormat, Property, Value};
+    use super::{DecodeScriptSection, ObjectFormat, Property, Value};
 
     #[test]
     fn decode_property_struct_recursive() {
@@ -354,7 +516,7 @@ mod tests {
             123, 0, 0, 0, // Int value
         ];
 
-        let property = Property::decode(&input[..], ObjectFormat::V1).unwrap();
+        let property = Property::decode_section(&input[..], 0, ObjectFormat::V1).unwrap();
         assert_eq!(property.name, "A");
         let members = match &property.value {
             Value::Struct(members, _) => members,
@@ -389,7 +551,7 @@ mod tests {
             43, 0, 0, 0, // Value (Int)
         ];
 
-        let property = Property::decode(&input[..], ObjectFormat::V1).unwrap();
+        let property = Property::decode_section(&input[..], 0, ObjectFormat::V1).unwrap();
         assert_eq!(
             property,
             Property {
