@@ -18,12 +18,12 @@ use std::mem::MaybeUninit;
 
 use bytes::Buf;
 use records::{
-    Action, Activator, Armor, Book, Cell, Climate, Container, Empty, Furniture, GameSetting,
+    Action, Activator, Ammo, Armor, Book, Cell, Climate, Container, Empty, Furniture, GameSetting,
     Hazard, IdleMarker, Ingestible, Key, Land, LandTexture, LeveledActor, LeveledItem, Light,
     LocationReferenceType, MiscObject, Note, Npc, PlacedGrenade, PlacedHazard, PlacedNpc,
     PlacedObject, Projectile, Race, ShaderParticleGeometry, StaticCollection, Tes4, TextureSet,
-    VisualEffect, Weather, Worldspace, AMMO, ASPC, CLAS, CMPO, DMGT, DOOR, ENCH, FACT, FLOR, GLOB,
-    GRAS, HDPT, INGR, KYWD, MGEF, MSTT, SOUN, SPEL, STAT, TACT, TRNS,
+    VisualEffect, Weather, Worldspace, ASPC, CLAS, CMPO, DMGT, DOOR, ENCH, FACT, FLOR, GLOB, GRAS,
+    HDPT, INGR, KYWD, MGEF, MSTT, SOUN, SPEL, STAT, TACT, TRNS,
 };
 
 use crate::records::{
@@ -373,7 +373,7 @@ where
             Flora => FLOR,
             Furniture => Furniture,
             Weapon => Weapon,
-            Ammo => AMMO,
+            Ammo => Ammo,
             Npc => Npc,
             LeveledActor => LeveledActor,
             Key => Key,
@@ -577,7 +577,7 @@ pub enum RecordData {
     FLOR(FLOR),
     Furniture(Furniture),
     Weapon(Weapon),
-    AMMO(AMMO),
+    Ammo(Ammo),
     Npc(Npc),
     LeveledActor(LeveledActor),
     Key(Key),
@@ -730,7 +730,7 @@ as_record_kind_impl! {
     GRAS => RecordKind::Grass,
     FLOR => RecordKind::Flora,
     Furniture => RecordKind::Furniture,
-    AMMO => RecordKind::Ammo,
+    Ammo => RecordKind::Ammo,
     Npc => RecordKind::Npc,
     LeveledActor => RecordKind::LeveledActor,
     Key => RecordKind::Key,

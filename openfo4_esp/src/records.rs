@@ -2195,61 +2195,72 @@ pub enum MeleeSpeed {
     VeryFast = 4,
 }
 
+/// A Weapon Ammunition record.
 #[derive(Clone, Debug, Record)]
-#[cfg_attr(feature = "serde", derive(Serialize))]
-pub struct AMMO {
+#[non_exhaustive]
+pub struct Ammo {
+    /// The editor name of the record.
     #[record("EDID")]
-    pub edid: ZString,
+    pub id: ZString,
     #[record("OBND")]
-    pub obnd: Bounds,
+    pub object_bounds: Bounds,
+    #[record("PTRN")]
+    pub preview_transform: Option<FormId>,
+    /// The localized name of the record.
     #[record("FULL")]
-    pub full: Option<LString>,
+    pub full_name: Option<LString>,
+    /// The worldspace model of the item.
     #[record("MODL")]
-    pub modl: Option<ZString>,
-    // TODO
-    #[record("MODT")]
-    pub modt: Option<()>,
-    #[record("ICON")]
-    pub icon: Option<ZString>,
-    #[record("MICO")]
-    pub mico: Option<ZString>,
+    pub model: Model,
     #[record("DEST")]
-    pub dest: DEST,
+    pub destruction: DEST,
+    /// The sound played when the item is picked up.
+    ///
+    /// Reference to a [`SoundDescriptor`].
     #[record("YNAM")]
-    pub ynam: Option<FormId>,
+    pub sound_pickup: Option<FormId>,
+    /// The sound played when the item is dropped.
+    ///
+    /// Reference to a [`SoundDescriptor`].
     #[record("ZNAM")]
-    pub znam: Option<FormId>,
+    pub sound_drop: Option<FormId>,
     #[record("DESC")]
     pub desc: Option<LString>,
     #[record("KSIZ")]
-    pub ksiz: Option<u32>,
+    _keyword_count: Option<u32>,
+    /// A list of keywords attached to the item.
+    ///
+    /// Reference to a [`KYWD`].
     #[record("KWDA")]
-    pub kwda: Option<Keywords>,
+    pub keywords: Array<FormId>,
     #[record("DATA")]
-    pub data: AMMO_DATA,
+    pub data: AmmoItemData,
     #[record("DNAM")]
-    pub dnam: AMMO_DNAM,
+    pub projectile_data: AmmoProjectileData,
+    #[record("ONAM")]
+    pub short_name: Option<LString>,
     #[record("NAM1")]
     pub casing_model: Option<ZString>,
-    // TODO
     #[record("NAM2")]
-    pub casing_model_info: Option<()>,
-    #[record("ONAM")]
-    pub short_name: Option<()>,
+    pub casing_model_info: Option<ModelInfo>,
 }
 
+/// Item related data about an [`Ammo`] record.
 #[derive(Copy, Clone, Debug, BinaryStruct)]
-#[cfg_attr(feature = "serde", derive(Serialize))]
-pub struct AMMO_DATA {
+pub struct AmmoItemData {
+    /// The value of the item.
     pub value: u32,
+    /// The weight of the item inside an inventory.
     pub weight: f32,
 }
 
+/// Combat related data about an [`Ammo`] record.
 #[derive(Copy, Clone, Debug, BinaryStruct)]
-#[cfg_attr(feature = "serde", derive(Serialize))]
-pub struct AMMO_DNAM {
-    pub projectile_id: FormId,
+pub struct AmmoProjectileData {
+    /// The object spawned when the ammo is fired.
+    pub projectile: FormId,
     pub flags: u32,
+    /// The damage that the projectile deals on impact.
     pub damage: f32,
     pub health: u32,
 }
