@@ -116,16 +116,23 @@ pub enum TypedValue {
     Rgb(),
 }
 
+/// A keyword.
 #[derive(Clone, Debug, Record)]
-pub struct KYWD {
+#[non_exhaustive]
+pub struct Keyword {
+    /// The unique editor ID.
     #[record("EDID")]
-    pub edid: Option<ZString>,
+    pub id: Option<ZString>,
     #[record("CNAM")]
-    pub cnam: Option<RgbPadded<u8>>,
+    pub color: Option<RgbPadded<u8>>,
+    #[record("DNAM")]
+    pub notes: Option<ZString>,
     #[record("TNAM")]
-    pub tnam: Option<u32>,
+    pub r#type: Option<u32>,
+    #[record("DATA")]
+    pub attraction_rule: Option<FormId>,
     #[record("FULL")]
-    pub full: Option<u32>,
+    pub full_name: Option<LString>,
 }
 
 #[derive(Clone, Debug, Record)]
@@ -2174,7 +2181,7 @@ pub struct Ammo {
     _keyword_count: Option<u32>,
     /// A list of keywords attached to the item.
     ///
-    /// Reference to a [`KYWD`].
+    /// Reference to a [`Keyword`].
     #[record("KWDA")]
     pub keywords: Array<FormId>,
     #[record("DATA")]

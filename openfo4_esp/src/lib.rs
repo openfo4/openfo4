@@ -18,11 +18,11 @@ use std::mem::MaybeUninit;
 use bytes::Buf;
 use records::{
     Action, Activator, Ammo, Armor, Book, Cell, Climate, Container, Empty, Furniture, GameSetting,
-    Hazard, IdleMarker, Ingestible, Key, Land, LandTexture, LeveledActor, LeveledItem, Light,
-    LocationReferenceType, MiscObject, Note, Npc, PlacedGrenade, PlacedHazard, PlacedNpc,
+    Hazard, IdleMarker, Ingestible, Key, Keyword, Land, LandTexture, LeveledActor, LeveledItem,
+    Light, LocationReferenceType, MiscObject, Note, Npc, PlacedGrenade, PlacedHazard, PlacedNpc,
     PlacedObject, Projectile, Race, ShaderParticleGeometry, StaticCollection, Tes4, TextureSet,
     VisualEffect, Weather, Worldspace, ASPC, CLAS, CMPO, DMGT, DOOR, ENCH, FACT, FLOR, GLOB, GRAS,
-    HDPT, INGR, KYWD, MGEF, MSTT, SOUN, SPEL, STAT, TACT, TRNS,
+    HDPT, INGR, MGEF, MSTT, SOUN, SPEL, STAT, TACT, TRNS,
 };
 
 use crate::records::{
@@ -338,7 +338,7 @@ where
         read_data! {
             Tes4 => Tes4,
             GameSetting => GameSetting,
-            Keyword => KYWD,
+            Keyword => Keyword,
             LocationReferenceType => LCRT,
             Action => Action,
             Transform => TRNS,
@@ -542,7 +542,7 @@ pub struct Record {
 pub enum RecordData {
     Tes4(Tes4),
     GameSetting(GameSetting),
-    KYWD(KYWD),
+    Keyword(Keyword),
     LCRT(LocationReferenceType),
     Action(Action),
     TRNS(TRNS),
@@ -697,7 +697,7 @@ macro_rules! as_record_kind_impl {
 as_record_kind_impl! {
     Tes4 => RecordKind::Tes4,
     GameSetting => RecordKind::GameSetting,
-    KYWD => RecordKind::Keyword,
+    Keyword => RecordKind::Keyword,
     LocationReferenceType => RecordKind::LocationReferenceType,
     Action => RecordKind::Action,
     TRNS => RecordKind::Transform,
