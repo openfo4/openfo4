@@ -25,7 +25,6 @@ macro_rules! impl_decode_bitflags {
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct Empty;
 
 impl Read for Empty {
@@ -37,16 +36,12 @@ impl Read for Empty {
 }
 
 #[derive(Copy, Clone, Debug, BinaryStruct)]
-#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct Rgba<T> {
     pub r: T,
     pub g: T,
     pub b: T,
     pub a: T,
 }
-
-#[cfg(feature = "serde")]
-use serde::Serialize;
 
 #[derive(Clone, Debug, Record)]
 pub struct Tes4 {
@@ -70,7 +65,6 @@ pub struct Tes4Header {
 }
 
 #[derive(Clone, Debug)]
-#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct GameSetting {
     pub id: ZString,
     pub data: TypedValue,
@@ -110,7 +104,6 @@ impl Read for GameSetting {
 }
 
 #[derive(Clone, Debug)]
-#[cfg_attr(feature = "serde", derive(Serialize))]
 pub enum TypedValue {
     Boolean(bool),
     Int(i32),
@@ -124,7 +117,6 @@ pub enum TypedValue {
 }
 
 #[derive(Clone, Debug, Record)]
-#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct KYWD {
     #[record("EDID")]
     pub edid: Option<ZString>,
@@ -137,7 +129,6 @@ pub struct KYWD {
 }
 
 #[derive(Clone, Debug, Record)]
-#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct LocationReferenceType {
     #[record("EDID")]
     pub id: ZString,
@@ -148,7 +139,6 @@ pub struct LocationReferenceType {
 }
 
 #[derive(Clone, Debug, Record)]
-#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct Action {
     #[record("EDID")]
     pub edid: Option<ZString>,
@@ -159,7 +149,6 @@ pub struct Action {
 }
 
 #[derive(Clone, Debug, Record)]
-#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct TRNS {
     #[record("EDID")]
     pub edid: ZString,
@@ -168,7 +157,6 @@ pub struct TRNS {
 }
 
 #[derive(Clone, Debug, Record)]
-#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct CMPO {
     #[record("EDID")]
     pub edid: ZString,
@@ -186,7 +174,6 @@ pub struct CMPO {
 }
 
 #[derive(Copy, Clone, Debug)]
-#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct Bounds {
     x1: i16,
     y1: i16,
@@ -271,7 +258,6 @@ bitflags! {
 impl_decode_bitflags!(TextureSetFlags: u16);
 
 #[derive(Clone, Debug, Record)]
-#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct GLOB {
     #[record("EDID")]
     pub edid: ZString,
@@ -282,7 +268,6 @@ pub struct GLOB {
 }
 
 #[derive(Clone, Debug, Record)]
-#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct DMGT {
     #[record("EDID")]
     pub edid: ZString,
@@ -291,7 +276,6 @@ pub struct DMGT {
 }
 
 #[derive(Clone, Debug, Record)]
-#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct CLAS {
     #[record("EDID")]
     pub edid: ZString,
@@ -308,7 +292,6 @@ pub struct CLAS {
 }
 
 #[derive(Clone, Debug)]
-#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct ClassData {
     _unknown0: u32,
     training_skill: u8,
@@ -345,7 +328,6 @@ impl Decode for ClassData {
 }
 
 #[derive(Clone, Debug, Record)]
-#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct FACT {
     #[record("EDID")]
     pub edid: ZString,
@@ -386,7 +368,6 @@ pub struct FACT {
 }
 
 #[derive(Copy, Clone, Debug)]
-#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct InterfactionRelation {
     faction: FormId,
     _unknown0: i32,
@@ -409,7 +390,6 @@ impl Decode for InterfactionRelation {
 }
 
 #[derive(Copy, Clone, Debug, BinaryStruct)]
-#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct FACT_CRVA {
     arrest: u8,
     attack_on_sight: u8,
@@ -424,7 +404,6 @@ pub struct FACT_CRVA {
 }
 
 #[derive(Copy, Clone, Debug, BinaryStruct)]
-#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct FACT_VENV {
     pub start_hour: u16,
     pub end_hour: u16,
@@ -435,7 +414,6 @@ pub struct FACT_VENV {
 }
 
 #[derive(Copy, Clone, Debug, BinaryStruct)]
-#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct FACT_PLVD {
     pub specification_type: u32,
     pub form: FormId,
@@ -443,7 +421,6 @@ pub struct FACT_PLVD {
 }
 
 #[derive(Clone, Debug, Record)]
-#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct HDPT {
     #[record("EDID")]
     pub edid: ZString,
@@ -472,7 +449,6 @@ pub struct HDPT {
 }
 
 #[derive(Clone, Debug, Record)]
-#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct Model {
     #[record("MODL")]
     pub model: Option<ZString>,
@@ -481,7 +457,6 @@ pub struct Model {
 }
 
 #[derive(Clone, Debug)]
-#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct ModelInfo {
     a: u32,
     b: u32,
@@ -859,7 +834,6 @@ pub struct RaceBehaviorGraph {
 }
 
 #[derive(Copy, Clone, Debug, BinaryStruct)]
-#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct RACE_BODT {
     pub biped_object_flags: u32,
     pub general_flags: u32,
@@ -867,7 +841,6 @@ pub struct RACE_BODT {
 }
 
 #[derive(Copy, Clone, Debug, BinaryStruct)]
-#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct RACE_DATA {
     pub skill_1: u8,
     pub racial_bonus_for_skill_1: u8,
@@ -917,11 +890,9 @@ pub struct RACE_DATA {
 }
 
 #[derive(Copy, Clone, Debug, BinaryStruct)]
-#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct RACE_MODT {}
 
 #[derive(Copy, Clone, Debug, BinaryStruct)]
-#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct RACE_ATKD {
     pub damage_mult: f32,
     pub attack_chance: f32,
@@ -937,7 +908,6 @@ pub struct RACE_ATKD {
 }
 
 #[derive(Clone, Debug, Record)]
-#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct SOUN {
     #[record("EDID")]
     pub edid: ZString,
@@ -948,7 +918,6 @@ pub struct SOUN {
 }
 
 #[derive(Clone, Debug, Record)]
-#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct ASPC {
     #[record("EDID")]
     pub edid: ZString,
@@ -963,7 +932,6 @@ pub struct ASPC {
 }
 
 #[derive(Clone, Debug, Record)]
-#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct MGEF {
     #[record("EDID")]
     pub edid: ZString,
@@ -993,7 +961,6 @@ pub struct MGEF {
 }
 
 #[derive(Copy, Clone, Debug, BinaryStruct)]
-#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct MGEF_DATA {
     pub flags: u32,
     pub base_cost: f32,
@@ -1036,14 +1003,12 @@ pub struct MGEF_DATA {
 }
 
 #[derive(Copy, Clone, Debug, BinaryStruct)]
-#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct MGEF_SNDD {
     pub typ: u32,
     pub sound_desc: FormId,
 }
 
 #[derive(Clone, Debug, Record)]
-#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct LandTexture {
     #[record("EDID")]
     pub id: ZString,
@@ -1060,14 +1025,12 @@ pub struct LandTexture {
 }
 
 #[derive(Copy, Clone, Debug, BinaryStruct)]
-#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct LandTextureHavokData {
     pub friction: u8,
     pub restitution: u8,
 }
 
 #[derive(Clone, Debug, Record)]
-#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct ENCH {
     #[record("EDID")]
     pub edid: ZString,
@@ -1087,7 +1050,6 @@ pub struct ENCH {
 }
 
 #[derive(Copy, Clone, Debug, BinaryStruct)]
-#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct EnchantedItem {
     pub enchantment_cost: u32,
     pub flags: u32,
@@ -1101,7 +1063,6 @@ pub struct EnchantedItem {
 }
 
 #[derive(Copy, Clone, Debug, BinaryStruct)]
-#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct EffectItem {
     pub magnitude: f32,
     pub area_of_effect: u32,
@@ -1109,7 +1070,6 @@ pub struct EffectItem {
 }
 
 #[derive(Clone, Debug, Record)]
-#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct SPEL {
     #[record("EDID")]
     pub edid: ZString,
@@ -1130,7 +1090,6 @@ pub struct SPEL {
 }
 
 #[derive(Copy, Clone, Debug, BinaryStruct)]
-#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct SpellItem {
     pub spell_cost: u32,
     pub flags: u32,
@@ -1197,7 +1156,6 @@ bitflags! {
 impl_decode_bitflags!(ActivatorFlags: u16);
 
 #[derive(Clone, Debug, Record)]
-#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct TACT {
     #[record("EDID")]
     pub edid: ZString,
@@ -1311,7 +1269,6 @@ pub struct ArmorModel {
 }
 
 #[derive(Copy, Clone, Debug, BinaryStruct)]
-#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct ARMO_BOD2 {
     pub body_part_flags: u32,
 }
@@ -1420,7 +1377,6 @@ pub struct ObjectModTemplateItemInclude {
 }
 
 #[derive(Clone, Debug, Record)]
-#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct Book {
     #[record("EDID")]
     pub edid: ZString,
@@ -1460,7 +1416,6 @@ pub struct Book {
 }
 
 #[derive(Copy, Clone, Debug, BinaryStruct)]
-#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct BOOK_DATA {
     pub flags: u8,
     pub typ: u8,
@@ -1607,8 +1562,6 @@ pub struct INGR {
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "serde", derive(Serialize))]
-#[cfg_attr(feature = "serde", serde(transparent))]
 pub struct Array<T>(pub Vec<T>);
 
 impl<T> Decode for Array<T>
@@ -1632,8 +1585,6 @@ where
 
 #[deprecated(note = "use Array<FormId> instead")]
 #[derive(Clone, Debug)]
-#[cfg_attr(feature = "serde", derive(Serialize))]
-#[cfg_attr(feature = "serde", serde(transparent))]
 pub struct Keywords(Vec<FormId>);
 
 impl Decode for Keywords {
@@ -1654,21 +1605,18 @@ impl Decode for Keywords {
 }
 
 #[derive(Copy, Clone, Debug, BinaryStruct)]
-#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct INGR_DATA {
     pub value: u32,
     pub weight: f32,
 }
 
 #[derive(Copy, Clone, Debug, BinaryStruct)]
-#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct INGR_ENIT {
     pub ingredient_value: u32,
     pub flags: u32,
 }
 
 #[derive(Copy, Clone, Debug, BinaryStruct)]
-#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct INGR_EFIT {
     pub magnitude: f32,
     pub area_of_effect: u32,
@@ -1871,7 +1819,6 @@ pub struct StaticCollectionPartPlacement {
 }
 
 #[derive(Clone, Debug, Record)]
-#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct MSTT {
     #[record("EDID")]
     pub edid: ZString,
@@ -1998,21 +1945,18 @@ pub struct Furniture {
 }
 
 // #[derive(Copy, Clone, Debug, BinaryStruct)]
-// #[cfg_attr(feature = "serde", derive(Serialize))]
 // pub struct FURN_WBDT {
 //     pub workbench: u8,
 //     pub actor_value_skill: u8,
 // }
 
 #[derive(Copy, Clone, Debug, BinaryStruct)]
-#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct FURN_NAM0 {
     _unknown0: u16,
     pub flags: u16,
 }
 
 #[derive(Copy, Clone, Debug, BinaryStruct)]
-#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct FURN_FNPR {
     pub flags_marker_type: u16,
     pub flags_marker_entry_point: u16,
@@ -2266,7 +2210,6 @@ pub struct AmmoProjectileData {
 }
 
 #[derive(Clone, Debug, Record)]
-#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct DEST {}
 
 #[derive(Clone, Debug, Record)]
@@ -2385,7 +2328,6 @@ pub struct Npc {
 }
 
 #[derive(Copy, Clone, Debug, BinaryStruct)]
-#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct NpcBaseStats {
     pub flags: NpcBaseFlags,
     pub xp_value_offset: i16,
@@ -2400,7 +2342,6 @@ pub struct NpcBaseStats {
 
 bitflags! {
     #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
-    #[cfg_attr(feature = "serde", derive(Serialize))]
     pub struct NpcBaseFlags: u32 {
         const FEMALE = 0x01;
         const ESSENTIAL = 0x02;
@@ -2422,14 +2363,12 @@ impl_decode_bitflags! {
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, BinaryStruct)]
-#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct NpcFactionMember {
     pub faction: FormId,
     pub rank: i8,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, BinaryStruct)]
-#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct NpcTemplateActors {
     pub traits: FormId,
     pub stats: FormId,
@@ -2447,21 +2386,18 @@ pub struct NpcTemplateActors {
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, BinaryStruct)]
-#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct NpcPerk {
     pub perk: FormId,
     pub rank: i8,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, BinaryStruct)]
-#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct NpcContainerObject {
     pub item: FormId,
     pub count: u32,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, BinaryStruct)]
-#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct NpcOwner {
     pub owner: FormId,
     pub value: u32,
@@ -2469,7 +2405,6 @@ pub struct NpcOwner {
 }
 
 #[derive(Copy, Clone, Debug, BinaryStruct)]
-#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct NpcAiData {
     pub aggression: NpcAiAggression,
     pub confidence: NpcAiConfidence,
@@ -2485,7 +2420,6 @@ pub struct NpcAiData {
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, BinaryStruct)]
 #[primitive(u8)]
-#[cfg_attr(feature = "serde", derive(Serialize))]
 pub enum NpcAiAggression {
     Unaggressive = 0x00,
     Aggressive = 0x01,
@@ -2495,7 +2429,6 @@ pub enum NpcAiAggression {
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, BinaryStruct)]
 #[primitive(u8)]
-#[cfg_attr(feature = "serde", derive(Serialize))]
 pub enum NpcAiConfidence {
     Cowardly = 0x00,
     Cautious = 0x01,
@@ -2506,7 +2439,6 @@ pub enum NpcAiConfidence {
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, BinaryStruct)]
 #[primitive(u8)]
-#[cfg_attr(feature = "serde", derive(Serialize))]
 pub enum NpcAiMorality {
     AnyCrime = 0x00,
     ViolenceAgainstEnemies = 0x01,
@@ -2516,7 +2448,6 @@ pub enum NpcAiMorality {
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, BinaryStruct)]
 #[primitive(u8)]
-#[cfg_attr(feature = "serde", derive(Serialize))]
 pub enum NpcAiMood {
     Neutral = 0x00,
     Angry = 0x01,
@@ -2530,7 +2461,6 @@ pub enum NpcAiMood {
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, BinaryStruct)]
 #[primitive(u8)]
-#[cfg_attr(feature = "serde", derive(Serialize))]
 pub enum NpcAiAssistance {
     HelpsNobody = 0x00,
     HelpsAllies = 0x01,
@@ -2539,7 +2469,6 @@ pub enum NpcAiAssistance {
 
 bitflags! {
     #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
-    #[cfg_attr(feature = "serde", derive(Serialize))]
     pub struct NpcAiDataFlags: u8 {
         const AGGRO_RADIUS_BEHAVIOR = 0x01;
     }
@@ -2548,7 +2477,6 @@ bitflags! {
 impl_decode_bitflags! { NpcAiDataFlags: u8 }
 
 #[derive(Copy, Clone, Debug, BinaryStruct)]
-#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct NpcStats {
     pub calculated_health: u16,
     pub calculated_action_points: u16,
@@ -2559,7 +2487,6 @@ pub struct NpcStats {
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, BinaryStruct)]
 #[primitive(u32)]
-#[cfg_attr(feature = "serde", derive(Serialize))]
 pub enum SoundLevel {
     Loud = 0,
     Normal = 1,
@@ -2569,7 +2496,6 @@ pub enum SoundLevel {
 }
 
 #[derive(Copy, Clone, Debug, BinaryStruct)]
-#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct NpcWeight {
     pub thin: f32,
     pub muscular: f32,
@@ -2577,7 +2503,6 @@ pub struct NpcWeight {
 }
 
 #[derive(Clone, Debug, Record)]
-#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct LeveledActor {
     #[record("EDID")]
     pub id: ZString,
@@ -2605,7 +2530,6 @@ pub struct LeveledActor {
 
 bitflags! {
     #[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Hash)]
-    #[cfg_attr(feature = "serde", derive(Serialize))]
     pub struct LeveledActorFlags: u8 {
         const ALL_LEVELS = 0x01;
         const EACH = 0x02;
@@ -2615,7 +2539,6 @@ bitflags! {
 impl_decode_bitflags!(LeveledActorFlags: u8);
 
 #[derive(Copy, Clone, Debug, BinaryStruct)]
-#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct LeveledListEntry {
     pub level: u32,
     pub reference: FormId,
@@ -2624,7 +2547,6 @@ pub struct LeveledListEntry {
 }
 
 #[derive(Copy, Clone, Debug, BinaryStruct)]
-#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct FilterKeywordChances {
     pub keyword: FormId,
     pub chance: u32,
@@ -2659,14 +2581,12 @@ pub struct Key {
 }
 
 #[derive(Copy, Clone, Debug, BinaryStruct)]
-#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct KeyData {
     pub value: u32,
     pub weight: f32,
 }
 
 #[derive(Clone, Debug, Record)]
-#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct Ingestible {
     #[record("EDID")]
     pub id: ZString,
@@ -2708,7 +2628,6 @@ pub struct Ingestible {
 }
 
 #[derive(Copy, Clone, Debug, BinaryStruct)]
-#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct EffectData {
     pub value: i32,
     pub flags: EffectDataFlags,
@@ -2719,7 +2638,6 @@ pub struct EffectData {
 
 bitflags! {
     #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
-    #[cfg_attr(feature = "serde", derive(Serialize))]
     pub struct EffectDataFlags: u32 {
         const NO_AUTO_CALC = 0x00001;
         const FOOD = 0x00002;
@@ -2731,7 +2649,6 @@ bitflags! {
 impl_decode_bitflags!(EffectDataFlags: u32);
 
 #[derive(Clone, Debug, Record)]
-#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct IdleMarker {
     #[record("EDID")]
     pub id: ZString,
@@ -2753,7 +2670,6 @@ pub struct IdleMarker {
 
 bitflags! {
     #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
-    #[cfg_attr(feature = "serde", derive(Serialize))]
     pub struct IdleMarkerFlags: u8 {
         const RUN_IN_SEQUENCE = 0x01;
         const DO_ONCE = 0x04;
@@ -2794,7 +2710,6 @@ pub struct Note {
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, BinaryStruct)]
 #[primitive(u8)]
-#[cfg_attr(feature = "serde", derive(Serialize))]
 pub enum NoteType {
     Sound = 0,
     Voice = 1,
@@ -2803,14 +2718,12 @@ pub enum NoteType {
 }
 
 #[derive(Copy, Clone, Debug, BinaryStruct)]
-#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct NoteData {
     pub value: u32,
     pub weight: f32,
 }
 
 #[derive(Clone, Debug, Record)]
-#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct Projectile {
     #[record("EDID")]
     pub id: ZString,
@@ -2827,7 +2740,6 @@ pub struct Projectile {
 }
 
 #[derive(Copy, Clone, Debug, BinaryStruct)]
-#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct ProjectileData {
     pub flags: ProjectileFlags,
     pub ty: ProjectileType,
@@ -2858,7 +2770,6 @@ pub struct ProjectileData {
 
 bitflags! {
     #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
-    #[cfg_attr(feature = "serde", derive(Serialize))]
     pub struct ProjectileFlags: u16 {
         const HITSCAN = 0x0001;
         const EXPLOSION = 0x0002;
@@ -2880,7 +2791,6 @@ impl_decode_bitflags!(ProjectileFlags: u16);
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, BinaryStruct)]
 #[primitive(u16)]
-#[cfg_attr(feature = "serde", derive(Serialize))]
 pub enum ProjectileType {
     Missle = 0x01,
     Lobber = 0x02,
@@ -2892,7 +2802,6 @@ pub enum ProjectileType {
 }
 
 #[derive(Clone, Debug, Record)]
-#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct Hazard {
     #[record("EDID")]
     pub id: ZString,
@@ -2908,7 +2817,6 @@ pub struct Hazard {
 }
 
 #[derive(Copy, Clone, Debug, BinaryStruct)]
-#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct HazardData {
     pub limit: u32,
     pub radius: f32,
@@ -2925,7 +2833,6 @@ pub struct HazardData {
 
 bitflags! {
     #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
-    #[cfg_attr(feature = "serde", derive(Serialize))]
     pub struct HazardFlags: u32 {
         const AFFECTS_PLAYER_ONLY = 0x01;
         const INHERIT_DURATION_FROM_SPAWN_SPELL = 0x02;
@@ -2939,7 +2846,6 @@ bitflags! {
 impl_decode_bitflags!(HazardFlags: u32);
 
 #[derive(Copy, Clone, Debug, BinaryStruct)]
-#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct HazardTaperEffectiveness {
     pub full_effect_radius: f32,
     pub taper_weight: f32,
@@ -3054,7 +2960,6 @@ pub struct TreeData {
 }
 
 #[derive(Clone, Debug, Record)]
-#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct LeveledItem {
     #[record("EDID")]
     pub id: ZString,
@@ -3082,7 +2987,6 @@ pub struct LeveledItem {
 }
 
 #[derive(Clone, Debug, Record)]
-#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct Weather {
     #[record("EDID")]
     pub id: ZString,
@@ -3199,7 +3103,6 @@ pub struct Weather {
 }
 
 #[derive(Copy, Clone, Debug)]
-#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct CloudSpeed(pub [f32; 32]);
 
 impl Decode for CloudSpeed {
@@ -3219,7 +3122,6 @@ impl Decode for CloudSpeed {
 }
 
 #[derive(Copy, Clone, Debug, BinaryStruct)]
-#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct TimeOfDaySet<T> {
     pub sunrise: T,
     pub day: T,
@@ -3228,7 +3130,6 @@ pub struct TimeOfDaySet<T> {
 }
 
 #[derive(Copy, Clone, Debug, BinaryStruct)]
-#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct TimeOfDaySetExtended<T> {
     pub sunrise: T,
     pub day: T,
@@ -3241,11 +3142,9 @@ pub struct TimeOfDaySetExtended<T> {
 }
 
 #[derive(Copy, Clone, Debug, BinaryStruct)]
-#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct WeatherColors {
     pub sky_upper: TimeOfDaySet<Rgba<u8>>,
     pub fog_near: TimeOfDaySet<Rgba<u8>>,
-    #[cfg_attr(feature = "serde", serde(skip))]
     _unknown0: TimeOfDaySet<Rgba<u8>>,
     pub ambient: TimeOfDaySet<Rgba<u8>>,
     pub sunlight: TimeOfDaySet<Rgba<u8>>,
@@ -3264,7 +3163,6 @@ pub struct WeatherColors {
 }
 
 #[derive(Copy, Clone, Debug, BinaryStruct)]
-#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct WeatherFogDistance {
     pub day_near: f32,
     pub day_far: f32,
@@ -3278,7 +3176,6 @@ pub struct WeatherFogDistance {
 
 /// FIXME: Most of the u8s are quantized floats
 #[derive(Copy, Clone, Debug, BinaryStruct)]
-#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct WeatherData {
     pub wind_speed: u8,
     _unknown0: u8,
@@ -3300,7 +3197,6 @@ pub struct WeatherData {
 
 bitflags! {
     #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
-    #[cfg_attr(feature = "serde", derive(Serialize))]
     pub struct WeatherFlags: u8 {
         const PLEASANT = 0x01;
         const CLOUDY = 0x02;
@@ -3314,7 +3210,6 @@ bitflags! {
 impl_decode_bitflags!(WeatherFlags: u8);
 
 #[derive(Copy, Clone, Debug, BinaryStruct)]
-#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct AmbientSound {
     pub sound: FormId,
     pub ty: AmbientSoundType,
@@ -3322,7 +3217,6 @@ pub struct AmbientSound {
 
 #[derive(Copy, Clone, Debug, BinaryStruct)]
 #[primitive(u16)]
-#[cfg_attr(feature = "serde", derive(Serialize))]
 pub enum AmbientSoundType {
     Default = 0,
     Precip = 1,
@@ -3331,7 +3225,6 @@ pub enum AmbientSoundType {
 }
 
 #[derive(Copy, Clone, Debug, BinaryStruct)]
-#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct WeatherLightingData {
     pub directional_ambient_x_up: Rgba<u8>,
     pub directional_ambient_x_down: Rgba<u8>,
@@ -3344,7 +3237,6 @@ pub struct WeatherLightingData {
 }
 
 #[derive(Copy, Clone, Debug, BinaryStruct)]
-#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct WeatherMagic {
     pub on_lightning_strike_spell: FormId,
     pub on_lightning_strike_threshold: f32,
@@ -3354,7 +3246,6 @@ pub struct WeatherMagic {
 }
 
 #[derive(Clone, Debug, Record)]
-#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct Climate {
     #[record("EDID")]
     pub id: ZString,
@@ -3370,7 +3261,6 @@ pub struct Climate {
 }
 
 #[derive(Copy, Clone, Debug, BinaryStruct)]
-#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct ClimateWeather {
     pub weather: FormId,
     pub chance: u32,
@@ -3378,7 +3268,6 @@ pub struct ClimateWeather {
 }
 
 #[derive(Copy, Clone, Debug, BinaryStruct)]
-#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct ClimateTiming {
     pub sunrise_begin: u8,
     pub sunrise_end: u8,
@@ -3389,7 +3278,6 @@ pub struct ClimateTiming {
 }
 
 #[derive(Clone, Debug, Record)]
-#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct ShaderParticleGeometry {
     #[record("EDID")]
     pub id: ZString,
@@ -3400,7 +3288,6 @@ pub struct ShaderParticleGeometry {
 }
 
 #[derive(Copy, Clone, Debug, BinaryStruct)]
-#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct ShaderParticleGeometryData {
     pub gravity_velocity: f32,
     pub rotation_velocity: f32,
@@ -3417,7 +3304,6 @@ pub struct ShaderParticleGeometryData {
 }
 
 #[derive(Clone, Debug, Record)]
-#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct VisualEffect {
     #[record("EDID")]
     pub id: ZString,
@@ -3426,7 +3312,6 @@ pub struct VisualEffect {
 }
 
 #[derive(Copy, Clone, Debug, BinaryStruct)]
-#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct VisualEffectData {
     pub effect_art: FormId,
     pub shader: FormId,
@@ -3435,7 +3320,6 @@ pub struct VisualEffectData {
 
 bitflags! {
     #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
-    #[cfg_attr(feature = "serde", derive(Serialize))]
     pub struct VisualEffectFlags: u32 {
         const ROTATE_TO_FACE_TARGET = 0x01;
         const ATTACH_TO_CAMERA = 0x02;
@@ -3461,7 +3345,6 @@ pub struct Region {
 pub struct NAVI {}
 
 #[derive(Clone, Debug, Record)]
-#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct Cell {
     #[record("EDID")]
     pub id: Option<ZString>,
@@ -3508,7 +3391,6 @@ pub struct Cell {
 
 bitflags! {
     #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
-    #[cfg_attr(feature = "serde", derive(Serialize))]
     pub struct CellFlags: u16 {
         const INTERIOR = 0x0001;
         const HAS_WATER = 0x0002;
@@ -3528,7 +3410,6 @@ bitflags! {
 impl_decode_bitflags!(CellFlags: u16);
 
 #[derive(Copy, Clone, Debug, BinaryStruct)]
-#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct Grid {
     pub x: i32,
     pub y: i32,
@@ -3537,7 +3418,6 @@ pub struct Grid {
 
 bitflags! {
     #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
-    #[cfg_attr(feature = "serde", derive(Serialize))]
     pub struct GridFlags: u32 {
         const FORCE_HIDE_LAND_QUAD1 = 0x1;
         const FORCE_HIDE_LAND_QUAD2 = 0x2;
@@ -3549,7 +3429,6 @@ bitflags! {
 impl_decode_bitflags!(GridFlags: u32);
 
 #[derive(Copy, Clone, Debug, BinaryStruct)]
-#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct CellLighting {
     pub ambient: RgbPadded<u8>,
     pub directional: RgbPadded<u8>,
@@ -3590,7 +3469,6 @@ pub struct CellLighting {
 
 bitflags! {
     #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
-    #[cfg_attr(feature = "serde", derive(Serialize))]
     pub struct CellLightingInheritFlags: u32 {
         const AMBIENT_COLOR = 0x0001;
         const DIRECTIONAL_COLOR = 0x0002;
@@ -3609,7 +3487,6 @@ bitflags! {
 impl_decode_bitflags!(CellLightingInheritFlags: u32);
 
 #[derive(Copy, Clone, Debug, BinaryStruct)]
-#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct Vec3Padded<T> {
     pub x: T,
     pub y: T,
@@ -3650,7 +3527,6 @@ pub struct PlacedNpc {
 
 #[derive(Copy, Clone, Debug, BinaryStruct)]
 #[primitive(u32)]
-#[cfg_attr(feature = "serde", derive(Serialize))]
 pub enum LevelModifier {
     Easy = 0,
     Medium = 1,
@@ -3659,7 +3535,6 @@ pub enum LevelModifier {
 }
 
 #[derive(Copy, Clone, Debug, BinaryStruct)]
-#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct LinkedReference {
     pub keyword: FormId,
     pub reference: FormId,
@@ -3667,7 +3542,6 @@ pub struct LinkedReference {
 
 bitflags! {
     #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
-    #[cfg_attr(feature = "serde", derive(Serialize))]
     pub struct ActivationParentFlags: u8 {
         const PARENT_ACTIVATE_ONLY = 0x01;
     }
@@ -3676,14 +3550,12 @@ bitflags! {
 impl_decode_bitflags!(ActivationParentFlags: u8);
 
 #[derive(Copy, Clone, Debug, BinaryStruct)]
-#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct ActivateParent {
     pub form: FormId,
     pub delay: f32,
 }
 
 #[derive(Copy, Clone, Debug, BinaryStruct)]
-#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct PositionRotation {
     pub position_x: f32,
     pub position_y: f32,
@@ -3784,7 +3656,6 @@ pub struct PlacedObject {
 }
 
 #[derive(Copy, Clone, Debug, BinaryStruct)]
-#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct PlacedObjectPrimitive {
     pub bound_half_extents: [f32; 3],
     pub color: [f32; 3],
@@ -3793,7 +3664,6 @@ pub struct PlacedObjectPrimitive {
 }
 
 #[derive(Copy, Clone, Debug, BinaryStruct)]
-#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct DoorTeleport {
     pub destination: FormId,
     pub position: [f32; 3],
@@ -3802,14 +3672,12 @@ pub struct DoorTeleport {
 }
 
 #[derive(Copy, Clone, Debug, BinaryStruct)]
-#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct PortalDestination {
     pub origin: FormId,
     pub destination: FormId,
 }
 
 #[derive(Copy, Clone, Debug, BinaryStruct)]
-#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct PlacedObjectLightData {
     pub fov_offset_from_base_object: f32,
     pub fade_offset_from_base_ojbect: f32,
@@ -3818,7 +3686,6 @@ pub struct PlacedObjectLightData {
 }
 
 #[derive(Copy, Clone, Debug, BinaryStruct)]
-#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct AlphaCutoff {
     pub current_alpha_cutoff: u8,
     pub default_alpha_cutoff: u8,
@@ -3900,7 +3767,6 @@ pub enum LockLevel {
 }
 
 #[derive(Clone, Debug, Record)]
-#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct PlacedGrenade {
     #[record("EDID")]
     pub id: Option<ZString>,
@@ -3923,7 +3789,6 @@ pub struct PlacedHazard {
 }
 
 #[derive(Clone, Debug, Record)]
-#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct Worldspace {
     #[record("EDID")]
     pub id: ZString,
@@ -3977,7 +3842,6 @@ pub struct Worldspace {
 
 bitflags! {
     #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
-    #[cfg_attr(feature = "serde", derive(Serialize))]
     pub struct ParentWorldspaceFlags: u16 {
         const USE_LAND_DATA = 0x01;
         const USE_LOD_DATA = 0x02;
@@ -3991,14 +3855,12 @@ bitflags! {
 impl_decode_bitflags!(ParentWorldspaceFlags: u16);
 
 #[derive(Copy, Clone, Debug, BinaryStruct)]
-#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct WorldspaceLandData {
     pub default_land_height: f32,
     pub default_water_height: f32,
 }
 
 #[derive(Copy, Clone, Debug, BinaryStruct)]
-#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct WorldspaceMapData {
     pub width: u32,
     pub height: u32,
@@ -4012,7 +3874,6 @@ pub struct WorldspaceMapData {
 }
 
 #[derive(Copy, Clone, Debug, BinaryStruct)]
-#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct WorldMapOffsetData {
     pub world_map_scale: f32,
     pub cell_x_offset: f32,
@@ -4037,7 +3898,6 @@ pub struct Land {
 }
 
 #[derive(Copy, Clone, Debug, BinaryStruct)]
-#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct LandLandTexture {
     pub land_texture: FormId,
     pub quadrant: Quadrant,
@@ -4062,7 +3922,6 @@ pub struct LandTextureAlphaLayerPoint {
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, BinaryStruct)]
 #[primitive(u8)]
-#[cfg_attr(feature = "serde", derive(Serialize))]
 pub enum Quadrant {
     BottomLeft = 0,
     BottomRight = 1,
@@ -4071,9 +3930,7 @@ pub enum Quadrant {
 }
 
 #[derive(Clone, Debug)]
-#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct LandVertexHeight {
-    #[serde(skip)]
     pub heightmap: [[f32; 33]; 33],
 }
 

@@ -7,7 +7,6 @@ use fields::FieldMap;
 use flate2::read::ZlibDecoder;
 use glam::Vec3;
 use hashbrown::HashMap;
-use serde::Serialize;
 use thiserror::Error;
 
 use std::fmt::Debug;
@@ -1519,16 +1518,6 @@ impl Decode for ZString {
     }
 }
 
-impl Serialize for ZString {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        let s = std::str::from_utf8(self.as_bytes()).unwrap();
-        serializer.serialize_str(s)
-    }
-}
-
 #[derive(Copy, Clone, Debug)]
 struct FieldHeader {
     key: Text<4>,
@@ -1742,18 +1731,7 @@ impl<const N: usize> Debug for Text<N> {
     }
 }
 
-impl<const N: usize> Serialize for Text<N> {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        let s = std::str::from_utf8(&self.0).unwrap_or("?");
-        serializer.serialize_str(s)
-    }
-}
-
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
-#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct LString(u32);
 
 impl Decode for LString {
@@ -1768,7 +1746,6 @@ impl Decode for LString {
 }
 
 #[derive(Copy, Clone, Debug)]
-#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct RgbPadded<T> {
     r: T,
     g: T,
@@ -1795,7 +1772,7 @@ where
     }
 }
 
-#[derive(Copy, Clone, PartialEq, Eq, Hash, Serialize)]
+#[derive(Copy, Clone, PartialEq, Eq, Hash)]
 pub struct FormId(pub u32);
 
 impl std::fmt::Debug for FormId {
@@ -1816,7 +1793,6 @@ impl Decode for FormId {
 }
 
 #[derive(Copy, Clone, Debug)]
-#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct Rgb<T> {
     r: T,
     g: T,
