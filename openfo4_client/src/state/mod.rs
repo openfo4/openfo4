@@ -59,8 +59,31 @@ impl GameState {
     pub fn new(shared: Arc<SharedState>, pool: Arc<TaskPool>) -> Self {
         let mut file =
             EspFile::new(BufReader::new(File::open("../../Fallout4.esm").unwrap())).unwrap();
+
+        let sources = [
+            "../../archive/raw/Data/Fallout4 - Animations.ba2",
+            "../../archive/raw/Data/Fallout4 - Interface.ba2",
+            "../../archive/raw/Data/Fallout4 - Materials.ba2",
+            "../../archive/raw/Data/Fallout4 - Meshes.ba2",
+            "../../archive/raw/Data/Fallout4 - MeshesExtra.ba2",
+            "../../archive/raw/Data/Fallout4 - Misc.ba2",
+            "../../archive/raw/Data/Fallout4 - Nvflex.ba2",
+            "../../archive/raw/Data/Fallout4 - Shaders.ba2",
+            "../../archive/raw/Data/Fallout4 - Sounds.ba2",
+            "../../archive/raw/Data/Fallout4 - Startup.ba2",
+            "../../archive/raw/Data/Fallout4 - Textures1.ba2",
+            "../../archive/raw/Data/Fallout4 - Textures2.ba2",
+            "../../archive/raw/Data/Fallout4 - Textures3.ba2",
+            "../../archive/raw/Data/Fallout4 - Textures4.ba2",
+            "../../archive/raw/Data/Fallout4 - Textures5.ba2",
+            "../../archive/raw/Data/Fallout4 - Textures6.ba2",
+            "../../archive/raw/Data/Fallout4 - Textures7.ba2",
+            "../../archive/raw/Data/Fallout4 - Textures8.ba2",
+            "../../archive/raw/Data/Fallout4 - Textures9.ba2",
+        ];
+
         let mut loader = EspLoader::new();
-        let file_loader = Arc::new(FileLoader::new([""]));
+        let file_loader = Arc::new(FileLoader::new(sources));
         loader.push(file);
         let mut assets = AssetServer::new(file_loader.clone(), pool.clone());
 
@@ -127,13 +150,13 @@ impl GameState {
 
         self.level.update(&mut self.world, &mut self.events);
 
-        animation_test::animation_test(
-            &self.loader,
-            &self.shared,
-            &mut self.world,
-            &self.assets,
-            &self.asset_loader,
-        );
+        // animation_test::animation_test(
+        //     &self.loader,
+        //    &self.shared,
+        //    &mut self.world,
+        //    &self.assets,
+        //    &self.asset_loader,
+        //);
 
         systems::ni_transform::compute_transform_from_ni_transform(&mut self.world);
         systems::ni_transform::compute_cell_ids_from_ni_transform(&mut self.world);

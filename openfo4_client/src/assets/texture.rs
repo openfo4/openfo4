@@ -35,14 +35,14 @@ impl Asset for FileImageHandle {
                 .map_err(|err| Error(format!("failed to read file {}: {}", path, err)))?;
 
             let format = match image.format {
-                Format::Dxt1 => TextureFormat::Bc1RgbaUnorm,
-                Format::Dxt2 => TextureFormat::Bc2RgbaUnorm,
-                Format::Dxt3 => TextureFormat::Bc2RgbaUnorm,
-                Format::Dxt4 => TextureFormat::Bc3RgbaUnorm,
-                Format::Dxt5 => TextureFormat::Bc3RgbaUnorm,
-                Format::Bc5U => TextureFormat::Bc5RgUnorm,
-                Format::Rgb8 => TextureFormat::Rgb8Unorm,
-                Format::Rgba8 => TextureFormat::Rgba8Unorm,
+                Format::Bc1Unorm => TextureFormat::Bc1RgbaUnorm,
+                Format::Bc2Unorm => TextureFormat::Bc2RgbaUnorm,
+                Format::Bc3Unorm => TextureFormat::Bc3RgbaUnorm,
+                Format::Bc5Unorm => TextureFormat::Bc5RgUnorm,
+                Format::Rgba8Unorm => TextureFormat::Rgb8Unorm,
+                Format::Bgra8Unorm => TextureFormat::Bgra8Unorm,
+                Format::Bgra8UnormSrgb => TextureFormat::Bgra8UnormSrgb,
+                _ => todo!(),
             };
 
             let mips = image

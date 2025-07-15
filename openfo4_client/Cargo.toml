@@ -24,6 +24,7 @@ openfo4_core = { version = "0.1.0", path = "../openfo4_core" }
 openfo4_physics = { version = "0.1.0", path = "../openfo4_physics" }
 openfo4_animation = { version = "0.1.0", path = "../openfo4_animation" }
 openfo4_asset = { version = "0.1.0", path = "../openfo4_asset" }
+openfo4_ba2 = { version = "0.1.0", path = "../openfo4_ba2" }
 
 glam = { version = "0.28.0", features = ["bytemuck"] }
 hecs = "0.10.5"
