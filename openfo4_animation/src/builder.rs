@@ -2,17 +2,21 @@ mod behavior_reference_generator;
 mod blender_generator;
 mod bs_assign_variables_modifier;
 mod bs_event_on_deactivate_modifier;
+mod bs_events_every_n_events_modifier;
 mod bs_is_active_modifier;
 mod bs_modify_once_modifier;
+mod bs_offset_animation_generator;
 mod bs_random_alarm_modifier;
 mod bs_timer_modifier;
 mod bsi_state_tagging_generator;
+mod clip_generator;
 mod event_driven_modifier;
 mod events_from_range_modifier;
 mod layer_generator;
 mod manual_selector_generator;
 mod pose_matching_generator;
 mod state_machine;
+mod timer_modifier;
 
 use std::collections::HashMap;
 use std::time::Duration;
@@ -213,7 +217,7 @@ impl BuildNode for HkObject {
             Self::BSAssignVariablesModifier(node) => node.children(state),
             Self::BSDirectAtModifier(node) => Ok(Vec::new()),
             Self::PoseMatchingGenerator(node) => node.children(state),
-            Self::TimerModifier(node) => Ok(Vec::new()),
+            Self::TimerModifier(node) => node.children(state),
             Self::BSRagdollContactListenerModifier(node) => Ok(Vec::new()),
             Self::PoweredRagdollControlsModifier(node) => Ok(Vec::new()),
             Self::ManualSelectorGenerator(node) => node.children(state),
@@ -223,18 +227,18 @@ impl BuildNode for HkObject {
             Self::KeyframesBonesModifier(node) => Ok(Vec::new()),
             Self::GetUpModifier(node) => Ok(Vec::new()),
             Self::EvaluateExpressionModifier(node) => Ok(Vec::new()),
-            Self::BSOffsetAnimationGenerator(node) => Ok(Vec::new()),
+            Self::BSOffsetAnimationGenerator(node) => node.children(state),
             Self::FootIkControlsModifier(node) => Ok(Vec::new()),
             Self::BehaviorReferenceGenerator(node) => node.children(state),
             Self::LayerGenerator(node) => node.children(state),
             Self::BSBehaviorGraphSwapGenerator(node) => node.children(state),
             Self::MirrorModifier(node) => Ok(Vec::new()),
             Self::BSEventEveryNEventsModifier(node) => Ok(Vec::new()),
-            Self::EventsFromRangeModifier(node) => Ok(Vec::new()),
-            Self::BSEventOnDeactivateModifier(node) => Ok(Vec::new()),
+            Self::EventsFromRangeModifier(node) => node.children(state),
+            Self::BSEventOnDeactivateModifier(node) => node.children(state),
             Self::BSiStateTaggingGenerator(node) => node.children(state),
             Self::BSCyclicBlendTransitionGenerator(node) => Ok(Vec::new()),
-            Self::BSTimerModifier(node) => Ok(Vec::new()),
+            Self::BSTimerModifier(node) => node.children(state),
             Self::BSRandomAlarmModifier(node) => node.children(state),
             Self::BSInterpValueModifier(node) => Ok(Vec::new()),
             Self::BSEventOnFalseToTrueModifier(node) => Ok(Vec::new()),
@@ -244,6 +248,8 @@ impl BuildNode for HkObject {
             Self::GetHandleOnBoneModifier(node) => Ok(Vec::new()),
             Self::HandIkControlsModifier(node) => Ok(Vec::new()),
             Self::BSRootTwistModifier(node) => Ok(Vec::new()),
+            Self::BSLookAtModifier(node) => Ok(Vec::new()),
+            Self::BSGetTimeStepModifier(node) => Ok(Vec::new()),
             x => todo!("{:?}", x),
             _ => todo!(),
         }
@@ -260,7 +266,7 @@ impl BuildNode for HkObject {
             Self::BSAssignVariablesModifier(node) => node.build(state),
             Self::BSDirectAtModifier(node) => Ok(None),
             Self::PoseMatchingGenerator(node) => node.build(state),
-            Self::TimerModifier(node) => Ok(None),
+            Self::TimerModifier(node) => node.build(state),
             Self::BSRagdollContactListenerModifier(node) => Ok(None),
             Self::PoweredRagdollControlsModifier(node) => Ok(None),
             Self::ManualSelectorGenerator(node) => node.build(state),
@@ -270,15 +276,15 @@ impl BuildNode for HkObject {
             Self::KeyframesBonesModifier(node) => Ok(None),
             Self::GetUpModifier(node) => Ok(None),
             Self::EvaluateExpressionModifier(node) => Ok(None),
-            Self::BSOffsetAnimationGenerator(node) => Ok(None),
+            Self::BSOffsetAnimationGenerator(node) => node.build(state),
             Self::FootIkControlsModifier(node) => Ok(None),
             Self::BehaviorReferenceGenerator(node) => node.build(state),
             Self::LayerGenerator(node) => node.build(state),
             Self::BSBehaviorGraphSwapGenerator(node) => node.build(state),
             Self::MirrorModifier(node) => Ok(None),
-            Self::BSEventEveryNEventsModifier(node) => Ok(None),
-            Self::EventsFromRangeModifier(node) => Ok(None),
-            Self::BSEventOnDeactivateModifier(node) => Ok(None),
+            Self::BSEventEveryNEventsModifier(node) => node.build(state),
+            Self::EventsFromRangeModifier(node) => node.build(state),
+            Self::BSEventOnDeactivateModifier(node) => node.build(state),
             Self::BSiStateTaggingGenerator(node) => node.build(state),
             Self::BSCyclicBlendTransitionGenerator(node) => Ok(None),
             Self::BSTimerModifier(node) => node.build(state),
@@ -291,6 +297,8 @@ impl BuildNode for HkObject {
             Self::GetHandleOnBoneModifier(node) => Ok(None),
             Self::HandIkControlsModifier(node) => Ok(None),
             Self::BSRootTwistModifier(node) => Ok(None),
+            Self::BSLookAtModifier(node) => Ok(None),
+            Self::BSGetTimeStepModifier(node) => Ok(None),
             _ => todo!(),
         }
     }
@@ -340,60 +348,6 @@ impl BuildNode for openfo4_hkx::behavior::ModifierList {
         Ok(Some(Node {
             name: self.parent.node.name.clone(),
             inner: NodeInner::List(list),
-            listeners: Vec::new(),
-            on_activate: Vec::new(),
-            on_deactivate: Vec::new(),
-            on_update: Vec::new(),
-        }))
-    }
-}
-
-impl BuildNode for openfo4_hkx::behavior::ClipGenerator {
-    fn build(&self, state: &mut GraphBuilderState<'_>) -> Result<Option<Node>, Error> {
-        let mut triggers = Vec::new();
-        if let Some(t) = &self.triggers {
-            for trigger in &*t.triggers {
-                let event = parse_event(state.file, &trigger.event);
-
-                let local_time = if trigger.relative_to_end_of_clip {
-                    // The offset is from the end of the clip.
-                    // If the `local_time` is > 0, then the trigger happens
-                    // after the end of the clip, but such a case can never happen!
-                    if trigger.local_time > 0.0 {
-                        continue;
-                    }
-
-                    trigger.local_time.abs()
-                } else {
-                    // The offset is from the start of the clip.
-                    // If the `local_time` is < 0, then the trigger happens
-                    // before the end of the clip, but such a case can never happen!
-                    if trigger.local_time < 0.0 {
-                        continue;
-                    }
-
-                    trigger.local_time.abs()
-                };
-
-                triggers.push(ClipTrigger {
-                    local_time: Duration::from_secs_f32(local_time),
-                    from_end: trigger.relative_to_end_of_clip,
-                    event,
-                });
-            }
-        }
-
-        let speed = self.playback_speed;
-        let animation_name = self.animation_name.replace("\\", "/");
-
-        Ok(Some(Node {
-            name: format!("{} {}", self.parent.node.name, animation_name),
-            inner: NodeInner::Clip(Clip {
-                path: self.animation_name.clone(),
-                triggers,
-                looping: matches!(self.mode, PlaybackMode::Looping),
-                speed,
-            }),
             listeners: Vec::new(),
             on_activate: Vec::new(),
             on_deactivate: Vec::new(),

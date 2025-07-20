@@ -1,4 +1,5 @@
 pub mod actions;
+pub mod anim_starter;
 pub mod animation;
 pub mod animation_test;
 pub mod asset;
@@ -35,6 +36,8 @@ use crate::components::{Camera, NiTransform};
 use crate::events::Event;
 use crate::loader::FileLoader;
 use crate::shared::SharedState;
+use crate::state::actions::{Action, Actions};
+use crate::state::anim_starter::{AnimationEventQueue, AnimationSystem};
 use crate::systems;
 use crate::systems::camera::CameraMode;
 
@@ -53,6 +56,8 @@ pub struct GameState {
     assets: AssetServer,
     asset_loader: AssetLoader,
     event_bus: EventBus,
+    animation: AnimationSystem,
+    actions: Actions,
 }
 
 impl GameState {
@@ -104,6 +109,8 @@ impl GameState {
         let actions = futures_lite::future::block_on(actions::Actions::load(&loader));
         dbg!(&actions);
 
+        let animation = AnimationSystem::new(&loader);
+
         let level = Level::new(
             loader,
             asset_loader.clone(),
@@ -124,6 +131,8 @@ impl GameState {
             assets,
             asset_loader,
             event_bus: EventBus::new(),
+            animation,
+            actions,
         }
     }
 
@@ -150,17 +159,19 @@ impl GameState {
 
         self.level.update(&mut self.world, &mut self.events);
 
-        // animation_test::animation_test(
-        //     &self.loader,
-        //    &self.shared,
-        //    &mut self.world,
-        //    &self.assets,
-        //    &self.asset_loader,
-        //);
+        animation_test::animation_test(
+            &self.loader,
+            &self.shared,
+            &mut self.world,
+            &self.assets,
+            &self.asset_loader,
+        );
 
         systems::ni_transform::compute_transform_from_ni_transform(&mut self.world);
         systems::ni_transform::compute_cell_ids_from_ni_transform(&mut self.world);
         systems::hierarchy::compute_global_transform(&mut self.world);
+
+        self.animation.update(&mut self.world);
 
         openfo4_animation::systems::drive_animations(&mut self.world, time, self.anim_event.take());
 
@@ -221,41 +232,86 @@ impl GameState {
                     ));
                 }
 
+                if !event.state.is_pressed() {
+                    return;
+                }
+
                 if event.key_code == Some(KeyCode::O) {
                     // self.anim_event = Some("g_weapForceEquip");
                     self.anim_event = Some("MoveStart");
                 }
                 if event.key_code == Some(KeyCode::P) {
                     // self.anim_event = Some("weapUnequip");
-                    self.anim_event = Some("CameraSneakStart");
+                    // self.anim_event = Some("CameraSneakStart");
+
+                    if let Some(action) = self.actions.0.get(&Action::Sneak) {
+                        for (_, events) in self.world.query_mut::<&mut AnimationEventQueue>() {
+                            events.0.push_back(*action);
+                        }
+                    }
                 }
                 if event.key_code == Some(KeyCode::I) {
                     // self.anim_event = Some("attackStart");
-                    self.anim_event = Some("CameraSneakStop");
+                    // self.anim_event = Some("CameraSneakStop");
                 }
                 if event.key_code == Some(KeyCode::U) {
                     // self.anim_event = Some("attackEnd");
                     // self.anim_event = Some("moveStartForward");
-                    self.anim_event = Some("CameraMoveStartSlave");
+                    // self.anim_event = Some("CameraMoveStartSlave");
+
+                    if let Some(action) = self.actions.0.get(&Action::MoveStart) {
+                        for (_, events) in self.world.query_mut::<&mut AnimationEventQueue>() {
+                            events.0.push_back(*action);
+                        }
+                    }
                 }
                 if event.key_code == Some(KeyCode::J) {
                     // self.anim_event = Some("attackStartAuto");
                     // self.anim_event = Some("moveStop");
-                    self.anim_event = Some("CameraMoveStopSlave");
+                    // self.anim_event = Some("CameraMoveStopSlave");
+
+                    if let Some(action) = self.actions.0.get(&Action::MoveStop) {
+                        for (_, events) in self.world.query_mut::<&mut AnimationEventQueue>() {
+                            events.0.push_back(*action);
+                        }
+                    }
                 }
                 if event.key_code == Some(KeyCode::K) {
                     // self.anim_event = Some("attackRelease");
-                    self.anim_event = Some("speedup");
+                    // self.anim_event = Some("speedup");
+                    if let Some(action) = self.actions.0.get(&Action::Jump) {
+                        for (_, events) in self.world.query_mut::<&mut AnimationEventQueue>() {
+                            events.0.push_back(*action);
+                        }
+                    }
                 }
                 if event.key_code == Some(KeyCode::L) {
                     // self.anim_event = Some("PerkCannibalFeed");
-                    self.anim_event = Some("speeddown");
+                    // self.anim_event = Some("speeddown");
+
+                    if let Some(action) = self.actions.0.get(&Action::PerkCannibal) {
+                        for (_, events) in self.world.query_mut::<&mut AnimationEventQueue>() {
+                            events.0.push_back(*action);
+                        }
+                    }
                 }
                 if event.key_code == Some(KeyCode::G) {
-                    self.anim_event = Some("EssentialDownStart");
+                    // self.anim_event = Some("EssentialDownStart");
+
+                    if let Some(action) = self.actions.0.get(&Action::BleedoutStart) {
+                        for (_, events) in self.world.query_mut::<&mut AnimationEventQueue>() {
+                            events.0.push_back(*action);
+                        }
+                    }
                 }
                 if event.key_code == Some(KeyCode::H) {
-                    self.anim_event = Some("EssentialDownExit");
+                    // self.anim_event = Some("EssentialDownExit");
+
+                    if let Some(action) = self.actions.0.get(&Action::BleedoutStop) {
+                        for (_, events) in self.world.query_mut::<&mut AnimationEventQueue>() {
+                            events.0.push_back(*action);
+                        }
+                    }
                 }
                 if event.key_code == Some(KeyCode::E) {
                     self.anim_event = Some("dump");

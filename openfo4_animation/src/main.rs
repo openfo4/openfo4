@@ -11,20 +11,20 @@ use openfo4_animation::{build_graph, builder::animation_graph};
 use openfo4_hkx::{HkObject, HkxFile};
 
 fn main() {
-    // let p = "../../archive/raw/Data/meshes/actors/character/behaviors/raiderrootbehavior.hkx";
+    let p = "../../archive/raw/Data/data/meshes/actors/character/behaviors/raiderrootbehavior.hkx";
     // let p = "../../archive/raw/Data/meshes/actors/alien/behaviors/alienrootbehavior.hkx";
     // let p =
     //     "../../archive/raw/Data/meshes/actors/shared/behaviors/aliensharedcorewrappingbehavior.hkx";
     // let p = "../../archive/raw/Data/meshes/actors/character/behaviors/usespinetrackingfurniturewrappingbehavior.hkx";
-    let p = "../../archive/raw/Data/meshes/actors/character/behaviors/weaponbehavior.hkx";
-    // let p = "../../archive/raw/Data/meshes/actors/character/behaviors/mtbehavior.hkx";
+    //let p = "../../archive/raw/Data/meshes/actors/character/behaviors/weaponbehavior.hkx";
+    let p = "../../archive/raw/Data/data/meshes/actors/character/behaviors/mtbehavior.hkx";
     //let p = "../../archive/raw/Data/meshes/actors/character/behaviors/dialoguebehavior.hkx";
     // let p = "../../archive/raw/Data/meshes/actors/turret/behaviors/turretstandingrootbehavior.hkx";
     // let p = "../../archive/raw/Data/meshes/actors/turret/behaviors/turretsharedbehavior.hkx";
     let x = std::fs::read(p).unwrap();
     let f = HkxFile::decode(&x[..]).unwrap();
 
-    let root = "../../archive/raw/Data/meshes/actors/turret";
+    let root = "../../archive/raw/Data/data/meshes/actors/turret";
 
     let root_file = std::fs::read(format!("{}/{}", root, "turretstanding.hkx")).unwrap();
     let root_file = HkxFile::decode(&root_file[..]).unwrap();

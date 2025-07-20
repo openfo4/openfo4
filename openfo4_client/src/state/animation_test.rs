@@ -19,6 +19,7 @@ use crate::cell::CellId;
 use crate::components::NiTransform;
 use crate::loader::FileLoader;
 use crate::shared::SharedState;
+use crate::state::anim_starter::{ActiveBehaviorGraphs, AnimationEventQueue};
 use crate::state::animation::{SkeletonConfig, load_anim};
 
 pub struct SkinInstance {
@@ -48,7 +49,9 @@ pub fn animation_test(
     let nif_skeleton = "actors/turret/characterassets/turretstandingskeleton.nif";
 
     let project_file = "actors/character/raiderproject.hkx";
-    let behavior_file = "meshes/actors/character/behaviors/mtbehavior.hkx";
+    let behavior_filename = "meshes/actors/character/behaviors/mtbehavior.hkx";
+    // let behavior_filename = "meshes/actors/character/behaviors/raiderrootbehavior.hkx";
+    let behavior_file = behavior_filename;
     let search_paths = [
         "meshes/actors/character/animations/mt/player",
         "meshes/actors/character/animations/mt/confident",
@@ -60,6 +63,8 @@ pub fn animation_test(
     // let skin_path = "meshes/actors/character/characterassets/malebody.nif";
     let skin_path = "meshes/armor/armoredcoat/outfitf.nif";
     let nif_skeleton = "actors/character/characterassets/skeleton.nif";
+
+    // let raider_root_path = "meshes/actors/character/behaviors/raiderrootbehavior.hkx";
 
     ONCE.get_or_init(|| {
         let (nif_skeleton, skeleton) =
@@ -255,6 +260,11 @@ pub fn animation_test(
                     },
                     AnimationDriver::new(Arc::new(graph)),
                     SkinInstances(skin_instances),
+                    ActiveBehaviorGraphs(vec![
+                        behavior_filename.replace("meshes/", ""),
+                        "actors/character/behaviors/raiderrootbehavior.hkx".to_owned(),
+                    ]),
+                    AnimationEventQueue::default(),
                 ),
             )
             .unwrap();

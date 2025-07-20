@@ -159,6 +159,7 @@ impl Level {
                     event.scene.instantiate(event.transform.into(), world);
                 }
                 SpawnEvent::SpawnTerrain(transform, object, collider) => {
+                    dbg!("TERRAIN");
                     world.spawn((
                         transform,
                         object,
@@ -301,8 +302,6 @@ async fn load_cell(
                     scale = 1.0;
                 }
                 RecordData::Land(land) => {
-                    return;
-
                     let positions: Vec<Vec3> = land
                         .vertex_height
                         .unwrap()
@@ -377,6 +376,8 @@ async fn load_cell(
                     }
 
                     for alpha_layer in &land.alpha_layer.0 {
+                        continue;
+
                         if alpha_layer.texture.land_texture == FormId(0) {
                             continue;
                         }

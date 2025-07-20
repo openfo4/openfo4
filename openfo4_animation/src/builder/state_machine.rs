@@ -64,13 +64,20 @@ impl BuildNode for openfo4_hkx::behavior::StateMachine {
         let mut state_id_to_index = HashMap::new();
 
         for state in &*self.states {
-            let Some(generator) = &state.generator else {
-                continue;
-            };
-
-            let Some(id) = builder_state.ptr_to_id.get(&generator.ptr) else {
-                continue;
-            };
+            // Note that it is possible that the children generator for this state
+            // evaluated to no node. In this case we must not skip the state entirely
+            // so that events and transitions are still handled correctly.
+            // We create a dummy node and use that when this case happens.
+            let id = state
+                .generator
+                .as_ref()
+                .and_then(|generator| builder_state.ptr_to_id.get(&generator.ptr).copied())
+                .unwrap_or_else(|| {
+                    builder_state.nodes.insert(Node {
+                        name: state.name.clone(),
+                        ..Default::default()
+                    })
+                });
 
             let mut enter_events = Vec::new();
             if let Some(events) = &state.enter_notify_events {
@@ -89,7 +96,7 @@ impl BuildNode for openfo4_hkx::behavior::StateMachine {
             let index = states.len();
             state_id_to_index.insert(state.state_id, index);
             states.push(State {
-                node: *id,
+                node: id,
                 enter_events,
                 exit_events,
             });

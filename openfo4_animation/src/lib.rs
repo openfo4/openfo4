@@ -833,7 +833,7 @@ pub struct Clip {
     pub path: String,
     pub triggers: Vec<ClipTrigger>,
     pub looping: bool,
-    pub speed: f32,
+    pub speed: ValueExpression,
 }
 
 #[derive(Clone, Debug)]

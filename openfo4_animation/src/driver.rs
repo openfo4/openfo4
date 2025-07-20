@@ -69,6 +69,7 @@ impl AnimationDriver {
             queue.push_back(DriverEvent::UpdateNode(*id));
         }
         for event in self.events.drain(..) {
+            dbg!(&event);
             queue.push_back(DriverEvent::HandleEvent(event));
         }
 
@@ -407,7 +408,8 @@ impl AnimationDriver {
 
                     let leader_timescale = anim_duration.as_secs_f32() / duration_sum.as_secs_f32();
 
-                    let delta = delta.mul_f32(clip.speed * leader_timescale);
+                    let clip_speed = clip.speed.eval(&self.variables).to_f32().unwrap();
+                    let delta = delta.mul_f32(clip_speed * leader_timescale);
 
                     if clip.looping {
                         // FIXME: Duration has no `Rem` impl?
@@ -442,7 +444,8 @@ impl AnimationDriver {
 
                     let start_time = clip_state.time;
 
-                    let delta = delta.mul_f32(clip.speed);
+                    let clip_speed = clip.speed.eval(&self.variables).to_f32().unwrap();
+                    let delta = delta.mul_f32(clip_speed);
 
                     if let Some(group) = state.sync_group {
                         let group = &self.sync_groups[&group];
@@ -799,8 +802,13 @@ impl AnimationDriver {
         }
     }
 
-    pub fn send_event(&mut self, event: &'static str) {
-        let Some(event_id) = self.graph.event_names.iter().position(|e| *e == event) else {
+    pub fn send_event(&mut self, event: &str) {
+        let Some(event_id) = self
+            .graph
+            .event_names
+            .iter()
+            .position(|e| e.to_lowercase() == event.to_lowercase())
+        else {
             return;
         };
 

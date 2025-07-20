@@ -20,13 +20,14 @@ pub fn drive_animations(world: &mut World, time: &Time, event: Option<&'static s
         world.query_mut::<(&SkeletonInstance, &mut AnimationDriver, &AnimationSet)>()
     {
         if let Some(e) = event {
-            driver.send_event(e);
+            // driver.send_event(e);
         }
 
         let mut events = Vec::new();
         driver.update(time.delta(), set, &mut rng, &mut events);
 
         for event in events {
+            dbg!(&event, driver.graph.event_name(event.id));
             match driver.graph.event_name(event.id) {
                 Some("ReevaluateGraphState") => {
                     driver.reset();
