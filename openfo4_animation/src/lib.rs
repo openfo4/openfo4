@@ -302,7 +302,7 @@ pub fn build_graph(file: &HkxFile) {
     std::fs::write("graph.dot", Dot::new(&graph).to_string().as_bytes()).unwrap();
 }
 
-fn load_initial_variable_set(graph: &BehaviorGraph) -> VariableSet {
+fn load_initial_variable_set(graph: &BehaviorGraph, props: &HashMap<String, Value>) -> VariableSet {
     let mut set = VariableSet::default();
 
     if let Some(v) = &graph.data.variable_initial_values {
@@ -386,30 +386,48 @@ fn load_initial_variable_set(graph: &BehaviorGraph) -> VariableSet {
         set.variables_by_name.insert(name.clone(), key);
     }
 
-    for (index, (info, name)) in graph
+    for (index, name) in graph
         .data
-        .character_property_infos
+        .string_data
+        .character_property_names
         .iter()
-        .zip(graph.data.string_data.character_property_names.iter())
         .enumerate()
     {
-        let value = match info.type_ {
-            VariableType::Invalid => Value::None,
-            VariableType::Bool => Value::Bool(false),
-            VariableType::Int8 => Value::I8(0),
-            VariableType::Int16 => Value::I16(0),
-            VariableType::Int32 => Value::I32(0),
-            VariableType::Real => Value::F32(0.0),
-            VariableType::Pointer => Value::Pointer(0),
-            VariableType::Vector3 => Value::Vec3(Vec3::ZERO),
-            VariableType::Vector4 => Value::Vec4(Vec4::ZERO),
-            VariableType::Quaternion => Value::Quat(Quat::IDENTITY),
+        let name = name.to_lowercase();
+
+        let Some(value) = props.get(&name) else {
+            todo!("undeclared variable");
         };
 
-        let key = set.variables.insert(value);
+        let key = set.variables.insert(value.clone());
         set.character_property_by_index.insert(index, key);
-        set.character_property_by_name.insert(name.clone(), key);
+        set.character_property_by_name.insert(name, key);
     }
+
+    // for (index, (info, name)) in graph
+    //     .data
+    //     .character_property_infos
+    //     .iter()
+    //     .zip(graph.data.string_data.character_property_names.iter())
+    //     .enumerate()
+    // {
+    //     let value = match info.type_ {
+    //         VariableType::Invalid => Value::None,
+    //         VariableType::Bool => Value::Bool(false),
+    //         VariableType::Int8 => Value::I8(0),
+    //         VariableType::Int16 => Value::I16(0),
+    //         VariableType::Int32 => Value::I32(0),
+    //         VariableType::Real => Value::F32(0.0),
+    //         VariableType::Pointer => Value::Pointer(0),
+    //         VariableType::Vector3 => Value::Vec3(Vec3::ZERO),
+    //         VariableType::Vector4 => Value::Vec4(Vec4::ZERO),
+    //         VariableType::Quaternion => Value::Quat(Quat::IDENTITY),
+    //     };
+
+    //     let key = set.variables.insert(value);
+    //     set.character_property_by_index.insert(index, key);
+    //     set.character_property_by_name.insert(name.clone(), key);
+    // }
 
     set
 }
@@ -818,6 +836,7 @@ pub struct Blend {
 #[derive(Clone, Debug)]
 pub struct BlendNode {
     pub weight: ValueExpression,
+    pub bone_weights: Option<ValueExpression>,
     pub node: NodeId,
 }
 
@@ -859,6 +878,7 @@ pub enum Value {
     Vec3(Vec3),
     Vec4(Vec4),
     Quat(Quat),
+    BoneWeights(Vec<f32>),
 }
 
 impl Value {
@@ -882,6 +902,7 @@ impl Value {
             Self::Vec3(_) => None,
             Self::Vec4(_) => None,
             Self::Quat(_) => None,
+            Self::BoneWeights(_) => None,
         }
     }
 

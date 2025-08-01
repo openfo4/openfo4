@@ -19,6 +19,8 @@ mod state_machine;
 mod timer_modifier;
 
 use std::collections::HashMap;
+use std::fmt::Pointer;
+use std::hash::Hash;
 use std::time::Duration;
 
 use openfo4_hkx::behavior::{BSBehaviorGraphSwapGenerator, PlaybackMode, PoseMatchingGenerator};
@@ -35,12 +37,16 @@ use crate::{
 
 #[derive(Clone, Debug, Error)]
 pub enum Error {
+    #[error("file contains no BehaviorGraph class")]
+    NoGraph,
     #[error(transparent)]
     UnknownVariableName(UnknownVariableName),
     #[error("unknown variable id: {0}")]
     UnknownVariableId(VariableId),
     #[error("unknown variable id: {0}")]
     UnknownEventId(i64),
+    #[error("undeclared variable {0}")]
+    UndeclaredVariable(String),
 }
 
 #[derive(Copy, Clone, Debug)]
@@ -48,17 +54,43 @@ pub enum Hint<'a> {
     NeedFile(&'a str),
 }
 
-pub struct Builder {
-    root: HkxFile,
+#[derive(Clone, Debug)]
+pub enum Dependency<'a> {
+    File(&'a str),
 }
 
-impl Builder {
-    pub fn new(root: HkxFile) -> Self {
-        Self { root }
+pub struct Builder<'a> {
+    root: &'a HkxFile,
+    props: HashMap<String, Value>,
+    pointees: HashMap<u32, Value>,
+}
+
+impl<'a> Builder<'a> {
+    pub fn new(root: &'a HkxFile) -> Self {
+        Self {
+            root,
+            props: HashMap::new(),
+            pointees: HashMap::new(),
+        }
+    }
+
+    /// Registers a property from the character file.
+    ///
+    /// The `name` is considered case-insensitive.
+    pub fn register_character_property(&mut self, name: &str, value: Value) {
+        let name = name.to_lowercase();
+        self.props.insert(name, value);
     }
 
     pub fn build(&mut self) -> Result<Result<AnimationGraph, Hint<'_>>, Error> {
-        let g = animation_graph(&self.root);
+        let Some(root) = self.root.iter().find_map(|obj| match obj {
+            HkObject::BehaviorGraph(node) => Some(node),
+            _ => None,
+        }) else {
+            return Err(Error::NoGraph);
+        };
+
+        let g = animation_graph(&self.root, &self.props);
         Ok(Ok(g))
     }
 }
@@ -70,7 +102,7 @@ pub struct UnknownVariableName {
     pub name: String,
 }
 
-pub fn animation_graph(f: &HkxFile) -> AnimationGraph {
+pub fn animation_graph(f: &HkxFile, props: &HashMap<String, Value>) -> AnimationGraph {
     let mut root = None;
     for obj in f.iter() {
         match obj {
@@ -84,7 +116,7 @@ pub fn animation_graph(f: &HkxFile) -> AnimationGraph {
 
     let graph = root.unwrap();
 
-    let mut variables = load_initial_variable_set(graph);
+    let mut variables = load_initial_variable_set(graph, props);
 
     let event_names: Vec<_> = graph.data.string_data.event_names.iter().cloned().collect();
 
@@ -200,6 +232,8 @@ trait BuildNode {
     fn children(&self, state: &mut GraphBuilderState<'_>) -> Result<Vec<OpaquePtr>, Error> {
         Ok(Vec::new())
     }
+
+    fn dependencies(&self, state: &mut GraphBuilderState<'_>) {}
 
     /// Build this node.
     fn build(&self, state: &mut GraphBuilderState<'_>) -> Result<Option<Node>, Error>;

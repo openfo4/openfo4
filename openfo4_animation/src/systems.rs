@@ -2,12 +2,12 @@ use std::thread::panicking;
 
 use game_common::components::{Component, Transform};
 use game_core::time::Time;
-use glam::{Quat, Vec3};
+use glam::{Mat4, Quat, Vec3};
 use hecs::{CommandBuffer, World};
 use openfo4_hkx::animation::Animation;
 
 use crate::animation::{AnimationClip, AnimationClipFlags};
-use crate::driver::AnimationDriver;
+use crate::driver::{AnimationDriver, BoneWeights};
 use crate::skeleton::{Skeleton, SkeletonInstance};
 use crate::{AnimationSet, Node, NodeInner, Value};
 
@@ -19,15 +19,10 @@ pub fn drive_animations(world: &mut World, time: &Time, event: Option<&'static s
     for (entity, (skeleton, driver, set)) in
         world.query_mut::<(&SkeletonInstance, &mut AnimationDriver, &AnimationSet)>()
     {
-        if let Some(e) = event {
-            // driver.send_event(e);
-        }
-
         let mut events = Vec::new();
         driver.update(time.delta(), set, &mut rng, &mut events);
 
         for event in events {
-            dbg!(&event, driver.graph.event_name(event.id));
             match driver.graph.event_name(event.id) {
                 Some("ReevaluateGraphState") => {
                     driver.reset();
@@ -38,14 +33,6 @@ pub fn drive_animations(world: &mut World, time: &Time, event: Option<&'static s
 
         if event == Some("dump") {
             crate::debug::update(&driver);
-        } else {
-            let var = driver.get_variable_mut("SpeedSmoothed").unwrap();
-
-            if event == Some("speedup") {
-                *var = Value::F32(var.to_f32().unwrap() + 5.0);
-            } else if event == Some("speeddown") {
-                *var = Value::F32(var.to_f32().unwrap() - 5.0);
-            }
         }
 
         let active_anims = || {
@@ -120,6 +107,10 @@ pub fn drive_animations(world: &mut World, time: &Time, event: Option<&'static s
                     continue;
                 };
 
+                if anim.blend_factor.get(*index as u32).abs() == 0.0 {
+                    continue;
+                }
+
                 anim_applied = true;
 
                 let transform_a = anim.animation.get(anim.a, *track as u32).unwrap();
@@ -130,7 +121,7 @@ pub fn drive_animations(world: &mut World, time: &Time, event: Option<&'static s
                 rotation = rotation.slerp(transform.rotation, 1.0 - blend_factor);
                 scale = scale.lerp(transform.scale, 1.0 - blend_factor);
 
-                blend_factor += anim.blend_factor;
+                blend_factor += anim.blend_factor.get(*index as u32);
             }
 
             let bone_transform = Transform {
@@ -156,7 +147,7 @@ struct Contribution<'a> {
     a: u32,
     b: u32,
     s: f32,
-    blend_factor: f32,
+    blend_factor: &'a BoneWeights,
 }
 
 trait TransformLerp {

@@ -44,6 +44,22 @@ impl BuildNode for BlenderGenerator {
             };
 
             let mut weight = ValueExpression::Const(Value::F32(child.weight));
+            let mut bone_weights = None;
+
+            if let Some(weights) = &child.bone_weights {
+                if let Some(set) = &weights.bindable.variable_binding_set {
+                    for binding in &*set.bindings {
+                        return Err(Error::UnknownVariableName(UnknownVariableName {
+                            class: "hkbBoneWeightArray",
+                            name: binding.member_path.clone(),
+                        }));
+                    }
+                }
+
+                bone_weights = Some(ValueExpression::Const(Value::BoneWeights(
+                    weights.bone_weights.iter().map(|v| *v).collect(),
+                )));
+            }
 
             if let Some(set) = &child.parent.variable_binding_set {
                 for binding in &*set.bindings {
@@ -53,7 +69,7 @@ impl BuildNode for BlenderGenerator {
 
                     match &*binding.member_path {
                         "weight" => weight = ValueExpression::Variable(variable),
-                        "boneWeights" => {}
+                        "boneWeights" => bone_weights = Some(ValueExpression::Variable(variable)),
                         name => {
                             return Err(Error::UnknownVariableName(UnknownVariableName {
                                 class: "hkbBlenderGeneratorChild",
@@ -65,7 +81,11 @@ impl BuildNode for BlenderGenerator {
             }
 
             if let Some(id) = state.ptr_to_id.get(&generator.ptr) {
-                children.push(BlendNode { weight, node: *id });
+                children.push(BlendNode {
+                    weight,
+                    bone_weights,
+                    node: *id,
+                });
             }
         }
 

@@ -1,4 +1,5 @@
 use std::collections::{HashMap, VecDeque};
+use std::ops::{Mul, MulAssign};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -53,6 +54,8 @@ impl AnimationDriver {
     ) {
         let _span = trace_span!("AnimationDriver::update").entered();
 
+        // let delta = delta.mul_f32(0.1);
+
         let mut set_blend_factor = VecDeque::new();
 
         let mut queue = VecDeque::new();
@@ -89,7 +92,10 @@ impl AnimationDriver {
                                 StartState::Expression(expr) => {
                                     Some(expr.eval(&self.variables).to_usize().unwrap_or(0))
                                 }
-                                StartState::Random => todo!(),
+                                StartState::Random => {
+                                    let state = rand::random_range(0..sm.states.len());
+                                    Some(state)
+                                }
                             };
 
                             // TODO: Figure out whether state.enter_events is triggered.
@@ -133,7 +139,7 @@ impl AnimationDriver {
                         id,
                         NodeState {
                             blend_factor: 1.0,
-                            global_blend_factor: 1.0,
+                            computed_blend_factor: BoneWeights::Shared(1.0),
                             sync_group: None,
                             inner,
                         },
@@ -447,14 +453,18 @@ impl AnimationDriver {
                     let clip_speed = clip.speed.eval(&self.variables).to_f32().unwrap();
                     let delta = delta.mul_f32(clip_speed);
 
-                    if let Some(group) = state.sync_group {
+                    if let Some(group) = state.sync_group
+                        && false
+                    {
                         let group = &self.sync_groups[&group];
                         if group.leader.id == *node {
                             clip_state.time = group.leader.time;
                         }
                     }
 
-                    if let Some(group) = state.sync_group {
+                    if let Some(group) = state.sync_group
+                        && false
+                    {
                         let group = &self.sync_groups[&group];
 
                         // Compute leader position.
@@ -628,10 +638,10 @@ impl AnimationDriver {
             self.blend_factors.insert(id, factor);
         }
 
-        if self.update_blend_factors {
-            self.update_blend_factors = false;
-            self.update_blend_factors();
-        }
+        // if self.update_blend_factors {
+        self.update_blend_factors = false;
+        self.update_blend_factors();
+        // }
 
         events.extend(self.events.clone());
     }
@@ -657,34 +667,26 @@ impl AnimationDriver {
         };
 
         let mut queue = VecDeque::new();
-        queue.push_back((root, 1.0, None));
+        queue.push_back((root, BoneWeights::Shared(1.0), None));
 
-        while let Some((id, blend_factor, sync_group)) = queue.pop_front() {
+        while let Some((id, mut blend_factor, sync_group)) = queue.pop_front() {
             let state = self.states.get_mut(&id).unwrap();
 
-            let blend_factor = blend_factor * state.blend_factor;
-            state.global_blend_factor = blend_factor;
+            blend_factor *= state.blend_factor;
+            state.computed_blend_factor = blend_factor.clone();
             state.sync_group = sync_group;
 
             match &self.graph.nodes[id].inner {
                 NodeInner::StateMachine(node) => {
-                    // Ensure at least one state is active.
-                    // debug_assert!(
-                    //     !node
-                    //         .states
-                    //         .iter()
-                    //         .all(|s| !self.states.contains_key(&s.node))
-                    // );
-
                     for state in &node.states {
                         if self.states.contains_key(&state.node) {
-                            queue.push_back((state.node, blend_factor, sync_group));
+                            queue.push_back((state.node, blend_factor.clone(), sync_group));
                         }
                     }
                 }
                 NodeInner::List(list) => {
                     for node in list {
-                        queue.push_back((*node, blend_factor, sync_group));
+                        queue.push_back((*node, blend_factor.clone(), sync_group));
                     }
                 }
                 NodeInner::Clip(clip) => {}
@@ -767,7 +769,18 @@ impl AnimationDriver {
                                 scale: s,
                             });
 
-                            queue.push_back((child.node, blend_factor * s, Some(id)));
+                            let mut blend_factor = blend_factor.clone() * s;
+                            if let Some(weights) = &child.bone_weights {
+                                let weights = weights.eval(&self.variables);
+                                let weights = match weights {
+                                    Value::BoneWeights(weights) => weights,
+                                    _ => unreachable!(),
+                                };
+
+                                blend_factor *= &BoneWeights::Unique(weights);
+                            }
+
+                            queue.push_back((child.node, blend_factor, Some(id)));
                         }
 
                         if let Some((index, leader)) = nodes
@@ -787,9 +800,30 @@ impl AnimationDriver {
                             );
                         }
                     } else {
-                        for child in &node.children {
-                            let weight = child.weight.eval(&self.variables).to_f32().unwrap();
-                            let blend_factor = blend_factor * weight;
+                        let weights = node
+                            .children
+                            .iter()
+                            .map(|child| child.weight.eval(&self.variables).to_f32().unwrap())
+                            .collect::<Vec<_>>();
+
+                        let sum = weights.iter().sum::<f32>();
+
+                        for (child, weight) in node.children.iter().zip(weights) {
+                            let mut blend_factor = if sum.abs() == 0.0 {
+                                BoneWeights::Shared(0.0)
+                            } else {
+                                blend_factor.clone() * (weight / sum)
+                            };
+
+                            if let Some(weights) = &child.bone_weights {
+                                let weights = weights.eval(&self.variables);
+                                let weights = match weights {
+                                    Value::BoneWeights(weights) => weights,
+                                    _ => unreachable!(),
+                                };
+
+                                blend_factor *= &BoneWeights::Unique(weights);
+                            }
 
                             queue.push_back((child.node, blend_factor, sync_group));
                         }
@@ -829,11 +863,13 @@ impl AnimationDriver {
         self.variables.get_mut_by_name(name)
     }
 
-    pub fn animations(&self) -> impl Iterator<Item = (usize, &AnimationPlaybackState, f32)> {
+    pub fn animations(
+        &self,
+    ) -> impl Iterator<Item = (usize, &AnimationPlaybackState, &BoneWeights)> {
         self.states
             .iter()
             .filter_map(|(id, node)| match &node.inner {
-                NodeStateInner::Clip(state) => Some((*id, state, node.global_blend_factor)),
+                NodeStateInner::Clip(state) => Some((*id, state, &node.computed_blend_factor)),
                 _ => None,
             })
     }
@@ -842,7 +878,7 @@ impl AnimationDriver {
 #[derive(Clone, Debug)]
 struct NodeState {
     blend_factor: f32,
-    global_blend_factor: f32,
+    computed_blend_factor: BoneWeights,
     /// The sync group in which this node is contained.
     sync_group: Option<NodeId>,
     inner: NodeStateInner,
@@ -896,4 +932,111 @@ struct SyncGroupNode {
     id: NodeId,
     time: Duration,
     scale: f32,
+}
+
+#[derive(Clone, Debug)]
+pub enum BoneWeights {
+    Shared(f32),
+    Unique(Vec<f32>),
+}
+
+impl BoneWeights {
+    pub fn get(&self, bone: u32) -> f32 {
+        match self {
+            Self::Shared(v) => *v,
+            Self::Unique(bones) => bones.get(bone as usize).copied().unwrap_or(1.0),
+        }
+    }
+}
+
+impl Mul for BoneWeights {
+    type Output = Self;
+
+    fn mul(self, rhs: Self) -> Self::Output {
+        match (self, rhs) {
+            (Self::Shared(lhs), Self::Shared(rhs)) => Self::Shared(lhs * rhs),
+            (Self::Unique(mut lhs), Self::Unique(rhs)) => {
+                let count = lhs.len().max(rhs.len());
+                lhs.resize(count, 1.0);
+                for (lhs, rhs) in lhs.iter_mut().zip(rhs.iter()) {
+                    *lhs *= rhs;
+                }
+
+                Self::Unique(lhs)
+            }
+            (Self::Unique(mut lhs), Self::Shared(rhs)) => {
+                for lhs in &mut lhs {
+                    *lhs *= rhs;
+                }
+
+                Self::Unique(lhs)
+            }
+            (Self::Shared(lhs), Self::Unique(rhs)) => {
+                let mut rhs = rhs.clone();
+                for rhs in &mut rhs {
+                    *rhs *= lhs;
+                }
+
+                Self::Unique(rhs)
+            }
+        }
+    }
+}
+
+impl MulAssign<&Self> for BoneWeights {
+    fn mul_assign(&mut self, rhs: &Self) {
+        match (&mut *self, rhs) {
+            (Self::Shared(lhs), Self::Shared(rhs)) => *lhs *= rhs,
+            (Self::Unique(lhs), Self::Unique(rhs)) => {
+                let count = lhs.len().max(rhs.len());
+                lhs.resize(count, 1.0);
+                for (lhs, rhs) in lhs.iter_mut().zip(rhs.iter()) {
+                    *lhs *= rhs;
+                }
+            }
+            (Self::Unique(lhs), Self::Shared(rhs)) => {
+                for lhs in lhs {
+                    *lhs *= rhs;
+                }
+            }
+            (Self::Shared(lhs), Self::Unique(rhs)) => {
+                let mut rhs = rhs.clone();
+                for rhs in &mut rhs {
+                    *rhs *= *lhs;
+                }
+
+                *self = Self::Unique(rhs);
+            }
+        }
+    }
+}
+
+impl Mul<f32> for BoneWeights {
+    type Output = Self;
+
+    fn mul(self, rhs: f32) -> Self::Output {
+        match self {
+            Self::Shared(lhs) => Self::Shared(lhs * rhs),
+            Self::Unique(mut lhs) => {
+                for lhs in &mut lhs {
+                    *lhs *= rhs;
+                }
+
+                Self::Unique(lhs)
+            }
+        }
+    }
+}
+
+impl MulAssign<f32> for BoneWeights {
+    fn mul_assign(&mut self, rhs: f32) {
+        match self {
+            Self::Shared(lhs) => *lhs *= rhs,
+            Self::Unique(lhs) => {
+                for lhs in lhs {
+                    *lhs *= rhs;
+                }
+            }
+        }
+    }
 }
