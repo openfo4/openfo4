@@ -24,7 +24,7 @@ pub fn drive_animations(world: &mut World, time: &Time, event: Option<&'static s
 
         for event in events {
             match driver.graph.event_name(event.id) {
-                Some("ReevaluateGraphState") => {
+                Some("reevaluategraphstate") => {
                     driver.reset();
                 }
                 _ => (),

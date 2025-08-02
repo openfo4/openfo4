@@ -4,22 +4,22 @@
 
 use openfo4_hkx::behavior::{EventRangeMode, EventsFromRangeModifier};
 
-use crate::builder::{BuildNode, Error, GraphBuilderState, UnknownVariableName};
+use crate::builder::{BuildNode, BuilderContext, Error, UnknownVariableName};
 use crate::{
     Command, Listener, ListenerEvent, Node, NodeInner, SetVariable, Value, ValueExpression,
     parse_event,
 };
 
 impl BuildNode for EventsFromRangeModifier {
-    fn build(&self, state: &mut GraphBuilderState<'_>) -> Result<Option<Node>, Error> {
+    fn build(&self, ctx: &mut BuilderContext<'_>) -> Result<Option<Node>, Error> {
         let mut enable = ValueExpression::Const(Value::Bool(self.parent.enable));
         let mut input_value = ValueExpression::Const(Value::F32(self.input_value));
         let mut lower_bound = ValueExpression::Const(Value::F32(self.lower_bound));
 
         if let Some(set) = &self.parent.node.bindable.variable_binding_set {
             for binding in &*set.bindings {
-                let variable = state
-                    .get_variable_id(binding.binding_type, binding.variable_index)
+                let variable = ctx
+                    .get_variable(binding.binding_type, binding.variable_index)
                     .unwrap();
 
                 match &*binding.member_path {
@@ -48,7 +48,7 @@ impl BuildNode for EventsFromRangeModifier {
         for range in &*self.event_ranges.event_data {
             let upper_bound = ValueExpression::Const(Value::F32(range.upper_bound));
 
-            let event = parse_event(state.file, &range.event);
+            let event = parse_event(ctx.hkx_file(), &range.event);
 
             // Evalutes to true if `input_value <= lower_bound && input_value >= upper_bound`.
             let condition = ValueExpression::And(
@@ -69,7 +69,7 @@ impl BuildNode for EventsFromRangeModifier {
                     // Only when this variable changes from `false` to `true` will we
                     // send an event and then set the variable to `true` until the
                     // condition evaluates to `false` for one frame.
-                    let active = state.create_variable(Value::Bool(false));
+                    let active = ctx.create_variable(Value::Bool(false));
 
                     // Expand the condition such that it only triggers if `active` is `false`.
                     let on_enter_condition = ValueExpression::And(

@@ -4,12 +4,12 @@ use std::time::Duration;
 
 use openfo4_hkx::behavior::TimerModifier;
 
-use crate::builder::{BuildNode, Error, GraphBuilderState, UnknownVariableName};
+use crate::builder::{BuildNode, BuilderContext, Error, UnknownVariableName};
 use crate::{Node, NodeInner, Timer, parse_event};
 
 impl BuildNode for TimerModifier {
-    fn build(&self, state: &mut GraphBuilderState<'_>) -> Result<Option<Node>, Error> {
-        let event = parse_event(state.file, &self.alarm_event);
+    fn build(&self, ctx: &mut BuilderContext<'_>) -> Result<Option<Node>, Error> {
+        let event = parse_event(ctx.hkx_file(), &self.alarm_event);
         let time = Duration::from_secs_f32(self.alarm_time_seconds);
 
         if let Some(set) = &self.parent.node.bindable.variable_binding_set {

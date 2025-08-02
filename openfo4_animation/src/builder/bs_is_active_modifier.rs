@@ -2,11 +2,11 @@
 
 use std::collections::HashMap;
 
-use crate::builder::{BuildNode, Error, GraphBuilderState, UnknownVariableName};
+use crate::builder::{BuildNode, BuilderContext, Error, UnknownVariableName};
 use crate::{Command, Node, NodeInner, SetVariable, Value, ValueExpression};
 
 impl BuildNode for openfo4_hkx::behavior::BSIsActiveModifier {
-    fn build(&self, state: &mut GraphBuilderState<'_>) -> Result<Option<Node>, Error> {
+    fn build(&self, ctx: &mut BuilderContext<'_>) -> Result<Option<Node>, Error> {
         let Some(set) = &self.parent.node.bindable.variable_binding_set else {
             return Ok(None);
         };
@@ -17,8 +17,8 @@ impl BuildNode for openfo4_hkx::behavior::BSIsActiveModifier {
         let mut enable = ValueExpression::Const(Value::Bool(self.parent.enable));
 
         for binding in &*set.bindings {
-            let variable = state
-                .get_variable_id(binding.binding_type, binding.variable_index)
+            let variable = ctx
+                .get_variable(binding.binding_type, binding.variable_index)
                 .unwrap();
 
             let invert = match binding.member_path.as_str() {

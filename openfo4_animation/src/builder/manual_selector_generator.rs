@@ -3,29 +3,32 @@
 //! This is a generator that selects another generator based on a variable.
 //! We compile this node into a [`StateMachine`].
 
-use openfo4_hkx::OpaquePtr;
 use openfo4_hkx::behavior::ManualSelectorGenerator;
 
-use crate::builder::{BuildNode, Error, GraphBuilderState, UnknownVariableName};
+use crate::builder::{BuildNode, BuilderContext, Dependency, Error, UnknownVariableName};
 use crate::{
     Event, Node, NodeInner, StartState, State, StateMachine, Transition, TransitionEffect, Value,
     ValueExpression, VariableChangeEvent, VariableChangeTracker,
 };
 
 impl BuildNode for ManualSelectorGenerator {
-    fn children(&self, _state: &mut GraphBuilderState<'_>) -> Result<Vec<OpaquePtr>, Error> {
-        Ok(self.generators.iter().map(|v| v.ptr).collect())
+    fn dependencies(&self, _ctx: &mut BuilderContext<'_>) -> Result<Vec<Dependency>, Error> {
+        Ok(self
+            .generators
+            .iter()
+            .map(|v| Dependency::Node(v.ptr))
+            .collect())
     }
 
-    fn build(&self, state: &mut GraphBuilderState<'_>) -> Result<Option<Node>, Error> {
+    fn build(&self, ctx: &mut BuilderContext<'_>) -> Result<Option<Node>, Error> {
         let mut start_state = ValueExpression::Const(Value::I16(self.selected_generator_index));
 
         let mut selected_generator_variable = 0;
 
         if let Some(set) = &self.parent.node.bindable.variable_binding_set {
             for binding in &*set.bindings {
-                let variable = state
-                    .get_variable_id(binding.binding_type, binding.variable_index)
+                let variable = ctx
+                    .get_variable(binding.binding_type, binding.variable_index)
                     .unwrap();
 
                 match &*binding.member_path {
@@ -52,7 +55,7 @@ impl BuildNode for ManualSelectorGenerator {
 
             let generator = &self.generators[index];
 
-            let Some(node) = state.ptr_to_id.get(&generator.ptr).copied() else {
+            let Some(node) = ctx.get_node(generator.ptr) else {
                 return Ok(None);
             };
 
@@ -69,7 +72,7 @@ impl BuildNode for ManualSelectorGenerator {
         let mut states = Vec::new();
 
         for generator in &*self.generators {
-            let Some(node) = state.ptr_to_id.get(&generator.ptr).copied() else {
+            let Some(node) = ctx.get_node(generator.ptr) else {
                 continue;
             };
 
@@ -104,8 +107,7 @@ impl BuildNode for ManualSelectorGenerator {
         // Generator changes after node activation can be implemented with
         // state transitions.
         for to in 0..states.len() {
-            let event = state.events.len();
-            state.events.push("internal_transition_event".to_owned());
+            let event = ctx.create_event("internal_transition_event".to_owned());
 
             transitions.push(Transition {
                 from: None,
@@ -130,7 +132,7 @@ impl BuildNode for ManualSelectorGenerator {
             });
         }
 
-        let state_machine = state.nodes.insert(Node {
+        let state_machine = ctx.create_node(Node {
             name: "".to_owned(),
             inner: NodeInner::StateMachine(StateMachine {
                 states,
@@ -143,7 +145,7 @@ impl BuildNode for ManualSelectorGenerator {
             on_deactivate: Vec::new(),
             on_update: Vec::new(),
         });
-        let tracker = state.nodes.insert(Node {
+        let tracker = ctx.create_node(Node {
             name: "".to_owned(),
             inner: NodeInner::VariableChangeTracker(VariableChangeTracker { trackers }),
             listeners: Vec::new(),

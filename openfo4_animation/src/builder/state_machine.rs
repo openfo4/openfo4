@@ -1,20 +1,21 @@
 use std::collections::HashMap;
 use std::time::Duration;
 
+use openfo4_hkx::HkObject;
 use openfo4_hkx::behavior::{GeneratorTransitionEffect, StartStateMode};
 use openfo4_hkx::skeleton::BindingType;
-use openfo4_hkx::{HkObject, OpaquePtr};
 use slab::Slab;
 
+use crate::builder::{BuilderContext, Dependency};
 use crate::{
     ClipTrigger, Event, Node, NodeId, NodeInner, StartState, State, StateMachine, Transition,
     TransitionEffect, Value, ValueExpression, parse_event,
 };
 
-use super::{BuildNode, Error, GraphBuilderState};
+use super::{BuildNode, Error};
 
 impl BuildNode for openfo4_hkx::behavior::StateMachine {
-    fn children(&self, state: &mut GraphBuilderState<'_>) -> Result<Vec<OpaquePtr>, Error> {
+    fn dependencies(&self, ctx: &mut BuilderContext<'_>) -> Result<Vec<Dependency>, Error> {
         let mut children = Vec::new();
 
         let mut transitions = Vec::new();
@@ -24,7 +25,7 @@ impl BuildNode for openfo4_hkx::behavior::StateMachine {
                 continue;
             };
 
-            children.push(generator.ptr);
+            children.push(Dependency::Node(generator.ptr));
 
             if let Some(t) = &state.transitions {
                 for t in &*t.transitions {
@@ -44,11 +45,11 @@ impl BuildNode for openfo4_hkx::behavior::StateMachine {
         }
 
         for ptr in transitions {
-            match state.file.get(ptr) {
+            match ctx.hkx_file().get(ptr) {
                 Some(HkObject::BlendingTransitionEffect(_)) => (),
                 Some(HkObject::GeneratorTransitionEffect(effect)) => {
                     if let Some(ptr) = &effect.transition_generator {
-                        children.push(ptr.ptr);
+                        children.push(Dependency::Node(ptr.ptr));
                     }
                 }
                 _ => todo!(),
@@ -58,7 +59,7 @@ impl BuildNode for openfo4_hkx::behavior::StateMachine {
         Ok(children)
     }
 
-    fn build(&self, builder_state: &mut GraphBuilderState<'_>) -> Result<Option<Node>, Error> {
+    fn build(&self, ctx: &mut BuilderContext<'_>) -> Result<Option<Node>, Error> {
         let mut states = Vec::new();
         let mut transitions = Vec::new();
         let mut state_id_to_index = HashMap::new();
@@ -71,9 +72,9 @@ impl BuildNode for openfo4_hkx::behavior::StateMachine {
             let id = state
                 .generator
                 .as_ref()
-                .and_then(|generator| builder_state.ptr_to_id.get(&generator.ptr).copied())
+                .and_then(|generator| ctx.get_node(generator.ptr))
                 .unwrap_or_else(|| {
-                    builder_state.nodes.insert(Node {
+                    ctx.create_node(Node {
                         name: state.name.clone(),
                         ..Default::default()
                     })
@@ -82,14 +83,14 @@ impl BuildNode for openfo4_hkx::behavior::StateMachine {
             let mut enter_events = Vec::new();
             if let Some(events) = &state.enter_notify_events {
                 for event in &*events.events {
-                    enter_events.push(parse_event(builder_state.file, event));
+                    enter_events.push(parse_event(ctx.hkx_file(), event));
                 }
             }
 
             let mut exit_events = Vec::new();
             if let Some(events) = &state.exit_notify_events {
                 for event in &*events.events {
-                    exit_events.push(parse_event(builder_state.file, event));
+                    exit_events.push(parse_event(ctx.hkx_file(), event));
                 }
             }
 
@@ -162,7 +163,7 @@ impl BuildNode for openfo4_hkx::behavior::StateMachine {
             transitions.iter_mut().zip(transition_effects).enumerate()
         {
             match effect {
-                Some(effect) => match builder_state.file.get(effect.ptr) {
+                Some(effect) => match ctx.hkx_file().get(effect.ptr) {
                     Some(HkObject::BlendingTransitionEffect(effect)) => {
                         let duration = Duration::from_secs_f32(effect.duration);
 
@@ -180,7 +181,7 @@ impl BuildNode for openfo4_hkx::behavior::StateMachine {
         }
 
         for (index, effect) in generator_effects {
-            generator_transition(builder_state, effect, &mut states, &mut transitions, index);
+            generator_transition(ctx, effect, &mut states, &mut transitions, index);
         }
 
         let mut state_variable = None;
@@ -192,8 +193,8 @@ impl BuildNode for openfo4_hkx::behavior::StateMachine {
             },
             StartStateMode::Random => StartState::Random,
             StartStateMode::Sync => {
-                let variable = builder_state
-                    .get_variable_id(BindingType::Variable, self.sync_variable_index)
+                let variable = ctx
+                    .get_variable(BindingType::Variable, self.sync_variable_index)
                     .unwrap();
 
                 state_variable = Some(variable);
@@ -219,7 +220,7 @@ impl BuildNode for openfo4_hkx::behavior::StateMachine {
 }
 
 fn generator_transition(
-    builder_state: &mut GraphBuilderState<'_>,
+    ctx: &mut BuilderContext<'_>,
     generator: &GeneratorTransitionEffect,
     states: &mut Vec<State>,
     transitions: &mut Vec<Transition>,
@@ -230,20 +231,14 @@ fn generator_transition(
 
     let transition_generator = generator.transition_generator.as_ref().unwrap();
 
-    let node = *builder_state
-        .ptr_to_id
-        .get(&transition_generator.ptr)
-        .unwrap();
+    let node = ctx.get_node(transition_generator.ptr).unwrap();
 
-    let exit_event = builder_state.events.len();
-    builder_state
-        .events
-        .push("internal_transition_event".to_owned());
+    let exit_event = ctx.create_event("internal_transition_event".to_owned());
 
     // Find the leaf nodes in the generator (usually animation clips)
     // and insert an event that will cause our state to transition forward.
-    for node in find_leaf_nodes(&builder_state.nodes, node) {
-        match &mut builder_state.nodes[node].inner {
+    for node in find_leaf_nodes(&ctx.state.nodes, node) {
+        match &mut ctx.state.nodes[node].inner {
             NodeInner::Clip(clip) => {
                 clip.triggers.push(ClipTrigger {
                     local_time: blend_out,

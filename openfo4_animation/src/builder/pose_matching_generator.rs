@@ -1,15 +1,14 @@
-use openfo4_hkx::OpaquePtr;
 use openfo4_hkx::behavior::PoseMatchingGenerator;
 
 use crate::Node;
-use crate::builder::{BuildNode, Error, GraphBuilderState};
+use crate::builder::{BuildNode, BuilderContext, Error};
 
 impl BuildNode for PoseMatchingGenerator {
-    fn children(&self, state: &mut GraphBuilderState<'_>) -> Result<Vec<OpaquePtr>, Error> {
-        self.parent.children(state)
+    fn dependencies(&self, ctx: &mut BuilderContext<'_>) -> Result<Vec<super::Dependency>, Error> {
+        self.parent.dependencies(ctx)
     }
 
-    fn build(&self, state: &mut GraphBuilderState<'_>) -> Result<Option<Node>, Error> {
-        self.parent.build(state)
+    fn build(&self, ctx: &mut BuilderContext<'_>) -> Result<Option<Node>, Error> {
+        self.parent.build(ctx)
     }
 }

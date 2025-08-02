@@ -1,25 +1,24 @@
 //! BSiStateTaggingGenerator
 
-use openfo4_hkx::OpaquePtr;
 use openfo4_hkx::behavior::BSiStateTaggingGenerator;
 
-use crate::builder::{BuildNode, Error, GraphBuilderState};
+use crate::builder::{BuildNode, BuilderContext, Dependency, Error};
 use crate::{Node, NodeInner};
 
 impl BuildNode for BSiStateTaggingGenerator {
-    fn children(&self, _state: &mut GraphBuilderState<'_>) -> Result<Vec<OpaquePtr>, Error> {
+    fn dependencies(&self, _ctx: &mut BuilderContext<'_>) -> Result<Vec<Dependency>, Error> {
         if let Some(generator) = &self.p_default_generator {
-            Ok(vec![generator.ptr])
+            Ok(vec![Dependency::Node(generator.ptr)])
         } else {
             Ok(Vec::new())
         }
     }
 
-    fn build(&self, state: &mut GraphBuilderState<'_>) -> Result<Option<Node>, Error> {
+    fn build(&self, ctx: &mut BuilderContext<'_>) -> Result<Option<Node>, Error> {
         let mut list = Vec::new();
 
         if let Some(generator) = &self.p_default_generator {
-            let node = *state.ptr_to_id.get(&generator.ptr).unwrap();
+            let node = ctx.get_node(generator.ptr).unwrap();
             list.push(node);
         }
 

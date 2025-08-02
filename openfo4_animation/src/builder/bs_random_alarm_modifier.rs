@@ -2,14 +2,14 @@ use std::time::Duration;
 
 use openfo4_hkx::behavior::BSRandomAlarmModifier;
 
-use crate::builder::{BuildNode, Error, GraphBuilderState, UnknownVariableName};
+use crate::builder::{BuildNode, BuilderContext, Error, UnknownVariableName};
 use crate::{Node, NodeInner, Timer, parse_event};
 
 impl BuildNode for BSRandomAlarmModifier {
-    fn build(&self, state: &mut GraphBuilderState<'_>) -> Result<Option<Node>, Error> {
+    fn build(&self, ctx: &mut BuilderContext<'_>) -> Result<Option<Node>, Error> {
         let min_time = Duration::from_secs_f32(self.alarm_time_seconds_min);
         let max_time = Duration::from_secs_f32(self.alarm_time_seconds_max);
-        let event = parse_event(state.file, &self.alarm_event);
+        let event = parse_event(ctx.hkx_file(), &self.alarm_event);
         let repeat = self.reset_alarm;
 
         if let Some(set) = &self.parent.node.bindable.variable_binding_set {

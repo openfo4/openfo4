@@ -5,18 +5,21 @@
 
 use std::time::Duration;
 
-use openfo4_hkx::OpaquePtr;
 use openfo4_hkx::behavior::LayerGenerator;
 
-use crate::builder::{BuildNode, Error, GraphBuilderState, UnknownVariableName};
+use crate::builder::{BuildNode, BuilderContext, Dependency, Error, UnknownVariableName};
 use crate::{Node, NodeInner, StartState, State, StateMachine, Transition, TransitionEffect};
 
 impl BuildNode for LayerGenerator {
-    fn children(&self, _state: &mut GraphBuilderState<'_>) -> Result<Vec<OpaquePtr>, Error> {
-        Ok(self.layers.iter().map(|l| l.generator.ptr).collect())
+    fn dependencies(&self, _ctx: &mut BuilderContext<'_>) -> Result<Vec<Dependency>, Error> {
+        Ok(self
+            .layers
+            .iter()
+            .map(|l| Dependency::Node(l.generator.ptr))
+            .collect())
     }
 
-    fn build(&self, state: &mut GraphBuilderState<'_>) -> Result<Option<Node>, Error> {
+    fn build(&self, ctx: &mut BuilderContext<'_>) -> Result<Option<Node>, Error> {
         let mut layers = Vec::new();
 
         if let Some(set) = &self.parent.node.bindable.variable_binding_set {
@@ -37,7 +40,7 @@ impl BuildNode for LayerGenerator {
         // We compile every layer into an individual state machine
         // with the two states representing on and off.
         for layer in &*self.layers {
-            let Some(node) = state.ptr_to_id.get(&layer.generator.ptr) else {
+            let Some(node) = ctx.get_node(layer.generator.ptr) else {
                 continue;
             };
 
@@ -54,8 +57,8 @@ impl BuildNode for LayerGenerator {
             //     }
             // }
 
-            let on_node = *node;
-            let off_node = state.nodes.insert(Node {
+            let on_node = node;
+            let off_node = ctx.create_node(Node {
                 name: "".to_owned(),
                 inner: NodeInner::List(Vec::new()),
                 listeners: Vec::new(),
@@ -84,7 +87,7 @@ impl BuildNode for LayerGenerator {
             };
 
             // Off -> On transition
-            if let Some(event) = state.get_event_id(layer.on_event_id) {
+            if let Some(event) = ctx.get_event(layer.on_event_id) {
                 transitions.push(Transition {
                     from: Some(0),
                     to: 1,
@@ -97,7 +100,7 @@ impl BuildNode for LayerGenerator {
             }
 
             // On -> Off transition
-            if let Some(event) = state.get_event_id(layer.off_event_id) {
+            if let Some(event) = ctx.get_event(layer.off_event_id) {
                 transitions.push(Transition {
                     from: Some(1),
                     to: 0,
@@ -109,7 +112,7 @@ impl BuildNode for LayerGenerator {
                 });
             }
 
-            let state_machine = state.nodes.insert(Node {
+            let state_machine = ctx.create_node(Node {
                 name: "".to_owned(),
                 inner: NodeInner::StateMachine(StateMachine {
                     states,

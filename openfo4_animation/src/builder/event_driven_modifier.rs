@@ -1,24 +1,23 @@
 //! hkbEventDrivenModifier
 //!
 
-use openfo4_hkx::OpaquePtr;
 use openfo4_hkx::behavior::EventDrivenModifier;
 
-use crate::builder::{BuildNode, Error, GraphBuilderState, UnknownVariableName};
+use crate::builder::{BuildNode, BuilderContext, Dependency, Error, UnknownVariableName};
 use crate::{Command, Listener, ListenerEvent, Node, NodeInner, Value, ValueExpression};
 
 impl BuildNode for EventDrivenModifier {
-    fn children(&self, _state: &mut GraphBuilderState<'_>) -> Result<Vec<OpaquePtr>, Error> {
-        Ok(vec![self.parent.modifer.ptr])
+    fn dependencies(&self, _ctx: &mut BuilderContext<'_>) -> Result<Vec<Dependency>, Error> {
+        Ok(vec![Dependency::Node(self.parent.modifer.ptr)])
     }
 
-    fn build(&self, state: &mut GraphBuilderState<'_>) -> Result<Option<Node>, Error> {
+    fn build(&self, ctx: &mut BuilderContext<'_>) -> Result<Option<Node>, Error> {
         let mut enable = ValueExpression::Const(Value::Bool(self.parent.parent.enable));
 
         if let Some(set) = &self.parent.parent.node.bindable.variable_binding_set {
             for binding in &*set.bindings {
-                let variable = state
-                    .get_variable_id(binding.binding_type, binding.variable_index)
+                let variable = ctx
+                    .get_variable(binding.binding_type, binding.variable_index)
                     .unwrap();
 
                 match &*binding.member_path {
@@ -35,13 +34,13 @@ impl BuildNode for EventDrivenModifier {
             }
         }
 
-        let Some(modifier) = state.ptr_to_id.get(&self.parent.modifer.ptr).copied() else {
+        let Some(modifier) = ctx.get_node(self.parent.modifer.ptr) else {
             return Ok(None);
         };
 
         let mut listeners = Vec::new();
 
-        if let Some(event) = state.get_event_id(self.activate_event_id) {
+        if let Some(event) = ctx.get_event(self.activate_event_id) {
             // Only activate the modifier if the event was received
             // while the enable variable was set to true.
             listeners.push(Listener {
@@ -53,7 +52,7 @@ impl BuildNode for EventDrivenModifier {
             });
         }
 
-        if let Some(event) = state.get_event_id(self.deactivate_event_id) {
+        if let Some(event) = ctx.get_event(self.deactivate_event_id) {
             // Note that we don't have to care about the enable variable
             // here since if we receive the event while enable was false
             // the variable tracker also disable the node.

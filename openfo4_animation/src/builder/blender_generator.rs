@@ -1,29 +1,28 @@
 //! hkxBlenderGenerator
 
-use openfo4_hkx::OpaquePtr;
 use openfo4_hkx::behavior::{BlenderGenerator, BlenderGeneratorFlags};
 
-use crate::builder::{BuildNode, Error, GraphBuilderState, UnknownVariableName};
+use crate::builder::{BuildNode, BuilderContext, Dependency, Error, UnknownVariableName};
 use crate::{Blend, BlendNode, Node, NodeInner, Value, ValueExpression};
 
 impl BuildNode for BlenderGenerator {
-    fn children(&self, _state: &mut GraphBuilderState<'_>) -> Result<Vec<OpaquePtr>, Error> {
+    fn dependencies(&self, _ctx: &mut BuilderContext<'_>) -> Result<Vec<Dependency>, Error> {
         Ok(self
             .children
             .iter()
-            .filter_map(|c| c.generator.as_ref().map(|g| g.ptr))
+            .filter_map(|c| c.generator.as_ref().map(|g| Dependency::Node(g.ptr)))
             .collect())
     }
 
-    fn build(&self, state: &mut GraphBuilderState<'_>) -> Result<Option<Node>, Error> {
+    fn build(&self, ctx: &mut BuilderContext<'_>) -> Result<Option<Node>, Error> {
         let mut children = Vec::new();
 
         let mut blend_parameter = ValueExpression::Const(Value::F32(self.blend_parameter));
 
         if let Some(set) = &self.parent.node.bindable.variable_binding_set {
             for binding in &*set.bindings {
-                let variable = state
-                    .get_variable_id(binding.binding_type, binding.variable_index)
+                let variable = ctx
+                    .get_variable(binding.binding_type, binding.variable_index)
                     .unwrap();
 
                 match &*binding.member_path {
@@ -63,8 +62,8 @@ impl BuildNode for BlenderGenerator {
 
             if let Some(set) = &child.parent.variable_binding_set {
                 for binding in &*set.bindings {
-                    let variable = state
-                        .get_variable_id(binding.binding_type, binding.variable_index)
+                    let variable = ctx
+                        .get_variable(binding.binding_type, binding.variable_index)
                         .unwrap();
 
                     match &*binding.member_path {
@@ -80,11 +79,11 @@ impl BuildNode for BlenderGenerator {
                 }
             }
 
-            if let Some(id) = state.ptr_to_id.get(&generator.ptr) {
+            if let Some(id) = ctx.get_node(generator.ptr) {
                 children.push(BlendNode {
                     weight,
                     bone_weights,
-                    node: *id,
+                    node: id,
                 });
             }
         }

@@ -396,7 +396,7 @@ fn load_initial_variable_set(graph: &BehaviorGraph, props: &HashMap<String, Valu
         let name = name.to_lowercase();
 
         let Some(value) = props.get(&name) else {
-            todo!("undeclared variable");
+            todo!("undeclared variable: {}", name);
         };
 
         let key = set.variables.insert(value.clone());

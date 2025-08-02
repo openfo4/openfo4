@@ -4,11 +4,11 @@ use std::time::Duration;
 
 use openfo4_hkx::behavior::BSTimerModifier;
 
-use crate::builder::{BuildNode, Error, GraphBuilderState, UnknownVariableName};
+use crate::builder::{BuildNode, BuilderContext, Error, UnknownVariableName};
 use crate::{Node, NodeInner, Timer, parse_event};
 
 impl BuildNode for BSTimerModifier {
-    fn build(&self, state: &mut GraphBuilderState<'_>) -> Result<Option<Node>, Error> {
+    fn build(&self, ctx: &mut BuilderContext<'_>) -> Result<Option<Node>, Error> {
         let time = Duration::from_secs_f32(self.alarm_time_seconds);
         let repeat = self.reset_alarm;
 
@@ -25,7 +25,7 @@ impl BuildNode for BSTimerModifier {
             }
         }
 
-        let event = parse_event(state.file, &self.alarm_event);
+        let event = parse_event(ctx.hkx_file(), &self.alarm_event);
 
         Ok(Some(Node {
             name: format!("[BSTimerModifier] {}", self.parent.node.name),

@@ -72,7 +72,6 @@ impl AnimationDriver {
             queue.push_back(DriverEvent::UpdateNode(*id));
         }
         for event in self.events.drain(..) {
-            dbg!(&event);
             queue.push_back(DriverEvent::HandleEvent(event));
         }
 

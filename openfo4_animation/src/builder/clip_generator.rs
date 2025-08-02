@@ -2,17 +2,17 @@ use std::time::Duration;
 
 use openfo4_hkx::behavior::{ClipGenerator, PlaybackMode};
 
-use crate::builder::{BuildNode, Error, GraphBuilderState, UnknownVariableName};
+use crate::builder::{BuildNode, BuilderContext, Error, UnknownVariableName};
 use crate::{Clip, ClipTrigger, Node, NodeInner, Value, ValueExpression, parse_event};
 
 impl BuildNode for ClipGenerator {
-    fn build(&self, state: &mut GraphBuilderState<'_>) -> Result<Option<Node>, Error> {
+    fn build(&self, ctx: &mut BuilderContext<'_>) -> Result<Option<Node>, Error> {
         let mut speed = ValueExpression::Const(Value::F32(self.playback_speed));
 
         if let Some(set) = &self.parent.node.bindable.variable_binding_set {
             for binding in &*set.bindings {
-                let variable = state
-                    .get_variable_id(binding.binding_type, binding.variable_index)
+                let variable = ctx
+                    .get_variable(binding.binding_type, binding.variable_index)
                     .unwrap();
 
                 match &*binding.member_path {
@@ -32,7 +32,7 @@ impl BuildNode for ClipGenerator {
         let mut triggers = Vec::new();
         if let Some(t) = &self.triggers {
             for trigger in &*t.triggers {
-                let event = parse_event(state.file, &trigger.event);
+                let event = parse_event(ctx.hkx_file(), &trigger.event);
 
                 let local_time = if trigger.relative_to_end_of_clip {
                     // The offset is from the end of the clip.
