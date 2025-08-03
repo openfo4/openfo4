@@ -1,15 +1,12 @@
-use std::thread::panicking;
-
-use game_common::components::{Component, Transform};
+use game_common::components::Transform;
 use game_core::time::Time;
-use glam::{Mat4, Quat, Vec3};
+use glam::{Quat, Vec3};
 use hecs::{CommandBuffer, World};
-use openfo4_hkx::animation::Animation;
 
 use crate::animation::{AnimationClip, AnimationClipFlags};
 use crate::driver::{AnimationDriver, BoneWeights};
-use crate::skeleton::{Skeleton, SkeletonInstance};
-use crate::{AnimationSet, Node, NodeInner, Value};
+use crate::skeleton::SkeletonInstance;
+use crate::{AnimationSet, NodeInner};
 
 pub fn drive_animations(world: &mut World, time: &Time, event: Option<&'static str>) {
     let mut commands = CommandBuffer::new();
@@ -96,11 +93,21 @@ pub fn drive_animations(world: &mut World, time: &Time, event: Option<&'static s
 
         for (index, entity) in &skeleton.bones {
             let mut translation = Vec3::ZERO;
-            let mut rotation = Quat::IDENTITY;
             let mut scale = Vec3::ZERO;
-            let mut blend_factor = 0.0;
+
+            let mut rotation = Quat::from_array([0.0; 4]);
+            let mut first_rotation = None;
 
             let mut anim_applied = false;
+
+            let mut weight_sum = 0.0;
+            for anim in active_anims() {
+                weight_sum += anim.blend_factor.get(*index as u32);
+            }
+
+            if weight_sum == 0.0 {
+                continue;
+            }
 
             for anim in active_anims() {
                 let Some(track) = anim.animation.skeleton_bone_to_animation_bone.get(index) else {
@@ -117,23 +124,44 @@ pub fn drive_animations(world: &mut World, time: &Time, event: Option<&'static s
                 let transform_b = anim.animation.get(anim.b, *track as u32).unwrap();
                 let transform = Transform::lerp(transform_a, transform_b, anim.s);
 
-                translation = translation.lerp(transform.translation, 1.0 - blend_factor);
-                rotation = rotation.slerp(transform.rotation, 1.0 - blend_factor);
-                scale = scale.lerp(transform.scale, 1.0 - blend_factor);
+                let weight = anim.blend_factor.get(*index as u32) / weight_sum;
+                debug_assert!(weight >= 0.0 && weight <= 1.0);
 
-                blend_factor += anim.blend_factor.get(*index as u32);
+                translation += transform.translation * weight;
+                scale += transform.scale * weight;
+
+                // Fast approximate quaternion average.
+                // Since q = -q for rotations hold the first quaternion will dictate
+                // the sign and all other quaternion will be inverted to that sign.
+                // See https://math.stackexchange.com/questions/61146/averaging-quaternions
+                // FIXME: When updating to glam 30.0 replace rotation = rotation + ...
+                // with rotation += ... .
+                if let Some(first_rotation) = first_rotation {
+                    if transform.rotation.dot(first_rotation) < 0.0 {
+                        rotation = rotation - transform.rotation * weight;
+                    } else {
+                        rotation = rotation + transform.rotation * weight;
+                    }
+                } else {
+                    first_rotation = Some(transform.rotation);
+                    rotation = rotation + transform.rotation * weight;
+                }
             }
-
-            let bone_transform = Transform {
-                translation,
-                rotation,
-                scale,
-            };
 
             // It is possible that bones exist that are not driven from animations
             // and are only used for skinning. We must not overwrite those bones.
             if anim_applied {
-                commands.insert_one(*entity, bone_transform);
+                debug_assert_ne!(rotation.length(), 0.0);
+                rotation = rotation.normalize();
+
+                commands.insert_one(
+                    *entity,
+                    Transform {
+                        translation,
+                        rotation,
+                        scale,
+                    },
+                );
             }
         }
     }
