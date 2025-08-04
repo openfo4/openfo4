@@ -223,20 +223,17 @@ impl Builder {
     pub fn build(&mut self) -> Result<Result<AnimationGraph, Hint>, Error> {
         let mut nodes_ready = Vec::new();
 
-        while let Some((file, _)) = self.stack.first() {
+        while let Some((file, _)) = self.stack.last() {
             let Some(state) = self.state.files.get(file) else {
                 return Ok(Err(Hint::NeedFile(file.clone())));
             };
 
             let (file, ptr) = self.stack.pop().unwrap();
-            dbg!(&ptr);
 
             let ptr = match ptr {
                 RootOrPtr::Root => state.root.unwrap(),
                 RootOrPtr::Ptr(ptr) => ptr,
             };
-
-            dbg!(&ptr);
 
             let hkx_file = self.hkx_files.get(&file).unwrap();
             let object = match hkx_file.get(ptr) {
@@ -392,11 +389,8 @@ impl<'a> BuilderContext<'a> {
     }
 
     fn get_variable(&self, binding_type: BindingType, variable_index: i32) -> Option<VariableId> {
-        dbg!(&variable_index, &binding_type);
         let state = self.state.files.get(self.file).unwrap();
         let variable_index = variable_index as usize;
-
-        dbg!(&state.index_table);
 
         match binding_type {
             BindingType::Variable => state

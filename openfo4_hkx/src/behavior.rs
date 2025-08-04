@@ -215,7 +215,7 @@ pub struct VariableValueSet {
     // Offset: 32
     pub quad_variable_values: Array<Vec4>,
     // Offset: 48
-    pub variant_variable_values: Array<ReferencedObject>,
+    pub variant_variable_values: Array<OpaquePtr>,
 }
 
 #[derive(Clone, Debug, HkStruct)]
@@ -1637,7 +1637,7 @@ pub struct Layer {
 #[signature(0x154fcfaa)]
 pub struct BehaviorReferenceGenerator {
     // Offset: 0
-    pub parent: Modifier,
+    pub parent: Generator,
     // Offset: 136
     pub behavior_name: String,
     // Offset: 144
