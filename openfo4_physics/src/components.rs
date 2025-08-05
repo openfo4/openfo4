@@ -7,6 +7,20 @@ pub struct RigidBody {
     pub angvel: Vec3,
 }
 
+impl RigidBody {
+    pub const FIXED: Self = Self {
+        kind: RigidBodyKind::Fixed,
+        linvel: Vec3::ZERO,
+        angvel: Vec3::ZERO,
+    };
+
+    pub const DYNAMIC: Self = Self {
+        kind: RigidBodyKind::Dynamic,
+        linvel: Vec3::ZERO,
+        angvel: Vec3::ZERO,
+    };
+}
+
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub enum RigidBodyKind {
     Dynamic,

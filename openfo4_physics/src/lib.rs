@@ -12,8 +12,8 @@ use openfo4_core::hierarchy::Children;
 use rapier3d::math::{Isometry, Rotation};
 use rapier3d::prelude::{
     CCDSolver, ColliderBuilder, ColliderHandle, ColliderSet, DefaultBroadPhase, ImpulseJointSet,
-    IntegrationParameters, IslandManager, MultibodyJointSet, NarrowPhase, QueryPipeline,
-    RigidBodyBuilder, RigidBodyHandle, RigidBodySet, RigidBodyType, SharedShape, Vector,
+    IntegrationParameters, IslandManager, MultibodyJointSet, NarrowPhase, RigidBodyBuilder,
+    RigidBodyHandle, RigidBodySet, RigidBodyType, SharedShape, Vector,
 };
 use tracing::instrument;
 
@@ -33,7 +33,6 @@ pub struct PhysicsPipeline {
     impulse_joints: ImpulseJointSet,
     multibody_joints: MultibodyJointSet,
     ccd_solver: CCDSolver,
-    query_pipeline: QueryPipeline,
     // Our stuff
     body_handles: BiMap<Entity, RigidBodyHandle>,
     /// Maps [`RigidBody`] entities to a list of [`Collider`] entities that are attached to the
@@ -62,7 +61,6 @@ impl PhysicsPipeline {
             impulse_joints: ImpulseJointSet::new(),
             multibody_joints: MultibodyJointSet::new(),
             ccd_solver: CCDSolver::new(),
-            query_pipeline: QueryPipeline::new(),
             body_handles: BiMap::new(),
             collider_handles: HashMap::new(),
             body_children: HashMap::new(),
@@ -85,7 +83,6 @@ impl PhysicsPipeline {
             &mut self.impulse_joints,
             &mut self.multibody_joints,
             &mut self.ccd_solver,
-            Some(&mut self.query_pipeline),
             &(),
             &(),
         );
@@ -215,9 +212,16 @@ impl PhysicsPipeline {
                     spawned_collider.scale = transform.scale;
                 }
 
+                // Scale of the collider relative to the scale the parent expects us.
+                // We need to offset the collider in the coordinate of the parent,
+                // which we get when we scale from the collider to the parent sees us.
+                let scale_to_parent = transform.scale / collider_parent.transform.scale;
+                let translation = collider_parent.transform.translation * scale_to_parent;
+                let rotation = collider_parent.transform.rotation;
+
                 state.set_position_wrt_parent(Isometry {
-                    translation: Vector::from(collider_parent.transform.translation).into(),
-                    rotation: collider_parent.transform.rotation.into(),
+                    translation: Vector::from(translation).into(),
+                    rotation: rotation.into(),
                 });
 
                 state.set_friction(collider.friction);
@@ -385,7 +389,7 @@ fn build_shape(shape: &ColliderShape, scale: Vec3) -> SharedShape {
                 .collect();
             let indices = mesh
                 .indices()
-                .windows(3)
+                .chunks(3)
                 .map(|indices| indices.try_into().unwrap())
                 .collect::<Vec<[u32; 3]>>();
 

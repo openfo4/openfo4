@@ -7,10 +7,11 @@ edition = "2024"
 game_common = { version = "0.1.0", path = "../game_common" }
 game_tracing = { version = "0.1.0", path = "../game_tracing" }
 openfo4_core = { version = "0.1.0", path = "../openfo4_core" }
+game_gizmos = { version = "0.1.0", path = "../game_gizmos" }
 
 nalgebra = { version = "0.33.0", features = ["convert-glam028"] }
 parking_lot = "0.12.3"
-rapier3d = { version = "0.25.0", features = ["simd-stable"] }
+rapier3d = { version = "0.27.0", features = ["simd-stable", "debug-render"] }
 tracing = "0.1.40"
 glam = { version = "0.28.0" }
 hecs = "0.10.5"
