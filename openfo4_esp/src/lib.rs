@@ -1775,6 +1775,14 @@ where
 #[derive(Copy, Clone, PartialEq, Eq, Hash)]
 pub struct FormId(pub u32);
 
+impl FormId {
+    pub const NULL: Self = Self(0);
+
+    pub const fn is_null(&self) -> bool {
+        self.0 == 0
+    }
+}
+
 impl std::fmt::Debug for FormId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "FormId({:X})", self.0)
