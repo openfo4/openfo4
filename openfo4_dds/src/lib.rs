@@ -111,8 +111,11 @@ fn read_uncompressed(
     mut mip_size: UVec2,
     mip_count: u32,
 ) -> Result<Vec<MipLevel>, Error> {
-    let mut mips = Vec::new();
+    if mip_size.x == 0 || mip_size.y == 0 {
+        return Ok(Vec::new());
+    }
 
+    let mut mips = Vec::new();
     for _ in 0..mip_count {
         let size = mip_size.x as usize * mip_size.y as usize;
         let size_in_bytes = size * (header.pixel_format.rgb_bit_count / 8) as usize;
@@ -164,9 +167,7 @@ fn read_uncompressed(
             bytes: Bytes::from(bytes),
         });
 
-        return Ok(mips);
-
-        mip_size /= 2;
+        mip_size = UVec2::max(UVec2::ONE, mip_size / 2);
     }
 
     Ok(mips)
@@ -217,6 +218,10 @@ fn read_copy(
     format: Format,
 ) -> Result<Vec<MipLevel>, Error> {
     let mut mips = Vec::new();
+
+    if mip_size.x == 0 || mip_size.y == 0 {
+        return Ok(Vec::new());
+    }
 
     for _ in 0..mip_count {
         let size = match format {
@@ -294,7 +299,7 @@ fn read_copy(
             bytes,
         });
 
-        mip_size /= 2;
+        mip_size = UVec2::max(UVec2::ONE, mip_size / 2);
     }
 
     Ok(mips)
