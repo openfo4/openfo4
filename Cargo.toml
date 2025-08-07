@@ -47,7 +47,7 @@ members = [
     "openfo4_hkx",
     "openfo4_hkx_derive",
     "openfo4_nif",
-    "openfo4_physics", "openfo4_asset", "openfo4_pex",
+    "openfo4_physics", "openfo4_asset", "openfo4_pex", "openfo4_ba2",
 ]
 
 resolver = "2"
