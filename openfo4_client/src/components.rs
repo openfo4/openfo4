@@ -105,3 +105,6 @@ impl MulAssign for NiTransform {
 /// A root entity.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Root;
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub struct Player;

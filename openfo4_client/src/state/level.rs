@@ -156,7 +156,8 @@ impl Level {
                         continue;
                     }
 
-                    event.scene.instantiate(event.transform.into(), world);
+                    let entity = event.scene.instantiate(event.transform.into(), world);
+                    world.insert_one(entity, RigidBody::FIXED).unwrap();
                 }
                 SpawnEvent::SpawnTerrain(transform, object, collider) => {
                     dbg!("TERRAIN");

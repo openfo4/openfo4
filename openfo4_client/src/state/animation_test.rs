@@ -4,19 +4,22 @@ use std::sync::{Arc, OnceLock};
 
 use game_core_pipeline::entities::MaterialHandle;
 use game_render::mesh::Mesh;
-use glam::{IVec2, Vec4};
+use glam::{IVec2, Vec3, Vec4};
 use hecs::{Entity, World};
-use openfo4_animation::AnimationSet;
-use openfo4_animation::builder::animation_graph;
+use image::imageops::replace;
+use openfo4_animation::builder::{Builder, Hint};
 use openfo4_animation::driver::AnimationDriver;
 use openfo4_animation::skeleton::{BoneMarker, SkeletonInstance};
+use openfo4_animation::{AnimationSet, Value};
 use openfo4_asset::AssetLoader;
-use openfo4_hkx::HkxFile;
+use openfo4_hkx::behavior::VariableType;
+use openfo4_hkx::{HkObject, HkxFile};
+use openfo4_physics::components::{RigidBody, RigidBodyKind};
 
 use crate::assets::AssetServer;
 use crate::assets::nif_v2::{Instantiate, NifScene};
 use crate::cell::CellId;
-use crate::components::NiTransform;
+use crate::components::{NiTransform, Player};
 use crate::loader::FileLoader;
 use crate::shared::SharedState;
 use crate::state::anim_starter::{ActiveBehaviorGraphs, AnimationEventQueue};
@@ -64,6 +67,8 @@ pub fn animation_test(
     let skin_path = "meshes/armor/armoredcoat/outfitf.nif";
     let nif_skeleton = "actors/character/characterassets/skeleton.nif";
 
+    let char_path = "meshes/actors/character/characters/raidercharacter.hkx";
+
     // let raider_root_path = "meshes/actors/character/behaviors/raiderrootbehavior.hkx";
 
     ONCE.get_or_init(|| {
@@ -77,12 +82,76 @@ pub fn animation_test(
                 },
             ));
 
+        let mut char_file = loader.open(char_path).unwrap();
+        let mut buf = Vec::new();
+        char_file.read_to_end(&mut buf).unwrap();
+        let char_file = HkxFile::decode(&buf).unwrap();
+
         let mut behavior_file = loader.open(behavior_file).unwrap();
         let mut buf = Vec::new();
         behavior_file.read_to_end(&mut buf).unwrap();
         let behavior_file = HkxFile::decode(&buf).unwrap();
 
-        let graph = animation_graph(&behavior_file);
+        let mut props = HashMap::new();
+        for obj in char_file.iter() {
+            match obj {
+                HkObject::CharacterData(data) => {
+                    let vals = data.character_property_values.as_ref().unwrap();
+
+                    for ((name, info), data) in data
+                        .string_data
+                        .character_property_names
+                        .iter()
+                        .zip(data.character_property_infos.iter())
+                        .zip(
+                            data.character_property_values
+                                .as_ref()
+                                .unwrap()
+                                .word_variable_values
+                                .iter(),
+                        )
+                    {
+                        if info.type_ == VariableType::Pointer {
+                            let value = data.value;
+
+                            let ptr = &vals.variant_variable_values[value as usize];
+
+                            match char_file.get(*ptr) {
+                                Some(HkObject::BoneWeightArray(weights)) => {
+                                    props.insert(
+                                        name.clone(),
+                                        Value::BoneWeights(weights.bone_weights.to_vec()),
+                                    );
+                                }
+                                _ => (),
+                            }
+                        }
+                    }
+                }
+                _ => (),
+            }
+        }
+
+        let mut builder = Builder::new(behavior_file, props).unwrap();
+
+        let graph = loop {
+            match builder.build().unwrap() {
+                Ok(graph) => break graph,
+                Err(Hint::NeedFile(path)) => {
+                    let dir = "meshes/actors/character";
+                    let p = format!("{}/{}", dir, path.to_lowercase().replace("\\", "/"));
+
+                    let mut file = loader.open(&p).unwrap();
+                    let mut buf = Vec::new();
+                    file.read_to_end(&mut buf).unwrap();
+                    let file = HkxFile::decode(&buf).unwrap();
+
+                    builder.register_file(&path, file).unwrap();
+                }
+            }
+        };
+
+        let graph = builder.build().unwrap().unwrap();
 
         let mut anim_clips = HashMap::new();
 
@@ -265,6 +334,8 @@ pub fn animation_test(
                         "actors/character/behaviors/raiderrootbehavior.hkx".to_owned(),
                     ]),
                     AnimationEventQueue::default(),
+                    RigidBody::FIXED,
+                    Player,
                 ),
             )
             .unwrap();

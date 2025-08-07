@@ -15,26 +15,30 @@ use std::io::BufReader;
 use std::sync::Arc;
 
 use esp::EspLoader;
-use game_common::components::Transform;
+use game_common::components::{Color, Transform};
 use game_core::time::Time;
+use game_core_pipeline::material::StandardMaterial;
+use game_gizmos::Gizmos;
 use game_input::keyboard::KeyCode;
 use game_tasks::TaskPool;
 use game_tracing::trace_span;
 use game_window::events::WindowEvent;
 use glam::{IVec2, Vec3};
-use hecs::World;
+use hecs::{With, World};
 use level::{Level, Streamer};
 use openfo4_asset::AssetLoader;
 use openfo4_core::events::EventBus;
 use openfo4_esp::EspFile;
 use openfo4_physics::PhysicsPipeline;
+use openfo4_physics::components::{RigidBody, RigidBodyKind};
 
 use crate::assets::nif_v2::NifLoaderContext;
 use crate::assets::{AssetServer, FileLoadContext};
 use crate::cell::CellId;
-use crate::components::{Camera, NiTransform};
+use crate::components::{Camera, NiTransform, Player};
 use crate::events::Event;
 use crate::loader::FileLoader;
+use crate::render::RenderObject;
 use crate::shared::SharedState;
 use crate::state::actions::{Action, Actions};
 use crate::state::anim_starter::{AnimationEventQueue, AnimationSystem};
@@ -66,25 +70,25 @@ impl GameState {
             EspFile::new(BufReader::new(File::open("../../Fallout4.esm").unwrap())).unwrap();
 
         let sources = [
-            "../../archive/raw/Data/Fallout4 - Animations.ba2",
-            "../../archive/raw/Data/Fallout4 - Interface.ba2",
-            "../../archive/raw/Data/Fallout4 - Materials.ba2",
-            "../../archive/raw/Data/Fallout4 - Meshes.ba2",
-            "../../archive/raw/Data/Fallout4 - MeshesExtra.ba2",
-            "../../archive/raw/Data/Fallout4 - Misc.ba2",
-            "../../archive/raw/Data/Fallout4 - Nvflex.ba2",
-            "../../archive/raw/Data/Fallout4 - Shaders.ba2",
-            "../../archive/raw/Data/Fallout4 - Sounds.ba2",
-            "../../archive/raw/Data/Fallout4 - Startup.ba2",
-            "../../archive/raw/Data/Fallout4 - Textures1.ba2",
-            "../../archive/raw/Data/Fallout4 - Textures2.ba2",
-            "../../archive/raw/Data/Fallout4 - Textures3.ba2",
-            "../../archive/raw/Data/Fallout4 - Textures4.ba2",
-            "../../archive/raw/Data/Fallout4 - Textures5.ba2",
-            "../../archive/raw/Data/Fallout4 - Textures6.ba2",
-            "../../archive/raw/Data/Fallout4 - Textures7.ba2",
-            "../../archive/raw/Data/Fallout4 - Textures8.ba2",
-            "../../archive/raw/Data/Fallout4 - Textures9.ba2",
+            "../../archive/raw/Fallout4 - Animations.ba2",
+            "../../archive/raw/Fallout4 - Interface.ba2",
+            "../../archive/raw/Fallout4 - Materials.ba2",
+            "../../archive/raw/Fallout4 - Meshes.ba2",
+            "../../archive/raw/Fallout4 - MeshesExtra.ba2",
+            "../../archive/raw/Fallout4 - Misc.ba2",
+            "../../archive/raw/Fallout4 - Nvflex.ba2",
+            "../../archive/raw/Fallout4 - Shaders.ba2",
+            "../../archive/raw/Fallout4 - Sounds.ba2",
+            "../../archive/raw/Fallout4 - Startup.ba2",
+            "../../archive/raw/Fallout4 - Textures1.ba2",
+            "../../archive/raw/Fallout4 - Textures2.ba2",
+            "../../archive/raw/Fallout4 - Textures3.ba2",
+            "../../archive/raw/Fallout4 - Textures4.ba2",
+            "../../archive/raw/Fallout4 - Textures5.ba2",
+            "../../archive/raw/Fallout4 - Textures6.ba2",
+            "../../archive/raw/Fallout4 - Textures7.ba2",
+            "../../archive/raw/Fallout4 - Textures8.ba2",
+            "../../archive/raw/Fallout4 - Textures9.ba2",
         ];
 
         let mut loader = EspLoader::new();
@@ -154,7 +158,7 @@ impl GameState {
         ));
     }
 
-    pub fn update(&mut self, time: &Time) {
+    pub fn update(&mut self, time: &Time, gizmos: &Gizmos) {
         let _span = trace_span!("GameState::update").entered();
 
         self.level.update(&mut self.world, &mut self.events);
@@ -175,7 +179,8 @@ impl GameState {
 
         openfo4_animation::systems::drive_animations(&mut self.world, time, self.anim_event.take());
 
-        // self.physics.step(&mut self.world);
+        systems::hierarchy::compute_global_transform(&mut self.world);
+        self.physics.step(&mut self.world);
 
         skinning::mesh_skinning(&mut self.world, &self.shared);
 
@@ -217,11 +222,18 @@ impl GameState {
                         break;
                     }
 
+                    let m = self.shared.entities.create_mesh(s);
+                    let material = self.shared.entities.create_material(StandardMaterial {
+                        base_color: Color::BLACK,
+                        ..Default::default()
+                    });
+                    let obj = RenderObject { mesh: m, material };
+
                     self.world.spawn((
                         transform,
                         openfo4_physics::components::Collider {
                             friction: 1.0,
-                            restitution: 1.0,
+                            restitution: 0.0,
                             shape: mesh,
                         },
                         openfo4_physics::components::RigidBody {
@@ -229,6 +241,7 @@ impl GameState {
                             linvel: Vec3::ZERO,
                             angvel: Vec3::ZERO,
                         },
+                        obj,
                     ));
                 }
 
@@ -238,7 +251,13 @@ impl GameState {
 
                 if event.key_code == Some(KeyCode::O) {
                     // self.anim_event = Some("g_weapForceEquip");
-                    self.anim_event = Some("MoveStart");
+                    // self.anim_event = Some("MoveStart");
+
+                    if let Some(action) = self.actions.0.get(&Action::SprintStart) {
+                        for (_, events) in self.world.query_mut::<&mut AnimationEventQueue>() {
+                            events.0.push_back(*action);
+                        }
+                    }
                 }
                 if event.key_code == Some(KeyCode::P) {
                     // self.anim_event = Some("weapUnequip");
@@ -315,6 +334,16 @@ impl GameState {
                 }
                 if event.key_code == Some(KeyCode::E) {
                     self.anim_event = Some("dump");
+                }
+
+                if event.key_code == Some(KeyCode::B) {
+                    for (_, (body, _)) in self.world.query_mut::<(&mut RigidBody, &Player)>() {
+                        dbg!(body.kind);
+                        body.kind = match body.kind {
+                            RigidBodyKind::Fixed => RigidBodyKind::Dynamic,
+                            RigidBodyKind::Dynamic => RigidBodyKind::Fixed,
+                        };
+                    }
                 }
             }
             _ => (),

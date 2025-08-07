@@ -85,11 +85,6 @@ impl Instantiate for Handle<NifScene> {
             let mut builder = EntityBuilder::new();
 
             builder.add(node.transform);
-            builder.add(RigidBody {
-                kind: RigidBodyKind::Fixed,
-                linvel: Vec3::ZERO,
-                angvel: Vec3::ZERO,
-            });
 
             if let Some(renderable) = &node.renderable {
                 builder.add(renderable.clone());
