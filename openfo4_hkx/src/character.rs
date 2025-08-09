@@ -62,6 +62,7 @@ pub struct RigidBodySetup {
     pub collision_filter_info: u32,
     // Offset: 4
     pub type_: i8,
+    _pad0: [u8; 3],
     // Offset: 8
     pub shape_setup: ShapeSetup,
 }
@@ -77,6 +78,7 @@ pub struct ShapeSetup {
     pub file_name: String,
     // Offset: 16
     pub type_: i8,
+    _pad0: [u8; 7],
 }
 
 #[derive(Clone, Debug, HkStruct)]

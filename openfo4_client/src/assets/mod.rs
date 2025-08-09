@@ -1,9 +1,9 @@
 mod bgsm;
-mod hkx;
 mod image;
 mod nif;
 mod scene;
 
+pub mod hkx;
 pub mod material;
 pub mod nif_v2;
 pub mod texture;
@@ -23,6 +23,7 @@ use parking_lot::{Mutex, RwLock};
 
 use crate::loader::{FileLoader, Reader};
 
+#[derive(Debug)]
 pub struct FileLoadContext {
     pub server: AssetServer,
     pub entities: Entities,

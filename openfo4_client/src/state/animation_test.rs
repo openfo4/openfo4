@@ -2,6 +2,7 @@ use std::collections::{HashMap, HashSet};
 use std::io::Read;
 use std::sync::{Arc, OnceLock};
 
+use game_common::components::Transform;
 use game_core_pipeline::entities::MaterialHandle;
 use game_render::mesh::Mesh;
 use glam::{IVec2, Vec3, Vec4};
@@ -12,12 +13,14 @@ use openfo4_animation::driver::AnimationDriver;
 use openfo4_animation::skeleton::{BoneMarker, SkeletonInstance};
 use openfo4_animation::{AnimationSet, Value};
 use openfo4_asset::AssetLoader;
+use openfo4_core::WorldExt;
 use openfo4_hkx::behavior::VariableType;
 use openfo4_hkx::{HkObject, HkxFile};
-use openfo4_physics::components::{RigidBody, RigidBodyKind};
+use openfo4_physics::components::{Collider, ColliderShape, RigidBody, RigidBodyKind, TriMesh};
 
 use crate::assets::AssetServer;
-use crate::assets::nif_v2::{Instantiate, NifScene};
+use crate::assets::hkx::FileHkxHandle;
+use crate::assets::nif_v2::{Instantiate, NIF_TO_METERS, NifScene};
 use crate::cell::CellId;
 use crate::components::{NiTransform, Player};
 use crate::loader::FileLoader;
@@ -316,6 +319,56 @@ pub fn animation_test(
             });
         }
 
+        let char_data = char_file
+            .iter()
+            .find_map(|v| match v {
+                HkObject::CharacterData(data) => Some(data),
+                _ => None,
+            })
+            .unwrap();
+
+        // FIXME: This is actually a capsule, but we currently use
+        // a box to approximate it because capsule colliders are
+        // not implemented yet.
+        let height = char_data
+            .character_controller_setup
+            .rigid_body_setup
+            .shape_setup
+            .capsule_height
+            * 1.0
+            / NIF_TO_METERS;
+        let radius = char_data
+            .character_controller_setup
+            .rigid_body_setup
+            .shape_setup
+            .capsule_radius
+            * 1.0
+            / NIF_TO_METERS;
+        let mesh: game_render::mesh::Mesh = game_render::shape::Box {
+            min_x: -radius / 2.0,
+            max_x: radius / 2.0,
+            min_y: -radius / 2.0,
+            max_y: radius / 2.0,
+            min_z: -height / 2.0,
+            max_z: height / 2.0,
+        }
+        .into();
+
+        let collider_shape = world.spawn((
+            Transform {
+                translation: Vec3::new(0.0, 0.0, height / 2.0),
+                ..Default::default()
+            },
+            Collider {
+                friction: 1.0,
+                restitution: 0.0,
+                shape: ColliderShape::TriMesh(TriMesh::new(
+                    mesh.positions().to_vec(),
+                    mesh.indicies().unwrap().into_u32(),
+                )),
+            },
+        ));
+
         world
             .insert(
                 root,
@@ -339,6 +392,8 @@ pub fn animation_test(
                 ),
             )
             .unwrap();
+
+        world.add_children(root, collider_shape);
 
         crate::systems::camera::attach_camera(world, root);
 

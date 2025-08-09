@@ -109,6 +109,10 @@ impl GameState {
             server: assets.clone(),
             entities: shared.entities.clone(),
         });
+        asset_loader.register::<crate::assets::hkx::FileHkxHandle>(FileLoadContext {
+            server: assets.clone(),
+            entities: shared.entities.clone(),
+        });
 
         let actions = futures_lite::future::block_on(actions::Actions::load(&loader));
         dbg!(&actions);
