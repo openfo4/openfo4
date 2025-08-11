@@ -215,7 +215,7 @@ pub struct VariableValueSet {
     // Offset: 32
     pub quad_variable_values: Array<Vec4>,
     // Offset: 48
-    pub variant_variable_values: Array<OpaquePtr>,
+    pub variant_variable_values: Array<Option<OpaquePtr>>,
 }
 
 #[derive(Clone, Debug, HkStruct)]

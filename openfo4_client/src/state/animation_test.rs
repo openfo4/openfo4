@@ -119,7 +119,7 @@ pub fn animation_test(
 
                             let ptr = &vals.variant_variable_values[value as usize];
 
-                            match char_file.get(*ptr) {
+                            match char_file.get(ptr.unwrap()) {
                                 Some(HkObject::BoneWeightArray(weights)) => {
                                     props.insert(
                                         name.clone(),

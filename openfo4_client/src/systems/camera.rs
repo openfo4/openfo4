@@ -1,16 +1,25 @@
+use std::f32::consts::PI;
+
 use game_common::components::{GlobalTransform, Transform};
+use game_common::math::RotationExt;
 use game_input::keyboard::KeyCode;
 use game_window::events::WindowEvent;
 use glam::{Quat, Vec3};
 use hecs::{CommandBuffer, Entity, World};
 use openfo4_animation::skeleton::SkeletonInstance;
 
+// Distances in CK units.
+const CAMERA_DISTANCE_MIN: f32 = 150.0;
+const CAMERA_DISTANCE_MAX: f32 = 400.0;
+
+use crate::assets::nif_v2::NIF_TO_METERS;
 use crate::components::Camera;
 
 #[derive(Copy, Clone, Debug)]
 pub struct CameraOffset {
     pub transform: Transform,
     pub rotation: Quat,
+    pub entity: Entity,
 }
 
 #[derive(Copy, Clone, Debug)]
@@ -20,7 +29,7 @@ pub struct PlayerControlled;
 pub enum CameraMode {
     Free,
     First { entity: Entity },
-    Third,
+    Third { entity: Entity, distance: f32 },
 }
 
 pub fn attach_camera(world: &mut World, entity: Entity) {
@@ -34,6 +43,8 @@ pub fn attach_camera(world: &mut World, entity: Entity) {
         .unwrap();
 
     let transform = *skeleton.bones_bind_pose.get(&bone_index).unwrap();
+
+    let camera_entity = skeleton.bones[&bone_index];
     drop(skeleton);
 
     world
@@ -46,6 +57,7 @@ pub fn attach_camera(world: &mut World, entity: Entity) {
                     scale: Vec3::ONE,
                 },
                 rotation: Quat::IDENTITY,
+                entity: camera_entity,
             },
         )
         .unwrap();
@@ -79,6 +91,16 @@ pub fn handle_free_camera(world: &mut World, event: &WindowEvent) {
                 transform.rotation = transform.rotation * q2;
                 transform.rotation = transform.rotation.normalize();
             }
+            WindowEvent::MouseWheel(event) => match &mut camera.mode {
+                CameraMode::Third {
+                    entity: _,
+                    distance,
+                } => {
+                    *distance =
+                        (*distance + event.y * 2.0).clamp(CAMERA_DISTANCE_MIN, CAMERA_DISTANCE_MAX);
+                }
+                _ => (),
+            },
             WindowEvent::KeyboardInput(event) => {
                 let mut direction = Vec3::ZERO;
                 if event.key_code == Some(KeyCode::W) {
@@ -97,7 +119,10 @@ pub fn handle_free_camera(world: &mut World, event: &WindowEvent) {
                     match camera.mode {
                         CameraMode::Free => {
                             if let Some(entity) = entity {
-                                camera.mode = CameraMode::First { entity };
+                                camera.mode = CameraMode::Third {
+                                    entity,
+                                    distance: CAMERA_DISTANCE_MIN,
+                                };
                             }
                         }
                         _ => camera.mode = CameraMode::Free,
@@ -115,8 +140,13 @@ pub fn update_camera_transform(world: &mut World) {
     let mut buffer = CommandBuffer::new();
 
     for (entity, camera) in world.query::<&Camera>().iter() {
+        let mut dist = 0.0;
         let parent = match camera.mode {
             CameraMode::First { entity: parent } => parent,
+            CameraMode::Third { entity, distance } => {
+                dist = distance;
+                entity
+            }
             _ => continue,
         };
 
@@ -126,8 +156,9 @@ pub fn update_camera_transform(world: &mut World) {
         let mut transform = parent_transform.0;
 
         if let Some(offset) = offset {
-            transform *= offset.transform;
-            transform.rotation *= offset.rotation;
+            transform = world.get::<&GlobalTransform>(offset.entity).unwrap().0;
+
+            transform.translation += transform.rotation * Vec3::new(0.0, 0.0, dist * NIF_TO_METERS);
         }
 
         buffer.insert(entity, (transform, GlobalTransform(transform)));

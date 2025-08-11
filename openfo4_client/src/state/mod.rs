@@ -183,8 +183,8 @@ impl GameState {
 
         openfo4_animation::systems::drive_animations(&mut self.world, time, self.anim_event.take());
 
-        systems::hierarchy::compute_global_transform(&mut self.world);
-        self.physics.step(&mut self.world);
+        // systems::hierarchy::compute_global_transform(&mut self.world);
+        // self.physics.step(&mut self.world);
 
         skinning::mesh_skinning(&mut self.world, &self.shared);
 
