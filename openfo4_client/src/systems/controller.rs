@@ -3,20 +3,30 @@ use game_input::keyboard::KeyCode;
 use game_window::events::WindowEvent;
 use glam::{Quat, Vec3};
 use hecs::World;
+use openfo4_animation::driver::AnimationDriver;
+use openfo4_animation::{AnimationGraph, Value};
 
 use crate::components::Camera;
+use crate::state::actions::{Action, Actions};
+use crate::state::anim_starter::AnimationEventQueue;
+use crate::systems::PlayerControlState;
 use crate::systems::camera::{CameraMode, CameraOffset, PlayerControlled};
 
-pub fn handle_inputs(world: &mut World, event: &WindowEvent) {
+pub fn handle_inputs(world: &mut World, actions: &Actions, event: &WindowEvent) {
     for (_, camera) in world.query_mut::<&Camera>() {
         if matches!(camera.mode, CameraMode::Free) {
             return;
         }
     }
 
-    for (_, (transform, offset, _)) in
-        world.query_mut::<(&mut Transform, &mut CameraOffset, &PlayerControlled)>()
-    {
+    for (_, (transform, offset, _, queue, state, driver)) in world.query_mut::<(
+        &mut Transform,
+        &mut CameraOffset,
+        &PlayerControlled,
+        &mut AnimationEventQueue,
+        &mut PlayerControlState,
+        &mut AnimationDriver,
+    )>() {
         match event {
             WindowEvent::MouseMotion(event) => {
                 let yaw = event.delta.x * 0.001;
@@ -28,31 +38,112 @@ pub fn handle_inputs(world: &mut World, event: &WindowEvent) {
                 offset.rotation = q1 * offset.rotation;
                 offset.rotation = offset.rotation * q2;
                 offset.rotation = offset.rotation.normalize();
+
+                transform.rotation = (q1 * transform.rotation).normalize();
             }
             WindowEvent::KeyboardInput(event) => {
-                let mut direction = Vec3::ZERO;
-                if event.key_code == Some(KeyCode::W) {
-                    direction -= Vec3::Z;
-                }
-                if event.key_code == Some(KeyCode::S) {
-                    direction += Vec3::Z;
-                }
-                if event.key_code == Some(KeyCode::A) {
-                    direction -= Vec3::X;
-                }
-                if event.key_code == Some(KeyCode::D) {
-                    direction += Vec3::X;
+                let old_state = state.clone();
+
+                match event.key_code {
+                    Some(KeyCode::W) => {
+                        state.moving_front = event.state.is_pressed();
+                    }
+                    Some(KeyCode::S) => {
+                        state.moving_back = event.state.is_pressed();
+                    }
+                    Some(KeyCode::A) => {
+                        state.moving_left = event.state.is_pressed();
+                    }
+                    Some(KeyCode::D) => {
+                        state.moving_right = event.state.is_pressed();
+                    }
+                    Some(KeyCode::LControl) => {
+                        if !event.state.is_pressed() {
+                            continue;
+                        }
+
+                        if let Some(form) = actions.0.get(&Action::Sneak) {
+                            queue.0.push_back(*form);
+                        }
+
+                        state.sneaking ^= true;
+                    }
+                    Some(KeyCode::LShift) => {
+                        let action = if state.sprinting {
+                            Action::SprintStop
+                        } else {
+                            Action::SprintStart
+                        };
+
+                        if let Some(form) = actions.0.get(&action) {
+                            queue.0.push_back(*form);
+                        }
+
+                        state.sprinting ^= true;
+                    }
+                    _ => continue,
                 }
 
-                // Remove the Y component from the facing direction since
-                // we don't want to move up.
-                direction = offset.rotation * direction;
-                direction.y = 0.0;
-                direction = direction.normalize_or_zero();
+                let started_moving = !old_state.moving_front
+                    && !old_state.moving_back
+                    && !old_state.moving_left
+                    && !old_state.moving_right
+                    && (state.moving_front
+                        || state.moving_back
+                        || state.moving_left
+                        || state.moving_right);
+                let stopped_moving = !state.moving_front
+                    && !state.moving_back
+                    && !state.moving_left
+                    && !state.moving_right
+                    && (old_state.moving_front
+                        || old_state.moving_back
+                        || old_state.moving_left
+                        || old_state.moving_right);
 
-                transform.translation += direction * 0.2;
+                if started_moving {
+                    if let Some(form) = actions.0.get(&Action::MoveStart) {
+                        queue.0.push_back(*form);
+                    }
+                }
+
+                if stopped_moving {
+                    if let Some(form) = actions.0.get(&Action::MoveStop) {
+                        queue.0.push_back(*form);
+                    }
+                }
             }
             _ => (),
+        }
+    }
+}
+
+pub fn apply_player_movements(world: &mut World) {
+    for (_, (transform, offset, state)) in
+        world.query_mut::<(&mut Transform, &CameraOffset, &mut PlayerControlState)>()
+    {
+        let mut direction = Vec3::ZERO;
+        if state.moving_front {
+            direction -= Vec3::Z;
+        }
+        if state.moving_back {
+            direction += Vec3::Z;
+        }
+        if state.moving_left {
+            direction -= Vec3::X;
+        }
+        if state.moving_right {
+            direction += Vec3::X;
+        }
+
+        if direction != Vec3::ZERO {
+            // Remove the Y component from the facing direction since
+            // we don't want to move up.
+            direction = offset.rotation * direction;
+            direction.y = 0.0;
+            direction = direction.normalize_or_zero();
+
+            transform.translation += direction * 0.02;
         }
     }
 }

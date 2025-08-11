@@ -44,6 +44,7 @@ use crate::state::actions::{Action, Actions};
 use crate::state::anim_starter::{AnimationEventQueue, AnimationSystem};
 use crate::systems;
 use crate::systems::camera::CameraMode;
+use crate::systems::controller::apply_player_movements;
 
 // Load cell
 // Instantiate entity
@@ -175,6 +176,8 @@ impl GameState {
             &self.asset_loader,
         );
 
+        apply_player_movements(&mut self.world);
+
         systems::ni_transform::compute_transform_from_ni_transform(&mut self.world);
         systems::ni_transform::compute_cell_ids_from_ni_transform(&mut self.world);
         systems::hierarchy::compute_global_transform(&mut self.world);
@@ -199,7 +202,7 @@ impl GameState {
 
     pub fn send_event(&mut self, event: WindowEvent) {
         systems::camera::handle_free_camera(&mut self.world, &event);
-        systems::controller::handle_inputs(&mut self.world, &event);
+        systems::controller::handle_inputs(&mut self.world, &self.actions, &event);
 
         match event {
             WindowEvent::KeyboardInput(event) => {

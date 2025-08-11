@@ -14,6 +14,7 @@ const CAMERA_DISTANCE_MAX: f32 = 400.0;
 
 use crate::assets::nif_v2::NIF_TO_METERS;
 use crate::components::Camera;
+use crate::state::actions::Actions;
 
 #[derive(Copy, Clone, Debug)]
 pub struct CameraOffset {
@@ -159,6 +160,7 @@ pub fn update_camera_transform(world: &mut World) {
             transform = world.get::<&GlobalTransform>(offset.entity).unwrap().0;
 
             transform.translation += transform.rotation * Vec3::new(0.0, 0.0, dist * NIF_TO_METERS);
+            transform.rotation = offset.rotation;
         }
 
         buffer.insert(entity, (transform, GlobalTransform(transform)));

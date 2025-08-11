@@ -27,6 +27,7 @@ use crate::loader::FileLoader;
 use crate::shared::SharedState;
 use crate::state::anim_starter::{ActiveBehaviorGraphs, AnimationEventQueue};
 use crate::state::animation::{SkeletonConfig, load_anim};
+use crate::systems::PlayerControlState;
 
 pub struct SkinInstance {
     pub mesh: Mesh,
@@ -389,6 +390,7 @@ pub fn animation_test(
                     AnimationEventQueue::default(),
                     RigidBody::FIXED,
                     Player,
+                    PlayerControlState::default(),
                 ),
             )
             .unwrap();
