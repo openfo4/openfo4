@@ -1,21 +1,30 @@
 pub mod components;
+pub mod controller;
+pub mod debug;
 
 use std::cell::Cell;
 use std::collections::{HashMap, VecDeque};
 
 use components::{ColliderShape, RigidBody, RigidBodyKind};
 use game_common::collections::bimap::BiMap;
-use game_common::components::{GlobalTransform, Transform};
+use game_common::components::{Axis, GlobalTransform, Transform};
+use game_common::math::Ray;
+use game_gizmos::Gizmos;
+use game_tracing::trace_span;
 use glam::{Quat, Vec3};
 use hecs::{Entity, World};
 use openfo4_core::hierarchy::Children;
 use rapier3d::math::{Isometry, Rotation};
+use rapier3d::parry::query::{DefaultQueryDispatcher, ShapeCastOptions};
 use rapier3d::prelude::{
-    CCDSolver, ColliderBuilder, ColliderHandle, ColliderSet, DefaultBroadPhase, ImpulseJointSet,
-    IntegrationParameters, IslandManager, MultibodyJointSet, NarrowPhase, RigidBodyBuilder,
-    RigidBodyHandle, RigidBodySet, RigidBodyType, SharedShape, Vector,
+    CCDSolver, ColliderBuilder, ColliderHandle, ColliderSet, DebugRenderMode, DebugRenderPipeline,
+    DebugRenderStyle, DefaultBroadPhase, ImpulseJointSet, IntegrationParameters, IslandManager,
+    MultibodyJointSet, NarrowPhase, QueryPipeline, RigidBodyBuilder, RigidBodyHandle, RigidBodySet,
+    RigidBodyType, SharedShape, Vector,
 };
 use tracing::instrument;
+
+use crate::debug::GizmoRenderBackend;
 
 const DT: f32 = 1.0 / 60.0;
 const MIN_CCD_DT: f32 = DT / 100.0;
@@ -40,6 +49,7 @@ pub struct PhysicsPipeline {
     /// [`RigidBody`].
     body_children: HashMap<Entity, BodyChildren>,
     collider_handles: HashMap<Entity, SpawnedCollider>,
+    debug: DebugRenderPipeline,
 }
 
 impl PhysicsPipeline {
@@ -64,6 +74,10 @@ impl PhysicsPipeline {
             body_handles: BiMap::new(),
             collider_handles: HashMap::new(),
             body_children: HashMap::new(),
+            debug: DebugRenderPipeline::new(
+                DebugRenderStyle::default(),
+                DebugRenderMode::default(),
+            ),
         }
     }
 
@@ -88,6 +102,17 @@ impl PhysicsPipeline {
         );
 
         self.write_back(world);
+    }
+
+    pub fn render_debug(&mut self, gizmos: &Gizmos) {
+        self.debug.render(
+            &mut GizmoRenderBackend(gizmos),
+            &self.bodies,
+            &self.colliders,
+            &self.impulse_joints,
+            &self.multibody_joints,
+            &self.narrow_phase,
+        );
     }
 
     #[instrument(name = "PhysicsPipeline::update_rigid_bodies", skip_all)]
@@ -300,6 +325,56 @@ impl PhysicsPipeline {
             }
         }
     }
+
+    fn query_pipeline(&self) -> QueryPipeline<'_> {
+        self.broad_phase.as_query_pipeline(
+            &DefaultQueryDispatcher,
+            &self.bodies,
+            &self.colliders,
+            rapier3d::pipeline::QueryFilter::default(),
+        )
+    }
+
+    pub fn cast_ray(&self, ray: Ray, max_toi: f32) -> Option<QueryHit> {
+        let _span = trace_span!("PhysicsPipeline::cast_ray").entered();
+
+        let ray = rapier3d::geometry::Ray {
+            origin: ray.origin.into(),
+            dir: ray.direction.into(),
+        };
+
+        self.query_pipeline()
+            .cast_ray(&ray, max_toi, true)
+            .map(|(collider, toi)| {
+                // self.collider_handles.get(collider).unwrap();
+
+                QueryHit { toi }
+            })
+    }
+
+    pub fn cast_shape(
+        &self,
+        origin: Transform,
+        direction: Vec3,
+        shape: &ColliderShape,
+    ) -> Option<QueryHit> {
+        let shape = build_shape(shape, origin.scale);
+        let origin = Isometry {
+            translation: origin.translation.into(),
+            rotation: origin.rotation.into(),
+        };
+
+        self.query_pipeline()
+            .cast_shape(
+                &origin,
+                &direction.into(),
+                &*shape,
+                ShapeCastOptions::default(),
+            )
+            .map(|(collider, hit)| QueryHit {
+                toi: hit.time_of_impact,
+            })
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -378,6 +453,30 @@ fn collect_collider_children(entity: Entity, world: &World) -> HashMap<Entity, T
 
 fn build_shape(shape: &ColliderShape, scale: Vec3) -> SharedShape {
     match shape {
+        ColliderShape::Capsule(shape) => {
+            // Capsules can only be scaled in two directions:
+            // The height direction and the radius which includes both
+            // other directions uniformly.
+            // If the radius scale factors are not the same we will take
+            // the middle (midpoint) value.
+            match shape.axis {
+                Axis::X => {
+                    let half_height = shape.half_height * scale.x;
+                    let radius = shape.radius * scale.y.midpoint(scale.z);
+                    SharedShape::capsule_x(half_height, radius)
+                }
+                Axis::Y => {
+                    let half_height = shape.half_height * scale.y;
+                    let radius = shape.radius * scale.x.midpoint(scale.z);
+                    SharedShape::capsule_y(half_height, radius)
+                }
+                Axis::Z => {
+                    let half_height = shape.half_height * scale.z;
+                    let radius = shape.radius * scale.x.midpoint(scale.y);
+                    SharedShape::capsule_z(half_height, radius)
+                }
+            }
+        }
         ColliderShape::TriMesh(mesh) => {
             let vertices = mesh
                 .vertices()
@@ -402,4 +501,11 @@ fn build_shape(shape: &ColliderShape, scale: Vec3) -> SharedShape {
             }
         }
     }
+}
+
+#[derive(Copy, Clone, Debug)]
+pub struct QueryHit {
+    // TODO
+    // pub entity: Entity,
+    pub toi: f32,
 }

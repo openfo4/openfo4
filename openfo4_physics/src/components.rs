@@ -1,3 +1,4 @@
+use game_common::components::Axis;
 use glam::Vec3;
 
 #[derive(Copy, Clone, Debug)]
@@ -36,7 +37,15 @@ pub struct Collider {
 
 #[derive(Clone, Debug)]
 pub enum ColliderShape {
+    Capsule(Capsule),
     TriMesh(TriMesh),
+}
+
+#[derive(Clone, Debug)]
+pub struct Capsule {
+    pub axis: Axis,
+    pub half_height: f32,
+    pub radius: f32,
 }
 
 #[derive(Clone, Debug)]

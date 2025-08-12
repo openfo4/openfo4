@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 use std::io::Read;
 use std::sync::{Arc, OnceLock};
 
-use game_common::components::Transform;
+use game_common::components::{Axis, Transform};
 use game_core_pipeline::entities::MaterialHandle;
 use game_render::mesh::Mesh;
 use glam::{IVec2, Vec3, Vec4};
@@ -16,7 +16,9 @@ use openfo4_asset::AssetLoader;
 use openfo4_core::WorldExt;
 use openfo4_hkx::behavior::VariableType;
 use openfo4_hkx::{HkObject, HkxFile};
-use openfo4_physics::components::{Collider, ColliderShape, RigidBody, RigidBodyKind, TriMesh};
+use openfo4_physics::components::{
+    Capsule, Collider, ColliderShape, RigidBody, RigidBodyKind, TriMesh,
+};
 
 use crate::assets::AssetServer;
 use crate::assets::hkx::FileHkxHandle;
@@ -28,6 +30,7 @@ use crate::shared::SharedState;
 use crate::state::anim_starter::{ActiveBehaviorGraphs, AnimationEventQueue};
 use crate::state::animation::{SkeletonConfig, load_anim};
 use crate::systems::PlayerControlState;
+use crate::systems::controller::ControllerShape;
 
 pub struct SkinInstance {
     pub mesh: Mesh,
@@ -192,7 +195,8 @@ pub fn animation_test(
         }
 
         let offset = CellId(IVec2::new(2, 7)).min();
-        let offset = NiTransform::from_translation(offset.extend(0.0));
+        let offset =
+            NiTransform::from_translation(offset.extend(0.0) - Vec3::new(1024.0, 1024.0, 0.0));
 
         let mut bones = HashMap::new();
         let mut bones_bind_pose = HashMap::new();
@@ -350,23 +354,27 @@ pub fn animation_test(
             max_x: radius / 2.0,
             min_y: -radius / 2.0,
             max_y: radius / 2.0,
-            min_z: -height / 2.0,
-            max_z: height / 2.0,
+            min_z: -height / 2.0 + height / 2.0,
+            max_z: height / 2.0 + height / 2.0,
         }
         .into();
 
-        let collider_shape = world.spawn((
-            Transform {
-                translation: Vec3::new(0.0, 0.0, height / 2.0),
-                ..Default::default()
-            },
+        let collider_offset = Transform {
+            translation: Vec3::new(0.0, 0.0, height / 2.0),
+            ..Default::default()
+        };
+        let collider_shape = ColliderShape::Capsule(Capsule {
+            axis: Axis::Z,
+            half_height: height / 2.0,
+            radius: radius / 2.0,
+        });
+
+        let collider = world.spawn((
+            collider_offset,
             Collider {
                 friction: 1.0,
                 restitution: 0.0,
-                shape: ColliderShape::TriMesh(TriMesh::new(
-                    mesh.positions().to_vec(),
-                    mesh.indicies().unwrap().into_u32(),
-                )),
+                shape: collider_shape.clone(),
             },
         ));
 
@@ -391,11 +399,15 @@ pub fn animation_test(
                     RigidBody::FIXED,
                     Player,
                     PlayerControlState::default(),
+                    ControllerShape {
+                        offset: collider_offset,
+                        shape: collider_shape,
+                    },
                 ),
             )
             .unwrap();
 
-        world.add_children(root, collider_shape);
+        world.add_children(root, collider);
 
         crate::systems::camera::attach_camera(world, root);
 

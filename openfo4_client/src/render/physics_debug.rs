@@ -1,6 +1,8 @@
-use game_common::components::{Color, GlobalTransform, Transform};
+use std::f32::consts::PI;
+
+use game_common::components::{Axis, Color, GlobalTransform, Transform};
 use game_gizmos::Gizmos;
-use glam::{Vec2, Vec3};
+use glam::{Quat, Vec3};
 use hecs::World;
 use openfo4_animation::skeleton::BoneMarker;
 use openfo4_core::hierarchy::Children;
@@ -16,6 +18,48 @@ pub fn draw_colliers(world: &World, gizmos: &Gizmos) {
         let transform = transform.0;
 
         match &collider.shape {
+            ColliderShape::Capsule(shape) => match shape.axis {
+                Axis::X => {}
+                Axis::Y => {
+                    let half_height = shape.half_height * transform.scale.y;
+                    let radius = shape.radius * transform.scale.x.midpoint(transform.scale.z);
+
+                    let a = transform.translation + Vec3::new(0.0, half_height, 0.0);
+                    let b = transform.translation - Vec3::new(0.0, half_height, 0.0);
+
+                    // Cyclinder
+                    for offset in [
+                        Vec3::new(radius, 0.0, 0.0),
+                        Vec3::new(-radius, 0.0, 0.0),
+                        Vec3::new(0.0, 0.0, radius),
+                        Vec3::new(0.0, 0.0, -radius),
+                    ] {
+                        gizmos.line(a + offset, b + offset, COLOR);
+                    }
+
+                    gizmos.circle(a, Vec3::Y, radius, COLOR);
+                    gizmos.circle(b, Vec3::Y, radius, COLOR);
+
+                    gizmos.arc(a, Quat::from_rotation_x(PI / 2.0), PI, radius, COLOR);
+                    gizmos.arc(
+                        a,
+                        Quat::from_rotation_x(PI / 2.0) * Quat::from_rotation_z(PI / 2.0),
+                        PI,
+                        radius,
+                        COLOR,
+                    );
+
+                    gizmos.arc(b, Quat::from_rotation_x(-PI / 2.0), PI, radius, COLOR);
+                    gizmos.arc(
+                        b,
+                        Quat::from_rotation_x(-PI / 2.0) * Quat::from_rotation_z(-PI / 2.0),
+                        PI,
+                        radius,
+                        COLOR,
+                    );
+                }
+                Axis::Z => {}
+            },
             ColliderShape::TriMesh(mesh) => {
                 for indices in mesh.indices().chunks(3) {
                     let a = transform.transform_point(mesh.vertices()[indices[0] as usize]);

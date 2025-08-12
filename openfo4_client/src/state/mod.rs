@@ -31,6 +31,7 @@ use openfo4_core::events::EventBus;
 use openfo4_esp::EspFile;
 use openfo4_physics::PhysicsPipeline;
 use openfo4_physics::components::{RigidBody, RigidBodyKind};
+use openfo4_physics::controller::CharacterController;
 
 use crate::assets::nif_v2::NifLoaderContext;
 use crate::assets::{AssetServer, FileLoadContext};
@@ -63,6 +64,7 @@ pub struct GameState {
     event_bus: EventBus,
     animation: AnimationSystem,
     actions: Actions,
+    physics_debug: bool,
 }
 
 impl GameState {
@@ -142,6 +144,7 @@ impl GameState {
             event_bus: EventBus::new(),
             animation,
             actions,
+            physics_debug: false,
         }
     }
 
@@ -176,24 +179,28 @@ impl GameState {
             &self.asset_loader,
         );
 
-        apply_player_movements(&mut self.world);
+        apply_player_movements(&mut self.world, &mut self.physics);
 
-        systems::ni_transform::compute_transform_from_ni_transform(&mut self.world);
-        systems::ni_transform::compute_cell_ids_from_ni_transform(&mut self.world);
-        systems::hierarchy::compute_global_transform(&mut self.world);
+        // systems::ni_transform::compute_transform_from_ni_transform(&mut self.world);
+        // systems::ni_transform::compute_cell_ids_from_ni_transform(&mut self.world);
+        // systems::hierarchy::compute_global_transform(&mut self.world);
 
         self.animation.update(&mut self.world);
 
         openfo4_animation::systems::drive_animations(&mut self.world, time, self.anim_event.take());
 
         // systems::hierarchy::compute_global_transform(&mut self.world);
-        // self.physics.step(&mut self.world);
+        self.physics.step(&mut self.world);
 
         skinning::mesh_skinning(&mut self.world, &self.shared);
 
         systems::hierarchy::compute_global_transform(&mut self.world);
 
         systems::camera::update_camera_transform(&mut self.world);
+
+        if self.physics_debug {
+            self.physics.render_debug(gizmos);
+        }
     }
 
     pub fn world(&self) -> &World {
@@ -254,6 +261,10 @@ impl GameState {
 
                 if !event.state.is_pressed() {
                     return;
+                }
+
+                if event.key_code == Some(KeyCode::F8) {
+                    self.physics_debug ^= true;
                 }
 
                 if event.key_code == Some(KeyCode::O) {
@@ -344,12 +355,19 @@ impl GameState {
                 }
 
                 if event.key_code == Some(KeyCode::B) {
-                    for (_, (body, _)) in self.world.query_mut::<(&mut RigidBody, &Player)>() {
-                        dbg!(body.kind);
-                        body.kind = match body.kind {
-                            RigidBodyKind::Fixed => RigidBodyKind::Dynamic,
-                            RigidBodyKind::Dynamic => RigidBodyKind::Fixed,
-                        };
+                    for (e, (body, _, controller)) in
+                        self.world
+                            .query_mut::<(&mut RigidBody, &Player, Option<&CharacterController>)>()
+                    {
+                        if controller.is_none() {
+                            self.world
+                                .insert_one(e, CharacterController::new())
+                                .unwrap();
+                        } else {
+                            self.world.remove_one::<CharacterController>(e).unwrap();
+                        }
+
+                        break;
                     }
                 }
             }

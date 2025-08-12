@@ -5,6 +5,9 @@ use glam::{Quat, Vec3};
 use hecs::World;
 use openfo4_animation::driver::AnimationDriver;
 use openfo4_animation::{AnimationGraph, Value};
+use openfo4_physics::PhysicsPipeline;
+use openfo4_physics::components::{Collider, ColliderShape};
+use openfo4_physics::controller::CharacterController;
 
 use crate::components::Camera;
 use crate::state::actions::{Action, Actions};
@@ -118,10 +121,14 @@ pub fn handle_inputs(world: &mut World, actions: &Actions, event: &WindowEvent) 
     }
 }
 
-pub fn apply_player_movements(world: &mut World) {
-    for (_, (transform, offset, state)) in
-        world.query_mut::<(&mut Transform, &CameraOffset, &mut PlayerControlState)>()
-    {
+pub fn apply_player_movements(world: &mut World, pipeline: &mut PhysicsPipeline) {
+    for (entity, (transform, offset, state, controller, collider)) in world.query_mut::<(
+        &mut Transform,
+        &CameraOffset,
+        &mut PlayerControlState,
+        Option<&mut CharacterController>,
+        &ControllerShape,
+    )>() {
         let mut direction = Vec3::ZERO;
         if state.moving_front {
             direction -= Vec3::Z;
@@ -136,14 +143,40 @@ pub fn apply_player_movements(world: &mut World) {
             direction += Vec3::X;
         }
 
-        if direction != Vec3::ZERO {
-            // Remove the Y component from the facing direction since
-            // we don't want to move up.
-            direction = offset.rotation * direction;
-            direction.y = 0.0;
-            direction = direction.normalize_or_zero();
+        // Remove the Y component from the facing direction since
+        // we don't want to move up.
+        let mut translation = offset.rotation * direction;
+        translation.y = 0.0;
+        translation = translation.normalize_or_zero();
+        translation *= 0.02;
 
-            transform.translation += direction * 0.02;
+        if let Some(controller) = controller {
+            let movement = controller.move_shape(
+                pipeline,
+                *transform * collider.offset,
+                &collider.shape,
+                translation,
+                entity,
+            );
+
+            transform.translation += movement.translation;
+
+            let gravity_movement = controller.apply_gravity(
+                pipeline,
+                *transform * collider.offset,
+                &collider.shape,
+                entity,
+            );
+
+            transform.translation += gravity_movement.translation;
+        } else {
+            transform.translation += translation;
         }
     }
+}
+
+#[derive(Clone, Debug)]
+pub struct ControllerShape {
+    pub offset: Transform,
+    pub shape: ColliderShape,
 }
