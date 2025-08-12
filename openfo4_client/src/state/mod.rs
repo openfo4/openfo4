@@ -13,9 +13,11 @@ use std::f32::consts::PI;
 use std::fs::File;
 use std::io::BufReader;
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 
 use esp::EspLoader;
 use game_common::components::{Color, Transform};
+use game_core::counter::Interval;
 use game_core::time::Time;
 use game_core_pipeline::material::StandardMaterial;
 use game_gizmos::Gizmos;
@@ -47,6 +49,8 @@ use crate::systems;
 use crate::systems::camera::CameraMode;
 use crate::systems::controller::apply_player_movements;
 
+const UPS: u32 = 60;
+
 // Load cell
 // Instantiate entity
 
@@ -65,6 +69,7 @@ pub struct GameState {
     animation: AnimationSystem,
     actions: Actions,
     physics_debug: bool,
+    interval: Interval,
 }
 
 impl GameState {
@@ -145,6 +150,7 @@ impl GameState {
             animation,
             actions,
             physics_debug: false,
+            interval: Interval::new(Duration::from_secs(1) / UPS),
         }
     }
 
@@ -168,6 +174,8 @@ impl GameState {
 
     pub fn update(&mut self, time: &Time, gizmos: &Gizmos) {
         let _span = trace_span!("GameState::update").entered();
+
+        futures_lite::future::block_on(self.interval.wait(Instant::now()));
 
         self.level.update(&mut self.world, &mut self.events);
 
