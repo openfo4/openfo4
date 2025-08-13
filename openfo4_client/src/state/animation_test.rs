@@ -349,15 +349,6 @@ pub fn animation_test(
             .capsule_radius
             * 1.0
             / NIF_TO_METERS;
-        let mesh: game_render::mesh::Mesh = game_render::shape::Box {
-            min_x: -radius / 2.0,
-            max_x: radius / 2.0,
-            min_y: -radius / 2.0,
-            max_y: radius / 2.0,
-            min_z: -height / 2.0 + height / 2.0,
-            max_z: height / 2.0 + height / 2.0,
-        }
-        .into();
 
         let collider_offset = Transform {
             translation: Vec3::new(0.0, 0.0, height / 2.0),
@@ -365,7 +356,9 @@ pub fn animation_test(
         };
         let collider_shape = ColliderShape::Capsule(Capsule {
             axis: Axis::Z,
-            half_height: height / 2.0,
+            // It seems that the height already includes the radius
+            // at the top and bottom hemispheres.
+            half_height: (height - radius) / 2.0,
             radius: radius / 2.0,
         });
 
