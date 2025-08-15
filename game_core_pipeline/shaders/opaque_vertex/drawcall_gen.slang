@@ -3,6 +3,8 @@ import shared;
 
 static const u32 NUM_THREADS = 64;
 
+[[vk::push_constant]] u32 instance_count;
+
 [[vk::binding(0, 0)]] StructuredBuffer<InstanceIn> instances_in;
 [[vk::binding(1, 0)]] RWStructuredBuffer<InstanceOut> instances_out;
 [[vk::binding(2, 0)]] RWStructuredBuffer<DrawIndexedIndirectCommand> draws;
@@ -14,8 +16,7 @@ void main(
     u32 gid: SV_GroupID,
 ) {
     let index = gid * NUM_THREADS + tid;
-
-    if (index >= instances_in.getCount()) {
+    if (index >= instance_count) {
         return;
     }
 
@@ -36,12 +37,4 @@ void main(
 
     instances_out[index] = out_instance;
     draws[index] = draw;
-}
-
-struct DrawIndexedIndirectCommand {
-    u32 index_count;
-    u32 instance_count;
-    u32 first_index;
-    u32 vertex_offset;
-    u32 first_instance;
 }
