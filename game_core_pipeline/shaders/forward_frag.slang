@@ -1,26 +1,8 @@
 import types;
 import camera;
 import pbr;
-
-static const u32 MATERIAL_FLAGS_UNLIT = 1 << 0;
-static const u32 MATERIAL_FLAGS_FLIP_NORMAL_Y = 1 << 1;
-static const u32 MATERIAL_FLAGS_METALLIC_FROM_SPECULAR = 1 << 2;
-static const u32 MATERIAL_FLAGS_ROUGHNESS_FROM_GLOSSINESS = 1 << 3;
-static const u32 MATERIAL_FLAGS_NORMAL_ENCODING_TWO_COMPONENT = 1 << 4;
-
-struct Material {
-    u32 flags;
-    Vec4 base_color;
-    f32 roughness;
-    f32 metallic;
-    f32 reflectance;
-    f32 specular_strength;
-    Vec4 specular_color;
-    u32 base_color_texture;
-    u32 normal_texture;
-    u32 metallic_roughness_texture;
-    u32 specular_glossiness_texture;
-}
+import lights;
+import material;
 
 struct PushConstants {
     Camera camera;
@@ -98,91 +80,16 @@ func main(input: Input) -> Output {
     }
 
     for (var i = 0; i < push_constants.num_point_lights; i++) {
-        let light = point_lights[i].eval(input);
+        let light = point_lights[i].eval(FragParams(input.world_position));
         luminance += pbr::surface_shading(pbr_material, view_dir, light);
     }
 
     for (var i = 0; i < push_constants.num_spot_lights; i++) {
-        let light = spot_lights[i].eval(input);
+        let light = spot_lights[i].eval(FragParams(input.world_position));
         luminance += pbr::surface_shading(pbr_material, view_dir, light);
     }
 
     return Output(Vec4(luminance, 1.0));
-}
-
-struct DirectionalLight {
-    Vec3 direction;
-    Vec3 color;
-    f32 intensity;
-
-    func eval() -> pbr::Light {
-        pbr::Light light;
-        light.color = this.color * this.intensity;
-        light.attenuation = 1.0;
-        light.direction = normalize(-this.direction);
-        return light;
-    }
-}
-
-struct PointLight {
-    Vec3 position;
-    Vec3 color;
-    f32 intensity;
-    f32 radius;
-
-    func eval(input: Input) -> pbr::Light {
-        let distance = length(this.position - input.world_position);
-        let pos_to_light = this.position - input.world_position;
-        let attenuation = get_distance_attenuation(dot(pos_to_light, pos_to_light), (1.0 / this.radius) * (1.0 / this.radius));
-
-        let light_dir = normalize(this.position - input.world_position);
-
-        pbr::Light light;
-        light.color = this.color * this.intensity;
-        light.attenuation = attenuation;
-        light.direction = light_dir;
-        return light;
-    }
-}
-
-struct SpotLight {
-    Vec3 position;
-    Vec3 direction;
-    Vec3 color;
-    f32 intensity;
-    f32 radius;
-    f32 inner_cutoff;
-    f32 outer_cutoff;
-
-    func eval(input: Input) -> pbr::Light {
-        let pos_to_light = this.position - input.world_position;
-        let attenuation = get_distance_attenuation(dot(pos_to_light, pos_to_light), (1.0 / this.radius) * (1.0 / this.radius));
-
-        let light_dir = normalize(this.position - input.world_position);
-
-        // Falloff
-        // TODO: cosine can be precomputed on CPU side.
-        let cos_outer = cos(this.outer_cutoff);
-        let cos_inner = cos(this.inner_cutoff);
-
-        let theta = dot(light_dir, -this.direction);
-
-        let epsilon = cos_inner - cos_outer;
-        let intensity = clamp((theta - cos_outer) / epsilon, 0.0, 1.0);
-
-        pbr::Light light;
-        light.color = this.color * this.intensity;
-        light.attenuation = attenuation;
-        light.direction = light_dir;
-        return light;
-    }
-}
-
-func get_distance_attenuation(distance_square: f32, inv_range_squared: f32) -> f32 {
-    let factor = distance_square * inv_range_squared;
-    let smooth_factor = saturate(1.0 - factor * factor);
-    let attenuation = smooth_factor * smooth_factor;
-    return attenuation / max(distance_square, 0.0001);
 }
 
 func load_base_color(material: Material, uv: Vec2) -> Vec4 {
