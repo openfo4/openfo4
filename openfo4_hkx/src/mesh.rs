@@ -1,9 +1,8 @@
 use glam::{Mat4, Vec3, Vec4};
 use openfo4_hkx_derive::{HkStruct, signature};
 
-use crate::behavior::QsTransform;
 use crate::physics::Shape;
-use crate::{Array, OpaquePtr, Ptr, ReferencedObject, RelArray, Transform};
+use crate::{Array, OpaquePtr, Ptr, ReferencedObject, RelArray};
 
 #[derive(Clone, Debug, HkStruct)]
 pub struct CompressedMeshShape {
@@ -362,4 +361,42 @@ pub struct ShapeInstance {
     pub destruction_tag: u16,
     // Offset: 92
     _pad0: [u8; 30],
+}
+
+#[derive(Clone, Debug, HkStruct)]
+#[signature(0xc8f7c10d)]
+pub struct ConvexShape {
+    // Offset: 0
+    pub parent: Shape,
+    // Offset: 48
+    pub vertices: RelArray<Vec4>,
+}
+
+impl ConvexShape {
+    /// Builds a [`TriMesh`] from this `ConvexShape`. The resulting [`TriMesh`] is guaranteed to be
+    /// convex.
+    pub fn mesh(&self) -> TriMesh {
+        let mut vertices = Vec::new();
+        let mut indices = Vec::new();
+
+        if self.vertices.len() >= 3 {
+            // Fan triangulation is possible since the shape is convex.
+            let a = self.vertices[0];
+            for bc in self.vertices[1..].windows(2) {
+                let b = bc[0];
+                let c = bc[1];
+
+                // TODO: Deduplicate vertices.
+                indices.push(vertices.len() as u32);
+                indices.push(vertices.len() as u32 + 1);
+                indices.push(vertices.len() as u32 + 2);
+
+                vertices.push(a.truncate());
+                vertices.push(b.truncate());
+                vertices.push(c.truncate());
+            }
+        }
+
+        TriMesh { vertices, indices }
+    }
 }

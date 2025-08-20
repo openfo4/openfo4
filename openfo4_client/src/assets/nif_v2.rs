@@ -687,6 +687,10 @@ fn load_collider(nif: &Nif, collision_object: BlockRef) -> Option<ColliderNode> 
                 let mesh = shape.shape.to_tri_mesh();
                 meshes.push((mesh, transform));
             }
+            Some(HkObject::ConvexShape(shape)) => {
+                let mesh = shape.mesh();
+                meshes.push((mesh, transform));
+            }
             Some(HkObject::ScaledConvexShape(shape)) => {
                 // FIXME: Which of these two is applied first,
                 // or rather the question is whether translation
