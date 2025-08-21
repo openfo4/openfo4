@@ -6,7 +6,7 @@ use std::time::Duration;
 use game_tracing::trace_span;
 use rand::Rng;
 
-use crate::animation::{AnimationClipFlags, Annotation};
+use crate::animation::AnimationClipFlags;
 use crate::{
     AnimationGraph, AnimationSet, DriverEvent, Event, Listener, ListenerEvent, NodeId, NodeInner,
     StartState, TransitionEffect, Value, VariableSet,
@@ -23,7 +23,6 @@ pub struct AnimationDriver {
     blend_factors: HashMap<NodeId, f32>,
     variables: VariableSet,
     update_blend_factors: bool,
-    sync_groups: HashMap<NodeId, SyncGroup>,
     listeners: HashMap<ListenerEvent, HashMap<NodeId, Listener>>,
 }
 
@@ -40,7 +39,6 @@ impl AnimationDriver {
             blend_factors: HashMap::new(),
             states: HashMap::new(),
             update_blend_factors: false,
-            sync_groups: HashMap::new(),
             listeners: HashMap::new(),
         }
     }
@@ -139,7 +137,6 @@ impl AnimationDriver {
                         NodeState {
                             blend_factor: 1.0,
                             computed_blend_factor: BoneWeights::Shared(1.0),
-                            sync_group: None,
                             inner,
                         },
                     );
@@ -195,7 +192,6 @@ impl AnimationDriver {
                     }
 
                     self.states.remove(&id);
-                    self.sync_groups.remove(&id);
                 }
                 DriverEvent::UpdateNode(id) => {
                     if !self.states.contains_key(&id) {
@@ -359,77 +355,6 @@ impl AnimationDriver {
             }
         }
 
-        for sync_group in self.sync_groups.values_mut() {
-            let mut duration_sum = Duration::ZERO;
-
-            let leader_looping = match &self.graph.nodes[sync_group.leader.id].inner {
-                NodeInner::Clip(clip) => clip.looping,
-                _ => unreachable!(),
-            };
-
-            for node in sync_group
-                .followers
-                .iter()
-                .chain(std::iter::once(&sync_group.leader))
-            {
-                match &self.graph.nodes[node.id].inner {
-                    NodeInner::Clip(clip) => {
-                        let Some(anim) = anims.0.get(&clip.path) else {
-                            continue;
-                        };
-
-                        let mut anim_duration = anim.duration;
-                        if anim
-                            .flags
-                            .contains(AnimationClipFlags::TRIM_LAST_FRAME_IF_LOOPING)
-                            && leader_looping
-                        {
-                            anim_duration -= anim.frame_duration();
-                        }
-
-                        duration_sum += anim_duration.mul_f32(node.scale);
-                    }
-                    _ => (),
-                }
-            }
-
-            match (
-                &self.graph.nodes[sync_group.leader.id].inner,
-                &self.states[&sync_group.leader.id].inner,
-            ) {
-                (NodeInner::Clip(clip), NodeStateInner::Clip(state)) => {
-                    let Some(anim) = anims.0.get(&clip.path) else {
-                        continue;
-                    };
-
-                    let mut anim_duration = anim.duration;
-                    if anim
-                        .flags
-                        .contains(AnimationClipFlags::TRIM_LAST_FRAME_IF_LOOPING)
-                        && clip.looping
-                    {
-                        anim_duration -= anim.frame_duration();
-                    }
-
-                    let leader_timescale = anim_duration.as_secs_f32() / duration_sum.as_secs_f32();
-
-                    let clip_speed = clip.speed.eval(&self.variables).to_f32().unwrap();
-                    let delta = delta.mul_f32(clip_speed * leader_timescale);
-
-                    if clip.looping {
-                        // FIXME: Duration has no `Rem` impl?
-                        sync_group.leader.time = Duration::from_secs_f64(
-                            (state.time + delta).as_secs_f64() % anim_duration.as_secs_f64(),
-                        );
-                    } else {
-                        // Clamp at the maximum time.
-                        sync_group.leader.time = Duration::min(state.time + delta, anim_duration);
-                    }
-                }
-                _ => (),
-            }
-        }
-
         for (node, state) in &mut self.states {
             match &self.graph.nodes[*node].inner {
                 NodeInner::List(_) => (),
@@ -452,139 +377,23 @@ impl AnimationDriver {
                     let clip_speed = clip.speed.eval(&self.variables).to_f32().unwrap();
                     let delta = delta.mul_f32(clip_speed);
 
-                    if let Some(group) = state.sync_group
-                        && false
+                    let mut anim_duration = anim.duration;
+                    if anim
+                        .flags
+                        .contains(AnimationClipFlags::TRIM_LAST_FRAME_IF_LOOPING)
+                        && clip.looping
                     {
-                        let group = &self.sync_groups[&group];
-                        if group.leader.id == *node {
-                            clip_state.time = group.leader.time;
-                        }
+                        anim_duration -= anim.frame_duration();
                     }
 
-                    if let Some(group) = state.sync_group
-                        && false
-                    {
-                        let group = &self.sync_groups[&group];
-
-                        // Compute leader position.
-
-                        let mut leader_annotations = Vec::new();
-                        let mut leader_anim_duration = Duration::ZERO;
-                        let mut leader_looping = false;
-                        match &self.graph.nodes[group.leader.id].inner {
-                            NodeInner::Clip(clip) => {
-                                leader_looping = clip.looping;
-
-                                match anims.0.get(&clip.path) {
-                                    Some(anim) => {
-                                        leader_annotations = anim
-                                            .annotations
-                                            .iter()
-                                            .filter_map(|annotation| match annotation {
-                                                Annotation::Sync(duration, name) => {
-                                                    Some((duration, name))
-                                                }
-                                            })
-                                            .collect();
-
-                                        leader_anim_duration = anim.duration;
-                                        if anim.flags.contains(
-                                            AnimationClipFlags::TRIM_LAST_FRAME_IF_LOOPING,
-                                        ) && clip.looping
-                                        {
-                                            leader_anim_duration -= anim.frame_duration();
-                                        }
-                                    }
-                                    _ => (),
-                                };
-                            }
-                            _ => (),
-                        }
-
-                        let mut leader_start_sync_point = None;
-                        let mut leader_end_sync_point = None;
-                        let mut leader_start_time = Duration::ZERO;
-                        let mut leader_end_time = leader_anim_duration;
-
-                        for (&time, name) in leader_annotations {
-                            if time <= group.leader.time && time > leader_start_time {
-                                leader_start_sync_point = Some(name);
-                                leader_start_time = time;
-                            }
-
-                            if time > group.leader.time && time < leader_end_time {
-                                leader_end_sync_point = Some(name);
-                                leader_end_time = time;
-                            }
-                        }
-
-                        debug_assert!(leader_end_time >= leader_start_time);
-                        debug_assert!(group.leader.time >= leader_start_time);
-                        debug_assert!(group.leader.time <= leader_end_time);
-
-                        let sync_location = (group.leader.time.as_secs_f32()
-                            - leader_start_time.as_secs_f32())
-                            / (leader_end_time.as_secs_f32() - leader_start_time.as_secs_f32());
-
-                        // Compute our position.
-
-                        let mut anim_duration = anim.duration;
-                        if leader_looping
-                            && anim
-                                .flags
-                                .contains(AnimationClipFlags::TRIM_LAST_FRAME_IF_LOOPING)
-                        {
-                            anim_duration -= anim.frame_duration();
-                        }
-
-                        let start_time = match leader_start_sync_point {
-                            Some(leader_start_sync_point) => anim
-                                .annotations
-                                .iter()
-                                .find_map(|annotation| match annotation {
-                                    Annotation::Sync(time, name) => {
-                                        (name == leader_start_sync_point).then_some(*time)
-                                    }
-                                })
-                                .unwrap_or_default(),
-                            None => Duration::ZERO,
-                        };
-
-                        let end_time = match leader_end_sync_point {
-                            Some(leader_end_sync_point) => anim
-                                .annotations
-                                .iter()
-                                .find_map(|annotation| match annotation {
-                                    Annotation::Sync(time, name) => {
-                                        (name == leader_end_sync_point).then_some(*time)
-                                    }
-                                })
-                                .unwrap_or(anim_duration),
-                            None => anim_duration,
-                        };
-
-                        let time = start_time + (end_time - start_time).mul_f32(sync_location);
-                        clip_state.time = time;
+                    if clip.looping {
+                        // FIXME: Duration has no `Rem` impl?
+                        clip_state.time = Duration::from_secs_f64(
+                            (clip_state.time + delta).as_secs_f64() % anim_duration.as_secs_f64(),
+                        );
                     } else {
-                        let mut anim_duration = anim.duration;
-                        if anim
-                            .flags
-                            .contains(AnimationClipFlags::TRIM_LAST_FRAME_IF_LOOPING)
-                            && clip.looping
-                        {
-                            anim_duration -= anim.frame_duration();
-                        }
-
-                        if clip.looping {
-                            // FIXME: Duration has no `Rem` impl?
-                            clip_state.time = Duration::from_secs_f64(
-                                (clip_state.time + delta).as_secs_f64()
-                                    % anim_duration.as_secs_f64(),
-                            );
-                        } else {
-                            // Clamp at the maximum time.
-                            clip_state.time = Duration::min(clip_state.time + delta, anim_duration)
-                        }
+                        // Clamp at the maximum time.
+                        clip_state.time = Duration::min(clip_state.time + delta, anim_duration)
                     }
 
                     let end_time = clip_state.time;
@@ -666,26 +475,25 @@ impl AnimationDriver {
         };
 
         let mut queue = VecDeque::new();
-        queue.push_back((root, BoneWeights::Shared(1.0), None));
+        queue.push_back((root, BoneWeights::Shared(1.0)));
 
-        while let Some((id, mut blend_factor, sync_group)) = queue.pop_front() {
+        while let Some((id, mut blend_factor)) = queue.pop_front() {
             let state = self.states.get_mut(&id).unwrap();
 
             blend_factor *= state.blend_factor;
             state.computed_blend_factor = blend_factor.clone();
-            state.sync_group = sync_group;
 
             match &self.graph.nodes[id].inner {
                 NodeInner::StateMachine(node) => {
                     for state in &node.states {
                         if self.states.contains_key(&state.node) {
-                            queue.push_back((state.node, blend_factor.clone(), sync_group));
+                            queue.push_back((state.node, blend_factor.clone()));
                         }
                     }
                 }
                 NodeInner::List(list) => {
                     for node in list {
-                        queue.push_back((*node, blend_factor.clone(), sync_group));
+                        queue.push_back((*node, blend_factor.clone()));
                     }
                 }
                 NodeInner::Clip(clip) => {}
@@ -738,8 +546,6 @@ impl AnimationDriver {
 
                         let blend_parameter = blend_parameter.clamp(min_weight, max_weight);
 
-                        let mut nodes = Vec::new();
-
                         for (index, child) in node.children.iter().enumerate() {
                             let weight = weights[index];
 
@@ -762,12 +568,6 @@ impl AnimationDriver {
                                 0.0
                             };
 
-                            nodes.push(SyncGroupNode {
-                                id: child.node,
-                                time: Duration::ZERO,
-                                scale: s,
-                            });
-
                             let mut blend_factor = blend_factor.clone() * s;
                             if let Some(weights) = &child.bone_weights {
                                 let weights = weights.eval(&self.variables);
@@ -779,24 +579,7 @@ impl AnimationDriver {
                                 blend_factor *= &BoneWeights::Unique(weights);
                             }
 
-                            queue.push_back((child.node, blend_factor, Some(id)));
-                        }
-
-                        if let Some((index, leader)) = nodes
-                            .iter()
-                            .enumerate()
-                            .max_by(|(_, a), (_, b)| a.scale.total_cmp(&b.scale))
-                        {
-                            let leader = *leader;
-                            nodes.remove(index);
-
-                            self.sync_groups.insert(
-                                id,
-                                SyncGroup {
-                                    leader,
-                                    followers: nodes,
-                                },
-                            );
+                            queue.push_back((child.node, blend_factor));
                         }
                     } else {
                         let weights = node
@@ -824,7 +607,7 @@ impl AnimationDriver {
                                 blend_factor *= &BoneWeights::Unique(weights);
                             }
 
-                            queue.push_back((child.node, blend_factor, sync_group));
+                            queue.push_back((child.node, blend_factor));
                         }
                     }
                 }
@@ -878,8 +661,6 @@ impl AnimationDriver {
 struct NodeState {
     blend_factor: f32,
     computed_blend_factor: BoneWeights,
-    /// The sync group in which this node is contained.
-    sync_group: Option<NodeId>,
     inner: NodeStateInner,
 }
 
@@ -917,20 +698,6 @@ pub struct AnimationPlaybackState {
 struct TimerState {
     remaining: Duration,
     running: bool,
-}
-
-/// A group of animations that are synchronized.
-#[derive(Clone, Debug)]
-struct SyncGroup {
-    leader: SyncGroupNode,
-    followers: Vec<SyncGroupNode>,
-}
-
-#[derive(Copy, Clone, Debug)]
-struct SyncGroupNode {
-    id: NodeId,
-    time: Duration,
-    scale: f32,
 }
 
 #[derive(Clone, Debug)]
