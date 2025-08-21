@@ -118,21 +118,26 @@ pub fn animation_test(
                                 .iter(),
                         )
                     {
-                        if info.type_ == VariableType::Pointer {
-                            let value = data.value;
+                        let value = match info.type_ {
+                            VariableType::Invalid => Value::None,
+                            VariableType::Bool => Value::Bool(data.value == 0),
+                            VariableType::Int16 => Value::I16(data.value as i16),
+                            VariableType::Int32 => Value::I32(data.value),
+                            VariableType::Real => Value::F32(f32::from_bits(data.value as u32)),
+                            VariableType::Pointer => {
+                                let ptr = &vals.variant_variable_values[data.value as usize];
 
-                            let ptr = &vals.variant_variable_values[value as usize];
-
-                            match char_file.get(ptr.unwrap()) {
-                                Some(HkObject::BoneWeightArray(weights)) => {
-                                    props.insert(
-                                        name.clone(),
-                                        Value::BoneWeights(weights.bone_weights.to_vec()),
-                                    );
+                                match char_file.get(ptr.unwrap()) {
+                                    Some(HkObject::BoneWeightArray(weights)) => {
+                                        Value::BoneWeights(weights.bone_weights.to_vec())
+                                    }
+                                    _ => todo!(),
                                 }
-                                _ => (),
                             }
-                        }
+                            _ => todo!(),
+                        };
+
+                        props.insert(name.clone(), value);
                     }
                 }
                 _ => (),
