@@ -1,15 +1,19 @@
+use std::f32::consts::PI;
+
 use game_common::components::Transform;
 use game_input::keyboard::KeyCode;
 use game_window::events::WindowEvent;
 use glam::{Quat, Vec3};
 use hecs::World;
+use openfo4_animation::Value;
 use openfo4_animation::driver::AnimationDriver;
-use openfo4_animation::{AnimationGraph, Value};
 use openfo4_physics::PhysicsPipeline;
-use openfo4_physics::components::{Collider, ColliderShape};
+use openfo4_physics::components::ColliderShape;
 use openfo4_physics::controller::CharacterController;
 
+use crate::assets::nif_v2::NIF_TO_METERS;
 use crate::components::Camera;
+use crate::state::UPS;
 use crate::state::actions::{Action, Actions};
 use crate::state::anim_starter::AnimationEventQueue;
 use crate::systems::PlayerControlState;
@@ -122,14 +126,16 @@ pub fn handle_inputs(world: &mut World, actions: &Actions, event: &WindowEvent) 
 }
 
 pub fn apply_player_movements(world: &mut World, pipeline: &mut PhysicsPipeline) {
-    for (entity, (transform, offset, state, controller, collider)) in world.query_mut::<(
+    for (entity, (transform, offset, state, controller, collider, driver)) in world.query_mut::<(
         &mut Transform,
         &CameraOffset,
         &mut PlayerControlState,
         Option<&mut CharacterController>,
         &ControllerShape,
+        Option<&mut AnimationDriver>,
     )>() {
         let mut direction = Vec3::ZERO;
+
         if state.moving_front {
             direction -= Vec3::Z;
         }
@@ -148,7 +154,13 @@ pub fn apply_player_movements(world: &mut World, pipeline: &mut PhysicsPipeline)
         let mut translation = offset.rotation * direction;
         translation.y = 0.0;
         translation = translation.normalize_or_zero();
-        translation *= 0.02;
+
+        // let speed = 92.55;
+        let speed = 500.0;
+
+        // Speed is in units per second.
+        // We are on a fixed timestep of 60 updates per second.
+        translation *= speed * NIF_TO_METERS / UPS as f32;
 
         if let Some(controller) = controller {
             let movement = controller.move_shape(
@@ -171,6 +183,28 @@ pub fn apply_player_movements(world: &mut World, pipeline: &mut PhysicsPipeline)
             transform.translation += gravity_movement.translation;
         } else {
             transform.translation += translation;
+        }
+
+        if let Some(driver) = driver {
+            // Compute angle between forward (-Z) vector and the movement vector.
+            // 0.0 is front, 0.25 is right, 0.5 is back, 0.75 is left.
+            let dir_norm = direction.normalize_or_zero();
+            let mut dir = (-dir_norm.z).acos();
+            // acos will yield PI/2 for a zero vector, but we want to face forward
+            // when we don't move.
+            // The length is either zero or normalized, so this will multiply with
+            // either 0 or 1.
+            dir *= dir_norm.length_squared();
+
+            if (dir_norm.x).is_sign_negative() {
+                dir = PI + (PI - dir);
+            }
+
+            dir /= 2.0 * PI;
+
+            if let Some(value) = driver.get_variable_mut("Direction") {
+                *value = Value::F32(dir);
+            }
         }
     }
 }
