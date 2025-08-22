@@ -1,6 +1,7 @@
 mod behavior_reference_generator;
 mod blender_generator;
 mod bs_assign_variables_modifier;
+mod bs_cyclic_blend_transition_generator;
 mod bs_event_on_deactivate_modifier;
 mod bs_events_every_n_events_modifier;
 mod bs_is_active_modifier;
@@ -388,9 +389,17 @@ impl<'a> BuilderContext<'a> {
             .flatten()
     }
 
+    #[track_caller]
     fn get_variable(&self, binding_type: BindingType, variable_index: i32) -> Option<VariableId> {
         let state = self.state.files.get(self.file).unwrap();
         let variable_index = variable_index as usize;
+
+        for (k, v) in state.index_table.variable_by_name.iter() {
+            if *v == variable_index {
+                println!("{} {}", &k, std::panic::Location::caller());
+                break;
+            }
+        }
 
         match binding_type {
             BindingType::Variable => state
@@ -482,7 +491,7 @@ impl BuildNode for HkObject {
             Self::EventsFromRangeModifier(node) => node.dependencies(ctx),
             Self::BSEventOnDeactivateModifier(node) => node.dependencies(ctx),
             Self::BSiStateTaggingGenerator(node) => node.dependencies(ctx),
-            Self::BSCyclicBlendTransitionGenerator(node) => Ok(Vec::new()),
+            Self::BSCyclicBlendTransitionGenerator(node) => node.dependencies(ctx),
             Self::BSTimerModifier(node) => node.dependencies(ctx),
             Self::BSRandomAlarmModifier(node) => node.dependencies(ctx),
             Self::BSInterpValueModifier(node) => Ok(Vec::new()),
@@ -495,6 +504,7 @@ impl BuildNode for HkObject {
             Self::BSRootTwistModifier(node) => Ok(Vec::new()),
             Self::BSLookAtModifier(node) => Ok(Vec::new()),
             Self::BSGetTimeStepModifier(node) => Ok(Vec::new()),
+            Self::BSBoneSwitchGenerator(node) => Ok(Vec::new()),
             x => todo!("{:?}", x),
             _ => todo!(),
         }
@@ -531,7 +541,7 @@ impl BuildNode for HkObject {
             Self::EventsFromRangeModifier(node) => node.build(state),
             Self::BSEventOnDeactivateModifier(node) => node.build(state),
             Self::BSiStateTaggingGenerator(node) => node.build(state),
-            Self::BSCyclicBlendTransitionGenerator(node) => Ok(None),
+            Self::BSCyclicBlendTransitionGenerator(node) => node.build(state),
             Self::BSTimerModifier(node) => node.build(state),
             Self::BSRandomAlarmModifier(node) => node.build(state),
             Self::BSInterpValueModifier(node) => Ok(None),
@@ -544,6 +554,7 @@ impl BuildNode for HkObject {
             Self::BSRootTwistModifier(node) => Ok(None),
             Self::BSLookAtModifier(node) => Ok(None),
             Self::BSGetTimeStepModifier(node) => Ok(None),
+            Self::BSBoneSwitchGenerator(node) => Ok(None),
             _ => todo!(),
         }
     }
