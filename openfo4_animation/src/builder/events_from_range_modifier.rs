@@ -50,13 +50,13 @@ impl BuildNode for EventsFromRangeModifier {
 
             let event = parse_event(ctx.hkx_file(), &range.event);
 
-            // Evalutes to true if `input_value <= lower_bound && input_value >= upper_bound`.
+            // Evalutes to true if `input_value >= lower_bound && input_value <= upper_bound`.
             let condition = ValueExpression::And(
-                Box::new(ValueExpression::CmpLe(
+                Box::new(ValueExpression::CmpGe(
                     Box::new(input_value.clone()),
                     Box::new(lower_bound.clone()),
                 )),
-                Box::new(ValueExpression::CmpGe(
+                Box::new(ValueExpression::CmpLe(
                     Box::new(input_value.clone()),
                     Box::new(upper_bound.clone()),
                 )),
