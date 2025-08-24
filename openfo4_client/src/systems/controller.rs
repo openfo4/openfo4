@@ -4,9 +4,7 @@ use game_common::components::Transform;
 use game_input::keyboard::KeyCode;
 use game_window::events::WindowEvent;
 use glam::{Quat, Vec3};
-use hecs::World;
-use openfo4_animation::Value;
-use openfo4_animation::driver::AnimationDriver;
+use hecs::{CommandBuffer, World};
 use openfo4_physics::PhysicsPipeline;
 use openfo4_physics::components::ColliderShape;
 use openfo4_physics::controller::CharacterController;
@@ -17,6 +15,7 @@ use crate::state::UPS;
 use crate::state::actions::{Action, Actions};
 use crate::state::anim_starter::AnimationEventQueue;
 use crate::systems::PlayerControlState;
+use crate::systems::animation_sync::AnimationParameters;
 use crate::systems::camera::{CameraMode, CameraOffset, PlayerControlled};
 
 pub fn handle_inputs(world: &mut World, actions: &Actions, event: &WindowEvent) {
@@ -26,13 +25,12 @@ pub fn handle_inputs(world: &mut World, actions: &Actions, event: &WindowEvent) 
         }
     }
 
-    for (_, (transform, offset, _, queue, state, driver)) in world.query_mut::<(
+    for (_, (transform, offset, _, queue, state)) in world.query_mut::<(
         &mut Transform,
         &mut CameraOffset,
         &PlayerControlled,
         &mut AnimationEventQueue,
         &mut PlayerControlState,
-        &mut AnimationDriver,
     )>() {
         match event {
             WindowEvent::MouseMotion(event) => {
@@ -88,6 +86,9 @@ pub fn handle_inputs(world: &mut World, actions: &Actions, event: &WindowEvent) 
 
                         state.sprinting ^= true;
                     }
+                    Some(KeyCode::Key1) if event.state.is_pressed() => {
+                        state.walking ^= true;
+                    }
                     _ => continue,
                 }
 
@@ -126,13 +127,14 @@ pub fn handle_inputs(world: &mut World, actions: &Actions, event: &WindowEvent) 
 }
 
 pub fn apply_player_movements(world: &mut World, pipeline: &mut PhysicsPipeline) {
-    for (entity, (transform, offset, state, controller, collider, driver)) in world.query_mut::<(
+    let mut buffer = CommandBuffer::new();
+
+    for (entity, (transform, offset, state, controller, collider)) in world.query_mut::<(
         &mut Transform,
         &CameraOffset,
         &mut PlayerControlState,
         Option<&mut CharacterController>,
         &ControllerShape,
-        Option<&mut AnimationDriver>,
     )>() {
         let mut direction = Vec3::ZERO;
 
@@ -155,8 +157,11 @@ pub fn apply_player_movements(world: &mut World, pipeline: &mut PhysicsPipeline)
         translation.y = 0.0;
         translation = translation.normalize_or_zero();
 
-        // let speed = 92.55;
-        let speed = 500.0;
+        let speed = if state.sprinting {
+            500.0
+        } else {
+            if state.walking { 92.55 } else { 372.0 }
+        };
 
         // Speed is in units per second.
         // We are on a fixed timestep of 60 updates per second.
@@ -185,28 +190,32 @@ pub fn apply_player_movements(world: &mut World, pipeline: &mut PhysicsPipeline)
             transform.translation += translation;
         }
 
-        if let Some(driver) = driver {
-            // Compute angle between forward (-Z) vector and the movement vector.
-            // 0.0 is front, 0.25 is right, 0.5 is back, 0.75 is left.
-            let dir_norm = direction.normalize_or_zero();
-            let mut dir = (-dir_norm.z).acos();
-            // acos will yield PI/2 for a zero vector, but we want to face forward
-            // when we don't move.
-            // The length is either zero or normalized, so this will multiply with
-            // either 0 or 1.
-            dir *= dir_norm.length_squared();
+        // Compute angle between forward (-Z) vector and the movement vector.
+        // 0.0 is front, 0.25 is right, 0.5 is back, 0.75 is left.
+        let dir_norm = direction.normalize_or_zero();
+        let mut dir = (-dir_norm.z).acos();
+        // acos will yield PI/2 for a zero vector, but we want to face forward
+        // when we don't move.
+        // The length is either zero or normalized, so this will multiply with
+        // either 0 or 1.
+        dir *= dir_norm.length_squared();
 
-            if (dir_norm.x).is_sign_negative() {
-                dir = PI + (PI - dir);
-            }
-
-            dir /= 2.0 * PI;
-
-            if let Some(value) = driver.get_variable_mut("Direction") {
-                *value = Value::F32(dir);
-            }
+        if (dir_norm.x).is_sign_negative() {
+            dir = PI + (PI - dir);
         }
+
+        dir /= 2.0 * PI;
+
+        buffer.insert_one(
+            entity,
+            AnimationParameters {
+                speed: speed,
+                direction: dir,
+            },
+        );
     }
+
+    buffer.run_on(world);
 }
 
 #[derive(Clone, Debug)]

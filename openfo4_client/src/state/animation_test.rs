@@ -163,8 +163,6 @@ pub fn animation_test(
             }
         };
 
-        let graph = builder.build().unwrap().unwrap();
-
         let mut anim_clips = HashMap::new();
 
         for file in graph.animation_files() {

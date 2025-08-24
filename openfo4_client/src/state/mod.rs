@@ -46,10 +46,11 @@ use crate::shared::SharedState;
 use crate::state::actions::{Action, Actions};
 use crate::state::anim_starter::{AnimationEventQueue, AnimationSystem};
 use crate::systems;
+use crate::systems::animation_sync::update_animation_parameters;
 use crate::systems::camera::CameraMode;
 use crate::systems::controller::apply_player_movements;
 
-const UPS: u32 = 60;
+pub const UPS: u32 = 60;
 
 // Load cell
 // Instantiate entity
@@ -188,6 +189,7 @@ impl GameState {
         );
 
         apply_player_movements(&mut self.world, &mut self.physics);
+        update_animation_parameters(&mut self.world);
 
         // systems::ni_transform::compute_transform_from_ni_transform(&mut self.world);
         // systems::ni_transform::compute_cell_ids_from_ni_transform(&mut self.world);
@@ -195,7 +197,11 @@ impl GameState {
 
         self.animation.update(&mut self.world);
 
-        openfo4_animation::systems::drive_animations(&mut self.world, time, self.anim_event.take());
+        openfo4_animation::systems::drive_animations(
+            &mut self.world,
+            Duration::from_secs(1) / UPS,
+            self.anim_event.take(),
+        );
 
         // systems::hierarchy::compute_global_transform(&mut self.world);
         self.physics.step(&mut self.world);
@@ -279,7 +285,7 @@ impl GameState {
                     // self.anim_event = Some("g_weapForceEquip");
                     // self.anim_event = Some("MoveStart");
 
-                    if let Some(action) = self.actions.0.get(&Action::SprintStart) {
+                    if let Some(action) = self.actions.0.get(&Action::GunRelaxed) {
                         for (_, events) in self.world.query_mut::<&mut AnimationEventQueue>() {
                             events.0.push_back(*action);
                         }
@@ -289,7 +295,7 @@ impl GameState {
                     // self.anim_event = Some("weapUnequip");
                     // self.anim_event = Some("CameraSneakStart");
 
-                    if let Some(action) = self.actions.0.get(&Action::Sneak) {
+                    if let Some(action) = self.actions.0.get(&Action::GunReady) {
                         for (_, events) in self.world.query_mut::<&mut AnimationEventQueue>() {
                             events.0.push_back(*action);
                         }

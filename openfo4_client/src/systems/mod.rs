@@ -1,3 +1,4 @@
+pub mod animation_sync;
 pub mod camera;
 pub mod controller;
 pub mod hierarchy;
@@ -12,4 +13,5 @@ pub struct PlayerControlState {
     pub moving_right: bool,
     pub sneaking: bool,
     pub sprinting: bool,
+    pub walking: bool,
 }
