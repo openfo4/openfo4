@@ -14,6 +14,8 @@ use material::{BSLightingShaderProperty, BSShaderTextureSet};
 use mesh::{BSMeshLODTriShape, BSSubIndexTriShape, BSTriShape};
 use thiserror::Error;
 
+use crate::material::BSEffectShaderProperty;
+
 #[derive(Clone, Debug)]
 pub struct Nif {
     header: Header,
@@ -119,6 +121,9 @@ impl Nif {
                 }
                 BlockType::BSLightingShaderProperty => {
                     Block::BSLightingShaderProperty(BSLightingShaderProperty::decode(&mut reader)?)
+                }
+                BlockType::BSEffectShaderProperty => {
+                    Block::BSEffectShaderProperty(BSEffectShaderProperty::decode(&mut reader)?)
                 }
                 BlockType::BSShaderTextureSet => {
                     Block::BSShaderTextureSet(BSShaderTextureSet::decode(&mut reader)?)
@@ -410,6 +415,7 @@ pub enum Block {
     BSSubIndexTriShape(BSSubIndexTriShape),
     BSMeshLODTriShape(BSMeshLODTriShape),
     BSLightingShaderProperty(BSLightingShaderProperty),
+    BSEffectShaderProperty(BSEffectShaderProperty),
     BSShaderTextureSet(BSShaderTextureSet),
     BhkNPCollisionObject(BhkNPCollisionObject),
     BhkPhysicsSystem(BhkPhysicsSystem),
@@ -949,6 +955,24 @@ bitflags! {
 impl Decode for u8 {
     fn decode(reader: &mut Reader<'_>) -> Result<Self, Error> {
         reader.get_u8()
+    }
+}
+
+impl Decode for u16 {
+    fn decode(reader: &mut Reader<'_>) -> Result<Self, Error> {
+        reader.get_u16()
+    }
+}
+
+impl Decode for u32 {
+    fn decode(reader: &mut Reader<'_>) -> Result<Self, Error> {
+        reader.get_u32()
+    }
+}
+
+impl Decode for f32 {
+    fn decode(reader: &mut Reader<'_>) -> Result<Self, Error> {
+        reader.get_f32()
     }
 }
 

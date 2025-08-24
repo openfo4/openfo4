@@ -3,7 +3,7 @@ use std::collections::{HashMap, VecDeque};
 use game_common::components::{Color, Transform};
 use game_core::hierarchy::Hierarchy;
 use game_core_pipeline::entities::{Entities, MaterialHandle};
-use game_core_pipeline::material::StandardMaterial;
+use game_core_pipeline::material::{AlphaMode, StandardMaterial};
 use game_render::mesh::{Indices, Mesh};
 use glam::{Quat, Vec2, Vec3, Vec4};
 use hashbrown::HashSet;
@@ -587,7 +587,32 @@ async fn load_material(
                 }
             }
 
-            let material = entities.create_material(StandardMaterial::default());
+            let material = entities.create_material(material);
+            Ok(HandleOrAsset::Asset(BgsmMaterial { material, textures }))
+        }
+        Some(Block::BSEffectShaderProperty(property)) => {
+            let mut textures = Vec::new();
+            let mut material = StandardMaterial {
+                alpha_mode: AlphaMode::Mask,
+                base_color: Color([
+                    property.base_color.r * property.base_color_scale,
+                    property.base_color.g * property.base_color_scale,
+                    property.base_color.b * property.base_color_scale,
+                    property.base_color.a * property.base_color_scale,
+                ]),
+                ..Default::default()
+            };
+
+            if !property.source_texture.is_empty() {
+                let handle = loader
+                    .load::<FileImageHandle, _>(&property.source_texture)
+                    .await?;
+
+                material.base_color_texture = Some(handle.0.clone());
+                textures.push(handle);
+            }
+
+            let material = entities.create_material(material);
             Ok(HandleOrAsset::Asset(BgsmMaterial { material, textures }))
         }
         _ => Ok(HandleOrAsset::Asset(BgsmMaterial {

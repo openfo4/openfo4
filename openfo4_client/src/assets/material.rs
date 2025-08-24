@@ -36,6 +36,7 @@ impl Asset for BgsmMaterial {
             roughness: 1.0 - bgsm.smoothness,
             specular_color: Color::from_rgb(bgsm.specular_color.to_array()),
             specular_strength: bgsm.specular_strength,
+            // alpha_mode: game_core_pipeline::material::AlphaMode::Mask,
             ..Default::default()
         };
 
