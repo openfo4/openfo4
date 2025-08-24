@@ -2,12 +2,12 @@
 
 use openfo4_hkx::behavior::BSEventOnDeactivateModifier;
 
-use crate::builder::{BuildNode, BuilderContext, Error};
-use crate::{Node, parse_event};
+use crate::Node;
+use crate::builder::{BuildNode, BuilderContext, Error, parse_event};
 
 impl BuildNode for BSEventOnDeactivateModifier {
     fn build(&self, ctx: &mut BuilderContext<'_>) -> Result<Option<Node>, Error> {
-        let event = parse_event(ctx.hkx_file(), &self.event);
+        let event = parse_event(ctx, &self.event);
 
         Ok(None)
     }

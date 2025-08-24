@@ -4,10 +4,9 @@
 
 use openfo4_hkx::behavior::{EventRangeMode, EventsFromRangeModifier};
 
-use crate::builder::{BuildNode, BuilderContext, Error, UnknownVariableName};
+use crate::builder::{BuildNode, BuilderContext, Error, UnknownVariableName, parse_event};
 use crate::{
     Command, Listener, ListenerEvent, Node, NodeInner, SetVariable, Value, ValueExpression,
-    parse_event,
 };
 
 impl BuildNode for EventsFromRangeModifier {
@@ -48,7 +47,7 @@ impl BuildNode for EventsFromRangeModifier {
         for range in &*self.event_ranges.event_data {
             let upper_bound = ValueExpression::Const(Value::F32(range.upper_bound));
 
-            let event = parse_event(ctx.hkx_file(), &range.event);
+            let event = parse_event(ctx, &range.event);
 
             // Evalutes to true if `input_value >= lower_bound && input_value <= upper_bound`.
             let condition = ValueExpression::And(

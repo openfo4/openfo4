@@ -6,10 +6,10 @@ use openfo4_hkx::behavior::{GeneratorTransitionEffect, StartStateMode};
 use openfo4_hkx::skeleton::BindingType;
 use slab::Slab;
 
-use crate::builder::{BuilderContext, Dependency};
+use crate::builder::{BuilderContext, Dependency, parse_event};
 use crate::{
     ClipTrigger, Event, Node, NodeId, NodeInner, StartState, State, StateMachine, Transition,
-    TransitionEffect, Value, ValueExpression, parse_event,
+    TransitionEffect, Value, ValueExpression,
 };
 
 use super::{BuildNode, Error};
@@ -83,14 +83,14 @@ impl BuildNode for openfo4_hkx::behavior::StateMachine {
             let mut enter_events = Vec::new();
             if let Some(events) = &state.enter_notify_events {
                 for event in &*events.events {
-                    enter_events.push(parse_event(ctx.hkx_file(), event));
+                    enter_events.push(parse_event(ctx, event));
                 }
             }
 
             let mut exit_events = Vec::new();
             if let Some(events) = &state.exit_notify_events {
                 for event in &*events.events {
-                    exit_events.push(parse_event(ctx.hkx_file(), event));
+                    exit_events.push(parse_event(ctx, event));
                 }
             }
 
@@ -119,10 +119,12 @@ impl BuildNode for openfo4_hkx::behavior::StateMachine {
                     continue;
                 };
 
+                let event_id = ctx.get_event(transition.event_id).unwrap();
+
                 transitions.push(Transition {
                     from: Some(from),
                     to,
-                    event_id: transition.event_id as i64,
+                    event_id,
                     priority: transition.priority as i64,
                     effect: TransitionEffect::None,
                 });
@@ -136,10 +138,12 @@ impl BuildNode for openfo4_hkx::behavior::StateMachine {
                     continue;
                 };
 
+                let event_id = ctx.get_event(transition.event_id).unwrap();
+
                 transitions.push(Transition {
                     from: None,
                     to,
-                    event_id: transition.event_id as i64,
+                    event_id,
                     priority: transition.priority as i64,
                     effect: TransitionEffect::None,
                 });

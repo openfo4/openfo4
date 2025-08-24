@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use game_common::components::Transform;
 use game_core::time::Time;
 use glam::{Quat, Vec3};
@@ -8,7 +10,7 @@ use crate::driver::{AnimationDriver, BoneWeights};
 use crate::skeleton::SkeletonInstance;
 use crate::{AnimationSet, NodeInner};
 
-pub fn drive_animations(world: &mut World, time: &Time, event: Option<&'static str>) {
+pub fn drive_animations(world: &mut World, delta: Duration, event: Option<&'static str>) {
     let mut commands = CommandBuffer::new();
 
     let mut rng = rand::rng();
@@ -17,7 +19,7 @@ pub fn drive_animations(world: &mut World, time: &Time, event: Option<&'static s
         world.query_mut::<(&SkeletonInstance, &mut AnimationDriver, &AnimationSet)>()
     {
         let mut events = Vec::new();
-        driver.update(time.delta(), set, &mut rng, &mut events);
+        driver.update(delta, set, &mut rng, &mut events);
 
         for event in events {
             match driver.graph.event_name(event.id) {

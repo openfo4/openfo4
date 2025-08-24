@@ -2,8 +2,8 @@ use std::time::Duration;
 
 use openfo4_hkx::behavior::{ClipGenerator, PlaybackMode};
 
-use crate::builder::{BuildNode, BuilderContext, Error, UnknownVariableName};
-use crate::{Clip, ClipTrigger, Node, NodeInner, Value, ValueExpression, parse_event};
+use crate::builder::{BuildNode, BuilderContext, Error, UnknownVariableName, parse_event};
+use crate::{Clip, ClipTrigger, Node, NodeInner, Value, ValueExpression};
 
 impl BuildNode for ClipGenerator {
     fn build(&self, ctx: &mut BuilderContext<'_>) -> Result<Option<Node>, Error> {
@@ -32,7 +32,7 @@ impl BuildNode for ClipGenerator {
         let mut triggers = Vec::new();
         if let Some(t) = &self.triggers {
             for trigger in &*t.triggers {
-                let event = parse_event(ctx.hkx_file(), &trigger.event);
+                let event = parse_event(ctx, &trigger.event);
 
                 let local_time = if trigger.relative_to_end_of_clip {
                     // The offset is from the end of the clip.

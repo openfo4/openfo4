@@ -4,8 +4,7 @@ use openfo4_hkx::behavior::BSEventEveryNEventsModifier;
 
 use crate::{
     Command, Listener, ListenerEvent, Node, Value, ValueExpression,
-    builder::{BuildNode, BuilderContext, Error, UnknownVariableName},
-    parse_event,
+    builder::{BuildNode, BuilderContext, Error, UnknownVariableName, parse_event},
 };
 
 impl BuildNode for BSEventEveryNEventsModifier {
@@ -32,8 +31,8 @@ impl BuildNode for BSEventEveryNEventsModifier {
             }
         }
 
-        let listen_event = parse_event(ctx.hkx_file(), &self.event_to_check_for);
-        let send_event = parse_event(ctx.hkx_file(), &self.event_to_send);
+        let listen_event = parse_event(ctx, &self.event_to_check_for);
+        let send_event = parse_event(ctx, &self.event_to_send);
 
         if self.randomize_number_of_events {
             // todo!()

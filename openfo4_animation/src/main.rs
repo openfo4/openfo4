@@ -5,12 +5,21 @@ use std::time::Duration;
 use game_common::components::Transform;
 use glam::Vec3;
 use openfo4_animation::animation::AnimationClip;
+use openfo4_animation::animationspeedinfo::AnimationSpeedInfo;
 use openfo4_animation::driver::AnimationDriver;
 use openfo4_animation::skeleton::{Bone, Skeleton};
-use openfo4_animation::{build_graph, builder::animation_graph};
+use openfo4_animation::{AnimationGraph, build_graph};
 use openfo4_hkx::{HkObject, HkxFile};
 
 fn main() {
+    let p =
+        "../../archive/raw/Data/meshes/animtextdata/animationspeedinfo/10008498266921984614.txt";
+    let f = std::fs::read(p).unwrap();
+    let info = AnimationSpeedInfo::parse(&f);
+    dbg!(&info);
+
+    return;
+
     let p = "../../archive/raw/Data/data/meshes/actors/character/behaviors/raiderrootbehavior.hkx";
     // let p = "../../archive/raw/Data/meshes/actors/alien/behaviors/alienrootbehavior.hkx";
     // let p =
@@ -81,7 +90,8 @@ fn main() {
     // let character = todo!();
 
     build_graph(&f);
-    let graph = animation_graph(&f);
+    // let graph =animation_graph(&f);
+    let graph: AnimationGraph = todo!();
 
     dbg!(&graph);
 

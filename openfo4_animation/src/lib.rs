@@ -13,7 +13,7 @@ use std::time::Duration;
 
 use animation::AnimationClip;
 use glam::{Quat, Vec3, Vec4};
-use openfo4_hkx::behavior::{BehaviorGraph, EventProperty, VariableType};
+use openfo4_hkx::behavior::{BehaviorGraph, VariableType};
 use openfo4_hkx::{HkObject, HkxFile};
 use petgraph::Graph;
 use petgraph::dot::Dot;
@@ -571,21 +571,6 @@ fn load_initial_variable_set(graph: &BehaviorGraph, props: &HashMap<String, Valu
 //     }
 // }
 
-fn parse_event(f: &HkxFile, event: &EventProperty) -> Event {
-    let payload = match &event.base.payload {
-        Some(payload) => match f.get(payload.ptr) {
-            Some(HkObject::StringEventPayload(payload)) => Value::String(payload.data.clone()),
-            _ => todo!(),
-        },
-        None => Value::None,
-    };
-
-    Event {
-        id: event.base.id as i64,
-        payload,
-    }
-}
-
 type NodeId = usize;
 
 #[derive(Clone, Debug)]
@@ -889,7 +874,7 @@ impl Value {
         }
     }
 
-    fn to_f32(&self) -> Option<f32> {
+    pub fn to_f32(&self) -> Option<f32> {
         match self {
             Self::None => Some(0.0),
             Self::Bool(val) => Some(*val as u8 as f32),

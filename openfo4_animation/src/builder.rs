@@ -22,14 +22,14 @@ mod timer_modifier;
 use std::collections::HashMap;
 use std::hash::Hash;
 
-use openfo4_hkx::behavior::BSBehaviorGraphSwapGenerator;
+use openfo4_hkx::behavior::{BSBehaviorGraphSwapGenerator, EventProperty};
 use openfo4_hkx::skeleton::BindingType;
 use openfo4_hkx::{HkObject, HkxFile, OpaquePtr};
 use slab::Slab;
 use thiserror::Error;
 
 use crate::{
-    AnimationGraph, Node, NodeId, NodeInner, Value, VariableId, VariableSet,
+    AnimationGraph, Event, Node, NodeId, NodeInner, Value, VariableId, VariableSet,
     load_initial_variable_set,
 };
 
@@ -389,17 +389,9 @@ impl<'a> BuilderContext<'a> {
             .flatten()
     }
 
-    #[track_caller]
     fn get_variable(&self, binding_type: BindingType, variable_index: i32) -> Option<VariableId> {
         let state = self.state.files.get(self.file).unwrap();
         let variable_index = variable_index as usize;
-
-        for (k, v) in state.index_table.variable_by_name.iter() {
-            if *v == variable_index {
-                println!("{} {}", &k, std::panic::Location::caller());
-                break;
-            }
-        }
 
         match binding_type {
             BindingType::Variable => state
@@ -487,7 +479,7 @@ impl BuildNode for HkObject {
             Self::LayerGenerator(node) => node.dependencies(ctx),
             Self::BSBehaviorGraphSwapGenerator(node) => node.dependencies(ctx),
             Self::MirrorModifier(node) => Ok(Vec::new()),
-            Self::BSEventEveryNEventsModifier(node) => Ok(Vec::new()),
+            Self::BSEventEveryNEventsModifier(node) => node.dependencies(ctx),
             Self::EventsFromRangeModifier(node) => node.dependencies(ctx),
             Self::BSEventOnDeactivateModifier(node) => node.dependencies(ctx),
             Self::BSiStateTaggingGenerator(node) => node.dependencies(ctx),
@@ -662,4 +654,20 @@ struct IndexTable {
 enum RootOrPtr {
     Ptr(OpaquePtr),
     Root,
+}
+
+fn parse_event(ctx: &BuilderContext<'_>, event: &EventProperty) -> Event {
+    let payload = match &event.base.payload {
+        Some(payload) => match ctx.hkx_file().get(payload.ptr) {
+            Some(HkObject::StringEventPayload(payload)) => Value::String(payload.data.clone()),
+            _ => todo!(),
+        },
+        None => Value::None,
+    };
+
+    Event {
+        // id: ctx.get_event(event.base.id).unwrap(),
+        id: event.base.id as i64,
+        payload,
+    }
 }

@@ -1,4 +1,4 @@
-use std::collections::{HashMap, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::ops::{Mul, MulAssign};
 use std::sync::Arc;
 use std::time::Duration;
@@ -9,7 +9,7 @@ use rand::Rng;
 use crate::animation::AnimationClipFlags;
 use crate::{
     AnimationGraph, AnimationSet, DriverEvent, Event, Listener, ListenerEvent, NodeId, NodeInner,
-    StartState, TransitionEffect, Value, VariableSet,
+    StartState, TransitionEffect, Value, VariableId, VariableSet,
 };
 
 #[derive(Clone, Debug)]
@@ -24,6 +24,7 @@ pub struct AnimationDriver {
     variables: VariableSet,
     update_blend_factors: bool,
     listeners: HashMap<ListenerEvent, HashMap<NodeId, Listener>>,
+    variables_changed: HashSet<VariableId>,
 }
 
 impl AnimationDriver {
@@ -40,6 +41,7 @@ impl AnimationDriver {
             states: HashMap::new(),
             update_blend_factors: false,
             listeners: HashMap::new(),
+            variables_changed: HashSet::new(),
         }
     }
 
@@ -64,6 +66,10 @@ impl AnimationDriver {
             if let Some(root) = self.graph.root {
                 queue.push_back(DriverEvent::ActivateNode(root));
             }
+        }
+
+        for id in self.variables_changed.drain() {
+            queue.push_back(DriverEvent::VariableChanged(id));
         }
 
         for id in self.states.keys() {
@@ -478,7 +484,9 @@ impl AnimationDriver {
         queue.push_back((root, BoneWeights::Shared(1.0)));
 
         while let Some((id, mut blend_factor)) = queue.pop_front() {
-            let state = self.states.get_mut(&id).unwrap();
+            let Some(state) = self.states.get_mut(&id) else {
+                continue;
+            };
 
             blend_factor *= state.blend_factor;
             state.computed_blend_factor = blend_factor.clone();
@@ -641,8 +649,12 @@ impl AnimationDriver {
     }
 
     pub fn get_variable_mut(&mut self, name: &str) -> Option<&mut Value> {
+        let id = *self.variables.variables_by_name.get(name)?;
+
         self.update_blend_factors = true;
-        self.variables.get_mut_by_name(name)
+        self.variables_changed.insert(id);
+
+        Some(&mut self.variables.variables[id])
     }
 
     pub fn animations(
