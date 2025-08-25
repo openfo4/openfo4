@@ -53,7 +53,9 @@ use skeleton::{
 };
 use thiserror::Error;
 
-use crate::behavior::{BSRandomAlarmModifier, BSRootTwistModifier};
+use crate::behavior::{
+    BSBoneSwitchGenerator, BSBoneSwitchGeneratorData, BSRandomAlarmModifier, BSRootTwistModifier,
+};
 use crate::mesh::{ConvexShape, DynamicCompoundShape};
 use crate::skeleton::HandIkDriverInfo;
 
@@ -734,6 +736,8 @@ enum ClassSignature {
     BSRandomAlarmModifier,
     HandIkDriverInfo,
     ConvexShape,
+    BSBoneSwitchGenerator,
+    BSBoneSwitchGeneratorData,
 }
 
 impl Decode for ClassSignature {
@@ -839,6 +843,8 @@ impl Decode for ClassSignature {
             BSRandomAlarmModifier::ID => Ok(Self::BSRandomAlarmModifier),
             HandIkDriverInfo::ID => Ok(Self::HandIkDriverInfo),
             ConvexShape::ID => Ok(Self::ConvexShape),
+            BSBoneSwitchGenerator::ID => Ok(Self::BSBoneSwitchGenerator),
+            BSBoneSwitchGeneratorData::ID => Ok(Self::BSBoneSwitchGeneratorData),
             val => Err(Error {
                 kind: ErrorKind::UnknownClassName(val, "".to_owned()),
                 position: reader.cursor.position(),
@@ -956,6 +962,8 @@ pub enum HkObject {
     HandIkDriverInfo(HandIkDriverInfo),
     DynamicCompoundShape(DynamicCompoundShape),
     ConvexShape(ConvexShape),
+    BSBoneSwitchGenerator(BSBoneSwitchGenerator),
+    BSBoneSwitchGeneratorData(BSBoneSwitchGeneratorData),
     Ignored,
 }
 
@@ -1225,6 +1233,12 @@ impl Decode for HkObject {
                 HandIkDriverInfo::decode(reader).map(Self::HandIkDriverInfo)
             }
             ClassSignature::ConvexShape => ConvexShape::decode(reader).map(Self::ConvexShape),
+            ClassSignature::BSBoneSwitchGenerator => {
+                BSBoneSwitchGenerator::decode(reader).map(Self::BSBoneSwitchGenerator)
+            }
+            ClassSignature::BSBoneSwitchGeneratorData => {
+                BSBoneSwitchGeneratorData::decode(reader).map(Self::BSBoneSwitchGeneratorData)
+            }
         }
     }
 }

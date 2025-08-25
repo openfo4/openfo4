@@ -1673,11 +1673,11 @@ pub struct BSCyclicBlendTransitionGenerator {
     // Offset: 136
     _pad0: u64,
     // Offset: 144
-    pub p_blender_generator: Option<Ptr<Generator>>,
+    pub p_blender_generator: Option<Ptr<BlenderGenerator>>,
     // Offset: 152
     pub event_to_freeze_blend_value: EventProperty,
     // Offset: 168
-    pub evemt_to_cross_blend: EventProperty,
+    pub event_to_cross_blend: EventProperty,
     // Offset: 184
     pub transition_out_event: EventProperty,
     // Offset: 200
@@ -2055,4 +2055,28 @@ pub struct BSRandomAlarmModifier {
     pub reset_alarm: bool,
     // Offset: 116
     pub seconds_remaining: f32,
+}
+
+#[derive(Clone, Debug, HkStruct)]
+#[signature(0x450fc55e)]
+pub struct BSBoneSwitchGenerator {
+    // Offset: 0
+    pub parent: Generator,
+    // Offset: 136
+    _pad0: u64,
+    // Offset: 144
+    pub p_default_generator: Option<Ptr<Generator>>,
+    // Offset: 152
+    pub children_a: Array<Ptr<BSBoneSwitchGeneratorData>>,
+}
+
+#[derive(Clone, Debug, HkStruct)]
+#[signature(0x0977b904)]
+pub struct BSBoneSwitchGeneratorData {
+    // Offset: 0
+    pub parent: Bindable,
+    // Offset: 48
+    pub p_generator: Option<Ptr<Generator>>,
+    // Offset: 56
+    pub sp_bone_weight: Ptr<BoneWeightArray>,
 }
