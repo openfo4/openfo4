@@ -6,7 +6,7 @@ use openfo4_hkx::behavior::{GeneratorTransitionEffect, StartStateMode};
 use openfo4_hkx::skeleton::BindingType;
 use slab::Slab;
 
-use crate::builder::{BuilderContext, Dependency, parse_event};
+use crate::builder::{BuilderContext, Dependency, UnknownVariableName, parse_event};
 use crate::{
     ClipTrigger, Event, Node, NodeId, NodeInner, StartState, State, StateMachine, Transition,
     TransitionEffect, Value, ValueExpression,
@@ -60,6 +60,31 @@ impl BuildNode for openfo4_hkx::behavior::StateMachine {
     }
 
     fn build(&self, ctx: &mut BuilderContext<'_>) -> Result<Option<Node>, Error> {
+        let mut start_state_id = ValueExpression::Const(Value::I32(self.start_state_id));
+
+        if let Some(set) = &self.parent.node.bindable.variable_binding_set {
+            for binding in &*set.bindings {
+                let variable = ctx
+                    .get_variable(binding.binding_type, binding.variable_index)
+                    .unwrap();
+
+                match &*binding.member_path {
+                    "startStateId" => {
+                        dbg!(&self.parent.node.name);
+                        start_state_id = ValueExpression::Variable(variable)
+                    }
+                    "isActive" => {}
+                    "currentStateId" => {}
+                    name => {
+                        return Err(Error::UnknownVariableName(UnknownVariableName {
+                            class: "hkbStateMachine",
+                            name: name.to_owned(),
+                        }));
+                    }
+                }
+            }
+        }
+
         let mut states = Vec::new();
         let mut transitions = Vec::new();
         let mut state_id_to_index = HashMap::new();
@@ -190,13 +215,15 @@ impl BuildNode for openfo4_hkx::behavior::StateMachine {
 
         let mut state_variable = None;
 
-        let start_state = match self.start_state_mode {
-            StartStateMode::Default => match state_id_to_index.get(&self.start_state_id) {
-                Some(index) => StartState::Index(*index),
-                None => StartState::None,
-            },
-            StartStateMode::Random => StartState::Random,
-            StartStateMode::Sync => {
+        let start_state = match (self.start_state_mode, start_state_id) {
+            (StartStateMode::Default, ValueExpression::Const(Value::I32(start_state_id))) => {
+                match state_id_to_index.get(&start_state_id).copied() {
+                    Some(index) => StartState::Index(index),
+                    None => StartState::None,
+                }
+            }
+            (StartStateMode::Random, _) => StartState::Random,
+            (StartStateMode::Sync, ValueExpression::Const(_)) => {
                 let variable = ctx
                     .get_variable(BindingType::Variable, self.sync_variable_index)
                     .unwrap();
@@ -204,7 +231,16 @@ impl BuildNode for openfo4_hkx::behavior::StateMachine {
                 state_variable = Some(variable);
                 StartState::Expression(ValueExpression::Variable(variable))
             }
-            x => todo!("{:?}", x),
+            (StartStateMode::Sync, expr) => {
+                let variable = ctx
+                    .get_variable(BindingType::Variable, self.sync_variable_index)
+                    .unwrap();
+
+                state_variable = Some(variable);
+                StartState::Expression(expr)
+            }
+            (StartStateMode::Default, expr) => StartState::Expression(expr),
+            _ => todo!(),
         };
 
         Ok(Some(Node {
@@ -214,6 +250,7 @@ impl BuildNode for openfo4_hkx::behavior::StateMachine {
                 transitions,
                 start_state,
                 state_variable,
+                state_id_to_index,
             }),
             listeners: Vec::new(),
             on_activate: Vec::new(),

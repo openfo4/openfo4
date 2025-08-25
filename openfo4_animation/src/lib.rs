@@ -744,6 +744,7 @@ pub struct StateMachine {
     pub transitions: Vec<Transition>,
     pub start_state: StartState,
     pub state_variable: Option<VariableId>,
+    pub state_id_to_index: HashMap<i32, usize>,
 }
 
 #[derive(Clone, Debug)]
@@ -888,6 +889,13 @@ impl Value {
             Self::Vec4(_) => None,
             Self::Quat(_) => None,
             Self::BoneWeights(_) => None,
+        }
+    }
+
+    fn to_i32(&self) -> Option<i32> {
+        match self {
+            Self::I32(val) => Some(*val),
+            _ => None,
         }
     }
 

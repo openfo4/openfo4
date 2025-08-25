@@ -3,6 +3,7 @@
 //! Layer is a blendable generator with multiple layers that can be activated/deactivated on demand
 //! with events.
 
+use std::collections::HashMap;
 use std::time::Duration;
 
 use openfo4_hkx::behavior::LayerGenerator;
@@ -119,6 +120,7 @@ impl BuildNode for LayerGenerator {
                     transitions,
                     start_state,
                     state_variable: None,
+                    state_id_to_index: HashMap::new(),
                 }),
                 listeners: Vec::new(),
                 on_activate: Vec::new(),

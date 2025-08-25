@@ -93,7 +93,8 @@ impl AnimationDriver {
                                 StartState::None => None,
                                 StartState::Index(state) => Some(*state),
                                 StartState::Expression(expr) => {
-                                    Some(expr.eval(&self.variables).to_usize().unwrap_or(0))
+                                    let id = expr.eval(&self.variables).to_i32().unwrap();
+                                    sm.state_id_to_index.get(&id).copied()
                                 }
                                 StartState::Random => {
                                     let state = rand::random_range(0..sm.states.len());

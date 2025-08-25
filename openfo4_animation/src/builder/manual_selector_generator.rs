@@ -3,6 +3,8 @@
 //! This is a generator that selects another generator based on a variable.
 //! We compile this node into a [`StateMachine`].
 
+use std::collections::HashMap;
+
 use openfo4_hkx::behavior::ManualSelectorGenerator;
 
 use crate::builder::{BuildNode, BuilderContext, Dependency, Error, UnknownVariableName};
@@ -83,6 +85,10 @@ impl BuildNode for ManualSelectorGenerator {
             });
         }
 
+        let state_id_to_index: HashMap<_, _> = (0..self.generators.len())
+            .map(|index| (index as i32, index))
+            .collect();
+
         // If the state can never change after activation we don't
         // need any transitions.
         if !self.selected_index_can_change_after_active {
@@ -93,6 +99,7 @@ impl BuildNode for ManualSelectorGenerator {
                     transitions: Vec::new(),
                     start_state: StartState::Expression(start_state),
                     state_variable: None,
+                    state_id_to_index,
                 }),
                 listeners: Vec::new(),
                 on_activate: Vec::new(),
@@ -139,6 +146,7 @@ impl BuildNode for ManualSelectorGenerator {
                 transitions,
                 start_state: StartState::Expression(start_state),
                 state_variable: None,
+                state_id_to_index,
             }),
             listeners: Vec::new(),
             on_activate: Vec::new(),
