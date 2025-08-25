@@ -497,7 +497,10 @@ fn build_shape(shape: &ColliderShape, scale: Vec3) -> SharedShape {
             } else {
                 // FIXME: Could use convex_mesh here, but it fails
                 // for some convex meshes (e.g. a simple cube)?
-                SharedShape::convex_hull(&vertices).unwrap()
+                match SharedShape::convex_hull(&vertices) {
+                    Some(shape) => shape,
+                    None => SharedShape::trimesh(vertices, indices).unwrap(),
+                }
             }
         }
     }
