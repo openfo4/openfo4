@@ -54,7 +54,7 @@ pub fn decompress(
 
             let spline_scale = header
                 .scale_flags
-                .intersects(Flags::STATIC_X | Flags::STATIC_Y | Flags::STATIC_Z);
+                .intersects(Flags::SPLINE_X | Flags::SPLINE_Y | Flags::SPLINE_Z);
 
             cursor.pad(4);
 
