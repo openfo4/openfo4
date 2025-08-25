@@ -1,6 +1,6 @@
 use game_common::components::Color;
 use game_core_pipeline::entities::MaterialHandle;
-use game_core_pipeline::material::StandardMaterial;
+use game_core_pipeline::material::{AlphaMode, StandardMaterial};
 use openfo4_asset::{Asset, AssetLoader, Handle};
 use openfo4_nif::bgsm::Bgsm;
 
@@ -76,6 +76,10 @@ impl Asset for BgsmMaterial {
 
             // material.grayscale = Some(handle.0.clone());
             textures.push(handle);
+        }
+
+        if bgsm.alpha_test {
+            material.alpha_mode = AlphaMode::Mask;
         }
 
         let material = ctx.entities.create_material(material);

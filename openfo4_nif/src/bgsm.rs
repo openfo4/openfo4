@@ -25,6 +25,7 @@ pub struct Bgsm {
     pub smoothness: f32,
 
     pub grayscale_palette: Option<GreyscalePalette>,
+    pub alpha_test: bool,
 }
 
 impl Bgsm {
@@ -224,6 +225,7 @@ impl Bgsm {
             smoothness,
             alpha,
             grayscale_palette,
+            alpha_test,
         })
     }
 }
