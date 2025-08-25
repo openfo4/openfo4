@@ -1,14 +1,22 @@
-use std::collections::{HashMap, VecDeque};
+use std::collections::VecDeque;
 
 use game_common::components::{GlobalTransform, Transform};
+use hashbrown::HashMap;
 use hecs::World;
-use openfo4_core::events::EventBus;
 use openfo4_core::hierarchy::Children;
 
 #[tracing::instrument(skip_all)]
 pub fn compute_global_transform(world: &mut World) {
-    let mut transforms = HashMap::new();
-    let mut parents = HashMap::new();
+    let len = world
+        .query_mut::<(&Transform, Option<&Children>)>()
+        .into_iter()
+        .len();
+
+    let mut transforms = HashMap::with_capacity(len);
+    let mut parents = HashMap::with_capacity(len);
+
+    let x = world.query_mut::<(&Transform, Option<&Children>)>();
+    x.into_iter().len();
 
     for (entity, (transform, children)) in world.query_mut::<(&Transform, Option<&Children>)>() {
         transforms.insert(entity, *transform);
@@ -21,7 +29,7 @@ pub fn compute_global_transform(world: &mut World) {
     }
 
     // Queue all entities that have no parent entity.
-    let mut queue = VecDeque::new();
+    let mut queue = VecDeque::with_capacity(len);
     for entity in transforms.keys() {
         if !parents.contains_key(entity) {
             queue.push_back(*entity);
