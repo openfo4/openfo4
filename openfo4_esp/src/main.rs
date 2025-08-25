@@ -29,47 +29,83 @@ fn main() {
     // dbg!(file.lookup(None, FormId(0xb1f08)));
     // dbg!(file.lookup(None, FormId(0x166729)));
     // dbg!(file.lookup(None, FormId(0x3c0f0)));
-    // todo!()
-    dbg!(file.lookup(None, FormId(0x80e)));
-    dbg!(file.lookup(None, FormId(0x3648)));
+    // // todo!()
+    // dbg!(file.lookup(None, FormId(0x80e)));
+    // dbg!(file.lookup(None, FormId(0x3648)));
+
+    let player_anims = file
+        .lookup_all(Some(RecordKind::Animation))
+        .map(|v| v.unwrap())
+        .filter(|v| match &v.data {
+            RecordData::Animation(x) => x.behavior_graph.as_ref().is_some_and(|f| {
+                f.as_str()
+                    .unwrap()
+                    .to_lowercase()
+                    .ends_with("raiderrootbehavior.hkx")
+                    || f.as_str()
+                        .unwrap()
+                        .to_lowercase()
+                        .ends_with("weaponbehavior.hkx")
+            }),
+            _ => false,
+        });
+
+    for p in player_anims {
+        match p.data {
+            RecordData::Animation(anim) => {
+                // if anim
+                //     .animation_event
+                //     .as_ref()
+                //     .is_some_and(|v| v.as_str().unwrap().to_lowercase() == "movebackward")
+                // {
+                //     dbg!(&anim);
+                // }
+
+                if let Some(e) = &anim.animation_event {
+                    println!("{:?}", e);
+                }
+            }
+            _ => (),
+        }
+    }
 
     // return;
 
-    let anims = file
-        .lookup_all(Some(RecordKind::Animation))
-        .collect::<Result<Vec<_>, _>>()
-        .unwrap();
+    // let anims = file
+    //     .lookup_all(Some(RecordKind::Animation))
+    //     .collect::<Result<Vec<_>, _>>()
+    //     .unwrap();
 
-    file.lookup_all(None)
-        .collect::<Result<Vec<_>, _>>()
-        .unwrap();
+    // file.lookup_all(None)
+    //     .collect::<Result<Vec<_>, _>>()
+    //     .unwrap();
 
-    let anims = file
-        .lookup_all(Some(RecordKind::Animation))
-        .collect::<Result<Vec<_>, _>>()
-        .unwrap();
+    // let anims = file
+    //     .lookup_all(Some(RecordKind::Animation))
+    //     .collect::<Result<Vec<_>, _>>()
+    //     .unwrap();
 
-    dbg!(anims);
+    // dbg!(anims);
 
     // let gmst = file.find_record(RecordKind::GameSetting, FormId(0x8BD));
     // let gmst = file.lookup(Some(RecordKind::Keyword), FormId(0xC1));
     // dbg!(&gmst);
     // let ent = file.lookup(Some(RecordKind::Cell), prewar_vault);
-    // dbg!(&ent);
-    for record in file
-        .children(RecordChildren::TemporaryEntities, prewar_vault)
-        .unwrap()
-    {
-        // dbg!(&record);
-        // match &record.data {
-        //     RecordData::PlacedObject(obj) => {
-        //         let base = obj.base_object;
-        //         let obj = file.lookup(None, base).unwrap();
-        //         dbg!(&obj);
-        //     }
-        //     _ => (),
-        // }
-    }
+    // // dbg!(&ent);
+    // for record in file
+    //     .children(RecordChildren::TemporaryEntities, prewar_vault)
+    //     .unwrap()
+    // {
+    //     // dbg!(&record);
+    //     // match &record.data {
+    //     //     RecordData::PlacedObject(obj) => {
+    //     //         let base = obj.base_object;
+    //     //         let obj = file.lookup(None, base).unwrap();
+    //     //         dbg!(&obj);
+    //     //     }
+    //     //     _ => (),
+    //     // }
+    // }
 
     // let mut data = std::fs::read("Fallout4.esm").unwrap();
     // let mut buf = &data[..];

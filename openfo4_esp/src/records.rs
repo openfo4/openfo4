@@ -601,12 +601,16 @@ pub struct Race {
     #[record("PHTN")]
     pub phenome_target_names: SubRecordArray<ZString>,
     // PHWT
+    /// Reference to [`MovementType`] that is active by default.
     #[record("WKMV")]
     pub base_movement_defaults_default: Option<FormId>,
+    /// Reference to [`MovementType`] that is active when the actor is swimming.
     #[record("SWMV")]
-    pub base_movement_defaults_swmin: Option<FormId>,
+    pub base_movement_defaults_swim: Option<FormId>,
+    /// Reference to [`MovementType`] that is active when the actor is flying.
     #[record("FLMV")]
     pub base_movement_defaults_fly: Option<FormId>,
+    /// Reference to [`MovementType`] that is active when the actor is sneaking.
     #[record("SNMV")]
     pub base_movement_defaults_sneak: Option<FormId>,
     /// Reference to another `Race` record which contains all the subgraph data that should be used
