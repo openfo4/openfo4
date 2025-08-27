@@ -59,6 +59,7 @@ fn main() {
     let ui = UiState::new(&mut renderer);
     let mut game = GameState::new(shared.clone(), pool);
     game.init_camera();
+    game.toggle_sun_light();
     let state = RenderState::new(
         renderer,
         RenderTarget::Window(window),

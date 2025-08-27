@@ -16,7 +16,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use esp::EspLoader;
-use game_common::components::{Color, Transform};
+use game_common::components::{Color, DirectionalLight, Transform};
 use game_core::counter::Interval;
 use game_core::time::Time;
 use game_core_pipeline::material::StandardMaterial;
@@ -173,6 +173,21 @@ impl GameState {
         ));
     }
 
+    pub fn toggle_sun_light(&mut self) {
+        for (entity, _) in self.world.query_mut::<(&Transform, &DirectionalLight)>() {
+            self.world.despawn(entity).unwrap();
+            return;
+        }
+
+        self.world.spawn((
+            DirectionalLight {
+                color: Color::WHITE,
+                illuminance: 25_000.0,
+            },
+            Transform::from_translation(Vec3::splat(200.0)).looking_at(Vec3::ZERO, Vec3::Y),
+        ));
+    }
+
     pub fn update(&mut self, time: &Time, gizmos: &Gizmos) {
         let _span = trace_span!("GameState::update").entered();
 
@@ -279,6 +294,10 @@ impl GameState {
 
                 if event.key_code == Some(KeyCode::F8) {
                     self.physics_debug ^= true;
+                }
+
+                if event.key_code == Some(KeyCode::F9) {
+                    self.toggle_sun_light();
                 }
 
                 if event.key_code == Some(KeyCode::O) {

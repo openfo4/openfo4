@@ -8,7 +8,7 @@ use game_core_pipeline::entities::{
     CameraHandle, Entities, LightHandle, MaterialHandle, MeshHandle, Object, ObjectHandle,
     SceneHandle,
 };
-use game_core_pipeline::lights::{DirectionalLight, Light};
+use game_core_pipeline::lights::{DirectionalLight, Light, PointLight};
 use game_gizmos::Gizmos;
 use game_render::Renderer;
 use game_render::camera::RenderTarget;
@@ -32,7 +32,8 @@ pub struct RenderState {
     pub objects: HashMap<Entity, ObjectHandle>,
     shared: Arc<SharedState>,
     prev_transforms: HashMap<Entity, GlobalTransform>,
-    lights: Vec<LightHandle>,
+
+    pub lights: HashMap<Entity, LightHandle>,
     pub gizmos: Gizmos,
 }
 
@@ -56,7 +57,7 @@ impl RenderState {
             objects: HashMap::new(),
             shared,
             prev_transforms: HashMap::new(),
-            lights: Vec::new(),
+            lights: HashMap::new(),
             gizmos,
         }
     }
@@ -86,31 +87,46 @@ impl RenderState {
 
             self.cameras.insert(entity, handle);
             self.gizmos.update_camera(camera);
-
-            // self.lights
-            //     .push(self.entities.create_light(Light::Point(PointLight {
-            //         transform: *transform,
-            //         scene: self.scene.clone(),
-            //         color: Color::WHITE,
-            //         intensity: 1000.0,
-            //         radius: 1000.0,
-            //     })));
         }
 
-        static ONCE: OnceLock<()> = OnceLock::new();
-        ONCE.get_or_init(|| {
-            let l = self
+        let mut lights_to_remove = self.lights.clone();
+
+        for (entity, (transform, light)) in
+            &mut world.query::<(&GlobalTransform, &game_common::components::DirectionalLight)>()
+        {
+            lights_to_remove.remove(&entity);
+
+            let handle = self
                 .entities
                 .create_light(Light::Directional(DirectionalLight {
+                    transform: transform.0,
                     scene: self.scene.clone(),
-                    transform: Transform::from_translation(Vec3::splat(200.0))
-                        .looking_at(Vec3::ZERO, Vec3::Y),
-                    color: Color::WHITE,
-                    // illuminance: 120_000.0,
-                    illuminance: 25_000.0,
+                    color: light.color,
+                    illuminance: light.illuminance,
                 }));
-            core::mem::forget(l);
-        });
+
+            self.lights.insert(entity, handle);
+        }
+
+        for (entity, (transform, light)) in
+            &mut world.query::<(&GlobalTransform, &game_common::components::PointLight)>()
+        {
+            lights_to_remove.remove(&entity);
+
+            let handle = self.entities.create_light(Light::Point(PointLight {
+                color: light.color,
+                intensity: light.intensity,
+                radius: light.radius,
+                transform: transform.0,
+                scene: self.scene.clone(),
+            }));
+
+            self.lights.insert(entity, handle);
+        }
+
+        for (entity, _) in lights_to_remove {
+            self.lights.remove(&entity);
+        }
 
         let mut objects_to_remove = self.objects.clone();
         for (entity, (transform, object)) in &mut world.query::<(&GlobalTransform, &RenderObject)>()
@@ -123,8 +139,6 @@ impl RenderState {
                 }
             }
             self.prev_transforms.insert(entity, *transform);
-
-            self.objects.remove(&entity);
 
             let handle = self.entities.create_object(Object {
                 transform: transform.0,
