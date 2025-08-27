@@ -1,6 +1,8 @@
+use std::fmt::DebugList;
+
 use glam::Vec2;
 
-use crate::{BlockRef, Decode, Error, Reader, Rgb, Rgba, TextureClampMode};
+use crate::{Block, BlockRef, Decode, Error, Reader, Rgb, Rgba, TextureClampMode};
 
 #[derive(Clone, Debug)]
 pub struct BSLightingShaderProperty {
@@ -241,6 +243,50 @@ impl Decode for BSEffectShaderProperty {
             normal_texture,
             env_mask_texture,
             env_map_scale,
+        })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct BSSkyShaderProperty {
+    pub name: String,
+    pub extra_data: Vec<BlockRef>,
+    pub controller: Option<BlockRef>,
+    pub shader_flags1: u32,
+    pub shader_flags2: u32,
+    pub uv_offset: Vec2,
+    pub uv_scale: Vec2,
+    pub source_texture: String,
+    pub sky_object_type: (), // What type?
+}
+
+impl Decode for BSSkyShaderProperty {
+    fn decode(reader: &mut Reader<'_>) -> Result<Self, Error> {
+        let name = reader.get_u32()?;
+        let name = reader.string(name)?.to_owned();
+
+        let extra_data_len = reader.get_u32()?;
+        let extra_data = (0..extra_data_len)
+            .map(|_| BlockRef::decode(reader))
+            .collect::<Result<_, _>>()?;
+
+        let controller = <Option<BlockRef>>::decode(reader)?;
+        let shader_flags1 = reader.get_u32()?;
+        let shader_flags2 = reader.get_u32()?;
+        let uv_offset = Vec2::decode(reader)?;
+        let uv_scale = Vec2::decode(reader)?;
+        let source_texture = String::decode(reader)?;
+
+        Ok(Self {
+            name,
+            extra_data,
+            controller,
+            shader_flags1,
+            shader_flags2,
+            uv_offset,
+            uv_scale,
+            source_texture,
+            sky_object_type: (),
         })
     }
 }

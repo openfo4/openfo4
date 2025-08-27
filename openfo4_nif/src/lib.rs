@@ -14,7 +14,7 @@ use material::{BSLightingShaderProperty, BSShaderTextureSet};
 use mesh::{BSMeshLODTriShape, BSSubIndexTriShape, BSTriShape};
 use thiserror::Error;
 
-use crate::material::BSEffectShaderProperty;
+use crate::material::{BSEffectShaderProperty, BSSkyShaderProperty};
 
 #[derive(Clone, Debug)]
 pub struct Nif {
@@ -124,6 +124,9 @@ impl Nif {
                 }
                 BlockType::BSEffectShaderProperty => {
                     Block::BSEffectShaderProperty(BSEffectShaderProperty::decode(&mut reader)?)
+                }
+                BlockType::BSSkyShaderProperty => {
+                    Block::BSSkyShaderProperty(BSSkyShaderProperty::decode(&mut reader)?)
                 }
                 BlockType::BSShaderTextureSet => {
                     Block::BSShaderTextureSet(BSShaderTextureSet::decode(&mut reader)?)
@@ -423,6 +426,7 @@ pub enum Block {
     BSSkinBoneData(BSSkinBoneData),
     BSBound(BSBound),
     BhkRagdollSystem(BhkRagdollSystem),
+    BSSkyShaderProperty(BSSkyShaderProperty),
 }
 
 #[derive(Clone, Debug)]
@@ -632,6 +636,7 @@ pub enum BlockType {
     BSBound,
     BSBoneLodExtraData,
     BhkRagdollSystem,
+    BSSkyShaderProperty,
 }
 
 impl FromStr for BlockType {
@@ -717,6 +722,7 @@ impl FromStr for BlockType {
             "BSBound" => Ok(Self::BSBound),
             "BSBoneLODExtraData" => Ok(Self::BSBoneLodExtraData),
             "bhkRagdollSystem" => Ok(Self::BhkRagdollSystem),
+            "BSSkyShaderProperty" => Ok(Self::BSSkyShaderProperty),
             _ => Err(BadBlockType),
         }
     }
