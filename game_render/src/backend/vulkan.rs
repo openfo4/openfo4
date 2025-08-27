@@ -2888,6 +2888,9 @@ vk_enum! {
     TextureFormat::R32Uint => vk::Format::R32_UINT,
     TextureFormat::R32Sint => vk::Format::R32_SINT,
     TextureFormat::R32SFloat => vk::Format::R32_SFLOAT,
+    TextureFormat::Rg32Uint => vk::Format::R32G32_UINT,
+    TextureFormat::Rg32Sint => vk::Format::R32G32_SINT,
+    TextureFormat::Rg32SFloat => vk::Format::R32G32_SFLOAT,
 }
 
 vk_enum! {
@@ -5775,11 +5778,9 @@ fn access_flags_to_stage_mask(
             GraphicsPrimitiveStage::FragmentShader,
         ),
         (
-            AccessFlags::COLOR_ATTACHMENT_READ,
-            GraphicsPrimitiveStage::FragmentShader,
-        ),
-        (
-            AccessFlags::COLOR_ATTACHMENT_WRITE,
+            // Even LOAD ops for color attachments happen at the COLOR_ATTACHMENT_WRITE stage.
+            // https://registry.khronos.org/vulkan/specs/latest/html/vkspec.html#renderpass-load-operations
+            AccessFlags::COLOR_ATTACHMENT_READ | AccessFlags::COLOR_ATTACHMENT_WRITE,
             GraphicsPrimitiveStage::ColorAttachmentOutput,
         ),
         (
