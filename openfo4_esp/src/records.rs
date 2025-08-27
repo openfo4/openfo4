@@ -1692,7 +1692,9 @@ pub struct Light {
 #[derive(Copy, Clone, Debug, BinaryStruct)]
 pub struct LightData {
     pub time: i32,
+    /// Light emission radius in game units.
     pub radius: u32,
+    /// Color of the emitted light.
     pub color: RgbPadded<u8>,
     pub flags: LightDataFlags,
     pub falloff_exponent: f32,

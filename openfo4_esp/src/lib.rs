@@ -17,12 +17,12 @@ use std::mem::MaybeUninit;
 
 use bytes::Buf;
 use records::{
-    AcousticSpace, Action, Activator, Ammo, Armor, Book, Cell, Climate, Container, Empty,
-    Furniture, GameSetting, Hazard, IdleMarker, Ingestible, Key, Keyword, Land, LandTexture,
-    LeveledActor, LeveledItem, Light, LocationReferenceType, MiscObject, Note, Npc, PlacedGrenade,
-    PlacedHazard, PlacedNpc, PlacedObject, Projectile, Race, ShaderParticleGeometry,
-    StaticCollection, Tes4, TextureSet, VisualEffect, Weather, Worldspace, CLAS, CMPO, DMGT, DOOR,
-    ENCH, FACT, FLOR, GLOB, GRAS, HDPT, INGR, MGEF, MSTT, SOUN, SPEL, STAT, TACT, TRNS,
+    AcousticSpace, Action, Activator, Ammo, Armor, Book, CLAS, CMPO, Cell, Climate, Container,
+    DMGT, DOOR, ENCH, Empty, FACT, FLOR, Furniture, GLOB, GRAS, GameSetting, HDPT, Hazard, INGR,
+    IdleMarker, Ingestible, Key, Keyword, Land, LandTexture, LeveledActor, LeveledItem, Light,
+    LocationReferenceType, MGEF, MSTT, MiscObject, Note, Npc, PlacedGrenade, PlacedHazard,
+    PlacedNpc, PlacedObject, Projectile, Race, SOUN, SPEL, STAT, ShaderParticleGeometry,
+    StaticCollection, TACT, TRNS, Tes4, TextureSet, VisualEffect, Weather, Worldspace,
 };
 
 use crate::records::{
@@ -33,12 +33,12 @@ use crate::records::{
     DialogueTopic, DialogueView, EffectShader, EncounterZone, EquipType, Explosion, Footstep,
     FootstepSet, FormList, GodRays, ImageSpace, ImageSpaceAdapter, Impact, ImpactDataSet,
     InstanceNamingRules, Layer, LensFlare, LightingTemplate, LoadScreen, Location, MaterialObject,
-    MaterialSwap, MaterialType, Message, MovementType, MusicTrack, MusicType,
+    MaterialSwap, MaterialType, Message, MovementType, MusicTrack, MusicType, NAVI,
     NavigationMeshObstacleManager, ObjectModification, ObjectVisibilityManager, Outfit, PackIn,
     Package, Perk, PlacedMissile, Quest, ReferenceGroup, Region, Relationship, ReverbParameters,
     Scene, SceneCollection, SoundCategory, SoundDescriptor, SoundKeywordMapping, SoundOutputModel,
     StoryManagerBranchNode, StoryManagerEventNode, StoryManagerQuestNode, Terminal, Tree,
-    VoiceType, Water, Weapon, Zoom, NAVI,
+    VoiceType, Water, Weapon, Zoom,
 };
 
 const MAX_INDEX_CAP: usize = 2 * 1024 * 1024;
@@ -1745,11 +1745,15 @@ impl Decode for LString {
     }
 }
 
+/// A three channel RGB color, padded to four channel width.
 #[derive(Copy, Clone, Debug)]
 pub struct RgbPadded<T> {
-    r: T,
-    g: T,
-    b: T,
+    /// The red channel.
+    pub r: T,
+    /// The green channel.
+    pub g: T,
+    /// The blue channel.
+    pub b: T,
 }
 
 impl<T> Decode for RgbPadded<T>
@@ -1766,7 +1770,7 @@ where
         let r = T::decode(&mut buf)?;
         let g = T::decode(&mut buf)?;
         let b = T::decode(&mut buf)?;
-        u8::decode(&mut buf)?;
+        T::decode(&mut buf)?;
 
         Ok(Self { r, g, b })
     }
