@@ -9,7 +9,7 @@ use slab::Slab;
 use crate::builder::{BuilderContext, Dependency, UnknownVariableName, parse_event};
 use crate::nodes::state_machine::{State, StateMachine, Transition};
 use crate::nodes::{Node, NodeInner};
-use crate::{ClipTrigger, Event, NodeId, StartState, TransitionEffect, Value, ValueExpression};
+use crate::{ClipTrigger, Event, NodeId, StartState, Value, ValueExpression};
 
 use super::{BuildNode, Error};
 
@@ -89,6 +89,19 @@ impl BuildNode for openfo4_hkx::behavior::StateMachine {
         let mut state_id_to_index = HashMap::new();
 
         for state in &*self.states {
+            if let Some(set) = &state.bindable.variable_binding_set {
+                for binding in &*set.bindings {
+                    match &*binding.member_path {
+                        name => {
+                            return Err(Error::UnknownVariableName(UnknownVariableName {
+                                class: "hkbStateMachineStateInfo",
+                                name: name.to_owned(),
+                            }));
+                        }
+                    }
+                }
+            }
+
             let node = state
                 .generator
                 .as_ref()

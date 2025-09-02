@@ -152,7 +152,11 @@ impl AnimationDriver {
             .iter()
             .filter_map(|id| match &self.nodes[*id].inner {
                 NodeInner::Clip(clip) => {
-                    let weight = self.properties.global_weight.get(id).unwrap();
+                    let weight = self
+                        .properties
+                        .global_weight
+                        .get(id)
+                        .unwrap_or(&BoneWeights::Shared(1.0));
 
                     Some(PlayingAnimationClip {
                         path: &clip.path,
