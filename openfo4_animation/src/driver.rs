@@ -2,6 +2,7 @@ use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::Arc;
 use std::time::Duration;
 
+use game_tracing::trace_span;
 use slab::Slab;
 
 use crate::nodes::{Context, GraphNode, Node, NodeEvent, NodeInner, Property};
@@ -42,6 +43,8 @@ impl AnimationDriver {
     }
 
     pub fn update(&mut self, delta: Duration, animations: &AnimationSet, events: &mut Vec<Event>) {
+        let _span = trace_span!("AnimationDriver::update").entered();
+
         while let Some(event) = self.queue.pop_front() {
             match event {
                 NodeEvent::ActivateNode(id) => {
