@@ -1,13 +1,14 @@
 use std::time::Duration;
 
-use crate::Event;
+use crate::{Event, ValueExpression};
 
 use super::{Context, GraphNode};
 
 #[derive(Clone, Debug)]
 pub struct Timer {
-    pub min_time: Duration,
-    pub max_time: Duration,
+    pub condition: ValueExpression,
+    pub min_time: ValueExpression,
+    pub max_time: ValueExpression,
     pub event: Event,
     pub repeat: bool,
     pub eval_duration: Duration,
@@ -15,26 +16,17 @@ pub struct Timer {
     pub is_running: bool,
 }
 
-impl Timer {
-    pub fn new_uniform(time: Duration, event: Event) -> Self {
-        Self {
-            min_time: time,
-            max_time: time,
-            event,
-            repeat: false,
-            eval_duration: Duration::ZERO,
-            elapsed: Duration::ZERO,
-            is_running: false,
-        }
-    }
-}
-
 impl GraphNode for Timer {
     fn activate<T>(&mut self, ctx: T)
     where
         T: Context,
     {
-        self.eval_duration = rand::random_range(self.min_time..self.max_time);
+        let min_time =
+            Duration::from_secs_f32(self.min_time.eval(ctx.variables()).to_f32().unwrap());
+        let max_time =
+            Duration::from_secs_f32(self.max_time.eval(ctx.variables()).to_f32().unwrap());
+
+        self.eval_duration = rand::random_range(min_time..=max_time);
         self.is_running = true;
     }
 
@@ -49,6 +41,10 @@ impl GraphNode for Timer {
     where
         T: Context,
     {
+        if !self.condition.eval(ctx.variables()).to_bool().unwrap() {
+            return;
+        }
+
         self.elapsed += ctx.delta();
         if self.elapsed > self.eval_duration {
             ctx.send_event(self.event.clone());
