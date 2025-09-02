@@ -1,7 +1,8 @@
 use openfo4_hkx::behavior::BSCyclicBlendTransitionGenerator;
 
 use crate::builder::{BuildNode, BuilderContext, Dependency, Error, UnknownVariableName};
-use crate::{Blend, BlendNode, Node, NodeInner, Value, ValueExpression};
+use crate::nodes::blend::{Blend, BlendChildren};
+use crate::{Node, NodeInner, Value, ValueExpression};
 
 impl BuildNode for BSCyclicBlendTransitionGenerator {
     fn dependencies(&self, ctx: &mut BuilderContext<'_>) -> Result<Vec<Dependency>, Error> {
@@ -102,22 +103,31 @@ impl BuildNode for BSCyclicBlendTransitionGenerator {
             }
 
             if let Some(id) = ctx.get_node(generator.ptr) {
-                children.push(BlendNode {
+                children.push(BlendChildren {
                     weight,
                     bone_weights,
-                    node: id,
+                    node: Some(id),
                 });
             }
         }
+
+        // Ok(Some(Node {
+        //     name: self.parent.node.name.clone(),
+        //     inner: NodeInner::Blend(Blend {
+        //         blend_factor: blend_parameter,
+        //         children,
+        //         is_parametric: true,
+        //     }),
+        //     ..Default::default()
+        // }))
 
         Ok(Some(Node {
             name: self.parent.node.name.clone(),
             inner: NodeInner::Blend(Blend {
                 blend_factor: blend_parameter,
-                children,
                 is_parametric: true,
+                children,
             }),
-            ..Default::default()
         }))
     }
 }

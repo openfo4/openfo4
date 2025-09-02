@@ -5,7 +5,8 @@ use std::time::Duration;
 use openfo4_hkx::behavior::BSTimerModifier;
 
 use crate::builder::{BuildNode, BuilderContext, Error, UnknownVariableName, parse_event};
-use crate::{Node, NodeInner, Timer};
+use crate::nodes::timer::Timer;
+use crate::nodes::{Node, NodeInner};
 
 impl BuildNode for BSTimerModifier {
     fn build(&self, ctx: &mut BuilderContext<'_>) -> Result<Option<Node>, Error> {
@@ -28,17 +29,16 @@ impl BuildNode for BSTimerModifier {
         let event = parse_event(ctx, &self.alarm_event);
 
         Ok(Some(Node {
-            name: format!("[BSTimerModifier] {}", self.parent.node.name),
+            name: self.parent.node.name.clone(),
             inner: NodeInner::Timer(Timer {
                 min_time: time,
                 max_time: time,
                 event,
                 repeat,
+                elapsed: Duration::ZERO,
+                eval_duration: Duration::ZERO,
+                is_running: false,
             }),
-            on_activate: Vec::new(),
-            on_deactivate: Vec::new(),
-            on_update: Vec::new(),
-            listeners: Vec::new(),
         }))
     }
 }

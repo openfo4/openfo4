@@ -3,7 +3,9 @@
 use openfo4_hkx::behavior::{BlenderGenerator, BlenderGeneratorFlags};
 
 use crate::builder::{BuildNode, BuilderContext, Dependency, Error, UnknownVariableName};
-use crate::{Blend, BlendNode, Node, NodeInner, Value, ValueExpression};
+use crate::nodes::blend::{Blend, BlendChildren};
+use crate::nodes::{Node, NodeInner};
+use crate::{Value, ValueExpression};
 
 impl BuildNode for BlenderGenerator {
     fn dependencies(&self, _ctx: &mut BuilderContext<'_>) -> Result<Vec<Dependency>, Error> {
@@ -79,13 +81,12 @@ impl BuildNode for BlenderGenerator {
                 }
             }
 
-            if let Some(id) = ctx.get_node(generator.ptr) {
-                children.push(BlendNode {
-                    weight,
-                    bone_weights,
-                    node: id,
-                });
-            }
+            let node = ctx.get_node(generator.ptr);
+            children.push(BlendChildren {
+                weight,
+                bone_weights,
+                node,
+            });
         }
 
         Ok(Some(Node {
@@ -95,10 +96,6 @@ impl BuildNode for BlenderGenerator {
                 children,
                 is_parametric: self.flags.contains(BlenderGeneratorFlags::PARAMETRIC_BLEND),
             }),
-            on_activate: Vec::new(),
-            on_deactivate: Vec::new(),
-            on_update: Vec::new(),
-            listeners: Vec::new(),
         }))
     }
 }

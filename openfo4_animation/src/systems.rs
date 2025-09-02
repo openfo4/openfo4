@@ -1,14 +1,13 @@
 use std::time::Duration;
 
 use game_common::components::Transform;
-use game_core::time::Time;
 use glam::{Quat, Vec3};
 use hecs::{CommandBuffer, World};
 
 use crate::animation::{AnimationClip, AnimationClipFlags};
-use crate::driver::{AnimationDriver, BoneWeights};
+use crate::driver::AnimationDriver;
 use crate::skeleton::SkeletonInstance;
-use crate::{AnimationSet, NodeInner};
+use crate::{AnimationSet, BoneWeights};
 
 pub fn drive_animations(world: &mut World, delta: Duration, event: Option<&'static str>) {
     let mut commands = CommandBuffer::new();
@@ -19,10 +18,10 @@ pub fn drive_animations(world: &mut World, delta: Duration, event: Option<&'stat
         world.query_mut::<(&SkeletonInstance, &mut AnimationDriver, &AnimationSet)>()
     {
         let mut events = Vec::new();
-        driver.update(delta, set, &mut rng, &mut events);
+        driver.update(delta, set, &mut events);
 
         for event in events {
-            match driver.graph.event_name(event.id) {
+            match driver.graph().event_name(event.id) {
                 Some("reevaluategraphstate") => {
                     driver.reset();
                 }
@@ -35,62 +34,54 @@ pub fn drive_animations(world: &mut World, delta: Duration, event: Option<&'stat
         }
 
         let active_anims = || {
-            driver
-                .animations()
-                .filter_map(|(node_id, state, blend_factor)| {
-                    let node = &driver.graph.nodes[node_id];
-                    let clip = match &node.inner {
-                        NodeInner::Clip(clip) => clip,
-                        _ => unreachable!(),
-                    };
+            driver.animations().filter_map(|state| {
+                let Some(animation) = set.0.get(state.path) else {
+                    return None;
+                };
 
-                    let Some(animation) = set.0.get(&clip.path) else {
-                        return None;
-                    };
+                let mut num_frames = animation.num_frames;
+                let mut anim_duration = animation.duration;
+                if animation
+                    .flags
+                    .contains(AnimationClipFlags::TRIM_LAST_FRAME_IF_LOOPING)
+                    && state.looping
+                {
+                    num_frames = num_frames.saturating_sub(1);
+                    anim_duration -= animation.frame_duration();
+                }
 
-                    let mut num_frames = animation.num_frames;
-                    let mut anim_duration = animation.duration;
-                    if animation
-                        .flags
-                        .contains(AnimationClipFlags::TRIM_LAST_FRAME_IF_LOOPING)
-                        && clip.looping
-                    {
-                        num_frames = num_frames.saturating_sub(1);
-                        anim_duration -= animation.frame_duration();
-                    }
+                if animation.duration.is_zero() || num_frames == 0 {
+                    return None;
+                }
 
-                    if animation.duration.is_zero() || num_frames == 0 {
-                        return None;
-                    }
+                let progress = state.time.as_secs_f32() / anim_duration.as_secs_f32();
 
-                    let progress = state.time.as_secs_f32() / anim_duration.as_secs_f32();
+                // For each bone we linearly interpolate between the closest two frames a and b
+                // based on how far the time has progressed between the two frames.
+                let v = progress * num_frames as f32;
+                let v_a = v.floor();
+                let v_b = v.ceil();
 
-                    // For each bone we linearly interpolate between the closest two frames a and b
-                    // based on how far the time has progressed between the two frames.
-                    let v = progress * num_frames as f32;
-                    let v_a = v.floor();
-                    let v_b = v.ceil();
+                let s = f32::clamp(v - v_a, 0.0, 1.0);
+                let mut a = u32::min(v_a as u32, num_frames - 1);
+                let mut b = u32::min(v_b as u32, num_frames - 1);
 
-                    let s = f32::clamp(v - v_a, 0.0, 1.0);
-                    let mut a = u32::min(v_a as u32, num_frames - 1);
-                    let mut b = u32::min(v_b as u32, num_frames - 1);
+                if state.looping && v_a as u32 >= num_frames {
+                    a = v_a as u32 % num_frames;
+                }
 
-                    if clip.looping && v_a as u32 >= num_frames {
-                        a = v_a as u32 % num_frames;
-                    }
+                if state.looping && v_b as u32 >= num_frames {
+                    b = v_b as u32 % num_frames;
+                }
 
-                    if clip.looping && v_b as u32 >= num_frames {
-                        b = v_b as u32 % num_frames;
-                    }
-
-                    Some(Contribution {
-                        animation,
-                        a,
-                        b,
-                        s,
-                        blend_factor,
-                    })
+                Some(Contribution {
+                    animation,
+                    a,
+                    b,
+                    s,
+                    blend_factor: state.weight,
                 })
+            })
         };
 
         for (index, entity) in &skeleton.bones {

@@ -5,9 +5,8 @@
 use openfo4_hkx::behavior::{EventRangeMode, EventsFromRangeModifier};
 
 use crate::builder::{BuildNode, BuilderContext, Error, UnknownVariableName, parse_event};
-use crate::{
-    Command, Listener, ListenerEvent, Node, NodeInner, SetVariable, Value, ValueExpression,
-};
+use crate::nodes::events_from_range::{EventsFromRange, Range};
+use crate::{Node, NodeInner, Value, ValueExpression};
 
 impl BuildNode for EventsFromRangeModifier {
     fn build(&self, ctx: &mut BuilderContext<'_>) -> Result<Option<Node>, Error> {
@@ -41,125 +40,33 @@ impl BuildNode for EventsFromRangeModifier {
             }
         }
 
-        let mut listeners = Vec::new();
-        let mut on_update = Vec::new();
-
+        let mut ranges = Vec::new();
         for range in &*self.event_ranges.event_data {
             let upper_bound = ValueExpression::Const(Value::F32(range.upper_bound));
 
             let event = parse_event(ctx, &range.event);
 
-            // Evalutes to true if `input_value >= lower_bound && input_value <= upper_bound`.
-            let condition = ValueExpression::And(
-                Box::new(ValueExpression::CmpGe(
-                    Box::new(input_value.clone()),
-                    Box::new(lower_bound.clone()),
-                )),
-                Box::new(ValueExpression::CmpLe(
-                    Box::new(input_value.clone()),
-                    Box::new(upper_bound.clone()),
-                )),
-            );
+            let continous = match range.event_mode {
+                EventRangeMode::OnEnterRange => true,
+                EventRangeMode::WhenInRange => false,
+            };
 
-            match range.event_mode {
-                EventRangeMode::OnEnterRange => {
-                    // Add a variable that indicates whether the condition is currently
-                    // active.
-                    // Only when this variable changes from `false` to `true` will we
-                    // send an event and then set the variable to `true` until the
-                    // condition evaluates to `false` for one frame.
-                    let active = ctx.create_variable(Value::Bool(false));
-
-                    // Expand the condition such that it only triggers if `active` is `false`.
-                    let on_enter_condition = ValueExpression::And(
-                        Box::new(condition.clone()),
-                        Box::new(ValueExpression::CmpEq(
-                            Box::new(ValueExpression::Variable(active)),
-                            Box::new(ValueExpression::Const(Value::Bool(false))),
-                        )),
-                    );
-
-                    let on_leave_condition = ValueExpression::CmpEq(
-                        Box::new(condition),
-                        Box::new(ValueExpression::Const(Value::Bool(false))),
-                    );
-
-                    let commands = vec![
-                        // Equivalent to:
-                        // if enable && !active && condition {
-                        //    send_event(..);
-                        //    active = true;
-                        // }
-                        Command::Conditional(
-                            ValueExpression::And(
-                                Box::new(enable.clone()),
-                                Box::new(on_enter_condition),
-                            ),
-                            vec![
-                                Command::SendEvent(event),
-                                Command::SetVariable(SetVariable {
-                                    variable: active,
-                                    condition: ValueExpression::Const(Value::Bool(true)),
-                                    value: ValueExpression::Const(Value::Bool(true)),
-                                }),
-                            ],
-                        ),
-                        // Equivalent to:
-                        // if (active && !condition) || !enable {
-                        //     active = false;
-                        // }
-                        // Note that we always want to reset the state if the enable value
-                        // changes to false.
-                        Command::Conditional(
-                            ValueExpression::Or(
-                                Box::new(on_leave_condition),
-                                Box::new(ValueExpression::Not(Box::new(enable.clone()))),
-                            ),
-                            vec![Command::SetVariable(SetVariable {
-                                variable: active,
-                                condition: ValueExpression::Const(Value::Bool(true)),
-                                value: ValueExpression::Const(Value::Bool(false)),
-                            })],
-                        ),
-                    ];
-
-                    if let ValueExpression::Variable(variable) = input_value {
-                        listeners.push(Listener {
-                            event: ListenerEvent::Variable(variable),
-                            reaction: commands.clone(),
-                        });
-                    }
-
-                    if let ValueExpression::Variable(variable) = lower_bound {
-                        listeners.push(Listener {
-                            event: ListenerEvent::Variable(variable),
-                            reaction: commands.clone(),
-                        });
-                    }
-
-                    if let ValueExpression::Variable(variable) = enable {
-                        listeners.push(Listener {
-                            event: ListenerEvent::Variable(variable),
-                            reaction: commands,
-                        });
-                    }
-                }
-                EventRangeMode::WhenInRange => {
-                    on_update.push(Command::Conditional(
-                        ValueExpression::And(Box::new(enable.clone()), Box::new(condition)),
-                        vec![Command::SendEvent(event)],
-                    ));
-                }
-            }
+            ranges.push(Range {
+                lower: lower_bound.clone(),
+                upper: upper_bound,
+                continous,
+                event,
+                is_active: false,
+            });
         }
 
         Ok(Some(Node {
             name: self.parent.node.name.clone(),
-            inner: NodeInner::Nop,
-            on_update,
-            on_activate: Vec::new(),
-            on_deactivate: Vec::new(),
-            listeners,
+            inner: NodeInner::EventsFromRange(EventsFromRange {
+                condition: enable,
+                input: input_value,
+                ranges,
+            }),
         }))
     }
 }

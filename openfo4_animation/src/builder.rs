@@ -15,6 +15,8 @@ mod event_driven_modifier;
 mod events_from_range_modifier;
 mod layer_generator;
 mod manual_selector_generator;
+mod modifier_generator;
+mod modifier_list;
 mod pose_matching_generator;
 mod state_machine;
 mod timer_modifier;
@@ -28,8 +30,9 @@ use openfo4_hkx::{HkObject, HkxFile, OpaquePtr};
 use slab::Slab;
 use thiserror::Error;
 
+use crate::nodes::Node;
 use crate::{
-    AnimationGraph, Event, Node, NodeId, NodeInner, Value, VariableId, VariableSet,
+    AnimationGraph, Event, NodeId, NodeInner, Value, VariableId, VariableSet,
     load_initial_variable_set,
 };
 
@@ -552,65 +555,6 @@ impl BuildNode for HkObject {
     }
 }
 
-impl BuildNode for openfo4_hkx::behavior::ModifierGenerator {
-    fn dependencies(&self, _ctx: &mut BuilderContext<'_>) -> Result<Vec<Dependency>, Error> {
-        Ok(vec![
-            Dependency::Node(self.modifier.ptr),
-            Dependency::Node(self.generator.ptr),
-        ])
-    }
-
-    fn build(&self, state: &mut BuilderContext<'_>) -> Result<Option<Node>, Error> {
-        let mut list = Vec::new();
-
-        if let Some(id) = state.get_node(self.modifier.ptr) {
-            list.push(id);
-        }
-
-        if let Some(id) = state.get_node(self.generator.ptr) {
-            list.push(id);
-        }
-
-        Ok(Some(Node {
-            name: self.parent.node.name.clone(),
-            inner: NodeInner::List(list),
-            listeners: Vec::new(),
-            on_activate: Vec::new(),
-            on_deactivate: Vec::new(),
-            on_update: Vec::new(),
-        }))
-    }
-}
-
-impl BuildNode for openfo4_hkx::behavior::ModifierList {
-    fn dependencies(&self, _ctx: &mut BuilderContext<'_>) -> Result<Vec<Dependency>, Error> {
-        Ok(self
-            .modifiers
-            .iter()
-            .map(|m| Dependency::Node(m.ptr))
-            .collect())
-    }
-
-    fn build(&self, state: &mut BuilderContext<'_>) -> Result<Option<Node>, Error> {
-        let mut list = Vec::new();
-
-        for modifier in &*self.modifiers {
-            if let Some(id) = state.get_node(modifier.ptr) {
-                list.push(id);
-            }
-        }
-
-        Ok(Some(Node {
-            name: self.parent.node.name.clone(),
-            inner: NodeInner::List(list),
-            listeners: Vec::new(),
-            on_activate: Vec::new(),
-            on_deactivate: Vec::new(),
-            on_update: Vec::new(),
-        }))
-    }
-}
-
 impl BuildNode for BSBehaviorGraphSwapGenerator {
     fn dependencies(&self, ctx: &mut BuilderContext<'_>) -> Result<Vec<Dependency>, Error> {
         Ok(self
@@ -629,14 +573,15 @@ impl BuildNode for BSBehaviorGraphSwapGenerator {
             }
         }
 
-        Ok(Some(Node {
-            name: self.parent.node.name.clone(),
-            inner: NodeInner::List(nodes),
-            listeners: Vec::new(),
-            on_activate: Vec::new(),
-            on_deactivate: Vec::new(),
-            on_update: Vec::new(),
-        }))
+        // Ok(Some(Node {
+        //     name: self.parent.node.name.clone(),
+        //     inner: NodeInner::List(nodes),
+        //     listeners: Vec::new(),
+        //     on_activate: Vec::new(),
+        //     on_deactivate: Vec::new(),
+        //     on_update: Vec::new(),
+        // }))
+        Ok(None)
     }
 }
 

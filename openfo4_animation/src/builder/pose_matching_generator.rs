@@ -1,7 +1,7 @@
 use openfo4_hkx::behavior::PoseMatchingGenerator;
 
-use crate::Node;
 use crate::builder::{BuildNode, BuilderContext, Error};
+use crate::nodes::Node;
 
 impl BuildNode for PoseMatchingGenerator {
     fn dependencies(&self, ctx: &mut BuilderContext<'_>) -> Result<Vec<super::Dependency>, Error> {

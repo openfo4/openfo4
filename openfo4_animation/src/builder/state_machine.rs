@@ -7,10 +7,9 @@ use openfo4_hkx::skeleton::BindingType;
 use slab::Slab;
 
 use crate::builder::{BuilderContext, Dependency, UnknownVariableName, parse_event};
-use crate::{
-    ClipTrigger, Event, Node, NodeId, NodeInner, StartState, State, StateMachine, Transition,
-    TransitionEffect, Value, ValueExpression,
-};
+use crate::nodes::state_machine::{State, StateMachine, Transition};
+use crate::nodes::{Node, NodeInner};
+use crate::{ClipTrigger, Event, NodeId, StartState, TransitionEffect, Value, ValueExpression};
 
 use super::{BuildNode, Error};
 
@@ -90,20 +89,10 @@ impl BuildNode for openfo4_hkx::behavior::StateMachine {
         let mut state_id_to_index = HashMap::new();
 
         for state in &*self.states {
-            // Note that it is possible that the children generator for this state
-            // evaluated to no node. In this case we must not skip the state entirely
-            // so that events and transitions are still handled correctly.
-            // We create a dummy node and use that when this case happens.
-            let id = state
+            let node = state
                 .generator
                 .as_ref()
-                .and_then(|generator| ctx.get_node(generator.ptr))
-                .unwrap_or_else(|| {
-                    ctx.create_node(Node {
-                        name: state.name.clone(),
-                        ..Default::default()
-                    })
-                });
+                .and_then(|generator| ctx.get_node(generator.ptr));
 
             let mut enter_events = Vec::new();
             if let Some(events) = &state.enter_notify_events {
@@ -122,7 +111,8 @@ impl BuildNode for openfo4_hkx::behavior::StateMachine {
             let index = states.len();
             state_id_to_index.insert(state.state_id, index);
             states.push(State {
-                node: id,
+                id: state.state_id,
+                node,
                 enter_events,
                 exit_events,
             });
@@ -151,7 +141,7 @@ impl BuildNode for openfo4_hkx::behavior::StateMachine {
                     to,
                     event_id,
                     priority: transition.priority as i64,
-                    effect: TransitionEffect::None,
+                    blend_duration: Duration::ZERO,
                 });
                 transition_effects.push(&transition.transition);
             }
@@ -170,7 +160,7 @@ impl BuildNode for openfo4_hkx::behavior::StateMachine {
                     to,
                     event_id,
                     priority: transition.priority as i64,
-                    effect: TransitionEffect::None,
+                    blend_duration: Duration::ZERO,
                 });
                 transition_effects.push(&transition.transition);
             }
@@ -197,7 +187,7 @@ impl BuildNode for openfo4_hkx::behavior::StateMachine {
                         let duration = Duration::from_secs_f32(effect.duration);
 
                         if !duration.is_zero() {
-                            transition.effect = TransitionEffect::Blend(duration);
+                            transition.blend_duration = duration;
                         }
                     }
                     Some(HkObject::GeneratorTransitionEffect(effect)) => {
@@ -247,15 +237,13 @@ impl BuildNode for openfo4_hkx::behavior::StateMachine {
             name: self.parent.node.name.clone(),
             inner: NodeInner::StateMachine(StateMachine {
                 states,
+                state_id_to_index,
                 transitions,
                 start_state,
                 state_variable,
-                state_id_to_index,
+                active_state: None,
+                active_effect: None,
             }),
-            listeners: Vec::new(),
-            on_activate: Vec::new(),
-            on_deactivate: Vec::new(),
-            on_update: Vec::new(),
         }))
     }
 }
@@ -297,35 +285,25 @@ fn generator_transition(
     // Register the new state for the transition.
     let transition_state = states.len();
     states.push(State {
-        node,
+        id: i32::MAX,
+        node: Some(node),
         enter_events: Vec::new(),
         exit_events: Vec::new(),
     });
-
-    let transition_in_effect = if blend_in.is_zero() {
-        TransitionEffect::None
-    } else {
-        TransitionEffect::Blend(blend_in)
-    };
-    let transition_out_effect = if blend_out.is_zero() {
-        TransitionEffect::None
-    } else {
-        TransitionEffect::Blend(blend_out)
-    };
 
     // Redirect the original transition to our temporary transition
     // state.
     let original_transition = &mut transitions[original_transition];
     let to = original_transition.to;
     original_transition.to = transition_state;
-    original_transition.effect = transition_in_effect;
+    original_transition.blend_duration = blend_in;
 
     transitions.push(Transition {
         from: Some(transition_state),
         to,
         event_id: exit_event as i64,
         priority: 0,
-        effect: transition_out_effect,
+        blend_duration: blend_out,
     });
 }
 
@@ -337,27 +315,50 @@ fn find_leaf_nodes(nodes: &Slab<Node>, root: NodeId) -> Vec<NodeId> {
         let is_leaf = match &nodes[id].inner {
             NodeInner::StateMachine(node) => {
                 for state in &node.states {
-                    queue.push(state.node);
+                    if let Some(node) = state.node {
+                        queue.push(node);
+                    }
                 }
 
                 false
             }
             NodeInner::List(list) => {
-                queue.extend(list);
+                queue.extend(&list.nodes);
 
                 false
             }
             NodeInner::Blend(node) => {
                 for c in &node.children {
-                    queue.push(c.node);
+                    if let Some(node) = c.node {
+                        queue.push(node);
+                    }
                 }
 
                 false
             }
+            NodeInner::ManualSelector(node) => {
+                for node in node.states.values() {
+                    queue.push(*node);
+                }
+
+                false
+            }
+            NodeInner::Layers(node) => {
+                for layer in &node.layers {
+                    queue.push(layer.node);
+                }
+
+                false
+            }
+            // Technically has children but they are only active
+            // for a single frame so we cannot insert meaningful triggers.
+            NodeInner::ModifyOnce(_) => false,
             NodeInner::Clip(_) => true,
-            NodeInner::VariableChangeTracker(_) => true,
             NodeInner::Timer(_) => true,
-            NodeInner::Nop => true,
+            NodeInner::AssignVariables(_) => true,
+            NodeInner::EventDriven(_) => true,
+            NodeInner::IsActive(_) => true,
+            NodeInner::EventsFromRange(_) => true,
         };
 
         if is_leaf {

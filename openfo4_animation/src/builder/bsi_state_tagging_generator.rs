@@ -3,7 +3,8 @@
 use openfo4_hkx::behavior::BSiStateTaggingGenerator;
 
 use crate::builder::{BuildNode, BuilderContext, Dependency, Error};
-use crate::{Node, NodeInner};
+use crate::nodes::list::List;
+use crate::nodes::{Node, NodeInner};
 
 impl BuildNode for BSiStateTaggingGenerator {
     fn dependencies(&self, _ctx: &mut BuilderContext<'_>) -> Result<Vec<Dependency>, Error> {
@@ -15,20 +16,17 @@ impl BuildNode for BSiStateTaggingGenerator {
     }
 
     fn build(&self, ctx: &mut BuilderContext<'_>) -> Result<Option<Node>, Error> {
-        let mut list = Vec::new();
+        let mut nodes = Vec::new();
 
         if let Some(generator) = &self.p_default_generator {
-            let node = ctx.get_node(generator.ptr).unwrap();
-            list.push(node);
+            if let Some(node) = ctx.get_node(generator.ptr) {
+                nodes.push(node);
+            }
         }
 
         Ok(Some(Node {
             name: self.parent.node.name.clone(),
-            inner: NodeInner::List(list),
-            on_activate: Vec::new(),
-            on_deactivate: Vec::new(),
-            on_update: Vec::new(),
-            listeners: Vec::new(),
+            inner: NodeInner::List(List { nodes }),
         }))
     }
 }

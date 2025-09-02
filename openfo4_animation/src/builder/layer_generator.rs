@@ -3,13 +3,11 @@
 //! Layer is a blendable generator with multiple layers that can be activated/deactivated on demand
 //! with events.
 
-use std::collections::HashMap;
-use std::time::Duration;
-
 use openfo4_hkx::behavior::LayerGenerator;
 
 use crate::builder::{BuildNode, BuilderContext, Dependency, Error, UnknownVariableName};
-use crate::{Node, NodeInner, StartState, State, StateMachine, Transition, TransitionEffect};
+use crate::nodes::layers::{Layer, Layers};
+use crate::nodes::{Node, NodeInner};
 
 impl BuildNode for LayerGenerator {
     fn dependencies(&self, _ctx: &mut BuilderContext<'_>) -> Result<Vec<Dependency>, Error> {
@@ -21,8 +19,6 @@ impl BuildNode for LayerGenerator {
     }
 
     fn build(&self, ctx: &mut BuilderContext<'_>) -> Result<Option<Node>, Error> {
-        let mut layers = Vec::new();
-
         if let Some(set) = &self.parent.node.bindable.variable_binding_set {
             for binding in &*set.bindings {
                 match &*binding.member_path {
@@ -38,8 +34,7 @@ impl BuildNode for LayerGenerator {
             }
         }
 
-        // We compile every layer into an individual state machine
-        // with the two states representing on and off.
+        let mut layers = Vec::new();
         for layer in &*self.layers {
             let Some(node) = ctx.get_node(layer.generator.ptr) else {
                 continue;
@@ -58,86 +53,18 @@ impl BuildNode for LayerGenerator {
             //     }
             // }
 
-            let on_node = node;
-            let off_node = ctx.create_node(Node {
-                name: "".to_owned(),
-                inner: NodeInner::List(Vec::new()),
-                listeners: Vec::new(),
-                on_activate: Vec::new(),
-                on_deactivate: Vec::new(),
-                on_update: Vec::new(),
+            layers.push(Layer {
+                on_by_default: layer.on_by_default,
+                node,
+                on_event: layer.on_event_id as i64,
+                off_event: layer.off_event_id as i64,
+                is_active: false,
             });
-
-            let states = vec![
-                State {
-                    node: off_node,
-                    enter_events: Vec::new(),
-                    exit_events: Vec::new(),
-                },
-                State {
-                    node: on_node,
-                    enter_events: Vec::new(),
-                    exit_events: Vec::new(),
-                },
-            ];
-            let mut transitions = Vec::new();
-            let start_state = if layer.on_by_default {
-                StartState::Index(1)
-            } else {
-                StartState::Index(0)
-            };
-
-            // Off -> On transition
-            if let Some(event) = ctx.get_event(layer.on_event_id) {
-                transitions.push(Transition {
-                    from: Some(0),
-                    to: 1,
-                    event_id: event,
-                    priority: 0,
-                    effect: TransitionEffect::Blend(Duration::from_secs_f32(
-                        layer.fade_in_duration,
-                    )),
-                });
-            }
-
-            // On -> Off transition
-            if let Some(event) = ctx.get_event(layer.off_event_id) {
-                transitions.push(Transition {
-                    from: Some(1),
-                    to: 0,
-                    event_id: event,
-                    priority: 0,
-                    effect: TransitionEffect::Blend(Duration::from_secs_f32(
-                        layer.fade_out_duration,
-                    )),
-                });
-            }
-
-            let state_machine = ctx.create_node(Node {
-                name: "".to_owned(),
-                inner: NodeInner::StateMachine(StateMachine {
-                    states,
-                    transitions,
-                    start_state,
-                    state_variable: None,
-                    state_id_to_index: HashMap::new(),
-                }),
-                listeners: Vec::new(),
-                on_activate: Vec::new(),
-                on_deactivate: Vec::new(),
-                on_update: Vec::new(),
-            });
-
-            layers.push(state_machine);
         }
 
         Ok(Some(Node {
             name: self.parent.node.name.clone(),
-            inner: NodeInner::List(layers),
-            listeners: Vec::new(),
-            on_activate: Vec::new(),
-            on_deactivate: Vec::new(),
-            on_update: Vec::new(),
+            inner: NodeInner::Layers(Layers { layers }),
         }))
     }
 }

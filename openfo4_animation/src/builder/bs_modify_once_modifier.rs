@@ -1,7 +1,8 @@
 use openfo4_hkx::behavior::BSModifyOnceModifier;
 
 use crate::builder::{BuildNode, BuilderContext, Dependency, Error, UnknownVariableName};
-use crate::{Command, Node};
+use crate::nodes::modify_once::ModifyOnce;
+use crate::nodes::{Node, NodeInner};
 
 impl BuildNode for BSModifyOnceModifier {
     fn dependencies(&self, _ctx: &mut BuilderContext<'_>) -> Result<Vec<Dependency>, Error> {
@@ -38,22 +39,21 @@ impl BuildNode for BSModifyOnceModifier {
         if let Some(modifier) = &self.p_on_activate_modifier
             && let Some(node) = ctx.get_node(modifier.ptr)
         {
-            on_activate.push(Command::ActivateNode(node));
-            on_activate.push(Command::DeactivateNode(node));
+            on_activate.push(node);
         }
 
         if let Some(modifier) = &self.p_on_deactivate_modifier
             && let Some(node) = ctx.get_node(modifier.ptr)
         {
-            on_deactivate.push(Command::ActivateNode(node));
-            on_deactivate.push(Command::DeactivateNode(node));
+            on_deactivate.push(node);
         }
 
         Ok(Some(Node {
             name: self.parent.node.name.clone(),
-            on_activate,
-            on_deactivate,
-            ..Default::default()
+            inner: NodeInner::ModifyOnce(ModifyOnce {
+                on_activate,
+                on_deactivate,
+            }),
         }))
     }
 }

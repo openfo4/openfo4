@@ -6,8 +6,11 @@ pub mod graph;
 pub mod skeleton;
 pub mod systems;
 
+mod nodes;
+
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::fmt::Debug;
+use std::ops::{Mul, MulAssign};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -19,6 +22,8 @@ use petgraph::Graph;
 use petgraph::dot::Dot;
 use petgraph::prelude::StableGraph;
 use slab::Slab;
+
+use crate::nodes::{GraphNode as _, Node, NodeInner};
 
 pub fn build_graph(file: &HkxFile) {
     let mut root = None;
@@ -598,78 +603,29 @@ impl AnimationGraph {
                 name: "Root".to_owned(),
             });
             // node_to_id.insert(*root, id);
-            queue.push_back((id, root));
+            queue.push_back((id, *root));
         }
 
-        let mut transitions = Vec::new();
+        // let mut transitions = Vec::new();
 
         while let Some((parent, node_id)) = queue.pop_front() {
-            let node = &self.nodes[*node_id];
+            let node = &self.nodes[node_id];
 
-            if let Some(id) = node_to_id.get(node_id) {
+            if let Some(id) = node_to_id.get(&node_id) {
                 graph.add_edge(parent, *id, "".to_owned());
                 continue;
             }
 
             let id = graph.add_node(GraphNode {
-                id: *node_id,
+                id: node_id,
                 name: node.name.clone(),
             });
-            node_to_id.insert(*node_id, id);
+            node_to_id.insert(node_id, id);
 
             graph.add_edge(parent, id, "".to_owned());
 
-            match &node.inner {
-                NodeInner::List(node) => {
-                    for node in node {
-                        queue.push_back((id, node));
-                    }
-                }
-                NodeInner::StateMachine(node) => {
-                    for state in &node.states {
-                        queue.push_back((id, &state.node));
-                    }
-
-                    for t in &node.transitions {
-                        match t.from {
-                            Some(from) => {
-                                transitions.push((*node_id, from, t.to, t.event_id));
-                            }
-                            None => {
-                                for from in 0..node.states.len() {
-                                    transitions.push((*node_id, from, t.to, t.event_id));
-                                }
-                            }
-                        }
-
-                        // match &t.effect {
-                        //     TransitionEffect::Node(node) => {
-                        //         let t = graph.add_node("[TRANSITION]".to_owned());
-                        //         node_to_id.insert(node.node, t);
-                        //         graph.add_edge(id, t, "".to_owned());
-
-                        //         queue.push_back((t, &node.node));
-                        //     }
-                        //     _ => (),
-                        // }
-                    }
-                }
-                NodeInner::Clip(_) => {}
-                NodeInner::Blend(node) => {
-                    for node in &node.children {
-                        let t = graph.add_node(GraphNode {
-                            id: *node_id,
-                            name: "[BLEND_CHILDREN]".to_owned(),
-                        });
-                        node_to_id.insert(*node_id, id);
-                        graph.add_edge(id, t, "".to_owned());
-
-                        queue.push_back((t, &node.node));
-                    }
-                }
-                NodeInner::VariableChangeTracker(_) => {}
-                NodeInner::Timer(_) => {}
-                NodeInner::Nop => {}
+            for children in node.children() {
+                queue.push_back((id, children));
             }
         }
 
@@ -776,28 +732,28 @@ pub enum TransitionEffect {
     Blend(Duration),
 }
 
-#[derive(Clone, Debug, Default)]
-pub struct Node {
-    pub name: String,
-    pub inner: NodeInner,
-    pub on_activate: Vec<Command>,
-    pub on_deactivate: Vec<Command>,
-    pub on_update: Vec<Command>,
-    pub listeners: Vec<Listener>,
-}
+// #[derive(Clone, Debug, Default)]
+// pub struct Node {
+//     pub name: String,
+//     pub inner: NodeInner,
+//     pub on_activate: Vec<Command>,
+//     pub on_deactivate: Vec<Command>,
+//     pub on_update: Vec<Command>,
+//     pub listeners: Vec<Listener>,
+// }
 
-#[derive(Clone, Debug, Default)]
-pub enum NodeInner {
-    #[default]
-    Nop,
-    /// A list where all nodes are active.
-    List(Vec<NodeId>),
-    StateMachine(StateMachine),
-    Clip(Clip),
-    Blend(Blend),
-    VariableChangeTracker(VariableChangeTracker),
-    Timer(Timer),
-}
+// #[derive(Clone, Debug, Default)]
+// pub enum NodeInner {
+//     #[default]
+//     Nop,
+//     /// A list where all nodes are active.
+//     List(Vec<NodeId>),
+//     StateMachine(StateMachine),
+//     Clip(Clip),
+//     Blend(Blend),
+//     VariableChangeTracker(VariableChangeTracker),
+//     Timer(Timer),
+// }
 
 #[derive(Clone, Debug)]
 pub struct Listener {
@@ -1129,4 +1085,111 @@ pub enum DriverEvent {
     ActivateNode(NodeId),
     DeactivateNode(NodeId),
     VariableChanged(VariableId),
+}
+
+#[derive(Clone, Debug)]
+pub enum BoneWeights {
+    Shared(f32),
+    Unique(Vec<f32>),
+}
+
+impl BoneWeights {
+    pub fn get(&self, bone: u32) -> f32 {
+        match self {
+            Self::Shared(v) => *v,
+            Self::Unique(bones) => bones.get(bone as usize).copied().unwrap_or(1.0),
+        }
+    }
+}
+
+impl Mul for BoneWeights {
+    type Output = Self;
+
+    fn mul(self, rhs: Self) -> Self::Output {
+        match (self, rhs) {
+            (Self::Shared(lhs), Self::Shared(rhs)) => Self::Shared(lhs * rhs),
+            (Self::Unique(mut lhs), Self::Unique(rhs)) => {
+                let count = lhs.len().max(rhs.len());
+                lhs.resize(count, 1.0);
+                for (lhs, rhs) in lhs.iter_mut().zip(rhs.iter()) {
+                    *lhs *= rhs;
+                }
+
+                Self::Unique(lhs)
+            }
+            (Self::Unique(mut lhs), Self::Shared(rhs)) => {
+                for lhs in &mut lhs {
+                    *lhs *= rhs;
+                }
+
+                Self::Unique(lhs)
+            }
+            (Self::Shared(lhs), Self::Unique(rhs)) => {
+                let mut rhs = rhs.clone();
+                for rhs in &mut rhs {
+                    *rhs *= lhs;
+                }
+
+                Self::Unique(rhs)
+            }
+        }
+    }
+}
+
+impl MulAssign<&Self> for BoneWeights {
+    fn mul_assign(&mut self, rhs: &Self) {
+        match (&mut *self, rhs) {
+            (Self::Shared(lhs), Self::Shared(rhs)) => *lhs *= rhs,
+            (Self::Unique(lhs), Self::Unique(rhs)) => {
+                let count = lhs.len().max(rhs.len());
+                lhs.resize(count, 1.0);
+                for (lhs, rhs) in lhs.iter_mut().zip(rhs.iter()) {
+                    *lhs *= rhs;
+                }
+            }
+            (Self::Unique(lhs), Self::Shared(rhs)) => {
+                for lhs in lhs {
+                    *lhs *= rhs;
+                }
+            }
+            (Self::Shared(lhs), Self::Unique(rhs)) => {
+                let mut rhs = rhs.clone();
+                for rhs in &mut rhs {
+                    *rhs *= *lhs;
+                }
+
+                *self = Self::Unique(rhs);
+            }
+        }
+    }
+}
+
+impl Mul<f32> for BoneWeights {
+    type Output = Self;
+
+    fn mul(self, rhs: f32) -> Self::Output {
+        match self {
+            Self::Shared(lhs) => Self::Shared(lhs * rhs),
+            Self::Unique(mut lhs) => {
+                for lhs in &mut lhs {
+                    *lhs *= rhs;
+                }
+
+                Self::Unique(lhs)
+            }
+        }
+    }
+}
+
+impl MulAssign<f32> for BoneWeights {
+    fn mul_assign(&mut self, rhs: f32) {
+        match self {
+            Self::Shared(lhs) => *lhs *= rhs,
+            Self::Unique(lhs) => {
+                for lhs in lhs {
+                    *lhs *= rhs;
+                }
+            }
+        }
+    }
 }

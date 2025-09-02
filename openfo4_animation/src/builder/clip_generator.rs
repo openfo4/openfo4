@@ -3,7 +3,9 @@ use std::time::Duration;
 use openfo4_hkx::behavior::{ClipGenerator, PlaybackMode};
 
 use crate::builder::{BuildNode, BuilderContext, Error, UnknownVariableName, parse_event};
-use crate::{Clip, ClipTrigger, Node, NodeInner, Value, ValueExpression};
+use crate::nodes::clip::Clip;
+use crate::nodes::{Node, NodeInner};
+use crate::{ClipTrigger, Value, ValueExpression};
 
 impl BuildNode for ClipGenerator {
     fn build(&self, ctx: &mut BuilderContext<'_>) -> Result<Option<Node>, Error> {
@@ -71,11 +73,8 @@ impl BuildNode for ClipGenerator {
                 triggers,
                 looping: matches!(self.mode, PlaybackMode::Looping),
                 speed,
+                time: Duration::ZERO,
             }),
-            listeners: Vec::new(),
-            on_activate: Vec::new(),
-            on_deactivate: Vec::new(),
-            on_update: Vec::new(),
         }))
     }
 }

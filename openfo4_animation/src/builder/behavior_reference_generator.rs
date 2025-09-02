@@ -3,7 +3,8 @@
 use openfo4_hkx::behavior::BehaviorReferenceGenerator;
 
 use crate::builder::{BuildNode, BuilderContext, Dependency, Error};
-use crate::{Node, NodeInner};
+use crate::nodes::list::List;
+use crate::nodes::{Node, NodeInner};
 
 impl BuildNode for BehaviorReferenceGenerator {
     fn dependencies(&self, _ctx: &mut BuilderContext<'_>) -> Result<Vec<Dependency>, Error> {
@@ -25,8 +26,7 @@ impl BuildNode for BehaviorReferenceGenerator {
 
         Ok(Some(Node {
             name: self.parent.node.name.clone(),
-            inner: NodeInner::List(children),
-            ..Default::default()
+            inner: NodeInner::List(List { nodes: children }),
         }))
     }
 }

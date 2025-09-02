@@ -4,7 +4,9 @@
 use openfo4_hkx::behavior::EventDrivenModifier;
 
 use crate::builder::{BuildNode, BuilderContext, Dependency, Error, UnknownVariableName};
-use crate::{Command, Listener, ListenerEvent, Node, NodeInner, Value, ValueExpression};
+use crate::nodes::event_driven::EventDriven;
+use crate::nodes::{Node, NodeInner};
+use crate::{Value, ValueExpression};
 
 impl BuildNode for EventDrivenModifier {
     fn dependencies(&self, _ctx: &mut BuilderContext<'_>) -> Result<Vec<Dependency>, Error> {
@@ -12,7 +14,7 @@ impl BuildNode for EventDrivenModifier {
     }
 
     fn build(&self, ctx: &mut BuilderContext<'_>) -> Result<Option<Node>, Error> {
-        let mut enable = ValueExpression::Const(Value::Bool(self.parent.parent.enable));
+        // let mut enable = ValueExpression::Const(Value::Bool(self.parent.parent.enable));
 
         if let Some(set) = &self.parent.parent.node.bindable.variable_binding_set {
             for binding in &*set.bindings {
@@ -22,7 +24,7 @@ impl BuildNode for EventDrivenModifier {
 
                 match &*binding.member_path {
                     "enable" => {
-                        enable = ValueExpression::Variable(variable);
+                        // enable = ValueExpression::Variable(variable);
                     }
                     name => {
                         return Err(Error::UnknownVariableName(UnknownVariableName {
@@ -34,59 +36,19 @@ impl BuildNode for EventDrivenModifier {
             }
         }
 
-        let Some(modifier) = ctx.get_node(self.parent.modifer.ptr) else {
+        let Some(node) = ctx.get_node(self.parent.modifer.ptr) else {
             return Ok(None);
         };
 
-        let mut listeners = Vec::new();
-
-        if let Some(event) = ctx.get_event(self.activate_event_id) {
-            // Only activate the modifier if the event was received
-            // while the enable variable was set to true.
-            listeners.push(Listener {
-                event: ListenerEvent::Event(event),
-                reaction: vec![Command::Conditional(
-                    enable.clone(),
-                    vec![Command::ActivateNode(modifier)],
-                )],
-            });
-        }
-
-        if let Some(event) = ctx.get_event(self.deactivate_event_id) {
-            // Note that we don't have to care about the enable variable
-            // here since if we receive the event while enable was false
-            // the variable tracker also disable the node.
-            listeners.push(Listener {
-                event: ListenerEvent::Event(event),
-                reaction: vec![Command::DeactivateNode(modifier)],
-            });
-        }
-
-        match enable {
-            ValueExpression::Const(Value::Bool(true)) => (),
-            ValueExpression::Const(Value::Bool(false)) => return Ok(None),
-            ValueExpression::Variable(variable) => {
-                listeners.push(Listener {
-                    event: ListenerEvent::Variable(variable),
-                    reaction: vec![Command::Conditional(
-                        ValueExpression::CmpEq(
-                            Box::new(enable),
-                            Box::new(ValueExpression::Const(Value::Bool(false))),
-                        ),
-                        vec![Command::DeactivateNode(modifier)],
-                    )],
-                });
-            }
-            _ => unreachable!(),
-        }
-
         Ok(Some(Node {
             name: self.parent.parent.node.name.clone(),
-            inner: NodeInner::Nop,
-            on_activate: Vec::new(),
-            on_deactivate: Vec::new(),
-            on_update: Vec::new(),
-            listeners,
+            inner: NodeInner::EventDriven(EventDriven {
+                node,
+                on_by_default: self.active_by_default,
+                on_event: self.activate_event_id as i64,
+                off_event: self.deactivate_event_id as i64,
+                is_active: false,
+            }),
         }))
     }
 }

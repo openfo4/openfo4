@@ -5,7 +5,8 @@ use std::time::Duration;
 use openfo4_hkx::behavior::TimerModifier;
 
 use crate::builder::{BuildNode, BuilderContext, Error, UnknownVariableName, parse_event};
-use crate::{Node, NodeInner, Timer};
+use crate::nodes::timer::Timer;
+use crate::nodes::{Node, NodeInner};
 
 impl BuildNode for TimerModifier {
     fn build(&self, ctx: &mut BuilderContext<'_>) -> Result<Option<Node>, Error> {
@@ -17,7 +18,6 @@ impl BuildNode for TimerModifier {
                 match &*binding.member_path {
                     "enable" => {}
                     "alarmTimeSeconds" => {}
-
                     name => {
                         return Err(Error::UnknownVariableName(UnknownVariableName {
                             class: "hkbTimerModifier",
@@ -35,11 +35,10 @@ impl BuildNode for TimerModifier {
                 max_time: time,
                 event,
                 repeat: false,
+                eval_duration: Duration::ZERO,
+                elapsed: Duration::ZERO,
+                is_running: false,
             }),
-            on_activate: Vec::new(),
-            on_deactivate: Vec::new(),
-            on_update: Vec::new(),
-            listeners: Vec::new(),
         }))
     }
 }

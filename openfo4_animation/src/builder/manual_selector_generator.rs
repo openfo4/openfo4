@@ -1,17 +1,13 @@
 //! hkbManualSelectorGenerator
-//!
-//! This is a generator that selects another generator based on a variable.
-//! We compile this node into a [`StateMachine`].
 
 use std::collections::HashMap;
 
 use openfo4_hkx::behavior::ManualSelectorGenerator;
 
 use crate::builder::{BuildNode, BuilderContext, Dependency, Error, UnknownVariableName};
-use crate::{
-    Event, Node, NodeInner, StartState, State, StateMachine, Transition, TransitionEffect, Value,
-    ValueExpression, VariableChangeEvent, VariableChangeTracker,
-};
+use crate::nodes::manual_selector::ManualSelector;
+use crate::nodes::{Node, NodeInner};
+use crate::{Value, ValueExpression};
 
 impl BuildNode for ManualSelectorGenerator {
     fn dependencies(&self, _ctx: &mut BuilderContext<'_>) -> Result<Vec<Dependency>, Error> {
@@ -25,8 +21,6 @@ impl BuildNode for ManualSelectorGenerator {
     fn build(&self, ctx: &mut BuilderContext<'_>) -> Result<Option<Node>, Error> {
         let mut start_state = ValueExpression::Const(Value::I16(self.selected_generator_index));
 
-        let mut selected_generator_variable = 0;
-
         if let Some(set) = &self.parent.node.bindable.variable_binding_set {
             for binding in &*set.bindings {
                 let variable = ctx
@@ -34,10 +28,7 @@ impl BuildNode for ManualSelectorGenerator {
                     .unwrap();
 
                 match &*binding.member_path {
-                    "selectedGeneratorIndex" => {
-                        start_state = ValueExpression::Variable(variable);
-                        selected_generator_variable = variable;
-                    }
+                    "selectedGeneratorIndex" => start_state = ValueExpression::Variable(variable),
                     name => {
                         return Err(Error::UnknownVariableName(UnknownVariableName {
                             class: "hkbManualSelectorGenerator",
@@ -48,127 +39,23 @@ impl BuildNode for ManualSelectorGenerator {
             }
         }
 
-        // If the selected_generator_index is a constant value, the generator
-        // index will never change and we can just always forward the generator
-        // directly.
-        if let ValueExpression::Const(index) = start_state {
-            // Must be i16, since `selected_generator_index` is i16.
-            let index = index.to_usize().unwrap();
-
-            let generator = &self.generators[index];
-
-            let Some(node) = ctx.get_node(generator.ptr) else {
-                return Ok(None);
-            };
-
-            return Ok(Some(Node {
-                name: self.parent.node.name.clone(),
-                inner: NodeInner::List(vec![node]),
-                listeners: Vec::new(),
-                on_activate: Vec::new(),
-                on_deactivate: Vec::new(),
-                on_update: Vec::new(),
-            }));
-        }
-
-        let mut states = Vec::new();
-
-        for generator in &*self.generators {
+        let mut states = HashMap::new();
+        for (index, generator) in self.generators.iter().enumerate() {
             let Some(node) = ctx.get_node(generator.ptr) else {
                 continue;
             };
 
-            states.push(State {
-                node,
-                enter_events: Vec::new(),
-                exit_events: Vec::new(),
-            });
+            states.insert(index, node);
         }
-
-        let state_id_to_index: HashMap<_, _> = (0..self.generators.len())
-            .map(|index| (index as i32, index))
-            .collect();
-
-        // If the state can never change after activation we don't
-        // need any transitions.
-        if !self.selected_index_can_change_after_active {
-            return Ok(Some(Node {
-                name: self.parent.node.name.clone(),
-                inner: NodeInner::StateMachine(StateMachine {
-                    states,
-                    transitions: Vec::new(),
-                    start_state: StartState::Expression(start_state),
-                    state_variable: None,
-                    state_id_to_index,
-                }),
-                listeners: Vec::new(),
-                on_activate: Vec::new(),
-                on_deactivate: Vec::new(),
-                on_update: Vec::new(),
-            }));
-        }
-
-        let mut transitions = Vec::new();
-        let mut trackers = Vec::new();
-
-        // Generator changes after node activation can be implemented with
-        // state transitions.
-        for to in 0..states.len() {
-            let event = ctx.create_event("internal_transition_event".to_owned());
-
-            transitions.push(Transition {
-                from: None,
-                to,
-                event_id: event as i64,
-                priority: 0,
-                effect: TransitionEffect::None,
-            });
-
-            // Create an event when the variable is set to `selected_generator_variable`.
-            // This will trigger every frame while the variable is set to the correct
-            // value, but this has no further effect.
-            trackers.push(VariableChangeEvent {
-                expr: ValueExpression::CmpEq(
-                    Box::new(ValueExpression::Variable(selected_generator_variable)),
-                    Box::new(ValueExpression::Const(Value::I16(to as i16))),
-                ),
-                event: Event {
-                    id: event as i64,
-                    payload: Value::None,
-                },
-            });
-        }
-
-        let state_machine = ctx.create_node(Node {
-            name: "".to_owned(),
-            inner: NodeInner::StateMachine(StateMachine {
-                states,
-                transitions,
-                start_state: StartState::Expression(start_state),
-                state_variable: None,
-                state_id_to_index,
-            }),
-            listeners: Vec::new(),
-            on_activate: Vec::new(),
-            on_deactivate: Vec::new(),
-            on_update: Vec::new(),
-        });
-        let tracker = ctx.create_node(Node {
-            name: "".to_owned(),
-            inner: NodeInner::VariableChangeTracker(VariableChangeTracker { trackers }),
-            listeners: Vec::new(),
-            on_activate: Vec::new(),
-            on_deactivate: Vec::new(),
-            on_update: Vec::new(),
-        });
 
         Ok(Some(Node {
             name: self.parent.node.name.clone(),
-            inner: NodeInner::List(vec![state_machine, tracker]),
-            listeners: Vec::new(),
-            on_activate: Vec::new(),
-            on_deactivate: Vec::new(),
-            on_update: Vec::new(),
+            inner: NodeInner::ManualSelector(ManualSelector {
+                states,
+                index_value: start_state,
+                can_change_after_activation: self.selected_index_can_change_after_active,
+                active_index: None,
+            }),
         }))
     }
 }

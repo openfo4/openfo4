@@ -1,7 +1,8 @@
 use openfo4_hkx::behavior::BSOffsetAnimationGenerator;
 
 use crate::builder::{BuildNode, BuilderContext, Dependency, Error};
-use crate::{Node, NodeInner};
+use crate::nodes::list::List;
+use crate::nodes::{Node, NodeInner};
 
 impl BuildNode for BSOffsetAnimationGenerator {
     fn dependencies(&self, _ctx: &mut BuilderContext<'_>) -> Result<Vec<Dependency>, Error> {
@@ -29,8 +30,7 @@ impl BuildNode for BSOffsetAnimationGenerator {
 
         Ok(Some(Node {
             name: self.parent.node.name.clone(),
-            inner: NodeInner::List(nodes),
-            ..Default::default()
+            inner: NodeInner::List(List { nodes }),
         }))
     }
 }

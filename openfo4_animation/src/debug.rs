@@ -19,7 +19,7 @@ pub fn update(driver: &AnimationDriver) {
         timer: Mutex::new(Instant::now()),
     });
 
-    let graph = driver.graph.graph();
+    let graph = driver.graph().graph();
     let active = driver.active_nodes();
 
     let buf = draw(&graph, &active);

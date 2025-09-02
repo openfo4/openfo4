@@ -1,9 +1,9 @@
 //! BSIsActiveModifier
 
-use std::collections::HashMap;
-
 use crate::builder::{BuildNode, BuilderContext, Error, UnknownVariableName};
-use crate::{Command, Node, NodeInner, SetVariable, Value, ValueExpression};
+use crate::nodes::is_active::IsActive;
+use crate::nodes::{Node, NodeInner};
+use crate::{Value, ValueExpression};
 
 impl BuildNode for openfo4_hkx::behavior::BSIsActiveModifier {
     fn build(&self, ctx: &mut BuilderContext<'_>) -> Result<Option<Node>, Error> {
@@ -11,10 +11,10 @@ impl BuildNode for openfo4_hkx::behavior::BSIsActiveModifier {
             return Ok(None);
         };
 
-        let mut on_enable = HashMap::new();
-        let mut on_disable = HashMap::new();
-
         let mut enable = ValueExpression::Const(Value::Bool(self.parent.enable));
+
+        let mut variables = Vec::new();
+        let mut inverted_variables = Vec::new();
 
         for binding in &*set.bindings {
             let variable = ctx
@@ -37,42 +37,21 @@ impl BuildNode for openfo4_hkx::behavior::BSIsActiveModifier {
                 }
             };
 
-            let enable_value = Value::Bool(!invert);
-            let disable_value = Value::Bool(invert);
-
-            on_enable.insert(variable, enable_value);
-            on_disable.insert(variable, disable_value);
+            if invert {
+                inverted_variables.push(variable);
+            } else {
+                variables.push(variable);
+            }
         }
 
-        let on_activate = on_enable
-            .into_iter()
-            .map(|(variable, value)| {
-                Command::SetVariable(SetVariable {
-                    variable,
-                    condition: enable.clone(),
-                    value: ValueExpression::Const(value),
-                })
-            })
-            .collect();
-
-        let on_deactivate = on_disable
-            .into_iter()
-            .map(|(variable, value)| {
-                Command::SetVariable(SetVariable {
-                    variable,
-                    condition: enable.clone(),
-                    value: ValueExpression::Const(value),
-                })
-            })
-            .collect();
-
         Ok(Some(Node {
-            name: format!("[BSIsActiveModifier] {}", self.parent.node.name),
-            on_activate,
-            on_deactivate,
-            on_update: Vec::new(),
-            inner: NodeInner::Nop,
-            listeners: Vec::new(),
+            name: self.parent.node.name.clone(),
+            inner: NodeInner::IsActive(IsActive {
+                condition: enable,
+                variables,
+                inverted_variables,
+                is_active: false,
+            }),
         }))
     }
 }

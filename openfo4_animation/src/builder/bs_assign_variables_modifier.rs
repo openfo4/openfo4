@@ -1,7 +1,9 @@
 //! BSAssignVariablesModifier
 
 use crate::builder::{BuildNode, BuilderContext, Error, UnknownVariableName};
-use crate::{Command, Node, NodeInner, SetVariable, Value, ValueExpression};
+use crate::nodes::assign_variables::{AssignVariable, AssignVariables};
+use crate::nodes::{Node, NodeInner};
+use crate::{Value, ValueExpression};
 
 impl BuildNode for openfo4_hkx::behavior::BSAssignVariablesModifier {
     fn build(&self, ctx: &mut BuilderContext<'_>) -> Result<Option<Node>, Error> {
@@ -84,7 +86,7 @@ impl BuildNode for openfo4_hkx::behavior::BSAssignVariablesModifier {
             *slot = Some(variable);
         }
 
-        let mut commands = Vec::new();
+        let mut variables = Vec::new();
         for (index, (var, val)) in float_variables.iter().zip(float_values).enumerate() {
             // If no variable binding is set the write is equivalent
             // to a no-op, so we can skip it.
@@ -119,11 +121,7 @@ impl BuildNode for openfo4_hkx::behavior::BSAssignVariablesModifier {
                 },
             };
 
-            commands.push(Command::SetVariable(SetVariable {
-                variable,
-                condition: ValueExpression::Const(Value::Bool(true)),
-                value,
-            }));
+            variables.push(AssignVariable { variable, value });
         }
 
         for (index, (var, val)) in int_variables.iter().zip(int_values).enumerate() {
@@ -144,22 +142,15 @@ impl BuildNode for openfo4_hkx::behavior::BSAssignVariablesModifier {
                 },
             };
 
-            commands.push(Command::SetVariable(SetVariable {
-                variable,
-                condition: ValueExpression::Const(Value::Bool(true)),
-                value,
-            }));
+            variables.push(AssignVariable { variable, value });
         }
 
-        let on_update = vec![Command::Conditional(enable, commands)];
-
         Ok(Some(Node {
-            name: format!("[BSAssignVariablesModifier] {}", self.parent.node.name),
-            on_activate: Vec::new(),
-            on_deactivate: Vec::new(),
-            on_update,
-            inner: NodeInner::Nop,
-            listeners: Vec::new(),
+            name: self.parent.node.name.clone(),
+            inner: NodeInner::AssignVariables(AssignVariables {
+                condition: enable,
+                variables,
+            }),
         }))
     }
 }
