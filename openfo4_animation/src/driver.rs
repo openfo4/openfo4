@@ -48,9 +48,15 @@ impl AnimationDriver {
         while let Some(event) = self.queue.pop_front() {
             match event {
                 NodeEvent::ActivateNode(id) => {
+                    if self.active_nodes.contains(&id) {
+                        continue;
+                    }
+
                     let node = &mut self.nodes[id];
 
                     let ctx = UpdateContext::new(
+                        id,
+                        &self.graph,
                         delta,
                         &mut self.variables,
                         &mut self.queue,
@@ -62,9 +68,15 @@ impl AnimationDriver {
                     self.active_nodes.insert(id);
                 }
                 NodeEvent::DeactivateNode(id) => {
+                    if !self.active_nodes.contains(&id) {
+                        continue;
+                    }
+
                     let node = &mut self.nodes[id];
 
                     let ctx = UpdateContext::new(
+                        id,
+                        &self.graph,
                         delta,
                         &mut self.variables,
                         &mut self.queue,
@@ -85,6 +97,8 @@ impl AnimationDriver {
                         let node = &mut self.nodes[*id];
 
                         let ctx = UpdateContext::new(
+                            *id,
+                            &self.graph,
                             delta,
                             &mut self.variables,
                             &mut self.queue,
@@ -101,6 +115,8 @@ impl AnimationDriver {
             let node = &mut self.nodes[*id];
 
             let ctx = UpdateContext::new(
+                *id,
+                &self.graph,
                 delta,
                 &mut self.variables,
                 &mut self.queue,
@@ -206,6 +222,8 @@ impl AnimationDriver {
 }
 
 struct UpdateContext<'a> {
+    node: NodeId,
+    graph: &'a AnimationGraph,
     delta: Duration,
     variables: &'a mut VariableSet,
     queue: &'a mut VecDeque<NodeEvent>,
@@ -215,6 +233,8 @@ struct UpdateContext<'a> {
 
 impl<'a> UpdateContext<'a> {
     fn new(
+        node: NodeId,
+        graph: &'a AnimationGraph,
         delta: Duration,
         variables: &'a mut VariableSet,
         queue: &'a mut VecDeque<NodeEvent>,
@@ -222,6 +242,8 @@ impl<'a> UpdateContext<'a> {
         animations: &'a AnimationSet,
     ) -> Self {
         Self {
+            node,
+            graph,
             delta,
             variables,
             queue,
@@ -237,14 +259,32 @@ impl Context for UpdateContext<'_> {
     }
 
     fn activate_node(&mut self, id: NodeId) {
+        tracing::trace!(
+            "Node {} activated node {}",
+            &self.graph.nodes[self.node].name,
+            &self.graph.nodes[id].name,
+        );
+
         self.queue.push_back(NodeEvent::ActivateNode(id));
     }
 
     fn deactivate_node(&mut self, id: NodeId) {
+        tracing::trace!(
+            "Node {} deactivated node {}",
+            &self.graph.nodes[self.node].name,
+            &self.graph.nodes[id].name,
+        );
+
         self.queue.push_back(NodeEvent::DeactivateNode(id));
     }
 
     fn send_event(&mut self, event: Event) {
+        tracing::trace!(
+            "Node {} sent event {}",
+            &self.graph.nodes[self.node].name,
+            &self.graph.event_names[event.id as usize],
+        );
+
         self.queue.push_back(NodeEvent::Event(event));
     }
 

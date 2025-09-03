@@ -32,7 +32,7 @@ use thiserror::Error;
 
 use crate::nodes::Node;
 use crate::{
-    AnimationGraph, Event, NodeId, NodeInner, Value, VariableId, VariableSet,
+    AnimationGraph, Event, NodeId, NodeInner, Value, ValueExpression, VariableId, VariableSet,
     load_initial_variable_set,
 };
 
@@ -378,6 +378,10 @@ impl<'a> BuilderContext<'a> {
         self.hkx_file
     }
 
+    fn variables(&self) -> &VariableSet {
+        &self.state.variables
+    }
+
     /// Returns the [`NodeId`] of a node in the current file if it was loaded.
     fn get_node(&self, ptr: OpaquePtr) -> Option<NodeId> {
         let state = self.state.files.get(self.file).unwrap();
@@ -614,5 +618,14 @@ fn parse_event(ctx: &BuilderContext<'_>, event: &EventProperty) -> Event {
         // id: ctx.get_event(event.base.id).unwrap(),
         id: event.base.id as i64,
         payload,
+    }
+}
+
+fn parse_condition(ctx: &BuilderContext<'_>, ptr: OpaquePtr) -> ValueExpression {
+    match ctx.hkx_file().get(ptr) {
+        Some(HkObject::ExpressionCondition(condition)) => {
+            crate::expr::parse_expr(&condition.expression, ctx.variables())
+        }
+        _ => todo!(),
     }
 }

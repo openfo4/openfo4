@@ -39,6 +39,10 @@ pub fn drive_animations(world: &mut World, delta: Duration, event: Option<&'stat
                     return None;
                 };
 
+                // if state.path.to_lowercase().contains("reload") {
+                //     dbg!(&state.time);
+                // }
+
                 let mut num_frames = animation.num_frames;
                 let mut anim_duration = animation.duration;
                 if animation

@@ -6,6 +6,7 @@ pub mod graph;
 pub mod skeleton;
 pub mod systems;
 
+mod expr;
 mod nodes;
 
 use std::collections::{HashMap, HashSet, VecDeque};
@@ -913,7 +914,7 @@ pub struct SetVariable {
 }
 
 /// An expression that can be evaluated to a [`Value`].
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum ValueExpression {
     /// The variable is set to a constant value.
     Const(Value),
@@ -934,6 +935,11 @@ pub enum ValueExpression {
     And(Box<ValueExpression>, Box<ValueExpression>),
     Or(Box<ValueExpression>, Box<ValueExpression>),
     Not(Box<ValueExpression>),
+    Add(Box<ValueExpression>, Box<ValueExpression>),
+    Sub(Box<ValueExpression>, Box<ValueExpression>),
+    Mul(Box<ValueExpression>, Box<ValueExpression>),
+    Div(Box<ValueExpression>, Box<ValueExpression>),
+    Mod(Box<ValueExpression>, Box<ValueExpression>),
 }
 
 impl ValueExpression {
@@ -982,6 +988,56 @@ impl ValueExpression {
                 Value::Bool(lhs || rhs)
             }
             Self::Not(value) => Value::Bool(!value.eval(set).to_bool().unwrap()),
+            Self::Add(lhs, rhs) => {
+                let lhs = lhs.eval(set);
+                let rhs = rhs.eval(set);
+
+                match (lhs, rhs) {
+                    (Value::I32(lhs), Value::I32(rhs)) => Value::I32(lhs + rhs),
+                    (Value::F32(lhs), Value::F32(rhs)) => Value::F32(lhs + rhs),
+                    _ => unreachable!(),
+                }
+            }
+            Self::Sub(lhs, rhs) => {
+                let lhs = lhs.eval(set);
+                let rhs = rhs.eval(set);
+
+                match (lhs, rhs) {
+                    (Value::I32(lhs), Value::I32(rhs)) => Value::I32(lhs - rhs),
+                    (Value::F32(lhs), Value::F32(rhs)) => Value::F32(lhs - rhs),
+                    _ => unreachable!(),
+                }
+            }
+            Self::Mul(lhs, rhs) => {
+                let lhs = lhs.eval(set);
+                let rhs = rhs.eval(set);
+
+                match (lhs, rhs) {
+                    (Value::I32(lhs), Value::I32(rhs)) => Value::I32(lhs * rhs),
+                    (Value::F32(lhs), Value::F32(rhs)) => Value::F32(lhs * rhs),
+                    _ => unreachable!(),
+                }
+            }
+            Self::Div(lhs, rhs) => {
+                let lhs = lhs.eval(set);
+                let rhs = rhs.eval(set);
+
+                match (lhs, rhs) {
+                    (Value::I32(lhs), Value::I32(rhs)) => Value::I32(lhs / rhs),
+                    (Value::F32(lhs), Value::F32(rhs)) => Value::F32(lhs / rhs),
+                    _ => unreachable!(),
+                }
+            }
+            Self::Mod(lhs, rhs) => {
+                let lhs = lhs.eval(set);
+                let rhs = rhs.eval(set);
+
+                match (lhs, rhs) {
+                    (Value::I32(lhs), Value::I32(rhs)) => Value::I32(lhs % rhs),
+                    (Value::F32(lhs), Value::F32(rhs)) => Value::F32(lhs % rhs),
+                    _ => unreachable!(),
+                }
+            }
         }
     }
 }

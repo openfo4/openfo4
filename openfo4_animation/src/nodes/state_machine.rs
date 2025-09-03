@@ -2,10 +2,11 @@ use std::collections::HashMap;
 use std::time::Duration;
 
 use crate::nodes::{Context, GraphNode};
-use crate::{BoneWeights, Event, NodeId, StartState, Value, VariableId};
+use crate::{BoneWeights, Event, NodeId, StartState, Value, ValueExpression, VariableId};
 
 #[derive(Clone, Debug)]
 pub struct StateMachine {
+    pub name: String,
     pub states: Vec<State>,
     pub transitions: Vec<Transition>,
     pub state_id_to_index: HashMap<i32, usize>,
@@ -21,6 +22,8 @@ impl GraphNode for StateMachine {
     where
         T: Context,
     {
+        dbg!("on", &self.name);
+
         let start_state = match &self.start_state {
             StartState::None => None,
             StartState::Index(index) => Some(*index),
@@ -60,8 +63,13 @@ impl GraphNode for StateMachine {
     where
         T: Context,
     {
-        if let Some(index) = self.active_state {
-            let state = &self.states[index];
+        dbg!("off", &self.name);
+        // Deacticate all states; there may be multiple states active
+        // during a transition.
+        // If a state is already inactive the caller will ignore it.
+        // Note that we are not "leaving" the state and do not need to
+        // send any leave events.
+        for state in &self.states {
             if let Some(node) = state.node {
                 ctx.deactivate_node(node);
             }
@@ -78,7 +86,11 @@ impl GraphNode for StateMachine {
 
         effect.time_left = effect.time_left.saturating_sub(ctx.delta());
 
-        let progress = 1.0 - (effect.time_left.as_secs_f32() / effect.total_time.as_secs_f32());
+        let progress = if effect.total_time.is_zero() {
+            1.0
+        } else {
+            1.0 - (effect.time_left.as_secs_f32() / effect.total_time.as_secs_f32())
+        };
 
         if let Some(dst_state) = &self.states[effect.dst_state].node {
             ctx.set_bone_weights(*dst_state, BoneWeights::Shared(progress));
@@ -103,6 +115,8 @@ impl GraphNode for StateMachine {
         }
 
         if effect.time_left.is_zero() {
+            dbg!("transition done in", &self.name);
+
             for state in &effect.src_states {
                 if state.state_index == effect.dst_state {
                     continue;
@@ -140,6 +154,15 @@ impl GraphNode for StateMachine {
             return;
         }
 
+        if !transition
+            .condition
+            .eval(ctx.variables())
+            .to_bool()
+            .unwrap()
+        {
+            return;
+        }
+
         let state = &self.states[transition.to];
 
         if let Some(id) = self.state_variable {
@@ -148,8 +171,11 @@ impl GraphNode for StateMachine {
 
         let effect = match &mut self.active_effect {
             Some(effect) => {
-                let progress =
-                    1.0 - effect.time_left.as_secs_f32() / effect.total_time.as_secs_f32();
+                let progress = if effect.total_time.is_zero() {
+                    1.0
+                } else {
+                    1.0 - effect.time_left.as_secs_f32() / effect.total_time.as_secs_f32()
+                };
 
                 let mut coalesced = false;
 
@@ -182,6 +208,8 @@ impl GraphNode for StateMachine {
                 dst_state: 0,
             }),
         };
+
+        dbg!("next state in", &self.name);
 
         effect.total_time = transition.blend_duration;
         effect.time_left = transition.blend_duration;
@@ -224,6 +252,7 @@ pub struct State {
 
 #[derive(Clone, Debug)]
 pub struct Transition {
+    pub condition: ValueExpression,
     /// The source state.
     ///
     /// Can be `None` in which case the transition is always valid.

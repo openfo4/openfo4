@@ -6,7 +6,9 @@ use openfo4_hkx::behavior::{GeneratorTransitionEffect, StartStateMode};
 use openfo4_hkx::skeleton::BindingType;
 use slab::Slab;
 
-use crate::builder::{BuilderContext, Dependency, UnknownVariableName, parse_event};
+use crate::builder::{
+    BuilderContext, Dependency, UnknownVariableName, parse_condition, parse_event,
+};
 use crate::nodes::state_machine::{State, StateMachine, Transition};
 use crate::nodes::{Node, NodeInner};
 use crate::{ClipTrigger, Event, NodeId, StartState, Value, ValueExpression};
@@ -147,9 +149,16 @@ impl BuildNode for openfo4_hkx::behavior::StateMachine {
                     continue;
                 };
 
+                let condition = transition
+                    .condition
+                    .as_ref()
+                    .map(|ptr| parse_condition(&ctx, ptr.ptr))
+                    .unwrap_or(ValueExpression::Const(Value::Bool(true)));
+
                 let event_id = ctx.get_event(transition.event_id).unwrap();
 
                 transitions.push(Transition {
+                    condition,
                     from: Some(from),
                     to,
                     event_id,
@@ -166,9 +175,16 @@ impl BuildNode for openfo4_hkx::behavior::StateMachine {
                     continue;
                 };
 
+                let condition = transition
+                    .condition
+                    .as_ref()
+                    .map(|ptr| parse_condition(&ctx, ptr.ptr))
+                    .unwrap_or(ValueExpression::Const(Value::Bool(true)));
+
                 let event_id = ctx.get_event(transition.event_id).unwrap();
 
                 transitions.push(Transition {
+                    condition,
                     from: None,
                     to,
                     event_id,
@@ -249,6 +265,7 @@ impl BuildNode for openfo4_hkx::behavior::StateMachine {
         Ok(Some(Node {
             name: self.parent.node.name.clone(),
             inner: NodeInner::StateMachine(StateMachine {
+                name: self.parent.node.name.clone(),
                 states,
                 state_id_to_index,
                 transitions,
@@ -312,6 +329,7 @@ fn generator_transition(
     original_transition.blend_duration = blend_in;
 
     transitions.push(Transition {
+        condition: ValueExpression::Const(Value::Bool(true)),
         from: Some(transition_state),
         to,
         event_id: exit_event as i64,

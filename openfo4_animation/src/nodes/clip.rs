@@ -33,6 +33,10 @@ impl GraphNode for Clip {
         let speed = self.speed.eval(ctx.variables()).to_f32().unwrap();
         let delta = ctx.delta().mul_f32(speed);
 
+        // if self.path.to_lowercase().contains("reload") {
+        // dbg!(&self, speed, &anim.duration);
+        // }
+
         let mut anim_duration = anim.duration;
         if anim
             .flags
