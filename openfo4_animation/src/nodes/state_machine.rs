@@ -6,7 +6,6 @@ use crate::{BoneWeights, Event, NodeId, StartState, Value, ValueExpression, Vari
 
 #[derive(Clone, Debug)]
 pub struct StateMachine {
-    pub name: String,
     pub states: Vec<State>,
     pub transitions: Vec<Transition>,
     pub state_id_to_index: HashMap<i32, usize>,
@@ -22,8 +21,6 @@ impl GraphNode for StateMachine {
     where
         T: Context,
     {
-        dbg!("on", &self.name);
-
         let start_state = match &self.start_state {
             StartState::None => None,
             StartState::Index(index) => Some(*index),
@@ -63,45 +60,12 @@ impl GraphNode for StateMachine {
     where
         T: Context,
     {
-        dbg!("off", &self.name);
         // Deacticate all states; there may be multiple states active
         // during a transition.
         // If a state is already inactive the caller will ignore it.
         // Note that we are not "leaving" the state and do not need to
         // send any leave events.
-        // for state in &self.states {
-        //     if let Some(node) = state.node {
-        //         ctx.deactivate_node(node);
-        //     }
-        // }
-
-        let mut active_state_deactivated = false;
-
-        if let Some(effect) = self.active_effect.take() {
-            if let Some(active) = self.active_state {
-                debug_assert_eq!(active, effect.dst_state);
-            }
-
-            for state in &effect.src_states {
-                if let Some(active) = self.active_state {
-                    debug_assert!(!active_state_deactivated);
-
-                    if state.state_index == active {
-                        active_state_deactivated = true;
-                    }
-                }
-
-                let state = &self.states[state.state_index];
-                if let Some(node) = state.node {
-                    ctx.deactivate_node(node);
-                }
-            }
-        }
-
-        if let Some(active) = self.active_state
-            && !active_state_deactivated
-        {
-            let state = &self.states[active];
+        for state in &self.states {
             if let Some(node) = state.node {
                 ctx.deactivate_node(node);
             }
@@ -153,8 +117,6 @@ impl GraphNode for StateMachine {
         }
 
         if effect.time_left.is_zero() {
-            dbg!("transition done in", &self.name);
-
             for state in &effect.src_states {
                 if state.state_index == effect.dst_state {
                     continue;
@@ -246,8 +208,6 @@ impl GraphNode for StateMachine {
                 dst_state: 0,
             }),
         };
-
-        dbg!("next state in", &self.name);
 
         effect.total_time = transition.blend_duration;
         effect.time_left = transition.blend_duration;

@@ -265,7 +265,6 @@ impl BuildNode for openfo4_hkx::behavior::StateMachine {
         Ok(Some(Node {
             name: self.parent.node.name.clone(),
             inner: NodeInner::StateMachine(StateMachine {
-                name: self.parent.node.name.clone(),
                 states,
                 state_id_to_index,
                 transitions,
