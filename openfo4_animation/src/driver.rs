@@ -16,8 +16,8 @@ pub struct AnimationDriver {
     nodes: Slab<Node>,
     variables: VariableSet,
     queue: VecDeque<NodeEvent>,
-    active_nodes: HashSet<NodeId>,
     properties: PropertySet,
+    active_nodes: HashMap<NodeId, NodeState>,
 }
 
 impl AnimationDriver {
@@ -26,7 +26,7 @@ impl AnimationDriver {
             nodes: graph.nodes.clone(),
             variables: graph.variables.clone(),
             queue: VecDeque::new(),
-            active_nodes: HashSet::new(),
+            active_nodes: HashMap::new(),
             properties: PropertySet::default(),
             graph,
         };
@@ -39,7 +39,7 @@ impl AnimationDriver {
     }
 
     pub(crate) fn active_nodes(&self) -> Vec<usize> {
-        self.active_nodes.iter().copied().collect()
+        self.active_nodes.keys().copied().collect()
     }
 
     pub fn update(&mut self, delta: Duration, animations: &AnimationSet, events: &mut Vec<Event>) {
@@ -48,44 +48,53 @@ impl AnimationDriver {
         while let Some(event) = self.queue.pop_front() {
             match event {
                 NodeEvent::ActivateNode(id) => {
-                    if self.active_nodes.contains(&id) {
-                        continue;
-                    }
-
                     let node = &mut self.nodes[id];
 
-                    let ctx = UpdateContext::new(
-                        id,
-                        &self.graph,
-                        delta,
-                        &mut self.variables,
-                        &mut self.queue,
-                        &mut self.properties,
-                        animations,
-                    );
-                    node.activate(ctx);
+                    let state = self.active_nodes.entry(id).or_insert_with(|| {
+                        let mut state = NodeState::default();
 
-                    self.active_nodes.insert(id);
+                        let ctx = UpdateContext::new(
+                            id,
+                            &self.graph,
+                            delta,
+                            &mut self.variables,
+                            &mut self.queue,
+                            &mut self.properties,
+                            animations,
+                            &mut state,
+                        );
+                        node.activate(ctx);
+
+                        state
+                    });
+
+                    state.active_count += 1;
                 }
                 NodeEvent::DeactivateNode(id) => {
-                    if !self.active_nodes.contains(&id) {
-                        continue;
+                    let state = self.active_nodes.get_mut(&id).unwrap();
+                    state.active_count -= 1;
+
+                    if state.active_count == 0 {
+                        let node = &mut self.nodes[id];
+
+                        let ctx = UpdateContext::new(
+                            id,
+                            &self.graph,
+                            delta,
+                            &mut self.variables,
+                            &mut self.queue,
+                            &mut self.properties,
+                            animations,
+                            state,
+                        );
+                        node.deactivate(ctx);
+
+                        for children in state.active_children.drain() {
+                            self.queue.push_back(NodeEvent::DeactivateNode(children));
+                        }
+
+                        self.active_nodes.remove(&id);
                     }
-
-                    let node = &mut self.nodes[id];
-
-                    let ctx = UpdateContext::new(
-                        id,
-                        &self.graph,
-                        delta,
-                        &mut self.variables,
-                        &mut self.queue,
-                        &mut self.properties,
-                        animations,
-                    );
-                    node.deactivate(ctx);
-
-                    self.active_nodes.remove(&id);
                 }
                 NodeEvent::Event(event) => {
                     // The caller also gets the event.
@@ -93,7 +102,7 @@ impl AnimationDriver {
                     // but this is probably not desired?
                     events.push(event.clone());
 
-                    for id in &self.active_nodes {
+                    for (id, state) in &mut self.active_nodes {
                         let node = &mut self.nodes[*id];
 
                         let ctx = UpdateContext::new(
@@ -104,6 +113,7 @@ impl AnimationDriver {
                             &mut self.queue,
                             &mut self.properties,
                             animations,
+                            state,
                         );
                         node.handle_event(ctx, &event);
                     }
@@ -111,7 +121,7 @@ impl AnimationDriver {
             }
         }
 
-        for id in &self.active_nodes {
+        for (id, state) in &mut self.active_nodes {
             let node = &mut self.nodes[*id];
 
             let ctx = UpdateContext::new(
@@ -122,6 +132,7 @@ impl AnimationDriver {
                 &mut self.queue,
                 &mut self.properties,
                 animations,
+                state,
             );
             node.update(ctx);
         }
@@ -168,7 +179,7 @@ impl AnimationDriver {
 
     pub fn animations(&self) -> impl Iterator<Item = PlayingAnimationClip<'_>> {
         self.active_nodes
-            .iter()
+            .keys()
             .filter_map(|id| match &self.nodes[*id].inner {
                 NodeInner::Clip(clip) => {
                     let weight = self
@@ -211,7 +222,7 @@ impl AnimationDriver {
                 .insert(id, global_weight.clone());
 
             for children in node.children() {
-                if !self.active_nodes.contains(&children) {
+                if !self.active_nodes.contains_key(&children) {
                     continue;
                 }
 
@@ -219,6 +230,12 @@ impl AnimationDriver {
             }
         }
     }
+}
+
+#[derive(Clone, Debug, Default)]
+struct NodeState {
+    active_count: usize,
+    active_children: HashSet<NodeId>,
 }
 
 struct UpdateContext<'a> {
@@ -229,6 +246,7 @@ struct UpdateContext<'a> {
     queue: &'a mut VecDeque<NodeEvent>,
     properties: &'a mut PropertySet,
     animations: &'a AnimationSet,
+    state: &'a mut NodeState,
 }
 
 impl<'a> UpdateContext<'a> {
@@ -240,6 +258,7 @@ impl<'a> UpdateContext<'a> {
         queue: &'a mut VecDeque<NodeEvent>,
         properties: &'a mut PropertySet,
         animations: &'a AnimationSet,
+        state: &'a mut NodeState,
     ) -> Self {
         Self {
             node,
@@ -249,6 +268,7 @@ impl<'a> UpdateContext<'a> {
             queue,
             properties,
             animations,
+            state,
         }
     }
 }
@@ -265,7 +285,9 @@ impl Context for UpdateContext<'_> {
             &self.graph.nodes[id].name,
         );
 
-        self.queue.push_back(NodeEvent::ActivateNode(id));
+        if self.state.active_children.insert(id) {
+            self.queue.push_back(NodeEvent::ActivateNode(id));
+        }
     }
 
     fn deactivate_node(&mut self, id: NodeId) {
@@ -275,7 +297,9 @@ impl Context for UpdateContext<'_> {
             &self.graph.nodes[id].name,
         );
 
-        self.queue.push_back(NodeEvent::DeactivateNode(id));
+        if self.state.active_children.remove(&id) {
+            self.queue.push_back(NodeEvent::DeactivateNode(id));
+        }
     }
 
     fn send_event(&mut self, event: Event) {

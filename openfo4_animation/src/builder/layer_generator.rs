@@ -8,6 +8,7 @@ use openfo4_hkx::behavior::LayerGenerator;
 use crate::builder::{BuildNode, BuilderContext, Dependency, Error, UnknownVariableName};
 use crate::nodes::layers::{Layer, Layers};
 use crate::nodes::{Node, NodeInner};
+use crate::{Value, ValueExpression};
 
 impl BuildNode for LayerGenerator {
     fn dependencies(&self, _ctx: &mut BuilderContext<'_>) -> Result<Vec<Dependency>, Error> {
@@ -40,18 +41,31 @@ impl BuildNode for LayerGenerator {
                 continue;
             };
 
-            // if let Some(set) = &layer.parent.variable_binding_set {
-            //     for binding in &*set.bindings {
-            //         match &*binding.member_path {
-            //             name => {
-            //                 return Err(Error::UnknownVariableName(UnknownVariableName {
-            //                     class: "hkbLayer",
-            //                     name: name.to_owned(),
-            //                 }));
-            //             }
-            //         }
-            //     }
-            // }
+            let mut weight = ValueExpression::Const(Value::F32(layer.weight));
+            let mut bone_weights = layer.bone_weights.as_ref().map(|weights| {
+                ValueExpression::Const(Value::BoneWeights(
+                    weights.bone_weights.iter().copied().collect(),
+                ))
+            });
+
+            if let Some(set) = &layer.parent.variable_binding_set {
+                for binding in &*set.bindings {
+                    let variable = ctx
+                        .get_variable(binding.binding_type, binding.variable_index)
+                        .unwrap();
+
+                    match &*binding.member_path {
+                        "weight" => weight = ValueExpression::Variable(variable),
+                        "boneWeights" => bone_weights = Some(ValueExpression::Variable(variable)),
+                        name => {
+                            return Err(Error::UnknownVariableName(UnknownVariableName {
+                                class: "hkbLayer",
+                                name: name.to_owned(),
+                            }));
+                        }
+                    }
+                }
+            }
 
             layers.push(Layer {
                 on_by_default: layer.on_by_default,
@@ -59,6 +73,8 @@ impl BuildNode for LayerGenerator {
                 on_event: layer.on_event_id as i64,
                 off_event: layer.off_event_id as i64,
                 is_active: false,
+                weight,
+                bone_weights,
             });
         }
 

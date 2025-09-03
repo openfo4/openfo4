@@ -1,5 +1,5 @@
 use crate::nodes::{Context, GraphNode, NodeEvent};
-use crate::{Event, NodeId};
+use crate::{BoneWeights, Event, NodeId, Value, ValueExpression};
 
 #[derive(Clone, Debug)]
 pub struct Layers {
@@ -31,6 +31,31 @@ impl GraphNode for Layers {
         }
     }
 
+    fn update<T>(&mut self, mut ctx: T)
+    where
+        T: Context,
+    {
+        for layer in &self.layers {
+            if !layer.is_active {
+                continue;
+            }
+
+            let weight = layer.weight.eval(ctx.variables()).to_f32().unwrap();
+
+            let mut final_weights = BoneWeights::Shared(weight);
+            if let Some(bone_weights) = &layer.bone_weights {
+                let bone_weights = match bone_weights.eval(ctx.variables()) {
+                    Value::BoneWeights(v) => v,
+                    _ => unreachable!(),
+                };
+
+                final_weights *= &BoneWeights::Unique(bone_weights);
+            }
+
+            ctx.set_bone_weights(layer.node, final_weights);
+        }
+    }
+
     fn handle_event<T>(&mut self, mut ctx: T, event: &Event)
     where
         T: Context,
@@ -59,5 +84,7 @@ pub struct Layer {
     pub on_by_default: bool,
     pub on_event: i64,
     pub off_event: i64,
+    pub weight: ValueExpression,
+    pub bone_weights: Option<ValueExpression>,
     pub is_active: bool,
 }

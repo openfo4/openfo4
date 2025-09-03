@@ -69,7 +69,39 @@ impl GraphNode for StateMachine {
         // If a state is already inactive the caller will ignore it.
         // Note that we are not "leaving" the state and do not need to
         // send any leave events.
-        for state in &self.states {
+        // for state in &self.states {
+        //     if let Some(node) = state.node {
+        //         ctx.deactivate_node(node);
+        //     }
+        // }
+
+        let mut active_state_deactivated = false;
+
+        if let Some(effect) = self.active_effect.take() {
+            if let Some(active) = self.active_state {
+                debug_assert_eq!(active, effect.dst_state);
+            }
+
+            for state in &effect.src_states {
+                if let Some(active) = self.active_state {
+                    debug_assert!(!active_state_deactivated);
+
+                    if state.state_index == active {
+                        active_state_deactivated = true;
+                    }
+                }
+
+                let state = &self.states[state.state_index];
+                if let Some(node) = state.node {
+                    ctx.deactivate_node(node);
+                }
+            }
+        }
+
+        if let Some(active) = self.active_state
+            && !active_state_deactivated
+        {
+            let state = &self.states[active];
             if let Some(node) = state.node {
                 ctx.deactivate_node(node);
             }
@@ -81,6 +113,12 @@ impl GraphNode for StateMachine {
         T: Context,
     {
         let Some(effect) = &mut self.active_effect else {
+            if let Some(state) = self.active_state {
+                if let Some(node) = self.states[state].node {
+                    ctx.set_bone_weights(node, BoneWeights::Shared(1.0));
+                }
+            }
+
             return;
         };
 
