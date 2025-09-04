@@ -59,15 +59,19 @@ pub fn animation_test(
     let nif_skeleton = "actors/turret/characterassets/turretstandingskeleton.nif";
 
     let project_file = "actors/character/raiderproject.hkx";
-    let behavior_filename = "meshes/actors/character/behaviors/mtbehavior.hkx";
+    let behavior_filename = "meshes/actors/character/behaviors/weaponbehavior.hkx";
+    // let behavior_filename = "meshes/actors/character/behaviors/mtbehavior.hkx";
     // let behavior_filename = "meshes/actors/character/behaviors/raiderrootbehavior.hkx";
     let behavior_file = behavior_filename;
     let search_paths = [
-        "meshes/actors/character/animations/mt/player",
-        "meshes/actors/character/animations/mt/confident",
-        "meshes/actors/character/animations/mt/neutral",
+        // "meshes/actors/character/animations/mt/player",
+        // "meshes/actors/character/animations/mt/confident",
+        // "meshes/actors/character/animations/mt/neutral",
+        // "meshes/actors/character/animations",
+        // "meshes/actors/character/animations/furniture/water",
+        "meshes/actors/character/animations/weapon/laserpistol",
+        "meshes/actors/character/animations/weapon/pistol",
         "meshes/actors/character/animations",
-        "meshes/actors/character/animations/furniture/water",
     ];
     // let anim_search_path = "meshes/actors/character/animations/";
     // let skin_path = "meshes/actors/character/characterassets/malebody.nif";
@@ -335,9 +339,6 @@ pub fn animation_test(
             })
             .unwrap();
 
-        // FIXME: This is actually a capsule, but we currently use
-        // a box to approximate it because capsule colliders are
-        // not implemented yet.
         let height = char_data
             .character_controller_setup
             .rigid_body_setup

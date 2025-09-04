@@ -16,6 +16,7 @@ pub struct AnimationClip {
     pub skeleton_bone_to_animation_bone: HashMap<usize, usize>,
     pub annotations: Vec<Annotation>,
     pub flags: AnimationClipFlags,
+    pub blend_mode: BlendMode,
 }
 
 impl AnimationClip {
@@ -49,4 +50,11 @@ bitflags! {
         /// same data.
         const TRIM_LAST_FRAME_IF_LOOPING = 0x01;
     }
+}
+
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Hash)]
+pub enum BlendMode {
+    #[default]
+    Normal,
+    Additive,
 }

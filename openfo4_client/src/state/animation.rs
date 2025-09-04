@@ -4,14 +4,16 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use game_common::components::Transform;
-use openfo4_animation::animation::{AnimationClip, AnimationClipFlags, Annotation};
+use openfo4_animation::animation::{AnimationClip, AnimationClipFlags, Annotation, BlendMode};
 use openfo4_animation::skeleton::{Bone, Skeleton};
 use openfo4_asset::{AssetLoader, Handle};
+use openfo4_hkx::animation::BlendHint;
 use openfo4_hkx::{HkObject, HkxFile};
 
 use crate::assets::AssetServer;
 use crate::assets::nif_v2::NifScene;
 use crate::loader::{FileLoader, fix_path};
+use crate::state::anim_starter;
 
 pub struct AnimationLoader {
     file_loader: Arc<FileLoader>,
@@ -93,6 +95,7 @@ pub async fn load_anim(server: &AssetServer, search_paths: &[&str]) -> Result<An
         skeleton_bone_to_animation_bone: HashMap::new(),
         annotations: Vec::new(),
         flags: AnimationClipFlags::TRIM_LAST_FRAME_IF_LOOPING,
+        blend_mode: BlendMode::default(),
     };
 
     let mut file = None;
@@ -148,6 +151,11 @@ pub async fn load_anim(server: &AssetServer, search_paths: &[&str]) -> Result<An
                     clip.skeleton_bone_to_animation_bone
                         .insert(*bone as usize, index);
                 }
+
+                clip.blend_mode = match binding.blend_hint {
+                    BlendHint::Normal => BlendMode::Normal,
+                    BlendHint::Additive | BlendHint::AdditiveDeprecated => BlendMode::Additive,
+                };
             }
             _ => (),
         }

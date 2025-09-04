@@ -4,7 +4,7 @@ use game_common::components::Transform;
 use glam::{Quat, Vec3};
 use hecs::{CommandBuffer, World};
 
-use crate::animation::{AnimationClip, AnimationClipFlags};
+use crate::animation::{AnimationClip, AnimationClipFlags, BlendMode};
 use crate::driver::AnimationDriver;
 use crate::skeleton::SkeletonInstance;
 use crate::{AnimationSet, BoneWeights};
@@ -75,12 +75,15 @@ pub fn drive_animations(world: &mut World, delta: Duration, event: Option<&'stat
                     b = v_b as u32 % num_frames;
                 }
 
+                let additive = matches!(animation.blend_mode, BlendMode::Additive);
+
                 Some(Contribution {
                     animation,
                     a,
                     b,
                     s,
                     blend_factor: state.weight,
+                    additive,
                 })
             })
             .collect::<Vec<_>>();
@@ -106,6 +109,11 @@ pub fn drive_animations(world: &mut World, delta: Duration, event: Option<&'stat
                     continue;
                 }
 
+                // Additive animations are blended on top later.
+                if anim.additive {
+                    continue;
+                }
+
                 weight_sum += anim.blend_factor.get(*index as u32);
             }
 
@@ -122,14 +130,18 @@ pub fn drive_animations(world: &mut World, delta: Duration, event: Option<&'stat
                     continue;
                 }
 
+                if anim.additive {
+                    continue;
+                }
+
                 anim_applied = true;
+
+                let weight = anim.blend_factor.get(*index as u32) / weight_sum;
+                debug_assert!(weight >= 0.0 && weight <= 1.0);
 
                 let transform_a = anim.animation.get(anim.a, *track as u32).unwrap();
                 let transform_b = anim.animation.get(anim.b, *track as u32).unwrap();
                 let transform = Transform::lerp(transform_a, transform_b, anim.s);
-
-                let weight = anim.blend_factor.get(*index as u32) / weight_sum;
-                debug_assert!(weight >= 0.0 && weight <= 1.0);
 
                 translation += transform.translation * weight;
                 scale += transform.scale * weight;
@@ -150,6 +162,40 @@ pub fn drive_animations(world: &mut World, delta: Duration, event: Option<&'stat
                     first_rotation = Some(transform.rotation);
                     rotation = rotation + transform.rotation * weight;
                 }
+            }
+
+            for anim in &active_anims {
+                if !anim.additive {
+                    continue;
+                }
+
+                let Some(track) = anim.animation.skeleton_bone_to_animation_bone.get(index) else {
+                    continue;
+                };
+
+                let transform_a = anim.animation.get(anim.a, *track as u32).unwrap();
+                let transform_b = anim.animation.get(anim.b, *track as u32).unwrap();
+                let mut transform = Transform::lerp(transform_a, transform_b, anim.s);
+
+                // The first frame is our "reference frame" that we compute the additive
+                // delta to apply from.
+                let ref_frame = anim.animation.get(0, *track as u32).unwrap();
+
+                transform.translation -= ref_frame.translation;
+                transform.rotation = ref_frame.rotation.conjugate() * transform.rotation;
+                transform.scale -= ref_frame.scale;
+
+                // FIXME: This should probably be blended on top of bind pose.
+                if !anim_applied {
+                    continue;
+                }
+
+                debug_assert_ne!(rotation.length(), 0.0);
+                rotation = rotation.normalize();
+
+                translation += transform.translation;
+                rotation *= transform.rotation;
+                scale += transform.scale;
             }
 
             // It is possible that bones exist that are not driven from animations
@@ -180,6 +226,7 @@ struct Contribution<'a> {
     b: u32,
     s: f32,
     blend_factor: &'a BoneWeights,
+    additive: bool,
 }
 
 trait TransformLerp {

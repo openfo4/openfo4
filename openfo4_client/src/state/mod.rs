@@ -300,6 +300,33 @@ impl GameState {
                     self.toggle_sun_light();
                 }
 
+                if event.key_code == Some(KeyCode::T) {
+                    if let Some(action) = self.actions.0.get(&Action::FireSingle) {
+                        for (_, events) in self.world.query_mut::<&mut AnimationEventQueue>() {
+                            events.0.push_back(*action);
+                        }
+                    }
+                }
+
+                if event.key_code == Some(KeyCode::Z) {
+                    if let Some(action) = self.actions.0.get(&Action::FireAuto) {
+                        for (_, events) in self.world.query_mut::<&mut AnimationEventQueue>() {
+                            events.0.push_back(*action);
+                        }
+                    }
+                }
+
+                if event.key_code == Some(KeyCode::R) {
+                    // self.anim_event = Some("g_weapForceEquip");
+                    // self.anim_event = Some("MoveStart");
+
+                    if let Some(action) = self.actions.0.get(&Action::Reload) {
+                        for (_, events) in self.world.query_mut::<&mut AnimationEventQueue>() {
+                            events.0.push_back(*action);
+                        }
+                    }
+                }
+
                 if event.key_code == Some(KeyCode::O) {
                     // self.anim_event = Some("g_weapForceEquip");
                     // self.anim_event = Some("MoveStart");
