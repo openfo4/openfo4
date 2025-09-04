@@ -404,7 +404,7 @@ pub enum StateMachineSelfTransitionMode {
 #[signature(0xeca9d564)]
 pub struct TransitionEffect {
     // Offset: 0
-    pub generator: Generator,
+    pub parent: Generator,
     // Offset: 136
     pub self_transition_mode: i8,
     // Offset: 137

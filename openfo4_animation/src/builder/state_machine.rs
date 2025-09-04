@@ -70,10 +70,7 @@ impl BuildNode for openfo4_hkx::behavior::StateMachine {
                     .unwrap();
 
                 match &*binding.member_path {
-                    "startStateId" => {
-                        dbg!(&self.parent.node.name);
-                        start_state_id = ValueExpression::Variable(variable)
-                    }
+                    "startStateId" => start_state_id = ValueExpression::Variable(variable),
                     "isActive" => {}
                     "currentStateId" => {}
                     name => {
@@ -163,7 +160,7 @@ impl BuildNode for openfo4_hkx::behavior::StateMachine {
                     to,
                     event_id,
                     priority: transition.priority as i64,
-                    blend_duration: Duration::ZERO,
+                    blend_duration: ValueExpression::Const(Value::F32(0.0)),
                 });
                 transition_effects.push(&transition.transition);
             }
@@ -189,7 +186,7 @@ impl BuildNode for openfo4_hkx::behavior::StateMachine {
                     to,
                     event_id,
                     priority: transition.priority as i64,
-                    blend_duration: Duration::ZERO,
+                    blend_duration: ValueExpression::Const(Value::F32(0.0)),
                 });
                 transition_effects.push(&transition.transition);
             }
@@ -213,11 +210,33 @@ impl BuildNode for openfo4_hkx::behavior::StateMachine {
             match effect {
                 Some(effect) => match ctx.hkx_file().get(effect.ptr) {
                     Some(HkObject::BlendingTransitionEffect(effect)) => {
-                        let duration = Duration::from_secs_f32(effect.duration);
+                        let mut duration = ValueExpression::Const(Value::F32(effect.duration));
 
-                        if !duration.is_zero() {
-                            transition.blend_duration = duration;
+                        if let Some(set) = &effect.parent.parent.node.bindable.variable_binding_set
+                        {
+                            for binding in &*set.bindings {
+                                let variable = ctx
+                                    .get_variable(binding.binding_type, binding.variable_index)
+                                    .unwrap();
+
+                                match &*binding.member_path {
+                                    "duration" => duration = ValueExpression::Variable(variable),
+                                    // FIXME: What does this mean? Skip the first relative section
+                                    // on the generator?
+                                    "toGeneratorStartTimeFraction" => {}
+                                    name => {
+                                        return Err(Error::UnknownVariableName(
+                                            UnknownVariableName {
+                                                class: "hkbBlendingTransitionEffect",
+                                                name: name.to_owned(),
+                                            },
+                                        ));
+                                    }
+                                }
+                            }
                         }
+
+                        transition.blend_duration = duration;
                     }
                     Some(HkObject::GeneratorTransitionEffect(effect)) => {
                         generator_effects.push((index, effect));
@@ -284,8 +303,8 @@ fn generator_transition(
     transitions: &mut Vec<Transition>,
     original_transition: usize,
 ) {
-    let blend_in = Duration::from_secs_f32(generator.blend_in_duration);
-    let blend_out = Duration::from_secs_f32(generator.blend_out_duration);
+    let blend_in = ValueExpression::Const(Value::F32(generator.blend_in_duration));
+    let blend_out = ValueExpression::Const(Value::F32(generator.blend_out_duration));
 
     let transition_generator = generator.transition_generator.as_ref().unwrap();
 
@@ -299,7 +318,7 @@ fn generator_transition(
         match &mut ctx.state.nodes[node].inner {
             NodeInner::Clip(clip) => {
                 clip.triggers.push(ClipTrigger {
-                    local_time: blend_out,
+                    local_time: Duration::from_secs_f32(generator.blend_out_duration),
                     from_end: true,
                     event: Event {
                         id: exit_event as i64,

@@ -209,8 +209,16 @@ impl GraphNode for StateMachine {
             }),
         };
 
-        effect.total_time = transition.blend_duration;
-        effect.time_left = transition.blend_duration;
+        let blend_duration = Duration::from_secs_f32(
+            transition
+                .blend_duration
+                .eval(ctx.variables())
+                .to_f32()
+                .unwrap(),
+        );
+
+        effect.total_time = blend_duration;
+        effect.time_left = blend_duration;
         effect.dst_state = transition.to;
 
         // The node is only deactivated once the transition weight reaches 0.
@@ -260,9 +268,8 @@ pub struct Transition {
     /// The event which will trigger this transition if recevied.
     pub event_id: i64,
     pub priority: i64,
-    /// If not set to [`ZERO`] blending between the enabled and disabled state happens in the given
-    /// duration.
-    pub blend_duration: Duration,
+    /// Blending transition duration in seconds.
+    pub blend_duration: ValueExpression,
 }
 
 #[derive(Clone, Debug, Default)]
