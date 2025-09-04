@@ -1,3 +1,4 @@
+mod animation;
 mod bgsm;
 mod image;
 mod nif;
@@ -14,6 +15,7 @@ use std::collections::HashMap;
 use std::fmt::{self, Debug, Display, Formatter};
 use std::marker::PhantomData;
 use std::ops::Deref;
+use std::path::Path;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
@@ -30,20 +32,26 @@ pub struct FileLoadContext {
 }
 
 #[derive(Debug)]
-pub struct Error(String);
+pub enum Error {
+    NotFound,
+    Other(String),
+}
 
 impl<T> From<T> for Error
 where
     T: std::error::Error,
 {
     fn from(value: T) -> Self {
-        Self(value.to_string())
+        Self::Other(value.to_string())
     }
 }
 
 impl Display for Error {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        f.write_str(&self.0)
+        match self {
+            Self::NotFound => write!(f, "not found"),
+            Self::Other(err) => write!(f, "{}", err),
+        }
     }
 }
 
@@ -63,10 +71,12 @@ impl AssetServer {
         }
     }
 
-    pub async fn load<T>(&self, path: &str) -> Result<Handle<T>, Error>
+    pub async fn load<T>(&self, path: impl AsRef<Path>) -> Result<Handle<T>, Error>
     where
         T: Asset,
     {
+        let path = path.as_ref().to_str().unwrap();
+
         let key = AssetKey {
             type_id: TypeId::of::<T>(),
             path: Cow::Borrowed(path),
@@ -86,7 +96,11 @@ impl AssetServer {
             }
         }
 
-        let mut reader = self.loader.open(path)?;
+        let mut reader = match self.loader.open(path) {
+            Ok(reader) => reader,
+            Err(crate::loader::Error::NotFound(_)) => return Err(Error::NotFound),
+            Err(err) => return Err(err.into()),
+        };
 
         let key = AssetKey {
             type_id: TypeId::of::<T>(),

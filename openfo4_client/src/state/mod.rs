@@ -71,6 +71,7 @@ pub struct GameState {
     actions: Actions,
     physics_debug: bool,
     interval: Interval,
+    esp_loader: Arc<EspLoader>,
 }
 
 impl GameState {
@@ -103,6 +104,7 @@ impl GameState {
         let mut loader = EspLoader::new();
         let file_loader = Arc::new(FileLoader::new(sources));
         loader.push(file);
+        let loader = Arc::new(loader);
         let mut assets = AssetServer::new(file_loader.clone(), pool.clone());
 
         let asset_loader = AssetLoader::new();
@@ -129,7 +131,7 @@ impl GameState {
         let animation = AnimationSystem::new(&loader);
 
         let level = Level::new(
-            loader,
+            loader.clone(),
             asset_loader.clone(),
             pool.clone(),
             file_loader.clone(),
@@ -152,6 +154,7 @@ impl GameState {
             actions,
             physics_debug: false,
             interval: Interval::new(Duration::from_secs(1) / UPS),
+            esp_loader: loader,
         }
     }
 
@@ -201,6 +204,7 @@ impl GameState {
             &mut self.world,
             &self.assets,
             &self.asset_loader,
+            &self.esp_loader,
         );
 
         apply_player_movements(&mut self.world, &mut self.physics);

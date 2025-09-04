@@ -33,14 +33,6 @@ impl AnimationSystem {
                 continue;
             };
 
-            if anim
-                .animation_event
-                .as_ref()
-                .is_some_and(|v| v.as_str() == Some("moveStartLeft"))
-            {
-                dbg!(&anim);
-            }
-
             if anim.relations.parent.is_null() {
                 continue;
             }
@@ -84,8 +76,6 @@ impl AnimationSystem {
                     if !active_graphs.0.contains(&reaction.behavior_graph) {
                         continue;
                     }
-
-                    dbg!(&reaction);
 
                     if let Some(event) = &reaction.event {
                         driver.send_event(event);

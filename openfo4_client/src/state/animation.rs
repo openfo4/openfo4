@@ -10,8 +10,8 @@ use openfo4_asset::{AssetLoader, Handle};
 use openfo4_hkx::animation::BlendHint;
 use openfo4_hkx::{HkObject, HkxFile};
 
-use crate::assets::AssetServer;
 use crate::assets::nif_v2::NifScene;
+use crate::assets::{AssetServer, Error};
 use crate::loader::{FileLoader, fix_path};
 use crate::state::anim_starter;
 
@@ -105,6 +105,7 @@ pub async fn load_anim(server: &AssetServer, search_paths: &[&str]) -> Result<An
                 file = Some(f);
                 break;
             }
+            Err(Error::NotFound) => continue,
             Err(err) => {
                 tracing::error!("{}", err);
             }

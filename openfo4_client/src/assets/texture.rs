@@ -32,7 +32,7 @@ impl Asset for FileImageHandle {
                 .server
                 .load::<openfo4_dds::Image>(&path)
                 .await
-                .map_err(|err| Error(format!("failed to read file {}: {}", path, err)))?;
+                .map_err(|err| Error::Other(format!("failed to read file {}: {}", path, err)))?;
 
             let format = match image.format {
                 Format::Bc1Unorm => TextureFormat::Bc1RgbaUnorm,

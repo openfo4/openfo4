@@ -52,7 +52,7 @@ pub struct Level {
 
 impl Level {
     pub fn new(
-        loader: EspLoader,
+        loader: Arc<EspLoader>,
         asset_loader: AssetLoader,
         pool: Arc<TaskPool>,
         file_loader: Arc<FileLoader>,
@@ -60,7 +60,6 @@ impl Level {
     ) -> Self {
         let (tx, rx) = async_channel::unbounded::<CellId>();
         let events = Arc::new(SegQueue::new());
-        let loader = Arc::new(loader);
 
         pool.spawn({
             let loader = loader.clone();

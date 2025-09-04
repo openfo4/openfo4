@@ -27,7 +27,7 @@ impl Asset for BgsmMaterial {
             .server
             .load::<Bgsm>(&path)
             .await
-            .map_err(|err| Error(format!("failed to read file {}: {}", path, err)))?;
+            .map_err(|err| Error::Other(format!("failed to read file {}: {}", path, err)))?;
 
         let mut material = StandardMaterial {
             base_color: Color::from_rgba([1.0, 1.0, 1.0, bgsm.alpha]),

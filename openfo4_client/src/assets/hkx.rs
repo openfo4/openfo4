@@ -41,7 +41,7 @@ impl openfo4_asset::Asset for FileHkxHandle {
             .server
             .load(&path)
             .await
-            .map_err(|err| Error(format!("failed to read file: {}: {}", path, err)))?;
+            .map_err(|err| Error::Other(format!("failed to read file: {}: {}", path, err)))?;
 
         Ok(Self((*file).clone()))
     }

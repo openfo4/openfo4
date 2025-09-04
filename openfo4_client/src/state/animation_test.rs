@@ -1,5 +1,6 @@
 use std::collections::{HashMap, HashSet};
 use std::io::Read;
+use std::path::PathBuf;
 use std::sync::{Arc, OnceLock};
 
 use game_common::components::{Axis, Transform};
@@ -10,10 +11,12 @@ use hecs::{Entity, World};
 use image::imageops::replace;
 use openfo4_animation::builder::{Builder, Hint};
 use openfo4_animation::driver::AnimationDriver;
-use openfo4_animation::skeleton::{BoneMarker, SkeletonInstance};
-use openfo4_animation::{AnimationSet, Value};
-use openfo4_asset::AssetLoader;
+use openfo4_animation::skeleton::{BoneMarker, Skeleton, SkeletonInstance};
+use openfo4_animation::{AnimationGraph, AnimationSet, Value};
+use openfo4_asset::{AssetLoader, Handle};
 use openfo4_core::WorldExt;
+use openfo4_esp::records::Race;
+use openfo4_esp::{FormId, RecordData, RecordKind};
 use openfo4_hkx::behavior::VariableType;
 use openfo4_hkx::{HkObject, HkxFile};
 use openfo4_physics::components::{
@@ -28,7 +31,8 @@ use crate::components::{NiTransform, Player};
 use crate::loader::FileLoader;
 use crate::shared::SharedState;
 use crate::state::anim_starter::{ActiveBehaviorGraphs, AnimationEventQueue};
-use crate::state::animation::{SkeletonConfig, load_anim};
+use crate::state::animation::{self, SkeletonConfig, load_anim};
+use crate::state::esp::EspLoader;
 use crate::systems::PlayerControlState;
 use crate::systems::controller::ControllerShape;
 
@@ -49,6 +53,7 @@ pub fn animation_test(
     world: &mut World,
     server: &AssetServer,
     asset_loader: &AssetLoader,
+    esp_loader: &EspLoader,
 ) {
     static ONCE: OnceLock<()> = OnceLock::new();
 
@@ -58,7 +63,6 @@ pub fn animation_test(
     let skin_path = "meshes/actors/turret/characterassets/turretstanding.nif";
     let nif_skeleton = "actors/turret/characterassets/turretstandingskeleton.nif";
 
-    let project_file = "actors/character/raiderproject.hkx";
     let behavior_filename = "meshes/actors/character/behaviors/weaponbehavior.hkx";
     // let behavior_filename = "meshes/actors/character/behaviors/mtbehavior.hkx";
     // let behavior_filename = "meshes/actors/character/behaviors/raiderrootbehavior.hkx";
@@ -83,123 +87,26 @@ pub fn animation_test(
     // let raider_root_path = "meshes/actors/character/behaviors/raiderrootbehavior.hkx";
 
     ONCE.get_or_init(|| {
-        let (nif_skeleton, skeleton) =
-            futures_lite::future::block_on(crate::state::animation::load(
-                server,
-                asset_loader,
-                SkeletonConfig {
-                    nif_skeleton: nif_skeleton,
-                    hkx_project: project_file,
-                },
-            ));
+        let race = futures_lite::future::block_on(
+            esp_loader.lookup(Some(RecordKind::Race), FormId(0x13746)),
+        )
+        .unwrap();
 
-        let mut char_file = loader.open(char_path).unwrap();
-        let mut buf = Vec::new();
-        char_file.read_to_end(&mut buf).unwrap();
-        let char_file = HkxFile::decode(&buf).unwrap();
-
-        let mut behavior_file = loader.open(behavior_file).unwrap();
-        let mut buf = Vec::new();
-        behavior_file.read_to_end(&mut buf).unwrap();
-        let behavior_file = HkxFile::decode(&buf).unwrap();
-
-        let mut props = HashMap::new();
-        for obj in char_file.iter() {
-            match obj {
-                HkObject::CharacterData(data) => {
-                    let vals = data.character_property_values.as_ref().unwrap();
-
-                    for ((name, info), data) in data
-                        .string_data
-                        .character_property_names
-                        .iter()
-                        .zip(data.character_property_infos.iter())
-                        .zip(
-                            data.character_property_values
-                                .as_ref()
-                                .unwrap()
-                                .word_variable_values
-                                .iter(),
-                        )
-                    {
-                        let value = match info.type_ {
-                            VariableType::Invalid => Value::None,
-                            VariableType::Bool => Value::Bool(data.value == 0),
-                            VariableType::Int16 => Value::I16(data.value as i16),
-                            VariableType::Int32 => Value::I32(data.value),
-                            VariableType::Real => Value::F32(f32::from_bits(data.value as u32)),
-                            VariableType::Pointer => {
-                                let ptr = &vals.variant_variable_values[data.value as usize];
-
-                                match char_file.get(ptr.unwrap()) {
-                                    Some(HkObject::BoneWeightArray(weights)) => {
-                                        Value::BoneWeights(weights.bone_weights.to_vec())
-                                    }
-                                    _ => todo!(),
-                                }
-                            }
-                            _ => todo!(),
-                        };
-
-                        props.insert(name.clone(), value);
-                    }
-                }
-                _ => (),
-            }
-        }
-
-        let mut builder = Builder::new(behavior_file, props).unwrap();
-
-        let graph = loop {
-            match builder.build().unwrap() {
-                Ok(graph) => break graph,
-                Err(Hint::NeedFile(path)) => {
-                    let dir = "meshes/actors/character";
-                    let p = format!("{}/{}", dir, path.to_lowercase().replace("\\", "/"));
-
-                    let mut file = loader.open(&p).unwrap();
-                    let mut buf = Vec::new();
-                    file.read_to_end(&mut buf).unwrap();
-                    let file = HkxFile::decode(&buf).unwrap();
-
-                    builder.register_file(&path, file).unwrap();
-                }
-            }
+        let race = match race.data {
+            RecordData::Race(race) => race,
+            _ => todo!(),
         };
 
-        let mut anim_clips = HashMap::new();
-
-        for file in graph.animation_files() {
-            if anim_clips.contains_key(&file) {
-                continue;
-            }
-
-            let path = file.to_lowercase().replace("\\", "/").replace("hkt", "hkx");
-
-            let file_stem = path.split("/").last().unwrap_or(&path);
-
-            let search_paths: Vec<_> = search_paths
-                .iter()
-                .map(|v| format!("{}/{}", v, file_stem))
-                .collect();
-            let search_paths: Vec<_> = search_paths.iter().map(|v| v.as_str()).collect();
-
-            // let anim_root = format!(
-            //     "{}/{}",
-            //     anim_search_path,
-            //     path.split("/").last().unwrap_or(&path)
-            // );
-
-            let clip = match futures_lite::future::block_on(load_anim(server, &search_paths)) {
-                Ok(clip) => clip,
-                Err(()) => {
-                    tracing::error!("no animation found in paths {}", search_paths.join(", "));
-                    continue;
-                }
-            };
-
-            anim_clips.insert(file, clip);
-        }
+        let character =
+            futures_lite::future::block_on(load_character(&race, false, server, asset_loader))
+                .unwrap();
+        let behavior = futures_lite::future::block_on(load_behavior_data(
+            behavior_filename,
+            &character,
+            &search_paths,
+            server,
+        ))
+        .unwrap();
 
         let offset = CellId(IVec2::new(2, 7)).min();
         let offset =
@@ -207,12 +114,13 @@ pub fn animation_test(
 
         let mut bones = HashMap::new();
         let mut bones_bind_pose = HashMap::new();
-        let mut root_bones: HashSet<_> = skeleton.bones.iter().map(|b| b.index).collect();
+        let mut root_bones: HashSet<_> = character.skeleton.bones.iter().map(|b| b.index).collect();
 
-        for (bone, bind_pose) in skeleton
+        for (bone, bind_pose) in character
+            .skeleton
             .bones
             .iter()
-            .zip(skeleton.bind_pose_bone_transforms())
+            .zip(character.skeleton.bind_pose_bone_transforms())
         {
             bones.insert(bone.name.to_lowercase(), bone);
             bones_bind_pose.insert(bone.index, bind_pose);
@@ -225,7 +133,7 @@ pub fn animation_test(
         let mut bone_entities = HashMap::new();
         let mut root_bone_entities = Vec::new();
 
-        let root = nif_skeleton.instantiate_with_feedback(
+        let root = character.scene.instantiate_with_feedback(
             |node, entity| {
                 if let Some(bone) = bones.get(&node.name.to_lowercase()) {
                     bone_entities.insert(bone.index, entity);
@@ -238,37 +146,6 @@ pub fn animation_test(
             offset.into(),
             world,
         );
-
-        // dbg!(&bones_bind_pose);
-
-        // let mut bone_parent = HashMap::new();
-        // for bone in &skeleton.bones {
-        //     let mut entities = Vec::new();
-
-        //     for children in &bone.children {
-        //         let entity = bones.get(children).unwrap();
-        //         entities.push(*entity);
-
-        //         bone_parent.insert(*children, bone.index);
-        //     }
-
-        //     let parent = bones.get(&bone.index).unwrap();
-
-        //     if !entities.is_empty() {
-        //         world.insert_one(*parent, Children(entities)).unwrap();
-        //     }
-        // }
-
-        // let mut root_bones = Vec::new();
-        // for bone in &skeleton.bones {
-        //     if !bone_parent.contains_key(&bone.index) {
-        //         let entity = bones.get(&bone.index).unwrap();
-        //         root_bones.push(*entity);
-        //     }
-        // }
-
-        // let mut child_entities = Vec::new();
-        // child_entities.extend(root_bones.clone());
 
         for bone in bones.values() {
             if let Some(entity) = bone_entities.get(&bone.index) {
@@ -301,7 +178,8 @@ pub fn animation_test(
             let mut bone_indices = Vec::new();
             for name in &skin.bones {
                 // dbg!(&name);
-                let bone = skeleton
+                let bone = character
+                    .skeleton
                     .bones
                     .iter()
                     .find(|b| b.name.to_lowercase() == name.to_lowercase())
@@ -331,47 +209,12 @@ pub fn animation_test(
             });
         }
 
-        let char_data = char_file
-            .iter()
-            .find_map(|v| match v {
-                HkObject::CharacterData(data) => Some(data),
-                _ => None,
-            })
-            .unwrap();
-
-        let height = char_data
-            .character_controller_setup
-            .rigid_body_setup
-            .shape_setup
-            .capsule_height
-            * 1.0
-            / NIF_TO_METERS;
-        let radius = char_data
-            .character_controller_setup
-            .rigid_body_setup
-            .shape_setup
-            .capsule_radius
-            * 1.0
-            / NIF_TO_METERS;
-
-        let collider_offset = Transform {
-            translation: Vec3::new(0.0, 0.0, height / 2.0),
-            ..Default::default()
-        };
-        let collider_shape = ColliderShape::Capsule(Capsule {
-            axis: Axis::Z,
-            // It seems that the height already includes the radius
-            // at the top and bottom hemispheres.
-            half_height: (height - radius) / 2.0,
-            radius: radius / 2.0,
-        });
-
         let collider = world.spawn((
-            collider_offset,
+            character.controller_offset,
             Collider {
                 friction: 1.0,
                 restitution: 0.0,
-                shape: collider_shape.clone(),
+                shape: character.controller_shape.clone(),
             },
         ));
 
@@ -379,14 +222,14 @@ pub fn animation_test(
             .insert(
                 root,
                 (
-                    AnimationSet(Arc::new(anim_clips)),
+                    behavior.clips,
                     SkeletonInstance {
-                        skeleton,
+                        skeleton: character.skeleton,
                         bones: bone_entities,
                         bones_bind_pose,
                         root_bones: root_bone_entities,
                     },
-                    AnimationDriver::new(Arc::new(graph)),
+                    AnimationDriver::new(Arc::new(behavior.graph)),
                     SkinInstances(skin_instances),
                     ActiveBehaviorGraphs(vec![
                         behavior_filename.replace("meshes/", ""),
@@ -397,8 +240,8 @@ pub fn animation_test(
                     Player,
                     PlayerControlState::default(),
                     ControllerShape {
-                        offset: collider_offset,
-                        shape: collider_shape,
+                        offset: character.controller_offset,
+                        shape: character.controller_shape,
                     },
                 ),
             )
@@ -417,4 +260,225 @@ pub fn animation_test(
         //     Children(child_entities),
         // ));
     });
+}
+
+#[derive(Clone, Debug)]
+pub enum Error {
+    NoNifSkeleton,
+    NoHkxProject,
+    NoProjectData,
+    NoCharacterFilenames,
+}
+
+async fn load_character(
+    race: &Race,
+    female: bool,
+    server: &AssetServer,
+    loader: &AssetLoader,
+) -> Result<ActorCharacter, Error> {
+    let nif_skeleton;
+    let hkx_project;
+
+    if female {
+        nif_skeleton = race
+            .female_skeletal_model
+            .as_ref()
+            .ok_or(Error::NoNifSkeleton)?;
+
+        hkx_project = race
+            .behavior_graph
+            .as_ref()
+            .map(|g| g.0.female.as_ref())
+            .flatten()
+            .ok_or(Error::NoHkxProject)?;
+    } else {
+        nif_skeleton = race
+            .male_skeletal_model
+            .as_ref()
+            .ok_or(Error::NoNifSkeleton)?;
+
+        hkx_project = race
+            .behavior_graph
+            .as_ref()
+            .map(|g| g.0.male.as_ref())
+            .flatten()
+            .ok_or(Error::NoHkxProject)?;
+    };
+
+    let nif_skeleton = nif_skeleton.0.path.as_str().unwrap();
+    let hkx_project = "actors/character/raiderproject.hkx";
+
+    let (nif_skeleton, skeleton) = animation::load(
+        server,
+        loader,
+        SkeletonConfig {
+            nif_skeleton,
+            hkx_project,
+        },
+    )
+    .await;
+
+    let project_path = PathBuf::from("/meshes/").join(hkx_project);
+    let project = server.load::<HkxFile>(&project_path).await.unwrap();
+    let project = project
+        .iter()
+        .find_map(|obj| match obj {
+            HkObject::ProjectData(data) => Some(data),
+            _ => None,
+        })
+        .ok_or(Error::NoProjectData)?;
+
+    let character_filename = project
+        .string_data
+        .character_filenames
+        .get(0)
+        .ok_or(Error::NoCharacterFilenames)?;
+
+    let character_path = project_path.parent().unwrap().join(character_filename);
+    let character_file = server.load::<HkxFile>(&character_path).await.unwrap();
+    let character = character_file
+        .iter()
+        .find_map(|obj| match obj {
+            HkObject::CharacterData(data) => Some(data),
+            _ => None,
+        })
+        .unwrap();
+
+    let mut props = HashMap::new();
+
+    let vals = character.character_property_values.as_ref().unwrap();
+
+    for ((name, info), data) in character
+        .string_data
+        .character_property_names
+        .iter()
+        .zip(character.character_property_infos.iter())
+        .zip(
+            character
+                .character_property_values
+                .as_ref()
+                .unwrap()
+                .word_variable_values
+                .iter(),
+        )
+    {
+        let value = match info.type_ {
+            VariableType::Invalid => Value::None,
+            VariableType::Bool => Value::Bool(data.value == 0),
+            VariableType::Int16 => Value::I16(data.value as i16),
+            VariableType::Int32 => Value::I32(data.value),
+            VariableType::Real => Value::F32(f32::from_bits(data.value as u32)),
+            VariableType::Pointer => {
+                let ptr = &vals.variant_variable_values[data.value as usize];
+
+                match character_file.get(ptr.unwrap()) {
+                    Some(HkObject::BoneWeightArray(weights)) => {
+                        Value::BoneWeights(weights.bone_weights.to_vec())
+                    }
+                    _ => todo!(),
+                }
+            }
+            _ => todo!(),
+        };
+
+        props.insert(name.clone(), value);
+    }
+
+    let controller = &character.character_controller_setup.rigid_body_setup;
+
+    let height = controller.shape_setup.capsule_height / NIF_TO_METERS;
+    let radius = controller.shape_setup.capsule_radius / NIF_TO_METERS;
+
+    let controller_offset = Transform {
+        translation: Vec3::new(0.0, 0.0, height / 2.0),
+        ..Default::default()
+    };
+
+    let controller_shape = ColliderShape::Capsule(Capsule {
+        axis: Axis::Z,
+        // It seems that the height already includes the radius
+        // at the top and bottom hemispheres.
+        half_height: (height - radius) / 2.0,
+        radius: radius / 2.0,
+    });
+
+    Ok(ActorCharacter {
+        scene: nif_skeleton,
+        skeleton,
+        controller_offset,
+        controller_shape,
+        props,
+    })
+}
+
+#[derive(Clone, Debug)]
+struct ActorCharacter {
+    scene: Handle<NifScene>,
+    skeleton: Skeleton,
+    controller_offset: Transform,
+    controller_shape: ColliderShape,
+    props: HashMap<String, Value>,
+}
+
+struct ActorBehaviorData {
+    graph: AnimationGraph,
+    clips: AnimationSet,
+}
+
+async fn load_behavior_data(
+    behavior_path: &str,
+    character: &ActorCharacter,
+    search_paths: &[&str],
+    server: &AssetServer,
+) -> Result<ActorBehaviorData, ()> {
+    let behavior_file = server.load::<HkxFile>(behavior_path).await.unwrap();
+
+    let mut builder = Builder::new((*behavior_file).clone(), character.props.clone()).unwrap();
+
+    let graph = loop {
+        match builder.build().unwrap() {
+            Ok(graph) => break graph,
+            Err(Hint::NeedFile(path)) => {
+                let dir = "meshes/actors/character";
+                let p = format!("{}/{}", dir, path.to_lowercase().replace("\\", "/"));
+
+                let file = server.load::<HkxFile>(&p).await.unwrap();
+                builder.register_file(&path, (*file).clone()).unwrap();
+            }
+        }
+    };
+
+    let mut clips = HashMap::new();
+    for file in graph.animation_files() {
+        if clips.contains_key(&file) {
+            continue;
+        }
+
+        let path = file.to_lowercase().replace("\\", "/").replace("hkt", "hkx");
+        let file_stem = path.split("/").last().unwrap_or(&path);
+        let search_paths: Vec<_> = search_paths
+            .iter()
+            .map(|v| format!("{}/{}", v, file_stem))
+            .collect();
+        let search_paths: Vec<_> = search_paths.iter().map(|v| v.as_str()).collect();
+
+        let clip = match load_anim(server, &search_paths).await {
+            Ok(clip) => clip,
+            Err(err) => {
+                tracing::error!(
+                    "failed to load animation {} in searched paths {}",
+                    path,
+                    search_paths.join(", ")
+                );
+                continue;
+            }
+        };
+
+        clips.insert(file, clip);
+    }
+
+    Ok(ActorBehaviorData {
+        graph,
+        clips: AnimationSet(Arc::new(clips)),
+    })
 }

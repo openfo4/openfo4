@@ -189,7 +189,7 @@ impl Asset for NifScene {
             .server
             .load::<Nif>(&path)
             .await
-            .map_err(|err| Error(format!("failed to read file {}: {}", path, err)))?;
+            .map_err(|err| Error::Other(format!("failed to read file {}: {}", path, err)))?;
 
         let Some(root) = nif.root() else {
             // Nif file is empty, return an empty scene.
@@ -299,7 +299,7 @@ impl Asset for NifScene {
                                     load_material(loader, &ctx.entities, &nif, shader_property)
                                         .await
                                         .map_err(|err| {
-                                            Error(format!(
+                                            Error::Other(format!(
                                                 "invalid material in nif file {}: {}",
                                                 path, err
                                             ))
