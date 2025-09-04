@@ -33,15 +33,12 @@ pub fn drive_animations(world: &mut World, delta: Duration, event: Option<&'stat
             crate::debug::update(&driver);
         }
 
-        let active_anims = || {
-            driver.animations().filter_map(|state| {
+        let active_anims = driver
+            .animations()
+            .filter_map(|state| {
                 let Some(animation) = set.0.get(state.path) else {
                     return None;
                 };
-
-                // if state.path.to_lowercase().contains("reload") {
-                //     dbg!(&state.time);
-                // }
 
                 let mut num_frames = animation.num_frames;
                 let mut anim_duration = animation.duration;
@@ -86,7 +83,7 @@ pub fn drive_animations(world: &mut World, delta: Duration, event: Option<&'stat
                     blend_factor: state.weight,
                 })
             })
-        };
+            .collect::<Vec<_>>();
 
         for (index, entity) in &skeleton.bones {
             let mut translation = Vec3::ZERO;
@@ -98,7 +95,17 @@ pub fn drive_animations(world: &mut World, delta: Duration, event: Option<&'stat
             let mut anim_applied = false;
 
             let mut weight_sum = 0.0;
-            for anim in active_anims() {
+            for anim in &active_anims {
+                // Animations that have no track bound to a bone should
+                // not contribute towards the final transform of that bone.
+                if !anim
+                    .animation
+                    .skeleton_bone_to_animation_bone
+                    .contains_key(index)
+                {
+                    continue;
+                }
+
                 weight_sum += anim.blend_factor.get(*index as u32);
             }
 
@@ -106,7 +113,7 @@ pub fn drive_animations(world: &mut World, delta: Duration, event: Option<&'stat
                 continue;
             }
 
-            for anim in active_anims() {
+            for anim in &active_anims {
                 let Some(track) = anim.animation.skeleton_bone_to_animation_bone.get(index) else {
                     continue;
                 };
