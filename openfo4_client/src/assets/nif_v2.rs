@@ -131,6 +131,24 @@ pub struct Node {
     pub skin: Option<Skin>,
 }
 
+impl Node {
+    pub fn build(&self) -> EntityBuilder {
+        let mut builder = EntityBuilder::new();
+
+        builder.add(self.transform);
+
+        if let Some(renderable) = &self.renderable {
+            builder.add(renderable.clone());
+        }
+
+        if let Some(collider) = &self.collider {
+            builder.add(collider.clone());
+        }
+
+        builder
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct Skin {
     pub bones: Vec<String>,
@@ -237,10 +255,6 @@ impl Asset for NifScene {
         while let Some((parent, block)) = queue.pop_front() {
             let parent = parent.map(|parent| *block_to_node.get(&parent).unwrap());
 
-            // Always setup the node to be a root node
-            // regardless of the position in the hierarchy.
-            let mut set_root_node = false;
-
             let node = match nif.get(block) {
                 Some(Block::NiNode(node)) => {
                     if is_marker(&node.name) {
@@ -281,11 +295,23 @@ impl Asset for NifScene {
                         queue.push_back((Some(block), collision_object));
                     }
 
-                    let transform = Transform {
+                    let mut transform = Transform {
                         translation: node.translation,
                         rotation: Quat::from_mat3(&node.rotation).normalize(),
                         scale: Vec3::splat(node.scale),
                     };
+
+                    let mut parent = parent;
+                    let mut parent_transform = Transform::default();
+                    while let Some(p) = parent {
+                        let parent_node: &Node = nodes.get(p).unwrap();
+                        parent_transform = parent_node.transform * parent_transform;
+                        parent = nodes.parent_key(p);
+                    }
+
+                    transform = Transform::from_matrix(
+                        parent_transform.compute_matrix().inverse() * transform.compute_matrix(),
+                    );
 
                     let mesh = meshes.entry(block).or_insert_with(|| {
                         let mesh = build_mesh(node);
@@ -408,7 +434,6 @@ impl Asset for NifScene {
                         None => None,
                     };
 
-                    set_root_node = true;
                     Node {
                         name: node.name.clone(),
                         transform,
@@ -445,10 +470,6 @@ impl Asset for NifScene {
                 }
                 _ => Node::default(),
             };
-
-            // If `set_root_node` is `true` we must not set
-            // a parent.
-            let parent = (!set_root_node).then_some(parent).flatten();
 
             let key = nodes.append(parent, node);
             block_to_node.insert(block, key);

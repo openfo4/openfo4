@@ -633,10 +633,12 @@ pub enum BlockType {
     BSSubIndexTriShape,
     BSLeafAnimNode,
     BSConnectPointParents,
+    BSConnectPointChildren,
     BSBound,
     BSBoneLodExtraData,
     BhkRagdollSystem,
     BSSkyShaderProperty,
+    BSDamageStage,
 }
 
 impl FromStr for BlockType {
@@ -719,10 +721,12 @@ impl FromStr for BlockType {
             "BSSubIndexTriShape" => Ok(Self::BSSubIndexTriShape),
             "BSLeafAnimNode" => Ok(Self::BSLeafAnimNode),
             "BSConnectPoint::Parents" => Ok(Self::BSConnectPointParents),
+            "BSConnectPoint::Children" => Ok(Self::BSConnectPointChildren),
             "BSBound" => Ok(Self::BSBound),
             "BSBoneLODExtraData" => Ok(Self::BSBoneLodExtraData),
             "bhkRagdollSystem" => Ok(Self::BhkRagdollSystem),
             "BSSkyShaderProperty" => Ok(Self::BSSkyShaderProperty),
+            "BSDamageStage" => Ok(Self::BSDamageStage),
             _ => Err(BadBlockType),
         }
     }

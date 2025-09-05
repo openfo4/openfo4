@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::io::Read;
 use std::path::PathBuf;
 use std::sync::{Arc, OnceLock};
@@ -35,6 +35,7 @@ use crate::state::animation::{self, SkeletonConfig, load_anim};
 use crate::state::esp::EspLoader;
 use crate::systems::PlayerControlState;
 use crate::systems::controller::ControllerShape;
+use crate::systems::equipment::equip_item;
 
 pub struct SkinInstance {
     pub mesh: Mesh,
@@ -133,81 +134,86 @@ pub fn animation_test(
         let mut bone_entities = HashMap::new();
         let mut root_bone_entities = Vec::new();
 
-        let root = character.scene.instantiate_with_feedback(
-            |node, entity| {
-                if let Some(bone) = bones.get(&node.name.to_lowercase()) {
-                    bone_entities.insert(bone.index, entity);
+        let root = world.spawn((Transform::from(offset),));
 
-                    if root_bones.contains(&bone.index) {
-                        root_bone_entities.push(entity);
-                    }
-                }
-            },
-            offset.into(),
+        let mut queue = VecDeque::new();
+
+        for index in &root_bones {
+            queue.push_back((root, *index));
+        }
+
+        while let Some((parent, index)) = queue.pop_front() {
+            let bone = &character.skeleton.bones[index];
+
+            let entity = world.spawn((BoneMarker, bone.transform));
+
+            if let Some((_, node)) = character
+                .scene
+                .nodes
+                .iter()
+                .find(|(_, node)| node.name.to_lowercase() == bone.name.to_lowercase())
+            {
+                let mut builder = node.build();
+                world.insert(entity, builder.build()).unwrap();
+            }
+
+            world.add_children(parent, entity);
+
+            for children in &bone.children {
+                queue.push_back((entity, *children));
+            }
+
+            bone_entities.insert(bone.index, entity);
+
+            if root_bones.contains(&bone.index) {
+                root_bone_entities.push(entity);
+            }
+        }
+
+        // let root = character.scene.instantiate_with_feedback(
+        //     |node, entity| {
+        //         if let Some(bone) = bones.get(&node.name.to_lowercase()) {
+        //             bone_entities.insert(bone.index, entity);
+
+        //             if root_bones.contains(&bone.index) {
+        //                 root_bone_entities.push(entity);
+        //             }
+        //         }
+        //     },
+        //     offset.into(),
+        //     world,
+        // );
+
+        // for bone in bones.values() {
+        //     if let Some(entity) = bone_entities.get(&bone.index) {
+        //         world.insert_one(*entity, BoneMarker).unwrap();
+        //         world.insert_one(*entity, bone.transform).unwrap();
+        //     }
+        // }
+
+        // for entity in bone_entities.values() {
+        //     world.insert_one(*entity, BoneMarker).unwrap();
+        // }
+
+        let skeleton_instance = SkeletonInstance {
+            skeleton: character.skeleton,
+            bones: bone_entities,
+            bones_bind_pose,
+            root_bones: root_bone_entities,
+        };
+
+        let skin_instances = futures_lite::future::block_on(equip_item(
+            skin_path,
+            asset_loader,
+            &skeleton_instance,
             world,
-        );
-
-        for bone in bones.values() {
-            if let Some(entity) = bone_entities.get(&bone.index) {
-                world.insert_one(*entity, BoneMarker).unwrap();
-                world.insert_one(*entity, bone.transform).unwrap();
-            }
-        }
-
-        for entity in bone_entities.values() {
-            world.insert_one(*entity, BoneMarker).unwrap();
-        }
-
-        // let skin_scene = futures_lite::future::block_on(nif_loader.load(skin_path)).unwrap();
-        let skin_scene =
-            futures_lite::future::block_on(asset_loader.load::<NifScene, _>(skin_path)).unwrap();
-
-        let mut skin_instances = Vec::new();
-
-        let mut skin_bind_poses = HashMap::new();
-
-        for (_, node) in skin_scene.nodes.iter() {
-            let Some(object) = &node.renderable else {
-                continue;
-            };
-
-            let Some(skin) = &node.skin else {
-                continue;
-            };
-
-            let mut bone_indices = Vec::new();
-            for name in &skin.bones {
-                // dbg!(&name);
-                let bone = character
-                    .skeleton
-                    .bones
-                    .iter()
-                    .find(|b| b.name.to_lowercase() == name.to_lowercase())
-                    .unwrap();
-
-                let bone_node = skin_scene
-                    .nodes
-                    .iter()
-                    .find(|(_, node)| &node.name == name)
-                    .unwrap();
-
-                // dbg!(&bones_bind_pose[&bone.index]);
-                // dbg!(bone.transform);
-                // dbg!(bone_node.1.transform);
-                skin_bind_poses.insert(bone.index, bone_node.1.transform);
-
-                bone_indices.push(bone.index);
-            }
-
-            skin_instances.push(SkinInstance {
-                mesh: skin.mesh.clone(),
-                mesh_bone_weights: skin.weights.clone(),
-                mesh_bone_indices: skin.indices.clone(),
-                bones: bone_indices,
-                entity: None,
-                material: object.material.clone(),
-            });
-        }
+        ));
+        futures_lite::future::block_on(equip_item(
+            "meshes/weapons/laserweapons/laserpistol.nif",
+            asset_loader,
+            &skeleton_instance,
+            world,
+        ));
 
         let collider = world.spawn((
             character.controller_offset,
@@ -223,12 +229,7 @@ pub fn animation_test(
                 root,
                 (
                     behavior.clips,
-                    SkeletonInstance {
-                        skeleton: character.skeleton,
-                        bones: bone_entities,
-                        bones_bind_pose,
-                        root_bones: root_bone_entities,
-                    },
+                    skeleton_instance,
                     AnimationDriver::new(Arc::new(behavior.graph)),
                     SkinInstances(skin_instances),
                     ActiveBehaviorGraphs(vec![
