@@ -200,10 +200,17 @@ pub fn animation_test(
             bones: bone_entities,
             bones_bind_pose,
             root_bones: root_bone_entities,
+            culled: HashSet::new(),
         };
 
-        let skin_instances = futures_lite::future::block_on(equip_item(
+        let mut skin_instances = futures_lite::future::block_on(equip_item(
             skin_path,
+            asset_loader,
+            &skeleton_instance,
+            world,
+        ));
+        let skin_instances2 = futures_lite::future::block_on(equip_item(
+            "meshes/armor/armoredcoat/glovesf.nif",
             asset_loader,
             &skeleton_instance,
             world,
@@ -214,6 +221,8 @@ pub fn animation_test(
             &skeleton_instance,
             world,
         ));
+
+        skin_instances.extend(skin_instances2);
 
         let collider = world.spawn((
             character.controller_offset,

@@ -1,5 +1,6 @@
 use std::collections::VecDeque;
 
+use game_common::components::Transform;
 use hashbrown::HashMap;
 use hecs::World;
 use openfo4_animation::skeleton::SkeletonInstance;
@@ -77,6 +78,12 @@ pub async fn equip_item(
                 while let Some((parent, key)) = queue.pop_front() {
                     let node = scene.nodes.get(key).unwrap();
                     let entity = world.spawn(node.build().build());
+
+                    // If the node is root, i.e. matches the bone name the transform
+                    // of that node should be overwritten by the bone transform.
+                    if parent == bone_entity {
+                        world.insert_one(entity, Transform::default()).unwrap();
+                    }
 
                     world.add_children(parent, entity);
 

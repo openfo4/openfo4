@@ -7,7 +7,7 @@ use hecs::{CommandBuffer, World};
 use crate::animation::{AnimationClip, AnimationClipFlags, BlendMode};
 use crate::driver::AnimationDriver;
 use crate::skeleton::SkeletonInstance;
-use crate::{AnimationSet, BoneWeights};
+use crate::{AnimationSet, BoneWeights, Value};
 
 pub fn drive_animations(world: &mut World, delta: Duration, event: Option<&'static str>) {
     let mut commands = CommandBuffer::new();
@@ -15,7 +15,7 @@ pub fn drive_animations(world: &mut World, delta: Duration, event: Option<&'stat
     let mut rng = rand::rng();
 
     for (entity, (skeleton, driver, set)) in
-        world.query_mut::<(&SkeletonInstance, &mut AnimationDriver, &AnimationSet)>()
+        world.query_mut::<(&mut SkeletonInstance, &mut AnimationDriver, &AnimationSet)>()
     {
         let mut events = Vec::new();
         driver.update(delta, set, &mut events);
@@ -24,6 +24,50 @@ pub fn drive_animations(world: &mut World, delta: Duration, event: Option<&'stat
             match driver.graph().event_name(event.id) {
                 Some("reevaluategraphstate") => {
                     driver.reset();
+
+                    for index in skeleton.culled.drain() {
+                        let transform = *skeleton.bones_bind_pose.get(&index).unwrap();
+                        let entity = skeleton.bones.get(&index).unwrap();
+                        commands.insert_one(*entity, transform);
+                    }
+                }
+                Some("cullbone") => {
+                    let Value::String(name) = &event.payload else {
+                        continue;
+                    };
+
+                    let index = skeleton
+                        .skeleton
+                        .bones
+                        .iter()
+                        .position(|b| b.name.to_lowercase() == name.to_lowercase())
+                        .unwrap();
+
+                    let entity = skeleton.bones.get(&index).unwrap();
+
+                    // FIXME: Setting this to NAN will cause a NAN for the MVP matrix
+                    // effectively hiding the entity, but saying this is hacky is the
+                    // understatement of the century.
+                    commands.insert_one(*entity, Transform::from_translation(Vec3::NAN));
+                    skeleton.culled.insert(index);
+                }
+                Some("uncullbone") => {
+                    let Value::String(name) = &event.payload else {
+                        continue;
+                    };
+
+                    let index = skeleton
+                        .skeleton
+                        .bones
+                        .iter()
+                        .position(|b| b.name.to_lowercase() == name.to_lowercase())
+                        .unwrap();
+
+                    let transform = *skeleton.bones_bind_pose.get(&index).unwrap();
+
+                    let entity = skeleton.bones.get(&index).unwrap();
+                    commands.insert_one(*entity, transform);
+                    skeleton.culled.remove(&index);
                 }
                 _ => (),
             }
@@ -89,6 +133,10 @@ pub fn drive_animations(world: &mut World, delta: Duration, event: Option<&'stat
             .collect::<Vec<_>>();
 
         for (index, entity) in &skeleton.bones {
+            if skeleton.culled.contains(index) {
+                continue;
+            }
+
             let mut translation = Vec3::ZERO;
             let mut scale = Vec3::ZERO;
 

@@ -1,4 +1,4 @@
-use std::collections::{HashMap, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
 
 use game_common::components::Transform;
 use hecs::Entity;
@@ -68,4 +68,8 @@ pub struct SkeletonInstance {
     pub bones: HashMap<usize, Entity>,
     pub bones_bind_pose: HashMap<usize, Transform>,
     pub root_bones: Vec<Entity>,
+    pub culled: HashSet<usize>,
 }
+
+#[derive(Copy, Clone, Debug)]
+pub struct Culled;

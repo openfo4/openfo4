@@ -125,10 +125,10 @@ impl GraphNode for StateMachine {
                 let state = &self.states[state.state_index];
                 if let Some(node) = state.node {
                     ctx.deactivate_node(node);
+                }
 
-                    for event in &state.exit_events {
-                        ctx.send_event(event.clone());
-                    }
+                for event in &state.exit_events {
+                    ctx.send_event(event.clone());
                 }
             }
 
@@ -231,10 +231,10 @@ impl GraphNode for StateMachine {
         {
             if let Some(node) = state.node {
                 ctx.activate_node(node);
+            }
 
-                for event in &state.enter_events {
-                    ctx.send_event(event.clone());
-                }
+            for event in &state.enter_events {
+                ctx.send_event(event.clone());
             }
         }
 

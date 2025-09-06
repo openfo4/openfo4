@@ -36,9 +36,10 @@ impl AnimationClip {
 }
 
 #[derive(Clone, Debug)]
-pub enum Annotation {
-    /// Synchronization point with the given name.
-    Sync(Duration, String),
+pub struct Annotation {
+    pub time: Duration,
+    pub event: String,
+    pub payload: String,
 }
 
 bitflags! {

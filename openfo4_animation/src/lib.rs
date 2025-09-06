@@ -11,7 +11,7 @@ mod nodes;
 
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::fmt::Debug;
-use std::ops::{Mul, MulAssign};
+use std::ops::{Add, AddAssign, Mul, MulAssign};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -1154,6 +1154,63 @@ impl BoneWeights {
         match self {
             Self::Shared(v) => *v,
             Self::Unique(bones) => bones.get(bone as usize).copied().unwrap_or(1.0),
+        }
+    }
+}
+
+impl Add for BoneWeights {
+    type Output = Self;
+
+    fn add(self, rhs: Self) -> Self::Output {
+        match (self, rhs) {
+            (Self::Shared(lhs), Self::Shared(rhs)) => Self::Shared(lhs + rhs),
+            (Self::Unique(mut lhs), Self::Unique(rhs)) => {
+                let count = lhs.len().max(rhs.len());
+                lhs.resize(count, 1.0);
+                for (lhs, rhs) in lhs.iter_mut().zip(rhs.iter()) {
+                    *lhs += rhs;
+                }
+
+                Self::Unique(lhs)
+            }
+            (Self::Unique(mut lhs), Self::Shared(rhs))
+            | (Self::Shared(rhs), Self::Unique(mut lhs)) => {
+                for lhs in &mut lhs {
+                    *lhs += rhs;
+                }
+
+                Self::Unique(lhs)
+            }
+        }
+    }
+}
+
+impl AddAssign for BoneWeights {
+    fn add_assign(&mut self, rhs: Self) {
+        match (&mut *self, rhs) {
+            (Self::Shared(lhs), Self::Shared(rhs)) => {
+                *lhs += rhs;
+            }
+            (Self::Unique(lhs), Self::Unique(rhs)) => {
+                let count = lhs.len().max(rhs.len());
+                lhs.resize(count, 1.0);
+                for (lhs, rhs) in lhs.iter_mut().zip(rhs.iter()) {
+                    *lhs += rhs;
+                }
+            }
+            (Self::Unique(lhs), Self::Shared(rhs)) => {
+                for lhs in lhs {
+                    *lhs += rhs;
+                }
+            }
+            (Self::Shared(lhs), Self::Unique(rhs)) => {
+                let mut rhs = rhs.clone();
+                for rhs in &mut rhs {
+                    *rhs += *lhs;
+                }
+
+                *self = Self::Unique(rhs);
+            }
         }
     }
 }

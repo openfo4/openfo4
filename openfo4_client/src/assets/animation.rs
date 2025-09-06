@@ -51,20 +51,6 @@ impl Asset for FileAnimationClip {
                             scale: t.scale,
                         })
                         .collect();
-
-                    for track in &*anim.animation.annotation_tracks {
-                        for annotation in &*track.annotations {
-                            let time = Duration::from_secs_f32(annotation.time);
-
-                            let annotation = if annotation.text.starts_with("Sync") {
-                                Annotation::Sync(time, annotation.text.clone())
-                            } else {
-                                continue;
-                            };
-
-                            clip.annotations.push(annotation);
-                        }
-                    }
                 }
                 HkObject::AnimationBinding(binding) => {
                     for (index, bone) in binding.transform_track_to_bone_indices.iter().enumerate()

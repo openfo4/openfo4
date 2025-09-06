@@ -78,7 +78,9 @@ impl AnimationSystem {
                     }
 
                     if let Some(event) = &reaction.event {
-                        driver.send_event(event);
+                        if !event.to_lowercase().contains("injured") {
+                            driver.send_event(event);
+                        }
                     }
 
                     events.0.push_back(reaction.id);

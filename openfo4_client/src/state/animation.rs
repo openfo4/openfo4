@@ -135,15 +135,16 @@ pub async fn load_anim(server: &AssetServer, search_paths: &[&str]) -> Result<An
 
                 for track in &*anim.animation.annotation_tracks {
                     for annotation in &*track.annotations {
-                        let time = Duration::from_secs_f32(annotation.time);
+                        let (event, payload) = annotation
+                            .text
+                            .split_once(".")
+                            .unwrap_or((&annotation.text, ""));
 
-                        let annotation = if annotation.text.starts_with("Sync") {
-                            Annotation::Sync(time, annotation.text.clone())
-                        } else {
-                            continue;
-                        };
-
-                        clip.annotations.push(annotation);
+                        clip.annotations.push(Annotation {
+                            time: Duration::from_secs_f32(annotation.time),
+                            event: event.to_owned(),
+                            payload: payload.to_owned(),
+                        });
                     }
                 }
             }

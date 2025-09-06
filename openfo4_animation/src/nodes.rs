@@ -58,6 +58,8 @@ pub trait Context {
 
     fn variables(&self) -> &VariableSet;
 
+    fn event_names(&self) -> &[String];
+
     fn set_variable(&mut self, id: VariableId, value: Value);
 
     fn set_property(&mut self, node: NodeId, property: Property, value: Value);

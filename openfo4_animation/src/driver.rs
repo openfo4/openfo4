@@ -204,30 +204,57 @@ impl AnimationDriver {
             return;
         };
 
-        let mut queue = VecDeque::new();
-        queue.push_back((root, BoneWeights::Shared(1.0)));
+        // Note that it is possible for multiple nodes to reference the same other
+        // node. In that case the weights for each bone need to be computed for each
+        // subtree of nodes and then summed up.
+        // However since nodes only apply weights of their immediate children we only
+        // need to extract the weights for that particular (parent, children) set.
+        // For this we keep a (Node, Parent that set weight) for each weight.
+        // Also note: all of this is very cursed.
 
-        while let Some((id, parent_weight)) = queue.pop_front() {
+        let mut global_weights: HashMap<usize, Vec<_>> = HashMap::new();
+
+        let mut queue = VecDeque::new();
+        queue.push_back((root, usize::MAX, BoneWeights::Shared(1.0)));
+
+        while let Some((id, parent, parent_weight)) = queue.pop_front() {
             let node = &self.nodes[id];
 
             let weight = self
                 .properties
                 .weight
                 .get(&id)
+                .map(|v| v.get(&parent))
+                .flatten()
                 .unwrap_or(&BoneWeights::Shared(1.0));
 
             let global_weight = parent_weight * weight.clone();
-            self.properties
-                .global_weight
-                .insert(id, global_weight.clone());
+            global_weights
+                .entry(id)
+                .or_default()
+                .push(global_weight.clone());
 
             for children in node.children() {
                 if !self.active_nodes.contains_key(&children) {
                     continue;
                 }
 
-                queue.push_back((children, global_weight.clone()));
+                queue.push_back((children, id, global_weight.clone()));
             }
+        }
+
+        for (id, mut weights) in global_weights {
+            // if self.nodes[id].name.contains("WPNReload") {
+            //     // dbg!(&weights);
+            //     weights = vec![BoneWeights::Shared(1.0)];
+            // }
+
+            let weights = weights
+                .into_iter()
+                .reduce(|acc, w| acc + w)
+                .unwrap_or(BoneWeights::Shared(0.0));
+
+            self.properties.global_weight.insert(id, weights);
         }
     }
 }
@@ -320,6 +347,10 @@ impl Context for UpdateContext<'_> {
         self.variables.variables[id] = value;
     }
 
+    fn event_names(&self) -> &[String] {
+        &self.graph.event_names
+    }
+
     fn animations(&self) -> &AnimationSet {
         &self.animations
     }
@@ -333,7 +364,11 @@ impl Context for UpdateContext<'_> {
                     _ => panic!("invalid value for bone weights"),
                 };
 
-                self.properties.weight.insert(node, weights);
+                self.properties
+                    .weight
+                    .entry(node)
+                    .or_default()
+                    .insert(self.node, weights);
             }
             Property::GlobalWeight => {}
         }
@@ -342,7 +377,12 @@ impl Context for UpdateContext<'_> {
 
 #[derive(Clone, Debug, Default)]
 struct PropertySet {
-    weight: HashMap<NodeId, BoneWeights>,
+    /// Bone weights for each node as assigned by each other node.
+    ///
+    /// See [`compute_global_weights`] for why we need multiple weights per node.
+    ///
+    /// [`compute_global_weights`]: AnimationDriver::compute_global_weights
+    weight: HashMap<NodeId, HashMap<NodeId, BoneWeights>>,
     global_weight: HashMap<NodeId, BoneWeights>,
 }
 

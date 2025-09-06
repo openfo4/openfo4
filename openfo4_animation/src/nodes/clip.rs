@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use crate::animation::AnimationClipFlags;
 use crate::nodes::{Context, GraphNode};
-use crate::{ClipTrigger, ValueExpression};
+use crate::{ClipTrigger, Event, Value, ValueExpression};
 
 #[derive(Clone, Debug)]
 pub struct Clip {
@@ -71,6 +71,23 @@ impl GraphNode for Clip {
             // Only activate the trigger if the time was reached in the current frame.
             if trigger_time > start_time && trigger_time <= end_time {
                 ctx.send_event(trigger.event.clone());
+            }
+        }
+
+        for annotation in &anim.annotations {
+            if annotation.time >= start_time && annotation.time <= end_time {
+                let Some(event_id) = ctx
+                    .event_names()
+                    .iter()
+                    .position(|v| v.to_lowercase() == annotation.event.to_lowercase())
+                else {
+                    continue;
+                };
+
+                ctx.send_event(Event {
+                    id: event_id as i64,
+                    payload: Value::String(annotation.payload.clone()),
+                });
             }
         }
     }

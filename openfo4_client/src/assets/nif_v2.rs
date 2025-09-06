@@ -300,18 +300,21 @@ impl Asset for NifScene {
                         rotation: Quat::from_mat3(&node.rotation).normalize(),
                         scale: Vec3::splat(node.scale),
                     };
+                    // let transform = Transform::default();
 
-                    let mut parent = parent;
-                    let mut parent_transform = Transform::default();
-                    while let Some(p) = parent {
-                        let parent_node: &Node = nodes.get(p).unwrap();
-                        parent_transform = parent_node.transform * parent_transform;
-                        parent = nodes.parent_key(p);
-                    }
+                    // let mut parent = parent;
+                    // let mut parent_transform = Transform::default();
+                    // while let Some(p) = parent {
+                    //     let parent_node: &Node = nodes.get(p).unwrap();
+                    //     parent_transform = parent_node.transform * parent_transform;
+                    //     parent = nodes.parent_key(p);
+                    // }
 
-                    transform = Transform::from_matrix(
-                        parent_transform.compute_matrix().inverse() * transform.compute_matrix(),
-                    );
+                    // dbg!(&parent_transform);
+
+                    // transform = Transform::from_matrix(
+                    //     parent_transform.compute_matrix().inverse() * transform.compute_matrix(),
+                    // );
 
                     let mesh = meshes.entry(block).or_insert_with(|| {
                         let mesh = build_mesh(node);
