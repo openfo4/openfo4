@@ -46,14 +46,14 @@ pub struct NifScene {
 pub trait Instantiate {
     fn instantiate(&self, transform: Transform, world: &mut World) -> Entity;
 
-    fn instantiate_with_feedback<F>(
-        &self,
+    fn instantiate_with_feedback<'a, F>(
+        &'a self,
         callback: F,
         transform: Transform,
         world: &mut World,
     ) -> Entity
     where
-        F: FnMut(&Node, Entity);
+        F: FnMut(&'a Node, Entity);
 }
 
 impl Instantiate for Handle<NifScene> {
@@ -61,14 +61,14 @@ impl Instantiate for Handle<NifScene> {
         self.instantiate_with_feedback(|_, _| {}, transform, world)
     }
 
-    fn instantiate_with_feedback<F>(
-        &self,
+    fn instantiate_with_feedback<'a, F>(
+        &'a self,
         mut callback: F,
         transform: Transform,
         world: &mut World,
     ) -> Entity
     where
-        F: FnMut(&Node, Entity),
+        F: FnMut(&'a Node, Entity),
     {
         let mut entities = HashMap::new();
         let mut queue = Vec::new();

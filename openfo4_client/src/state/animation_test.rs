@@ -113,95 +113,8 @@ pub fn animation_test(
         let offset =
             NiTransform::from_translation(offset.extend(0.0) - Vec3::new(1024.0, 1024.0, 0.0));
 
-        let mut bones = HashMap::new();
-        let mut bones_bind_pose = HashMap::new();
-        let mut root_bones: HashSet<_> = character.skeleton.bones.iter().map(|b| b.index).collect();
-
-        for (bone, bind_pose) in character
-            .skeleton
-            .bones
-            .iter()
-            .zip(character.skeleton.bind_pose_bone_transforms())
-        {
-            bones.insert(bone.name.to_lowercase(), bone);
-            bones_bind_pose.insert(bone.index, bind_pose);
-
-            for index in &bone.children {
-                root_bones.remove(index);
-            }
-        }
-
-        let mut bone_entities = HashMap::new();
-        let mut root_bone_entities = Vec::new();
-
         let root = world.spawn((Transform::from(offset),));
-
-        let mut queue = VecDeque::new();
-
-        for index in &root_bones {
-            queue.push_back((root, *index));
-        }
-
-        while let Some((parent, index)) = queue.pop_front() {
-            let bone = &character.skeleton.bones[index];
-
-            let entity = world.spawn((BoneMarker, bone.transform));
-
-            if let Some((_, node)) = character
-                .scene
-                .nodes
-                .iter()
-                .find(|(_, node)| node.name.to_lowercase() == bone.name.to_lowercase())
-            {
-                let mut builder = node.build();
-                world.insert(entity, builder.build()).unwrap();
-            }
-
-            world.add_children(parent, entity);
-
-            for children in &bone.children {
-                queue.push_back((entity, *children));
-            }
-
-            bone_entities.insert(bone.index, entity);
-
-            if root_bones.contains(&bone.index) {
-                root_bone_entities.push(entity);
-            }
-        }
-
-        // let root = character.scene.instantiate_with_feedback(
-        //     |node, entity| {
-        //         if let Some(bone) = bones.get(&node.name.to_lowercase()) {
-        //             bone_entities.insert(bone.index, entity);
-
-        //             if root_bones.contains(&bone.index) {
-        //                 root_bone_entities.push(entity);
-        //             }
-        //         }
-        //     },
-        //     offset.into(),
-        //     world,
-        // );
-
-        // for bone in bones.values() {
-        //     if let Some(entity) = bone_entities.get(&bone.index) {
-        //         world.insert_one(*entity, BoneMarker).unwrap();
-        //         world.insert_one(*entity, bone.transform).unwrap();
-        //     }
-        // }
-
-        // for entity in bone_entities.values() {
-        //     world.insert_one(*entity, BoneMarker).unwrap();
-        // }
-
-        let skeleton_instance = SkeletonInstance {
-            skeleton: character.skeleton,
-            bones: bone_entities,
-            bones_bind_pose,
-            root_bones: root_bone_entities,
-            culled: HashSet::new(),
-        };
+        let skeleton_instance = character.instantiate(root, world);
 
         let mut skin_instances = futures_lite::future::block_on(equip_item(
             skin_path,
@@ -428,6 +341,81 @@ struct ActorCharacter {
     controller_offset: Transform,
     controller_shape: ColliderShape,
     props: HashMap<String, Value>,
+}
+
+impl ActorCharacter {
+    fn instantiate(&self, root: Entity, world: &mut World) -> SkeletonInstance {
+        // Because the scene may have nodes with extra components we
+        // will first spawn the scene and then "overlay" the HKX skeleton.
+        let mut scene_nodes = HashMap::new();
+        let scene = self.scene.instantiate_with_feedback(
+            |node, entity| {
+                scene_nodes.insert(node.name.to_lowercase(), entity);
+            },
+            Transform::default(),
+            world,
+        );
+
+        world.add_children(root, scene);
+
+        let mut ready_bones = Vec::new();
+        for bone in &self.skeleton.bones {
+            if scene_nodes.contains_key(&bone.name.to_lowercase()) {
+                ready_bones.push(bone);
+            }
+        }
+
+        let mut bones = HashMap::new();
+
+        while let Some(bone) = ready_bones.pop() {
+            let entity = *scene_nodes.get(&bone.name.to_lowercase()).unwrap();
+            bones.insert(bone.index, entity);
+
+            // Both transforms SHOULD be the same, however if they do
+            // not we will choose the one from the hkx skeleton.
+            world.insert(entity, (BoneMarker, bone.transform)).unwrap();
+
+            for index in &bone.children {
+                let child_bone = &self.skeleton.bones[*index];
+                if scene_nodes.contains_key(&child_bone.name.to_lowercase()) {
+                    continue;
+                }
+
+                let child_entity = world.reserve_entity();
+                world.add_children(entity, child_entity);
+                scene_nodes.insert(child_bone.name.to_lowercase(), child_entity);
+                ready_bones.push(child_bone);
+            }
+        }
+
+        let mut bones_bind_pose = HashMap::new();
+        let mut root_bones: HashSet<_> = self.skeleton.bones.iter().map(|b| b.index).collect();
+        for (bone, transform) in self
+            .skeleton
+            .bones
+            .iter()
+            .zip(self.skeleton.bind_pose_bone_transforms())
+        {
+            bones_bind_pose.insert(bone.index, transform);
+
+            for index in &bone.children {
+                root_bones.remove(index);
+            }
+        }
+
+        let root_bone_entities = root_bones
+            .into_iter()
+            .map(|index| *bones.get(&index).unwrap())
+            .collect();
+
+        SkeletonInstance {
+            skeleton: self.skeleton.clone(),
+            bones,
+            bones_bind_pose,
+            root_bones: root_bone_entities,
+            culled: HashSet::new(),
+        }
+    }
 }
 
 struct ActorBehaviorData {
