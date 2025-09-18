@@ -3,7 +3,7 @@ use std::io::Read;
 use std::sync::Arc;
 
 use crossbeam::queue::SegQueue;
-use game_common::components::Transform;
+use game_common::components::{Color, PointLight, Transform};
 use game_core::hierarchy::Hierarchy;
 use game_core_pipeline::material::StandardMaterial;
 use game_render::backend::TextureFormat;
@@ -22,7 +22,7 @@ use openfo4_nif::bgsm::Bgsm;
 use openfo4_physics::components::{Collider, ColliderShape, RigidBody, RigidBodyKind, TriMesh};
 use tracing::instrument;
 
-use crate::assets::nif_v2::{Instantiate, NifScene};
+use crate::assets::nif_v2::{Instantiate, NIF_TO_METERS, NifScene};
 use crate::cell::{CELL_SIZE, CellId};
 use crate::components::{NiTransform, Root};
 use crate::events::{Event, UnloadCell};
@@ -155,8 +155,17 @@ impl Level {
                         continue;
                     }
 
-                    let entity = event.scene.instantiate(event.transform.into(), world);
+                    let entity = if let Some(scene) = event.scene {
+                        scene.instantiate(event.transform.into(), world)
+                    } else {
+                        world.spawn((Transform::from(event.transform),))
+                    };
+
                     world.insert_one(entity, RigidBody::FIXED).unwrap();
+
+                    if let Some(light) = event.light {
+                        world.insert_one(entity, light).unwrap();
+                    }
                 }
                 SpawnEvent::SpawnTerrain(transform, object, collider) => {
                     dbg!("TERRAIN");
@@ -238,7 +247,8 @@ enum SpawnEvent {
 #[derive(Clone, Debug)]
 pub struct SpawnEntity {
     pub transform: NiTransform,
-    pub scene: Handle<NifScene>,
+    pub scene: Option<Handle<NifScene>>,
+    pub light: Option<PointLight>,
 }
 
 async fn load_cell(
@@ -290,11 +300,22 @@ async fn load_cell(
             let scale;
             let base_object;
 
+            let mut light_mod = LightModification::default();
+
             match record.data {
                 RecordData::PlacedObject(object) => {
                     position = object.position;
                     base_object = object.base_object;
                     scale = object.scale.unwrap_or(1.0);
+
+                    if let Some(radius) = object.radius {
+                        light_mod.radius = radius;
+                    }
+
+                    if let Some(light) = object.light_data {
+                        light_mod.fov = light.fov_offset_from_base_object;
+                        light_mod.fade = light.fade_offset_from_base_ojbect;
+                    }
                 }
                 RecordData::PlacedNpc(npc) => {
                     position = npc.position;
@@ -492,6 +513,8 @@ async fn load_cell(
                 return;
             }
 
+            let mut light = None;
+
             let model = match base.data {
                 RecordData::STAT(data) => data.modl.model,
                 RecordData::StaticCollection(data) => data.model.model,
@@ -503,28 +526,43 @@ async fn load_cell(
                 RecordData::Activator(data) => data.model.model,
                 RecordData::MiscObject(data) => data.model.model,
                 RecordData::Furniture(data) => data.model.model,
-                RecordData::Light(data) => data.model.model,
+                RecordData::Light(data) => {
+                    light = Some(PointLight {
+                        color: Color::from_rgb([
+                            data.data.color.r as f32 / 255.0,
+                            data.data.color.g as f32 / 255.0,
+                            data.data.color.b as f32 / 255.0,
+                        ]),
+                        intensity: (data.fade_value + light_mod.fade) * 100.0,
+                        radius: (data.data.radius as f32 + light_mod.radius) * NIF_TO_METERS,
+                    });
+
+                    data.model.model
+                }
                 RecordData::Ingestible(data) => data.model.model,
                 _ => return,
                 x => todo!("{:?}", x),
             };
 
-            let Some(model) = model else {
-                return;
+            let scene = match model {
+                Some(model) => {
+                    let path = format!("meshes/{}", model.as_str().unwrap());
+                    match asset_loader.load::<NifScene, _>(&path).await {
+                        Ok(scene) => Some(scene),
+                        Err(err) => {
+                            tracing::error!("{}", err);
+                            None
+                        }
+                    }
+                }
+                None => None,
             };
 
-            let path = format!("meshes/{}", model.as_str().unwrap());
-            match asset_loader.load::<NifScene, _>(&path).await {
-                Ok(scene) => {
-                    events.push(SpawnEvent::SpawnEntity(SpawnEntity {
-                        transform: NiTransform::from_ni_transform(transform),
-                        scene: scene.clone(),
-                    }));
-                }
-                Err(err) => {
-                    tracing::error!("{}", err);
-                }
-            }
+            events.push(SpawnEvent::SpawnEntity(SpawnEntity {
+                transform: NiTransform::from_ni_transform(transform),
+                scene,
+                light,
+            }));
         });
     }
 }
@@ -701,4 +739,11 @@ async fn load_terrain_layer(
         smoothness,
         specular_strength,
     })
+}
+
+#[derive(Copy, Clone, Debug, Default)]
+struct LightModification {
+    radius: f32,
+    fov: f32,
+    fade: f32,
 }

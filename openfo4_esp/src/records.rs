@@ -1722,9 +1722,12 @@ bitflags! {
         const FLICKER = 0x00000008;
         const OFF_BY_DEFAULT = 0x00000020;
         const PULSE = 0x00000080;
+        /// The light is a shadow casting spotlight.
         const SHADOW_SPOTLIGHT = 0x00000400;
         const SHADOW_HEMISPHERE = 0x00000800;
+        /// The light is a shadow casting point light.
         const SHADOW_OMNIDIRECTIONAL = 0x00001000;
+        /// The light is a spotlight without casting shadows.
         const NON_SHADOW_SPOTLIGHT = 0x00004000;
         const NON_SPECULAR = 0x00008000;
         const ATTENUATION_ONLY = 0x00010000;
@@ -3611,7 +3614,7 @@ pub struct PlacedObject {
     #[record("XEMI")]
     pub emitted_light: Option<FormId>,
     #[record("XRDS")]
-    pub radius: Option<FormId>,
+    pub radius: Option<f32>,
     #[record("XLIG")]
     pub light_data: Option<PlacedObjectLightData>,
     #[record("XALP")]
