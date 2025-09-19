@@ -19,10 +19,10 @@ use bytes::Buf;
 use records::{
     AcousticSpace, Action, Activator, Ammo, Armor, Book, Cell, Climate, Container, Empty,
     Furniture, GameSetting, Hazard, IdleMarker, Ingestible, Key, Keyword, Land, LandTexture,
-    LeveledActor, LeveledItem, Light, LocationReferenceType, MiscObject, Note, Npc, PlacedGrenade,
-    PlacedHazard, PlacedNpc, PlacedObject, Projectile, Race, ShaderParticleGeometry,
+    LeveledActor, LeveledItem, Light, LocationReferenceType, MagicEffect, MiscObject, Note, Npc,
+    PlacedGrenade, PlacedHazard, PlacedNpc, PlacedObject, Projectile, Race, ShaderParticleGeometry,
     StaticCollection, Tes4, TextureSet, VisualEffect, Weather, Worldspace, CLAS, CMPO, DMGT, DOOR,
-    ENCH, FACT, FLOR, GLOB, GRAS, HDPT, INGR, MGEF, MSTT, SOUN, SPEL, STAT, TACT, TRNS,
+    ENCH, FACT, FLOR, GLOB, GRAS, HDPT, INGR, MSTT, SOUN, SPEL, STAT, TACT, TRNS,
 };
 
 use crate::records::{
@@ -244,7 +244,7 @@ where
                             continue;
                         }
 
-                        let data = self.read_record_data(header).unwrap();
+                        let data = self.read_record_data(header)?;
                         cells.push(Record {
                             id: header.form_id,
                             flags: header.flags,
@@ -556,7 +556,7 @@ pub enum RecordData {
     Race(Race),
     SOUN(SOUN),
     AcousticSpace(AcousticSpace),
-    MGEF(MGEF),
+    MGEF(MagicEffect),
     LandTexture(LandTexture),
     ENCH(ENCH),
     SPEL(SPEL),
@@ -711,7 +711,7 @@ as_record_kind_impl! {
     Race => RecordKind::Race,
     SOUN => RecordKind::Sound,
     AcousticSpace => RecordKind::AcousticSpace,
-    MGEF => RecordKind::MagicEffect,
+    MagicEffect => RecordKind::MagicEffect,
     LandTexture => RecordKind::LandTexture,
     ENCH => RecordKind::Enchantment,
     SPEL => RecordKind::Spell,

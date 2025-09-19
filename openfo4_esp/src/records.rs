@@ -33,6 +33,10 @@ impl Read for Empty {
     fn read(map: &mut FieldMap, key: Text<4>) -> Result<Self, Self::Error> {
         Ok(Empty)
     }
+
+    fn read_next(map: &mut FieldMap, key: Text<4>) -> Result<Self, Self::Error> {
+        Ok(Empty)
+    }
 }
 
 #[derive(Copy, Clone, Debug, BinaryStruct)]
@@ -47,14 +51,28 @@ pub struct Rgba<T> {
 pub struct Tes4 {
     #[record("HEDR")]
     pub header: Tes4Header,
+    #[record("OFST")]
+    _unknown_ofst: Option<()>,
+    #[record("DELE")]
+    _unknown_dele: Option<()>,
     #[record("CNAM")]
     pub author: Option<ZString>,
     #[record("SNAM")]
     pub description: Option<ZString>,
+    #[record("MAST")]
+    pub master_files: SubRecordArray<MasterFile>,
     #[record("INTV")]
-    pub intv: u32,
+    pub intv: Option<u32>,
     #[record("INCC")]
-    pub incc: u32,
+    pub incc: Option<u32>,
+}
+
+#[derive(Clone, Debug, Record)]
+pub struct MasterFile {
+    #[record("MAST")]
+    pub file_name: ZString,
+    #[record("DATA")]
+    _unknown_data: Option<()>,
 }
 
 #[derive(Copy, Clone, Debug, BinaryStruct)]
@@ -100,6 +118,10 @@ impl Read for GameSetting {
         };
 
         Ok(Self { id, data })
+    }
+
+    fn read_next(map: &mut FieldMap, key: Text<4>) -> Result<Self, Self::Error> {
+        Self::read(map, key)
     }
 }
 
@@ -147,12 +169,19 @@ pub struct LocationReferenceType {
 
 #[derive(Clone, Debug, Record)]
 pub struct Action {
+    /// The editor ID of this record.
     #[record("EDID")]
-    pub edid: Option<ZString>,
+    pub id: Option<ZString>,
     #[record("CNAM")]
-    pub cnam: Option<RgbPadded<u8>>,
+    pub color: Option<RgbPadded<u8>>,
+    #[record("DNAM")]
+    pub notes: Option<ZString>,
     #[record("TNAM")]
-    pub tnam: Option<u32>,
+    pub type_: Option<u32>,
+    #[record("DATA")]
+    pub attraction_rule: Option<()>,
+    #[record("FULL")]
+    pub full_name: Option<LString>,
 }
 
 #[derive(Clone, Debug, Record)]
@@ -218,16 +247,16 @@ pub struct TextureSet {
     pub diffuse_texture: Option<ZString>,
     #[record("TX01")]
     pub normal_texture: Option<ZString>,
-    #[record("TX02")]
-    pub emissive_texture: Option<ZString>,
     #[record("TX03")]
-    pub height_texture: Option<ZString>,
+    pub emissive_texture: Option<ZString>,
     #[record("TX04")]
-    pub environment_texture: Option<ZString>,
+    pub height_texture: Option<ZString>,
     #[record("TX05")]
-    pub tx05: Option<ZString>,
+    pub environment_texture: Option<ZString>,
+    #[record("TX02")]
+    pub wrinkles_texture: Option<ZString>,
     #[record("TX06")]
-    pub tx06: Option<ZString>,
+    pub multilayer_texture: Option<ZString>,
     #[record("TX07")]
     pub smooth_spec_texture: Option<ZString>,
     #[record("DODT")]
@@ -522,10 +551,13 @@ impl Decode for ModelInfo {
 }
 
 #[derive(Clone, Debug, Record)]
+#[record(ordered)]
 pub struct Race {
     /// The editor ID.
     #[record("EDID")]
     pub id: ZString,
+    #[record("STCP")]
+    pub animation_sound: Option<FormId>,
     /// The localized name of the record.
     #[record("FULL")]
     pub full_name: Option<LString>,
@@ -533,26 +565,32 @@ pub struct Race {
     #[record("DESC")]
     pub description: Option<LString>,
     #[record("SPCT")]
-    effect_count: Option<u32>,
+    _effects_len: Option<u32>,
     #[record("SPLO")]
     pub effects: Vec<FormId>,
     /// Link to [`Armor`] that contains the skin of the race.
     #[record("WNAM")]
     pub skin: Option<FormId>,
-    #[record("BODT")]
-    pub bodt: Option<RACE_BODT>,
+    #[record("BOD2")]
+    _bod2: Option<()>,
     #[record("KSIZ")]
-    keyword_count: Option<u32>,
-    /// List of [`KYWD`] records.
+    _keywords_len: Option<u32>,
+    /// List of [`Keyword`] records attached to this `Race`.
     #[record("KWDA")]
     pub keywords: Option<Array<FormId>>,
+    #[record("PRPS")]
+    pub properties: Option<Array<Property>>,
+    #[record("APPR")]
+    pub attach_parent_slots: Option<()>,
     #[record("DATA")]
     pub data: RaceData,
     #[record("MNAM")]
     pub male_skeletal_model: Option<SubRecordSection<RaceSkeletalModel>>,
     #[record("FNAM")]
     pub female_skeletal_model: Option<SubRecordSection<RaceSkeletalModel>>,
-    #[record("MTMN")]
+    #[record("NAM2")]
+    _unknown_nam2: Option<()>,
+    #[record("MTNM")]
     pub movement_type_names: Vec<Text<4>>,
     /// Voice types for male and female.
     #[record("VTCK")]
@@ -563,15 +601,19 @@ pub struct Race {
     #[record("TINL")]
     pub total_number_of_tints: Option<u16>,
     #[record("PNAM")]
-    pub face_gen_main_clamp: f32,
+    pub face_gen_main_clamp: Option<f32>,
     #[record("UNAM")]
-    pub face_gen_face_clamp: f32,
+    pub face_gen_face_clamp: Option<f32>,
     #[record("ATKR")]
     pub attack_race: Option<FormId>,
     #[record("ATKD")]
-    pub attacks: Vec<RACE_ATKD>,
+    pub attacks: SubRecordArray<RaceAttack>,
     #[record("NAM1")]
-    pub body_parts: Option<SubRecordSection<RaceBodyParts>>,
+    _unknown_nam1: Option<()>,
+    #[record("MNAM")]
+    pub male_body_parts: Option<SubRecordSection<RaceBodyParts>>,
+    #[record("FNAM")]
+    pub female_body_parts: Option<SubRecordSection<RaceBodyParts>>,
     #[record("GNAM")]
     pub body_part_data: Option<FormId>,
     #[record("NAM3")]
@@ -596,11 +638,16 @@ pub struct Race {
     pub biped_object_conditions: Option<Array<FormId>>,
     // movement_data_overrides
     // pub equipment_flags:
+    #[record("VNAM")]
+    pub equipment_flags: Option<u32>,
+    #[record("QNAM")]
+    pub equip_slots: SubRecordArray<RaceEquipSlot>,
     #[record("UNWP")]
     pub unarmed_weapon: Option<FormId>,
     #[record("PHTN")]
-    pub phenome_target_names: SubRecordArray<ZString>,
-    // PHWT
+    pub phoneme_target_names: SubRecordArray<ZString>,
+    #[record("PHWT")]
+    pub phonemes: SubRecordArray<()>,
     /// Reference to [`MovementType`] that is active by default.
     #[record("WKMV")]
     pub base_movement_defaults_default: Option<FormId>,
@@ -613,6 +660,18 @@ pub struct Race {
     /// Reference to [`MovementType`] that is active when the actor is sneaking.
     #[record("SNMV")]
     pub base_movement_defaults_sneak: Option<FormId>,
+    #[record("NAM0")]
+    _head_male_marker: Option<()>,
+    #[record("MNAM")]
+    pub male_customization: Option<SubRecordSection<RaceMaleCustomization>>,
+    #[record("NAM0")]
+    _head_female_marker: Option<()>,
+    #[record("FNAM")]
+    pub female_customization: Option<SubRecordSection<RaceFemaleCustomization>>,
+    #[record("NAM8")]
+    pub morph_race: Option<FormId>,
+    #[record("RNAM")]
+    pub armor_race: Option<FormId>,
     /// Reference to another `Race` record which contains all the subgraph data that should be used
     /// for this `Race`.
     #[record("SRAC")]
@@ -625,6 +684,13 @@ pub struct Race {
     pub subgraph_additive_race: Option<FormId>,
     #[record("SGNM")]
     pub subgraph_data: SubRecordArray<RaceSubgraphData>,
+    // TODO: Incomplete
+}
+
+#[derive(Copy, Clone, Debug, BinaryStruct)]
+pub struct Property {
+    pub actor_value: FormId,
+    pub value: f32,
 }
 
 #[derive(Clone, Debug, Record)]
@@ -633,6 +699,8 @@ pub struct RaceSubgraphData {
     pub actor_keywords: Vec<FormId>,
     #[record("SGNM")]
     pub behavior_graph: ZString,
+    #[record("SAPT")]
+    pub animation_paths: Vec<ZString>,
     #[record("STKD")]
     pub target_keywords: Vec<FormId>,
     #[record("SRAF")]
@@ -817,23 +885,15 @@ pub struct PerGender<T> {
 #[derive(Clone, Debug, Record)]
 pub struct BodyPart {
     #[record("INDX")]
-    pub index: Option<()>,
+    pub index: Option<u32>,
     #[record("MODL")]
     pub model: Model,
 }
 
 #[derive(Clone, Debug, Record)]
-pub struct BodyPartSection {
-    #[record("MODL")]
-    pub parts: SubRecordArray<BodyPart>,
-}
-
-#[derive(Clone, Debug, Record)]
 pub struct RaceBodyParts {
-    #[record("MNAM")]
-    pub male: Option<SubRecordSection<BodyPartSection>>,
-    #[record("FNAM")]
-    pub female: Option<SubRecordSection<BodyPartSection>>,
+    #[record("INDX")]
+    pub parts: SubRecordArray<BodyPart>,
 }
 
 #[derive(Clone, Debug, Record)]
@@ -903,19 +963,186 @@ pub struct RACE_DATA {
 #[derive(Copy, Clone, Debug, BinaryStruct)]
 pub struct RACE_MODT {}
 
+#[derive(Clone, Debug, Record)]
+pub struct RaceAttack {
+    #[record("ATKD")]
+    pub data: RaceAttackData,
+    #[record("ATKE")]
+    pub event: Option<ZString>,
+    #[record("ATKW")]
+    _atkw: Option<()>,
+    #[record("ATKS")]
+    _atks: Option<()>,
+    #[record("ATKT")]
+    _atkt: Option<()>,
+}
+
 #[derive(Copy, Clone, Debug, BinaryStruct)]
-pub struct RACE_ATKD {
+pub struct RaceAttackData {
     pub damage_mult: f32,
     pub attack_chance: f32,
     pub attack_spell: FormId,
-    pub flags: u32,
+    pub flags: RaceAttackFlags,
     pub attack_angle: f32,
     pub strike_angle: f32,
     pub stagger: f32,
-    pub attack_type: FormId,
     pub knockdown: f32,
     pub recovery_time: f32,
-    pub fatigue_mult: f32,
+    pub action_points_mult: f32,
+    pub stagger_offsets: u32,
+}
+
+bitflags! {
+    #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+    pub struct RaceAttackFlags: u32 {
+        const POWER_ATTACK = 0x04;
+    }
+}
+
+impl_decode_bitflags!(RaceAttackFlags: u32);
+
+#[derive(Clone, Debug, Record)]
+pub struct RaceEquipSlot {
+    #[record("QNAM")]
+    pub equip_slot: FormId,
+    #[record("ZNAM")]
+    _znam: Option<()>,
+}
+
+#[derive(Clone, Debug, Record)]
+pub struct RaceMaleCustomization {
+    #[record("NNAM")]
+    pub neck_fat_adjustment: Option<()>,
+    #[record("INDX")]
+    pub head_parts: SubRecordArray<RaceHeadPart>,
+    #[record("RPRM")]
+    pub race_presets: SubRecordArray<FormId>,
+    #[record("AHCM")]
+    pub hair_colors: SubRecordArray<FormId>,
+    #[record("FTSM")]
+    pub face_details: SubRecordArray<FormId>,
+    #[record("DFTM")]
+    pub default_face_texture: Option<FormId>,
+    #[record("TTGP")]
+    pub tint_layers: SubRecordArray<RaceTintLayerGroup>,
+    #[record("MPGN")]
+    pub morph_groups: SubRecordArray<RaceMorphGroup>,
+    #[record("FMRI")]
+    pub face_morphs: SubRecordArray<RaceFaceMorph>,
+    #[record("WMAP")]
+    pub wrinke_map_path: Option<ZString>,
+}
+
+#[derive(Clone, Debug, Record)]
+pub struct RaceFemaleCustomization {
+    #[record("NNAM")]
+    pub neck_fat_adjustment: Option<()>,
+    #[record("INDX")]
+    pub head_parts: SubRecordArray<RaceHeadPart>,
+    #[record("RPRF")]
+    pub race_presets: SubRecordArray<FormId>,
+    #[record("AHCF")]
+    pub hair_colors: SubRecordArray<FormId>,
+    #[record("FTSF")]
+    pub face_details: SubRecordArray<FormId>,
+    #[record("DFTF")]
+    pub default_face_texture: Option<FormId>,
+    #[record("TTGP")]
+    pub tint_layers: SubRecordArray<RaceTintLayerGroup>,
+    #[record("MPGN")]
+    pub morph_groups: SubRecordArray<RaceMorphGroup>,
+    #[record("FMRI")]
+    pub face_morphs: SubRecordArray<RaceFaceMorph>,
+    #[record("WMAP")]
+    pub wrinke_map_path: Option<ZString>,
+}
+
+#[derive(Clone, Debug, Record)]
+pub struct RaceHeadPart {
+    #[record("INDX")]
+    pub index: u32,
+    #[record("HEAD")]
+    pub part: FormId,
+}
+
+#[derive(Clone, Debug, Record)]
+pub struct RaceTintLayerGroup {
+    #[record("TTGP")]
+    pub group_name: LString,
+    #[record("TETI")]
+    pub options: SubRecordArray<RaceTintLayerGroupOption>,
+    #[record("TTGE")]
+    pub category_index: Option<u32>,
+}
+
+#[derive(Clone, Debug, Record)]
+pub struct RaceTintLayerGroupOption {
+    #[record("TETI")]
+    pub index: RaceTintLayerGroupOptionIndex,
+    #[record("TTGP")]
+    pub name: Option<LString>,
+    #[record("TTEF")]
+    pub flags: Option<u16>,
+    #[record("CTDA")]
+    pub conditions: SubRecordArray<Condition>,
+    #[record("TTET")]
+    pub textures: SubRecordArray<ZString>,
+    #[record("TTEB")]
+    pub blend_operation: Option<()>,
+    #[record("TTEC")]
+    pub template_colors: Vec<RaceTintLayerTemplateColor>,
+    #[record("TTED")]
+    pub default: Option<f32>,
+}
+
+#[derive(Clone, Debug, BinaryStruct)]
+pub struct RaceTintLayerGroupOptionIndex {
+    pub slot: u16,
+    pub index: u16,
+}
+
+#[derive(Clone, Debug, BinaryStruct)]
+pub struct RaceTintLayerTemplateColor {
+    pub color: FormId,
+    pub alpha: f32,
+    pub template_index: u16,
+    pub blend_operation: u32,
+}
+
+#[derive(Clone, Debug, Record)]
+pub struct RaceMorphGroup {
+    #[record("MPGN")]
+    pub name: ZString,
+    #[record("MPPC")]
+    _presets_len: Option<u32>,
+    #[record("MPPI")]
+    pub presets: SubRecordArray<RaceMorphGroupPreset>,
+    #[record("MPPK")]
+    pub mask: Option<u16>,
+    #[record("MPGS")]
+    pub sliders: Option<Array<u32>>,
+}
+
+#[derive(Clone, Debug, Record)]
+pub struct RaceMorphGroupPreset {
+    #[record("MPPI")]
+    pub index: u32,
+    #[record("MPPN")]
+    pub name: LString,
+    #[record("MPPM")]
+    pub morph: ZString,
+    #[record("MPPT")]
+    pub texture: FormId,
+    #[record("MPPF")]
+    pub playable: bool,
+}
+
+#[derive(Clone, Debug, Record)]
+pub struct RaceFaceMorph {
+    #[record("FMRI")]
+    pub index: u32,
+    #[record("FMRN")]
+    pub name: LString,
 }
 
 #[derive(Clone, Debug, Record)]
@@ -943,7 +1170,7 @@ pub struct AcousticSpace {
     /// Use the sound from a region.
     ///
     /// Reference to a [`Region`] record.
-    #[record("TDAT")]
+    #[record("RDAT")]
     pub region_sound: Option<FormId>,
     /// Reveberation data to use.
     ///
@@ -958,32 +1185,29 @@ pub struct AcousticSpace {
 }
 
 #[derive(Clone, Debug, Record)]
-pub struct MGEF {
+pub struct MagicEffect {
     #[record("EDID")]
-    pub edid: ZString,
-    /// TODO
+    pub id: ZString,
     #[record("VMAD")]
-    pub vmad: Option<()>,
+    pub virtual_machine_adpater: Option<VirtualMachineAdapter>,
     #[record("FULL")]
-    pub full: Option<LString>,
+    pub full_name: Option<LString>,
     #[record("MDOB")]
-    pub mdob: Option<FormId>,
+    pub menu_display_object: Option<FormId>,
     #[record("KSIZ")]
-    pub ksiz: Option<u32>,
+    _keywords_len: Option<u32>,
     #[record("KWDA")]
-    pub kwda: Vec<FormId>,
+    pub keywords: Option<Array<FormId>>,
     #[record("DATA")]
-    pub data: MGEF_DATA,
+    pub data: (),
     #[record("ESCE")]
-    pub esce: Vec<FormId>,
-    // TODO: Does not parse
-    // #[record("SNDD")]
-    // pub sndd: Vec<MGEF_SNDD>,
+    pub counter_effects: Vec<FormId>,
+    #[record("SNDD")]
+    pub sounds: Option<()>,
     #[record("DNAM")]
-    pub dnam: LString,
-    /// TODO
+    pub magic_item_description: Option<LString>,
     #[record("CTDA")]
-    pub ctda: Vec<()>,
+    pub conditions: SubRecordArray<Condition>,
 }
 
 #[derive(Copy, Clone, Debug, BinaryStruct)]
@@ -2399,6 +2623,7 @@ pub struct NpcFactionMember {
     pub rank: i8,
 }
 
+/// Indicates which properties an [`Npc`] should inherit from another [`Npc`] record.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, BinaryStruct)]
 pub struct NpcTemplateActors {
     pub traits: FormId,
@@ -2539,16 +2764,18 @@ pub struct LeveledActor {
     pub id: ZString,
     #[record("OBND")]
     pub object_bounds: Bounds,
+    /// The chance of this `LeveledActor` to evaluate to no actor.
     #[record("LVLD")]
     pub chance_none: u8,
     #[record("LVLM")]
     pub max_count: u8,
     #[record("LVLF")]
     pub flags: LeveledActorFlags,
+    /// Use a [`GLOB`] variable to set the `chance_none` field.
     #[record("LVLG")]
     pub use_global: Option<FormId>,
     #[record("LLCT")]
-    list_count: u8,
+    _list_count: u8,
     #[record("LVLO")]
     pub entries: Vec<LeveledListEntry>,
     #[record("COED")]
@@ -2569,12 +2796,16 @@ bitflags! {
 
 impl_decode_bitflags!(LeveledActorFlags: u8);
 
+/// A possible actor selection of a [`LeveledActor`].
 #[derive(Copy, Clone, Debug, BinaryStruct)]
 pub struct LeveledListEntry {
+    /// The minimum player level at which the entry may be selected.
     pub level: u32,
     pub reference: FormId,
     pub count: u32,
-    // pub chance_none: u8,
+    /// The chance that this `LeveldListEntry` is NOT selected. In other words this is the inverse
+    /// chance.
+    pub chance_none: u8,
 }
 
 #[derive(Copy, Clone, Debug, BinaryStruct)]
@@ -3383,11 +3614,24 @@ pub struct Cell {
     pub full_name: Option<LString>,
     #[record("DATA")]
     pub flags: CellFlags,
+    #[record("VISI")]
+    _unknown_visi: Option<()>,
+    #[record("RVIS")]
+    _unknown_rvis: Option<()>,
+    #[record("PCMB")]
+    _unknown_pcmb: Option<()>,
     #[record("XCLC")]
     pub grid: Option<Grid>,
     #[record("XCLL")]
     pub lighting: Option<CellLighting>,
-    // max_height_data
+    #[record("CNAM")]
+    _unknown_cnam: Option<()>,
+    #[record("ZNAM")]
+    _unknown_znam: Option<()>,
+    #[record("TVDT")]
+    _unknown_tvdt: Option<()>,
+    #[record("MHDT")]
+    pub max_height_data: Option<()>,
     #[record("LTMP")]
     pub lighting_template: FormId,
     #[record("XCLW")]
@@ -3396,6 +3640,8 @@ pub struct Cell {
     pub regions: Option<Array<FormId>>,
     #[record("XLCN")]
     pub location: Option<FormId>,
+    #[record("XWCN")]
+    _unknown_xwcn: Option<()>,
     #[record("XWCU")]
     pub water_velocity: Option<Array<Vec3Padded<f32>>>,
     #[record("XCWT")]
@@ -3610,13 +3856,24 @@ pub struct PlacedObject {
     pub primitive: Option<PlacedObjectPrimitive>,
     #[record("XPOD")]
     pub portal_destination: Option<PortalDestination>,
-    // XRMR
-    #[record("XEMI")]
-    pub emitted_light: Option<FormId>,
-    #[record("XRDS")]
-    pub radius: Option<f32>,
+    #[record("XPTL")]
+    pub portal_room: Option<()>,
+    #[record("XORD")]
+    pub linked_occlusion_reference: Option<()>,
+    #[record("XOCP")]
+    pub occlusion_plane_data: Option<()>,
+    #[record("XMBP")]
+    pub multibound_primitive: Option<()>,
+    #[record("XRGD")]
+    pub ragdoll_data: Option<()>,
+    #[record("XRGB")]
+    pub ragdoll_biped_rotation: Option<()>,
     #[record("XLIG")]
     pub light_data: Option<PlacedObjectLightData>,
+    #[record("XRDS")]
+    pub radius: Option<f32>,
+    #[record("XEMI")]
+    pub emitted_light: Option<FormId>,
     #[record("XALP")]
     pub alpha_cutoff: Option<AlphaCutoff>,
     #[record("XTEL")]
@@ -3625,6 +3882,8 @@ pub struct PlacedObject {
     pub teleport_location_name: Option<FormId>,
     #[record("XMBR")]
     pub multibound_reference: Option<FormId>,
+    #[record("XWCN")]
+    _unknown_xwcn: Option<()>,
     #[record("XWCU")]
     pub water_velocity: Option<WaterVelocity>,
     #[record("XASP")]
@@ -3655,7 +3914,8 @@ pub struct PlacedObject {
     pub activate_parent_refs: Option<Array<ActivateParentRefs>>,
     #[record("XLIB")]
     pub leveled_base_item_object: Option<FormId>,
-    // XLCM
+    #[record("XLCM")]
+    pub level_modifier: Option<()>,
     #[record("XLCN")]
     pub persist_location: Option<FormId>,
     #[record("XTRI")]
@@ -3664,26 +3924,86 @@ pub struct PlacedObject {
     pub lock_data: Option<LockData>,
     #[record("XEZN")]
     pub encounter_zone: Option<FormId>,
-    // XNDP
+    #[record("XNDP")]
+    pub navigation_door_link: Option<()>,
     #[record("XLRL")]
     pub location_reference: Option<FormId>,
     #[record("XLRT")]
     pub location_ref_type: Vec<FormId>,
     #[record("XIS2")]
     pub ignored_by_sandbox: Option<()>,
-    // OWNERSHIP
+    #[record("XOWN")]
+    xown: Option<()>,
+    #[record("XRNK")]
+    xrnk: Option<()>,
     #[record("XCNT")]
     pub item_count: Option<i32>,
     #[record("XHLT")]
     pub health_percentage: Option<u32>,
     #[record("XESP")]
     pub enable_parent: Option<EnableParent>,
-    // XLKR
-    // things missing
+    #[record("XPRD")]
+    pub patrol: SubRecordArray<PatrolData>,
+    #[record("XLKR")]
+    pub linked_references: Option<Array<LinkedReference>>,
+    #[record("XACT")]
+    pub action_flag: Option<()>,
+    #[record("XHTW")]
+    pub head_tracking_weight: Option<f32>,
+    #[record("XFVC")]
+    pub favor_cost: Option<f32>,
+    #[record("ONAM")]
+    pub open_by_default: Option<()>,
+    #[record("XMRK")]
+    pub map_marker: Option<SubRecordSection<MapMarker>>,
+    #[record("XATR")]
+    pub attach_ref: Option<()>,
+    // SPLINE CONNECTION
+    // POWER GRID
+    #[record("XCVR")]
+    _unknown_xcvr: Option<()>,
+    #[record("XCVL")]
+    _unknown_xcvl: Option<()>,
+    #[record("XCZR")]
+    pub current_zone_reference: Option<FormId>,
+    #[record("XCZA")]
+    _unknown_xcza: Option<()>,
+    #[record("XCZC")]
+    pub current_zone_cell: Option<FormId>,
     #[record("XSCL")]
     pub scale: Option<f32>,
+    #[record("XLOD")]
+    pub distant_lod_data: Option<()>,
     #[record("DATA")]
     pub position: PositionRotation,
+}
+
+#[derive(Clone, Debug, Record)]
+pub struct MapMarker {
+    #[record("FNAM")]
+    pub flags: u8,
+    #[record("FULL")]
+    pub full_name: LString,
+    #[record("TNAM")]
+    pub type_: u8,
+}
+
+#[derive(Clone, Debug, Record)]
+pub struct PatrolData {
+    #[record("XPRD")]
+    pub idle_time: f32,
+    #[record("XPPA")]
+    pub patrol_script_marker: Option<()>,
+    #[record("INAM")]
+    pub idle: FormId,
+    #[record("PDTO")]
+    pub topics: Vec<PatrolTopic>,
+}
+
+#[derive(Clone, Debug, BinaryStruct)]
+pub struct PatrolTopic {
+    pub ty: u32,
+    pub data: u32,
 }
 
 #[derive(Copy, Clone, Debug, BinaryStruct)]
@@ -3914,16 +4234,18 @@ pub struct WorldMapOffsetData {
 
 #[derive(Clone, Debug, Record)]
 pub struct Land {
+    #[record("DATA")]
+    pub data: u32,
+    #[record("VNML")]
+    pub vertex_normals: Option<Array<[i8; 3]>>,
+    #[record("VHGT")]
+    pub vertex_height: Option<LandVertexHeight>,
+    #[record("VCLR")]
+    pub vertex_colors: Option<Array<Rgb<u8>>>,
     #[record("BTXT")]
     pub base_layer: Vec<LandLandTexture>,
     #[record("ATXT")]
     pub alpha_layer: SubRecordArray<LandTextureAlphaLayer>,
-    #[record("VCLR")]
-    pub vertex_colors: Option<Array<Rgb<u8>>>,
-    #[record("VHGT")]
-    pub vertex_height: Option<LandVertexHeight>,
-    #[record("VNML")]
-    pub vertex_normals: Option<Array<[i8; 3]>>,
     #[record("MPCD")]
     pub high_res_heighfield: SubRecordArray<Vec<u8>>,
 }

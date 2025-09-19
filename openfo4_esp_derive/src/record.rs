@@ -1,11 +1,13 @@
 use proc_macro2::{Ident, TokenStream as TokenStream2};
 use quote::{quote, ToTokens};
-use syn::parse::Parse;
-use syn::{Data, DeriveInput, LitStr, Type};
+use syn::parse::{Parse, ParseStream};
+use syn::{Attribute, Data, DeriveInput, LitStr, Type};
 
 use crate::Error;
 
 pub fn derive_record_impl(input: DeriveInput) -> Result<TokenStream2, Error> {
+    let attrs = StructAttributes::parse(&input.attrs);
+
     let Data::Struct(data) = input.data else {
         return Err("Record macro can only be used on structs".into());
     };
@@ -54,6 +56,13 @@ pub fn derive_record_impl(input: DeriveInput) -> Result<TokenStream2, Error> {
         });
     }
 
+    let mut read_impl: TokenStream2 = fields.iter().map(|f| f.expand_read_impl()).collect();
+    let read_next_impl: TokenStream2 = fields.iter().map(|f| f.expand_read_next_impl()).collect();
+
+    if attrs.is_ordered {
+        read_impl = read_next_impl.clone();
+    }
+
     let struct_ident = input.ident;
     Ok(quote! {
         #[automatically_derived]
@@ -62,7 +71,13 @@ pub fn derive_record_impl(input: DeriveInput) -> Result<TokenStream2, Error> {
 
             fn read(_fields: &mut crate::fields::FieldMap, _: crate::Text<4>) -> ::core::result::Result<Self, Self::Error> {
                 Ok(Self {
-                    #(#fields)*
+                    #read_impl
+                })
+            }
+
+            fn read_next(_fields: &mut crate::fields::FieldMap, _: crate::Text<4>) -> ::core::result::Result<Self, Self::Error> {
+                Ok(Self {
+                    #read_next_impl
                 })
             }
         }
@@ -77,8 +92,8 @@ struct Field {
     count: Option<String>,
 }
 
-impl ToTokens for Field {
-    fn to_tokens(&self, tokens: &mut TokenStream2) {
+impl Field {
+    fn expand_read_impl(&self) -> TokenStream2 {
         let ident = &self.ident;
         let ty = &self.ty;
 
@@ -107,9 +122,43 @@ impl ToTokens for Field {
             }
         };
 
-        tokens.extend(quote! {
+        quote! {
             #ident: #value,
-        });
+        }
+    }
+
+    fn expand_read_next_impl(&self) -> TokenStream2 {
+        let ident = &self.ident;
+        let ty = &self.ty;
+
+        let literals: TokenStream2 = self
+            .key
+            .as_bytes()
+            .iter()
+            .map(|&byte| {
+                quote! {
+                    #byte,
+                }
+            })
+            .collect();
+
+        let text = quote! { crate::Text::<4>([#literals]) };
+
+        let value = quote! {
+            match <#ty as crate::fields::Read>::read_next(_fields, #text) {
+                Ok(value) => value,
+                Err(err) => {
+                    return Err(crate::Error::Record(Box::new(crate::RecordError {
+                        field: #text,
+                        error: err,
+                    })));
+                }
+            }
+        };
+
+        quote! {
+            #ident: #value,
+        }
     }
 }
 
@@ -134,5 +183,46 @@ impl Parse for CountAttr {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
         let key = input.parse::<LitStr>()?;
         Ok(Self { key: key.value() })
+    }
+}
+
+#[derive(Clone, Debug)]
+struct StructAttributes {
+    pub is_ordered: bool,
+}
+
+impl StructAttributes {
+    fn parse(attrs: &[Attribute]) -> Self {
+        let mut is_ordered = false;
+
+        for attr in attrs {
+            let Some(name) = attr.path().get_ident() else {
+                continue;
+            };
+
+            if name.to_string() != "record" {
+                continue;
+            }
+
+            match attr.parse_args::<StructAttribute>().unwrap() {
+                StructAttribute::Ordered => is_ordered = true,
+            }
+        }
+
+        Self { is_ordered }
+    }
+}
+
+#[derive(Clone, Debug)]
+enum StructAttribute {
+    Ordered,
+}
+
+impl Parse for StructAttribute {
+    fn parse(input: ParseStream) -> syn::Result<Self> {
+        match &*input.parse::<Ident>()?.to_string() {
+            "ordered" => Ok(Self::Ordered),
+            _ => todo!(),
+        }
     }
 }

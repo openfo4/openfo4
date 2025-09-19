@@ -44,62 +44,6 @@ pub fn derive_record(input: TokenStream) -> TokenStream {
     }
 }
 
-#[derive(Clone, Debug)]
-struct Field {
-    ident: Ident,
-    ty: Type,
-    info: FieldInfo,
-}
-
-impl ToTokens for Field {
-    fn to_tokens(&self, tokens: &mut TokenStream2) {
-        let ident = &self.ident;
-        let ty = &self.ty;
-
-        let literals: TokenStream2 = self
-            .info
-            .key
-            .as_bytes()
-            .iter()
-            .map(|&byte| {
-                quote! {
-                    #byte,
-                }
-            })
-            .collect();
-
-        let text = quote! { crate::Text::<4>([#literals]) };
-
-        let value = quote! {
-            match <#ty as crate::ReadFromField>::read(&_fields, #text) {
-                Ok(value) => value,
-                Err(err) => {
-                    return Err(crate::Error::Record(Box::new(crate::RecordError {
-                        field: #text,
-                        error: err,
-                    })));
-                }
-            }
-        };
-
-        tokens.extend(quote! {
-            #ident: #value,
-        });
-    }
-}
-
-#[derive(Clone, Debug)]
-struct FieldInfo {
-    key: String,
-}
-
-impl Parse for FieldInfo {
-    fn parse(input: ParseStream) -> Result<Self> {
-        let key = input.parse::<LitStr>()?;
-        Ok(Self { key: key.value() })
-    }
-}
-
 #[proc_macro_derive(BinaryStruct, attributes(primitive, default_value))]
 pub fn derive_binary_struct(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
