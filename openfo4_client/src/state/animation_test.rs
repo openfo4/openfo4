@@ -23,12 +23,12 @@ use openfo4_physics::components::{
     Capsule, Collider, ColliderShape, RigidBody, RigidBodyKind, TriMesh,
 };
 
-use crate::assets::AssetServer;
 use crate::assets::hkx::FileHkxHandle;
 use crate::assets::nif_v2::{Instantiate, NIF_TO_METERS, NifScene};
+use crate::assets::{AssetServer, hkx};
 use crate::cell::CellId;
 use crate::components::{NiTransform, Player};
-use crate::loader::FileLoader;
+use crate::loader::{FileLoader, fix_path};
 use crate::shared::SharedState;
 use crate::state::anim_starter::{ActiveBehaviorGraphs, AnimationEventQueue};
 use crate::state::animation::{self, SkeletonConfig, load_anim};
@@ -229,14 +229,21 @@ async fn load_character(
     };
 
     let nif_skeleton = nif_skeleton.0.path.as_str().unwrap();
-    let hkx_project = "actors/character/raiderproject.hkx";
+    let hkx_project = hkx_project
+        .0
+        .model
+        .as_ref()
+        .ok_or(Error::NoHkxProject)?
+        .as_str()
+        .ok_or(Error::NoHkxProject)?;
+    let hkx_project = fix_path(hkx_project);
 
     let (nif_skeleton, skeleton) = animation::load(
         server,
         loader,
         SkeletonConfig {
             nif_skeleton,
-            hkx_project,
+            hkx_project: &hkx_project,
         },
     )
     .await;

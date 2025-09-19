@@ -384,7 +384,7 @@ impl Actions {
                 continue;
             };
 
-            let Some(name) = data.edid.as_ref().map(|v| v.as_str()).flatten() else {
+            let Some(name) = data.id.as_ref().map(|v| v.as_str()).flatten() else {
                 continue;
             };
 
