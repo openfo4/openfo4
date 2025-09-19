@@ -231,6 +231,8 @@ impl GameState {
 
         systems::camera::update_camera_transform(&mut self.world);
 
+        systems::lights::update_flickering_lights(&mut self.world, time.delta());
+
         if self.physics_debug {
             self.physics.render_debug(gizmos);
         }

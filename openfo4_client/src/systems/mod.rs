@@ -3,6 +3,7 @@ pub mod camera;
 pub mod controller;
 pub mod equipment;
 pub mod hierarchy;
+pub mod lights;
 pub mod ni_transform;
 pub mod skeleton;
 

@@ -1,6 +1,7 @@
 use std::collections::HashSet;
 use std::io::Read;
 use std::sync::Arc;
+use std::time::Duration;
 
 use crossbeam::queue::SegQueue;
 use game_common::components::{Color, PointLight, Transform};
@@ -15,7 +16,9 @@ use glam::{EulerRot, Quat, UVec2, Vec2, Vec3};
 use hecs::World;
 use openfo4_asset::{AssetLoader, Handle};
 use openfo4_core::hierarchy::Children;
-use openfo4_esp::records::{Cell, LandLandTexture, LandTextureAlphaLayerPoint, Quadrant};
+use openfo4_esp::records::{
+    Cell, LandLandTexture, LandTextureAlphaLayerPoint, LightDataFlags, Quadrant,
+};
 use openfo4_esp::{FormId, RecordChildren, RecordData, RecordHeaderFlags, RecordKind};
 use openfo4_hkx::behavior::EventBase;
 use openfo4_nif::bgsm::Bgsm;
@@ -29,6 +32,7 @@ use crate::events::{Event, UnloadCell};
 use crate::loader::FileLoader;
 use crate::render::RenderObject;
 use crate::shared::SharedState;
+use crate::systems::lights::{LightFlicker, LightFlickerMode, LightFlickerState};
 
 use super::asset::load_image_buffer;
 use super::esp::EspLoader;
@@ -166,6 +170,10 @@ impl Level {
                     if let Some(light) = event.light {
                         world.insert_one(entity, light).unwrap();
                     }
+
+                    if let Some(light_flicker) = event.light_flicker {
+                        world.insert_one(entity, light_flicker).unwrap();
+                    }
                 }
                 SpawnEvent::SpawnTerrain(transform, object, collider) => {
                     dbg!("TERRAIN");
@@ -249,6 +257,7 @@ pub struct SpawnEntity {
     pub transform: NiTransform,
     pub scene: Option<Handle<NifScene>>,
     pub light: Option<PointLight>,
+    pub light_flicker: Option<LightFlicker>,
 }
 
 async fn load_cell(
@@ -515,6 +524,7 @@ async fn load_cell(
 
             let model;
             let mut light = None;
+            let mut light_flicker = None;
 
             match base.data {
                 RecordData::STAT(data) => {
@@ -546,15 +556,41 @@ async fn load_cell(
                 RecordData::Light(data) => {
                     model = data.model.model;
 
+                    let intensity = (data.fade_value + light_mod.fade) * 10.0;
+                    let radius = (data.data.radius as f32 + light_mod.radius) * NIF_TO_METERS;
+
                     light = Some(PointLight {
                         color: Color::from_rgb([
                             data.data.color.r as f32 / 255.0,
                             data.data.color.g as f32 / 255.0,
                             data.data.color.b as f32 / 255.0,
                         ]),
-                        intensity: (data.fade_value + light_mod.fade) * 100.0,
-                        radius: (data.data.radius as f32 + light_mod.radius) * NIF_TO_METERS,
+                        intensity,
+                        radius,
                     });
+
+                    let is_pulsing = data.data.flags.contains(LightDataFlags::PULSE);
+                    let is_flicking = data.data.flags.contains(LightDataFlags::FLICKER);
+
+                    if is_pulsing || is_flicking {
+                        let mode = if is_pulsing {
+                            LightFlickerMode::Pulse
+                        } else {
+                            debug_assert!(is_flicking);
+                            LightFlickerMode::Flicker
+                        };
+
+                        dbg!(&data.data.flicker_period);
+                        let period = Duration::from_secs_f32(data.data.flicker_period * 10.0);
+
+                        light_flicker = Some(LightFlicker {
+                            mode,
+                            period,
+                            intensity,
+                            intensity_amplitude: data.data.flicker_intensity_amplitude,
+                            state: Default::default(),
+                        });
+                    }
                 }
                 RecordData::Ingestible(data) => {
                     model = data.model.model;
@@ -581,6 +617,7 @@ async fn load_cell(
                 transform: NiTransform::from_ni_transform(transform),
                 scene,
                 light,
+                light_flicker,
             }));
         });
     }
