@@ -513,20 +513,39 @@ async fn load_cell(
                 return;
             }
 
+            let model;
             let mut light = None;
 
-            let model = match base.data {
-                RecordData::STAT(data) => data.modl.model,
-                RecordData::StaticCollection(data) => data.model.model,
-                RecordData::MSTT(data) => data.model.model,
-                RecordData::DOOR(data) => data.modl.model,
-                RecordData::Container(data) => data.modl.model,
+            match base.data {
+                RecordData::STAT(data) => {
+                    model = data.modl.model;
+                }
+                RecordData::StaticCollection(data) => {
+                    model = data.model.model;
+                }
+                RecordData::MSTT(data) => {
+                    model = data.model.model;
+                }
+                RecordData::DOOR(data) => {
+                    model = data.modl.model;
+                }
+                RecordData::Container(data) => {
+                    model = data.modl.model;
+                }
                 RecordData::Npc(_) => return,
                 RecordData::IdleMarker(_) => return,
-                RecordData::Activator(data) => data.model.model,
-                RecordData::MiscObject(data) => data.model.model,
-                RecordData::Furniture(data) => data.model.model,
+                RecordData::Activator(data) => {
+                    model = data.model.model;
+                }
+                RecordData::MiscObject(data) => {
+                    model = data.model.model;
+                }
+                RecordData::Furniture(data) => {
+                    model = data.model.model;
+                }
                 RecordData::Light(data) => {
+                    model = data.model.model;
+
                     light = Some(PointLight {
                         color: Color::from_rgb([
                             data.data.color.r as f32 / 255.0,
@@ -536,13 +555,13 @@ async fn load_cell(
                         intensity: (data.fade_value + light_mod.fade) * 100.0,
                         radius: (data.data.radius as f32 + light_mod.radius) * NIF_TO_METERS,
                     });
-
-                    data.model.model
                 }
-                RecordData::Ingestible(data) => data.model.model,
+                RecordData::Ingestible(data) => {
+                    model = data.model.model;
+                }
                 _ => return,
                 x => todo!("{:?}", x),
-            };
+            }
 
             let scene = match model {
                 Some(model) => {

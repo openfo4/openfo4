@@ -1,4 +1,5 @@
 use std::collections::{HashMap, VecDeque};
+use std::f32::consts::PI;
 
 use game_common::components::{Color, Transform};
 use game_core::hierarchy::Hierarchy;
@@ -265,11 +266,18 @@ impl Asset for NifScene {
                         queue.push_back((Some(block), collision_object));
                     }
 
-                    let node_transform = Transform {
+                    let mut node_transform = Transform {
                         translation: node.translation,
                         rotation: Quat::from_mat3(&node.rotation).normalize(),
                         scale: Vec3::splat(node.scale),
                     };
+
+                    // For some scenes the transform of the root node breaks the
+                    // transform exactly by the root transform, so maybe the transform
+                    // of the root node is not applied?
+                    if parent.is_none() {
+                        node_transform = Transform::default();
+                    }
 
                     // One would really expected that the parent transform
                     // affects the children, but this is not the case?
