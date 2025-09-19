@@ -10,7 +10,6 @@ use hashbrown::HashMap;
 use thiserror::Error;
 
 use std::fmt::Debug;
-use std::fs::File;
 use std::io::{self, ErrorKind, SeekFrom};
 use std::io::{Read, Seek};
 use std::mem::MaybeUninit;
@@ -1154,76 +1153,6 @@ enum Group {
     DOBJ,
 }
 
-struct Record2 {}
-
-impl Record2 {
-    pub fn decode2(buf: &mut &[u8]) -> Self {
-        todo!()
-    }
-}
-
-trait Reader {
-    fn read(&mut self, buf: &mut [u8]);
-
-    fn peek_byte(&mut self) -> Option<u8>;
-}
-
-impl<T> Reader for &mut T
-where
-    T: Reader,
-{
-    fn read(&mut self, buf: &mut [u8]) {
-        T::read(self, buf);
-    }
-
-    fn peek_byte(&mut self) -> Option<u8> {
-        T::peek_byte(self)
-    }
-}
-
-struct Peekable<R> {
-    peeked_byte: Option<u8>,
-    reader: R,
-}
-
-impl<R> Reader for Peekable<R>
-where
-    R: Read,
-{
-    fn read(&mut self, mut buf: &mut [u8]) {
-        if buf.is_empty() {
-            return;
-        }
-
-        if let Some(byte) = self.peeked_byte.take() {
-            buf[0] = byte;
-            buf = &mut buf[1..];
-        }
-
-        self.reader.read_exact(buf).unwrap();
-    }
-
-    fn peek_byte(&mut self) -> Option<u8> {
-        if self.peeked_byte.is_none() {
-            let mut buf = [0; 1];
-            self.read(&mut buf);
-            self.peeked_byte = Some(buf[0]);
-        }
-
-        self.peeked_byte
-    }
-}
-
-impl Reader for File {
-    fn read(&mut self, buf: &mut [u8]) {
-        self.read_exact(buf).unwrap();
-    }
-
-    fn peek_byte(&mut self) -> Option<u8> {
-        todo!()
-    }
-}
-
 pub trait Decode: Sized {
     type Error;
 
@@ -1617,100 +1546,14 @@ where
     }
 }
 
-struct Buffer {
-    buffer: Vec<u8>,
-    cursor: usize,
-}
-
-impl Reader for Buffer {
-    fn read(&mut self, buf: &mut [u8]) {
-        buf.copy_from_slice(&self.buffer[self.cursor..self.cursor + buf.len()]);
-        self.cursor += buf.len();
-    }
-
-    fn peek_byte(&mut self) -> Option<u8> {
-        self.buffer.get(self.cursor).copied()
-    }
-}
-
 #[derive(Copy, Clone, PartialEq, Eq, Hash)]
 pub struct Text<const N: usize>([u8; N]);
 
 impl Text<4> {
     const TES4: Self = Self([b'T', b'E', b'S', b'4']);
     const GRUP: Self = Self([b'G', b'R', b'U', b'P']);
-    pub const GMST: Self = Self([b'G', b'M', b'S', b'T']);
-    const KYWD: Self = Self([b'K', b'Y', b'W', b'D']);
-    const LCRT: Self = Self([b'L', b'C', b'R', b'T']);
-    const AACT: Self = Self([b'A', b'A', b'C', b'T']);
-    const TRNS: Self = Self([b'T', b'R', b'N', b'S']);
-    const CMPO: Self = Self([b'C', b'M', b'P', b'O']);
-    const TXST: Self = Self([b'T', b'X', b'S', b'T']);
-    const GLOB: Self = Self([b'G', b'L', b'O', b'B']);
-    const DMGT: Self = Self([b'D', b'M', b'G', b'T']);
-    const CLAS: Self = Self([b'C', b'L', b'A', b'S']);
-    const FACT: Self = Self([b'F', b'A', b'C', b'T']);
-    const HDPT: Self = Self([b'H', b'D', b'P', b'T']);
-    const RACE: Self = Self([b'R', b'A', b'C', b'E']);
-    const SOUN: Self = Self([b'S', b'O', b'U', b'N']);
-    const ASPC: Self = Self([b'A', b'S', b'P', b'C']);
-    const MGEF: Self = Self([b'M', b'G', b'E', b'F']);
-    const LTEX: Self = Self([b'L', b'T', b'E', b'X']);
-    const ENCH: Self = Self([b'E', b'N', b'C', b'H']);
-    const SPEL: Self = Self([b'S', b'P', b'E', b'L']);
-    const ACTI: Self = Self([b'A', b'C', b'T', b'I']);
-    const TACT: Self = Self([b'T', b'A', b'C', b'T']);
-    const ARMO: Self = Self([b'A', b'R', b'M', b'O']);
-    const BOOK: Self = Self([b'B', b'O', b'O', b'K']);
-    const CONT: Self = Self([b'C', b'O', b'N', b'T']);
-    const DOOR: Self = Self([b'D', b'O', b'O', b'R']);
-    const INGR: Self = Self([b'I', b'N', b'G', b'R']);
-    const LIGH: Self = Self([b'L', b'I', b'G', b'H']);
-    const MISC: Self = Self([b'M', b'I', b'S', b'C']);
-    const STAT: Self = Self([b'S', b'T', b'A', b'T']);
-    const SCOL: Self = Self([b'S', b'C', b'O', b'L']);
-    const MSTT: Self = Self([b'M', b'S', b'T', b'T']);
-    const GRAS: Self = Self([b'G', b'R', b'A', b'S']);
-    const FLOR: Self = Self([b'F', b'L', b'O', b'R']);
-    const FURN: Self = Self([b'F', b'U', b'R', b'N']);
-    const WEAP: Self = Self([b'W', b'E', b'A', b'P']);
-    const AMMO: Self = Self([b'A', b'M', b'M', b'O']);
-    const NPC_: Self = Self([b'N', b'P', b'C', b'_']);
-    const LVLN: Self = Self([b'L', b'V', b'L', b'N']);
-    const KEYM: Self = Self([b'K', b'E', b'Y', b'M']);
-    const ALCH: Self = Self([b'A', b'L', b'C', b'H']);
-    const IDLM: Self = Self([b'I', b'D', b'L', b'M']);
-    const NOTE: Self = Self([b'N', b'O', b'T', b'E']);
-    const PROJ: Self = Self([b'P', b'R', b'O', b'J']);
-    const HAZD: Self = Self([b'H', b'A', b'Z', b'D']);
-    const BNDS: Self = Self([b'B', b'N', b'D', b'S']);
-    const TERM: Self = Self([b'T', b'E', b'R', b'M']);
-    const TREE: Self = Self([b'T', b'R', b'E', b'E']);
-    const LVLI: Self = Self([b'L', b'V', b'L', b'I']);
-    const WTHR: Self = Self([b'W', b'T', b'H', b'R']);
-    const CLMT: Self = Self([b'C', b'L', b'M', b'T']);
-    const SPGD: Self = Self([b'S', b'P', b'G', b'D']);
-    const RFCT: Self = Self([b'R', b'F', b'C', b'T']);
-    const REGN: Self = Self([b'R', b'E', b'G', b'N']);
-    const NAVI: Self = Self([b'N', b'A', b'V', b'I']);
-    const CELL: Self = Self([b'C', b'E', b'L', b'L']);
-    const ACHR: Self = Self([b'A', b'C', b'H', b'R']);
-    const REFR: Self = Self([b'R', b'E', b'F', b'R']);
-    const NAVM: Self = Self([b'N', b'A', b'V', b'M']);
-    const PGRE: Self = Self([b'P', b'G', b'R', b'E']);
-    const PHZD: Self = Self([b'P', b'H', b'Z', b'D']);
-    const WRLD: Self = Self([b'W', b'R', b'L', b'D']);
-    const LAND: Self = Self([b'L', b'A', b'N', b'D']);
 
-    const HEDR: Self = Self([b'H', b'E', b'D', b'R']);
-    const CNAM: Self = Self([b'C', b'N', b'A', b'M']);
-    const SNAM: Self = Self([b'S', b'N', b'A', b'M']);
-    const MAST: Self = Self([b'M', b'A', b'S', b'T']);
     const DATA: Self = Self([b'D', b'A', b'T', b'A']);
-    const ONAM: Self = Self([b'O', b'N', b'A', b'M']);
-    const INTV: Self = Self([b'I', b'N', b'T', b'V']);
-    const INCC: Self = Self([b'I', b'N', b'C', b'C']);
-
     const EDID: Self = Self([b'E', b'D', b'I', b'D']);
 }
 
@@ -1746,6 +1589,8 @@ impl Decode for LString {
 }
 
 /// A three channel RGB color, padded to four channel width.
+///
+/// The only difference between `RgbPadded` and [`Rgb`] is the [`Decode`] implementation.
 #[derive(Copy, Clone, Debug)]
 pub struct RgbPadded<T> {
     /// The red channel.
@@ -1776,6 +1621,16 @@ where
     }
 }
 
+impl<T> From<RgbPadded<T>> for Rgb<T> {
+    fn from(value: RgbPadded<T>) -> Self {
+        Rgb {
+            r: value.r,
+            g: value.g,
+            b: value.b,
+        }
+    }
+}
+
 #[derive(Copy, Clone, PartialEq, Eq, Hash)]
 pub struct FormId(pub u32);
 
@@ -1803,12 +1658,15 @@ impl Decode for FormId {
         u32::decode(buf).map(Self)
     }
 }
-
+/// A three channel RGB color.
 #[derive(Copy, Clone, Debug)]
 pub struct Rgb<T> {
-    r: T,
-    g: T,
-    b: T,
+    /// The red color channel.
+    pub r: T,
+    /// The green color channel.
+    pub g: T,
+    /// The blue color channel.
+    pub b: T,
 }
 
 impl<T> Decode for Rgb<T>
