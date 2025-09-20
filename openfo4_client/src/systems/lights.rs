@@ -35,9 +35,16 @@ pub fn update_flickering_lights(world: &mut World, delta: Duration) {
 
         let progress = flicker.state.time.as_secs_f32() / flicker.period.as_secs_f32();
 
-        let intensity_base = f32::max(0.0, flicker.intensity * (1.0 - flicker.intensity_amplitude));
+        // Factor between -1 and 1.
+        let factor = match flicker.mode {
+            LightFlickerMode::Pulse => (progress * 2.0 * PI).sin(),
+            LightFlickerMode::Flicker => {
+                // Based on https://stackoverflow.com/questions/8798771/perlin-noise-for-1d
+                ((2.0 * progress).sin() + (PI * progress).sin()) / 2.0
+            }
+        };
 
-        let factor = (progress * PI).sin() * flicker.intensity_amplitude;
-        light.intensity = intensity_base + flicker.intensity * factor;
+        light.intensity =
+            flicker.intensity + flicker.intensity * flicker.intensity_amplitude * factor;
     }
 }

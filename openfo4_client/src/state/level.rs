@@ -581,7 +581,7 @@ async fn load_cell(
                         };
 
                         dbg!(&data.data.flicker_period);
-                        let period = Duration::from_secs_f32(data.data.flicker_period * 10.0);
+                        let period = Duration::from_secs_f32(1.0 / data.data.flicker_period);
 
                         light_flicker = Some(LightFlicker {
                             mode,
