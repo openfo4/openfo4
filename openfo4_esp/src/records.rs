@@ -1433,6 +1433,7 @@ pub struct TACT {
 }
 
 #[derive(Clone, Debug, Record)]
+#[record(ordered)]
 pub struct Armor {
     #[record("EDID")]
     pub id: ZString,
@@ -1441,7 +1442,7 @@ pub struct Armor {
     #[record("OBND")]
     pub object_bounds: Option<Bounds>,
     #[record("PTRN")]
-    pub prview_transform: Option<FormId>,
+    pub preview_transform: Option<FormId>,
     #[record("FULL")]
     pub full_name: Option<LString>,
     #[record("EITM")]
@@ -1453,13 +1454,13 @@ pub struct Armor {
     #[record("MICO")]
     pub male_message_icon: Option<ZString>,
     #[record("MOD4")]
-    pub female_world_model: Option<ZString>,
+    pub female_world_model: ArmorFemaleModel,
     #[record("ICO2")]
     pub female_inventory_image: Option<ZString>,
     #[record("MIC2")]
     pub female_message_icon: Option<ZString>,
     #[record("BOD2")]
-    pub biped_body_template: ARMO_BOD2,
+    pub biped_body_template: BipedObjectFlags,
     #[record("DEST")]
     pub destruction_data: DEST,
     #[record("YNAM")]
@@ -1472,15 +1473,21 @@ pub struct Armor {
     pub block_bash_impact_data: Option<FormId>,
     #[record("BAMT")]
     pub block_material: Option<FormId>,
+    /// Reference to a [`Race`].
     #[record("RNAM")]
     pub race: Option<FormId>,
+    #[record("KSIZ")]
+    _keywords_len: Option<u32>,
+    /// A list of keywords attached to the `Armor`.
+    ///
+    /// Reference to [`Keyword`]s.
     #[record("KWDA")]
-    pub keywords: Option<Keywords>,
+    pub keywords: Option<Array<FormId>>,
     #[record("DESC")]
     pub description: Option<LString>,
     #[record("INRD")]
     pub instance_naming: Option<FormId>,
-    #[record("MODL")]
+    #[record("INDX")]
     pub models: SubRecordArray<ArmorModel>,
     #[record("DATA")]
     pub data: ArmorData,
@@ -1490,8 +1497,11 @@ pub struct Armor {
     pub resistances: Option<Array<Resistance>>,
     #[record("TNAM")]
     pub template_armor: Option<FormId>,
-    #[record("OBTS")]
-    pub object_template: SubRecordArray<ObjectTemplateCombination>,
+    /// Reference to [`Keyword`]s.
+    #[record("APPR")]
+    pub attach_parent_slots: Option<Array<FormId>>,
+    #[record("OBTE")]
+    pub object_template: Option<SubRecordSection<ObjectModificationTemplates>>,
 }
 
 #[derive(Clone, Debug, Record)]
@@ -1500,6 +1510,10 @@ pub struct ArmorMaleModel {
     pub model: Option<ZString>,
     #[record("MO2T")]
     pub model_info: Option<ModelInfo>,
+    #[record("MODC")]
+    pub color_remapping_index: Option<()>,
+    #[record("MO2S")]
+    pub material_swap: Option<()>,
 }
 
 #[derive(Clone, Debug, Record)]
@@ -1508,6 +1522,10 @@ pub struct ArmorFemaleModel {
     pub model: Option<ZString>,
     #[record("MO4T")]
     pub model_info: Option<ModelInfo>,
+    #[record("MODC")]
+    pub color_remapping_index: Option<()>,
+    #[record("MO4S")]
+    pub material_swap: Option<()>,
 }
 
 #[derive(Clone, Debug, Record)]
@@ -1518,10 +1536,45 @@ pub struct ArmorModel {
     pub armor_addon: FormId,
 }
 
-#[derive(Copy, Clone, Debug, BinaryStruct)]
-pub struct ARMO_BOD2 {
-    pub body_part_flags: u32,
+bitflags! {
+    #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+    pub struct BipedObjectFlags: u32 {
+        const HAIR_TOP = 0x00000001;
+        const HAIR_LONG = 0x00000002;
+        const FACEGEN_HEAD = 0x00000004;
+        const BODY = 0x00000008;
+        const LEFT_HAND = 0x00000010;
+        const RIGHT_HAND = 0x00000020;
+        const UNDER_TORSO = 0x00000040;
+        const UNDER_LEFT_ARM = 0x00000080;
+        const UNDER_RIGHT_ARM = 0x00000100;
+        const UNDER_LEFT_LEG = 0x00000200;
+        const UNDER_RIGHT_LEFT = 0x00000400;
+        const ABOVE_TORSO = 0x00000800;
+        const ABOVE_LEFT_ARM = 0x00001000;
+        const ABOVE_RIGHT_ARM = 0x00002000;
+        const ABOVE_LEFT_LEG = 0x00004000;
+        const ABOVE_RIGHT_LEG = 0x00008000;
+        const HEADBAND = 0x00010000;
+        const EYES = 0x00020000;
+        const BEARD = 0x00040000;
+        const MOUTH = 0x00080000;
+        const NECK = 0x00100000;
+        const RING = 0x00200000;
+        const SCALP = 0x00400000;
+        const DECAPITATION = 0x00800000;
+        const UNNAMED0 = 0x01000000;
+        const UNNAMED1 = 0x02000000;
+        const UNNAMED2 = 0x04000000;
+        const UNNAMED3 = 0x08000000;
+        const UNNAMED4 = 0x10000000;
+        const SHIELD = 0x20000000;
+        const PIPBOY = 0x40000000;
+        const FX = 0x80000000;
+    }
 }
+
+impl_decode_bitflags!(BipedObjectFlags: u32);
 
 #[derive(Copy, Clone, Debug, BinaryStruct)]
 pub struct ArmorData {
@@ -1554,9 +1607,17 @@ pub struct Resistance {
 }
 
 #[derive(Clone, Debug, Record)]
+pub struct ObjectModificationTemplates {
+    #[record("OBTF")]
+    pub templates: SubRecordArray<ObjectTemplateCombination>,
+    #[record("STOP")]
+    _stop: Option<()>,
+}
+
+#[derive(Clone, Debug, Record)]
 pub struct ObjectTemplateCombination {
     #[record("OBTF")]
-    pub editor_only: Option<()>,
+    pub editor_only: (),
     #[record("FULL")]
     pub full_name: Option<LString>,
     #[record("OBTS")]
