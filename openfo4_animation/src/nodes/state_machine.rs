@@ -50,6 +50,7 @@ impl GraphNode for StateMachine {
 
             // It is possible that an old bone weight still exists
             // when the state machine was disabled, so we must reset it.
+            ctx.set_playback_speed(node, 1.0);
             ctx.set_bone_weights(node, BoneWeights::Shared(1.0));
         }
 
@@ -165,6 +166,17 @@ impl GraphNode for StateMachine {
             ctx.set_variable(id, Value::I32(state.id));
         }
 
+        // Freeze the currently active node.
+        if let Some(index) = self.active_state {
+            if let Some(node) = self.states[index].node {
+                ctx.set_playback_speed(node, 0.0);
+            }
+        }
+
+        if let Some(node) = self.states[transition.to].node {
+            ctx.set_playback_speed(node, 1.0);
+        }
+
         let effect = match &mut self.active_effect {
             Some(effect) => {
                 let progress = if effect.total_time.is_zero() {
@@ -227,6 +239,7 @@ impl GraphNode for StateMachine {
         {
             if let Some(node) = state.node {
                 ctx.activate_node(node);
+                ctx.set_playback_speed(node, 1.0);
             }
 
             for event in &state.enter_events {

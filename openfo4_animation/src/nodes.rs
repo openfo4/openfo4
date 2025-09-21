@@ -74,6 +74,10 @@ pub trait Context {
 
         self.set_property(node, Property::Weight, value);
     }
+
+    fn set_playback_speed(&mut self, node: NodeId, speed: f32) {
+        self.set_property(node, Property::Speed, Value::F32(speed));
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -221,4 +225,6 @@ impl GraphNode for Node {
 pub enum Property {
     Weight,
     GlobalWeight,
+    Speed,
+    GlobalSpeed,
 }

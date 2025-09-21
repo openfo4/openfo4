@@ -5,8 +5,8 @@ use std::time::{Duration, Instant};
 use petgraph::prelude::StableGraph;
 use petgraph::visit::{EdgeRef, IntoEdgeReferences, IntoNodeReferences};
 
-use crate::GraphNode;
 use crate::driver::AnimationDriver;
+use crate::{BoneWeights, GraphNode};
 
 static INIT: OnceLock<State> = OnceLock::new();
 
@@ -22,7 +22,12 @@ pub fn update(driver: &AnimationDriver) {
     let graph = driver.graph().graph();
     let active = driver.active_nodes();
 
-    let buf = draw(&graph, &active);
+    let weights = active
+        .iter()
+        .map(|node| driver.global_weight(*node).unwrap())
+        .collect::<Vec<_>>();
+
+    let buf = draw(&graph, &active, &weights);
 
     if state.timer.lock().unwrap().elapsed() < Duration::from_secs_f32(1.0) {
         return;
@@ -33,15 +38,23 @@ pub fn update(driver: &AnimationDriver) {
     std::fs::write("/tmp/graph", buf.as_bytes()).unwrap();
 }
 
-pub fn draw(graph: &StableGraph<GraphNode, String>, active: &[usize]) -> String {
+pub fn draw(
+    graph: &StableGraph<GraphNode, String>,
+    active: &[usize],
+    weights: &[&BoneWeights],
+) -> String {
     let mut buf = String::from("digraph {");
 
     for (index, node) in graph.node_references() {
-        let color = if active.contains(&node.id) {
-            "green"
-        } else {
-            "white"
-        };
+        let mut color = "white";
+
+        if let Some(index) = active.iter().position(|v| *v == node.id) {
+            color = "green";
+
+            if weights[index].is_zero() {
+                color = "red";
+            }
+        }
 
         writeln!(
             buf,

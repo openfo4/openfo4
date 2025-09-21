@@ -1150,6 +1150,13 @@ pub enum BoneWeights {
 }
 
 impl BoneWeights {
+    pub fn is_zero(&self) -> bool {
+        match self {
+            Self::Shared(weight) => *weight == 0.0,
+            Self::Unique(weights) => weights.iter().all(|weight| *weight == 0.0),
+        }
+    }
+
     pub fn get(&self, bone: u32) -> f32 {
         match self {
             Self::Shared(v) => *v,

@@ -42,6 +42,10 @@ impl AnimationDriver {
         self.active_nodes.keys().copied().collect()
     }
 
+    pub(crate) fn global_weight(&self, node: NodeId) -> Option<&BoneWeights> {
+        self.properties.global_weight.get(&node)
+    }
+
     pub fn update(&mut self, delta: Duration, animations: &AnimationSet, events: &mut Vec<Event>) {
         let _span = trace_span!("AnimationDriver::update").entered();
 
@@ -121,8 +125,13 @@ impl AnimationDriver {
             }
         }
 
+        self.compute_global_speed();
+
         for (id, state) in &mut self.active_nodes {
             let node = &mut self.nodes[*id];
+
+            let speed = self.properties.global_speed.get(id).copied().unwrap_or(1.0);
+            let delta = delta.mul_f32(speed);
 
             let ctx = UpdateContext::new(
                 *id,
@@ -138,6 +147,7 @@ impl AnimationDriver {
         }
 
         self.compute_global_weights();
+        self.compute_global_speed();
     }
 
     pub fn reset(&mut self) {
@@ -243,18 +253,39 @@ impl AnimationDriver {
             }
         }
 
-        for (id, mut weights) in global_weights {
-            // if self.nodes[id].name.contains("WPNReload") {
-            //     // dbg!(&weights);
-            //     weights = vec![BoneWeights::Shared(1.0)];
-            // }
-
+        for (id, weights) in global_weights {
             let weights = weights
                 .into_iter()
                 .reduce(|acc, w| acc + w)
                 .unwrap_or(BoneWeights::Shared(0.0));
 
             self.properties.global_weight.insert(id, weights);
+        }
+    }
+
+    fn compute_global_speed(&mut self) {
+        let Some(root) = self.graph.root else {
+            return;
+        };
+
+        let mut queue = VecDeque::new();
+        queue.push_back((root, 1.0));
+
+        while let Some((id, parent_speed)) = queue.pop_front() {
+            let node = &self.nodes[id];
+
+            let local_speed = self.properties.speed.get(&id).copied().unwrap_or(1.0);
+
+            let speed = parent_speed * local_speed;
+            self.properties.global_speed.insert(id, speed);
+
+            for children in node.children() {
+                if !self.active_nodes.contains_key(&children) {
+                    continue;
+                }
+
+                queue.push_back((children, speed));
+            }
         }
     }
 }
@@ -371,6 +402,11 @@ impl Context for UpdateContext<'_> {
                     .insert(self.node, weights);
             }
             Property::GlobalWeight => {}
+            Property::Speed => {
+                let speed = value.to_f32().unwrap();
+                self.properties.speed.insert(node, speed);
+            }
+            Property::GlobalSpeed => {}
         }
     }
 }
@@ -384,6 +420,8 @@ struct PropertySet {
     /// [`compute_global_weights`]: AnimationDriver::compute_global_weights
     weight: HashMap<NodeId, HashMap<NodeId, BoneWeights>>,
     global_weight: HashMap<NodeId, BoneWeights>,
+    speed: HashMap<NodeId, f32>,
+    global_speed: HashMap<NodeId, f32>,
 }
 
 #[derive(Clone, Debug)]
