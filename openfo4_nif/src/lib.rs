@@ -14,7 +14,7 @@ use material::{BSLightingShaderProperty, BSShaderTextureSet};
 use mesh::{BSMeshLODTriShape, BSSubIndexTriShape, BSTriShape};
 use thiserror::Error;
 
-use crate::material::{BSEffectShaderProperty, BSSkyShaderProperty};
+use crate::material::{BSEffectShaderProperty, BSSkyShaderProperty, NiAlphaProperty};
 
 #[derive(Clone, Debug)]
 pub struct Nif {
@@ -131,6 +131,9 @@ impl Nif {
                 BlockType::BSShaderTextureSet => {
                     Block::BSShaderTextureSet(BSShaderTextureSet::decode(&mut reader)?)
                 }
+                BlockType::NiAlphaProperty => {
+                    Block::NiAlphaProperty(NiAlphaProperty::decode(&mut reader)?)
+                }
                 BlockType::BSSkinInstance => {
                     let skeleton_root = BlockRef::decode(&mut reader).unwrap();
                     let data = BlockRef::decode(&mut reader).unwrap();
@@ -201,6 +204,10 @@ pub enum Error {
     InvalidStringPointer(u32),
     #[error("bad block type: {0}")]
     BadBlockType(String),
+    #[error("invalid blend mode: {0}")]
+    InvalidBlendMode(u8),
+    #[error("invalid alpha test function: {0}")]
+    InvalidAlphaTestFunction(u8),
 }
 
 pub trait Decode: Sized {
@@ -427,6 +434,7 @@ pub enum Block {
     BSBound(BSBound),
     BhkRagdollSystem(BhkRagdollSystem),
     BSSkyShaderProperty(BSSkyShaderProperty),
+    NiAlphaProperty(NiAlphaProperty),
 }
 
 #[derive(Clone, Debug)]

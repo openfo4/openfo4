@@ -1,8 +1,6 @@
-use std::fmt::DebugList;
-
 use glam::Vec2;
 
-use crate::{Block, BlockRef, Decode, Error, Reader, Rgb, Rgba, TextureClampMode};
+use crate::{BlockRef, Decode, Error, Reader, Rgb, Rgba, TextureClampMode};
 
 #[derive(Clone, Debug)]
 pub struct BSLightingShaderProperty {
@@ -288,5 +286,132 @@ impl Decode for BSSkyShaderProperty {
             source_texture,
             sky_object_type: (),
         })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct NiAlphaProperty {
+    pub name: String,
+    pub extra_data: Vec<BlockRef>,
+    pub controller: Option<BlockRef>,
+    pub alpha_blend: Option<AlphaBlendState>,
+    pub alpha_test: Option<AlphaTestState>,
+}
+
+impl Decode for NiAlphaProperty {
+    fn decode(reader: &mut Reader<'_>) -> Result<Self, Error> {
+        let name = reader.get_u32()?;
+        let name = reader.string(name)?.to_owned();
+
+        let extra_data_len = reader.get_u32()?;
+        let extra_data = (0..extra_data_len)
+            .map(|_| BlockRef::decode(reader))
+            .collect::<Result<_, _>>()?;
+
+        let controller = <Option<BlockRef>>::decode(reader)?;
+        let flags = u16::decode(reader)?;
+        let threshold = u8::decode(reader)?;
+
+        let enable_blending = (flags & 1) != 0;
+        let alpha_blend = if enable_blending {
+            let src_mode = BlendMode::from_bits(((flags >> 1) & 0b1111) as u8)?;
+            let dst_mode = BlendMode::from_bits(((flags >> 5) & 0b1111) as u8)?;
+            Some(AlphaBlendState { src_mode, dst_mode })
+        } else {
+            None
+        };
+
+        let enable_alpha_test = (flags & (1 << 9)) != 0;
+        let alpha_test = if enable_alpha_test {
+            let function = AlphaTestFunction::from_bits(((flags >> 10) & 0b111) as u8)?;
+            Some(AlphaTestState {
+                function,
+                threshold,
+            })
+        } else {
+            None
+        };
+
+        Ok(Self {
+            name,
+            extra_data,
+            controller,
+            alpha_blend,
+            alpha_test,
+        })
+    }
+}
+
+#[derive(Copy, Clone, Debug)]
+pub struct AlphaBlendState {
+    pub src_mode: BlendMode,
+    pub dst_mode: BlendMode,
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub enum BlendMode {
+    One,
+    Zero,
+    SrcColor,
+    InvSrcColor,
+    DstColor,
+    InvDstColor,
+    SrcAlpha,
+    InvSrcAlpha,
+    DstAlpha,
+    InvDstAlpha,
+    SrcAlphaSaturate,
+}
+
+impl BlendMode {
+    fn from_bits(bits: u8) -> Result<Self, Error> {
+        match bits {
+            0 => Ok(Self::One),
+            1 => Ok(Self::Zero),
+            2 => Ok(Self::SrcColor),
+            3 => Ok(Self::InvSrcColor),
+            4 => Ok(Self::DstColor),
+            5 => Ok(Self::InvDstColor),
+            6 => Ok(Self::SrcAlpha),
+            7 => Ok(Self::InvSrcAlpha),
+            8 => Ok(Self::DstAlpha),
+            9 => Ok(Self::InvDstAlpha),
+            10 => Ok(Self::SrcAlphaSaturate),
+            _ => Err(Error::InvalidBlendMode(bits)),
+        }
+    }
+}
+
+#[derive(Copy, Clone, Debug)]
+pub struct AlphaTestState {
+    pub function: AlphaTestFunction,
+    pub threshold: u8,
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub enum AlphaTestFunction {
+    Always,
+    Less,
+    Equal,
+    LessEqual,
+    Greater,
+    NotEqual,
+    GreaterEqual,
+    Never,
+}
+
+impl AlphaTestFunction {
+    fn from_bits(bits: u8) -> Result<Self, Error> {
+        match bits {
+            0 => Ok(Self::Always),
+            1 => Ok(Self::Less),
+            2 => Ok(Self::Equal),
+            3 => Ok(Self::LessEqual),
+            4 => Ok(Self::Greater),
+            5 => Ok(Self::NotEqual),
+            6 => Ok(Self::GreaterEqual),
+            7 => Ok(Self::Never),
+            _ => Err(Error::InvalidBlendMode(bits)),
+        }
     }
 }
