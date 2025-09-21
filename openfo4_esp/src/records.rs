@@ -4681,9 +4681,98 @@ pub struct ImpactDataSet {
 }
 
 #[derive(Clone, Debug, Record)]
+#[record(ordered)]
 pub struct ArmorAddon {
     #[record("EDID")]
     pub id: Option<ZString>,
+    #[record("BOD2")]
+    pub biped_body_template: BipedObjectFlags,
+    /// Reference to [`Race`].
+    #[record("RNAM")]
+    pub race: Option<FormId>,
+    #[record("DNAM")]
+    pub data: (),
+    #[record("MOD2")]
+    pub male_model: ArmorAddonMaleModel,
+    #[record("MOD3")]
+    pub female_model: ArmorAddonFemaleModel,
+    #[record("MOD4")]
+    pub male_first_person_model: ArmorAddonMaleFirstPersonModel,
+    #[record("MOD5")]
+    pub female_first_person_model: ArmorAddonFemaleFirstPersonModel,
+    /// Reference to [`TextureSet`].
+    #[record("NAM0")]
+    pub male_skin_texture: Option<FormId>,
+    /// Reference to [`TextureSet`].
+    #[record("NAM1")]
+    pub female_skin_texture: Option<FormId>,
+    #[record("NAM2")]
+    pub male_skin_textures_swap_list: Option<()>,
+    #[record("NAM3")]
+    pub female_skin_textures_swap_list: Option<()>,
+    /// Reference to [`Race`]s.
+    #[record("MODL")]
+    pub additional_races: Vec<FormId>,
+    #[record("SNDD")]
+    pub footstep_sound: Option<FormId>,
+    #[record("ONAM")]
+    pub art_object: Option<FormId>,
+}
+
+#[derive(Clone, Debug, Record)]
+pub struct ArmorAddonMaleModel {
+    #[record("MOD2")]
+    pub model: Option<ZString>,
+    #[record("MO2T")]
+    pub model_info: Option<ModelInfo>,
+    #[record("MO2C")]
+    pub color_remapping_index: Option<()>,
+    #[record("MO2S")]
+    pub material_swap: Option<()>,
+    #[record("MO2F")]
+    pub flags: Option<()>,
+}
+
+#[derive(Clone, Debug, Record)]
+pub struct ArmorAddonFemaleModel {
+    #[record("MOD3")]
+    pub model: Option<ZString>,
+    #[record("MO3T")]
+    pub model_info: Option<ModelInfo>,
+    #[record("MO3C")]
+    pub color_remapping_index: Option<()>,
+    #[record("MO3S")]
+    pub material_swap: Option<()>,
+    #[record("MO3F")]
+    pub flags: Option<()>,
+}
+
+#[derive(Clone, Debug, Record)]
+pub struct ArmorAddonMaleFirstPersonModel {
+    #[record("MOD4")]
+    pub model: Option<ZString>,
+    #[record("MO4T")]
+    pub model_info: Option<ModelInfo>,
+    #[record("MO4C")]
+    pub color_remapping_index: Option<()>,
+    #[record("MO4S")]
+    pub material_swap: Option<()>,
+    #[record("MO4F")]
+    pub flags: Option<()>,
+}
+
+#[derive(Clone, Debug, Record)]
+pub struct ArmorAddonFemaleFirstPersonModel {
+    #[record("MOD5")]
+    pub model: Option<ZString>,
+    #[record("MO5T")]
+    pub model_info: Option<ModelInfo>,
+    #[record("MO5C")]
+    pub color_remapping_index: Option<()>,
+    #[record("MO5S")]
+    pub material_swap: Option<()>,
+    #[record("MO5F")]
+    pub flags: Option<()>,
 }
 
 #[derive(Clone, Debug, Record)]
