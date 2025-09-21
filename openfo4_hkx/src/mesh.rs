@@ -282,6 +282,59 @@ pub struct CapsuleShape {
     pub b: Vec4,
 }
 
+impl CapsuleShape {
+    /// Returns an [`TriMesh`] that approximates this capsule.
+    pub fn to_tri_mesh(&self) -> TriMesh {
+        let radius = self.shape.shape.convex_radius;
+        let min = Vec3::min(self.a.truncate(), self.b.truncate()) - radius;
+        let max = Vec3::max(self.a.truncate(), self.b.truncate()) + radius;
+
+        let vertices = vec![
+            // Front
+            Vec3::new(min.x, min.y, max.z),
+            Vec3::new(max.x, min.y, max.z),
+            Vec3::new(max.x, max.y, max.z),
+            Vec3::new(min.x, max.y, max.z),
+            // Back
+            Vec3::new(min.x, max.y, min.z),
+            Vec3::new(max.x, max.y, min.z),
+            Vec3::new(max.x, min.y, min.z),
+            Vec3::new(min.x, min.y, min.z),
+            // Right
+            Vec3::new(max.x, min.y, min.z),
+            Vec3::new(max.x, max.y, min.z),
+            Vec3::new(max.x, max.y, max.z),
+            Vec3::new(max.x, min.y, max.z),
+            // Left
+            Vec3::new(min.x, min.y, max.z),
+            Vec3::new(min.x, max.y, max.z),
+            Vec3::new(min.x, max.y, min.z),
+            Vec3::new(min.x, min.y, min.z),
+            // Top
+            Vec3::new(max.x, max.y, min.z),
+            Vec3::new(min.x, max.y, min.z),
+            Vec3::new(min.x, max.y, max.z),
+            Vec3::new(max.x, max.y, max.z),
+            // Bottom
+            Vec3::new(max.x, min.y, max.z),
+            Vec3::new(min.x, min.y, max.z),
+            Vec3::new(min.x, min.y, min.z),
+            Vec3::new(max.x, min.y, min.z),
+        ];
+
+        let indices = vec![
+            0, 1, 2, 2, 3, 0, // Front
+            4, 5, 6, 6, 7, 4, // Back
+            8, 9, 10, 10, 11, 8, // Right
+            12, 13, 14, 14, 15, 12, // Left
+            16, 17, 18, 18, 19, 16, // Top
+            20, 21, 22, 22, 23, 20, // Bottom
+        ];
+
+        TriMesh { vertices, indices }
+    }
+}
+
 #[derive(Clone, Debug, HkStruct)]
 pub struct ScaledConvexShape {
     // Offset: 0

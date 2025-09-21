@@ -741,7 +741,7 @@ fn load_collider(nif: &Nif, collision_object: BlockRef) -> Option<ColliderNode> 
                 meshes.push((mesh, transform));
             }
             Some(HkObject::CapsuleShape(shape)) => {
-                let mesh = shape.shape.to_tri_mesh();
+                let mesh = shape.to_tri_mesh();
                 meshes.push((mesh, transform));
             }
             Some(HkObject::ConvexShape(shape)) => {

@@ -222,7 +222,7 @@ pub struct Shape {
     // Offset: 19
     dispatch_type: u8,
     // Offset: 20
-    convex_radius: f32,
+    pub convex_radius: f32,
     // Offset: 24
     user_data: u64,
     // Offset: 32
