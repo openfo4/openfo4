@@ -145,21 +145,17 @@ impl GraphNode for StateMachine {
                 && transition
                     .from
                     .is_none_or(|from| Some(from) == self.active_state)
+                && transition
+                    .condition
+                    .eval(ctx.variables())
+                    .to_bool()
+                    .unwrap()
         }) else {
             return;
         };
 
         // Don't trigger a transition if we already are in the correct state.
         if self.active_state == Some(transition.to) {
-            return;
-        }
-
-        if !transition
-            .condition
-            .eval(ctx.variables())
-            .to_bool()
-            .unwrap()
-        {
             return;
         }
 
