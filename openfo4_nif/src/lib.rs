@@ -1,4 +1,5 @@
 pub mod bgsm;
+pub mod connect_points;
 pub mod material;
 pub mod mesh;
 
@@ -8,12 +9,13 @@ use std::str::FromStr;
 use bitflags::bitflags;
 use bstr::{BStr, BString};
 use bytes::Buf;
-use glam::{Mat3, Vec2, Vec3, Vec4};
+use glam::{Mat3, Quat, Vec2, Vec3, Vec4};
 use half::f16;
 use material::{BSLightingShaderProperty, BSShaderTextureSet};
 use mesh::{BSMeshLODTriShape, BSSubIndexTriShape, BSTriShape};
 use thiserror::Error;
 
+use crate::connect_points::{BSConnectPointChildren, BSConnectPointParents};
 use crate::material::{BSEffectShaderProperty, BSSkyShaderProperty, NiAlphaProperty};
 
 #[derive(Clone, Debug)]
@@ -167,6 +169,12 @@ impl Nif {
                 BlockType::BhkRagdollSystem => {
                     let data = reader.get_byte_array()?;
                     Block::BhkRagdollSystem(BhkRagdollSystem { data })
+                }
+                BlockType::BSConnectPointChildren => {
+                    Block::BSConnectPointChildren(BSConnectPointChildren::decode(&mut reader)?)
+                }
+                BlockType::BSConnectPointParents => {
+                    Block::BSConnectPointParents(BSConnectPointParents::decode(&mut reader)?)
                 }
                 _ => Block::Skipped,
             };
@@ -435,6 +443,8 @@ pub enum Block {
     BhkRagdollSystem(BhkRagdollSystem),
     BSSkyShaderProperty(BSSkyShaderProperty),
     NiAlphaProperty(NiAlphaProperty),
+    BSConnectPointChildren(BSConnectPointChildren),
+    BSConnectPointParents(BSConnectPointParents),
 }
 
 #[derive(Clone, Debug)]
@@ -758,6 +768,16 @@ impl Decode for Mat3 {
         let y = Vec3::decode(reader)?;
         let z = Vec3::decode(reader)?;
         Ok(Self::from_cols(x, y, z))
+    }
+}
+
+impl Decode for Quat {
+    fn decode(reader: &mut Reader<'_>) -> Result<Self, Error> {
+        let x = reader.get_f32()?;
+        let y = reader.get_f32()?;
+        let z = reader.get_f32()?;
+        let w = reader.get_f32()?;
+        Ok(Self::from_xyzw(x, y, z, w))
     }
 }
 
