@@ -82,7 +82,7 @@ pub async fn load(
         .await
         .unwrap();
 
-    let skeleton = load_skeleton(&skeleton_file).unwrap();
+    let skeleton = load_skeleton(&skeleton_file, &nif_skeleton).unwrap();
     let skeleton = merge_skeletons(&nif_skeleton, &skeleton);
 
     (nif_skeleton, skeleton)
@@ -178,10 +178,20 @@ fn hkt_to_hkx(path: &str) -> Cow<'_, str> {
     }
 }
 
-fn load_skeleton(file: &HkxFile) -> Option<Skeleton> {
+fn load_skeleton(file: &HkxFile, nif: &NifScene) -> Option<Skeleton> {
     for object in file.iter() {
         match object {
-            HkObject::Skeleton(data) if data.name == "Root" => {
+            HkObject::Skeleton(data)
+                // The skeleton will attach to the nif scene where hkx skeleton
+                // has the same name as the nif node. This is "Root" for most skeletons.
+                // There is a theoretical concern if the hkx file contains multiple
+                // matching skeletons, but this is never seen in the game files, so we will
+                // not care for now.
+                if nif
+                    .nodes
+                    .values()
+                    .any(|node| node.name.to_lowercase() == data.name.to_lowercase()) =>
+            {
                 let mut bones = Vec::new();
                 for (index, bone) in data.bones.iter().enumerate() {
                     let transform = &data.reference_pose[index];
@@ -230,14 +240,7 @@ fn merge_skeletons(nif: &NifScene, hkx: &Skeleton) -> Skeleton {
     let mut bones: HashMap<game_core::hierarchy::Key, usize> = HashMap::new();
 
     let mut queue = VecDeque::new();
-    // queue.extend(nif.nodes.root_keys());
-
-    let root = nif
-        .nodes
-        .iter()
-        .find_map(|(key, node)| (node.name == "Root").then_some(key))
-        .unwrap();
-    queue.push_back(root);
+    queue.extend(nif.nodes.root_keys());
 
     while let Some(key) = queue.pop_front() {
         let node = nif.nodes.get(key).unwrap();
