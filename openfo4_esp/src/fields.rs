@@ -1,4 +1,5 @@
 use std::collections::VecDeque;
+use std::ops::{Deref, DerefMut};
 
 use bytes::Buf;
 
@@ -19,6 +20,10 @@ impl FieldMap {
 
     pub(crate) fn next_key(&self) -> Option<Text<4>> {
         self.fields.front().map(|f| f.key)
+    }
+
+    pub(crate) fn next_keys(&self) -> impl Iterator<Item = Text<4>> + '_ {
+        self.fields.iter().map(|v| v.key)
     }
 
     /// Consumes the next field if it has the given key. Returns `None` if the next field does not
@@ -170,7 +175,7 @@ where
 
     fn read(map: &mut FieldMap, key: Text<4>) -> Result<Self, Self::Error> {
         let mut elems = Vec::new();
-        while map.next_key().is_some_and(|k| k == key) {
+        while map.next_keys().any(|k| k == key) {
             let elem = T::read(map, key)?;
             elems.push(elem);
         }
@@ -181,11 +186,25 @@ where
     fn read_next(map: &mut FieldMap, key: Text<4>) -> Result<Self, Self::Error> {
         let mut elems = Vec::new();
         while map.next_key().is_some_and(|k| k == key) {
-            let elem = T::read(map, key)?;
+            let elem = T::read_next(map, key)?;
             elems.push(elem);
         }
 
         Ok(Self(elems))
+    }
+}
+
+impl<T> Deref for SubRecordArray<T> {
+    type Target = Vec<T>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl<T> DerefMut for SubRecordArray<T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
     }
 }
 
@@ -218,7 +237,7 @@ where
     fn read_next(map: &mut FieldMap, key: Text<4>) -> Result<Self, Self::Error> {
         match map.consume_next::<()>(key)? {
             Some(_) => {
-                let section = T::read(map, key)?;
+                let section = T::read_next(map, key)?;
                 Ok(Some(SubRecordSection(section)))
             }
             None => Ok(None),

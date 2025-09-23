@@ -25,6 +25,7 @@ use openfo4_nif::bgsm::Bgsm;
 use openfo4_physics::components::{Collider, ColliderShape, RigidBody, RigidBodyKind, TriMesh};
 use tracing::instrument;
 
+use crate::assets::AssetServer;
 use crate::assets::nif_v2::{Instantiate, NIF_TO_METERS, NifScene};
 use crate::cell::{CELL_SIZE, CellId};
 use crate::components::{NiTransform, Root};
@@ -32,6 +33,7 @@ use crate::events::{Event, UnloadCell};
 use crate::loader::FileLoader;
 use crate::render::RenderObject;
 use crate::shared::SharedState;
+use crate::state::npc::Actor;
 use crate::systems::lights::{LightFlicker, LightFlickerMode, LightFlickerState};
 
 use super::asset::load_image_buffer;
@@ -61,6 +63,7 @@ impl Level {
         pool: Arc<TaskPool>,
         file_loader: Arc<FileLoader>,
         shared: Arc<SharedState>,
+        server: AssetServer,
     ) -> Self {
         let (tx, rx) = async_channel::unbounded::<CellId>();
         let events = Arc::new(SegQueue::new());
@@ -104,6 +107,7 @@ impl Level {
                         &pool,
                         &file_loader,
                         &shared,
+                        &server,
                         form_id,
                     )
                     .await;
@@ -161,10 +165,15 @@ impl Level {
 
                     let entity = if let Some(scene) = event.scene {
                         scene.instantiate(event.transform.into(), world)
+                    } else if let Some(actor) = event.actor {
+                        actor.instantiate(world)
                     } else {
-                        world.spawn((Transform::from(event.transform),))
+                        world.reserve_entity()
                     };
 
+                    world
+                        .insert_one(entity, Transform::from(event.transform))
+                        .unwrap();
                     world.insert_one(entity, RigidBody::FIXED).unwrap();
 
                     if let Some(light) = event.light {
@@ -246,18 +255,19 @@ impl Level {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 enum SpawnEvent {
     SpawnEntity(SpawnEntity),
     SpawnTerrain(Transform, RenderObject, Collider),
 }
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct SpawnEntity {
     pub transform: NiTransform,
     pub scene: Option<Handle<NifScene>>,
     pub light: Option<PointLight>,
     pub light_flicker: Option<LightFlicker>,
+    pub actor: Option<Actor>,
 }
 
 async fn load_cell(
@@ -267,6 +277,7 @@ async fn load_cell(
     pool: &TaskPool,
     file_loader: &Arc<FileLoader>,
     shared: &Arc<SharedState>,
+    server: &AssetServer,
     cell_id: FormId,
 ) {
     let cell = match loader.lookup(Some(RecordKind::Cell), cell_id).await {
@@ -303,6 +314,7 @@ async fn load_cell(
         let shared = shared.clone();
         let events = events.clone();
         let asset_loader = asset_loader.clone();
+        let server = server.clone();
 
         pool.spawn(async move {
             let mut position;
@@ -522,9 +534,10 @@ async fn load_cell(
                 return;
             }
 
-            let model;
+            let mut model = None;
             let mut light = None;
             let mut light_flicker = None;
+            let mut actor = None;
 
             match base.data {
                 RecordData::STAT(data) => {
@@ -542,7 +555,13 @@ async fn load_cell(
                 RecordData::Container(data) => {
                     model = data.modl.model;
                 }
-                RecordData::Npc(_) => return,
+                RecordData::Npc(_) => {
+                    actor = Some(
+                        crate::state::npc::spawn_actor(&asset_loader, &loader, &server, base.id)
+                            .await
+                            .unwrap(),
+                    );
+                }
                 RecordData::IdleMarker(_) => return,
                 RecordData::Activator(data) => {
                     model = data.model.model;
@@ -580,7 +599,6 @@ async fn load_cell(
                             LightFlickerMode::Flicker
                         };
 
-                        dbg!(&data.data.flicker_period);
                         let period = Duration::from_secs_f32(1.0 / data.data.flicker_period);
 
                         light_flicker = Some(LightFlicker {
@@ -618,6 +636,7 @@ async fn load_cell(
                 scene,
                 light,
                 light_flicker,
+                actor,
             }));
         });
     }

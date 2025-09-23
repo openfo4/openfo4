@@ -20,6 +20,16 @@ fn main() {
     let mut file = BufReader::new(File::open("../../Fallout4.esm").unwrap());
     let mut file = EspFile::new(file).unwrap();
 
+    // dbg!(file.lookup(None, FormId(0x29463)).unwrap());
+    // dbg!(file.lookup(None, FormId(0x184c4d)).unwrap());
+    // return;
+
+    for x in file.lookup_all(Some(RecordKind::Race)) {
+        dbg!(x.unwrap());
+    }
+
+    return;
+
     // file.children(RecordChildren::Cells, FormId(0x3C)).unwrap();
 
     // let record = file.validate().unwrap();

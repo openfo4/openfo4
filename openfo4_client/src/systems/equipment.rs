@@ -6,18 +6,43 @@ use hecs::World;
 use openfo4_animation::skeleton::SkeletonInstance;
 use openfo4_asset::AssetLoader;
 use openfo4_core::WorldExt;
+use openfo4_esp::FormId;
+use slab::Slab;
 
 use crate::assets::nif_v2::NifScene;
 use crate::state::animation_test::SkinInstance;
+use crate::state::equipment::EquipmentItem;
 
-pub async fn equip_item(
-    skin_path: &str,
-    loader: &AssetLoader,
+#[derive(Clone, Debug, Default)]
+pub struct Equipment {
+    items: Slab<EquippedItem>,
+}
+
+impl Equipment {}
+
+#[derive(Clone, Debug)]
+pub struct Weapon {
+    pub min_range: f32,
+    pub max_range: f32,
+    pub damage: f32,
+}
+
+#[derive(Clone, Debug)]
+pub struct EquippedItem {
+    pub item: FormId,
+    pub attachments: Vec<usize>,
+}
+
+#[derive(Clone, Debug)]
+pub struct AttachmentPoint {
+    pub transform: Transform,
+}
+
+pub fn equip_item(
+    scene: &NifScene,
     skeleton: &SkeletonInstance,
     world: &mut World,
 ) -> Vec<SkinInstance> {
-    let scene = loader.load::<NifScene, _>(skin_path).await.unwrap();
-
     let mut skin_bind_pose = HashMap::new();
     let mut instances = Vec::new();
 

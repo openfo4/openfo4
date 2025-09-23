@@ -1,3 +1,5 @@
+use std::ops::{Deref, DerefMut};
+
 use bitflags::bitflags;
 use bytes::Buf;
 use glam::Vec3;
@@ -683,6 +685,7 @@ pub struct Race {
     #[record("SADD")]
     pub subgraph_additive_race: Option<FormId>,
     #[record("SGNM")]
+    #[record(unordered)]
     pub subgraph_data: SubRecordArray<RaceSubgraphData>,
     // TODO: Incomplete
 }
@@ -694,15 +697,16 @@ pub struct Property {
 }
 
 #[derive(Clone, Debug, Record)]
+#[record(ordered)]
 pub struct RaceSubgraphData {
     #[record("SAKD")]
     pub actor_keywords: Vec<FormId>,
+    #[record("STKD")]
+    pub target_keywords: Vec<FormId>,
     #[record("SGNM")]
     pub behavior_graph: ZString,
     #[record("SAPT")]
     pub animation_paths: Vec<ZString>,
-    #[record("STKD")]
-    pub target_keywords: Vec<FormId>,
     #[record("SRAF")]
     pub flags: SubgraphFlags,
 }
@@ -1894,6 +1898,20 @@ where
     }
 }
 
+impl<T> Deref for Array<T> {
+    type Target = Vec<T>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl<T> DerefMut for Array<T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
 #[deprecated(note = "use Array<FormId> instead")]
 #[derive(Clone, Debug)]
 pub struct Keywords(Vec<FormId>);
@@ -2331,6 +2349,7 @@ pub struct Weapon {
     pub impact_data_set: Option<FormId>,
     #[record("LNAM")]
     pub npc_add_ammo_list: Option<FormId>,
+    /// Reference to [`AimModel`].
     #[record("WAMD")]
     pub aim_model: Option<FormId>,
     #[record("WZMD")]
@@ -2346,6 +2365,7 @@ pub struct Weapon {
 
 #[derive(Clone, Debug, BinaryStruct)]
 pub struct WeaponData {
+    /// Ammo that this [`Weapon`] fires.
     pub ammo: FormId,
     pub speed: f32,
     pub reload_speed: f32,
@@ -2354,14 +2374,18 @@ pub struct WeaponData {
     pub max_range: f32,
     pub attack_delay: f32,
     _unknown0: u32,
+    /// Fixed factor that is applied when the target is outside the `[min_range..max_range]`
+    /// bounds.
     pub damage_out_of_range_mult: f32,
     pub on_hit: u32,
     pub skill: FormId,
     pub resist: FormId,
     pub flags: WeaponDataFlags,
+    /// Ammo capacity.
     pub capacity: u16,
     pub animation_type: WeaponAnimationType,
     pub secondary_damage: f32,
+    /// Weight of the item in the inventory.
     pub weight: f32,
     pub value: u32,
     pub base_damage: u16,
@@ -2577,6 +2601,8 @@ pub struct Npc {
     perk_count: Option<u32>,
     #[record("PRKR")]
     pub perks: Vec<NpcPerk>,
+    #[record("PRPS")]
+    pub properties: Vec<Property>,
     #[record("COCT")]
     count_of_container: Option<u32>,
     #[record("CNTO")]
@@ -2590,7 +2616,7 @@ pub struct Npc {
     #[record("KSIZ")]
     keyword_count: Option<u32>,
     #[record("KWDA")]
-    pub keywords: Option<Keywords>,
+    pub keywords: Option<Array<FormId>>,
     // attach_parent_slot
     // object template
     #[record("CNAM")]
@@ -2651,7 +2677,7 @@ pub struct NpcBaseStats {
     pub calc_min_level: u16,
     pub calc_max_level: u16,
     pub disposition_base: i16,
-    pub template_flags: u16,
+    pub template_flags: NpcTemplateFlags,
     pub bleedout_override: u16,
     _unknown0: [u8; 2],
 }
@@ -2674,9 +2700,28 @@ bitflags! {
     }
 }
 
-impl_decode_bitflags! {
-    NpcBaseFlags: u32
+impl_decode_bitflags!(NpcBaseFlags: u32);
+
+bitflags! {
+    #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+    pub struct NpcTemplateFlags: u16 {
+        const TRAITS = 0x0001;
+        const STATS = 0x0002;
+        const FACTIONS = 0x0004;
+        const SPELL_LIST = 0x0008;
+        const AI_DATA = 0x0010;
+        const AI_PACKAGES = 0x0020;
+        const MODEL = 0x0040;
+        const BASE_DATA = 0x0080;
+        const INVENTORY = 0x0100;
+        const SCRIPT = 0x0200;
+        const DEF_PACK_LIST = 0x0400;
+        const ATTACK_DATA = 0x0800;
+        const KEYWORDS = 0x1000;
+    }
 }
+
+impl_decode_bitflags!(NpcTemplateFlags: u16);
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, BinaryStruct)]
 pub struct NpcFactionMember {
@@ -2850,6 +2895,9 @@ pub struct LeveledActor {
 bitflags! {
     #[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Hash)]
     pub struct LeveledActorFlags: u8 {
+        /// If set any actor with level set to less than or equal to the player's level may be
+        /// selected. If this flag is not selected one entry with the highest level that is less
+        /// than or equal to the player's level is selected.
         const ALL_LEVELS = 0x01;
         const EACH = 0x02;
     }
@@ -2861,9 +2909,10 @@ impl_decode_bitflags!(LeveledActorFlags: u8);
 #[derive(Copy, Clone, Debug, BinaryStruct)]
 pub struct LeveledListEntry {
     /// The minimum player level at which the entry may be selected.
-    pub level: u32,
+    pub level: u16,
+    _pad0: u16,
     pub reference: FormId,
-    pub count: u32,
+    pub count: u16,
     /// The chance that this `LeveldListEntry` is NOT selected. In other words this is the inverse
     /// chance.
     pub chance_none: u8,
@@ -4953,6 +5002,28 @@ pub struct ReferenceGroup {
 pub struct AimModel {
     #[record("EDID")]
     pub id: Option<ZString>,
+    #[record("DNAM")]
+    pub data: AimModelData,
+}
+
+#[derive(Copy, Clone, Debug, BinaryStruct)]
+pub struct AimModelData {
+    pub cone_of_fire_min_angle: f32,
+    pub cone_of_fire_max_angle: f32,
+    pub cone_of_fire_increase_per_shot: f32,
+    pub cone_of_fire_decrease_per_second: f32,
+    pub cone_of_fire_decrease_delay_ms: f32,
+    pub cone_of_fire_sneak_mult: f32,
+    pub recoil_diminish_sprint_force: f32,
+    pub recoil_diminish_sights_mult: f32,
+    pub recoil_max_per_shot: f32,
+    pub recoil_min_per_shot: f32,
+    pub recoil_hip_mult: f32,
+    pub runaway_recoil_shots: f32,
+    pub recoil_arc: f32,
+    pub recoil_arc_rotate: f32,
+    pub cone_of_fire_iron_sights_mult: f32,
+    pub base_stability: f32,
 }
 
 #[derive(Clone, Debug, Record)]

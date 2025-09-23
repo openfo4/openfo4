@@ -189,11 +189,17 @@ impl Asset for NifScene {
         path: &Self::Key,
         ctx: &Self::Context,
     ) -> Result<Self, Self::Error> {
+        let mut path = fix_path(path);
+
+        // All nif files are located in the meshes directory.
+        if !path.starts_with("meshes") {
+            path.insert_str(0, "meshes/");
+        }
+
         // `meshes/markers` contains editor markers.
         // There does not seem any other indication that a
         // file/object is a marker.
         // Some markers are not inside this directory.
-        let path = fix_path(path);
         if path.starts_with("meshes/markers/") {
             tracing::info!("skip {}", path);
 

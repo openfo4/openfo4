@@ -3,8 +3,10 @@ pub mod anim_starter;
 pub mod animation;
 pub mod animation_test;
 pub mod asset;
+pub mod equipment;
 pub mod esp;
 pub mod level;
+pub mod npc;
 pub mod skinning;
 pub mod spawner;
 pub mod terrain;
@@ -136,6 +138,7 @@ impl GameState {
             pool.clone(),
             file_loader.clone(),
             shared.clone(),
+            assets.clone(),
         );
 
         Self {

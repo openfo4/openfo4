@@ -74,9 +74,9 @@ pub fn animation_test(
         // "meshes/actors/character/animations/mt/neutral",
         // "meshes/actors/character/animations",
         // "meshes/actors/character/animations/furniture/water",
-        "meshes/actors/character/animations/weapon/laserpistol",
-        "meshes/actors/character/animations/weapon/pistol",
-        "meshes/actors/character/animations",
+        "actors/character/animations/weapon/laserpistol",
+        "actors/character/animations/weapon/pistol",
+        "actors/character/animations",
     ];
     // let anim_search_path = "meshes/actors/character/animations/";
     // let skin_path = "meshes/actors/character/characterassets/malebody.nif";
@@ -88,91 +88,99 @@ pub fn animation_test(
     // let raider_root_path = "meshes/actors/character/behaviors/raiderrootbehavior.hkx";
 
     ONCE.get_or_init(|| {
-        let race = futures_lite::future::block_on(
-            esp_loader.lookup(Some(RecordKind::Race), FormId(0x13746)),
-        )
-        .unwrap();
-
-        let race = match race.data {
-            RecordData::Race(race) => race,
-            _ => todo!(),
-        };
-
-        let character =
-            futures_lite::future::block_on(load_character(&race, false, server, asset_loader))
-                .unwrap();
-        let behavior = futures_lite::future::block_on(load_behavior_data(
-            behavior_filename,
-            &character,
-            &search_paths,
-            server,
-        ))
-        .unwrap();
-
         let offset = CellId(IVec2::new(2, 7)).min();
-        let offset =
-            NiTransform::from_translation(offset.extend(0.0) - Vec3::new(1024.0, 1024.0, 0.0));
-
-        let root = world.spawn((Transform::from(offset),));
-        let skeleton_instance = character.instantiate(root, world);
-
-        let mut skin_instances = futures_lite::future::block_on(equip_item(
-            skin_path,
-            asset_loader,
-            &skeleton_instance,
-            world,
-        ));
-        let skin_instances2 = futures_lite::future::block_on(equip_item(
-            "meshes/armor/armoredcoat/glovesf.nif",
-            asset_loader,
-            &skeleton_instance,
-            world,
-        ));
-        futures_lite::future::block_on(equip_item(
-            "meshes/weapons/laserweapons/laserpistol.nif",
-            asset_loader,
-            &skeleton_instance,
-            world,
-        ));
-
-        skin_instances.extend(skin_instances2);
-
-        let collider = world.spawn((
-            character.controller_offset,
-            Collider {
-                friction: 1.0,
-                restitution: 0.0,
-                shape: character.controller_shape.clone(),
-            },
-        ));
-
-        world
-            .insert(
-                root,
-                (
-                    behavior.clips,
-                    skeleton_instance,
-                    AnimationDriver::new(Arc::new(behavior.graph)),
-                    SkinInstances(skin_instances),
-                    ActiveBehaviorGraphs(vec![
-                        behavior_filename.replace("meshes/", ""),
-                        "actors/character/behaviors/raiderrootbehavior.hkx".to_owned(),
-                    ]),
-                    AnimationEventQueue::default(),
-                    RigidBody::FIXED,
-                    Player,
-                    PlayerControlState::default(),
-                    ControllerShape {
-                        offset: character.controller_offset,
-                        shape: character.controller_shape,
-                    },
-                ),
+        for (index, offset) in [
+            NiTransform::from_translation(offset.extend(0.0) - Vec3::new(1024.0, 1024.0, 0.0)),
+            // NiTransform::from_translation(offset.extend(0.0) - Vec3::new(2000.0, 2000.0, 0.0)),
+        ]
+        .iter()
+        .enumerate()
+        {
+            let race = futures_lite::future::block_on(
+                esp_loader.lookup(Some(RecordKind::Race), FormId(0x13746)),
             )
             .unwrap();
 
-        world.add_children(root, collider);
+            let race = match race.data {
+                RecordData::Race(race) => race,
+                _ => todo!(),
+            };
 
-        crate::systems::camera::attach_camera(world, root);
+            let character =
+                futures_lite::future::block_on(load_character(&race, false, server, asset_loader))
+                    .unwrap();
+            let behavior = futures_lite::future::block_on(load_behavior_data(
+                &character.root_path,
+                behavior_filename,
+                &character,
+                &search_paths,
+                server,
+            ))
+            .unwrap();
+
+            let root = world.spawn((Transform::from(*offset),));
+            let skeleton_instance = character.instantiate(root, world);
+
+            let mut skin_instances = Vec::new();
+            for model_path in [
+                skin_path,
+                "meshes/armor/armoredcoat/glovesf.nif",
+                "meshes/weapons/laserweapons/laserpistol.nif",
+            ] {
+                let scene =
+                    futures_lite::future::block_on(asset_loader.load::<NifScene, _>(model_path))
+                        .unwrap();
+
+                let skin_instance = equip_item(&scene, &skeleton_instance, world);
+                skin_instances.extend(skin_instance);
+            }
+
+            let collider = world.spawn((
+                character.controller_offset,
+                Collider {
+                    friction: 1.0,
+                    restitution: 0.0,
+                    shape: character.controller_shape.clone(),
+                },
+            ));
+
+            world
+                .insert(
+                    root,
+                    (
+                        behavior.clips,
+                        skeleton_instance,
+                        AnimationDriver::new(Arc::new(behavior.graph)),
+                        SkinInstances(skin_instances),
+                        ActiveBehaviorGraphs(vec![
+                            behavior_filename.replace("meshes/", ""),
+                            "actors/character/behaviors/raiderrootbehavior.hkx".to_owned(),
+                        ]),
+                        RigidBody::FIXED,
+                        ControllerShape {
+                            offset: character.controller_offset,
+                            shape: character.controller_shape,
+                        },
+                    ),
+                )
+                .unwrap();
+
+            world.add_children(root, collider);
+
+            if index == 0 {
+                crate::systems::camera::attach_camera(world, root);
+                world
+                    .insert(
+                        root,
+                        (
+                            Player,
+                            PlayerControlState::default(),
+                            AnimationEventQueue::default(),
+                        ),
+                    )
+                    .unwrap();
+            }
+        }
 
         // world.spawn((
         //     Transform {
@@ -193,7 +201,7 @@ pub enum Error {
     NoCharacterFilenames,
 }
 
-async fn load_character(
+pub async fn load_character(
     race: &Race,
     female: bool,
     server: &AssetServer,
@@ -263,6 +271,8 @@ async fn load_character(
         .character_filenames
         .get(0)
         .ok_or(Error::NoCharacterFilenames)?;
+
+    let root_path = project_path.parent().unwrap().to_str().unwrap().to_owned();
 
     let character_path = project_path.parent().unwrap().join(character_filename);
     let character_file = server.load::<HkxFile>(&character_path).await.unwrap();
@@ -338,20 +348,22 @@ async fn load_character(
         controller_offset,
         controller_shape,
         props,
+        root_path: root_path,
     })
 }
 
 #[derive(Clone, Debug)]
-struct ActorCharacter {
-    scene: Handle<NifScene>,
-    skeleton: Skeleton,
-    controller_offset: Transform,
-    controller_shape: ColliderShape,
-    props: HashMap<String, Value>,
+pub struct ActorCharacter {
+    pub scene: Handle<NifScene>,
+    pub skeleton: Skeleton,
+    pub controller_offset: Transform,
+    pub controller_shape: ColliderShape,
+    pub props: HashMap<String, Value>,
+    pub root_path: String,
 }
 
 impl ActorCharacter {
-    fn instantiate(&self, root: Entity, world: &mut World) -> SkeletonInstance {
+    pub fn instantiate(&self, root: Entity, world: &mut World) -> SkeletonInstance {
         // Because the scene may have nodes with extra components we
         // will first spawn the scene and then "overlay" the HKX skeleton.
         let mut scene_nodes = HashMap::new();
@@ -425,18 +437,24 @@ impl ActorCharacter {
     }
 }
 
-struct ActorBehaviorData {
-    graph: AnimationGraph,
-    clips: AnimationSet,
+pub struct ActorBehaviorData {
+    pub graph: AnimationGraph,
+    pub clips: AnimationSet,
 }
 
-async fn load_behavior_data(
+pub async fn load_behavior_data(
+    root_path: &str,
     behavior_path: &str,
     character: &ActorCharacter,
     search_paths: &[&str],
     server: &AssetServer,
 ) -> Result<ActorBehaviorData, ()> {
-    let behavior_file = server.load::<HkxFile>(behavior_path).await.unwrap();
+    let mut behavior_path = fix_path(behavior_path);
+    if !behavior_path.starts_with("meshes") {
+        behavior_path = format!("meshes/{}", behavior_path)
+    }
+
+    let behavior_file = server.load::<HkxFile>(&behavior_path).await.unwrap();
 
     let mut builder = Builder::new((*behavior_file).clone(), character.props.clone()).unwrap();
 
@@ -444,10 +462,21 @@ async fn load_behavior_data(
         match builder.build().unwrap() {
             Ok(graph) => break graph,
             Err(Hint::NeedFile(path)) => {
-                let dir = "meshes/actors/character";
-                let p = format!("{}/{}", dir, path.to_lowercase().replace("\\", "/"));
+                let p = format!("{}/{}", root_path, path.to_lowercase().replace("\\", "/"));
 
-                let file = server.load::<HkxFile>(&p).await.unwrap();
+                let file = match server.load::<HkxFile>(&p).await {
+                    Ok(f) => f,
+                    Err(err) => {
+                        // The game seems to also load from this directory for all races.
+                        // This doesn't seem to be referenced anywhere, so it might be hardcoded?
+                        let shared_path = "meshes/actors/shared";
+                        let p =
+                            format!("{}/{}", shared_path, path.to_lowercase().replace("\\", "/"));
+
+                        server.load::<HkxFile>(&p).await.unwrap()
+                    }
+                };
+
                 builder.register_file(&path, (*file).clone()).unwrap();
             }
         }
@@ -463,7 +492,7 @@ async fn load_behavior_data(
         let file_stem = path.split("/").last().unwrap_or(&path);
         let search_paths: Vec<_> = search_paths
             .iter()
-            .map(|v| format!("{}/{}", v, file_stem))
+            .map(|v| format!("meshes/{}/{}", v, file_stem))
             .collect();
         let search_paths: Vec<_> = search_paths.iter().map(|v| v.as_str()).collect();
 

@@ -16,6 +16,7 @@ pub fn derive_record_impl(input: DeriveInput) -> Result<TokenStream2, Error> {
     for field in data.fields {
         let mut key = None;
         let mut count = None;
+        let mut unordered = false;
 
         for attr in field.attrs {
             match attr
@@ -25,12 +26,15 @@ pub fn derive_record_impl(input: DeriveInput) -> Result<TokenStream2, Error> {
                 .map(|i| i.to_string())
                 .as_deref()
             {
-                Some("record") => {
-                    assert!(key.is_none());
-                    let attr = attr.parse_args::<RecordAttr>()?;
-
-                    key = Some(attr.key);
-                }
+                Some("record") => match attr.parse_args::<RecordAttr>()? {
+                    RecordAttr::Key(k) => {
+                        assert!(key.is_none());
+                        key = Some(k);
+                    }
+                    RecordAttr::Unordered => {
+                        unordered = true;
+                    }
+                },
                 Some("count") => {
                     assert!(count.is_none());
                     let attr = attr.parse_args::<CountAttr>()?;
@@ -53,6 +57,7 @@ pub fn derive_record_impl(input: DeriveInput) -> Result<TokenStream2, Error> {
             ty: field.ty,
             key,
             count,
+            read_unordered: unordered,
         });
     }
 
@@ -90,6 +95,7 @@ struct Field {
     ty: Type,
     key: String,
     count: Option<String>,
+    read_unordered: bool,
 }
 
 impl Field {
@@ -128,6 +134,10 @@ impl Field {
     }
 
     fn expand_read_next_impl(&self) -> TokenStream2 {
+        if self.read_unordered {
+            return self.expand_read_impl();
+        }
+
         let ident = &self.ident;
         let ty = &self.ty;
 
@@ -163,14 +173,23 @@ impl Field {
 }
 
 #[derive(Clone, Debug)]
-struct RecordAttr {
-    key: String,
+pub enum RecordAttr {
+    Key(String),
+    Unordered,
 }
 
 impl Parse for RecordAttr {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
-        let key = input.parse::<LitStr>()?;
-        Ok(Self { key: key.value() })
+        match input.parse::<Ident>() {
+            Ok(ident) => match &*ident.to_string() {
+                "unordered" => Ok(Self::Unordered),
+                _ => panic!("unknown field attribute"),
+            },
+            Err(_) => {
+                let key = input.parse::<LitStr>()?;
+                Ok(Self::Key(key.value()))
+            }
+        }
     }
 }
 

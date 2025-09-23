@@ -1,3 +1,4 @@
+pub mod aim;
 pub mod animation_sync;
 pub mod camera;
 pub mod controller;
@@ -5,6 +6,7 @@ pub mod equipment;
 pub mod hierarchy;
 pub mod lights;
 pub mod ni_transform;
+pub mod projectile;
 pub mod skeleton;
 
 #[derive(Clone, Debug, Default)]
