@@ -21,8 +21,8 @@ pub fn drive_animations(world: &mut World, delta: Duration, event: Option<&'stat
         driver.update(delta, set, &mut events);
 
         for event in events {
-            match driver.graph().event_name(event.id) {
-                Some("reevaluategraphstate") => {
+            match GameEvent::from_name(driver.graph().event_name(event.id).unwrap_or_default()) {
+                Some(GameEvent::ReevaluateGraphState) => {
                     driver.reset();
 
                     for index in skeleton.culled.drain() {
@@ -31,7 +31,7 @@ pub fn drive_animations(world: &mut World, delta: Duration, event: Option<&'stat
                         commands.insert_one(*entity, transform);
                     }
                 }
-                Some("cullbone") => {
+                Some(GameEvent::CullBone) => {
                     let Value::String(name) = &event.payload else {
                         continue;
                     };
@@ -51,7 +51,7 @@ pub fn drive_animations(world: &mut World, delta: Duration, event: Option<&'stat
                     commands.insert_one(*entity, Transform::from_translation(Vec3::NAN));
                     skeleton.culled.insert(index);
                 }
-                Some("uncullbone") => {
+                Some(GameEvent::UncullBone) => {
                     let Value::String(name) = &event.payload else {
                         continue;
                     };
@@ -68,6 +68,12 @@ pub fn drive_animations(world: &mut World, delta: Duration, event: Option<&'stat
                     let entity = skeleton.bones.get(&index).unwrap();
                     commands.insert_one(*entity, transform);
                     skeleton.culled.remove(&index);
+                }
+                Some(GameEvent::WeaponFire) => {
+                    dbg!("fire");
+                }
+                Some(GameEvent::ReloadComplete) => {
+                    dbg!("reload");
                 }
                 _ => (),
             }
@@ -287,6 +293,28 @@ impl TransformLerp for Transform {
             translation: Vec3::lerp(self.translation, other.translation, s),
             rotation: Quat::slerp(self.rotation, other.rotation, s).normalize(),
             scale: Vec3::lerp(self.scale, other.scale, s),
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub enum GameEvent {
+    ReevaluateGraphState,
+    CullBone,
+    UncullBone,
+    WeaponFire,
+    ReloadComplete,
+}
+
+impl GameEvent {
+    fn from_name(name: &str) -> Option<Self> {
+        match name {
+            "reevaluategraphstate" => Some(Self::ReevaluateGraphState),
+            "cullbone" => Some(Self::CullBone),
+            "uncullbone" => Some(Self::UncullBone),
+            "weaponfire" => Some(Self::WeaponFire),
+            "reloadcomplete" => Some(Self::ReloadComplete),
+            _ => None,
         }
     }
 }
