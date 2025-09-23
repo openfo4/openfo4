@@ -1,5 +1,4 @@
-use std::collections::{HashMap, HashSet, VecDeque};
-use std::io::Read;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::{Arc, OnceLock};
 
@@ -8,7 +7,6 @@ use game_core_pipeline::entities::MaterialHandle;
 use game_render::mesh::Mesh;
 use glam::{IVec2, Vec3, Vec4};
 use hecs::{Entity, World};
-use image::imageops::replace;
 use openfo4_animation::builder::{Builder, Hint};
 use openfo4_animation::driver::AnimationDriver;
 use openfo4_animation::skeleton::{BoneMarker, Skeleton, SkeletonInstance};
@@ -19,13 +17,10 @@ use openfo4_esp::records::Race;
 use openfo4_esp::{FormId, RecordData, RecordKind};
 use openfo4_hkx::behavior::VariableType;
 use openfo4_hkx::{HkObject, HkxFile};
-use openfo4_physics::components::{
-    Capsule, Collider, ColliderShape, RigidBody, RigidBodyKind, TriMesh,
-};
+use openfo4_physics::components::{Capsule, Collider, ColliderShape, RigidBody};
 
-use crate::assets::hkx::FileHkxHandle;
+use crate::assets::data_file::DataFile;
 use crate::assets::nif_v2::{Instantiate, NIF_TO_METERS, NifScene};
-use crate::assets::{AssetServer, hkx};
 use crate::cell::CellId;
 use crate::components::{NiTransform, Player};
 use crate::loader::{FileLoader, fix_path};
@@ -52,7 +47,6 @@ pub fn animation_test(
     loader: &FileLoader,
     shared: &SharedState,
     world: &mut World,
-    server: &AssetServer,
     asset_loader: &AssetLoader,
     esp_loader: &EspLoader,
 ) {
@@ -107,14 +101,13 @@ pub fn animation_test(
             };
 
             let character =
-                futures_lite::future::block_on(load_character(&race, false, server, asset_loader))
-                    .unwrap();
+                futures_lite::future::block_on(load_character(&race, false, asset_loader)).unwrap();
             let behavior = futures_lite::future::block_on(load_behavior_data(
                 &character.root_path,
                 behavior_filename,
                 &character,
                 &search_paths,
-                server,
+                asset_loader,
             ))
             .unwrap();
 
@@ -204,7 +197,6 @@ pub enum Error {
 pub async fn load_character(
     race: &Race,
     female: bool,
-    server: &AssetServer,
     loader: &AssetLoader,
 ) -> Result<ActorCharacter, Error> {
     let nif_skeleton;
@@ -247,7 +239,6 @@ pub async fn load_character(
     let hkx_project = fix_path(hkx_project);
 
     let (nif_skeleton, skeleton) = animation::load(
-        server,
         loader,
         SkeletonConfig {
             nif_skeleton,
@@ -257,7 +248,10 @@ pub async fn load_character(
     .await;
 
     let project_path = PathBuf::from("/meshes/").join(hkx_project);
-    let project = server.load::<HkxFile>(&project_path).await.unwrap();
+    let project = loader
+        .load::<DataFile<HkxFile>, _>(project_path.to_str().unwrap())
+        .await
+        .unwrap();
     let project = project
         .iter()
         .find_map(|obj| match obj {
@@ -275,7 +269,10 @@ pub async fn load_character(
     let root_path = project_path.parent().unwrap().to_str().unwrap().to_owned();
 
     let character_path = project_path.parent().unwrap().join(character_filename);
-    let character_file = server.load::<HkxFile>(&character_path).await.unwrap();
+    let character_file = loader
+        .load::<DataFile<HkxFile>, _>(character_path.to_str().unwrap())
+        .await
+        .unwrap();
     let character = character_file
         .iter()
         .find_map(|obj| match obj {
@@ -447,16 +444,19 @@ pub async fn load_behavior_data(
     behavior_path: &str,
     character: &ActorCharacter,
     search_paths: &[&str],
-    server: &AssetServer,
+    loader: &AssetLoader,
 ) -> Result<ActorBehaviorData, ()> {
     let mut behavior_path = fix_path(behavior_path);
     if !behavior_path.starts_with("meshes") {
         behavior_path = format!("meshes/{}", behavior_path)
     }
 
-    let behavior_file = server.load::<HkxFile>(&behavior_path).await.unwrap();
+    let behavior_file = loader
+        .load::<DataFile<HkxFile>, _>(&behavior_path)
+        .await
+        .unwrap();
 
-    let mut builder = Builder::new((*behavior_file).clone(), character.props.clone()).unwrap();
+    let mut builder = Builder::new((**behavior_file).clone(), character.props.clone()).unwrap();
 
     let graph = loop {
         match builder.build().unwrap() {
@@ -464,7 +464,7 @@ pub async fn load_behavior_data(
             Err(Hint::NeedFile(path)) => {
                 let p = format!("{}/{}", root_path, path.to_lowercase().replace("\\", "/"));
 
-                let file = match server.load::<HkxFile>(&p).await {
+                let file = match loader.load::<DataFile<HkxFile>, _>(&p).await {
                     Ok(f) => f,
                     Err(err) => {
                         // The game seems to also load from this directory for all races.
@@ -473,11 +473,11 @@ pub async fn load_behavior_data(
                         let p =
                             format!("{}/{}", shared_path, path.to_lowercase().replace("\\", "/"));
 
-                        server.load::<HkxFile>(&p).await.unwrap()
+                        loader.load::<DataFile<HkxFile>, _>(&p).await.unwrap()
                     }
                 };
 
-                builder.register_file(&path, (*file).clone()).unwrap();
+                builder.register_file(&path, (**file).clone()).unwrap();
             }
         }
     };
@@ -496,7 +496,7 @@ pub async fn load_behavior_data(
             .collect();
         let search_paths: Vec<_> = search_paths.iter().map(|v| v.as_str()).collect();
 
-        let clip = match load_anim(server, &search_paths).await {
+        let clip = match load_anim(loader, &search_paths).await {
             Ok(clip) => clip,
             Err(err) => {
                 tracing::error!(

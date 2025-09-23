@@ -4,6 +4,7 @@ use game_core_pipeline::material::{AlphaMode, StandardMaterial};
 use openfo4_asset::{Asset, AssetLoader, Handle};
 use openfo4_nif::bgsm::Bgsm;
 
+use crate::assets::data_file::DataFile;
 use crate::assets::texture::FileImageHandle;
 use crate::assets::{Error, FileLoadContext};
 
@@ -23,9 +24,8 @@ impl Asset for BgsmMaterial {
         path: &Self::Key,
         ctx: &Self::Context,
     ) -> Result<Self, Self::Error> {
-        let bgsm = ctx
-            .server
-            .load::<Bgsm>(&path)
+        let bgsm = loader
+            .load::<DataFile<Bgsm>, _>(path)
             .await
             .map_err(|err| Error::Other(format!("failed to read file {}: {}", path, err)))?;
 

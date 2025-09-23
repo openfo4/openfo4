@@ -10,10 +10,10 @@ use openfo4_asset::{AssetLoader, Handle};
 use openfo4_hkx::animation::BlendHint;
 use openfo4_hkx::{HkObject, HkxFile};
 
+use crate::assets::Error;
+use crate::assets::data_file::DataFile;
 use crate::assets::nif_v2::NifScene;
-use crate::assets::{AssetServer, Error};
 use crate::loader::{FileLoader, fix_path};
-use crate::state::anim_starter;
 
 pub struct AnimationLoader {
     file_loader: Arc<FileLoader>,
@@ -30,7 +30,6 @@ pub struct SkeletonConfig<'a> {
 }
 
 pub async fn load(
-    server: &AssetServer,
     loader: &AssetLoader,
     config: SkeletonConfig<'_>,
 ) -> (Handle<NifScene>, Skeleton) {
@@ -44,7 +43,10 @@ pub async fn load(
         root.truncate(position);
     }
 
-    let root_file = server.load::<HkxFile>(&project_path).await.unwrap();
+    let root_file = loader
+        .load::<DataFile<HkxFile>, _>(&project_path)
+        .await
+        .unwrap();
 
     let project_data = root_file
         .iter()
@@ -60,8 +62,8 @@ pub async fn load(
         .first()
         .unwrap();
 
-    let character_file = server
-        .load::<HkxFile>(&format!("{}/{}", root, hkt_to_hkx(character_filename)))
+    let character_file = loader
+        .load::<DataFile<HkxFile>, _>(&format!("{}/{}", root, hkt_to_hkx(character_filename)))
         .await
         .unwrap();
 
@@ -75,8 +77,8 @@ pub async fn load(
 
     let skeleton_filename = hkt_to_hkx(&character_data.string_data.rig_name);
 
-    let skeleton_file = server
-        .load::<HkxFile>(&format!("{}/{}", root, skeleton_filename))
+    let skeleton_file = loader
+        .load::<DataFile<HkxFile>, _>(&format!("{}/{}", root, skeleton_filename))
         .await
         .unwrap();
 
@@ -86,7 +88,7 @@ pub async fn load(
     (nif_skeleton, skeleton)
 }
 
-pub async fn load_anim(server: &AssetServer, search_paths: &[&str]) -> Result<AnimationClip, ()> {
+pub async fn load_anim(loader: &AssetLoader, search_paths: &[&str]) -> Result<AnimationClip, ()> {
     let mut clip = AnimationClip {
         duration: Duration::ZERO,
         num_bones: 0,
@@ -100,7 +102,7 @@ pub async fn load_anim(server: &AssetServer, search_paths: &[&str]) -> Result<An
 
     let mut file = None;
     for path in search_paths {
-        match server.load::<HkxFile>(path).await {
+        match loader.load::<DataFile<HkxFile>, _>(*path).await {
             Ok(f) => {
                 file = Some(f);
                 break;

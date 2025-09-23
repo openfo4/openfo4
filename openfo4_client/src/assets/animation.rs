@@ -7,6 +7,7 @@ use openfo4_asset::{Asset, AssetLoader, Handle};
 use openfo4_hkx::animation::BlendHint;
 use openfo4_hkx::{HkObject, HkxFile};
 
+use crate::assets::data_file::DataFile;
 use crate::assets::{Error, FileLoadContext};
 
 #[derive(Clone, Debug)]
@@ -33,7 +34,7 @@ impl Asset for FileAnimationClip {
             blend_mode: BlendMode::default(),
         };
 
-        let file = ctx.server.load::<HkxFile>(&key).await?;
+        let file = loader.load::<DataFile<HkxFile>, _>(key).await?;
 
         for object in file.iter() {
             match object {

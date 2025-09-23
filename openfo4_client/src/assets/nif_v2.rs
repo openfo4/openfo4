@@ -1,5 +1,4 @@
 use std::collections::{HashMap, VecDeque};
-use std::f32::consts::PI;
 
 use game_common::components::{Color, Transform};
 use game_core::hierarchy::Hierarchy;
@@ -14,11 +13,12 @@ use openfo4_core::hierarchy::Children;
 use openfo4_hkx::{HkObject, HkxFile};
 use openfo4_nif::mesh::{BSMeshLODTriShape, BSSubIndexTriShape, BSTriShape};
 use openfo4_nif::{BSXFlags, Block, BlockRef, Nif};
-use openfo4_physics::components::{Collider, ColliderShape, RigidBody, RigidBodyKind, TriMesh};
+use openfo4_physics::components::{Collider, ColliderShape, TriMesh};
 
+use crate::assets::Error;
+use crate::assets::data_file::DataFile;
 use crate::assets::material::BgsmMaterial;
 use crate::assets::texture::FileImageHandle;
-use crate::assets::{AssetServer, Error};
 use crate::components::Root;
 use crate::loader::fix_path;
 use crate::render::RenderObject;
@@ -160,18 +160,16 @@ pub struct Skin {
 
 #[derive(Debug)]
 pub struct NifLoaderContext {
-    pub server: AssetServer,
     pub entities: Entities,
     /// The material used if no other material is specified.
     pub default_material: MaterialHandle,
 }
 
 impl NifLoaderContext {
-    pub fn new(server: AssetServer, entities: Entities) -> Self {
+    pub fn new(entities: Entities) -> Self {
         let default_material = entities.create_material(StandardMaterial::default());
 
         Self {
-            server,
             entities,
             default_material,
         }
@@ -210,11 +208,7 @@ impl Asset for NifScene {
             });
         }
 
-        let nif = ctx
-            .server
-            .load::<Nif>(&path)
-            .await
-            .map_err(|err| Error::Other(format!("failed to read file {}: {}", path, err)))?;
+        let nif = loader.load::<DataFile<Nif>, _>(&path).await?;
 
         let Some(root) = nif.root() else {
             // Nif file is empty, return an empty scene.

@@ -28,17 +28,21 @@ use game_tasks::TaskPool;
 use game_tracing::trace_span;
 use game_window::events::WindowEvent;
 use glam::{IVec2, Vec3};
-use hecs::{With, World};
+use hecs::World;
 use level::{Level, Streamer};
 use openfo4_asset::AssetLoader;
 use openfo4_core::events::EventBus;
 use openfo4_esp::EspFile;
+use openfo4_hkx::HkxFile;
+use openfo4_nif::Nif;
+use openfo4_nif::bgsm::Bgsm;
 use openfo4_physics::PhysicsPipeline;
-use openfo4_physics::components::{RigidBody, RigidBodyKind};
+use openfo4_physics::components::RigidBody;
 use openfo4_physics::controller::CharacterController;
 
+use crate::assets::FileLoadContext;
+use crate::assets::data_file::{DataFile, DataFileContext};
 use crate::assets::nif_v2::NifLoaderContext;
-use crate::assets::{AssetServer, FileLoadContext};
 use crate::cell::CellId;
 use crate::components::{Camera, NiTransform, Player};
 use crate::events::Event;
@@ -66,7 +70,6 @@ pub struct GameState {
     physics: PhysicsPipeline,
     events: Vec<Event>,
     anim_event: Option<&'static str>,
-    assets: AssetServer,
     asset_loader: AssetLoader,
     event_bus: EventBus,
     animation: AnimationSystem,
@@ -107,24 +110,28 @@ impl GameState {
         let file_loader = Arc::new(FileLoader::new(sources));
         loader.push(file);
         let loader = Arc::new(loader);
-        let mut assets = AssetServer::new(file_loader.clone(), pool.clone());
 
         let asset_loader = AssetLoader::new();
         asset_loader.register::<crate::assets::nif_v2::NifScene>(NifLoaderContext::new(
-            assets.clone(),
             shared.entities.clone(),
         ));
         asset_loader.register::<crate::assets::texture::FileImageHandle>(FileLoadContext {
-            server: assets.clone(),
             entities: shared.entities.clone(),
         });
         asset_loader.register::<crate::assets::material::BgsmMaterial>(FileLoadContext {
-            server: assets.clone(),
             entities: shared.entities.clone(),
         });
-        asset_loader.register::<crate::assets::hkx::FileHkxHandle>(FileLoadContext {
-            server: assets.clone(),
-            entities: shared.entities.clone(),
+        asset_loader.register::<DataFile<Nif>>(DataFileContext {
+            loader: file_loader.clone(),
+        });
+        asset_loader.register::<DataFile<HkxFile>>(DataFileContext {
+            loader: file_loader.clone(),
+        });
+        asset_loader.register::<DataFile<Bgsm>>(DataFileContext {
+            loader: file_loader.clone(),
+        });
+        asset_loader.register::<DataFile<openfo4_dds::Image>>(DataFileContext {
+            loader: file_loader.clone(),
         });
 
         let actions = futures_lite::future::block_on(actions::Actions::load(&loader));
@@ -138,7 +145,6 @@ impl GameState {
             pool.clone(),
             file_loader.clone(),
             shared.clone(),
-            assets.clone(),
         );
 
         Self {
@@ -150,7 +156,6 @@ impl GameState {
             physics: PhysicsPipeline::new(),
             events: Vec::new(),
             anim_event: None,
-            assets,
             asset_loader,
             event_bus: EventBus::new(),
             animation,
@@ -205,7 +210,6 @@ impl GameState {
             &self.loader,
             &self.shared,
             &mut self.world,
-            &self.assets,
             &self.asset_loader,
             &self.esp_loader,
         );

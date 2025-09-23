@@ -25,7 +25,6 @@ use openfo4_nif::bgsm::Bgsm;
 use openfo4_physics::components::{Collider, ColliderShape, RigidBody, RigidBodyKind, TriMesh};
 use tracing::instrument;
 
-use crate::assets::AssetServer;
 use crate::assets::nif_v2::{Instantiate, NIF_TO_METERS, NifScene};
 use crate::cell::{CELL_SIZE, CellId};
 use crate::components::{NiTransform, Root};
@@ -63,7 +62,6 @@ impl Level {
         pool: Arc<TaskPool>,
         file_loader: Arc<FileLoader>,
         shared: Arc<SharedState>,
-        server: AssetServer,
     ) -> Self {
         let (tx, rx) = async_channel::unbounded::<CellId>();
         let events = Arc::new(SegQueue::new());
@@ -107,7 +105,6 @@ impl Level {
                         &pool,
                         &file_loader,
                         &shared,
-                        &server,
                         form_id,
                     )
                     .await;
@@ -277,7 +274,6 @@ async fn load_cell(
     pool: &TaskPool,
     file_loader: &Arc<FileLoader>,
     shared: &Arc<SharedState>,
-    server: &AssetServer,
     cell_id: FormId,
 ) {
     let cell = match loader.lookup(Some(RecordKind::Cell), cell_id).await {
@@ -314,7 +310,6 @@ async fn load_cell(
         let shared = shared.clone();
         let events = events.clone();
         let asset_loader = asset_loader.clone();
-        let server = server.clone();
 
         pool.spawn(async move {
             let mut position;
@@ -556,11 +551,9 @@ async fn load_cell(
                     model = data.modl.model;
                 }
                 RecordData::Npc(_) => {
-                    actor = Some(
-                        crate::state::npc::spawn_actor(&asset_loader, &loader, &server, base.id)
-                            .await
-                            .unwrap(),
-                    );
+                    actor = crate::state::npc::spawn_actor(&asset_loader, &loader, base.id)
+                        .await
+                        .ok();
                 }
                 RecordData::IdleMarker(_) => return,
                 RecordData::Activator(data) => {

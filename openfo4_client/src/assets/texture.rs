@@ -5,6 +5,7 @@ use game_render::texture::image::MipImage;
 use openfo4_asset::{Asset, AssetLoader};
 use openfo4_dds::Format;
 
+use crate::assets::data_file::DataFile;
 use crate::assets::{Error, FileLoadContext};
 use crate::loader::fix_path;
 
@@ -18,7 +19,7 @@ impl Asset for FileImageHandle {
     type Context = FileLoadContext;
 
     async fn load(
-        _loader: &AssetLoader,
+        loader: &AssetLoader,
         path: &Self::Key,
         ctx: &Self::Context,
     ) -> Result<Self, Self::Error> {
@@ -28,9 +29,8 @@ impl Asset for FileImageHandle {
         }
 
         if path.to_lowercase().ends_with(".dds") {
-            let image = ctx
-                .server
-                .load::<openfo4_dds::Image>(&path)
+            let image = loader
+                .load::<DataFile<openfo4_dds::Image>, _>(&path)
                 .await
                 .map_err(|err| Error::Other(format!("failed to read file {}: {}", path, err)))?;
 

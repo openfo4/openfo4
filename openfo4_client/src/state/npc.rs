@@ -17,7 +17,6 @@ use openfo4_physics::components::{Collider, RigidBody};
 use rand::distr::Distribution;
 use rand::distr::weighted::WeightedIndex;
 
-use crate::assets::AssetServer;
 use crate::assets::nif_v2::NifScene;
 use crate::state::animation_test::{
     ActorCharacter, SkinInstances, load_behavior_data, load_character,
@@ -83,7 +82,6 @@ impl Actor {
 pub async fn spawn_actor(
     loader: &AssetLoader,
     esp_loader: &EspLoader,
-    server: &AssetServer,
     npc_form: FormId,
 ) -> Result<Actor, ()> {
     let props = resolve_actor_props(&loader, esp_loader, npc_form).await;
@@ -97,9 +95,7 @@ pub async fn spawn_actor(
         _ => unreachable!(),
     };
 
-    let character = load_character(data, props.female, server, &loader)
-        .await
-        .unwrap();
+    let character = load_character(data, props.female, &loader).await.unwrap();
 
     let behavior_path = data.behavior_graph.as_ref().unwrap();
     let behavior_path = if props.female {
@@ -128,7 +124,7 @@ pub async fn spawn_actor(
         subgraph.behavior_graph.as_str().unwrap(),
         &character,
         &search_paths,
-        server,
+        loader,
     )
     .await
     .unwrap();
