@@ -661,6 +661,7 @@ pub enum BlockType {
     BhkRagdollSystem,
     BSSkyShaderProperty,
     BSDamageStage,
+    BSLagBoneController,
 }
 
 impl FromStr for BlockType {
@@ -749,6 +750,7 @@ impl FromStr for BlockType {
             "bhkRagdollSystem" => Ok(Self::BhkRagdollSystem),
             "BSSkyShaderProperty" => Ok(Self::BSSkyShaderProperty),
             "BSDamageStage" => Ok(Self::BSDamageStage),
+            "BSLagBoneController" => Ok(Self::BSLagBoneController),
             _ => Err(BadBlockType),
         }
     }
