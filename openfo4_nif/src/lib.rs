@@ -289,9 +289,13 @@ pub struct Reader<'a> {
 
 impl Reader<'_> {
     fn string(&self, index: u32) -> Result<&str, Error> {
-        match self.strings.get(index as usize) {
-            Some(s) => Ok(s),
-            None => Err(Error::InvalidStringPointer(index)),
+        if index == u32::MAX {
+            Ok("")
+        } else {
+            match self.strings.get(index as usize) {
+                Some(s) => Ok(s),
+                None => Err(Error::InvalidStringPointer(index)),
+            }
         }
     }
 
