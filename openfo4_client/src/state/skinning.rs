@@ -9,15 +9,14 @@ use openfo4_core::hierarchy::Children;
 
 use crate::render::RenderObject;
 use crate::shared::SharedState;
-
-use super::animation_test::SkinInstances;
+use crate::systems::equipment::Equipment;
 
 pub fn mesh_skinning(world: &mut World, shared: &SharedState) {
     let _span = trace_span!("mesh_skinning").entered();
 
     let mut commands = CommandBuffer::new();
-    for (_, (skeleton, skins, children)) in world
-        .query::<(&SkeletonInstance, &mut SkinInstances, &mut Children)>()
+    for (_, (skeleton, equipment, children)) in world
+        .query::<(&SkeletonInstance, &mut Equipment, &mut Children)>()
         .iter()
     {
         // Compute "global" transform relative the the entity with the SkeletonInstance
@@ -48,7 +47,7 @@ pub fn mesh_skinning(world: &mut World, shared: &SharedState) {
             }
         }
 
-        for skin in &mut skins.0 {
+        for skin in equipment.items_mut().map(|v| &mut v.skins).flatten() {
             let mut bone_matrices = Vec::new();
             for bone_index in skin.bones.iter() {
                 let bind_pose = skeleton.bones_bind_pose.get(bone_index).unwrap();

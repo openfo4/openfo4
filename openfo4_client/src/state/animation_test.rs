@@ -1,5 +1,6 @@
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
+use std::ptr::eq;
 use std::sync::{Arc, OnceLock};
 
 use game_common::components::{Axis, Transform};
@@ -30,8 +31,9 @@ use crate::state::animation::{self, SkeletonConfig, load_anim};
 use crate::state::esp::EspLoader;
 use crate::systems::PlayerControlState;
 use crate::systems::controller::ControllerShape;
-use crate::systems::equipment::equip_item;
+use crate::systems::equipment::{Equipment, equip_item};
 
+#[derive(Clone, Debug)]
 pub struct SkinInstance {
     pub mesh: Mesh,
     pub mesh_bone_weights: Vec<Vec4>,
@@ -40,8 +42,6 @@ pub struct SkinInstance {
     pub entity: Option<Entity>,
     pub material: MaterialHandle,
 }
-
-pub struct SkinInstances(pub Vec<SkinInstance>);
 
 pub fn animation_test(
     loader: &FileLoader,
@@ -114,19 +114,38 @@ pub fn animation_test(
             let root = world.spawn((Transform::from(*offset),));
             let skeleton_instance = character.instantiate(root, world);
 
-            let mut skin_instances = Vec::new();
-            for model_path in [
-                skin_path,
-                "meshes/armor/armoredcoat/glovesf.nif",
-                "meshes/weapons/laserweapons/laserpistol.nif",
-            ] {
+            let mut equipment = Equipment::default();
+
+            for model_path in ["meshes/armor/armoredcoat/glovesf.nif"] {
                 let scene =
                     futures_lite::future::block_on(asset_loader.load::<NifScene, _>(model_path))
                         .unwrap();
 
-                let skin_instance = equip_item(&scene, &skeleton_instance, world);
-                skin_instances.extend(skin_instance);
+                equip_item(&scene, &skeleton_instance, world, &mut equipment, None);
             }
+
+            let laser_pistol = futures_lite::future::block_on(
+                asset_loader.load::<NifScene, _>("meshes/weapons/laserweapons/laserpistol.nif"),
+            )
+            .unwrap();
+            let laser_pistol = equip_item(
+                &laser_pistol,
+                &skeleton_instance,
+                world,
+                &mut equipment,
+                None,
+            );
+            let grip = futures_lite::future::block_on(
+                asset_loader.load::<NifScene, _>("meshes/weapons/laserweapons/laserpistolgrip.nif"),
+            )
+            .unwrap();
+            let grip = equip_item(
+                &grip,
+                &skeleton_instance,
+                world,
+                &mut equipment,
+                Some(laser_pistol),
+            );
 
             let collider = world.spawn((
                 character.controller_offset,
@@ -144,7 +163,6 @@ pub fn animation_test(
                         behavior.clips,
                         skeleton_instance,
                         AnimationDriver::new(Arc::new(behavior.graph)),
-                        SkinInstances(skin_instances),
                         ActiveBehaviorGraphs(vec![
                             behavior_filename.replace("meshes/", ""),
                             "actors/character/behaviors/raiderrootbehavior.hkx".to_owned(),
@@ -154,6 +172,7 @@ pub fn animation_test(
                             offset: character.controller_offset,
                             shape: character.controller_shape,
                         },
+                        equipment,
                     ),
                 )
                 .unwrap();

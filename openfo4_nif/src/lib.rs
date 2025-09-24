@@ -779,10 +779,10 @@ impl Decode for Mat3 {
 
 impl Decode for Quat {
     fn decode(reader: &mut Reader<'_>) -> Result<Self, Error> {
+        let w = reader.get_f32()?;
         let x = reader.get_f32()?;
         let y = reader.get_f32()?;
         let z = reader.get_f32()?;
-        let w = reader.get_f32()?;
         Ok(Self::from_xyzw(x, y, z, w))
     }
 }

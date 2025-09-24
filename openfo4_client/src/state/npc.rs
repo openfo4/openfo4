@@ -18,13 +18,11 @@ use rand::distr::Distribution;
 use rand::distr::weighted::WeightedIndex;
 
 use crate::assets::nif_v2::NifScene;
-use crate::state::animation_test::{
-    ActorCharacter, SkinInstances, load_behavior_data, load_character,
-};
+use crate::state::animation_test::{ActorCharacter, load_behavior_data, load_character};
 use crate::state::equipment::{EquipmentItem, load_armor};
 use crate::state::esp::EspLoader;
 use crate::systems::controller::ControllerShape;
-use crate::systems::equipment::{EquippedItem, equip_item};
+use crate::systems::equipment::{Equipment, EquippedItem, equip_item};
 
 // FIXME: Unhardcode this guy.
 const PLAYER_LEVEL: u16 = 1000;
@@ -52,11 +50,10 @@ impl Actor {
         let root = world.reserve_entity();
         let instance = self.character.instantiate(root, world);
 
-        let mut skins = Vec::new();
+        let mut equipment = Equipment::default();
         if let Some(skin) = self.skin {
             for scene in &skin.models {
-                let instances = equip_item(&scene, &instance, world);
-                skins.extend(instances);
+                equip_item(&scene, &instance, world, &mut equipment, None);
             }
         }
 
@@ -69,7 +66,7 @@ impl Actor {
                     RigidBody::FIXED,
                     self.controller,
                     instance,
-                    SkinInstances(skins),
+                    equipment,
                 ),
             )
             .unwrap();

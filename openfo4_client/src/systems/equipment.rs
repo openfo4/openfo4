@@ -2,49 +2,67 @@ use std::collections::VecDeque;
 
 use game_common::components::Transform;
 use hashbrown::HashMap;
-use hecs::World;
+use hecs::{Entity, World};
 use openfo4_animation::skeleton::SkeletonInstance;
-use openfo4_asset::AssetLoader;
 use openfo4_core::WorldExt;
-use openfo4_esp::FormId;
 use slab::Slab;
 
 use crate::assets::nif_v2::NifScene;
 use crate::state::animation_test::SkinInstance;
-use crate::state::equipment::EquipmentItem;
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub struct EquipmentKey(usize);
 
 #[derive(Clone, Debug, Default)]
 pub struct Equipment {
     items: Slab<EquippedItem>,
 }
 
-impl Equipment {}
+impl Equipment {
+    pub fn insert(&mut self, item: EquippedItem) -> EquipmentKey {
+        EquipmentKey(self.items.insert(item))
+    }
 
-#[derive(Clone, Debug)]
-pub struct Weapon {
-    pub min_range: f32,
-    pub max_range: f32,
-    pub damage: f32,
+    pub fn get(&self, key: EquipmentKey) -> Option<&EquippedItem> {
+        self.items.get(key.0)
+    }
+
+    pub fn get_mut(&mut self, key: EquipmentKey) -> Option<&mut EquippedItem> {
+        self.items.get_mut(key.0)
+    }
+
+    pub fn items_mut(&mut self) -> impl Iterator<Item = &mut EquippedItem> {
+        self.items.iter_mut().map(|(_, v)| v)
+    }
 }
 
 #[derive(Clone, Debug)]
 pub struct EquippedItem {
-    pub item: FormId,
-    pub attachments: Vec<usize>,
+    pub entities: Vec<Entity>,
+    pub attachments: HashMap<String, AttachmentPoint>,
+    pub skins: Vec<SkinInstance>,
 }
 
 #[derive(Clone, Debug)]
 pub struct AttachmentPoint {
-    pub transform: Transform,
+    /// Entity of the node where to attach to.
+    pub entity: Entity,
+    pub offset: Transform,
+    /// References to other [`EquippedItem`]s that are attached currently.
+    pub attachments: Vec<EquipmentKey>,
 }
 
 pub fn equip_item(
     scene: &NifScene,
     skeleton: &SkeletonInstance,
     world: &mut World,
-) -> Vec<SkinInstance> {
-    let mut skin_bind_pose = HashMap::new();
-    let mut instances = Vec::new();
+    equipment: &mut Equipment,
+    parent: Option<EquipmentKey>,
+) -> EquipmentKey {
+    let mut skins = Vec::new();
+    let mut entities = Vec::new();
+    let mut attachments = HashMap::new();
+    let mut attachment_parents = Vec::new();
 
     for (key, node) in scene.nodes.iter() {
         match &node.skin {
@@ -62,17 +80,10 @@ pub fn equip_item(
                         .find(|b| b.name.to_lowercase() == name.to_lowercase())
                         .unwrap();
 
-                    let bone_node = scene
-                        .nodes
-                        .iter()
-                        .find(|(_, node)| &node.name == name)
-                        .unwrap();
-
-                    skin_bind_pose.insert(bone.index, bone_node.1.transform);
                     bone_indices.push(bone.index);
                 }
 
-                instances.push(SkinInstance {
+                skins.push(SkinInstance {
                     mesh: skin.mesh.clone(),
                     mesh_bone_weights: skin.weights.clone(),
                     mesh_bone_indices: skin.indices.clone(),
@@ -82,31 +93,67 @@ pub fn equip_item(
                 });
             }
             None => {
-                // If the node matches the name of a bone we will attach it there.
-                // This includes all children of the node, unless they match the
-                // name of another bone, in which case they will get attached there
-                // instead.
-                let Some(bone) = skeleton
-                    .skeleton
-                    .bones
-                    .iter()
-                    .find(|b| b.name.to_lowercase() == node.name.to_lowercase())
-                else {
-                    continue;
+                let root = if let (Some(attaches), Some(parent_key)) = (&scene.attaches, parent) {
+                    let Some(parent) = equipment.get(parent_key) else {
+                        continue;
+                    };
+
+                    let Some(point) = parent.attachments.get(attaches) else {
+                        continue;
+                    };
+
+                    attachment_parents.push((parent_key, attaches));
+
+                    // If we have no offset we can directly attach to the parent
+                    // scene node, otherwise we have to apply the offset transform
+                    // first.
+                    if point.offset == Transform::IDENTITY {
+                        point.entity
+                    } else {
+                        let root = world.spawn((point.offset,));
+                        world.add_children(point.entity, root);
+                        entities.push(root);
+                        root
+                    }
+                } else {
+                    // If the node matches the name of a bone we will attach it there.
+                    // This includes all children of the node, unless they match the
+                    // name of another bone, in which case they will get attached there
+                    // instead.
+                    let Some(bone) = skeleton
+                        .skeleton
+                        .bones
+                        .iter()
+                        .find(|b| b.name.to_lowercase() == node.name.to_lowercase())
+                    else {
+                        continue;
+                    };
+
+                    let bone_entity = *skeleton.bones.get(&bone.index).unwrap();
+                    bone_entity
                 };
 
-                let bone_entity = *skeleton.bones.get(&bone.index).unwrap();
-
                 let mut queue = VecDeque::new();
-                queue.push_back((bone_entity, key));
+                queue.push_back((root, key));
 
                 while let Some((parent, key)) = queue.pop_front() {
                     let node = scene.nodes.get(key).unwrap();
                     let entity = world.spawn(node.build().build());
 
+                    for attachment in &node.attachments {
+                        attachments.insert(
+                            attachment.name.clone(),
+                            AttachmentPoint {
+                                entity,
+                                offset: attachment.offset,
+                                attachments: Vec::new(),
+                            },
+                        );
+                    }
+
                     // If the node is root, i.e. matches the bone name the transform
                     // of that node should be overwritten by the bone transform.
-                    if parent == bone_entity {
+                    if parent == root {
                         world.insert_one(entity, Transform::default()).unwrap();
                     }
 
@@ -125,10 +172,24 @@ pub fn equip_item(
 
                         queue.push_back((entity, child_key));
                     }
+
+                    entities.push(entity);
                 }
             }
         }
     }
 
-    instances
+    let key = equipment.insert(EquippedItem {
+        entities,
+        attachments,
+        skins,
+    });
+
+    for (parent, name) in attachment_parents {
+        let parent = equipment.get_mut(parent).unwrap();
+        let point = parent.attachments.get_mut(name).unwrap();
+        point.attachments.push(key);
+    }
+
+    key
 }

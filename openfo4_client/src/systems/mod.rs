@@ -8,6 +8,7 @@ pub mod lights;
 pub mod ni_transform;
 pub mod projectile;
 pub mod skeleton;
+pub mod weapon;
 
 #[derive(Clone, Debug, Default)]
 pub struct PlayerControlState {

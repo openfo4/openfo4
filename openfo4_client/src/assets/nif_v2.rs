@@ -28,6 +28,8 @@ pub const NIF_TO_METERS: f32 = 1.0 / 69.99125;
 #[derive(Clone, Debug)]
 pub struct NifScene {
     pub nodes: Hierarchy<Node>,
+    /// The name of the parent [`AttachmentPoint`] where this scene attaches.
+    pub attaches: Option<String>,
     /// List of materials that are referenced by the scene.
     ///
     /// This exists to keep all the handles alive while this `NifScene` is alive.
@@ -130,6 +132,7 @@ pub struct Node {
     pub renderable: Option<RenderObject>,
     pub collider: Option<Collider>,
     pub skin: Option<Skin>,
+    pub attachments: Vec<AttachmentPoint>,
 }
 
 impl Node {
@@ -156,6 +159,12 @@ pub struct Skin {
     pub mesh: Mesh,
     pub weights: Vec<Vec4>,
     pub indices: Vec<[u8; 4]>,
+}
+
+#[derive(Clone, Debug)]
+pub struct AttachmentPoint {
+    pub name: String,
+    pub offset: Transform,
 }
 
 #[derive(Debug)]
@@ -203,6 +212,7 @@ impl Asset for NifScene {
 
             return Ok(Self {
                 nodes: Hierarchy::new(),
+                attaches: None,
                 _materials: Vec::new(),
                 _textures: Vec::new(),
             });
@@ -214,6 +224,7 @@ impl Asset for NifScene {
             // Nif file is empty, return an empty scene.
             return Ok(Self {
                 nodes: Hierarchy::new(),
+                attaches: None,
                 _materials: Vec::new(),
                 _textures: Vec::new(),
             });
@@ -223,13 +234,22 @@ impl Asset for NifScene {
         queue.push_back((None, root));
 
         let mut contains_editor_marker = true;
+
+        let mut connect_points_children = None;
+        let mut connect_points_parents = None;
+
         match nif.get(root) {
             Some(Block::NiNode(node)) => {
                 for block in &node.extra_data {
                     match nif.get(*block) {
                         Some(Block::BSXFlags(flags)) => {
                             contains_editor_marker = flags.contains(BSXFlags::EDITOR_MARKER);
-                            break;
+                        }
+                        Some(Block::BSConnectPointChildren(node)) => {
+                            connect_points_children = Some(node);
+                        }
+                        Some(Block::BSConnectPointParents(node)) => {
+                            connect_points_parents = Some(node);
                         }
                         _ => (),
                     }
@@ -286,9 +306,32 @@ impl Asset for NifScene {
                         queue.push_back((Some(block), *children));
                     }
 
+                    let mut attachments = Vec::new();
+                    if let Some(points) = connect_points_parents {
+                        for point in &points.points {
+                            if point.parent != node.name {
+                                continue;
+                            }
+
+                            let name = extract_attachment_name(&point.name);
+
+                            let offset = Transform {
+                                translation: point.translation,
+                                rotation: point.rotation,
+                                scale: Vec3::splat(point.scale),
+                            };
+
+                            attachments.push(AttachmentPoint {
+                                name: name.to_owned(),
+                                offset,
+                            });
+                        }
+                    }
+
                     Node {
                         name: node.name.clone(),
                         transform: node_transform,
+                        attachments,
                         ..Default::default()
                     }
                 }
@@ -486,8 +529,17 @@ impl Asset for NifScene {
             block_to_node.insert(block, key);
         }
 
+        let mut attaches = None;
+        if let Some(children) = connect_points_children {
+            if let Some(point) = children.points.first() {
+                let name = extract_attachment_name(point);
+                attaches = Some(name.to_owned());
+            }
+        }
+
         Ok(Self {
             nodes,
+            attaches,
             _materials: material_handles,
             _textures: texture_handles,
         })
@@ -821,4 +873,14 @@ fn load_collider(nif: &Nif, collision_object: BlockRef) -> Option<ColliderNode> 
             shape: ColliderShape::TriMesh(mesh),
         },
     })
+}
+
+fn extract_attachment_name(mut name: &str) -> &str {
+    if name.starts_with("P-") {
+        name = name.strip_prefix("P-").unwrap_or(name);
+        name.strip_prefix("C-").unwrap_or(name)
+    } else {
+        name = name.strip_prefix("C-").unwrap_or(name);
+        name.strip_prefix("P-").unwrap_or(name)
+    }
 }
