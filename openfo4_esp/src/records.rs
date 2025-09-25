@@ -2324,7 +2324,8 @@ pub struct Weapon {
     pub equipment_type: Option<FormId>,
     #[record("BIDS")]
     pub block_impact_data: Option<FormId>,
-    // BAMT
+    #[record("BAMT")]
+    pub alternate_block_material: Option<FormId>,
     #[record("YNAM")]
     pub sound_pickup: Option<FormId>,
     #[record("ZNAM")]
@@ -2339,10 +2340,12 @@ pub struct Weapon {
     pub instance_naming: Option<FormId>,
     #[record("APPR")]
     pub attach_parent_slots: Option<Array<FormId>>,
-    // OBTE
+    #[record("OBTE")]
+    pub object_templates: ObjectTemplates,
     #[record("DNAM")]
     pub data: WeaponData,
-    // FNAM
+    #[record("FNAM")]
+    pub data2: Option<WeaponData2>,
     #[record("CRDT")]
     pub critical_data: Option<WeaponCriticalData>,
     #[record("INAM")]
@@ -2358,9 +2361,90 @@ pub struct Weapon {
     pub template: Option<FormId>,
     #[record("DAMA")]
     pub damage_types: Option<Array<WeaponDamageType>>,
-    // FLTR
+    #[record("FLTR")]
+    pub filter: Option<ZString>,
     #[record("MASE")]
     pub melee_speed: Option<MeleeSpeed>,
+}
+
+#[derive(Clone, Debug, Record)]
+pub struct ObjectTemplates {
+    #[record("OBTE")]
+    _template_count: Option<u32>,
+    #[record("OBTS")]
+    #[record(unordered)]
+    pub templates: SubRecordArray<ObjectTemplate>,
+}
+
+#[derive(Clone, Debug, Record)]
+pub struct ObjectTemplate {
+    #[record("OBTF")]
+    _editor_only: Option<()>,
+    #[record("FULL")]
+    pub full_name: Option<LString>,
+    #[record("OBTS")]
+    pub item: ObjectTemplateItem,
+}
+
+#[derive(Clone, Debug)]
+pub struct ObjectTemplateItem {
+    pub includes: Vec<ObjectTemplateItemInclude>,
+    pub keywords: Vec<FormId>,
+    pub min_level: u8,
+    pub max_level: u8,
+    pub parent_combination_index: i16,
+    pub default: bool,
+    pub min_level_for_ranks: u8,
+    pub alt_level_per_tier: u8,
+}
+
+impl Decode for ObjectTemplateItem {
+    type Error = Error;
+
+    fn decode<B>(mut buf: B) -> Result<Self, Self::Error>
+    where
+        B: Buf,
+    {
+        let include_count = u32::decode(&mut buf)?;
+        let property_count = u32::decode(&mut buf)?;
+        let min_level = u8::decode(&mut buf)?;
+        u8::decode(&mut buf)?;
+        let max_level = u8::decode(&mut buf)?;
+        u8::decode(&mut buf)?;
+        let parent_combination_index = i16::decode(&mut buf)?;
+        let default = bool::decode(&mut buf)?;
+
+        let keyword_count = u8::decode(&mut buf)?;
+        let keywords = (0..keyword_count)
+            .map(|_| FormId::decode(&mut buf))
+            .collect::<Result<_, _>>()?;
+
+        let min_level_for_ranks = u8::decode(&mut buf)?;
+        let alt_level_per_tier = u8::decode(&mut buf)?;
+
+        let includes = (0..include_count)
+            .map(|_| ObjectTemplateItemInclude::decode(&mut buf))
+            .collect::<Result<_, _>>()?;
+
+        Ok(Self {
+            includes,
+            min_level,
+            max_level,
+            parent_combination_index,
+            default,
+            keywords,
+            min_level_for_ranks,
+            alt_level_per_tier,
+        })
+    }
+}
+
+#[derive(Clone, Debug, BinaryStruct)]
+pub struct ObjectTemplateItemInclude {
+    pub item_mod: FormId,
+    pub attach_point_index: u8,
+    pub optional: bool,
+    pub dont_use_all: bool,
 }
 
 #[derive(Clone, Debug, BinaryStruct)]
@@ -2454,6 +2538,21 @@ pub enum WeaponAnimationType {
     Gun = 9,
     Grenade = 10,
     Mine = 11,
+}
+
+#[derive(Clone, Debug, BinaryStruct)]
+pub struct WeaponData2 {
+    pub animation_fire_seconds: f32,
+    pub rumble_left_motor_strength: f32,
+    pub rumble_right_motor_strength: f32,
+    pub rumble_duration: f32,
+    pub animation_reload_seconds: f32,
+    pub bolt_anim_seconds: f32,
+    pub sighted_transition_seconds: f32,
+    pub num_projectiles: u8,
+    pub override_projectile: FormId,
+    pub pattern: u32,
+    pub rumble_period_ms: u32,
 }
 
 #[derive(Copy, Clone, Debug, BinaryStruct)]
