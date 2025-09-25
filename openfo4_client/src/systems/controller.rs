@@ -211,6 +211,11 @@ pub fn apply_player_movements(world: &mut World, pipeline: &mut PhysicsPipeline)
             AnimationParameters {
                 speed: speed,
                 direction: dir,
+                is_moving: state.moving_front
+                    || state.moving_back
+                    || state.moving_left
+                    || state.moving_right,
+                is_sprinting: state.sprinting,
             },
         );
     }

@@ -12,6 +12,8 @@ use crate::state::anim_starter::ActiveBehaviorGraphs;
 pub struct AnimationParameters {
     pub speed: f32,
     pub direction: f32,
+    pub is_moving: bool,
+    pub is_sprinting: bool,
 }
 
 pub fn update_animation_parameters(world: &mut World) {
@@ -29,6 +31,14 @@ pub fn update_animation_parameters(world: &mut World) {
 
         if let Some(var) = driver.get_variable_mut("Direction") {
             *var = Value::F32(params.direction);
+        }
+
+        if let Some(var) = driver.get_variable_mut("iSyncIdleLocomotion") {
+            *var = Value::I32(params.is_moving as i32);
+        }
+
+        if let Some(var) = driver.get_variable_mut("iSyncSprintState") {
+            *var = Value::I32(params.is_sprinting as i32);
         }
 
         // Hardcoded variables that come from "animtextdata/animspeedinfo".
