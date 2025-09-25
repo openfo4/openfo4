@@ -3202,10 +3202,12 @@ pub struct Projectile {
     pub object_bounds: Bounds,
     #[record("FULL")]
     pub full_name: Option<LString>,
-    //model
+    #[record("MODL")]
+    pub model: Model,
     #[record("DNAM")]
     pub data: ProjectileData,
-    // muzzle flash data
+    #[record("NAM1")]
+    pub muzzle_flash_model: ProjectileMuzzleFlashModel,
     #[record("VNAM")]
     pub sound_detection_level: SoundLevel,
 }
@@ -3270,6 +3272,14 @@ pub enum ProjectileType {
     Cone = 0x10,
     Barrier = 0x20,
     Arrow = 0x40,
+}
+
+#[derive(Clone, Debug, Record)]
+pub struct ProjectileMuzzleFlashModel {
+    #[record("NAM1")]
+    pub model: Option<ZString>,
+    #[record("NAM2")]
+    pub model_info: Option<ModelInfo>,
 }
 
 #[derive(Clone, Debug, Record)]
