@@ -16,12 +16,12 @@ use std::mem::MaybeUninit;
 
 use bytes::Buf;
 use records::{
-    AcousticSpace, Action, Activator, Ammo, Armor, Book, Cell, Climate, Container, Empty,
+    AcousticSpace, Action, Activator, Ammo, Armor, Book, Cell, Class, Climate, Container, Empty,
     Furniture, GameSetting, Hazard, IdleMarker, Ingestible, Key, Keyword, Land, LandTexture,
     LeveledActor, LeveledItem, Light, LocationReferenceType, MagicEffect, MiscObject, Note, Npc,
     PlacedGrenade, PlacedHazard, PlacedNpc, PlacedObject, Projectile, Race, ShaderParticleGeometry,
-    StaticCollection, Tes4, TextureSet, VisualEffect, Weather, Worldspace, CLAS, CMPO, DMGT, DOOR,
-    ENCH, FACT, FLOR, GLOB, GRAS, HDPT, INGR, MSTT, SOUN, SPEL, STAT, TACT, TRNS,
+    StaticCollection, Tes4, TextureSet, VisualEffect, Weather, Worldspace, CMPO, DMGT, DOOR, ENCH,
+    FACT, FLOR, GLOB, GRAS, HDPT, INGR, MSTT, SOUN, SPEL, STAT, TACT, TRNS,
 };
 
 use crate::records::{
@@ -345,7 +345,7 @@ where
             TextureSet => TXST,
             GlobalVariable => GLOB,
             DamageType => DMGT,
-            Class => CLAS,
+            Class => Class,
             Faction => FACT,
             HeadPart => HDPT,
             Race => Race,
@@ -549,7 +549,7 @@ pub enum RecordData {
     TXST(TextureSet),
     GLOB(GLOB),
     DMGT(DMGT),
-    CLAS(CLAS),
+    Class(Class),
     FACT(FACT),
     HDPT(HDPT),
     Race(Race),
@@ -704,7 +704,7 @@ as_record_kind_impl! {
     TextureSet => RecordKind::TextureSet,
     GLOB => RecordKind::GlobalVariable,
     DMGT => RecordKind::DamageType,
-    CLAS => RecordKind::Class,
+    Class => RecordKind::Class,
     FACT => RecordKind::Faction,
     HDPT => RecordKind::HeadPart,
     Race => RecordKind::Race,

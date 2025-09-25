@@ -314,55 +314,17 @@ pub struct DMGT {
 }
 
 #[derive(Clone, Debug, Record)]
-pub struct CLAS {
+pub struct Class {
     #[record("EDID")]
-    pub edid: ZString,
+    pub id: ZString,
     #[record("FULL")]
-    pub full: Option<LString>,
+    pub full_name: Option<LString>,
     #[record("DESC")]
-    pub desc: LString,
+    pub description: Option<LString>,
     #[record("ICON")]
-    pub icon: Option<ZString>,
-    // Doesnt fit
-    // #[record("DATA")]
-    // pub data: ClassData,
-    // pub prps: (),
-}
-
-#[derive(Clone, Debug)]
-pub struct ClassData {
-    _unknown0: u32,
-    training_skill: u8,
-    training_level: u8,
-    skill_weights: [u8; 18],
-    bleedout_default: f32,
-    voice_points: u32,
-    health_weight: u8,
-    magicka_weight: u8,
-    stamina_weight: u8,
-    flags: u8,
-}
-
-impl Decode for ClassData {
-    type Error = Error;
-
-    fn decode<B>(mut buf: B) -> Result<Self, Self::Error>
-    where
-        B: bytes::Buf,
-    {
-        Ok(Self {
-            _unknown0: u32::decode(&mut buf)?,
-            training_skill: u8::decode(&mut buf)?,
-            training_level: u8::decode(&mut buf)?,
-            skill_weights: <[u8; 18]>::decode(&mut buf)?,
-            bleedout_default: f32::decode(&mut buf)?,
-            voice_points: u32::decode(&mut buf)?,
-            health_weight: u8::decode(&mut buf)?,
-            magicka_weight: u8::decode(&mut buf)?,
-            stamina_weight: u8::decode(&mut buf)?,
-            flags: u8::decode(&mut buf)?,
-        })
-    }
+    pub inventory_image: Option<ZString>,
+    #[record("PRPS")]
+    pub properties: Array<Property>,
 }
 
 #[derive(Clone, Debug, Record)]
