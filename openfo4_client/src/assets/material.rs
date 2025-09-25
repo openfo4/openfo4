@@ -8,6 +8,12 @@ use crate::assets::data_file::DataFile;
 use crate::assets::texture::FileImageHandle;
 use crate::assets::{Error, FileLoadContext};
 
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct MaterialKey {
+    pub path: String,
+    pub alpha_mode: AlphaMode,
+}
+
 #[derive(Clone, Debug)]
 pub struct BgsmMaterial {
     pub material: MaterialHandle,
@@ -15,28 +21,28 @@ pub struct BgsmMaterial {
 }
 
 impl Asset for BgsmMaterial {
-    type Key = String;
+    type Key = MaterialKey;
     type Error = Error;
     type Context = FileLoadContext;
 
     async fn load(
         loader: &AssetLoader,
-        path: &Self::Key,
+        key: &Self::Key,
         ctx: &Self::Context,
     ) -> Result<Self, Self::Error> {
         let bgsm = loader
-            .load::<DataFile<Bgsm>, _>(path)
+            .load::<DataFile<Bgsm>, _>(&key.path)
             .await
-            .map_err(|err| Error::Other(format!("failed to read file {}: {}", path, err)))?;
+            .map_err(|err| Error::Other(format!("failed to read file {}: {}", key.path, err)))?;
 
         let mut material = StandardMaterial {
+            alpha_mode: key.alpha_mode,
             base_color: Color::from_rgba([1.0, 1.0, 1.0, bgsm.alpha]),
             flip_normal_y: true,
             two_component_normal_encoding: true,
             roughness: 1.0 - bgsm.smoothness,
             specular_color: Color::from_rgb(bgsm.specular_color.to_array()),
             specular_strength: bgsm.specular_strength,
-            // alpha_mode: game_core_pipeline::material::AlphaMode::Mask,
             ..Default::default()
         };
 
@@ -76,10 +82,6 @@ impl Asset for BgsmMaterial {
 
             // material.grayscale = Some(handle.0.clone());
             textures.push(handle);
-        }
-
-        if bgsm.alpha_test {
-            material.alpha_mode = AlphaMode::Mask;
         }
 
         let material = ctx.entities.create_material(material);

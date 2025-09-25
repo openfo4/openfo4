@@ -11,13 +11,14 @@ use hecs::{Entity, EntityBuilder, World};
 use openfo4_asset::{Asset, AssetLoader, Handle, HandleOrAsset};
 use openfo4_core::hierarchy::Children;
 use openfo4_hkx::{HkObject, HkxFile};
+use openfo4_nif::material::{AlphaTestFunction, NiAlphaProperty};
 use openfo4_nif::mesh::{BSMeshLODTriShape, BSSubIndexTriShape, BSTriShape};
 use openfo4_nif::{BSXFlags, Block, BlockRef, Nif};
 use openfo4_physics::components::{Collider, ColliderShape, TriMesh};
 
 use crate::assets::Error;
 use crate::assets::data_file::DataFile;
-use crate::assets::material::BgsmMaterial;
+use crate::assets::material::{BgsmMaterial, MaterialKey};
 use crate::assets::texture::FileImageHandle;
 use crate::components::Root;
 use crate::loader::fix_path;
@@ -372,18 +373,30 @@ impl Asset for NifScene {
                         ctx.entities.create_mesh(mesh)
                     });
 
+                    let alpha_property = node.alpha_property.and_then(|alpha_property| {
+                        match nif.get(alpha_property) {
+                            Some(Block::NiAlphaProperty(block)) => Some(block),
+                            _ => None,
+                        }
+                    });
+
                     let material = match node.shader_property {
                         Some(shader_property) => {
                             if materials.get(&shader_property).is_none() {
-                                let material =
-                                    load_material(loader, &ctx.entities, &nif, shader_property)
-                                        .await
-                                        .map_err(|err| {
-                                            Error::Other(format!(
-                                                "invalid material in nif file {}: {}",
-                                                path, err
-                                            ))
-                                        })?;
+                                let material = load_material(
+                                    loader,
+                                    &ctx.entities,
+                                    &nif,
+                                    shader_property,
+                                    alpha_property,
+                                )
+                                .await
+                                .map_err(|err| {
+                                    Error::Other(format!(
+                                        "invalid material in nif file {}: {}",
+                                        path, err
+                                    ))
+                                })?;
 
                                 match &material {
                                     HandleOrAsset::Asset(material) => {
@@ -598,20 +611,49 @@ async fn load_material(
     entities: &Entities,
     nif: &Nif,
     block: BlockRef,
+    alpha_property: Option<&NiAlphaProperty>,
 ) -> Result<HandleOrAsset<BgsmMaterial>, Error> {
+    let mut alpha_mode = AlphaMode::Opaque;
+    if let Some(alpha_property) = alpha_property {
+        if let Some(alpha_test) = alpha_property.alpha_test {
+            let threshold = (alpha_test.threshold as f32) / 255.0;
+
+            match alpha_test.function {
+                AlphaTestFunction::Always => {
+                    alpha_mode = AlphaMode::Opaque;
+                }
+                AlphaTestFunction::Greater => {
+                    alpha_mode = AlphaMode::Mask(threshold);
+                }
+                AlphaTestFunction::GreaterEqual => {
+                    alpha_mode = AlphaMode::Mask(threshold);
+                }
+                _ => todo!(),
+            }
+        }
+
+        if let Some(blend) = alpha_property.alpha_blend {
+            alpha_mode = AlphaMode::Blend;
+        }
+    }
+
     match nif.get(block) {
         // If the name field is not empty we need to load from BGSM file.
         Some(Block::BSLightingShaderProperty(shader_property))
             if !shader_property.name.is_empty() =>
         {
             let material = loader
-                .load::<BgsmMaterial, _>(&shader_property.name)
+                .load::<BgsmMaterial, _>(&MaterialKey {
+                    alpha_mode,
+                    path: shader_property.name.clone(),
+                })
                 .await?;
 
             Ok(HandleOrAsset::Handle(material))
         }
         Some(Block::BSLightingShaderProperty(shader_property)) => {
             let mut material = StandardMaterial {
+                alpha_mode,
                 base_color: Color::from_rgba([1.0, 1.0, 1.0, shader_property.alpha]),
                 flip_normal_y: true,
                 two_component_normal_encoding: true,
@@ -677,7 +719,7 @@ async fn load_material(
         Some(Block::BSEffectShaderProperty(property)) => {
             let mut textures = Vec::new();
             let mut material = StandardMaterial {
-                alpha_mode: AlphaMode::Mask,
+                alpha_mode: AlphaMode::Blend,
                 base_color: Color([
                     property.base_color.r * property.base_color_scale,
                     property.base_color.g * property.base_color_scale,
