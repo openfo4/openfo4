@@ -4,6 +4,8 @@ use crate::hierarchy::Children;
 
 pub mod events;
 pub mod hierarchy;
+pub mod path;
+pub mod transform;
 
 pub trait WorldExt {
     fn add_children(&mut self, parent: Entity, children: Entity);
