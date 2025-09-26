@@ -25,7 +25,9 @@ pub struct Bgsm {
     pub smoothness: f32,
 
     pub grayscale_palette: Option<GreyscalePalette>,
+
     pub alpha_test: bool,
+    pub alpha_test_threshold: u8,
 }
 
 impl Bgsm {
@@ -53,7 +55,7 @@ impl Bgsm {
         let alpha_blend_mode0 = reader.get_u8()?;
         let alpha_blend_mode1 = reader.get_u32()?;
         let alpha_blend_mode2 = reader.get_u32()?;
-        let alpha_test_ref = reader.get_u8()?;
+        let alpha_test_threshold = reader.get_u8()?;
         let alpha_test = reader.get_bool()?;
 
         let z_buffer_write = reader.get_bool()?;
@@ -226,6 +228,7 @@ impl Bgsm {
             alpha,
             grayscale_palette,
             alpha_test,
+            alpha_test_threshold,
         })
     }
 }

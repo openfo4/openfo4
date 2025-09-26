@@ -1,6 +1,6 @@
 use std::f32::consts::PI;
 
-use game_common::components::{Axis, Color, GlobalTransform, Transform};
+use game_common::components::{Axis, Color, GlobalTransform, PointLight, Transform};
 use game_gizmos::Gizmos;
 use glam::{Quat, Vec3};
 use hecs::World;
@@ -148,5 +148,11 @@ pub fn draw_skeletons(world: &World, gizmos: &Gizmos) {
                 COLOR,
             );
         }
+    }
+}
+
+pub fn draw_light_markers(world: &World, gizmos: &Gizmos) {
+    for (_, (transform, light)) in world.query::<(&GlobalTransform, &PointLight)>().iter() {
+        gizmos.sphere(transform.0.translation, light.radius, light.color);
     }
 }

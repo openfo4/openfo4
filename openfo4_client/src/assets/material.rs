@@ -11,7 +11,7 @@ use crate::assets::{Error, FileLoadContext};
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct MaterialKey {
     pub path: String,
-    pub alpha_mode: AlphaMode,
+    pub alpha_mode: Option<AlphaMode>,
 }
 
 #[derive(Clone, Debug)]
@@ -35,8 +35,16 @@ impl Asset for BgsmMaterial {
             .await
             .map_err(|err| Error::Other(format!("failed to read file {}: {}", key.path, err)))?;
 
+        let alpha_mode = key.alpha_mode.unwrap_or_else(|| {
+            if bgsm.alpha_test {
+                AlphaMode::Mask(bgsm.alpha_test_threshold as f32 / 255.0)
+            } else {
+                AlphaMode::Opaque
+            }
+        });
+
         let mut material = StandardMaterial {
-            alpha_mode: key.alpha_mode,
+            alpha_mode,
             base_color: Color::from_rgba([1.0, 1.0, 1.0, bgsm.alpha]),
             flip_normal_y: true,
             two_component_normal_encoding: true,

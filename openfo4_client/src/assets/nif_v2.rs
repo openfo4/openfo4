@@ -613,27 +613,27 @@ async fn load_material(
     block: BlockRef,
     alpha_property: Option<&NiAlphaProperty>,
 ) -> Result<HandleOrAsset<BgsmMaterial>, Error> {
-    let mut alpha_mode = AlphaMode::Opaque;
+    let mut alpha_mode = None;
     if let Some(alpha_property) = alpha_property {
         if let Some(alpha_test) = alpha_property.alpha_test {
             let threshold = (alpha_test.threshold as f32) / 255.0;
 
             match alpha_test.function {
                 AlphaTestFunction::Always => {
-                    alpha_mode = AlphaMode::Opaque;
+                    alpha_mode = Some(AlphaMode::Opaque);
                 }
                 AlphaTestFunction::Greater => {
-                    alpha_mode = AlphaMode::Mask(threshold);
+                    alpha_mode = Some(AlphaMode::Mask(threshold));
                 }
                 AlphaTestFunction::GreaterEqual => {
-                    alpha_mode = AlphaMode::Mask(threshold);
+                    alpha_mode = Some(AlphaMode::Mask(threshold));
                 }
                 _ => todo!(),
             }
         }
 
         if let Some(blend) = alpha_property.alpha_blend {
-            alpha_mode = AlphaMode::Blend;
+            alpha_mode = Some(AlphaMode::Blend);
         }
     }
 
@@ -653,7 +653,7 @@ async fn load_material(
         }
         Some(Block::BSLightingShaderProperty(shader_property)) => {
             let mut material = StandardMaterial {
-                alpha_mode,
+                alpha_mode: alpha_mode.unwrap_or(AlphaMode::Opaque),
                 base_color: Color::from_rgba([1.0, 1.0, 1.0, shader_property.alpha]),
                 flip_normal_y: true,
                 two_component_normal_encoding: true,
@@ -719,7 +719,7 @@ async fn load_material(
         Some(Block::BSEffectShaderProperty(property)) => {
             let mut textures = Vec::new();
             let mut material = StandardMaterial {
-                alpha_mode: AlphaMode::Blend,
+                alpha_mode: alpha_mode.unwrap_or(AlphaMode::Opaque),
                 base_color: Color([
                     property.base_color.r * property.base_color_scale,
                     property.base_color.g * property.base_color_scale,
