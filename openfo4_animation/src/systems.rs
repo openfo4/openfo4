@@ -20,9 +20,19 @@ pub fn drive_animations(world: &mut World, delta: Duration, event: Option<&'stat
         let mut events = Vec::new();
         driver.update(delta, set, &mut events);
 
-        for event in events {
-            match GameEvent::from_name(driver.graph().event_name(event.id).unwrap_or_default()) {
-                Some(GameEvent::ReevaluateGraphState) => {
+        let game_events = events
+            .into_iter()
+            .filter_map(|event| {
+                driver
+                    .graph()
+                    .event_name(event.id)
+                    .and_then(|name| GameEvent::from_name_and_payload(name, event.payload))
+            })
+            .collect::<Vec<_>>();
+
+        for event in game_events {
+            match event {
+                GameEvent::ReevaluateGraphState => {
                     driver.reset();
 
                     for index in skeleton.culled.drain() {
@@ -31,11 +41,7 @@ pub fn drive_animations(world: &mut World, delta: Duration, event: Option<&'stat
                         commands.insert_one(*entity, transform);
                     }
                 }
-                Some(GameEvent::CullBone) => {
-                    let Value::String(name) = &event.payload else {
-                        continue;
-                    };
-
+                GameEvent::CullBone(name) => {
                     let index = skeleton
                         .skeleton
                         .bones
@@ -51,11 +57,7 @@ pub fn drive_animations(world: &mut World, delta: Duration, event: Option<&'stat
                     commands.insert_one(*entity, Transform::from_translation(Vec3::NAN));
                     skeleton.culled.insert(index);
                 }
-                Some(GameEvent::UncullBone) => {
-                    let Value::String(name) = &event.payload else {
-                        continue;
-                    };
-
+                GameEvent::UncullBone(name) => {
                     let index = skeleton
                         .skeleton
                         .bones
@@ -69,13 +71,12 @@ pub fn drive_animations(world: &mut World, delta: Duration, event: Option<&'stat
                     commands.insert_one(*entity, transform);
                     skeleton.culled.remove(&index);
                 }
-                Some(GameEvent::WeaponFire) => {
+                GameEvent::WeaponFire => {
                     dbg!("fire");
                 }
-                Some(GameEvent::ReloadComplete) => {
+                GameEvent::ReloadComplete => {
                     dbg!("reload");
                 }
-                _ => (),
             }
         }
 
@@ -300,18 +301,18 @@ impl TransformLerp for Transform {
 #[derive(Clone, Debug)]
 pub enum GameEvent {
     ReevaluateGraphState,
-    CullBone,
-    UncullBone,
+    CullBone(String),
+    UncullBone(String),
     WeaponFire,
     ReloadComplete,
 }
 
 impl GameEvent {
-    fn from_name(name: &str) -> Option<Self> {
+    fn from_name_and_payload(name: &str, value: Value) -> Option<Self> {
         match name {
             "reevaluategraphstate" => Some(Self::ReevaluateGraphState),
-            "cullbone" => Some(Self::CullBone),
-            "uncullbone" => Some(Self::UncullBone),
+            "cullbone" => value.into_string().map(Self::CullBone),
+            "uncullbone" => value.into_string().map(Self::UncullBone),
             "weaponfire" => Some(Self::WeaponFire),
             "reloadcomplete" => Some(Self::ReloadComplete),
             _ => None,
