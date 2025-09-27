@@ -1,4 +1,5 @@
 use std::collections::VecDeque;
+use std::hash::Hash;
 use std::num::NonZeroU16;
 use std::sync::Arc;
 
@@ -51,7 +52,8 @@ impl Actor {
         ));
 
         let root = world.reserve_entity();
-        let instance = self.character.instantiate(root, world);
+        let spawned_actor = self.character.instantiate(root, world);
+        let instance = spawned_actor.skeleton;
 
         let mut equipment = Equipment::default();
         if let Some(skin) = self.skin {
@@ -113,14 +115,9 @@ pub async fn spawn_actor(
         _ => unreachable!(),
     };
 
-    let character = load_character(data, props.female, &loader).await.unwrap();
+    if let Some(data) = &data.body_part_data {}
 
-    let behavior_path = data.behavior_graph.as_ref().unwrap();
-    let behavior_path = if props.female {
-        behavior_path.0.female.as_ref().unwrap()
-    } else {
-        behavior_path.0.male.as_ref().unwrap()
-    };
+    let character = load_character(data, props.female, &loader).await.unwrap();
 
     let Some(subgraph) = data
         .subgraph_data
@@ -391,4 +388,13 @@ struct ActorLevel {
     scales_with_player: bool,
     min_level: Option<NonZeroU16>,
     max_level: Option<NonZeroU16>,
+}
+
+#[derive(Clone, Debug)]
+pub struct BodyParts(HashMap<Entity, BodyPart>);
+
+#[derive(Clone, Debug)]
+pub struct BodyPart {
+    pub condition: FormId,
+    pub damage_factor: f32,
 }

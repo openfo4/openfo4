@@ -4747,9 +4747,102 @@ pub struct Perk {
 }
 
 #[derive(Clone, Debug, Record)]
+#[record(ordered)]
 pub struct BodyPartData {
     #[record("EDID")]
     pub id: Option<ZString>,
+    #[record("MODL")]
+    pub skeleton_model: BodyPartDataSkeletonModel,
+    #[record("BPNN")]
+    #[record(unordered)]
+    pub parts: SubRecordArray<BodyPartDataBodyPart>,
+}
+
+#[derive(Clone, Debug, Record)]
+#[record(ordered)]
+pub struct BodyPartDataBodyPart {
+    #[record("BPTN")]
+    pub part_name: Option<LString>,
+    #[record("BPNN")]
+    pub part_node: ZString,
+    #[record("BPNT")]
+    pub vats_target: ZString,
+    #[record("BPND")]
+    pub data: BodyPartNodeData,
+    #[record("NAM1")]
+    pub limb_replacement_model: Option<ZString>,
+    #[record("NAM4")]
+    pub gore_effects_target_bone: Option<ZString>,
+    #[record("NAM5")]
+    pub model_info: Option<()>,
+    #[record("ENAM")]
+    pub hit_reaction_start: Option<ZString>,
+    #[record("FNAM")]
+    pub hit_reaction_end: Option<ZString>,
+    #[record("BNAM")]
+    pub gore_effects_dismember_blood_art: Option<FormId>,
+    #[record("INAM")]
+    pub gore_effects_blood_impact_material_type: Option<FormId>,
+    #[record("JNAM")]
+    pub on_cripple_blood_impact_material_type: Option<FormId>,
+    #[record("CNAM")]
+    pub meat_cap_texture_set: Option<FormId>,
+    #[record("NAM2")]
+    pub collar_texture_set: Option<FormId>,
+    #[record("DNAM")]
+    pub twist_variable_prefix: Option<ZString>,
+}
+
+#[derive(Clone, Debug, Record)]
+pub struct BodyPartDataSkeletonModel {
+    #[record("MODL")]
+    pub model: Option<ZString>,
+    #[record("MODT")]
+    pub info: Option<ModelInfo>,
+    #[record("MODC")]
+    pub color_remapping_index: Option<u32>,
+    #[record("MODS")]
+    pub material_swap: Option<FormId>,
+    #[record("MODF")]
+    pub flags: Option<u8>,
+}
+
+#[derive(Clone, Debug, BinaryStruct)]
+pub struct BodyPartNodeData {
+    pub damage_mult: f32,
+    pub explodable_debris: FormId,
+    pub explodable_explosion: FormId,
+    pub explodable_debris_scale: f32,
+    pub severable_debris: FormId,
+    pub severable_explosion: FormId,
+    pub severable_debris_scale: f32,
+    pub cut_min: f32,
+    pub cut_max: f32,
+    pub cut_radius: f32,
+    pub gore_effects_local_rotate_x: f32,
+    pub gore_effects_local_rotate_y: f32,
+    pub cut_tesselation: f32,
+    pub severable_impact_data_set: FormId,
+    pub explodable_limb_replacement_scale: f32,
+    pub flags: u8,
+    pub part_type: u8,
+    pub health_percentage: u8,
+    pub actor_value: FormId,
+    pub to_hit_chance: u8,
+    pub explodable_explosion_chance_percentage: u8,
+    pub non_lethal_dismemberment_chance: u8,
+    pub severable_debris_count: u8,
+    pub explodable_debris_count: u8,
+    pub severable_decal_count: u8,
+    pub explodable_decal_count: u8,
+    pub geometry_segment_index: u8,
+    pub on_cripple_art_object: FormId,
+    pub on_cripple_debris: FormId,
+    pub on_cripple_explosion: FormId,
+    pub on_cripple_impact_data_set: FormId,
+    pub on_cripple_debris_scale: f32,
+    pub on_cripple_debris_count: u8,
+    pub on_cripple_decal_count: u8,
 }
 
 #[derive(Clone, Debug, Record)]

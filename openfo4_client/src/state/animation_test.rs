@@ -112,7 +112,7 @@ pub fn animation_test(
             .unwrap();
 
             let root = world.spawn((Transform::from(*offset),));
-            let skeleton_instance = character.instantiate(root, world);
+            let skeleton_instance = character.instantiate(root, world).skeleton;
 
             let mut equipment = Equipment::default();
 
@@ -395,6 +395,7 @@ pub async fn load_character(
         controller_shape,
         props,
         root_path: root_path,
+        body_parts: Vec::new(),
     })
 }
 
@@ -406,10 +407,11 @@ pub struct ActorCharacter {
     pub controller_shape: ColliderShape,
     pub props: HashMap<String, Value>,
     pub root_path: String,
+    pub body_parts: Vec<BodyPartBoneProps>,
 }
 
 impl ActorCharacter {
-    pub fn instantiate(&self, root: Entity, world: &mut World) -> SkeletonInstance {
+    pub fn instantiate(&self, root: Entity, world: &mut World) -> SpawnedActor {
         // Because the scene may have nodes with extra components we
         // will first spawn the scene and then "overlay" the HKX skeleton.
         let mut scene_nodes = HashMap::new();
@@ -473,14 +475,54 @@ impl ActorCharacter {
             .map(|index| *bones.get(&index).unwrap())
             .collect();
 
-        SkeletonInstance {
-            skeleton: self.skeleton.clone(),
-            bones,
-            bones_bind_pose,
-            root_bones: root_bone_entities,
-            culled: HashSet::new(),
+        let mut body_parts = HashMap::new();
+        for body_part in &self.body_parts {
+            let mut bones = Vec::new();
+
+            let Some(mut bone) = self
+                .skeleton
+                .bones
+                .iter()
+                .find(|bone| bone.name.to_lowercase() == body_part.end_bone.to_lowercase())
+            else {
+                continue;
+            };
+
+            loop {
+                bones.push(bone.index);
+
+                let Some(b) = self
+                    .skeleton
+                    .bones
+                    .iter()
+                    .find(|b| b.children.contains(&bone.index))
+                else {
+                    break;
+                };
+
+                bone = b;
+            }
+
+            body_parts.insert(body_part.id, bones);
+        }
+
+        SpawnedActor {
+            skeleton: SkeletonInstance {
+                skeleton: self.skeleton.clone(),
+                bones,
+                bones_bind_pose,
+                root_bones: root_bone_entities,
+                culled: HashSet::new(),
+            },
+            body_parts,
         }
     }
+}
+
+#[derive(Clone, Debug)]
+pub struct SpawnedActor {
+    pub skeleton: SkeletonInstance,
+    pub body_parts: HashMap<u32, Vec<usize>>,
 }
 
 pub struct ActorBehaviorData {
@@ -564,4 +606,11 @@ pub async fn load_behavior_data(
         graph,
         clips: AnimationSet(Arc::new(clips)),
     })
+}
+
+#[derive(Clone, Debug)]
+pub struct BodyPartBoneProps {
+    pub id: u32,
+    pub start_bone: String,
+    pub end_bone: String,
 }
