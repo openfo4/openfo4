@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap, HashSet, VecDeque};
 
 use game_common::collections::arena::{self, Arena};
 use game_common::collections::vec_map::VecMap;
@@ -17,6 +17,12 @@ pub struct Hierarchy<T> {
     children: HashMap<Key, Vec<Key>>,
     parents: VecMap<arena::Key, arena::Key>,
     root: HashSet<Key>,
+    /// Hint that the nodes are currently topologically sorted in memory, i.e. the parent comes
+    /// before all children is true for all nodes.
+    ///
+    /// This hint can improve performance of some operations, but note that this hint is
+    /// conservative and may be set to false, even if the nodes are sorted.
+    is_sorted: bool,
 }
 
 impl<T> Hierarchy<T> {
@@ -26,6 +32,7 @@ impl<T> Hierarchy<T> {
             children: HashMap::new(),
             parents: VecMap::new(),
             root: HashSet::new(),
+            is_sorted: true,
         }
     }
 
@@ -67,6 +74,8 @@ impl<T> Hierarchy<T> {
                 self.remove(c);
             }
         }
+
+        self.is_sorted = false;
     }
 
     pub fn get(&self, key: Key) -> Option<&T> {
@@ -82,6 +91,7 @@ impl<T> Hierarchy<T> {
         self.nodes.clear();
         self.children.clear();
         self.parents.clear();
+        self.is_sorted = true;
     }
 
     pub fn contains_key(&self, key: Key) -> bool {
@@ -90,6 +100,26 @@ impl<T> Hierarchy<T> {
 
     pub fn iter(&self) -> impl Iterator<Item = (Key, &T)> + '_ {
         self.nodes.iter().map(|(k, v)| (Key(k), v))
+    }
+
+    /// Returns an [`Iterator`] over all nodes in this `Hierarchy` that yields all nodes
+    /// topologically sorted, i.e. such that parents are always yielded before their respective
+    /// children.
+    pub fn iter_topo_sorted(&self) -> IterTopoSorted<'_, T> {
+        // If the nodes are sorted in memory they are already topologically sorted.
+        if self.is_sorted {
+            IterTopoSorted {
+                inner: IterTopoSortedInner::Fast(self.nodes.iter()),
+            }
+        } else {
+            IterTopoSorted {
+                inner: IterTopoSortedInner::Slow {
+                    hierarchy: self,
+                    len: self.nodes.len(),
+                    queue: self.root.iter().copied().collect(),
+                },
+            }
+        }
     }
 
     pub fn values(&self) -> impl Iterator<Item = &T> + '_ {
@@ -165,6 +195,7 @@ impl<T> Hierarchy<T> {
             children,
             parents,
             root,
+            is_sorted: self.is_sorted,
         }
     }
 }
@@ -181,6 +212,63 @@ impl<T> From<T> for Hierarchy<T> {
         hierarchy.append(None, value);
         hierarchy
     }
+}
+
+/// An [`Iterator`] that yields all nodes of a [`Hierarchy`] topologically sorted.
+///
+/// Returned by [`iter_topo_sorted`].
+///
+/// [`iter_topo_sorted`]: Hierarchy::iter_topo_sorted
+#[derive(Clone, Debug)]
+pub struct IterTopoSorted<'a, T> {
+    inner: IterTopoSortedInner<'a, T>,
+}
+
+impl<'a, T> Iterator for IterTopoSorted<'a, T> {
+    type Item = (Key, &'a T);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        match &mut self.inner {
+            IterTopoSortedInner::Fast(iter) => iter.next().map(|(k, v)| (Key(k), v)),
+            IterTopoSortedInner::Slow {
+                hierarchy,
+                len,
+                queue,
+            } => {
+                let key = queue.pop_front()?;
+
+                if let Some(children) = hierarchy.children.get(&key) {
+                    queue.extend(children);
+                }
+
+                *len -= 1;
+                Some((key, hierarchy.nodes.get(key.0).unwrap()))
+            }
+        }
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        (self.len(), Some(self.len()))
+    }
+}
+
+impl<'a, T> ExactSizeIterator for IterTopoSorted<'a, T> {
+    fn len(&self) -> usize {
+        match &self.inner {
+            IterTopoSortedInner::Fast(iter) => iter.len(),
+            IterTopoSortedInner::Slow { len, .. } => *len,
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+enum IterTopoSortedInner<'a, T> {
+    Fast(arena::Iter<'a, T>),
+    Slow {
+        hierarchy: &'a Hierarchy<T>,
+        len: usize,
+        queue: VecDeque<Key>,
+    },
 }
 
 #[derive(Clone, Debug, Default)]
