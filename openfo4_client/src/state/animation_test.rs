@@ -121,30 +121,60 @@ pub fn animation_test(
                     futures_lite::future::block_on(asset_loader.load::<NifScene, _>(model_path))
                         .unwrap();
 
-                equip_item(&scene, &skeleton_instance, world, &mut equipment, None);
+                equip_item(
+                    root,
+                    &scene,
+                    &skeleton_instance,
+                    world,
+                    &mut equipment,
+                    None,
+                );
             }
 
-            let laser_pistol = futures_lite::future::block_on(
-                asset_loader.load::<NifScene, _>("meshes/weapons/laserweapons/laserpistol.nif"),
+            let base =
+                futures_lite::future::block_on(asset_loader.load::<NifScene, _>(
+                    "meshes/weapons/laserweapons/laserweapondummyreceiver.nif",
+                ))
+                .unwrap();
+            let base = equip_item(root, &base, &skeleton_instance, world, &mut equipment, None);
+            let receiver = futures_lite::future::block_on(
+                asset_loader.load::<NifScene, _>("meshes/weapons/laserweapons/laserreceiver.nif"),
             )
             .unwrap();
-            let laser_pistol = equip_item(
-                &laser_pistol,
+            let receiver = equip_item(
+                root,
+                &receiver,
                 &skeleton_instance,
                 world,
                 &mut equipment,
-                None,
+                Some(base),
             );
+
+            let barrel = futures_lite::future::block_on(
+                asset_loader
+                    .load::<NifScene, _>("meshes/weapons/laserweapons/laserpistolbarrel.nif"),
+            )
+            .unwrap();
+            let barrel = equip_item(
+                root,
+                &barrel,
+                &skeleton_instance,
+                world,
+                &mut equipment,
+                Some(receiver),
+            );
+
             let grip = futures_lite::future::block_on(
                 asset_loader.load::<NifScene, _>("meshes/weapons/laserweapons/laserpistolgrip.nif"),
             )
             .unwrap();
             let grip = equip_item(
+                root,
                 &grip,
                 &skeleton_instance,
                 world,
                 &mut equipment,
-                Some(laser_pistol),
+                Some(receiver),
             );
 
             let collider = world.spawn((

@@ -310,7 +310,14 @@ impl Asset for NifScene {
                     let mut attachments = Vec::new();
                     if let Some(points) = connect_points_parents {
                         for point in &points.points {
-                            if point.parent != node.name {
+                            // point.parent contains the name of the node where the attachment
+                            // will be mounted, except for some "dummy" weapon base files with
+                            // no child nodes it is empty, so it should probably refer to the
+                            // root node then?
+                            if point.parent != node.name
+                                && parent.is_some()
+                                && !point.parent.is_empty()
+                            {
                                 continue;
                             }
 

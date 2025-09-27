@@ -1,7 +1,7 @@
 use std::collections::VecDeque;
 
 use game_common::components::Transform;
-use hashbrown::HashMap;
+use hashbrown::{HashMap, HashSet};
 use hecs::{Entity, World};
 use openfo4_animation::skeleton::SkeletonInstance;
 use openfo4_core::WorldExt;
@@ -53,6 +53,7 @@ pub struct AttachmentPoint {
 }
 
 pub fn equip_item(
+    actor_root: Entity,
     scene: &NifScene,
     skeleton: &SkeletonInstance,
     world: &mut World,
@@ -64,7 +65,13 @@ pub fn equip_item(
     let mut attachments = HashMap::new();
     let mut attachment_parents = Vec::new();
 
-    for (key, node) in scene.nodes.iter() {
+    let mut skip_nodes = HashSet::new();
+
+    for (key, node) in scene.nodes.iter_topo_sorted() {
+        if skip_nodes.contains(&key) {
+            continue;
+        }
+
         match &node.skin {
             Some(skin) => {
                 let Some(object) = &node.renderable else {
@@ -93,44 +100,50 @@ pub fn equip_item(
                 });
             }
             None => {
-                let root = if let (Some(attaches), Some(parent_key)) = (&scene.attaches, parent) {
-                    let Some(parent) = equipment.get(parent_key) else {
-                        continue;
-                    };
-
-                    let Some(point) = parent.attachments.get(attaches) else {
-                        continue;
-                    };
-
-                    attachment_parents.push((parent_key, attaches));
-
-                    // If we have no offset we can directly attach to the parent
-                    // scene node, otherwise we have to apply the offset transform
-                    // first.
-                    if point.offset == Transform::IDENTITY {
-                        point.entity
-                    } else {
-                        let root = world.spawn((point.offset,));
-                        world.add_children(point.entity, root);
-                        entities.push(root);
-                        root
+                // If the node matches the name of a bone we will attach it there.
+                // This includes all children of the node, unless they match the
+                // name of another bone, in which case they will get attached there
+                // instead.
+                // If a node matches both a skeleton bone and an attachment point
+                // the skeleton bone should be preferred.
+                let root = match skeleton
+                    .skeleton
+                    .bones
+                    .iter()
+                    .find(|b| b.name.to_lowercase() == node.name.to_lowercase())
+                {
+                    Some(bone) => {
+                        let bone_entity = *skeleton.bones.get(&bone.index).unwrap();
+                        bone_entity
                     }
-                } else {
-                    // If the node matches the name of a bone we will attach it there.
-                    // This includes all children of the node, unless they match the
-                    // name of another bone, in which case they will get attached there
-                    // instead.
-                    let Some(bone) = skeleton
-                        .skeleton
-                        .bones
-                        .iter()
-                        .find(|b| b.name.to_lowercase() == node.name.to_lowercase())
-                    else {
-                        continue;
-                    };
+                    None => {
+                        if let (Some(attaches), Some(parent_key)) = (&scene.attaches, parent) {
+                            let Some(parent) = equipment.get(parent_key) else {
+                                continue;
+                            };
 
-                    let bone_entity = *skeleton.bones.get(&bone.index).unwrap();
-                    bone_entity
+                            let Some(point) = parent.attachments.get(attaches) else {
+                                continue;
+                            };
+
+                            attachment_parents.push((parent_key, attaches));
+
+                            // If we have no offset we can directly attach to the parent
+                            // scene node, otherwise we have to apply the offset transform
+                            // first.
+                            if point.offset == Transform::IDENTITY {
+                                point.entity
+                            } else {
+                                let root = world.spawn((point.offset,));
+                                world.add_children(point.entity, root);
+                                entities.push(root);
+                                root
+                            }
+                        } else {
+                            // Mount at the root entity instead.
+                            actor_root
+                        }
+                    }
                 };
 
                 let mut queue = VecDeque::new();
@@ -161,15 +174,17 @@ pub fn equip_item(
 
                     for (child_key, child_node) in scene.nodes.children(key).into_iter().flatten() {
                         // Skip the node if it matches the name of another bone.
-                        if skeleton
+                        let has_other_bone_name = skeleton
                             .skeleton
                             .bones
                             .iter()
-                            .any(|b| b.name.to_lowercase() == child_node.name.to_lowercase())
-                        {
+                            .any(|b| b.name.to_lowercase() == child_node.name.to_lowercase());
+
+                        if has_other_bone_name || child_node.skin.is_some() {
                             continue;
                         }
 
+                        skip_nodes.insert(child_key);
                         queue.push_back((entity, child_key));
                     }
 

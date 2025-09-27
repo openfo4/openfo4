@@ -53,7 +53,7 @@ impl Actor {
         let mut equipment = Equipment::default();
         if let Some(skin) = self.skin {
             for scene in &skin.models {
-                equip_item(&scene, &instance, world, &mut equipment, None);
+                equip_item(root, &scene, &instance, world, &mut equipment, None);
             }
         }
 
