@@ -657,7 +657,7 @@ async fn load_terrain_layer(
         .unwrap();
 
     let texture_set = match texture_set.data {
-        RecordData::TXST(set) => set,
+        RecordData::TextureSet(set) => set,
         _ => todo!(),
     };
 

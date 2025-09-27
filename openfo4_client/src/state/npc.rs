@@ -4,6 +4,7 @@ use std::sync::Arc;
 
 use bitflags::bitflags;
 use futures_lite::FutureExt;
+use hashbrown::HashMap;
 use hecs::{Entity, World};
 use openfo4_animation::AnimationSet;
 use openfo4_animation::animation::AnimationClip;
@@ -11,7 +12,7 @@ use openfo4_animation::driver::AnimationDriver;
 use openfo4_animation::skeleton::SkeletonInstance;
 use openfo4_asset::AssetLoader;
 use openfo4_core::WorldExt;
-use openfo4_esp::records::{LeveledActorFlags, NpcBaseFlags, NpcTemplateFlags};
+use openfo4_esp::records::{Class, LeveledActorFlags, NpcBaseFlags, NpcTemplateFlags};
 use openfo4_esp::{FormId, RecordData, RecordKind};
 use openfo4_physics::components::{Collider, RigidBody};
 use rand::distr::Distribution;
@@ -21,6 +22,7 @@ use crate::assets::nif_v2::NifScene;
 use crate::state::animation_test::{ActorCharacter, load_behavior_data, load_character};
 use crate::state::equipment::{EquipmentItem, load_armor};
 use crate::state::esp::EspLoader;
+use crate::systems::actor_value::ActorValueProperties;
 use crate::systems::controller::ControllerShape;
 use crate::systems::equipment::{Equipment, EquippedItem, equip_item};
 
@@ -34,6 +36,7 @@ pub struct Actor {
     clips: AnimationSet,
     controller: ControllerShape,
     skin: Option<EquipmentItem>,
+    properties: ActorValueProperties,
 }
 
 impl Actor {
@@ -67,6 +70,7 @@ impl Actor {
                     self.controller,
                     instance,
                     equipment,
+                    self.properties,
                 ),
             )
             .unwrap();
@@ -82,6 +86,23 @@ pub async fn spawn_actor(
     npc_form: FormId,
 ) -> Result<Actor, ()> {
     let props = resolve_actor_props(&loader, esp_loader, npc_form).await;
+
+    let mut properties = props.properties;
+
+    if let Some(class) = props.class
+        && !class.is_null()
+    {
+        let class = esp_loader
+            .lookup(Some(RecordKind::Class), class)
+            .await
+            .unwrap();
+        let class = &class.data.as_variant::<Class>().unwrap();
+
+        for prop in &*class.properties {
+            let old_value = properties.get(prop.actor_value).unwrap_or_default();
+            properties.set(prop.actor_value, old_value + prop.value);
+        }
+    }
 
     let race = esp_loader
         .lookup(Some(RecordKind::Race), props.race)
@@ -140,6 +161,7 @@ pub async fn spawn_actor(
         },
         character,
         skin,
+        properties,
     })
 }
 
@@ -164,7 +186,7 @@ async fn resolve_actor_props(
     let mut female = false;
 
     // Stats
-    let mut properties = Vec::new();
+    let mut properties = ActorValueProperties::default();
     let mut level = ActorLevel::default();
     let mut class = None;
 
@@ -186,7 +208,7 @@ async fn resolve_actor_props(
                 }
 
                 if flags.contains(NpcTemplateFlags::STATS) {
-                    properties = data.properties.clone();
+                    properties = data.properties.iter().copied().collect();
                     class = data.class;
                     level = ActorLevel {
                         level: data.base_stats.level,
@@ -328,7 +350,13 @@ async fn resolve_actor_props(
         }
     }
 
-    ActorProps { race, skin, female }
+    ActorProps {
+        race,
+        skin,
+        female,
+        class,
+        properties,
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -337,6 +365,8 @@ struct ActorProps {
     /// Skin overwrite
     skin: Option<FormId>,
     female: bool,
+    class: Option<FormId>,
+    properties: ActorValueProperties,
 }
 
 #[derive(Clone, Debug)]

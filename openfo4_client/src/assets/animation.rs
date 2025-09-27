@@ -2,13 +2,13 @@ use std::collections::HashMap;
 use std::time::Duration;
 
 use game_common::components::Transform;
-use openfo4_animation::animation::{AnimationClip, AnimationClipFlags, Annotation, BlendMode};
-use openfo4_asset::{Asset, AssetLoader, Handle};
+use openfo4_animation::animation::{AnimationClip, AnimationClipFlags, BlendMode};
+use openfo4_asset::{Asset, AssetLoader};
 use openfo4_hkx::animation::BlendHint;
 use openfo4_hkx::{HkObject, HkxFile};
 
+use crate::assets::Error;
 use crate::assets::data_file::DataFile;
-use crate::assets::{Error, FileLoadContext};
 
 #[derive(Clone, Debug)]
 pub struct FileAnimationClip(pub AnimationClip);
@@ -16,12 +16,12 @@ pub struct FileAnimationClip(pub AnimationClip);
 impl Asset for FileAnimationClip {
     type Key = String;
     type Error = Error;
-    type Context = FileLoadContext;
+    type Context = ();
 
     async fn load(
         loader: &AssetLoader,
         key: &Self::Key,
-        ctx: &Self::Context,
+        _ctx: &Self::Context,
     ) -> Result<Self, Self::Error> {
         let mut clip = AnimationClip {
             duration: Duration::ZERO,

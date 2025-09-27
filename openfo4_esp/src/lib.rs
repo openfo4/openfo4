@@ -338,11 +338,11 @@ where
             Tes4 => Tes4,
             GameSetting => GameSetting,
             Keyword => Keyword,
-            LocationReferenceType => LCRT,
+            LocationReferenceType => LocationReferenceType,
             Action => Action,
             Transform => TRNS,
             Component => CMPO,
-            TextureSet => TXST,
+            TextureSet => TextureSet,
             GlobalVariable => GLOB,
             DamageType => DMGT,
             Class => Class,
@@ -351,7 +351,7 @@ where
             Race => Race,
             Sound => SOUN,
             AcousticSpace => AcousticSpace,
-            MagicEffect => MGEF,
+            MagicEffect => MagicEffect,
             LandTexture => LandTexture,
             Enchantment => ENCH,
             Spell => SPEL,
@@ -542,11 +542,11 @@ pub enum RecordData {
     Tes4(Tes4),
     GameSetting(GameSetting),
     Keyword(Keyword),
-    LCRT(LocationReferenceType),
+    LocationReferenceType(LocationReferenceType),
     Action(Action),
     TRNS(TRNS),
     CMPO(CMPO),
-    TXST(TextureSet),
+    TextureSet(TextureSet),
     GLOB(GLOB),
     DMGT(DMGT),
     Class(Class),
@@ -555,7 +555,7 @@ pub enum RecordData {
     Race(Race),
     SOUN(SOUN),
     AcousticSpace(AcousticSpace),
-    MGEF(MagicEffect),
+    MagicEffect(MagicEffect),
     LandTexture(LandTexture),
     ENCH(ENCH),
     SPEL(SPEL),
@@ -679,15 +679,51 @@ pub enum RecordData {
     ObjectVisibilityManager(ObjectVisibilityManager),
 }
 
-pub trait AsRecordKind {
+impl RecordData {
+    pub fn as_variant<T>(&self) -> Option<&T>
+    where
+        T: AsRecordKind,
+    {
+        T::from_data(self)
+    }
+
+    pub fn into_variant<T>(self) -> Option<T>
+    where
+        T: AsRecordKind,
+    {
+        T::from_data_owned(self)
+    }
+}
+
+pub trait AsRecordKind: Sized {
     const KIND: RecordKind;
+
+    #[doc(hidden)]
+    fn from_data(data: &RecordData) -> Option<&Self>;
+
+    #[doc(hidden)]
+    fn from_data_owned(data: RecordData) -> Option<Self>;
 }
 
 macro_rules! as_record_kind_impl {
-    ($($t:ty => $kind:expr),*,) => {
+    ($($t:tt => $kind:expr),*,) => {
         $(
             impl AsRecordKind for $t {
                 const KIND: RecordKind = $kind;
+
+                fn from_data(data: &RecordData) -> Option<&Self> {
+                    match data {
+                        RecordData::$t(v) => Some(v),
+                        _ => None,
+                    }
+                }
+
+                fn from_data_owned(data: RecordData) -> Option<Self> {
+                    match data {
+                        RecordData::$t(v) => Some(v),
+                        _ => None,
+                    }
+                }
             }
         )*
     };

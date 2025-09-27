@@ -1,3 +1,4 @@
+pub mod actor_value;
 pub mod aim;
 pub mod animation_sync;
 pub mod camera;
