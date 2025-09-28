@@ -13,7 +13,9 @@ use openfo4_animation::driver::AnimationDriver;
 use openfo4_animation::skeleton::SkeletonInstance;
 use openfo4_asset::AssetLoader;
 use openfo4_core::WorldExt;
-use openfo4_esp::records::{Class, LeveledActorFlags, NpcBaseFlags, NpcTemplateFlags};
+use openfo4_esp::records::{
+    Class, LeveledActorFlags, NpcBaseFlags, NpcTemplateFlags, Race, RaceSubgraphData,
+};
 use openfo4_esp::{FormId, RecordData, RecordKind};
 use openfo4_physics::components::{Collider, RigidBody};
 use rand::distr::Distribution;
@@ -119,12 +121,9 @@ pub async fn spawn_actor(
 
     let character = load_character(data, props.female, &loader).await.unwrap();
 
-    let Some(subgraph) = data
-        .subgraph_data
-        .0
-        .iter()
-        .find(|v| v.target_keywords.is_empty())
-    else {
+    let subgraphs = load_subgraphs(esp_loader, props.race, data).await;
+
+    let Some(subgraph) = subgraphs.iter().find(|v| v.target_keywords.is_empty()) else {
         return Err(());
     };
 
@@ -398,4 +397,35 @@ pub struct BodyParts(HashMap<Entity, BodyPart>);
 pub struct BodyPart {
     pub condition: FormId,
     pub damage_factor: f32,
+}
+
+async fn load_subgraphs(
+    esp_loader: &EspLoader,
+    race_form: FormId,
+    race_data: &Race,
+) -> Vec<RaceSubgraphData> {
+    // If we have a template race all subgraph data from the referenced race
+    // is added to our race.
+    let template_race = race_data.subgraph_template_race;
+
+    let mut subgraphs = Vec::new();
+    for record in esp_loader.lookup_all(Some(RecordKind::Race)).await.unwrap() {
+        let Some(data) = record.data.into_variant::<Race>() else {
+            continue;
+        };
+
+        let is_original_race = record.id == race_form;
+        let is_template_race = template_race.is_some_and(|id| id == record.id);
+        let is_additive_race = data
+            .subgraph_additive_race
+            .is_some_and(|id| id == record.id || Some(id) == template_race);
+
+        if !is_original_race && !is_template_race && !is_additive_race {
+            continue;
+        }
+
+        subgraphs.extend(data.subgraph_data);
+    }
+
+    subgraphs
 }
