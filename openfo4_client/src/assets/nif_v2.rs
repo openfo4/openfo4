@@ -15,6 +15,7 @@ use openfo4_nif::material::{AlphaTestFunction, NiAlphaProperty};
 use openfo4_nif::mesh::{BSMeshLODTriShape, BSSubIndexTriShape, BSTriShape};
 use openfo4_nif::{BSXFlags, Block, BlockRef, Nif};
 use openfo4_physics::components::{Collider, ColliderShape, TriMesh};
+use thiserror::Error;
 
 use crate::assets::Error;
 use crate::assets::data_file::DataFile;
@@ -519,29 +520,19 @@ impl Asset for NifScene {
                         ..Default::default()
                     }
                 }
-                Some(Block::BhkNPCollisionObject(_)) => {
-                    if let Some(collider) = load_collider(&nif, block) {
-                        // instances.push(Instance {
-                        //     transform: instance.transform
-                        //         * NiTransform::from_ni_transform(
-                        //             Transform::from_scale(Vec3::splat(1.0 / NIF_TO_METERS))
-                        //                 * collider.transform,
-                        //         ),
-                        //     collider: Some(collider.collider),
-                        //     skin: None,
-                        //     renderable: None,
-                        // });
-
-                        Node {
-                            transform: Transform::from_scale(Vec3::splat(1.0 / NIF_TO_METERS))
-                                * collider.transform,
-                            collider: Some(collider.collider),
-                            ..Default::default()
-                        }
-                    } else {
+                Some(Block::BhkNPCollisionObject(_)) => match load_collider(&nif, block) {
+                    Ok(Some(collider)) => Node {
+                        transform: Transform::from_scale(Vec3::splat(1.0 / NIF_TO_METERS))
+                            * collider.transform,
+                        collider: Some(collider.collider),
+                        ..Default::default()
+                    },
+                    Ok(None) => Node::default(),
+                    Err(err) => {
+                        tracing::error!("failed to load collider from {}: {}", path, err);
                         Node::default()
                     }
-                }
+                },
                 _ => Node::default(),
             };
 
@@ -761,7 +752,22 @@ struct ColliderNode {
     collider: Collider,
 }
 
-fn load_collider(nif: &Nif, collision_object: BlockRef) -> Option<ColliderNode> {
+#[derive(Clone, Debug, Error)]
+enum LoadColliderError {
+    #[error(transparent)]
+    Hkx(openfo4_hkx::Error),
+    #[error("invalid material id: {0}")]
+    InvalidMaterialId(u16),
+    #[error("cycle in collider pointers")]
+    PointerCylce,
+    #[error("unknown mesh shape")]
+    UnknownMeshShape,
+}
+
+fn load_collider(
+    nif: &Nif,
+    collision_object: BlockRef,
+) -> Result<Option<ColliderNode>, LoadColliderError> {
     // The collision object is a `bhkNPCollisionObject` node, which
     // contains a reference to a `bhkPhysicsSystem` node that contains
     // a HKX file.
@@ -778,13 +784,7 @@ fn load_collider(nif: &Nif, collision_object: BlockRef) -> Option<ColliderNode> 
         _ => todo!(),
     };
 
-    let hkx = match HkxFile::decode(data) {
-        Ok(f) => f,
-        Err(err) => {
-            tracing::error!("invalid hkx data: {}", err);
-            return None;
-        }
-    };
+    let hkx = HkxFile::decode(data).map_err(LoadColliderError::Hkx)?;
 
     let system = hkx
         .iter()
@@ -801,8 +801,7 @@ fn load_collider(nif: &Nif, collision_object: BlockRef) -> Option<ColliderNode> 
         .unwrap();
 
     let Some(material) = system.materials.get(usize::from(body.material_id)) else {
-        tracing::error!("invalid hkx data: invalid material id {}", body.material_id);
-        return None;
+        return Err(LoadColliderError::InvalidMaterialId(body.material_id));
     };
 
     let friction = material.static_friction.to_f32();
@@ -827,8 +826,7 @@ fn load_collider(nif: &Nif, collision_object: BlockRef) -> Option<ColliderNode> 
         // Since composite shapes can point to any other shape
         // we need to catch cycles we may get stuck here forever.
         if !visited.insert(ptr) {
-            tracing::error!("cycle in collider pointers");
-            return None;
+            return Err(LoadColliderError::PointerCylce);
         }
 
         match hkx.get(ptr) {
@@ -878,10 +876,7 @@ fn load_collider(nif: &Nif, collision_object: BlockRef) -> Option<ColliderNode> 
                     queue.push_back((shape, transform));
                 }
             }
-            _ => {
-                tracing::error!("unknown mesh shape");
-                return None;
-            }
+            _ => return Err(LoadColliderError::UnknownMeshShape),
         }
     }
 
@@ -904,7 +899,7 @@ fn load_collider(nif: &Nif, collision_object: BlockRef) -> Option<ColliderNode> 
     }
 
     if indices.is_empty() {
-        return None;
+        return Ok(None);
     }
 
     let mesh = if all_meshes_are_convex {
@@ -913,7 +908,7 @@ fn load_collider(nif: &Nif, collision_object: BlockRef) -> Option<ColliderNode> 
         TriMesh::new(vertices, indices)
     };
 
-    Some(ColliderNode {
+    Ok(Some(ColliderNode {
         transform,
         collider: Collider {
             // TODO: Load values from material property.
@@ -921,7 +916,7 @@ fn load_collider(nif: &Nif, collision_object: BlockRef) -> Option<ColliderNode> 
             restitution: 0.5,
             shape: ColliderShape::TriMesh(mesh),
         },
-    })
+    }))
 }
 
 fn extract_attachment_name(mut name: &str) -> &str {
