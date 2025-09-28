@@ -344,7 +344,7 @@ pub struct AngMotorConstraintAtom {
     // Offset: 12
     pub target_angle: f32,
     // Offset: 16
-    pub motor: Ptr<ConstraintMotor>,
+    pub motor: Option<Ptr<ConstraintMotor>>,
     _pad1: u32,
     _pad2: u32,
     _pad3: u32,
