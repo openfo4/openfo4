@@ -11,7 +11,10 @@ use crate::{Value, ValueExpression};
 
 impl BuildNode for TimerModifier {
     fn build(&self, ctx: &mut BuilderContext<'_>) -> Result<Option<Node>, Error> {
-        let event = parse_event(ctx, &self.alarm_event);
+        let Some(event) = parse_event(ctx, &self.alarm_event) else {
+            return Ok(None);
+        };
+
         let mut condition = ValueExpression::Const(Value::Bool(self.parent.enable));
         let mut time = ValueExpression::Const(Value::F32(self.alarm_time_seconds));
 

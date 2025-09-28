@@ -29,6 +29,9 @@ impl BuildNode for BlenderGenerator {
 
                 match &*binding.member_path {
                     "blendParameter" => blend_parameter = ValueExpression::Variable(variable),
+                    // FIXME: These variables are part of `hkbPoseMatchingGenerator`, which we currently
+                    // do not implement fully and instead defer to the `hkbBlenderGenerator` portion.
+                    "rootBoneIndex" | "otherBoneIndex" | "anotherBoneIndex" | "pelvisIndex" => (),
                     name => {
                         return Err(Error::UnknownVariableName(UnknownVariableName {
                             class: "hkbBlenderGenerator",

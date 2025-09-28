@@ -109,14 +109,22 @@ impl BuildNode for openfo4_hkx::behavior::StateMachine {
             let mut enter_events = Vec::new();
             if let Some(events) = &state.enter_notify_events {
                 for event in &*events.events {
-                    enter_events.push(parse_event(ctx, event));
+                    let Some(event) = parse_event(ctx, event) else {
+                        continue;
+                    };
+
+                    enter_events.push(event);
                 }
             }
 
             let mut exit_events = Vec::new();
             if let Some(events) = &state.exit_notify_events {
                 for event in &*events.events {
-                    exit_events.push(parse_event(ctx, event));
+                    let Some(event) = parse_event(ctx, event) else {
+                        continue;
+                    };
+
+                    exit_events.push(event);
                 }
             }
 
@@ -321,7 +329,7 @@ fn generator_transition(
                     local_time: Duration::from_secs_f32(generator.blend_out_duration),
                     from_end: true,
                     event: Event {
-                        id: exit_event as i64,
+                        id: exit_event,
                         payload: Value::None,
                     },
                 });
@@ -350,7 +358,7 @@ fn generator_transition(
         condition: ValueExpression::Const(Value::Bool(true)),
         from: Some(transition_state),
         to,
-        event_id: exit_event as i64,
+        event_id: exit_event,
         priority: 0,
         blend_duration: blend_out,
     });

@@ -1,4 +1,5 @@
-use crate::nodes::{Context, GraphNode, NodeEvent};
+use crate::events::EventId;
+use crate::nodes::{Context, GraphNode};
 use crate::{BoneWeights, Event, NodeId, Value, ValueExpression};
 
 #[derive(Clone, Debug)]
@@ -61,12 +62,12 @@ impl GraphNode for Layers {
         T: Context,
     {
         for layer in &mut self.layers {
-            if layer.on_event == event.id && !layer.is_active {
+            if layer.on_event.is_some_and(|id| id == event.id) && !layer.is_active {
                 ctx.activate_node(layer.node);
                 layer.is_active = true;
             }
 
-            if layer.off_event == event.id && layer.is_active {
+            if layer.off_event.is_some_and(|id| id == event.id) && layer.is_active {
                 ctx.deactivate_node(layer.node);
                 layer.is_active = false;
             }
@@ -82,8 +83,8 @@ impl GraphNode for Layers {
 pub struct Layer {
     pub node: NodeId,
     pub on_by_default: bool,
-    pub on_event: i64,
-    pub off_event: i64,
+    pub on_event: Option<EventId>,
+    pub off_event: Option<EventId>,
     pub weight: ValueExpression,
     pub bone_weights: Option<ValueExpression>,
     pub is_active: bool,

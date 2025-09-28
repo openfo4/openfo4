@@ -58,7 +58,9 @@ pub fn animation_test(
     let skin_path = "meshes/actors/turret/characterassets/turretstanding.nif";
     let nif_skeleton = "actors/turret/characterassets/turretstandingskeleton.nif";
 
-    let behavior_filename = "meshes/actors/character/behaviors/weaponbehavior.hkx";
+    let behavior_filename = "meshes/actors/character/behaviors/raiderrootbehavior.hkx";
+    // let behavior_filename = "meshes/actors/character/behaviors/weaponbehavior.hkx";
+    let subgraph_filename = "meshes/actors/character/behaviors/weaponbehavior.hkx";
     // let behavior_filename = "meshes/actors/character/behaviors/mtbehavior.hkx";
     // let behavior_filename = "meshes/actors/character/behaviors/raiderrootbehavior.hkx";
     let behavior_file = behavior_filename;
@@ -105,6 +107,7 @@ pub fn animation_test(
             let behavior = futures_lite::future::block_on(load_behavior_data(
                 &character.root_path,
                 behavior_filename,
+                subgraph_filename,
                 &character,
                 &search_paths,
                 asset_loader,
@@ -194,7 +197,7 @@ pub fn animation_test(
                         skeleton_instance,
                         AnimationDriver::new(Arc::new(behavior.graph)),
                         ActiveBehaviorGraphs(vec![
-                            behavior_filename.replace("meshes/", ""),
+                            // subgraph_filename.replace("meshes/", ""),
                             "actors/character/behaviors/raiderrootbehavior.hkx".to_owned(),
                         ]),
                         RigidBody::FIXED,
@@ -388,7 +391,13 @@ pub async fn load_character(
         radius: radius / 2.0,
     });
 
+    let behavior_filename = fix_path(&format!(
+        "{}/{}",
+        root_path, character.string_data.behavior_filename
+    ));
+
     Ok(ActorCharacter {
+        behavior_filename,
         scene: nif_skeleton,
         skeleton,
         controller_offset,
@@ -401,6 +410,7 @@ pub async fn load_character(
 
 #[derive(Clone, Debug)]
 pub struct ActorCharacter {
+    pub behavior_filename: String,
     pub scene: Handle<NifScene>,
     pub skeleton: Skeleton,
     pub controller_offset: Transform,
@@ -533,6 +543,7 @@ pub struct ActorBehaviorData {
 pub async fn load_behavior_data(
     root_path: &str,
     behavior_path: &str,
+    subgraph_path: &str,
     character: &ActorCharacter,
     search_paths: &[&str],
     loader: &AssetLoader,
@@ -540,6 +551,11 @@ pub async fn load_behavior_data(
     let mut behavior_path = fix_path(behavior_path);
     if !behavior_path.starts_with("meshes") {
         behavior_path = format!("meshes/{}", behavior_path)
+    }
+
+    let mut subgraph_path = fix_path(subgraph_path);
+    if !subgraph_path.starts_with("meshes/") {
+        subgraph_path = format!("meshes/{}", subgraph_path);
     }
 
     let behavior_file = loader
@@ -569,6 +585,14 @@ pub async fn load_behavior_data(
                 };
 
                 builder.register_file(&path, (**file).clone()).unwrap();
+            }
+            Err(Hint::NeedSwapGenerator) => {
+                let file = loader
+                    .load::<DataFile<HkxFile>, _>(&subgraph_path)
+                    .await
+                    .unwrap();
+
+                builder.register_swap_generator((**file).clone()).unwrap();
             }
         }
     };

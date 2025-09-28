@@ -5,7 +5,9 @@ pub mod driver;
 pub mod graph;
 pub mod skeleton;
 pub mod systems;
+pub mod variables;
 
+mod events;
 mod expr;
 mod nodes;
 
@@ -24,7 +26,9 @@ use petgraph::dot::Dot;
 use petgraph::prelude::StableGraph;
 use slab::Slab;
 
+use crate::events::{EventId, EventSet};
 use crate::nodes::{GraphNode as _, Node, NodeInner};
+use crate::variables::{VariableId, VariableKind, VariableSet};
 
 pub fn build_graph(file: &HkxFile) {
     let mut root = None;
@@ -308,8 +312,12 @@ pub fn build_graph(file: &HkxFile) {
     std::fs::write("graph.dot", Dot::new(&graph).to_string().as_bytes()).unwrap();
 }
 
-fn load_initial_variable_set(graph: &BehaviorGraph, props: &HashMap<String, Value>) -> VariableSet {
-    let mut set = VariableSet::default();
+fn load_initial_variable_set(
+    graph: &BehaviorGraph,
+    props: &HashMap<String, Value>,
+) -> GraphVariables {
+    let mut variables = Vec::new();
+    let mut character_properties = Vec::new();
 
     if let Some(v) = &graph.data.variable_initial_values {
         // assert!(v.quad_variable_values.is_empty(), "TODO");
@@ -374,22 +382,23 @@ fn load_initial_variable_set(graph: &BehaviorGraph, props: &HashMap<String, Valu
                 Value::Pointer(val as u32)
             }
             VariableType::Vector3 => {
+                word_values.next();
                 let val = quad_values.next().copied().unwrap_or_default();
                 Value::Vec3(val.truncate())
             }
             VariableType::Vector4 => {
+                word_values.next();
                 let val = quad_values.next().copied().unwrap_or_default();
                 Value::Vec4(val)
             }
             VariableType::Quaternion => {
+                word_values.next();
                 let val = quad_values.next().copied().unwrap_or(Vec4::W);
                 Value::Quat(Quat::from_vec4(val))
             }
         };
 
-        let key = set.variables.insert(value);
-        set.variables_by_index.insert(index, key);
-        set.variables_by_name.insert(name.clone(), key);
+        variables.push((name.clone(), value));
     }
 
     for (index, name) in graph
@@ -405,9 +414,7 @@ fn load_initial_variable_set(graph: &BehaviorGraph, props: &HashMap<String, Valu
             todo!("undeclared variable: {}", name);
         };
 
-        let key = set.variables.insert(value.clone());
-        set.character_property_by_index.insert(index, key);
-        set.character_property_by_name.insert(name, key);
+        character_properties.push((name, value.clone()));
     }
 
     // for (index, (info, name)) in graph
@@ -435,7 +442,16 @@ fn load_initial_variable_set(graph: &BehaviorGraph, props: &HashMap<String, Valu
     //     set.character_property_by_name.insert(name.clone(), key);
     // }
 
-    set
+    GraphVariables {
+        variables,
+        character_properties,
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct GraphVariables {
+    pub variables: Vec<(String, Value)>,
+    pub character_properties: Vec<(String, Value)>,
 }
 
 // fn process_node(f: &HkxFile, ptr: OpaquePtr) -> Option<Node> {
@@ -584,12 +600,12 @@ pub struct AnimationGraph {
     nodes: Slab<Node>,
     root: Option<NodeId>,
     variables: VariableSet,
-    event_names: Vec<String>,
+    events: EventSet,
 }
 
 impl AnimationGraph {
-    pub fn event_name(&self, id: i64) -> Option<&str> {
-        self.event_names.get(id as usize).map(|v| v.as_str())
+    pub fn event_name(&self, id: EventId) -> Option<&str> {
+        self.events.lookup_id(id)
     }
 
     pub fn graph(&self) -> StableGraph<GraphNode, String> {
@@ -664,32 +680,6 @@ impl AnimationGraph {
 pub struct GraphNode {
     id: usize,
     name: String,
-}
-
-#[derive(Clone, Debug, Default)]
-struct VariableSet {
-    variables: Slab<Value>,
-    variables_by_index: HashMap<usize, usize>,
-    variables_by_name: HashMap<String, usize>,
-    character_property_by_index: HashMap<usize, usize>,
-    character_property_by_name: HashMap<String, usize>,
-}
-
-impl VariableSet {
-    fn get_by_name(&self, name: &str) -> Option<Value> {
-        let key = self.variables_by_name.get(name)?;
-        self.variables.get(*key).cloned()
-    }
-
-    fn get_mut_by_name(&mut self, name: &str) -> Option<&mut Value> {
-        let key = self.variables_by_name.get(name)?;
-        self.variables.get_mut(*key)
-    }
-
-    fn get_mut_by_index(&mut self, index: usize) -> Option<&mut Value> {
-        let key = self.variables_by_index.get(&index)?;
-        self.variables.get_mut(*key)
-    }
 }
 
 /// A state machine of one or more states.
@@ -785,7 +775,7 @@ pub struct BlendNode {
 
 #[derive(Clone, Debug)]
 pub struct Event {
-    pub id: i64,
+    pub id: EventId,
     pub payload: Value,
 }
 
@@ -861,6 +851,13 @@ impl Value {
             Self::I8(val) => Some(*val as usize),
             Self::I16(val) => Some(*val as usize),
             Self::I32(val) => Some(*val as usize),
+            _ => None,
+        }
+    }
+
+    pub fn into_string(self) -> Option<String> {
+        match self {
+            Self::String(s) => Some(s),
             _ => None,
         }
     }
@@ -946,7 +943,7 @@ impl ValueExpression {
     fn eval(&self, set: &VariableSet) -> Value {
         match self {
             Self::Const(val) => val.clone(),
-            Self::Variable(id) => set.variables[*id].clone(),
+            Self::Variable(id) => set.get(*id).unwrap().clone(),
             Self::CmpEq(lhs, rhs) => {
                 let lhs = lhs.eval(set);
                 let rhs = rhs.eval(set);
@@ -1053,8 +1050,6 @@ pub struct VariableChangeEvent {
     pub event: Event,
 }
 
-pub type VariableId = usize;
-
 #[derive(Clone, Debug)]
 pub struct AnimationSet(pub Arc<HashMap<String, AnimationClip>>);
 
@@ -1113,11 +1108,11 @@ impl Command {
                 }
             }
             Self::SetVariable(cmd) => {
-                let old_value = &variables.variables[cmd.variable];
+                let old_value = variables.get(cmd.variable).unwrap();
                 let new_value = cmd.value.eval(&variables);
 
                 if old_value != &new_value {
-                    variables.variables[cmd.variable] = cmd.value.eval(&variables);
+                    *variables.get_mut(cmd.variable).unwrap() = cmd.value.eval(&variables);
                     events.push_back(DriverEvent::VariableChanged(cmd.variable));
                 }
             }

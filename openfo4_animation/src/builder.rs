@@ -24,15 +24,20 @@ mod timer_modifier;
 use std::collections::HashMap;
 use std::hash::Hash;
 
-use openfo4_hkx::behavior::{BSBehaviorGraphSwapGenerator, EventProperty};
+use openfo4_hkx::behavior::{
+    BSBehaviorGraphSwapGenerator, DynamicAnimationTaggingGenerator, EventProperty,
+};
 use openfo4_hkx::skeleton::BindingType;
 use openfo4_hkx::{HkObject, HkxFile, OpaquePtr};
 use slab::Slab;
 use thiserror::Error;
 
+use crate::events::{EventId, EventSet};
 use crate::nodes::Node;
+use crate::nodes::list::List;
+use crate::variables::{VariableKind, VariableSet};
 use crate::{
-    AnimationGraph, Event, NodeId, NodeInner, Value, ValueExpression, VariableId, VariableSet,
+    AnimationGraph, Event, NodeId, NodeInner, Value, ValueExpression, VariableId,
     load_initial_variable_set,
 };
 
@@ -42,7 +47,7 @@ pub enum Error {
     NoGraph,
     #[error(transparent)]
     UnknownVariableName(UnknownVariableName),
-    #[error("unknown variable id: {0}")]
+    #[error("unknown variable id: {0:?}")]
     UnknownVariableId(VariableId),
     #[error("unknown variable id: {0}")]
     UnknownEventId(i64),
@@ -53,6 +58,7 @@ pub enum Error {
 #[derive(Clone, Debug)]
 pub enum Hint {
     NeedFile(String),
+    NeedSwapGenerator,
 }
 
 #[derive(Clone, Debug)]
@@ -81,7 +87,7 @@ impl Builder {
                 nodes: Slab::new(),
                 variables: VariableSet::default(),
                 files: HashMap::new(),
-                events: Vec::new(),
+                events: EventSet::default(),
             },
             hkx_files: HashMap::new(),
             stack: Vec::new(),
@@ -112,28 +118,24 @@ impl Builder {
             return Err(Error::NoGraph);
         };
 
-        let mut variables = load_initial_variable_set(graph, &self.state.props);
+        let variables = load_initial_variable_set(graph, &self.state.props);
 
         let mut table = IndexTable::default();
 
         // Variables
-        for (name, old_index) in variables.variables_by_name {
-            let value = variables.variables.remove(old_index);
-
-            let new_index = match self.state.variables.variables_by_name.get(&name) {
-                Some(index) => *index,
-                None => {
-                    let index = self.state.variables.variables.insert(value);
+        for (index, (name, value)) in variables.variables.into_iter().enumerate() {
+            let id = self
+                .state
+                .variables
+                .lookup_variable_name(&name)
+                .unwrap_or_else(|| {
                     self.state
                         .variables
-                        .variables_by_name
-                        .insert(name.clone(), index);
-                    index
-                }
-            };
+                        .insert(VariableKind::Variable, name.clone(), value)
+                });
 
-            table.variable_by_index.insert(old_index, new_index);
-            table.variable_by_name.insert(name, new_index);
+            table.variable_by_index.insert(index as u32, id);
+            table.variable_by_name.insert(name, id);
         }
 
         // Character properties
@@ -153,60 +155,48 @@ impl Builder {
             let id = self
                 .state
                 .variables
-                .character_property_by_name
-                .get(&name)
-                .copied()
+                .lookup_character_property_name(&name)
                 .unwrap_or_else(|| {
-                    let id = self.state.variables.variables.insert(value.clone());
-                    self.state
-                        .variables
-                        .character_property_by_name
-                        .insert(name.clone(), id);
-                    id
+                    self.state.variables.insert(
+                        VariableKind::CharacterProperty,
+                        name.clone(),
+                        value.clone(),
+                    )
                 });
 
-            table.character_property_by_index.insert(index, id);
+            table.character_property_by_index.insert(index as u32, id);
             table.character_property_by_name.insert(name, id);
         }
 
-        for (name, old_index) in variables.character_property_by_name {
-            let value = variables.variables.remove(old_index);
+        for (index, (name, value)) in variables.character_properties.into_iter().enumerate() {
+            let id = self
+                .state
+                .variables
+                .lookup_character_property_name(&name)
+                .unwrap_or_else(|| {
+                    self.state.variables.insert(
+                        VariableKind::CharacterProperty,
+                        name.clone(),
+                        value,
+                    )
+                });
 
-            let new_index = match self.state.variables.character_property_by_name.get(&name) {
-                Some(index) => *index,
-                None => {
-                    let index = self.state.variables.variables.insert(value);
-                    self.state
-                        .variables
-                        .character_property_by_name
-                        .insert(name.clone(), index);
-                    index
-                }
-            };
-
-            table
-                .character_property_by_index
-                .insert(old_index, new_index);
-            table.character_property_by_name.insert(name, new_index);
+            table.character_property_by_index.insert(index as u32, id);
+            table.character_property_by_name.insert(name, id);
         }
 
         // Events
-        for (index, event) in graph.data.string_data.event_names.iter().enumerate() {
-            let event = event.to_lowercase();
+        for (index, name) in graph.data.string_data.event_names.iter().enumerate() {
+            let name = name.to_lowercase();
 
             let id = self
                 .state
                 .events
-                .iter()
-                .position(|v| **v == event)
-                .unwrap_or_else(|| {
-                    let id = self.state.events.len();
-                    self.state.events.push(event.clone());
-                    id
-                });
+                .lookup_name(&name)
+                .unwrap_or_else(|| self.state.events.insert(name.clone()));
 
-            table.event_by_index.insert(index, id as i64);
-            table.event_by_name.insert(event.clone(), id as i64);
+            table.event_by_index.insert(index as u32, id);
+            table.event_by_name.insert(name, id);
         }
 
         let root = graph.root_generator.as_ref().map(|ptr| ptr.ptr);
@@ -224,12 +214,23 @@ impl Builder {
         Ok(())
     }
 
+    pub fn register_swap_generator(&mut self, file: HkxFile) -> Result<(), Error> {
+        // FIXME: This is hardcoded to a special file name for now,
+        // but we should probably add an enum as the filekey to more
+        // clearly express this.
+        self.register_file("#SWAP_GENERATOR", file)
+    }
+
     pub fn build(&mut self) -> Result<Result<AnimationGraph, Hint>, Error> {
         let mut nodes_ready = Vec::new();
 
         while let Some((file, _)) = self.stack.last() {
             let Some(state) = self.state.files.get(file) else {
-                return Ok(Err(Hint::NeedFile(file.clone())));
+                if file == "#SWAP_GENERATOR" {
+                    return Ok(Err(Hint::NeedSwapGenerator));
+                } else {
+                    return Ok(Err(Hint::NeedFile(file.clone())));
+                }
             };
 
             let (file, ptr) = self.stack.pop().unwrap();
@@ -346,7 +347,7 @@ impl Builder {
             nodes: self.state.nodes.clone(),
             root,
             variables: self.state.variables.clone(),
-            event_names: self.state.events.clone(),
+            events: self.state.events.clone(),
         }))
     }
 }
@@ -355,7 +356,7 @@ impl Builder {
 struct BuilderState {
     nodes: Slab<Node>,
     variables: VariableSet,
-    events: Vec<String>,
+    events: EventSet,
     files: HashMap<String, BuilderFileState>,
     props: HashMap<String, Value>,
 }
@@ -398,47 +399,41 @@ impl<'a> BuilderContext<'a> {
 
     fn get_variable(&self, binding_type: BindingType, variable_index: i32) -> Option<VariableId> {
         let state = self.state.files.get(self.file).unwrap();
-        let variable_index = variable_index as usize;
+        let Ok(index) = u32::try_from(variable_index) else {
+            return None;
+        };
 
         match binding_type {
-            BindingType::Variable => state
-                .index_table
-                .variable_by_index
-                .get(&variable_index)
-                .copied(),
+            BindingType::Variable => state.index_table.variable_by_index.get(&index).copied(),
             BindingType::CharacterProperty => state
                 .index_table
                 .character_property_by_index
-                .get(&variable_index)
+                .get(&index)
                 .copied(),
         }
     }
 
-    fn get_event(&self, index: i32) -> Option<i64> {
-        if index >= 0 && (index as usize) < self.state.events.len() {
-            let state = self.state.files.get(self.file).unwrap();
-            state
-                .index_table
-                .event_by_index
-                .get(&(index as usize))
-                .copied()
-        } else {
-            None
-        }
+    fn get_event(&self, index: i32) -> Option<EventId> {
+        let state = self.state.files.get(self.file).unwrap();
+        let Ok(index) = u32::try_from(index) else {
+            return None;
+        };
+
+        state.index_table.event_by_index.get(&index).copied()
     }
 
     fn create_node(&mut self, node: Node) -> NodeId {
         self.state.nodes.insert(node)
     }
 
-    fn create_event(&mut self, event: String) -> usize {
-        let id = self.state.events.len();
-        self.state.events.push(event);
-        id
+    fn create_event(&mut self, event: String) -> EventId {
+        self.state.events.insert(event)
     }
 
     fn create_variable(&mut self, value: Value) -> VariableId {
-        self.state.variables.variables.insert(value)
+        self.state
+            .variables
+            .insert(VariableKind::Variable, String::new(), value)
     }
 }
 
@@ -504,6 +499,7 @@ impl BuildNode for HkObject {
             Self::BSLookAtModifier(node) => Ok(Vec::new()),
             Self::BSGetTimeStepModifier(node) => Ok(Vec::new()),
             Self::BSBoneSwitchGenerator(node) => Ok(Vec::new()),
+            Self::DynamicAnimationTaggingGenerator(node) => node.dependencies(ctx),
             x => todo!("{:?}", x),
             _ => todo!(),
         }
@@ -554,6 +550,7 @@ impl BuildNode for HkObject {
             Self::BSLookAtModifier(node) => Ok(None),
             Self::BSGetTimeStepModifier(node) => Ok(None),
             Self::BSBoneSwitchGenerator(node) => Ok(None),
+            Self::DynamicAnimationTaggingGenerator(node) => node.build(state),
             _ => todo!(),
         }
     }
@@ -561,42 +558,56 @@ impl BuildNode for HkObject {
 
 impl BuildNode for BSBehaviorGraphSwapGenerator {
     fn dependencies(&self, ctx: &mut BuilderContext<'_>) -> Result<Vec<Dependency>, Error> {
-        Ok(self
-            .p_default_generator
-            .iter()
-            .map(|v| Dependency::Node(v.ptr))
-            .collect())
+        Ok(vec![Dependency::File("#SWAP_GENERATOR".to_owned())])
     }
 
-    fn build(&self, state: &mut BuilderContext<'_>) -> Result<Option<Node>, Error> {
-        let mut nodes = Vec::new();
+    fn build(&self, ctx: &mut BuilderContext<'_>) -> Result<Option<Node>, Error> {
+        let mut children = Vec::new();
 
-        if let Some(generator) = &self.p_default_generator {
-            if let Some(node) = state.get_node(generator.ptr) {
-                nodes.push(node);
+        if let Some(node) = ctx.get_file_root_node("#SWAP_GENERATOR") {
+            children.push(node);
+        }
+
+        Ok(Some(Node {
+            name: self.parent.node.name.clone(),
+            inner: NodeInner::List(List { nodes: children }),
+        }))
+    }
+}
+
+impl BuildNode for DynamicAnimationTaggingGenerator {
+    fn dependencies(&self, _ctx: &mut BuilderContext<'_>) -> Result<Vec<Dependency>, Error> {
+        if let Some(ptr) = &self.p_default_generator {
+            Ok(vec![Dependency::Node(ptr.ptr)])
+        } else {
+            Ok(vec![])
+        }
+    }
+
+    fn build(&self, ctx: &mut BuilderContext<'_>) -> Result<Option<Node>, Error> {
+        let mut children = Vec::new();
+
+        if let Some(ptr) = &self.p_default_generator {
+            if let Some(node) = ctx.get_node(ptr.ptr) {
+                children.push(node);
             }
         }
 
-        // Ok(Some(Node {
-        //     name: self.parent.node.name.clone(),
-        //     inner: NodeInner::List(nodes),
-        //     listeners: Vec::new(),
-        //     on_activate: Vec::new(),
-        //     on_deactivate: Vec::new(),
-        //     on_update: Vec::new(),
-        // }))
-        Ok(None)
+        Ok(Some(Node {
+            name: self.parent.node.name.clone(),
+            inner: NodeInner::List(List { nodes: children }),
+        }))
     }
 }
 
 #[derive(Clone, Debug, Default)]
 struct IndexTable {
-    variable_by_index: HashMap<usize, VariableId>,
+    variable_by_index: HashMap<u32, VariableId>,
     variable_by_name: HashMap<String, VariableId>,
-    character_property_by_index: HashMap<usize, usize>,
-    character_property_by_name: HashMap<String, usize>,
-    event_by_index: HashMap<usize, i64>,
-    event_by_name: HashMap<String, i64>,
+    character_property_by_index: HashMap<u32, VariableId>,
+    character_property_by_name: HashMap<String, VariableId>,
+    event_by_index: HashMap<u32, EventId>,
+    event_by_name: HashMap<String, EventId>,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
@@ -605,7 +616,11 @@ enum RootOrPtr {
     Root,
 }
 
-fn parse_event(ctx: &BuilderContext<'_>, event: &EventProperty) -> Event {
+fn parse_event(ctx: &BuilderContext<'_>, event: &EventProperty) -> Option<Event> {
+    if event.base.id < 0 {
+        return None;
+    }
+
     let payload = match &event.base.payload {
         Some(payload) => match ctx.hkx_file().get(payload.ptr) {
             Some(HkObject::StringEventPayload(payload)) => Value::String(payload.data.clone()),
@@ -614,11 +629,10 @@ fn parse_event(ctx: &BuilderContext<'_>, event: &EventProperty) -> Event {
         None => Value::None,
     };
 
-    Event {
-        // id: ctx.get_event(event.base.id).unwrap(),
-        id: event.base.id as i64,
+    Some(Event {
+        id: ctx.get_event(event.base.id).unwrap(),
         payload,
-    }
+    })
 }
 
 fn parse_condition(ctx: &BuilderContext<'_>, ptr: OpaquePtr) -> ValueExpression {

@@ -6,7 +6,6 @@ use openfo4_hkx::behavior::EventDrivenModifier;
 use crate::builder::{BuildNode, BuilderContext, Dependency, Error, UnknownVariableName};
 use crate::nodes::event_driven::EventDriven;
 use crate::nodes::{Node, NodeInner};
-use crate::{Value, ValueExpression};
 
 impl BuildNode for EventDrivenModifier {
     fn dependencies(&self, _ctx: &mut BuilderContext<'_>) -> Result<Vec<Dependency>, Error> {
@@ -40,13 +39,16 @@ impl BuildNode for EventDrivenModifier {
             return Ok(None);
         };
 
+        let on_event = ctx.get_event(self.activate_event_id);
+        let off_event = ctx.get_event(self.deactivate_event_id);
+
         Ok(Some(Node {
             name: self.parent.parent.node.name.clone(),
             inner: NodeInner::EventDriven(EventDriven {
                 node,
                 on_by_default: self.active_by_default,
-                on_event: self.activate_event_id as i64,
-                off_event: self.deactivate_event_id as i64,
+                on_event,
+                off_event,
                 is_active: false,
             }),
         }))

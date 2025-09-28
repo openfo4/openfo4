@@ -136,6 +136,7 @@ pub async fn spawn_actor(
 
     let behavior = load_behavior_data(
         &character.root_path,
+        &character.behavior_filename,
         subgraph.behavior_graph.as_str().unwrap(),
         &character,
         &search_paths,

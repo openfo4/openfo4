@@ -55,6 +55,7 @@ use thiserror::Error;
 
 use crate::behavior::{
     BSBoneSwitchGenerator, BSBoneSwitchGeneratorData, BSRandomAlarmModifier, BSRootTwistModifier,
+    DynamicAnimationTaggingGenerator,
 };
 use crate::mesh::{ConvexShape, DynamicCompoundShape};
 use crate::skeleton::HandIkDriverInfo;
@@ -502,7 +503,7 @@ impl HkxFile {
                     while reader.cursor.position() - u64::from(abs_data_start)
                         < u64::from(end_offset)
                     {
-                        let signature = ClassSignature::decode(&mut reader);
+                        let sig = u32::decode(&mut reader)?;
                         if u8::decode(&mut reader)? != 0x09 {
                             break;
                         }
@@ -510,20 +511,9 @@ impl HkxFile {
                         let src = reader.cursor.position() - u64::from(abs_data_start);
                         let name = ZString::decode(&mut reader)?;
 
-                        let signature = signature.map_err(|mut err| {
-                            if let ErrorKind::UnknownClassName(_, class_name) = &mut err.kind {
-                                *class_name = String::from_utf8_lossy(&name.0).to_string();
-                            }
-                            err
-                        });
+                        let signature = ClassSignature::from_sig_and_name(sig, &name)?;
 
-                        class_names.insert(
-                            src as u32,
-                            ClassName {
-                                signature: signature?,
-                                name,
-                            },
-                        );
+                        class_names.insert(src as u32, ClassName { signature, name });
                     }
                 }
                 Some("__data__") => {
@@ -738,116 +728,125 @@ enum ClassSignature {
     ConvexShape,
     BSBoneSwitchGenerator,
     BSBoneSwitchGeneratorData,
+    DynamicAnimationTaggingGenerator,
 }
 
-impl Decode for ClassSignature {
-    fn decode(reader: &mut Reader<'_>) -> Result<Self, Error> {
-        match u32::decode(reader)? {
-            0x33d42383 => Ok(Self::Class),
-            0xb0efa719 => Ok(Self::ClassMember),
-            0x8a3609cf => Ok(Self::ClassEnum),
-            0xce6f8a6c => Ok(Self::ClassEnumItem),
-            0x2772c11e => Ok(Self::RootLevelContainer),
-            0x26859f4c => Ok(Self::AnimationContainer),
-            0x8c3b5f7e => Ok(Self::SplineCompressedAnimation),
-            0x60f8e0b8 => Ok(Self::DefaultAnimatedReferenceFrame),
-            0x0faf9150 => Ok(Self::AnimationBinding),
-            0x1de13a73 => Ok(Self::MemoryResourceContainer),
-            0xca08c2ba => Ok(Self::ProjectStringData),
-            0x363c1159 => Ok(Self::ProjectData),
-            0xfec46c1f => Ok(Self::CharacterData),
-            0xeb5f7e25 => Ok(Self::VariableValueSet),
-            0x9f13052e => Ok(Self::MirroredSkeletionInfo),
-            0x0b9d8a52 => Ok(Self::CharacterStringData),
-            0xf79c429d => Ok(Self::FootIkDriverInfo),
-            0x2c9b5751 => Ok(Self::BoneWeightArray),
-            0x7c574867 => Ok(Self::RefCountedProperties),
-            0xb857718b => Ok(Self::PhysicsSystemData),
-            0x5f60d536 => Ok(Self::CompressedMeshShape),
-            0xa2bdfc59 => Ok(Self::CompressedMeshShapeData),
-            0x0f14e5f2 => Ok(Self::ScaledConvexShape),
-            0x3ce9b3e3 => Ok(Self::ConvexPolytopeShape),
-            0xe9191728 => Ok(Self::ShapeMassProperties),
-            0x4620d11c => Ok(Self::DynamicCompoundShape),
-            0xf33dc3cc => Ok(Self::DynamicCompoundShapeData),
-            0xfec1cedb => Ok(Self::Skeleton),
-            0x701ce72c => Ok(Self::PhysicsSceneData),
-            0xdc8f20ab => Ok(Self::RagdollData),
-            0x60a75f4c => Ok(Self::CapsuleShape),
-            0xb77d2036 => Ok(Self::RagdollConstraintData),
-            0x143dd400 => Ok(Self::PositionConstraintMotor),
-            0x51ea603a => Ok(Self::LimitedHingeConstraintData),
-            0xace9849c => Ok(Self::SkeletonMapper),
-            0xa3e47a9a => Ok(Self::BsMaterialProperties),
-            Node::ID => Ok(Self::Node),
-            Generator::ID => Ok(Self::Generator),
-            BehaviorGraph::ID => Ok(Self::BehaviorGraph),
-            StateMachine::ID => Ok(Self::StateMachine),
-            StateMachineStateInfo::ID => Ok(Self::StateMachineStateInfo),
-            ModifierGenerator::ID => Ok(Self::ModifierGenerator),
-            ModifierList::ID => Ok(Self::ModifierList),
-            EventDrivenModifier::ID => Ok(Self::EventDrivenModifier),
-            BSGetTimeStepModifier::ID => Ok(Self::BSGetTimeStepModifier),
-            VariableBindingSet::ID => Ok(Self::VariableBindingSet),
-            EvaluateExpressionModifier::ID => Ok(Self::EvaluateExpressionModifier),
-            ExpressionDataArray::ID => Ok(Self::ExpressionDataArray),
-            TwistModifier::ID => Ok(Self::TwistModifier),
-            BSInterpValueModifier::ID => Ok(Self::BSInterpValueModifier),
-            EventsFromRangeModifier::ID => Ok(Self::EventsFromRangeModifier),
-            EventRangeDataArray::ID => Ok(Self::EventRangeDataArray),
-            FootIkControlsModifier::ID => Ok(Self::FootIkControlsModifier),
-            BSLookAtModifier::ID => Ok(Self::BSLookAtModifier),
-            BSOffsetAnimationGenerator::ID => Ok(Self::BSOffsetAnimationGenerator),
-            BlenderGenerator::ID => Ok(Self::BlenderGenerator),
-            BlenderGeneratorChild::ID => Ok(Self::BlenderGeneratorChild),
-            BSBehaviorGraphSwapGenerator::ID => Ok(Self::BSBehaviorGraphSwapGenerator),
-            ClipGenerator::ID => Ok(Self::ClipGenerator),
-            StateMachineEventPropertyArray::ID => Ok(Self::StateMachineEventPropertyArray),
-            KeyframesBonesModifier::ID => Ok(Self::KeyframesBonesModifier),
-            BoneIndexArray::ID => Ok(Self::BoneIndexArray),
-            BSRagdollContactListenerModifier::ID => Ok(Self::BSRagdollContactListenerModifier),
-            BSIsActiveModifier::ID => Ok(Self::BSIsActiveModifier),
-            ClipTriggerArray::ID => Ok(Self::ClipTriggerArray),
-            ManualSelectorGenerator::ID => Ok(Self::ManualSelectorGenerator),
-            StateMachineTransitionInfoArray::ID => Ok(Self::StateMachineTransitionInfoArray),
-            BlendingTransitionEffect::ID => Ok(Self::BlendingTransitionEffect),
-            StringEventPayload::ID => Ok(Self::StringEventPayload),
-            GetUpModifier::ID => Ok(Self::GetUpModifier),
-            RigidBodyRagdollControlsModifier::ID => Ok(Self::RigidBodyRagdollControlsModifier),
-            BSModifyOnceModifier::ID => Ok(Self::BSModifyOnceModifier),
-            PoseMatchingGenerator::ID => Ok(Self::PoseMatchingGenerator),
-            PoweredRagdollControlsModifier::ID => Ok(Self::PoweredRagdollControlsModifier),
-            TimerModifier::ID => Ok(Self::TimerModifier),
-            BehaviorGraphData::ID => Ok(Self::BehaviorGraphData),
-            BehaviorGraphStringData::ID => Ok(Self::BehaviorGraphStringData),
-            BSAssignVariablesModifier::ID => Ok(Self::BSAssignVariablesModifier),
-            BSEventOnDeactivateModifier::ID => Ok(Self::BSEventOnDeactivateModifier),
-            LayerGenerator::ID => Ok(Self::LayerGenerator),
-            Layer::ID => Ok(Self::Layer),
-            BehaviorReferenceGenerator::ID => Ok(Self::BehaviorReferenceGenerator),
-            BSEventEveryNEventsModifier::ID => Ok(Self::BSEventEveryNEventsModifier),
-            BSCyclicBlendTransitionGenerator::ID => Ok(Self::BSCyclicBlendTransitionGenerator),
-            BSiStateTaggingGenerator::ID => Ok(Self::BSiStateTaggingGenerator),
-            HandIkControlsModifier::ID => Ok(Self::HandIkControlsModifier),
-            GetHandleOnBoneModifier::ID => Ok(Self::GetHandleOnBoneModifier),
-            BSTimerModifier::ID => Ok(Self::BSTimerModifier),
-            BSDirectAtModifier::ID => Ok(Self::BSDirectAtModifier),
-            ExpressionCondition::ID => Ok(Self::ExpressionCondition),
-            GeneratorTransitionEffect::ID => Ok(Self::GeneratorTransitionEffect),
-            ReferencePoseGenerator::ID => Ok(Self::ReferencePoseGenerator),
-            BSDirectAtCapturePoseModifier::ID => Ok(Self::BSDirectAtCapturePoseModifier),
-            MirrorModifier::ID => Ok(Self::MirrorModifier),
-            BSEventOnFalseToTrueModifier::ID => Ok(Self::BSEventOnFalseToTrueModifier),
-            BreakableConstraintData::ID => Ok(Self::BreakableConstraintData),
-            BSRootTwistModifier::ID => Ok(Self::BSRootTwistModifier),
-            BSRandomAlarmModifier::ID => Ok(Self::BSRandomAlarmModifier),
-            HandIkDriverInfo::ID => Ok(Self::HandIkDriverInfo),
-            ConvexShape::ID => Ok(Self::ConvexShape),
-            BSBoneSwitchGenerator::ID => Ok(Self::BSBoneSwitchGenerator),
-            BSBoneSwitchGeneratorData::ID => Ok(Self::BSBoneSwitchGeneratorData),
-            val => Err(Error {
-                kind: ErrorKind::UnknownClassName(val, "".to_owned()),
-                position: reader.cursor.position(),
+impl ClassSignature {
+    fn from_sig_and_name(sig: u32, name: &ZString) -> Result<Self, Error> {
+        match (sig, name.as_bytes()) {
+            (0x33d42383, _) => Ok(Self::Class),
+            (0xb0efa719, _) => Ok(Self::ClassMember),
+            (0x8a3609cf, _) => Ok(Self::ClassEnum),
+            (0xce6f8a6c, _) => Ok(Self::ClassEnumItem),
+            (0x2772c11e, _) => Ok(Self::RootLevelContainer),
+            (0x26859f4c, _) => Ok(Self::AnimationContainer),
+            (0x8c3b5f7e, _) => Ok(Self::SplineCompressedAnimation),
+            (0x60f8e0b8, _) => Ok(Self::DefaultAnimatedReferenceFrame),
+            (0x0faf9150, _) => Ok(Self::AnimationBinding),
+            (0x1de13a73, _) => Ok(Self::MemoryResourceContainer),
+            (0xca08c2ba, _) => Ok(Self::ProjectStringData),
+            (0x363c1159, _) => Ok(Self::ProjectData),
+            (0xfec46c1f, _) => Ok(Self::CharacterData),
+            (0xeb5f7e25, _) => Ok(Self::VariableValueSet),
+            (0x9f13052e, _) => Ok(Self::MirroredSkeletionInfo),
+            (0x0b9d8a52, _) => Ok(Self::CharacterStringData),
+            (0xf79c429d, _) => Ok(Self::FootIkDriverInfo),
+            (0x2c9b5751, _) => Ok(Self::BoneWeightArray),
+            (0x7c574867, _) => Ok(Self::RefCountedProperties),
+            (0xb857718b, _) => Ok(Self::PhysicsSystemData),
+            (0x5f60d536, _) => Ok(Self::CompressedMeshShape),
+            (0xa2bdfc59, _) => Ok(Self::CompressedMeshShapeData),
+            (0x0f14e5f2, _) => Ok(Self::ScaledConvexShape),
+            (0x3ce9b3e3, _) => Ok(Self::ConvexPolytopeShape),
+            (0xe9191728, _) => Ok(Self::ShapeMassProperties),
+            (0x4620d11c, _) => Ok(Self::DynamicCompoundShape),
+            (0xf33dc3cc, _) => Ok(Self::DynamicCompoundShapeData),
+            (0xfec1cedb, _) => Ok(Self::Skeleton),
+            (0x701ce72c, _) => Ok(Self::PhysicsSceneData),
+            (0xdc8f20ab, _) => Ok(Self::RagdollData),
+            (0x60a75f4c, _) => Ok(Self::CapsuleShape),
+            (0xb77d2036, _) => Ok(Self::RagdollConstraintData),
+            (0x143dd400, _) => Ok(Self::PositionConstraintMotor),
+            (0x51ea603a, _) => Ok(Self::LimitedHingeConstraintData),
+            (0xace9849c, _) => Ok(Self::SkeletonMapper),
+            (0xa3e47a9a, _) => Ok(Self::BsMaterialProperties),
+            (Node::ID, _) => Ok(Self::Node),
+            (Generator::ID, _) => Ok(Self::Generator),
+            (BehaviorGraph::ID, _) => Ok(Self::BehaviorGraph),
+            (StateMachine::ID, _) => Ok(Self::StateMachine),
+            (StateMachineStateInfo::ID, _) => Ok(Self::StateMachineStateInfo),
+            (ModifierGenerator::ID, _) => Ok(Self::ModifierGenerator),
+            (ModifierList::ID, _) => Ok(Self::ModifierList),
+            (EventDrivenModifier::ID, _) => Ok(Self::EventDrivenModifier),
+            (BSGetTimeStepModifier::ID, _) => Ok(Self::BSGetTimeStepModifier),
+            (VariableBindingSet::ID, _) => Ok(Self::VariableBindingSet),
+            (EvaluateExpressionModifier::ID, _) => Ok(Self::EvaluateExpressionModifier),
+            (ExpressionDataArray::ID, _) => Ok(Self::ExpressionDataArray),
+            (TwistModifier::ID, _) => Ok(Self::TwistModifier),
+            (BSInterpValueModifier::ID, _) => Ok(Self::BSInterpValueModifier),
+            (EventsFromRangeModifier::ID, _) => Ok(Self::EventsFromRangeModifier),
+            (EventRangeDataArray::ID, _) => Ok(Self::EventRangeDataArray),
+            (FootIkControlsModifier::ID, _) => Ok(Self::FootIkControlsModifier),
+            (BSLookAtModifier::ID, _) => Ok(Self::BSLookAtModifier),
+            (BSOffsetAnimationGenerator::ID, _) => Ok(Self::BSOffsetAnimationGenerator),
+            (BlenderGenerator::ID, _) => Ok(Self::BlenderGenerator),
+            (BlenderGeneratorChild::ID, _) => Ok(Self::BlenderGeneratorChild),
+            (BSBehaviorGraphSwapGenerator::ID, b"BSBehaviorGraphSwapGenerator") => {
+                Ok(Self::BSBehaviorGraphSwapGenerator)
+            }
+            (DynamicAnimationTaggingGenerator::ID, b"DynamicAnimationTaggingGenerator") => {
+                Ok(Self::DynamicAnimationTaggingGenerator)
+            }
+            (ClipGenerator::ID, _) => Ok(Self::ClipGenerator),
+            (StateMachineEventPropertyArray::ID, _) => Ok(Self::StateMachineEventPropertyArray),
+            (KeyframesBonesModifier::ID, _) => Ok(Self::KeyframesBonesModifier),
+            (BoneIndexArray::ID, _) => Ok(Self::BoneIndexArray),
+            (BSRagdollContactListenerModifier::ID, _) => Ok(Self::BSRagdollContactListenerModifier),
+            (BSIsActiveModifier::ID, _) => Ok(Self::BSIsActiveModifier),
+            (ClipTriggerArray::ID, _) => Ok(Self::ClipTriggerArray),
+            (ManualSelectorGenerator::ID, _) => Ok(Self::ManualSelectorGenerator),
+            (StateMachineTransitionInfoArray::ID, _) => Ok(Self::StateMachineTransitionInfoArray),
+            (BlendingTransitionEffect::ID, _) => Ok(Self::BlendingTransitionEffect),
+            (StringEventPayload::ID, _) => Ok(Self::StringEventPayload),
+            (GetUpModifier::ID, _) => Ok(Self::GetUpModifier),
+            (RigidBodyRagdollControlsModifier::ID, _) => Ok(Self::RigidBodyRagdollControlsModifier),
+            (BSModifyOnceModifier::ID, _) => Ok(Self::BSModifyOnceModifier),
+            (PoseMatchingGenerator::ID, _) => Ok(Self::PoseMatchingGenerator),
+            (PoweredRagdollControlsModifier::ID, _) => Ok(Self::PoweredRagdollControlsModifier),
+            (TimerModifier::ID, _) => Ok(Self::TimerModifier),
+            (BehaviorGraphData::ID, _) => Ok(Self::BehaviorGraphData),
+            (BehaviorGraphStringData::ID, _) => Ok(Self::BehaviorGraphStringData),
+            (BSAssignVariablesModifier::ID, _) => Ok(Self::BSAssignVariablesModifier),
+            (BSEventOnDeactivateModifier::ID, _) => Ok(Self::BSEventOnDeactivateModifier),
+            (LayerGenerator::ID, _) => Ok(Self::LayerGenerator),
+            (Layer::ID, _) => Ok(Self::Layer),
+            (BehaviorReferenceGenerator::ID, _) => Ok(Self::BehaviorReferenceGenerator),
+            (BSEventEveryNEventsModifier::ID, _) => Ok(Self::BSEventEveryNEventsModifier),
+            (BSCyclicBlendTransitionGenerator::ID, _) => Ok(Self::BSCyclicBlendTransitionGenerator),
+            (BSiStateTaggingGenerator::ID, _) => Ok(Self::BSiStateTaggingGenerator),
+            (HandIkControlsModifier::ID, _) => Ok(Self::HandIkControlsModifier),
+            (GetHandleOnBoneModifier::ID, _) => Ok(Self::GetHandleOnBoneModifier),
+            (BSTimerModifier::ID, _) => Ok(Self::BSTimerModifier),
+            (BSDirectAtModifier::ID, _) => Ok(Self::BSDirectAtModifier),
+            (ExpressionCondition::ID, _) => Ok(Self::ExpressionCondition),
+            (GeneratorTransitionEffect::ID, _) => Ok(Self::GeneratorTransitionEffect),
+            (ReferencePoseGenerator::ID, _) => Ok(Self::ReferencePoseGenerator),
+            (BSDirectAtCapturePoseModifier::ID, _) => Ok(Self::BSDirectAtCapturePoseModifier),
+            (MirrorModifier::ID, _) => Ok(Self::MirrorModifier),
+            (BSEventOnFalseToTrueModifier::ID, _) => Ok(Self::BSEventOnFalseToTrueModifier),
+            (BreakableConstraintData::ID, _) => Ok(Self::BreakableConstraintData),
+            (BSRootTwistModifier::ID, _) => Ok(Self::BSRootTwistModifier),
+            (BSRandomAlarmModifier::ID, _) => Ok(Self::BSRandomAlarmModifier),
+            (HandIkDriverInfo::ID, _) => Ok(Self::HandIkDriverInfo),
+            (ConvexShape::ID, _) => Ok(Self::ConvexShape),
+            (BSBoneSwitchGenerator::ID, _) => Ok(Self::BSBoneSwitchGenerator),
+            (BSBoneSwitchGeneratorData::ID, _) => Ok(Self::BSBoneSwitchGeneratorData),
+            _ => Err(Error {
+                kind: ErrorKind::UnknownClassName(
+                    sig,
+                    String::from_utf8_lossy(name.as_bytes()).to_string(),
+                ),
+                position: 0,
                 callstack: Vec::new(),
             }),
         }
@@ -964,6 +963,7 @@ pub enum HkObject {
     ConvexShape(ConvexShape),
     BSBoneSwitchGenerator(BSBoneSwitchGenerator),
     BSBoneSwitchGeneratorData(BSBoneSwitchGeneratorData),
+    DynamicAnimationTaggingGenerator(DynamicAnimationTaggingGenerator),
     Ignored,
 }
 
@@ -1238,6 +1238,10 @@ impl Decode for HkObject {
             }
             ClassSignature::BSBoneSwitchGeneratorData => {
                 BSBoneSwitchGeneratorData::decode(reader).map(Self::BSBoneSwitchGeneratorData)
+            }
+            ClassSignature::DynamicAnimationTaggingGenerator => {
+                DynamicAnimationTaggingGenerator::decode(reader)
+                    .map(Self::DynamicAnimationTaggingGenerator)
             }
         }
     }

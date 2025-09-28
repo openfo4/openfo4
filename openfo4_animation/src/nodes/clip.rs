@@ -72,16 +72,12 @@ impl GraphNode for Clip {
 
         for annotation in &anim.annotations {
             if annotation.time >= start_time && annotation.time <= end_time {
-                let Some(event_id) = ctx
-                    .event_names()
-                    .iter()
-                    .position(|v| v.to_lowercase() == annotation.event.to_lowercase())
-                else {
+                let Some(id) = ctx.events().lookup_name(&annotation.event.to_lowercase()) else {
                     continue;
                 };
 
                 ctx.send_event(Event {
-                    id: event_id as i64,
+                    id,
                     payload: Value::String(annotation.payload.clone()),
                 });
             }

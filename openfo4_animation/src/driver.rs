@@ -5,10 +5,10 @@ use std::time::Duration;
 use game_tracing::trace_span;
 use slab::Slab;
 
+use crate::events::EventSet;
 use crate::nodes::{Context, GraphNode, Node, NodeEvent, NodeInner, Property};
-use crate::{
-    AnimationGraph, AnimationSet, BoneWeights, Event, NodeId, Value, VariableId, VariableSet,
-};
+use crate::variables::VariableSet;
+use crate::{AnimationGraph, AnimationSet, BoneWeights, Event, NodeId, Value, VariableId};
 
 #[derive(Debug)]
 pub struct AnimationDriver {
@@ -162,7 +162,7 @@ impl AnimationDriver {
     }
 
     pub fn get_variable(&self, name: &str) -> Option<Value> {
-        self.variables.get_by_name(name)
+        self.variables.get_by_name(name).cloned()
     }
 
     pub fn get_variable_mut(&mut self, name: &str) -> Option<&mut Value> {
@@ -170,17 +170,12 @@ impl AnimationDriver {
     }
 
     pub fn send_event(&mut self, event: &str) {
-        let Some(event_id) = self
-            .graph
-            .event_names
-            .iter()
-            .position(|e| e.to_lowercase() == event.to_lowercase())
-        else {
+        let Some(id) = self.graph.events.lookup_name(&event.to_lowercase()) else {
             return;
         };
 
         let event = Event {
-            id: event_id as i64,
+            id,
             payload: Value::None,
         };
 
@@ -364,7 +359,7 @@ impl Context for UpdateContext<'_> {
         tracing::trace!(
             "Node {} sent event {}",
             &self.graph.nodes[self.node].name,
-            &self.graph.event_names[event.id as usize],
+            self.graph.event_name(event.id).unwrap_or(""),
         );
 
         self.queue.push_back(NodeEvent::Event(event));
@@ -374,12 +369,12 @@ impl Context for UpdateContext<'_> {
         &self.variables
     }
 
-    fn set_variable(&mut self, id: VariableId, value: Value) {
-        self.variables.variables[id] = value;
+    fn events(&self) -> &EventSet {
+        &self.graph.events
     }
 
-    fn event_names(&self) -> &[String] {
-        &self.graph.event_names
+    fn set_variable(&mut self, id: VariableId, value: Value) {
+        *self.variables.get_mut(id).unwrap() = value;
     }
 
     fn animations(&self) -> &AnimationSet {

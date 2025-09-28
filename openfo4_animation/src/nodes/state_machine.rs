@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::time::Duration;
 
+use crate::events::EventId;
 use crate::nodes::{Context, GraphNode};
 use crate::{BoneWeights, Event, NodeId, StartState, Value, ValueExpression, VariableId};
 
@@ -275,7 +276,7 @@ pub struct Transition {
     /// The destination state.
     pub to: usize,
     /// The event which will trigger this transition if recevied.
-    pub event_id: i64,
+    pub event_id: EventId,
     pub priority: i64,
     /// Blending transition duration in seconds.
     pub blend_duration: ValueExpression,

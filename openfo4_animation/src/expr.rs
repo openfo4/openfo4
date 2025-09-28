@@ -307,8 +307,8 @@ enum Unop {
 fn parse_literal(lit: Literal<'_>, variables: &VariableSet) -> ValueExpression {
     match lit {
         Literal::Str(ident) => {
-            let variable = variables.variables_by_name.get(ident).unwrap();
-            ValueExpression::Variable(*variable)
+            let variable = variables.lookup_variable_name(ident).unwrap();
+            ValueExpression::Variable(variable)
         }
         Literal::Int { base, value } => ValueExpression::Const(Value::I32(value)),
         Literal::Float { value } => ValueExpression::Const(Value::F32(value)),

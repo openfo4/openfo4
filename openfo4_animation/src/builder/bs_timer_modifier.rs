@@ -11,6 +11,10 @@ use crate::{Value, ValueExpression};
 
 impl BuildNode for BSTimerModifier {
     fn build(&self, ctx: &mut BuilderContext<'_>) -> Result<Option<Node>, Error> {
+        let Some(event) = parse_event(ctx, &self.alarm_event) else {
+            return Ok(None);
+        };
+
         let repeat = self.reset_alarm;
         let mut condition = ValueExpression::Const(Value::Bool(self.parent.enable));
         let mut time = ValueExpression::Const(Value::F32(self.alarm_time_seconds));
@@ -33,8 +37,6 @@ impl BuildNode for BSTimerModifier {
                 }
             }
         }
-
-        let event = parse_event(ctx, &self.alarm_event);
 
         Ok(Some(Node {
             name: self.parent.node.name.clone(),

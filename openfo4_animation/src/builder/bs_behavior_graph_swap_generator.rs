@@ -24,13 +24,10 @@ impl BuildNode for BSBehaviorGraphSwapGenerator {
             }
         }
 
-        Ok(Some(Node {
-            name: self.parent.node.name.clone(),
-            inner: NodeInner::List(nodes),
-            listeners: Vec::new(),
-            on_activate: Vec::new(),
-            on_deactivate: Vec::new(),
-            on_update: Vec::new(),
-        }))
+        Ok(None)
+        // Ok(Some(Node {
+        //     name: self.parent.node.name.clone(),
+        //     inner: NodeInner::List(nodes),
+        // }))
     }
 }

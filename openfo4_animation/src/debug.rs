@@ -46,21 +46,29 @@ pub fn draw(
     let mut buf = String::from("digraph {");
 
     for (index, node) in graph.node_references() {
+        let mut label = node.name.replace("\\", "\\\\");
         let mut color = "white";
 
         if let Some(index) = active.iter().position(|v| *v == node.id) {
             color = "green";
 
-            if weights[index].is_zero() {
+            let max_weight = match &weights[index] {
+                BoneWeights::Shared(v) => *v,
+                BoneWeights::Unique(v) => v.iter().copied().max_by(f32::total_cmp).unwrap_or(0.0),
+            };
+
+            if max_weight == 0.0 {
                 color = "red";
             }
+
+            write!(label, " [MW={}]", max_weight).unwrap();
         }
 
         writeln!(
             buf,
             "{} [label = \"{}\", fillcolor = {}]",
             index.index(),
-            node.name.replace("\\", "\\\\"),
+            label.replace("[", "\\[").replace("]", "\\]"),
             color,
         )
         .unwrap();

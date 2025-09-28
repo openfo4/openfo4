@@ -34,7 +34,9 @@ impl BuildNode for ClipGenerator {
         let mut triggers = Vec::new();
         if let Some(t) = &self.triggers {
             for trigger in &*t.triggers {
-                let event = parse_event(ctx, &trigger.event);
+                let Some(event) = parse_event(ctx, &trigger.event) else {
+                    continue;
+                };
 
                 let local_time = if trigger.relative_to_end_of_clip {
                     // The offset is from the end of the clip.

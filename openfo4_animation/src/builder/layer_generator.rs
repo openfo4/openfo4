@@ -67,11 +67,14 @@ impl BuildNode for LayerGenerator {
                 }
             }
 
+            let on_event = ctx.get_event(layer.on_event_id);
+            let off_event = ctx.get_event(layer.off_event_id);
+
             layers.push(Layer {
                 on_by_default: layer.on_by_default,
                 node,
-                on_event: layer.on_event_id as i64,
-                off_event: layer.off_event_id as i64,
+                on_event,
+                off_event,
                 is_active: false,
                 weight,
                 bone_weights,

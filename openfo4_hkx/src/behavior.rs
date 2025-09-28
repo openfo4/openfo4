@@ -2080,3 +2080,14 @@ pub struct BSBoneSwitchGeneratorData {
     // Offset: 56
     pub sp_bone_weight: Ptr<BoneWeightArray>,
 }
+
+#[derive(Clone, Debug, HkStruct)]
+#[signature(0xe7633191)]
+pub struct DynamicAnimationTaggingGenerator {
+    // Offset: 0
+    pub parent: Generator,
+    // Offset: 136
+    _pad0: u64,
+    // Offset: 144
+    pub p_default_generator: Option<Ptr<Generator>>,
+}

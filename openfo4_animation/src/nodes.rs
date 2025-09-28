@@ -13,7 +13,9 @@ pub mod timer;
 
 use std::time::Duration;
 
-use crate::{AnimationSet, BoneWeights, Event, NodeId, Value, VariableId, VariableSet};
+use crate::events::EventSet;
+use crate::variables::VariableSet;
+use crate::{AnimationSet, BoneWeights, Event, NodeId, Value, VariableId};
 
 pub trait GraphNode {
     /// Called once when the node is activated.
@@ -58,7 +60,7 @@ pub trait Context {
 
     fn variables(&self) -> &VariableSet;
 
-    fn event_names(&self) -> &[String];
+    fn events(&self) -> &EventSet;
 
     fn set_variable(&mut self, id: VariableId, value: Value);
 
