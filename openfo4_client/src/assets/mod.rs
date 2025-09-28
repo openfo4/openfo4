@@ -1,5 +1,4 @@
-mod animation;
-
+pub mod animation;
 pub mod data_file;
 pub mod material;
 pub mod nif_v2;

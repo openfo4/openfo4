@@ -1,25 +1,17 @@
 use std::borrow::Cow;
 use std::collections::{HashMap, VecDeque};
-use std::sync::Arc;
-use std::time::Duration;
 
 use game_common::components::Transform;
-use openfo4_animation::animation::{AnimationClip, AnimationClipFlags, Annotation, BlendMode};
+use openfo4_animation::animation::AnimationClip;
 use openfo4_animation::skeleton::{Bone, Skeleton};
 use openfo4_asset::{AssetLoader, Handle};
-use openfo4_hkx::animation::BlendHint;
 use openfo4_hkx::{HkObject, HkxFile};
 
 use crate::assets::Error;
+use crate::assets::animation::FileAnimationClip;
 use crate::assets::data_file::DataFile;
 use crate::assets::nif_v2::NifScene;
-use crate::loader::{FileLoader, fix_path};
-
-pub struct AnimationLoader {
-    file_loader: Arc<FileLoader>,
-}
-
-impl AnimationLoader {}
+use crate::loader::fix_path;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct SkeletonConfig<'a> {
@@ -89,83 +81,17 @@ pub async fn load(
 }
 
 pub async fn load_anim(loader: &AssetLoader, search_paths: &[&str]) -> Result<AnimationClip, ()> {
-    let mut clip = AnimationClip {
-        duration: Duration::ZERO,
-        num_bones: 0,
-        num_frames: 0,
-        keyframes: Vec::new(),
-        skeleton_bone_to_animation_bone: HashMap::new(),
-        annotations: Vec::new(),
-        flags: AnimationClipFlags::TRIM_LAST_FRAME_IF_LOOPING,
-        blend_mode: BlendMode::default(),
-    };
-
-    let mut file = None;
     for path in search_paths {
-        match loader.load::<DataFile<HkxFile>, _>(*path).await {
-            Ok(f) => {
-                file = Some(f);
-                break;
-            }
+        match loader.load::<FileAnimationClip, _>(*path).await {
+            Ok(clip) => return Ok(clip.0.clone()),
             Err(Error::NotFound) => continue,
             Err(err) => {
-                tracing::error!("{}", err);
+                tracing::error!("failed to load animation clip: {}", err);
             }
-        };
-    }
-
-    let Some(file) = file else {
-        return Err(());
-    };
-
-    for object in file.iter() {
-        match object {
-            HkObject::SplineCompressedAnimation(anim) => {
-                let keyframes = anim.decompress();
-
-                clip.duration = Duration::from_secs_f32(anim.animation.duration);
-                clip.num_bones = anim.animation.num_of_transform_tracks;
-                clip.num_frames = anim.num_frames;
-                clip.keyframes = keyframes
-                    .into_iter()
-                    .map(|t| Transform {
-                        translation: t.translation,
-                        rotation: t.rotation,
-                        scale: t.scale,
-                    })
-                    .collect();
-
-                for track in &*anim.animation.annotation_tracks {
-                    for annotation in &*track.annotations {
-                        let (event, payload) = annotation
-                            .text
-                            .split_once(".")
-                            .unwrap_or((&annotation.text, ""));
-
-                        clip.annotations.push(Annotation {
-                            time: Duration::from_secs_f32(annotation.time),
-                            event: event.to_owned(),
-                            payload: payload.to_owned(),
-                        });
-                    }
-                }
-            }
-            HkObject::AnimationBinding(binding) => {
-                for (index, bone) in binding.transform_track_to_bone_indices.iter().enumerate() {
-                    clip.skeleton_bone_to_animation_bone
-                        .insert(*bone as usize, index);
-                }
-
-                clip.blend_mode = match binding.blend_hint {
-                    BlendHint::Normal => BlendMode::Normal,
-                    BlendHint::Additive | BlendHint::AdditiveDeprecated => BlendMode::Additive,
-                };
-            }
-            _ => (),
         }
     }
 
-    Ok(clip)
+    Err(())
 }
 
 fn hkt_to_hkx(path: &str) -> Cow<'_, str> {

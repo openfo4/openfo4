@@ -41,6 +41,7 @@ use openfo4_physics::components::RigidBody;
 use openfo4_physics::controller::CharacterController;
 
 use crate::assets::FileLoadContext;
+use crate::assets::animation::FileAnimationClip;
 use crate::assets::data_file::{DataFile, DataFileContext};
 use crate::assets::nif_v2::NifLoaderContext;
 use crate::cell::CellId;
@@ -133,6 +134,7 @@ impl GameState {
         asset_loader.register::<DataFile<openfo4_dds::Image>>(DataFileContext {
             loader: file_loader.clone(),
         });
+        asset_loader.register::<FileAnimationClip>(());
 
         let actions = futures_lite::future::block_on(actions::Actions::load(&loader));
         dbg!(&actions);

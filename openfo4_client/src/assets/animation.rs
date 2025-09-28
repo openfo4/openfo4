@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::time::Duration;
 
 use game_common::components::Transform;
-use openfo4_animation::animation::{AnimationClip, AnimationClipFlags, BlendMode};
+use openfo4_animation::animation::{AnimationClip, AnimationClipFlags, Annotation, BlendMode};
 use openfo4_asset::{Asset, AssetLoader};
 use openfo4_hkx::animation::BlendHint;
 use openfo4_hkx::{HkObject, HkxFile};
@@ -10,6 +10,7 @@ use openfo4_hkx::{HkObject, HkxFile};
 use crate::assets::Error;
 use crate::assets::data_file::DataFile;
 
+/// An [`AnimationClip`] loaded from a data file.
 #[derive(Clone, Debug)]
 pub struct FileAnimationClip(pub AnimationClip);
 
@@ -52,6 +53,21 @@ impl Asset for FileAnimationClip {
                             scale: t.scale,
                         })
                         .collect();
+
+                    for track in &*anim.animation.annotation_tracks {
+                        for annotation in &*track.annotations {
+                            let (event, payload) = annotation
+                                .text
+                                .split_once(".")
+                                .unwrap_or((&annotation.text, ""));
+
+                            clip.annotations.push(Annotation {
+                                time: Duration::from_secs_f32(annotation.time),
+                                event: event.to_owned(),
+                                payload: payload.to_owned(),
+                            });
+                        }
+                    }
                 }
                 HkObject::AnimationBinding(binding) => {
                     for (index, bone) in binding.transform_track_to_bone_indices.iter().enumerate()

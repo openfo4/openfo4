@@ -1,6 +1,5 @@
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
-use std::ptr::eq;
 use std::sync::{Arc, OnceLock};
 
 use game_common::components::{Axis, Transform};
@@ -197,7 +196,7 @@ pub fn animation_test(
                         skeleton_instance,
                         AnimationDriver::new(Arc::new(behavior.graph)),
                         ActiveBehaviorGraphs(vec![
-                            // subgraph_filename.replace("meshes/", ""),
+                            subgraph_filename.replace("meshes/", ""),
                             "actors/character/behaviors/raiderrootbehavior.hkx".to_owned(),
                         ]),
                         RigidBody::FIXED,
