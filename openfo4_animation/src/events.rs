@@ -15,7 +15,8 @@ impl EventSet {
         let id = EventId(self.next_id);
         self.next_id += 1;
         assert_ne!(self.next_id, usize::MAX);
-        self.by_name.insert(name, id);
+        self.by_name.insert(name.clone(), id);
+        self.by_id.insert(id, name);
         id
     }
 
