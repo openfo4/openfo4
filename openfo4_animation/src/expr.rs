@@ -85,7 +85,11 @@ fn parse_expr_tokens(tokens: &mut &[Token<'_>], variables: &VariableSet) -> Valu
             Token::Bang => {
                 stack.shift(ExprOrOp::Op(Op::Unop(Unop::Not)));
             }
-            Token::Eq => todo!(),
+            // This seems to exist in expressions sometimes and
+            // looks just like a regular cmp eq?
+            Token::Eq => {
+                stack.shift(ExprOrOp::Op(Op::Binop(Binop::CmpEq)));
+            }
         }
 
         stack.reduce(&tokens);
