@@ -13,7 +13,7 @@ impl GraphNode for Layers {
         T: Context,
     {
         for layer in &mut self.layers {
-            if layer.on_by_default {
+            if layer.on_by_default.eval(ctx.variables()).to_bool().unwrap() {
                 ctx.activate_node(layer.node);
                 layer.is_active = true;
             }
@@ -82,7 +82,7 @@ impl GraphNode for Layers {
 #[derive(Clone, Debug)]
 pub struct Layer {
     pub node: NodeId,
-    pub on_by_default: bool,
+    pub on_by_default: ValueExpression,
     pub on_event: Option<EventId>,
     pub off_event: Option<EventId>,
     pub weight: ValueExpression,

@@ -47,6 +47,7 @@ impl BuildNode for LayerGenerator {
                     weights.bone_weights.iter().copied().collect(),
                 ))
             });
+            let mut on_by_default = ValueExpression::Const(Value::Bool(layer.on_by_default));
 
             if let Some(set) = &layer.parent.variable_binding_set {
                 for binding in &*set.bindings {
@@ -57,6 +58,7 @@ impl BuildNode for LayerGenerator {
                     match &*binding.member_path {
                         "weight" => weight = ValueExpression::Variable(variable),
                         "boneWeights" => bone_weights = Some(ValueExpression::Variable(variable)),
+                        "onByDefault" => on_by_default = ValueExpression::Variable(variable),
                         name => {
                             return Err(Error::UnknownVariableName(UnknownVariableName {
                                 class: "hkbLayer",
@@ -71,7 +73,7 @@ impl BuildNode for LayerGenerator {
             let off_event = ctx.get_event(layer.off_event_id);
 
             layers.push(Layer {
-                on_by_default: layer.on_by_default,
+                on_by_default,
                 node,
                 on_event,
                 off_event,
