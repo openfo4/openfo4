@@ -3,14 +3,10 @@ use std::hash::Hash;
 use std::num::NonZeroU16;
 use std::sync::Arc;
 
-use bitflags::bitflags;
-use futures_lite::FutureExt;
-use hashbrown::HashMap;
+use hashbrown::{HashMap, HashSet};
 use hecs::{Entity, World};
 use openfo4_animation::AnimationSet;
-use openfo4_animation::animation::AnimationClip;
 use openfo4_animation::driver::AnimationDriver;
-use openfo4_animation::skeleton::SkeletonInstance;
 use openfo4_asset::AssetLoader;
 use openfo4_core::WorldExt;
 use openfo4_esp::records::{
@@ -21,16 +17,19 @@ use openfo4_physics::components::{Collider, RigidBody};
 use rand::distr::Distribution;
 use rand::distr::weighted::WeightedIndex;
 
-use crate::assets::nif_v2::NifScene;
 use crate::state::animation_test::{ActorCharacter, load_behavior_data, load_character};
 use crate::state::equipment::{EquipmentItem, load_equipment_item};
 use crate::state::esp::EspLoader;
+use crate::state::hardcoded_formids::KEYWORD_FEMALE;
 use crate::systems::actor_value::ActorValueProperties;
 use crate::systems::controller::ControllerShape;
-use crate::systems::equipment::{Equipment, EquippedItem, equip_item};
+use crate::systems::equipment::{Equipment, equip_item};
 
 // FIXME: Unhardcode this guy.
 const PLAYER_LEVEL: u16 = 1000;
+
+#[derive(Clone, Debug)]
+pub struct ActorKeywords(pub HashSet<FormId>);
 
 #[derive(Debug)]
 pub struct Actor {
@@ -40,6 +39,7 @@ pub struct Actor {
     controller: ControllerShape,
     skin: Option<EquipmentItem>,
     properties: ActorValueProperties,
+    keywords: ActorKeywords,
 }
 
 impl Actor {
@@ -75,6 +75,7 @@ impl Actor {
                     instance,
                     equipment,
                     self.properties,
+                    self.keywords,
                 ),
             )
             .unwrap();
@@ -149,6 +150,9 @@ pub async fn spawn_actor(
         skin = Some(load_equipment_item(loader, esp_loader, skin_form, &[], props.female).await);
     }
 
+    let mut keywords: HashSet<FormId> = props.keywords.into_iter().collect();
+    keywords.extend(data.keywords.iter().flatten());
+
     Ok(Actor {
         driver: AnimationDriver::new(Arc::new(behavior.graph)),
         clips: behavior.clips,
@@ -159,6 +163,7 @@ pub async fn spawn_actor(
         character,
         skin,
         properties,
+        keywords: ActorKeywords(keywords),
     })
 }
 
@@ -347,12 +352,18 @@ async fn resolve_actor_props(
         }
     }
 
+    // Special keyword that is present on all female actors.
+    if female && !keywords.contains(&KEYWORD_FEMALE) {
+        keywords.push(KEYWORD_FEMALE);
+    }
+
     ActorProps {
         race,
         skin,
         female,
         class,
         properties,
+        keywords,
     }
 }
 
@@ -364,6 +375,7 @@ struct ActorProps {
     female: bool,
     class: Option<FormId>,
     properties: ActorValueProperties,
+    keywords: Vec<FormId>,
 }
 
 #[derive(Clone, Debug)]

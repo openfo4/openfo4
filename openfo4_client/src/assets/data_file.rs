@@ -9,7 +9,7 @@ use openfo4_nif::Nif;
 use openfo4_nif::bgsm::Bgsm;
 
 use super::Error;
-use crate::loader::FileLoader;
+use crate::loader::{FileLoader, fix_path};
 
 #[derive(Clone, Debug)]
 pub struct DataFileContext {
@@ -43,10 +43,12 @@ where
 
     async fn load(
         _loader: &AssetLoader,
-        key: &Self::Key,
+        path: &Self::Key,
         ctx: &Self::Context,
     ) -> Result<Self, Self::Error> {
-        let mut reader = ctx.loader.open(&key).map_err(|err| match err {
+        let path = fix_path(path);
+
+        let mut reader = ctx.loader.open(&path).map_err(|err| match err {
             crate::loader::Error::NotFound(_) => Error::NotFound,
             err => Error::from(err),
         })?;

@@ -29,6 +29,7 @@ use crate::shared::SharedState;
 use crate::state::anim_starter::{ActiveBehaviorGraphs, AnimationEventQueue};
 use crate::state::animation::{self, SkeletonConfig, load_anim};
 use crate::state::esp::EspLoader;
+use crate::state::npc::spawn_actor;
 use crate::systems::PlayerControlState;
 use crate::systems::controller::ControllerShape;
 use crate::systems::equipment::{Equipment, equip_item};
@@ -92,43 +93,49 @@ pub fn animation_test(
         .iter()
         .enumerate()
         {
-            let race = futures_lite::future::block_on(
-                esp_loader.lookup(Some(RecordKind::Race), FormId(0x13746)),
-            )
-            .unwrap();
+            let actor =
+                futures_lite::future::block_on(spawn_actor(asset_loader, esp_loader, FormId(0x7)))
+                    .unwrap();
 
-            let race = match race.data {
-                RecordData::Race(race) => race,
-                _ => todo!(),
-            };
+            let root = actor.instantiate(world);
 
-            let character =
-                futures_lite::future::block_on(load_character(&race, false, asset_loader)).unwrap();
-            let behavior = futures_lite::future::block_on(load_behavior_data(
-                &character.root_path,
-                behavior_filename,
-                subgraph_filename,
-                &character,
-                &search_paths,
-                asset_loader,
-            ))
-            .unwrap();
+            // let race = futures_lite::future::block_on(
+            //     esp_loader.lookup(Some(RecordKind::Race), FormId(0x13746)),
+            // )
+            // .unwrap();
+
+            // let race = match race.data {
+            //     RecordData::Race(race) => race,
+            //     _ => todo!(),
+            // };
+
+            // let character =
+            //     futures_lite::future::block_on(load_character(&race, false, asset_loader)).unwrap();
+            // let behavior = futures_lite::future::block_on(load_behavior_data(
+            //     &character.root_path,
+            //     behavior_filename,
+            //     subgraph_filename,
+            //     &character,
+            //     &search_paths,
+            //     asset_loader,
+            // ))
+            // .unwrap();
 
             let inventory = Inventory::default();
             let armor = FormId(0x001BBCB5);
 
-            let root = world.spawn((Transform::from(*offset),));
-            let skeleton_instance = character.instantiate(root, world).skeleton;
+            // let root = world.spawn((Transform::from(*offset),));
+            // let skeleton_instance = character.instantiate(root, world).skeleton;
 
             events.send(AddItemEvent {
                 actor: root,
                 item: armor,
                 attachments: Vec::new(),
             });
-            events.send(EquipItemEvent {
-                actor: root,
-                item: armor,
-            });
+            // events.send(EquipItemEvent {
+            //     actor: root,
+            //     item: armor,
+            // });
 
             events.send(AddItemEvent {
                 actor: root,
@@ -147,40 +154,43 @@ pub fn animation_test(
                 item: FormId(0x9983b),
             });
 
-            let equipment = Equipment::default();
+            world.insert_one(root, inventory).unwrap();
+            world.insert_one(root, Transform::from(*offset)).unwrap();
 
-            let collider = world.spawn((
-                character.controller_offset,
-                Collider {
-                    friction: 1.0,
-                    restitution: 0.0,
-                    shape: character.controller_shape.clone(),
-                },
-            ));
+            // let equipment = Equipment::default();
 
-            world
-                .insert(
-                    root,
-                    (
-                        behavior.clips,
-                        skeleton_instance,
-                        AnimationDriver::new(Arc::new(behavior.graph)),
-                        ActiveBehaviorGraphs(vec![
-                            subgraph_filename.replace("meshes/", ""),
-                            "actors/character/behaviors/raiderrootbehavior.hkx".to_owned(),
-                        ]),
-                        RigidBody::FIXED,
-                        ControllerShape {
-                            offset: character.controller_offset,
-                            shape: character.controller_shape,
-                        },
-                        equipment,
-                        inventory,
-                    ),
-                )
-                .unwrap();
+            // let collider = world.spawn((
+            //     character.controller_offset,
+            //     Collider {
+            //         friction: 1.0,
+            //         restitution: 0.0,
+            //         shape: character.controller_shape.clone(),
+            //     },
+            // ));
 
-            world.add_children(root, collider);
+            // world
+            //     .insert(
+            //         root,
+            //         (
+            //             behavior.clips,
+            //             skeleton_instance,
+            //             AnimationDriver::new(Arc::new(behavior.graph)),
+            //             ActiveBehaviorGraphs(vec![
+            //                 subgraph_filename.replace("meshes/", ""),
+            //                 "actors/character/behaviors/raiderrootbehavior.hkx".to_owned(),
+            //             ]),
+            //             RigidBody::FIXED,
+            //             ControllerShape {
+            //                 offset: character.controller_offset,
+            //                 shape: character.controller_shape,
+            //             },
+            //             equipment,
+            //             inventory,
+            //         ),
+            //     )
+            //     .unwrap();
+
+            // world.add_children(root, collider);
 
             if index == 0 {
                 crate::systems::camera::attach_camera(world, root);
@@ -577,7 +587,7 @@ pub async fn load_behavior_data(
         let file_stem = path.split("/").last().unwrap_or(&path);
         let search_paths: Vec<_> = search_paths
             .iter()
-            .map(|v| format!("meshes/{}/{}", v, file_stem))
+            .map(|v| format!("meshes/{}/{}", fix_path(v), file_stem))
             .collect();
         let search_paths: Vec<_> = search_paths.iter().map(|v| v.as_str()).collect();
 
