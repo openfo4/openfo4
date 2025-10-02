@@ -208,6 +208,15 @@ impl<T> DerefMut for SubRecordArray<T> {
     }
 }
 
+impl<T> IntoIterator for SubRecordArray<T> {
+    type IntoIter = <Vec<T> as IntoIterator>::IntoIter;
+    type Item = T;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.into_iter()
+    }
+}
+
 /// A partial subrecord that is entered with a marker field.
 ///
 /// For example there are commonly `MNAM` and `FNAM` fields for male and female respectively, which
