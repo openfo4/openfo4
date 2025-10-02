@@ -5,6 +5,7 @@ pub mod animation_test;
 pub mod asset;
 pub mod equipment;
 pub mod esp;
+pub mod hardcoded_formids;
 pub mod item;
 pub mod level;
 pub mod npc;
