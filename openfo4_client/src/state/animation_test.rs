@@ -13,6 +13,7 @@ use openfo4_animation::skeleton::{BoneMarker, Skeleton, SkeletonInstance};
 use openfo4_animation::{AnimationGraph, AnimationSet, Value};
 use openfo4_asset::{AssetLoader, Handle};
 use openfo4_core::WorldExt;
+use openfo4_core::events::EventBus;
 use openfo4_esp::records::Race;
 use openfo4_esp::{FormId, RecordData, RecordKind};
 use openfo4_hkx::behavior::VariableType;
@@ -31,6 +32,7 @@ use crate::state::esp::EspLoader;
 use crate::systems::PlayerControlState;
 use crate::systems::controller::ControllerShape;
 use crate::systems::equipment::{Equipment, equip_item};
+use crate::systems::inventory::{AddItemEvent, EquipItemEvent, Inventory, ItemStack};
 
 #[derive(Clone, Debug)]
 pub struct SkinInstance {
@@ -43,8 +45,7 @@ pub struct SkinInstance {
 }
 
 pub fn animation_test(
-    loader: &FileLoader,
-    shared: &SharedState,
+    events: &mut EventBus,
     world: &mut World,
     asset_loader: &AssetLoader,
     esp_loader: &EspLoader,
@@ -113,71 +114,40 @@ pub fn animation_test(
             ))
             .unwrap();
 
+            let inventory = Inventory::default();
+            let armor = FormId(0x001BBCB5);
+
             let root = world.spawn((Transform::from(*offset),));
             let skeleton_instance = character.instantiate(root, world).skeleton;
 
-            let mut equipment = Equipment::default();
+            events.send(AddItemEvent {
+                actor: root,
+                item: armor,
+                attachments: Vec::new(),
+            });
+            events.send(EquipItemEvent {
+                actor: root,
+                item: armor,
+            });
 
-            for model_path in ["meshes/armor/armoredcoat/glovesf.nif"] {
-                let scene =
-                    futures_lite::future::block_on(asset_loader.load::<NifScene, _>(model_path))
-                        .unwrap();
+            events.send(AddItemEvent {
+                actor: root,
+                item: FormId(0x9983b),
+                // OMODs
+                attachments: vec![
+                    FormId(0x12eced),
+                    FormId(0x9983d),
+                    FormId(0x99836),
+                    FormId(0x1877fa),
+                    FormId(0x4f21d),
+                ],
+            });
+            events.send(EquipItemEvent {
+                actor: root,
+                item: FormId(0x9983b),
+            });
 
-                equip_item(
-                    root,
-                    &scene,
-                    &skeleton_instance,
-                    world,
-                    &mut equipment,
-                    None,
-                );
-            }
-
-            let base =
-                futures_lite::future::block_on(asset_loader.load::<NifScene, _>(
-                    "meshes/weapons/laserweapons/laserweapondummyreceiver.nif",
-                ))
-                .unwrap();
-            let base = equip_item(root, &base, &skeleton_instance, world, &mut equipment, None);
-            let receiver = futures_lite::future::block_on(
-                asset_loader.load::<NifScene, _>("meshes/weapons/laserweapons/laserreceiver.nif"),
-            )
-            .unwrap();
-            let receiver = equip_item(
-                root,
-                &receiver,
-                &skeleton_instance,
-                world,
-                &mut equipment,
-                Some(base),
-            );
-
-            let barrel = futures_lite::future::block_on(
-                asset_loader
-                    .load::<NifScene, _>("meshes/weapons/laserweapons/laserpistolbarrel.nif"),
-            )
-            .unwrap();
-            let barrel = equip_item(
-                root,
-                &barrel,
-                &skeleton_instance,
-                world,
-                &mut equipment,
-                Some(receiver),
-            );
-
-            let grip = futures_lite::future::block_on(
-                asset_loader.load::<NifScene, _>("meshes/weapons/laserweapons/laserpistolgrip.nif"),
-            )
-            .unwrap();
-            let grip = equip_item(
-                root,
-                &grip,
-                &skeleton_instance,
-                world,
-                &mut equipment,
-                Some(receiver),
-            );
+            let equipment = Equipment::default();
 
             let collider = world.spawn((
                 character.controller_offset,
@@ -205,6 +175,7 @@ pub fn animation_test(
                             shape: character.controller_shape,
                         },
                         equipment,
+                        inventory,
                     ),
                 )
                 .unwrap();

@@ -2,9 +2,10 @@ use std::collections::VecDeque;
 
 use game_common::components::Transform;
 use hashbrown::{HashMap, HashSet};
-use hecs::{Entity, World};
+use hecs::{CommandBuffer, Entity, World};
 use openfo4_animation::skeleton::SkeletonInstance;
 use openfo4_core::WorldExt;
+use openfo4_core::hierarchy::Children;
 use slab::Slab;
 
 use crate::assets::nif_v2::NifScene;

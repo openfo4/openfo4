@@ -23,7 +23,7 @@ use rand::distr::weighted::WeightedIndex;
 
 use crate::assets::nif_v2::NifScene;
 use crate::state::animation_test::{ActorCharacter, load_behavior_data, load_character};
-use crate::state::equipment::{EquipmentItem, load_armor};
+use crate::state::equipment::{EquipmentItem, load_equipment_item};
 use crate::state::esp::EspLoader;
 use crate::systems::actor_value::ActorValueProperties;
 use crate::systems::controller::ControllerShape;
@@ -146,7 +146,7 @@ pub async fn spawn_actor(
 
     let mut skin = None;
     if let Some(skin_form) = props.skin.or(data.skin) {
-        skin = Some(load_armor(loader, esp_loader, skin_form, props.female).await);
+        skin = Some(load_equipment_item(loader, esp_loader, skin_form, &[], props.female).await);
     }
 
     Ok(Actor {

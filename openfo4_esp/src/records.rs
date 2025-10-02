@@ -5365,7 +5365,6 @@ impl ObjectModificationProperty {
 
         let function_type = u8::decode(&mut buf)?;
         <[u8; 3]>::decode(&mut buf)?;
-        dbg!(&value_type);
         let function_type = match value_type {
             ObjectModificationValueType::Float => match function_type {
                 0 => ObjectModificationFunctionType::Set,

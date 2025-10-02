@@ -5,6 +5,7 @@ pub mod animation_test;
 pub mod asset;
 pub mod equipment;
 pub mod esp;
+pub mod item;
 pub mod level;
 pub mod npc;
 pub mod skinning;
@@ -209,8 +210,7 @@ impl GameState {
         self.level.update(&mut self.world, &mut self.events);
 
         animation_test::animation_test(
-            &self.loader,
-            &self.shared,
+            &mut self.event_bus,
             &mut self.world,
             &self.asset_loader,
             &self.esp_loader,
@@ -231,7 +231,7 @@ impl GameState {
             self.anim_event.take(),
         );
 
-        // systems::hierarchy::compute_global_transform(&mut self.world);
+        systems::hierarchy::compute_global_transform(&mut self.world);
         self.physics.step(&mut self.world);
 
         skinning::mesh_skinning(&mut self.world, &self.shared);
@@ -241,10 +241,19 @@ impl GameState {
         systems::camera::update_camera_transform(&mut self.world);
 
         systems::lights::update_flickering_lights(&mut self.world, time.delta());
+        systems::inventory::handle_inventory_events(
+            &mut self.world,
+            &self.asset_loader,
+            &self.esp_loader,
+            &mut self.event_bus,
+            &self.pool,
+        );
 
         if self.physics_debug {
             self.physics.render_debug(gizmos);
         }
+
+        self.event_bus.clear();
     }
 
     pub fn world(&self) -> &World {
