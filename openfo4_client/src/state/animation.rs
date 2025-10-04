@@ -1,10 +1,16 @@
 use std::borrow::Cow;
 use std::collections::{HashMap, VecDeque};
+use std::sync::Arc;
 
 use game_common::components::Transform;
+use game_tracing::trace_span;
+use hashbrown::HashSet;
+use hecs::{CommandBuffer, World};
 use openfo4_animation::animation::AnimationClip;
+use openfo4_animation::driver::AnimationDriver;
 use openfo4_animation::skeleton::{Bone, Skeleton};
 use openfo4_asset::{AssetLoader, Handle};
+use openfo4_esp::records::{SubgraphPerspective, SubgraphRole};
 use openfo4_hkx::{HkObject, HkxFile};
 
 use crate::assets::Error;
@@ -12,6 +18,10 @@ use crate::assets::animation::FileAnimationClip;
 use crate::assets::data_file::DataFile;
 use crate::assets::nif_v2::NifScene;
 use crate::loader::fix_path;
+use crate::state::anim_starter::ActiveBehaviorGraphs;
+use crate::state::animation_test::load_behavior_data;
+use crate::state::npc::{ActorAnimationGraphData, ActorAnimationGraphs, ActorKeywords};
+use crate::systems::inventory::Inventory;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct SkeletonConfig<'a> {
@@ -80,10 +90,13 @@ pub async fn load(
     (nif_skeleton, skeleton)
 }
 
-pub async fn load_anim(loader: &AssetLoader, search_paths: &[&str]) -> Result<AnimationClip, ()> {
+pub async fn load_anim(
+    loader: &AssetLoader,
+    search_paths: &[&str],
+) -> Result<Handle<FileAnimationClip>, ()> {
     for path in search_paths {
         match loader.load::<FileAnimationClip, _>(*path).await {
-            Ok(clip) => return Ok(clip.0.clone()),
+            Ok(clip) => return Ok(clip),
             Err(Error::NotFound) => continue,
             Err(err) => {
                 tracing::error!("failed to load animation clip: {}", err);
@@ -206,3 +219,114 @@ fn merge_skeletons(nif: &NifScene, hkx: &Skeleton) -> Skeleton {
 
     skeleton
 }
+
+pub fn update_actor_animation_graphs(world: &mut World, loader: &AssetLoader) {
+    let _span = trace_span!("update_actor_animation_graphs").entered();
+
+    let mut buffer = CommandBuffer::new();
+
+    for (entity, (graphs, keywords, inventory, active_graph)) in world.query_mut::<(
+        &ActorAnimationGraphData,
+        &ActorKeywords,
+        &Inventory,
+        Option<&ActiveAnimationGraph>,
+    )>() {
+        let mut active_index = None;
+        let mut max_actor_keywords = 0;
+        let mut max_target_keywords = 0;
+
+        let is_weapon_drawn = inventory.items().any(|v| v.drawn);
+        let weapon_keywords: HashSet<_> = inventory
+            .items()
+            .filter(|v| v.drawn)
+            .map(|v| v.combined_keywords.iter())
+            .flatten()
+            .copied()
+            .collect();
+
+        for (index, graph) in graphs.subgraphs.iter().enumerate() {
+            let expected_role = if is_weapon_drawn {
+                SubgraphRole::Weapon
+            } else {
+                SubgraphRole::Mt
+            };
+
+            if graph.flags.role != expected_role {
+                continue;
+            }
+
+            if !matches!(graph.flags.perspective, SubgraphPerspective::Third) {
+                continue;
+            }
+
+            if !graph
+                .actor_keywords
+                .iter()
+                .all(|kw| keywords.0.contains(kw))
+            {
+                continue;
+            }
+
+            if !graph
+                .target_keywords
+                .iter()
+                .all(|kw| weapon_keywords.contains(kw))
+            {
+                continue;
+            }
+
+            if max_actor_keywords > graph.actor_keywords.len() {
+                continue;
+            }
+
+            if max_target_keywords > graph.target_keywords.len() {
+                continue;
+            }
+
+            active_index = Some(index);
+            max_actor_keywords = graph.actor_keywords.len();
+            max_target_keywords = graph.target_keywords.len();
+        }
+
+        let Some(active_index) = active_index else {
+            continue;
+        };
+
+        if active_graph.is_some_and(|v| v.0 == active_index) {
+            continue;
+        }
+
+        let graph = &graphs.subgraphs[active_index];
+
+        let search_paths = graph
+            .search_paths
+            .iter()
+            .map(|v| v.as_str())
+            .collect::<Vec<_>>();
+
+        let behavior = futures_lite::future::block_on(load_behavior_data(
+            &graphs.root_path,
+            &graphs.root_behavior_path,
+            &graph.behavior,
+            &graphs.character,
+            &search_paths,
+            loader,
+        ))
+        .unwrap();
+
+        buffer.insert(
+            entity,
+            (
+                ActiveAnimationGraph(active_index),
+                AnimationDriver::new(Arc::new(behavior.graph)),
+                behavior.clips,
+                ActiveBehaviorGraphs(behavior.behavior_files.clone()),
+            ),
+        );
+    }
+
+    buffer.run_on(world);
+}
+
+#[derive(Copy, Clone, Debug)]
+struct ActiveAnimationGraph(usize);

@@ -10,7 +10,7 @@ use hecs::{Entity, World};
 use openfo4_animation::builder::{Builder, Hint};
 use openfo4_animation::driver::AnimationDriver;
 use openfo4_animation::skeleton::{BoneMarker, Skeleton, SkeletonInstance};
-use openfo4_animation::{AnimationGraph, AnimationSet, Value};
+use openfo4_animation::{AnimationGraph, Value};
 use openfo4_asset::{AssetLoader, Handle};
 use openfo4_core::WorldExt;
 use openfo4_core::events::EventBus;
@@ -20,6 +20,7 @@ use openfo4_hkx::behavior::VariableType;
 use openfo4_hkx::{HkObject, HkxFile};
 use openfo4_physics::components::{Capsule, Collider, ColliderShape, RigidBody};
 
+use crate::assets::animation::AnimationSet;
 use crate::assets::data_file::DataFile;
 use crate::assets::nif_v2::{Instantiate, NIF_TO_METERS, NifScene};
 use crate::cell::CellId;
@@ -132,10 +133,10 @@ pub fn animation_test(
                 item: armor,
                 attachments: Vec::new(),
             });
-            // events.send(EquipItemEvent {
-            //     actor: root,
-            //     item: armor,
-            // });
+            events.send(EquipItemEvent {
+                actor: root,
+                item: armor,
+            });
 
             events.send(AddItemEvent {
                 actor: root,
@@ -518,6 +519,7 @@ pub struct SpawnedActor {
 pub struct ActorBehaviorData {
     pub graph: AnimationGraph,
     pub clips: AnimationSet,
+    pub behavior_files: Vec<String>,
 }
 
 pub async fn load_behavior_data(
@@ -545,6 +547,8 @@ pub async fn load_behavior_data(
 
     let mut builder = Builder::new((**behavior_file).clone(), character.props.clone()).unwrap();
 
+    let mut behavior_files = Vec::new();
+
     let graph = loop {
         match builder.build().unwrap() {
             Ok(graph) => break graph,
@@ -552,7 +556,10 @@ pub async fn load_behavior_data(
                 let p = format!("{}/{}", root_path, path.to_lowercase().replace("\\", "/"));
 
                 let file = match loader.load::<DataFile<HkxFile>, _>(&p).await {
-                    Ok(f) => f,
+                    Ok(f) => {
+                        behavior_files.push(p);
+                        f
+                    }
                     Err(err) => {
                         // The game seems to also load from this directory for all races.
                         // This doesn't seem to be referenced anywhere, so it might be hardcoded?
@@ -560,7 +567,9 @@ pub async fn load_behavior_data(
                         let p =
                             format!("{}/{}", shared_path, path.to_lowercase().replace("\\", "/"));
 
-                        loader.load::<DataFile<HkxFile>, _>(&p).await.unwrap()
+                        let f = loader.load::<DataFile<HkxFile>, _>(&p).await.unwrap();
+                        behavior_files.push(p);
+                        f
                     }
                 };
 
@@ -576,6 +585,17 @@ pub async fn load_behavior_data(
             }
         }
     };
+
+    behavior_files.push(behavior_path);
+    behavior_files.push(subgraph_path);
+    for file in &mut behavior_files {
+        *file = file
+            .strip_prefix("/")
+            .unwrap_or(file)
+            .strip_prefix("meshes/")
+            .unwrap_or(file)
+            .to_owned();
+    }
 
     let mut clips = HashMap::new();
     for file in graph.animation_files() {
@@ -608,7 +628,8 @@ pub async fn load_behavior_data(
 
     Ok(ActorBehaviorData {
         graph,
-        clips: AnimationSet(Arc::new(clips)),
+        clips: AnimationSet(clips),
+        behavior_files,
     })
 }
 

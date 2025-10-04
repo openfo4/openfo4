@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use game_tasks::TaskPool;
-use hashbrown::HashMap;
+use hashbrown::{HashMap, HashSet};
 use hecs::{Entity, World};
 use openfo4_animation::skeleton::SkeletonInstance;
 use openfo4_asset::AssetLoader;
@@ -52,6 +52,10 @@ pub struct ItemStack {
     pub count: u64,
     pub attachments: Vec<FormId>,
     pub equipped: bool,
+    /// If the weapon is currently drawn.
+    pub drawn: bool,
+    pub base_keywords: HashSet<FormId>,
+    pub combined_keywords: HashSet<FormId>,
 }
 
 impl ItemStack {
@@ -94,6 +98,9 @@ pub fn handle_inventory_events(
             count: 1,
             attachments: event.attachments.clone(),
             equipped: false,
+            drawn: false,
+            base_keywords: HashSet::new(),
+            combined_keywords: HashSet::new(),
         });
     }
 
@@ -109,8 +116,7 @@ pub fn handle_inventory_events(
         }
 
         item.equipped = true;
-        let item = item.clone();
-        drop(inventory);
+        item.drawn = true;
 
         let equipment = futures_lite::future::block_on(load_equipment_item(
             loader,
@@ -120,6 +126,11 @@ pub fn handle_inventory_events(
             false,
         ));
 
+        item.base_keywords = equipment.base_keywords.clone();
+        item.combined_keywords = equipment.combined_keywords.clone();
+        dbg!(&item.combined_keywords);
+
+        drop(inventory);
         equipment.attach_scene(world, event.actor);
     }
 }

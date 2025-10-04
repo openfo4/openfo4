@@ -15,7 +15,7 @@ use std::time::Duration;
 
 use crate::events::EventSet;
 use crate::variables::VariableSet;
-use crate::{AnimationSet, BoneWeights, Event, NodeId, Value, VariableId};
+use crate::{AnimationProvider, BoneWeights, Event, NodeId, Value, VariableId};
 
 pub trait GraphNode {
     /// Called once when the node is activated.
@@ -66,7 +66,7 @@ pub trait Context {
 
     fn set_property(&mut self, node: NodeId, property: Property, value: Value);
 
-    fn animations(&self) -> &AnimationSet;
+    fn animations(&self) -> &dyn AnimationProvider;
 
     fn set_bone_weights(&mut self, node: NodeId, weights: BoneWeights) {
         let value = match weights {

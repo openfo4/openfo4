@@ -26,7 +26,7 @@ impl GraphNode for Clip {
         T: Context,
     {
         // TODO: Remove this extra clone.
-        let Some(anim) = ctx.animations().0.get(&self.path).cloned() else {
+        let Some(anim) = ctx.animations().get(&self.path).cloned() else {
             return;
         };
 

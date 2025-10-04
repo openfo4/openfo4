@@ -1050,8 +1050,18 @@ pub struct VariableChangeEvent {
     pub event: Event,
 }
 
-#[derive(Clone, Debug)]
-pub struct AnimationSet(pub Arc<HashMap<String, AnimationClip>>);
+pub trait AnimationProvider {
+    fn get(&self, name: &str) -> Option<&AnimationClip>;
+}
+
+impl<'a, T> AnimationProvider for &'a T
+where
+    T: AnimationProvider,
+{
+    fn get(&self, name: &str) -> Option<&AnimationClip> {
+        T::get(self, name)
+    }
+}
 
 #[derive(Clone, Debug)]
 pub struct PerFrameCommands {

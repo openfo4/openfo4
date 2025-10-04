@@ -5,18 +5,21 @@ use std::sync::Arc;
 
 use hashbrown::{HashMap, HashSet};
 use hecs::{Entity, World};
-use openfo4_animation::AnimationSet;
+use openfo4_animation::AnimationGraph;
 use openfo4_animation::driver::AnimationDriver;
 use openfo4_asset::AssetLoader;
 use openfo4_core::WorldExt;
 use openfo4_esp::records::{
-    Class, LeveledActorFlags, NpcBaseFlags, NpcTemplateFlags, Race, RaceSubgraphData,
+    Class, LeveledActorFlags, NpcBaseFlags, NpcTemplateFlags, Race, RaceSubgraphData, SubgraphFlags,
 };
 use openfo4_esp::{FormId, RecordData, RecordKind};
+use openfo4_hkx::character::CharacterData;
 use openfo4_physics::components::{Collider, RigidBody};
 use rand::distr::Distribution;
 use rand::distr::weighted::WeightedIndex;
 
+use crate::assets::animation::AnimationSet;
+use crate::loader::fix_path;
 use crate::state::animation_test::{ActorCharacter, load_behavior_data, load_character};
 use crate::state::equipment::{EquipmentItem, load_equipment_item};
 use crate::state::esp::EspLoader;
@@ -31,11 +34,13 @@ const PLAYER_LEVEL: u16 = 1000;
 #[derive(Clone, Debug)]
 pub struct ActorKeywords(pub HashSet<FormId>);
 
+#[derive(Clone, Debug)]
+pub struct ActorAnimationGraphs(pub Vec<ActorAnimationGraph>);
+
 #[derive(Debug)]
 pub struct Actor {
+    anim_graphs: ActorAnimationGraphData,
     character: ActorCharacter,
-    driver: AnimationDriver,
-    clips: AnimationSet,
     controller: ControllerShape,
     skin: Option<EquipmentItem>,
     properties: ActorValueProperties,
@@ -68,8 +73,7 @@ impl Actor {
             .insert(
                 root,
                 (
-                    self.clips,
-                    self.driver,
+                    self.anim_graphs,
                     RigidBody::FIXED,
                     self.controller,
                     instance,
@@ -122,28 +126,24 @@ pub async fn spawn_actor(
 
     let character = load_character(data, props.female, &loader).await.unwrap();
 
-    let subgraphs = load_subgraphs(esp_loader, props.race, data).await;
+    let mut subgraphs = Vec::new();
+    for subgraph in load_subgraphs(esp_loader, props.race, data).await {
+        let search_paths = subgraph
+            .animation_paths
+            .iter()
+            .map(|v| v.as_str().unwrap().to_owned())
+            .collect::<Vec<_>>();
 
-    let Some(subgraph) = subgraphs.iter().find(|v| v.target_keywords.is_empty()) else {
-        return Err(());
-    };
-
-    let search_paths = subgraph
-        .animation_paths
-        .iter()
-        .map(|v| v.as_str().unwrap())
-        .collect::<Vec<_>>();
-
-    let behavior = load_behavior_data(
-        &character.root_path,
-        &character.behavior_filename,
-        subgraph.behavior_graph.as_str().unwrap(),
-        &character,
-        &search_paths,
-        loader,
-    )
-    .await
-    .unwrap();
+        subgraphs.push(ActorAnimationGraph {
+            // graph: Arc::new(behavior.graph),
+            // animation: behavior.clips,
+            behavior: subgraph.behavior_graph.as_str().unwrap().to_owned(),
+            actor_keywords: subgraph.actor_keywords.clone(),
+            target_keywords: subgraph.target_keywords.clone(),
+            flags: subgraph.flags,
+            search_paths,
+        });
+    }
 
     let mut skin = None;
     if let Some(skin_form) = props.skin.or(data.skin) {
@@ -154,8 +154,12 @@ pub async fn spawn_actor(
     keywords.extend(data.keywords.iter().flatten());
 
     Ok(Actor {
-        driver: AnimationDriver::new(Arc::new(behavior.graph)),
-        clips: behavior.clips,
+        anim_graphs: ActorAnimationGraphData {
+            character: character.clone(),
+            root_path: character.root_path.clone(),
+            root_behavior_path: character.behavior_filename.clone(),
+            subgraphs,
+        },
         controller: ControllerShape {
             offset: character.controller_offset,
             shape: character.controller_shape.clone(),
@@ -440,4 +444,23 @@ async fn load_subgraphs(
     }
 
     subgraphs
+}
+
+#[derive(Clone, Debug)]
+pub struct ActorAnimationGraphData {
+    pub character: ActorCharacter,
+    pub root_path: String,
+    pub root_behavior_path: String,
+    pub subgraphs: Vec<ActorAnimationGraph>,
+}
+
+#[derive(Clone, Debug)]
+pub struct ActorAnimationGraph {
+    // pub graph: Arc<AnimationGraph>,
+    pub behavior: String,
+    // pub animation: AnimationSet,
+    pub actor_keywords: Vec<FormId>,
+    pub target_keywords: Vec<FormId>,
+    pub flags: SubgraphFlags,
+    pub search_paths: Vec<String>,
 }

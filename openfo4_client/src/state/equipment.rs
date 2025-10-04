@@ -121,6 +121,10 @@ pub async fn load_equipment_item(
             for resistance in armor.resistances.iter().flatten() {
                 *base_resistances.entry(resistance.damage_type).or_default() += resistance.value;
             }
+
+            if let Some(keywords) = armor.keywords {
+                base_keywords.extend(keywords);
+            }
         }
         RecordData::Weapon(weapon) => {
             let model_index = models.len();
@@ -208,6 +212,7 @@ pub async fn load_equipment_item(
             match property.property {
                 ObjectModificationPropertyProperty::Keywords => {
                     let keyword = params.to_formid::<0>().unwrap();
+                    dbg!(&keyword);
 
                     match property.function_type {
                         ObjectModificationFunctionType::Add => {

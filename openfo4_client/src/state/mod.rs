@@ -43,7 +43,7 @@ use openfo4_physics::components::RigidBody;
 use openfo4_physics::controller::CharacterController;
 
 use crate::assets::FileLoadContext;
-use crate::assets::animation::FileAnimationClip;
+use crate::assets::animation::{AnimationSet, FileAnimationClip};
 use crate::assets::data_file::{DataFile, DataFileContext};
 use crate::assets::nif_v2::NifLoaderContext;
 use crate::cell::CellId;
@@ -54,6 +54,7 @@ use crate::render::RenderObject;
 use crate::shared::SharedState;
 use crate::state::actions::{Action, Actions};
 use crate::state::anim_starter::{AnimationEventQueue, AnimationSystem};
+use crate::state::animation::update_actor_animation_graphs;
 use crate::systems;
 use crate::systems::animation_sync::update_animation_parameters;
 use crate::systems::camera::CameraMode;
@@ -226,7 +227,7 @@ impl GameState {
 
         self.animation.update(&mut self.world);
 
-        openfo4_animation::systems::drive_animations(
+        openfo4_animation::systems::drive_animations::<AnimationSet>(
             &mut self.world,
             Duration::from_secs(1) / UPS,
             self.anim_event.take(),
@@ -249,6 +250,7 @@ impl GameState {
             &mut self.event_bus,
             &self.pool,
         );
+        update_actor_animation_graphs(&mut self.world, &self.asset_loader);
 
         if self.physics_debug {
             self.physics.render_debug(gizmos);

@@ -7,15 +7,18 @@ use hecs::{CommandBuffer, World};
 use crate::animation::{AnimationClip, AnimationClipFlags, BlendMode};
 use crate::driver::AnimationDriver;
 use crate::skeleton::SkeletonInstance;
-use crate::{AnimationSet, BoneWeights, Value};
+use crate::{AnimationProvider, BoneWeights, Value};
 
-pub fn drive_animations(world: &mut World, delta: Duration, event: Option<&'static str>) {
+pub fn drive_animations<T>(world: &mut World, delta: Duration, event: Option<&'static str>)
+where
+    T: AnimationProvider + Send + Sync + 'static,
+{
     let mut commands = CommandBuffer::new();
 
     let mut rng = rand::rng();
 
     for (entity, (skeleton, driver, set)) in
-        world.query_mut::<(&mut SkeletonInstance, &mut AnimationDriver, &AnimationSet)>()
+        world.query_mut::<(&mut SkeletonInstance, &mut AnimationDriver, &T)>()
     {
         let mut events = Vec::new();
         driver.update(delta, set, &mut events);
@@ -87,7 +90,7 @@ pub fn drive_animations(world: &mut World, delta: Duration, event: Option<&'stat
         let active_anims = driver
             .animations()
             .filter_map(|state| {
-                let Some(animation) = set.0.get(state.path) else {
+                let Some(animation) = set.get(state.path) else {
                     return None;
                 };
 

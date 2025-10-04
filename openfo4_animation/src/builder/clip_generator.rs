@@ -21,6 +21,7 @@ impl BuildNode for ClipGenerator {
                     "playbackSpeed" => {
                         speed = ValueExpression::Variable(variable);
                     }
+                    "userControlledTimeFraction" => {}
                     name => {
                         return Err(Error::UnknownVariableName(UnknownVariableName {
                             class: "hkbClipGenerator",

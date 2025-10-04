@@ -8,7 +8,7 @@ use slab::Slab;
 use crate::events::EventSet;
 use crate::nodes::{Context, GraphNode, Node, NodeEvent, NodeInner, Property};
 use crate::variables::VariableSet;
-use crate::{AnimationGraph, AnimationSet, BoneWeights, Event, NodeId, Value, VariableId};
+use crate::{AnimationGraph, AnimationProvider, BoneWeights, Event, NodeId, Value, VariableId};
 
 #[derive(Debug)]
 pub struct AnimationDriver {
@@ -46,7 +46,12 @@ impl AnimationDriver {
         self.properties.global_weight.get(&node)
     }
 
-    pub fn update(&mut self, delta: Duration, animations: &AnimationSet, events: &mut Vec<Event>) {
+    pub fn update(
+        &mut self,
+        delta: Duration,
+        animations: &dyn AnimationProvider,
+        events: &mut Vec<Event>,
+    ) {
         let _span = trace_span!("AnimationDriver::update").entered();
 
         while let Some(event) = self.queue.pop_front() {
@@ -298,7 +303,7 @@ struct UpdateContext<'a> {
     variables: &'a mut VariableSet,
     queue: &'a mut VecDeque<NodeEvent>,
     properties: &'a mut PropertySet,
-    animations: &'a AnimationSet,
+    animations: &'a dyn AnimationProvider,
     state: &'a mut NodeState,
 }
 
@@ -310,7 +315,7 @@ impl<'a> UpdateContext<'a> {
         variables: &'a mut VariableSet,
         queue: &'a mut VecDeque<NodeEvent>,
         properties: &'a mut PropertySet,
-        animations: &'a AnimationSet,
+        animations: &'a dyn AnimationProvider,
         state: &'a mut NodeState,
     ) -> Self {
         Self {
@@ -377,8 +382,8 @@ impl Context for UpdateContext<'_> {
         *self.variables.get_mut(id).unwrap() = value;
     }
 
-    fn animations(&self) -> &AnimationSet {
-        &self.animations
+    fn animations(&self) -> &dyn AnimationProvider {
+        self.animations
     }
 
     fn set_property(&mut self, node: NodeId, property: Property, value: Value) {

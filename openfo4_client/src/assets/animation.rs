@@ -2,8 +2,9 @@ use std::collections::HashMap;
 use std::time::Duration;
 
 use game_common::components::Transform;
+use openfo4_animation::AnimationProvider;
 use openfo4_animation::animation::{AnimationClip, AnimationClipFlags, Annotation, BlendMode};
-use openfo4_asset::{Asset, AssetLoader};
+use openfo4_asset::{Asset, AssetLoader, Handle};
 use openfo4_hkx::animation::BlendHint;
 use openfo4_hkx::{HkObject, HkxFile};
 
@@ -86,5 +87,14 @@ impl Asset for FileAnimationClip {
         }
 
         Ok(Self(clip))
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct AnimationSet(pub HashMap<String, Handle<FileAnimationClip>>);
+
+impl AnimationProvider for AnimationSet {
+    fn get(&self, name: &str) -> Option<&AnimationClip> {
+        self.0.get(name).map(|v| &v.0)
     }
 }
