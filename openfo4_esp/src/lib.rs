@@ -138,6 +138,7 @@ where
             file: self,
             kind,
             is_init: false,
+            position: 0,
         }
     }
 
@@ -148,20 +149,33 @@ where
         let position = self.index.get(&id).copied().unwrap_or_default();
         self.reader.seek(SeekFrom::Start(position.into()))?;
 
-        self.lookup_next_from_current_position(kind, Some(id))
+        self.lookup_next_from_position(kind, Some(id), &mut position.into())
     }
 
-    /// Search for the next [`Record`] matching the given criteria without resetting the position
-    /// to the start of the file.
-    fn lookup_next_from_current_position(
+    /// Search for the next [`Record`] matching the given criteria starting from the given
+    /// position. The `position` value is updated as the cursor is advanced.
+    ///
+    /// When this function returns an [`Error`] the value of `position` is not specified.
+    fn lookup_next_from_position(
         &mut self,
         kind: Option<RecordKind>,
         id: Option<FormId>,
+        position: &mut u64,
     ) -> Result<Record, Error> {
+        let mut do_seek = true;
+
         loop {
-            let position = self.reader.stream_position()?;
+            let header_position = *position;
+
+            // Seeking is quite expensive so we only do it when we actually
+            // are skipping data.
+            if do_seek {
+                self.reader.seek(SeekFrom::Start(header_position))?;
+                do_seek = false;
+            }
 
             let header = self.read_record_header()?;
+            *position += RecordHeader::SIZE as u64;
 
             if header.typ == Text::GRUP {
                 let header = header.into_group();
@@ -180,7 +194,8 @@ where
                             .iter()
                             .all(|kind| kind.label() != header.label())
                     {
-                        self.reader.seek(SeekFrom::Current(header.size.into()))?;
+                        *position += u64::from(header.size);
+                        do_seek = true;
                     }
                 }
 
@@ -190,19 +205,22 @@ where
             if RecordKind::from_label(header.typ).is_some_and(|v| v.is_cachable())
                 && self.index.len() < MAX_INDEX_CAP
             {
-                if let Ok(position) = u32::try_from(position) {
-                    self.index.insert(header.form_id, position);
+                if let Ok(header_position) = u32::try_from(header_position) {
+                    self.index.insert(header.form_id, header_position);
                 }
             }
 
             if id.is_some_and(|id| header.form_id != id)
                 || kind.is_some_and(|kind| header.typ != kind.label())
             {
-                self.reader.seek(SeekFrom::Current(header.size.into()))?;
+                *position += u64::from(header.size);
+                do_seek = true;
                 continue;
             }
 
             let data = self.read_record_data(header)?;
+            *position += u64::from(header.size);
+
             return Ok(Record {
                 id: header.form_id,
                 flags: header.flags,
@@ -215,7 +233,9 @@ where
         // Lookup will scan exactly to the end of the record.
         // The next record will be a GRUP with the children if
         // the record has children.
-        self.lookup(Some(kind.parent_kind()), id)?;
+        let mut start_pos = self.index.get(&id).copied().unwrap_or_default().into();
+        self.lookup_next_from_position(Some(kind.parent_kind()), Some(id), &mut start_pos)?;
+        self.reader.seek(SeekFrom::Start(start_pos))?;
 
         let header = self.read_record_header()?;
         if header.typ != Text::GRUP {
@@ -330,7 +350,6 @@ where
                     )*
                     None => return Err(Error::UnknownRecordType(header.typ)),
                 }
-
             };
         }
 
@@ -483,6 +502,7 @@ pub struct LookupIter<'a, R> {
     /// Filter for the searched records.
     kind: Option<RecordKind>,
     is_init: bool,
+    position: u64,
 }
 
 impl<'a, R> Iterator for LookupIter<'a, R>
@@ -503,7 +523,10 @@ where
             }
         }
 
-        match self.file.lookup_next_from_current_position(self.kind, None) {
+        match self
+            .file
+            .lookup_next_from_position(self.kind, None, &mut self.position)
+        {
             Ok(value) => Some(Ok(value)),
             Err(Error::EndOfFile) => None,
             Err(err) => Some(Err(err)),
