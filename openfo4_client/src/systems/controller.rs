@@ -10,10 +10,12 @@ use openfo4_physics::components::ColliderShape;
 use openfo4_physics::controller::CharacterController;
 
 use crate::assets::nif_v2::NIF_TO_METERS;
-use crate::components::Camera;
+use crate::components::{Camera, Player};
 use crate::state::UPS;
 use crate::state::actions::{Action, Actions};
 use crate::state::anim_starter::AnimationEventQueue;
+use crate::state::hardcoded_formids::KEYWORD_FEMALE;
+use crate::state::npc::ActorKeywords;
 use crate::systems::PlayerControlState;
 use crate::systems::animation_sync::AnimationParameters;
 use crate::systems::camera::{CameraMode, CameraOffset, PlayerControlled};
@@ -129,13 +131,17 @@ pub fn handle_inputs(world: &mut World, actions: &Actions, event: &WindowEvent) 
 pub fn apply_player_movements(world: &mut World, pipeline: &mut PhysicsPipeline) {
     let mut buffer = CommandBuffer::new();
 
-    for (entity, (transform, offset, state, controller, collider)) in world.query_mut::<(
-        &mut Transform,
-        &CameraOffset,
-        &mut PlayerControlState,
-        Option<&mut CharacterController>,
-        &ControllerShape,
-    )>() {
+    for (entity, (transform, offset, state, controller, collider, actor_keywords, player)) in world
+        .query_mut::<(
+            &mut Transform,
+            &CameraOffset,
+            &mut PlayerControlState,
+            Option<&mut CharacterController>,
+            &ControllerShape,
+            &ActorKeywords,
+            Option<&Player>,
+        )>()
+    {
         let mut direction = Vec3::ZERO;
 
         if state.moving_front {
@@ -216,6 +222,8 @@ pub fn apply_player_movements(world: &mut World, pipeline: &mut PhysicsPipeline)
                     || state.moving_left
                     || state.moving_right,
                 is_sprinting: state.sprinting,
+                is_player: player.is_some(),
+                is_female: actor_keywords.0.contains(&KEYWORD_FEMALE),
             },
         );
     }

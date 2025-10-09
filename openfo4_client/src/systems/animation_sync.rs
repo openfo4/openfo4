@@ -14,6 +14,8 @@ pub struct AnimationParameters {
     pub direction: f32,
     pub is_moving: bool,
     pub is_sprinting: bool,
+    pub is_player: bool,
+    pub is_female: bool,
 }
 
 pub fn update_animation_parameters(world: &mut World) {
@@ -39,6 +41,18 @@ pub fn update_animation_parameters(world: &mut World) {
 
         if let Some(var) = driver.get_variable_mut("iSyncSprintState") {
             *var = Value::I32(params.is_sprinting as i32);
+        }
+
+        if let Some(var) = driver.get_variable_mut("IsPlayer") {
+            *var = Value::Bool(params.is_player);
+        }
+
+        if let Some(var) = driver.get_variable_mut("iIsPlayer") {
+            *var = Value::I32(params.is_player as i32);
+        }
+
+        if let Some(var) = driver.get_variable_mut("bIsFemale") {
+            *var = Value::Bool(params.is_female);
         }
 
         // Hardcoded variables that come from "animtextdata/animspeedinfo".
