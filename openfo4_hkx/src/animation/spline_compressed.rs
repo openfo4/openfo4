@@ -28,7 +28,15 @@ pub fn decompress(
 ) -> Result<Vec<Transform>, Error> {
     let mut cursor = Cursor::new(data);
 
-    let mut tracks = Vec::new();
+    let max_tracks = usize::min(
+        num_blocks as usize * num_transform_tracks as usize,
+        // Check against memory exhaustion.
+        // The smallest track is zero bytes (excluding the header) with the
+        // header being 8 bytes, so this is a worst-case estimate such that
+        // we still don't ever need to reallocate.
+        data.len() / 8,
+    );
+    let mut tracks = Vec::with_capacity(max_tracks);
     for block in 0..num_blocks {
         let start = block as usize * num_transform_tracks as usize;
         let end = (block as usize + 1) * num_transform_tracks as usize;
@@ -130,7 +138,7 @@ pub fn decompress(
         cursor.pad(16);
     }
 
-    let mut transforms = Vec::new();
+    let mut transforms = Vec::with_capacity(tracks.len());
     for frame in 0..num_frames {
         let frame = frame % num_frames_per_block;
         let block = frame / num_frames_per_block;
