@@ -346,15 +346,26 @@ impl<T> Channel<T> {
     }
 }
 
-fn find_knot_span(degree: u8, value: u32, points_size: usize, knots: &[u8]) -> usize {
-    if value >= u32::from(knots[points_size]) {
-        return points_size - 1;
+fn find_knot_span(degree: u8, value: u32, num_points: usize, knots: &[u8]) -> usize {
+    // FIXME: These conditions should be validated when the the spline track is
+    // decoded.
+    assert!(usize::from(degree) < num_points);
+    assert!(num_points < knots.len());
+
+    if value >= u32::from(knots[num_points]) {
+        return num_points - 1;
     }
 
     let mut low = usize::from(degree);
-    let mut high = points_size;
+    let mut high = num_points;
     let mut mid = low.midpoint(high);
 
+    // Under the assumption that degree < num_points, high < low is always
+    // given, such that all following slice accesses are always in bounds
+    // since mid < high is given when we enter the loop and high may only
+    // be decreased inside the loop.
+    // Note that `mid + 1` is at most `high = num_points`, which we have already
+    // bounds checked above.
     while value < u32::from(knots[mid]) || value >= u32::from(knots[mid + 1]) {
         if value < u32::from(knots[mid]) {
             high = mid;
@@ -364,6 +375,8 @@ fn find_knot_span(degree: u8, value: u32, points_size: usize, knots: &[u8]) -> u
 
         mid = low.midpoint(high);
     }
+
+    debug_assert!(mid < num_points);
 
     mid
 }
@@ -380,6 +393,13 @@ fn get_single_point<T>(
 where
     T: Point,
 {
+    // The caller guarantees that knot_span_index is in bounds.
+    debug_assert!(knot_span_index < knots.len());
+
+    // FIXME: Can we validate these ahead of time?
+    assert!(knot_span_index >= usize::from(degree));
+    assert!(knot_span_index + usize::from(degree) < knots.len());
+
     let frame = frame as f32;
 
     // The maximum degree is the maximum number of a u8.
