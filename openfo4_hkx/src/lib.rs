@@ -1260,10 +1260,9 @@ trait PadCursor {
 
 impl<T> PadCursor for Cursor<T> {
     fn pad(&mut self, align: u64) {
-        while self.position() % align != 0 {
-            // :)
-            self.set_position(self.position() + 1);
-        }
+        debug_assert!(align.is_power_of_two());
+        self.set_position((self.position() + align - 1) & !(align - 1));
+        debug_assert_eq!(self.position() % align, 0);
     }
 }
 
