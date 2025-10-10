@@ -10,5 +10,6 @@ bytes = "1.10.0"
 openfo4_esp_derive = { version = "*", path = "../openfo4_esp_derive" }
 glam = { version = "0.30.0", features = ["bytemuck"] }
 thiserror = "2.0.12"
-flate2 = "1.1.0"
 hashbrown = "0.15.4"
+# Use zlib-rs since it performs better.
+flate2 = { version = "1.1.0", default-features = false, features = ["zlib-rs"] }
