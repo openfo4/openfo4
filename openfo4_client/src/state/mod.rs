@@ -250,7 +250,7 @@ impl GameState {
             &mut self.event_bus,
             &self.pool,
         );
-        update_actor_animation_graphs(&mut self.world, &self.asset_loader);
+        update_actor_animation_graphs(&mut self.world, &self.asset_loader, &self.pool);
 
         if self.physics_debug {
             self.physics.render_debug(gizmos);

@@ -5,6 +5,7 @@ use std::sync::{Arc, OnceLock};
 use game_common::components::{Axis, Transform};
 use game_core_pipeline::entities::MaterialHandle;
 use game_render::mesh::Mesh;
+use game_tasks::TaskPool;
 use glam::{IVec2, Vec3, Vec4};
 use hecs::{Entity, World};
 use openfo4_animation::builder::{Builder, Hint};
@@ -20,7 +21,7 @@ use openfo4_hkx::behavior::VariableType;
 use openfo4_hkx::{HkObject, HkxFile};
 use openfo4_physics::components::{Capsule, Collider, ColliderShape, RigidBody};
 
-use crate::assets::animation::AnimationSet;
+use crate::assets::animation::{AnimationSet, FileAnimationClip};
 use crate::assets::data_file::DataFile;
 use crate::assets::nif_v2::{Instantiate, NIF_TO_METERS, NifScene};
 use crate::cell::CellId;
@@ -529,6 +530,7 @@ pub async fn load_behavior_data(
     character: &ActorCharacter,
     search_paths: &[&str],
     loader: &AssetLoader,
+    pool: &TaskPool,
 ) -> Result<ActorBehaviorData, ()> {
     let mut behavior_path = fix_path(behavior_path);
     if !behavior_path.starts_with("meshes") {
@@ -597,9 +599,11 @@ pub async fn load_behavior_data(
             .to_owned();
     }
 
-    let mut clips = HashMap::new();
-    for file in graph.animation_files() {
-        if clips.contains_key(&file) {
+    let animation_files = graph.animation_files();
+    let mut tasks = HashMap::with_capacity(animation_files.len());
+
+    for file in animation_files {
+        if tasks.contains_key(&file) {
             continue;
         }
 
@@ -609,21 +613,31 @@ pub async fn load_behavior_data(
             .iter()
             .map(|v| format!("meshes/{}/{}", fix_path(v), file_stem))
             .collect();
-        let search_paths: Vec<_> = search_paths.iter().map(|v| v.as_str()).collect();
 
-        let clip = match load_anim(loader, &search_paths).await {
-            Ok(clip) => clip,
-            Err(err) => {
-                tracing::error!(
-                    "failed to load animation {} in searched paths {}",
-                    path,
-                    search_paths.join(", ")
-                );
-                continue;
+        let loader = loader.clone();
+        let task = pool.spawn(async move {
+            let search_paths: Vec<_> = search_paths.iter().map(|v| v.as_str()).collect();
+            match load_anim(&loader, &search_paths).await {
+                Ok(clip) => Some(clip),
+                Err(err) => {
+                    tracing::error!(
+                        "failed to load animation {} in searched paths {}",
+                        path,
+                        search_paths.join(", ")
+                    );
+                    None
+                }
             }
-        };
+        });
 
-        clips.insert(file, clip);
+        tasks.insert(file, task);
+    }
+
+    let mut clips = HashMap::new();
+    for (file, task) in tasks {
+        if let Some(clip) = task.await {
+            clips.insert(file, clip);
+        }
     }
 
     Ok(ActorBehaviorData {

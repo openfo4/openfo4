@@ -7,6 +7,7 @@ use openfo4_dds::Image;
 use openfo4_hkx::HkxFile;
 use openfo4_nif::Nif;
 use openfo4_nif::bgsm::Bgsm;
+use tracing::instrument;
 
 use super::Error;
 use crate::loader::{FileLoader, fix_path};
@@ -41,6 +42,7 @@ where
     type Context = DataFileContext;
     type Error = Error;
 
+    #[instrument(name = "DataFile::load", skip_all)]
     async fn load(
         _loader: &AssetLoader,
         path: &Self::Key,

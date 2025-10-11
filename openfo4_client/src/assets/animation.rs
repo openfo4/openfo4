@@ -7,6 +7,7 @@ use openfo4_animation::animation::{AnimationClip, AnimationClipFlags, Annotation
 use openfo4_asset::{Asset, AssetLoader, Handle};
 use openfo4_hkx::animation::BlendHint;
 use openfo4_hkx::{HkObject, HkxFile};
+use tracing::instrument;
 
 use crate::assets::Error;
 use crate::assets::data_file::DataFile;
@@ -20,6 +21,7 @@ impl Asset for FileAnimationClip {
     type Error = Error;
     type Context = ();
 
+    #[instrument(name = "FileAnimationClip::load", skip_all)]
     async fn load(
         loader: &AssetLoader,
         key: &Self::Key,

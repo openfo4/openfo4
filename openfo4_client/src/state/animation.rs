@@ -3,6 +3,7 @@ use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
 
 use game_common::components::Transform;
+use game_tasks::TaskPool;
 use game_tracing::trace_span;
 use hashbrown::HashSet;
 use hecs::{CommandBuffer, World};
@@ -220,7 +221,7 @@ fn merge_skeletons(nif: &NifScene, hkx: &Skeleton) -> Skeleton {
     skeleton
 }
 
-pub fn update_actor_animation_graphs(world: &mut World, loader: &AssetLoader) {
+pub fn update_actor_animation_graphs(world: &mut World, loader: &AssetLoader, pool: &TaskPool) {
     let _span = trace_span!("update_actor_animation_graphs").entered();
 
     let mut buffer = CommandBuffer::new();
@@ -311,6 +312,7 @@ pub fn update_actor_animation_graphs(world: &mut World, loader: &AssetLoader) {
             &graphs.character,
             &search_paths,
             loader,
+            pool,
         ))
         .unwrap();
 
@@ -330,3 +332,6 @@ pub fn update_actor_animation_graphs(world: &mut World, loader: &AssetLoader) {
 
 #[derive(Copy, Clone, Debug)]
 struct ActiveAnimationGraph(usize);
+
+#[derive(Clone, Debug)]
+pub struct AnimationPreloadCache {}
