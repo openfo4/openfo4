@@ -4,6 +4,8 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+openfo4_io = { version = "0.1.0", path = "../openfo4_io" }
+
 thiserror = "2.0.12"
 hashbrown = "0.15.4"
 # Use zlib-rs since it performs better.

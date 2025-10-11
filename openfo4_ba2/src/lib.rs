@@ -1,9 +1,10 @@
 mod dds;
 
-use std::io::{self, Read, Seek, SeekFrom};
+use std::io::{self, Read};
 
 use flate2::read::ZlibDecoder;
 use hashbrown::HashMap;
+use openfo4_io::fs::{AsyncReadAt, Cursor};
 use thiserror::Error;
 
 const MAGIC: u32 = u32::from_le_bytes([b'B', b'T', b'D', b'X']);
@@ -32,30 +33,32 @@ pub struct Archive<T> {
 
 impl<T> Archive<T>
 where
-    T: Read + Seek,
+    T: AsyncReadAt,
 {
-    pub fn new(mut reader: T) -> Result<Self, Error> {
-        let header = Header::decode(&mut reader)?;
+    pub async fn new(reader: T) -> Result<Self, Error> {
+        let mut cursor = Cursor::new(&reader);
+
+        let header = Header::decode(&mut cursor).await?;
 
         let mut files = Vec::new();
         for _ in 0..header.file_count {
             match header.format {
                 Format::Gnrl => {
-                    let file = GnrlFileHeader::decode(&mut reader)?;
+                    let file = GnrlFileHeader::decode(&mut cursor).await?;
                     files.push(FileHeader::Gnrl(file));
                 }
                 Format::Dx10 => {
-                    let file = Dx10FileHeader::decode(&mut reader)?;
+                    let file = Dx10FileHeader::decode(&mut cursor).await?;
                     files.push(FileHeader::Dx10(file));
                 }
             }
         }
 
-        reader.seek(SeekFrom::Start(header.strings_offset.into()))?;
+        cursor.set_position(header.strings_offset.into());
 
         let mut file_names = Vec::new();
         for _ in 0..header.file_count {
-            let name = String::decode(&mut reader)?;
+            let name = String::decode(&mut cursor).await?;
             let name = name.to_lowercase().replace("\\", "/");
 
             file_names.push(name);
@@ -74,7 +77,7 @@ where
         self.files.contains_key(path)
     }
 
-    pub fn read(&mut self, name: &str) -> Result<Vec<u8>, Error> {
+    pub async fn read(&self, name: &str) -> Result<Vec<u8>, Error> {
         let header = self.files.get(name).ok_or(Error::NoKey)?;
 
         let mut buf = Vec::new();
@@ -90,11 +93,10 @@ where
         };
 
         for chunk in chunks {
-            self.reader.seek(SeekFrom::Start(chunk.offset))?;
-
             buf.clear();
             buf.resize(chunk.compressed_len as usize, 0);
-            self.reader.read_exact(&mut buf)?;
+
+            self.reader.read_exact_at(&mut buf, chunk.offset).await?;
 
             let mut decoder = ZlibDecoder::new(&buf[..]);
             decoder.read_to_end(&mut bytes)?;
@@ -112,11 +114,11 @@ enum Version {
 }
 
 impl Decode for Version {
-    fn decode<R>(mut reader: R) -> Result<Self, Error>
+    async fn decode<R>(reader: &mut Cursor<R>) -> Result<Self, Error>
     where
-        R: Read,
+        R: AsyncReadAt,
     {
-        let value = u32::decode(&mut reader)?;
+        let value = u32::decode(reader).await?;
         match value {
             1 => Ok(Self::V1),
             7 => Ok(Self::V7),
@@ -135,22 +137,22 @@ struct Header {
 }
 
 impl Decode for Header {
-    fn decode<R>(mut reader: R) -> Result<Self, Error>
+    async fn decode<R>(mut reader: &mut Cursor<R>) -> Result<Self, Error>
     where
-        R: Read,
+        R: AsyncReadAt,
     {
-        let magic = u32::decode(&mut reader)?;
+        let magic = u32::decode(reader).await?;
         if magic != MAGIC {
             return Err(Error::BadMagic(magic));
         }
 
-        let version = Version::decode(&mut reader)?;
-        let format = Format::decode(&mut reader)?;
+        let version = Version::decode(reader).await?;
+        let format = Format::decode(&mut reader).await?;
 
-        let file_count = u32::decode(&mut reader)?;
-        let strings_offset = u32::decode(&mut reader)?;
+        let file_count = u32::decode(&mut reader).await?;
+        let strings_offset = u32::decode(&mut reader).await?;
 
-        u32::decode(&mut reader)?;
+        u32::decode(&mut reader).await?;
 
         Ok(Self {
             version,
@@ -168,11 +170,11 @@ enum Format {
 }
 
 impl Decode for Format {
-    fn decode<R>(reader: R) -> Result<Self, Error>
+    async fn decode<R>(reader: &mut Cursor<R>) -> Result<Self, Error>
     where
-        R: Read,
+        R: AsyncReadAt,
     {
-        let value = u32::decode(reader)?;
+        let value = u32::decode(reader).await?;
         match &value.to_le_bytes() {
             b"GNRL" => Ok(Self::Gnrl),
             b"DX10" => Ok(Self::Dx10),
@@ -182,21 +184,21 @@ impl Decode for Format {
 }
 
 trait Decode: Sized {
-    fn decode<R>(reader: R) -> Result<Self, Error>
+    async fn decode<R>(cursor: &mut Cursor<R>) -> Result<Self, Error>
     where
-        R: Read;
+        R: AsyncReadAt;
 }
 
 macro_rules! impl_decode {
     ($($t:ty),*) => {
         $(
             impl Decode for $t {
-                fn decode<R>(mut reader: R) -> Result<Self, Error>
+                async fn decode<R>(reader: &mut Cursor<R>) -> Result<Self, Error>
                 where
-                    R: Read,
+                    R: AsyncReadAt,
                 {
                     let mut buf = [0; size_of::<Self>()];
-                    reader.read_exact(&mut buf)?;
+                    reader.read_exact(&mut buf).await?;
                     Ok(Self::from_le_bytes(buf))
                 }
             }
@@ -207,14 +209,14 @@ macro_rules! impl_decode {
 impl_decode!(u8, u16, u32, u64, i8, i16, i32, i64, f32, f64);
 
 impl Decode for String {
-    fn decode<R>(mut reader: R) -> Result<Self, Error>
+    async fn decode<R>(mut reader: &mut Cursor<R>) -> Result<Self, Error>
     where
-        R: Read,
+        R: AsyncReadAt,
     {
-        let len = u16::decode(&mut reader)?;
+        let len = u16::decode(&mut reader).await?;
 
         let mut bytes = vec![0; len.into()];
-        reader.read_exact(&mut bytes)?;
+        reader.read_exact(&mut bytes).await?;
 
         Self::from_utf8(bytes).map_err(Error::InvalidString)
     }
@@ -321,37 +323,37 @@ impl Dx10FileHeader {
 }
 
 impl Decode for Dx10FileHeader {
-    fn decode<R>(mut reader: R) -> Result<Self, Error>
+    async fn decode<R>(mut reader: &mut Cursor<R>) -> Result<Self, Error>
     where
-        R: Read,
+        R: AsyncReadAt,
     {
-        let file_hash = u32::decode(&mut reader)?;
-        let extension = u32::decode(&mut reader)?;
-        let directory_hash = u32::decode(&mut reader)?;
+        let file_hash = u32::decode(&mut reader).await?;
+        let extension = u32::decode(&mut reader).await?;
+        let directory_hash = u32::decode(&mut reader).await?;
 
-        u8::decode(&mut reader)?;
-        let chunk_count = u8::decode(&mut reader)?;
-        let chunk_size = u16::decode(&mut reader)?;
+        u8::decode(&mut reader).await?;
+        let chunk_count = u8::decode(&mut reader).await?;
+        let chunk_size = u16::decode(&mut reader).await?;
 
-        let height = u16::decode(&mut reader)?;
-        let width = u16::decode(&mut reader)?;
-        let mip_count = u8::decode(&mut reader)?;
-        let format = u8::decode(&mut reader)?;
-        let flags = u8::decode(&mut reader)?;
-        let tile_mode = u8::decode(&mut reader)?;
+        let height = u16::decode(&mut reader).await?;
+        let width = u16::decode(&mut reader).await?;
+        let mip_count = u8::decode(&mut reader).await?;
+        let format = u8::decode(&mut reader).await?;
+        let flags = u8::decode(&mut reader).await?;
+        let tile_mode = u8::decode(&mut reader).await?;
 
         let mut chunks = Vec::new();
         for _ in 0..chunk_count {
-            let offset = u64::decode(&mut reader)?;
+            let offset = u64::decode(&mut reader).await?;
 
-            let compressed_len = u32::decode(&mut reader)?;
-            let decompressed_len = u32::decode(&mut reader)?;
+            let compressed_len = u32::decode(&mut reader).await?;
+            let decompressed_len = u32::decode(&mut reader).await?;
 
-            let first_mip = u16::decode(&mut reader)?;
-            let last_mip = u16::decode(&mut reader)?;
+            let first_mip = u16::decode(&mut reader).await?;
+            let last_mip = u16::decode(&mut reader).await?;
 
             // Always 0x0df0 adba
-            u32::decode(&mut reader)?;
+            u32::decode(&mut reader).await?;
 
             chunks.push(Chunk {
                 offset,
@@ -382,26 +384,26 @@ struct GnrlFileHeader {
 }
 
 impl Decode for GnrlFileHeader {
-    fn decode<R>(mut reader: R) -> Result<Self, Error>
+    async fn decode<R>(mut reader: &mut Cursor<R>) -> Result<Self, Error>
     where
-        R: Read,
+        R: AsyncReadAt,
     {
-        let file_hash = u32::decode(&mut reader)?;
-        let extension = u32::decode(&mut reader)?;
-        let directory_hash = u32::decode(&mut reader)?;
+        let file_hash = u32::decode(&mut reader).await?;
+        let extension = u32::decode(&mut reader).await?;
+        let directory_hash = u32::decode(&mut reader).await?;
 
-        u8::decode(&mut reader)?;
-        let chunk_count = u8::decode(&mut reader)?;
-        let chunk_size = u16::decode(&mut reader)?;
+        u8::decode(&mut reader).await?;
+        let chunk_count = u8::decode(&mut reader).await?;
+        let chunk_size = u16::decode(&mut reader).await?;
 
         let mut chunks = Vec::new();
         for _ in 0..chunk_count {
-            let offset = u64::decode(&mut reader)?;
-            let compressed_len = u32::decode(&mut reader)?;
-            let decompressed_len = u32::decode(&mut reader)?;
+            let offset = u64::decode(&mut reader).await?;
+            let compressed_len = u32::decode(&mut reader).await?;
+            let decompressed_len = u32::decode(&mut reader).await?;
 
             // Always 0x0df0 adba?
-            u32::decode(&mut reader)?;
+            u32::decode(&mut reader).await?;
 
             chunks.push(Chunk {
                 offset,

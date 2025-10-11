@@ -1,0 +1,13 @@
+[package]
+name = "openfo4_io"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+blocking = "1.6.2"
+
+[dev-dependencies]
+futures-lite = "2.6.1"
+
+[lints]
+workspace = true

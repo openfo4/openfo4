@@ -1,9 +1,9 @@
-use std::fs::File;
 use std::io::{self, BufReader, Cursor, Read, Seek};
 use std::path::{Path, PathBuf};
 
 use openfo4_ba2::Archive;
-use parking_lot::Mutex;
+use openfo4_io::fs::File;
+use parking_lot::RwLock;
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -18,7 +18,7 @@ pub enum Error {
 
 #[derive(Debug)]
 pub struct FileLoader {
-    sources: Mutex<Vec<Source>>,
+    sources: Vec<Source>,
 }
 
 impl FileLoader {
@@ -49,30 +49,26 @@ impl FileLoader {
                 Source::Directory(location.as_ref().to_owned())
             } else {
                 let file = File::open(location).unwrap();
-                let archive = Archive::new(BufReader::new(file)).unwrap();
+                let archive = futures_lite::future::block_on(Archive::new(file)).unwrap();
                 Source::Archive(archive)
             };
 
             sources.push(source);
         }
 
-        Self {
-            sources: Mutex::new(sources),
-        }
+        Self { sources }
     }
 
-    pub fn open(&self, path: &str) -> Result<Reader, Error> {
+    pub async fn open(&self, path: &str) -> Result<Reader, Error> {
         let path = fix_path(path);
 
         tracing::debug!("loading {}", path);
 
-        let mut sources = self.sources.lock();
-
-        for source in sources.iter_mut().rev() {
+        for source in self.sources.iter().rev() {
             match source {
                 Source::Directory(root) => {
                     let path = root.join(path);
-                    let file = File::open(path).map_err(Error::Io)?;
+                    let file = std::fs::File::open(path).map_err(Error::Io)?;
                     return Ok(Reader::File(file));
                 }
                 Source::Archive(archive) => {
@@ -80,7 +76,7 @@ impl FileLoader {
                         continue;
                     }
 
-                    let buf = archive.read(&path).map_err(Error::Ba2)?;
+                    let buf = archive.read(&path).await.map_err(Error::Ba2)?;
                     return Ok(Reader::Archive(Cursor::new(buf)));
                 }
             }
@@ -94,12 +90,12 @@ impl FileLoader {
 enum Source {
     /// A filesystem root directory.
     Directory(PathBuf),
-    Archive(Archive<BufReader<File>>),
+    Archive(Archive<File>),
 }
 
 #[derive(Debug)]
 pub enum Reader {
-    File(File),
+    File(std::fs::File),
     Archive(Cursor<Vec<u8>>),
 }
 

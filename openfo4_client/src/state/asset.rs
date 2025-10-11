@@ -12,7 +12,7 @@ pub async fn load_image_buffer(
         path = format!("textures/{}", path);
     }
 
-    let mut reader = match loader.open(&path) {
+    let mut reader = match loader.open(&path).await {
         Ok(reader) => reader,
         Err(err) => {
             tracing::error!("failed to load texture: {}", err);

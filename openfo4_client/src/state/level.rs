@@ -672,6 +672,7 @@ async fn load_terrain_layer(
         Some(material) => {
             let mut reader = file_loader
                 .open(&format!("materials/{}", material.as_str().unwrap()))
+                .await
                 .unwrap();
 
             let mut buf = Vec::new();
@@ -699,6 +700,7 @@ async fn load_terrain_layer(
         Some(material) => {
             let mut reader = file_loader
                 .open(&format!("materials/{}", material.as_str().unwrap()))
+                .await
                 .unwrap();
 
             let mut buf = Vec::new();
@@ -726,6 +728,7 @@ async fn load_terrain_layer(
         Some(material) => {
             let mut reader = file_loader
                 .open(&format!("materials/{}", material.as_str().unwrap()))
+                .await
                 .unwrap();
 
             let mut buf = Vec::new();
@@ -753,6 +756,7 @@ async fn load_terrain_layer(
         Some(material) => {
             let mut reader = file_loader
                 .open(&format!("materials/{}", material.as_str().unwrap()))
+                .await
                 .unwrap();
 
             let mut buf = Vec::new();
@@ -769,6 +773,7 @@ async fn load_terrain_layer(
         Some(material) => {
             let mut reader = file_loader
                 .open(&format!("materials/{}", material.as_str().unwrap()))
+                .await
                 .unwrap();
 
             let mut buf = Vec::new();

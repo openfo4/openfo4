@@ -50,7 +50,7 @@ where
     ) -> Result<Self, Self::Error> {
         let path = fix_path(path);
 
-        let mut reader = ctx.loader.open(&path).map_err(|err| match err {
+        let mut reader = ctx.loader.open(&path).await.map_err(|err| match err {
             crate::loader::Error::NotFound(_) => Error::NotFound,
             err => Error::from(err),
         })?;
@@ -72,6 +72,7 @@ trait DecodeAsset: Sized {
 impl DecodeAsset for Bgsm {
     type Error = openfo4_nif::Error;
 
+    #[instrument(name = "Bgsm::decode", skip_all)]
     fn decode(buf: &[u8]) -> Result<Self, Self::Error> {
         Bgsm::decode(buf)
     }
@@ -80,6 +81,7 @@ impl DecodeAsset for Bgsm {
 impl DecodeAsset for Nif {
     type Error = openfo4_nif::Error;
 
+    #[instrument(name = "Nif::decode", skip_all)]
     fn decode(buf: &[u8]) -> Result<Self, Self::Error> {
         Nif::decode(buf)
     }
@@ -88,6 +90,7 @@ impl DecodeAsset for Nif {
 impl DecodeAsset for HkxFile {
     type Error = openfo4_hkx::Error;
 
+    #[instrument(name = "HkxFile::decode", skip_all)]
     fn decode(buf: &[u8]) -> Result<Self, Self::Error> {
         HkxFile::decode(buf)
     }
@@ -96,6 +99,7 @@ impl DecodeAsset for HkxFile {
 impl DecodeAsset for Image {
     type Error = openfo4_dds::Error;
 
+    #[instrument(name = "Image::decode", skip_all)]
     fn decode(buf: &[u8]) -> Result<Self, Self::Error> {
         Image::parse(buf)
     }
