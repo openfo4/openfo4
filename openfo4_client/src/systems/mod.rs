@@ -21,4 +21,5 @@ pub struct PlayerControlState {
     pub sneaking: bool,
     pub sprinting: bool,
     pub walking: bool,
+    pub jumping: bool,
 }

@@ -88,6 +88,24 @@ pub fn handle_inputs(world: &mut World, actions: &Actions, event: &WindowEvent) 
 
                         state.sprinting ^= true;
                     }
+                    Some(KeyCode::Space) => {
+                        if !event.state.is_pressed() {
+                            continue;
+                        }
+
+                        let action = if state.jumping {
+                            state.jumping = false;
+                            Action::Land
+                        } else {
+                            state.jumping = true;
+                            Action::Jump
+                        };
+
+                        if let Some(form) = actions.0.get(&action) {
+                            dbg!(form);
+                            queue.0.push_back(*form);
+                        }
+                    }
                     Some(KeyCode::Key1) if event.state.is_pressed() => {
                         state.walking ^= true;
                     }
@@ -224,6 +242,7 @@ pub fn apply_player_movements(world: &mut World, pipeline: &mut PhysicsPipeline)
                 is_sprinting: state.sprinting,
                 is_player: player.is_some(),
                 is_female: actor_keywords.0.contains(&KEYWORD_FEMALE),
+                is_jumping: state.jumping,
             },
         );
     }
