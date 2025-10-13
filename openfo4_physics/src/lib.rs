@@ -49,6 +49,7 @@ pub struct PhysicsPipeline {
     /// [`RigidBody`].
     body_children: HashMap<Entity, BodyChildren>,
     collider_handles: HashMap<Entity, SpawnedCollider>,
+    collider_handle_entities: HashMap<ColliderHandle, Entity>,
     debug: DebugRenderPipeline,
 }
 
@@ -73,6 +74,7 @@ impl PhysicsPipeline {
             ccd_solver: CCDSolver::new(),
             body_handles: BiMap::new(),
             collider_handles: HashMap::new(),
+            collider_handle_entities: HashMap::new(),
             body_children: HashMap::new(),
             debug: DebugRenderPipeline::new(
                 DebugRenderStyle::default(),
@@ -219,6 +221,9 @@ impl PhysicsPipeline {
                         ColliderBuilder::new(build_shape(&collider.shape, transform.scale));
                     let handle = self.colliders.insert(builder);
 
+                    debug_assert!(!self.collider_handle_entities.contains_key(&handle));
+                    self.collider_handle_entities.insert(handle, entity);
+
                     SpawnedCollider {
                         handle,
                         scale: transform.scale,
@@ -262,6 +267,7 @@ impl PhysicsPipeline {
 
         for (entity, collider) in despawned_colliders {
             self.collider_handles.remove(&entity);
+            self.collider_handle_entities.remove(&collider.handle);
             self.colliders
                 .remove(collider.handle, &mut self.islands, &mut self.bodies, true);
         }
@@ -346,9 +352,9 @@ impl PhysicsPipeline {
         self.query_pipeline()
             .cast_ray(&ray, max_toi, true)
             .map(|(collider, toi)| {
-                // self.collider_handles.get(collider).unwrap();
+                let entity = *self.collider_handle_entities.get(&collider).unwrap();
 
-                QueryHit { toi }
+                QueryHit { entity, toi }
             })
     }
 
@@ -371,8 +377,13 @@ impl PhysicsPipeline {
                 &*shape,
                 ShapeCastOptions::default(),
             )
-            .map(|(collider, hit)| QueryHit {
-                toi: hit.time_of_impact,
+            .map(|(collider, hit)| {
+                let entity = *self.collider_handle_entities.get(&collider).unwrap();
+
+                QueryHit {
+                    entity,
+                    toi: hit.time_of_impact,
+                }
             })
     }
 }
@@ -506,9 +517,14 @@ fn build_shape(shape: &ColliderShape, scale: Vec3) -> SharedShape {
     }
 }
 
+/// A resulting hit of a [`cast_ray`] or [`cast_shape`].
+///
+/// [`cast_ray`]: PhysicsPipeline::cast_ray
+/// [`cast_shape`]: PhysicsPipeline::cast_shape
 #[derive(Copy, Clone, Debug)]
 pub struct QueryHit {
-    // TODO
-    // pub entity: Entity,
+    /// The entity with the [`Collider`] attached that was hit.
+    pub entity: Entity,
+    /// The distance of the entity.
     pub toi: f32,
 }
