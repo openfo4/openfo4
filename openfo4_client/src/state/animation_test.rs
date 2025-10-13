@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::path::PathBuf;
 use std::sync::{Arc, OnceLock};
 
@@ -15,6 +15,7 @@ use openfo4_animation::{AnimationGraph, Value};
 use openfo4_asset::{AssetLoader, Handle};
 use openfo4_core::WorldExt;
 use openfo4_core::events::EventBus;
+use openfo4_core::hierarchy::Children;
 use openfo4_esp::records::Race;
 use openfo4_esp::{FormId, RecordData, RecordKind};
 use openfo4_hkx::behavior::VariableType;
@@ -31,7 +32,7 @@ use crate::shared::SharedState;
 use crate::state::anim_starter::{ActiveBehaviorGraphs, AnimationEventQueue};
 use crate::state::animation::{self, SkeletonConfig, load_anim};
 use crate::state::esp::EspLoader;
-use crate::state::npc::spawn_actor;
+use crate::state::npc::{BodyPartBone, spawn_actor};
 use crate::systems::PlayerControlState;
 use crate::systems::controller::ControllerShape;
 use crate::systems::equipment::{Equipment, equip_item};
@@ -417,6 +418,8 @@ impl ActorCharacter {
 
         world.add_children(root, scene);
 
+        let body_parts = self.build_body_parts(root);
+
         let mut ready_bones = Vec::new();
         for bone in &self.skeleton.bones {
             if scene_nodes.contains_key(&bone.name.to_lowercase()) {
@@ -467,35 +470,29 @@ impl ActorCharacter {
             .map(|index| *bones.get(&index).unwrap())
             .collect();
 
-        let mut body_parts = HashMap::new();
-        for body_part in &self.body_parts {
-            let mut bones = Vec::new();
+        for (bone_index, bone_entity) in &bones {
+            // A bone tagged body part must include all recursive
+            // children since colliders may be children.
+            // We skip children entities that are other bones.
+            if let Some(body_part) = body_parts.get(&bone_index) {
+                let mut queue = VecDeque::from(vec![*bone_entity]);
 
-            let Some(mut bone) = self
-                .skeleton
-                .bones
-                .iter()
-                .find(|bone| bone.name.to_lowercase() == body_part.end_bone.to_lowercase())
-            else {
-                continue;
-            };
+                while let Some(entity) = queue.pop_front() {
+                    world.insert_one(entity, *body_part).unwrap();
 
-            loop {
-                bones.push(bone.index);
+                    let Ok(children) = world.get::<&Children>(entity) else {
+                        continue;
+                    };
 
-                let Some(b) = self
-                    .skeleton
-                    .bones
-                    .iter()
-                    .find(|b| b.children.contains(&bone.index))
-                else {
-                    break;
-                };
+                    for children in &children.0 {
+                        if bones.values().any(|e| e == children) {
+                            continue;
+                        }
 
-                bone = b;
+                        queue.push_back(*children);
+                    }
+                }
             }
-
-            body_parts.insert(body_part.id, bones);
         }
 
         SpawnedActor {
@@ -506,15 +503,61 @@ impl ActorCharacter {
                 root_bones: root_bone_entities,
                 culled: HashSet::new(),
             },
-            body_parts,
         }
+    }
+
+    /// Returns the body parts for each bone.
+    fn build_body_parts(&self, actor: Entity) -> HashMap<usize, BodyPartBone> {
+        let mut body_parts = HashMap::new();
+        for body_part in &self.body_parts {
+            let mut bones = Vec::new();
+
+            let Some(root_bone) = self
+                .skeleton
+                .bones
+                .iter()
+                .find(|bone| bone.name.to_lowercase() == body_part.start_bone.to_lowercase())
+            else {
+                continue;
+            };
+
+            let mut queue = VecDeque::new();
+            queue.push_back(root_bone);
+
+            while let Some(bone) = queue.pop_front() {
+                bones.push(bone.index);
+
+                for children in &bone.children {
+                    let b = &self.skeleton.bones[*children];
+
+                    if !self
+                        .body_parts
+                        .iter()
+                        .any(|v| v.start_bone.to_lowercase() == b.name.to_lowercase())
+                    {
+                        queue.push_back(b);
+                    }
+                }
+            }
+
+            for bone in bones {
+                body_parts.insert(
+                    bone,
+                    BodyPartBone {
+                        actor,
+                        id: body_part.id,
+                    },
+                );
+            }
+        }
+
+        body_parts
     }
 }
 
 #[derive(Clone, Debug)]
 pub struct SpawnedActor {
     pub skeleton: SkeletonInstance,
-    pub body_parts: HashMap<u32, Vec<usize>>,
 }
 
 pub struct ActorBehaviorData {
@@ -651,5 +694,4 @@ pub async fn load_behavior_data(
 pub struct BodyPartBoneProps {
     pub id: u32,
     pub start_bone: String,
-    pub end_bone: String,
 }

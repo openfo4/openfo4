@@ -20,7 +20,9 @@ use rand::distr::weighted::WeightedIndex;
 
 use crate::assets::animation::AnimationSet;
 use crate::loader::fix_path;
-use crate::state::animation_test::{ActorCharacter, load_behavior_data, load_character};
+use crate::state::animation_test::{
+    ActorCharacter, BodyPartBoneProps, load_behavior_data, load_character,
+};
 use crate::state::equipment::{EquipmentItem, load_equipment_item};
 use crate::state::esp::EspLoader;
 use crate::state::hardcoded_formids::KEYWORD_FEMALE;
@@ -33,6 +35,15 @@ const PLAYER_LEVEL: u16 = 1000;
 
 #[derive(Clone, Debug)]
 pub struct ActorKeywords(pub HashSet<FormId>);
+
+/// A body part of an actor.
+#[derive(Copy, Clone, Debug)]
+pub struct BodyPartBone {
+    /// The actor that this body part is attached to.
+    pub actor: Entity,
+    /// The unique ID of the body part.
+    pub id: u32,
+}
 
 #[derive(Clone, Debug)]
 pub struct ActorAnimationGraphs(pub Vec<ActorAnimationGraph>);
@@ -122,9 +133,29 @@ pub async fn spawn_actor(
         _ => unreachable!(),
     };
 
-    if let Some(data) = &data.body_part_data {}
+    let mut character = load_character(data, props.female, &loader).await.unwrap();
 
-    let character = load_character(data, props.female, &loader).await.unwrap();
+    if let Some(body_part_form) = data.body_part_data {
+        let mut body_parts = Vec::new();
+
+        let RecordData::BodyPartData(body_part_data) = esp_loader
+            .lookup(Some(RecordKind::BodyPartData), body_part_form)
+            .await
+            .unwrap()
+            .data
+        else {
+            unreachable!();
+        };
+
+        for (id, part) in body_part_data.parts.iter().enumerate() {
+            body_parts.push(BodyPartBoneProps {
+                id: id as u32,
+                start_bone: part.part_node.as_str().unwrap().to_owned(),
+            });
+        }
+
+        character.body_parts = body_parts;
+    }
 
     let mut subgraphs = Vec::new();
     for subgraph in load_subgraphs(esp_loader, props.race, data).await {

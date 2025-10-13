@@ -10,12 +10,22 @@ use openfo4_physics::components::{Collider, ColliderShape};
 
 use crate::cell::CellId;
 use crate::components::{Camera, NiTransform};
+use crate::state::npc::BodyPartBone;
 
 const COLOR: Color = Color::RED;
 
 pub fn draw_colliers(world: &World, gizmos: &Gizmos) {
-    for (_, (transform, collider)) in world.query::<(&GlobalTransform, &Collider)>().iter() {
+    for (_, (transform, collider, body_part)) in world
+        .query::<(&GlobalTransform, &Collider, Option<&BodyPartBone>)>()
+        .iter()
+    {
         let transform = transform.0;
+
+        let color = if body_part.is_some() {
+            Color::BLUE
+        } else {
+            Color::RED
+        };
 
         match &collider.shape {
             ColliderShape::Capsule(shape) => match shape.axis {
@@ -34,28 +44,28 @@ pub fn draw_colliers(world: &World, gizmos: &Gizmos) {
                         Vec3::new(0.0, 0.0, radius),
                         Vec3::new(0.0, 0.0, -radius),
                     ] {
-                        gizmos.line(a + offset, b + offset, COLOR);
+                        gizmos.line(a + offset, b + offset, color);
                     }
 
-                    gizmos.circle(a, Vec3::Y, radius, COLOR);
-                    gizmos.circle(b, Vec3::Y, radius, COLOR);
+                    gizmos.circle(a, Vec3::Y, radius, color);
+                    gizmos.circle(b, Vec3::Y, radius, color);
 
-                    gizmos.arc(a, Quat::from_rotation_x(PI / 2.0), PI, radius, COLOR);
+                    gizmos.arc(a, Quat::from_rotation_x(PI / 2.0), PI, radius, color);
                     gizmos.arc(
                         a,
                         Quat::from_rotation_x(PI / 2.0) * Quat::from_rotation_z(PI / 2.0),
                         PI,
                         radius,
-                        COLOR,
+                        color,
                     );
 
-                    gizmos.arc(b, Quat::from_rotation_x(-PI / 2.0), PI, radius, COLOR);
+                    gizmos.arc(b, Quat::from_rotation_x(-PI / 2.0), PI, radius, color);
                     gizmos.arc(
                         b,
                         Quat::from_rotation_x(-PI / 2.0) * Quat::from_rotation_z(-PI / 2.0),
                         PI,
                         radius,
-                        COLOR,
+                        color,
                     );
                 }
                 Axis::Z => {}
@@ -66,9 +76,9 @@ pub fn draw_colliers(world: &World, gizmos: &Gizmos) {
                     let b = transform.transform_point(mesh.vertices()[indices[1] as usize]);
                     let c = transform.transform_point(mesh.vertices()[indices[2] as usize]);
 
-                    gizmos.line(a, b, COLOR);
-                    gizmos.line(b, c, COLOR);
-                    gizmos.line(c, a, COLOR);
+                    gizmos.line(a, b, color);
+                    gizmos.line(b, c, color);
+                    gizmos.line(c, a, color);
                 }
             }
         }
