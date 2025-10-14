@@ -41,6 +41,12 @@ use super::terrain::{TerrainLayer, combine_texture_layers};
 
 const LAND_POINTS: UVec2 = UVec2::splat(33);
 
+/// Translation offset applied to terrain mesh entities.
+///
+/// This is used to place the entity in the center of the cell. If we place it at the edge of cells
+/// it causes some numerical instabilities that cause terrains to get incorrectly assigned to cells.
+const LAND_OFFSET: Vec3 = Vec3::new(2048.0, 2048.0, 0.0);
+
 /// A streamer is an entity that causes a region around it to be loaded (i.e. streamed in).
 #[derive(Copy, Clone, Debug)]
 pub struct Streamer {
@@ -354,7 +360,7 @@ async fn load_cell(
                             let x = (index / 33) as f32 / LAND_POINTS.x as f32 * cell_size.x as f32;
                             let y = (index % 33) as f32 / LAND_POINTS.y as f32 * cell_size.y as f32;
                             let z = *point;
-                            Vec3::new(x, y, z)
+                            Vec3::new(x, y, z) - LAND_OFFSET
                         })
                         .collect();
                     let normals = land
@@ -475,7 +481,9 @@ async fn load_cell(
                     };
 
                     events.push(SpawnEvent::SpawnTerrain(
-                        Transform::from(NiTransform::from_translation(offset.extend(0.0))),
+                        Transform::from(NiTransform::from_translation(
+                            offset.extend(0.0) + LAND_OFFSET,
+                        )),
                         RenderObject { mesh, material },
                         collider,
                     ));
