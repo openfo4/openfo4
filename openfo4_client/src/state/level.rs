@@ -23,7 +23,9 @@ use openfo4_esp::records::{
 use openfo4_esp::{FormId, RecordChildren, RecordData, RecordHeaderFlags, RecordKind};
 use openfo4_hkx::behavior::EventBase;
 use openfo4_nif::bgsm::Bgsm;
-use openfo4_physics::components::{Collider, ColliderShape, RigidBody, RigidBodyKind, TriMesh};
+use openfo4_physics::components::{
+    Collider, ColliderShape, CollisionLayer, RigidBody, RigidBodyKind, TriMesh,
+};
 use tracing::instrument;
 
 use crate::assets::nif_v2::{Instantiate, NIF_TO_METERS, NifScene};
@@ -479,6 +481,7 @@ async fn load_cell(
                         friction: 1.0,
                         restitution: 1.0,
                         shape: ColliderShape::TriMesh(TriMesh::new(positions, indices)),
+                        layer: CollisionLayer::STATIC,
                     };
 
                     events.push(SpawnEvent::SpawnTerrain(

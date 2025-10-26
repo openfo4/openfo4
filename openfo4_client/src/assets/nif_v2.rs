@@ -14,7 +14,7 @@ use openfo4_hkx::{HkObject, HkxFile};
 use openfo4_nif::material::{AlphaTestFunction, NiAlphaProperty};
 use openfo4_nif::mesh::{BSMeshLODTriShape, BSSubIndexTriShape, BSTriShape};
 use openfo4_nif::{BSXFlags, Block, BlockRef, Nif};
-use openfo4_physics::components::{Collider, ColliderShape, TriMesh};
+use openfo4_physics::components::{Collider, ColliderShape, CollisionLayer, TriMesh};
 use thiserror::Error;
 
 use crate::assets::Error;
@@ -915,6 +915,7 @@ fn load_collider(
             friction: 0.5,
             restitution: 0.5,
             shape: ColliderShape::TriMesh(mesh),
+            layer: CollisionLayer::STATIC,
         },
     }))
 }

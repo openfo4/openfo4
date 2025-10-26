@@ -1,5 +1,3 @@
-use std::f32::consts::FRAC_PI_4;
-
 use game_common::components::Transform;
 use game_tracing::trace_span;
 use glam::Vec3;
@@ -7,7 +5,7 @@ use hecs::Entity;
 use rapier3d::control::{CharacterLength, KinematicCharacterController};
 use rapier3d::math::Isometry;
 use rapier3d::parry::query::DefaultQueryDispatcher;
-use rapier3d::prelude::{QueryFilter, SharedShape};
+use rapier3d::prelude::QueryFilter;
 
 use crate::components::ColliderShape;
 use crate::{GRAVITY, PhysicsPipeline, build_shape};

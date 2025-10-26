@@ -11,7 +11,7 @@ use openfo4_esp::records::{
     Class, LeveledActorFlags, NpcBaseFlags, NpcTemplateFlags, Race, RaceSubgraphData, SubgraphFlags,
 };
 use openfo4_esp::{FormId, RecordData, RecordKind};
-use openfo4_physics::components::{Collider, RigidBody};
+use openfo4_physics::components::{Collider, CollisionLayer, RigidBody};
 use rand::distr::Distribution;
 use rand::distr::weighted::WeightedIndex;
 
@@ -60,6 +60,7 @@ impl Actor {
                 friction: 1.0,
                 restitution: 1.0,
                 shape: self.controller.shape.clone(),
+                layer: CollisionLayer::CHARACTER_CONTROLLER,
             },
         ));
 

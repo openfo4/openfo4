@@ -91,7 +91,7 @@ pub fn animation_test(
         let offset = CellId(IVec2::new(2, 7)).min();
         for (index, offset) in [
             NiTransform::from_translation(offset.extend(0.0) - Vec3::new(1024.0, 1024.0, 0.0)),
-            // NiTransform::from_translation(offset.extend(0.0) - Vec3::new(2000.0, 2000.0, 0.0)),
+            NiTransform::from_translation(offset.extend(0.0) - Vec3::new(2000.0, 2000.0, 0.0)),
         ]
         .iter()
         .enumerate()
@@ -127,15 +127,15 @@ pub fn animation_test(
             let inventory = Inventory::default();
             let armor = FormId(0x001BBCB5);
 
-            events.send(AddItemEvent {
-                actor: root,
-                item: armor,
-                attachments: Vec::new(),
-            });
-            events.send(EquipItemEvent {
-                actor: root,
-                item: armor,
-            });
+            // events.send(AddItemEvent {
+            //     actor: root,
+            //     item: armor,
+            //     attachments: Vec::new(),
+            // });
+            // events.send(EquipItemEvent {
+            //     actor: root,
+            //     item: armor,
+            // });
 
             events.send(AddItemEvent {
                 actor: root,

@@ -39,7 +39,7 @@ use openfo4_hkx::HkxFile;
 use openfo4_nif::Nif;
 use openfo4_nif::bgsm::Bgsm;
 use openfo4_physics::PhysicsPipeline;
-use openfo4_physics::components::RigidBody;
+use openfo4_physics::components::{CollisionLayer, RigidBody};
 use openfo4_physics::controller::CharacterController;
 
 use crate::assets::FileLoadContext;
@@ -256,7 +256,7 @@ impl GameState {
             &self.pool,
         );
         update_actor_animation_graphs(&mut self.world, &self.asset_loader, &self.pool);
-        handle_weapon_fire_events(&mut self.world, &self.physics, &self.event_bus);
+        handle_weapon_fire_events(&mut self.world, &self.physics, &mut self.event_bus);
 
         if self.physics_debug {
             self.physics.render_debug(gizmos);
@@ -316,6 +316,7 @@ impl GameState {
                             friction: 1.0,
                             restitution: 0.0,
                             shape: mesh,
+                            layer: CollisionLayer::STATIC,
                         },
                         openfo4_physics::components::RigidBody {
                             kind: openfo4_physics::components::RigidBodyKind::Dynamic,

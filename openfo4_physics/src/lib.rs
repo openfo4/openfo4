@@ -24,6 +24,7 @@ use rapier3d::prelude::{
 };
 use tracing::instrument;
 
+use crate::components::CollisionLayer;
 use crate::debug::GizmoRenderBackend;
 
 const DT: f32 = 1.0 / 60.0;
@@ -218,7 +219,9 @@ impl PhysicsPipeline {
 
                 let spawned_collider = self.collider_handles.entry(entity).or_insert_with(|| {
                     let builder =
-                        ColliderBuilder::new(build_shape(&collider.shape, transform.scale));
+                        ColliderBuilder::new(build_shape(&collider.shape, transform.scale))
+                            .collision_groups(collider.layer.to_interaction_groups());
+
                     let handle = self.colliders.insert(builder);
 
                     debug_assert!(!self.collider_handle_entities.contains_key(&handle));
@@ -227,6 +230,7 @@ impl PhysicsPipeline {
                     SpawnedCollider {
                         handle,
                         scale: transform.scale,
+                        layer: collider.layer,
                     }
                 });
 
@@ -256,6 +260,7 @@ impl PhysicsPipeline {
 
                 state.set_friction(collider.friction);
                 state.set_restitution(collider.restitution);
+                state.set_collision_groups(collider.layer.to_interaction_groups());
 
                 self.colliders.set_parent(
                     spawned_collider.handle,
@@ -351,7 +356,9 @@ impl PhysicsPipeline {
 
         let predicate = |handle: ColliderHandle, _: &rapier3d::prelude::Collider| -> bool {
             let entity = self.collider_handle_entities.get(&handle).unwrap();
-            !filter.exclude_colliders.contains(entity)
+            let layer = self.collider_handles.get(entity).unwrap().layer;
+
+            filter.layers.contains(&layer) && !filter.exclude_colliders.contains(entity)
         };
 
         self.query_pipeline()
@@ -407,6 +414,7 @@ struct BodyChildren {
 struct SpawnedCollider {
     handle: ColliderHandle,
     scale: Vec3,
+    layer: CollisionLayer,
 }
 
 /// A reference to a rigid body that a collider should attach to.
@@ -540,6 +548,8 @@ pub struct QueryHit {
 
 #[derive(Copy, Clone, Debug)]
 pub struct QueryFilter<'a> {
+    /// Only collide with the given list of layers.
+    pub layers: &'a [CollisionLayer],
     /// Exclude all matching entities with a collider.
     pub exclude_colliders: &'a [Entity],
 }

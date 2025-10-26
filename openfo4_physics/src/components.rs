@@ -1,5 +1,6 @@
 use game_common::components::Axis;
 use glam::Vec3;
+use rapier3d::prelude::{Group, InteractionGroups};
 
 #[derive(Copy, Clone, Debug)]
 pub struct RigidBody {
@@ -33,6 +34,37 @@ pub struct Collider {
     pub friction: f32,
     pub restitution: f32,
     pub shape: ColliderShape,
+    pub layer: CollisionLayer,
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub struct CollisionLayer(Group);
+
+impl CollisionLayer {
+    /// Static objects.
+    pub const STATIC: Self = Self(Group::GROUP_1);
+    /// Character controllers.
+    pub const CHARACTER_CONTROLLER: Self = Self(Group::GROUP_2);
+    /// Weapon projectiles.
+    pub const PROJECTILE: Self = Self(Group::GROUP_3);
+
+    pub(crate) fn to_interaction_groups(self) -> InteractionGroups {
+        match self {
+            Self::STATIC => InteractionGroups {
+                memberships: self.0,
+                filter: self.0 | Self::CHARACTER_CONTROLLER.0 | Self::PROJECTILE.0,
+            },
+            Self::CHARACTER_CONTROLLER => InteractionGroups {
+                memberships: self.0,
+                filter: self.0 | Self::STATIC.0,
+            },
+            Self::PROJECTILE => InteractionGroups {
+                memberships: self.0,
+                filter: self.0 | Self::STATIC.0,
+            },
+            _ => unreachable!(),
+        }
+    }
 }
 
 #[derive(Clone, Debug)]

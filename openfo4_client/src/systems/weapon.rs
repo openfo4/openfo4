@@ -6,12 +6,13 @@ use glam::Vec3;
 use hecs::{CommandBuffer, World};
 use openfo4_core::events::EventBus;
 use openfo4_core::hierarchy::Children;
-use openfo4_physics::components::Collider;
+use openfo4_physics::components::{Collider, CollisionLayer};
 use openfo4_physics::{PhysicsPipeline, QueryFilter};
 
 use crate::render::physics_debug::{DespawnAt, HitscanRaycast};
+use crate::state::npc::BodyPartBone;
 use crate::systems::inventory::{Inventory, ItemData};
-use crate::systems::{FacingDirection, GunFireEvent};
+use crate::systems::{FacingDirection, GunFireEvent, ProjectileHitEvent};
 
 #[derive(Clone, Debug)]
 pub struct EquippedGun {
@@ -19,8 +20,14 @@ pub struct EquippedGun {
     pub damage: u32,
 }
 
-pub fn handle_weapon_fire_events(world: &mut World, physics: &PhysicsPipeline, events: &EventBus) {
+pub fn handle_weapon_fire_events(
+    world: &mut World,
+    physics: &PhysicsPipeline,
+    events: &mut EventBus,
+) {
     let mut commands = CommandBuffer::new();
+
+    let mut hit_events = Vec::new();
 
     for event in events.read::<GunFireEvent>() {
         let Ok(entity) = world.entity(event.actor) else {
@@ -30,6 +37,8 @@ pub fn handle_weapon_fire_events(world: &mut World, physics: &PhysicsPipeline, e
         let transform = entity.get::<&GlobalTransform>().unwrap();
         let facing_dir = entity.get::<&FacingDirection>().unwrap();
         let inventory = entity.get::<&Inventory>().unwrap();
+
+        let mut equipped_weapons = Vec::new();
 
         for item in inventory.items() {
             let ItemData::Weapon(weapon) = &item.data else {
@@ -41,7 +50,16 @@ pub fn handle_weapon_fire_events(world: &mut World, physics: &PhysicsPipeline, e
                 continue;
             }
 
-            dbg!(&item);
+            // Don't trigger weapons with no ammo.
+            if weapon.current_ammo == 0 {
+                continue;
+            }
+
+            equipped_weapons.push(weapon);
+        }
+
+        if equipped_weapons.is_empty() {
+            continue;
         }
 
         // We must exclude the actor itself, otherwise we're just gonna
@@ -67,6 +85,7 @@ pub fn handle_weapon_fire_events(world: &mut World, physics: &PhysicsPipeline, e
             ray,
             max_toi,
             QueryFilter {
+                layers: &[CollisionLayer::STATIC],
                 exclude_colliders: &exclude_colliders,
             },
         );
@@ -79,6 +98,23 @@ pub fn handle_weapon_fire_events(world: &mut World, physics: &PhysicsPipeline, e
             },
             DespawnAt(Instant::now() + Duration::from_secs(5)),
         ));
+
+        if let Some(hit) = hit {
+            if let Ok(body_part) = world.get::<&BodyPartBone>(hit.entity) {
+                for weapon in equipped_weapons {
+                    hit_events.push(ProjectileHitEvent {
+                        target: body_part.actor,
+                        body_part: body_part.id,
+                        damage: weapon.damage.clone(),
+                        shooter: Some(event.actor),
+                    });
+                }
+            }
+        }
+    }
+
+    if !hit_events.is_empty() {
+        dbg!(&hit_events);
     }
 
     commands.run_on(world);
