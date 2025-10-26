@@ -2,15 +2,20 @@ use std::time::Duration;
 
 use game_common::components::Transform;
 use glam::{Quat, Vec3};
-use hecs::{CommandBuffer, World};
+use hecs::{CommandBuffer, Entity, World};
+use openfo4_core::events::EventBus;
 
 use crate::animation::{AnimationClip, AnimationClipFlags, BlendMode};
 use crate::driver::AnimationDriver;
 use crate::skeleton::SkeletonInstance;
 use crate::{AnimationProvider, BoneWeights, Value};
 
-pub fn drive_animations<T>(world: &mut World, delta: Duration, event: Option<&'static str>)
-where
+pub fn drive_animations<T>(
+    world: &mut World,
+    delta: Duration,
+    event: Option<&'static str>,
+    event_bus: &mut EventBus,
+) where
     T: AnimationProvider + Send + Sync + 'static,
 {
     let mut commands = CommandBuffer::new();
@@ -34,7 +39,7 @@ where
             .collect::<Vec<_>>();
 
         for event in game_events {
-            match event {
+            match &event {
                 GameEvent::ReevaluateGraphState => {
                     driver.reset();
 
@@ -74,13 +79,11 @@ where
                     commands.insert_one(*entity, transform);
                     skeleton.culled.remove(&index);
                 }
-                GameEvent::WeaponFire => {
-                    dbg!("fire");
-                }
-                GameEvent::ReloadComplete => {
-                    dbg!("reload");
-                }
+                GameEvent::WeaponFire => {}
+                GameEvent::ReloadComplete => {}
             }
+
+            event_bus.send(GameAnimationEvent { entity, event });
         }
 
         if event == Some("dump") {
@@ -299,6 +302,12 @@ impl TransformLerp for Transform {
             scale: Vec3::lerp(self.scale, other.scale, s),
         }
     }
+}
+
+#[derive(Clone, Debug)]
+pub struct GameAnimationEvent {
+    pub entity: Entity,
+    pub event: GameEvent,
 }
 
 #[derive(Clone, Debug)]

@@ -1,12 +1,16 @@
 use std::ops::RangeInclusive;
 use std::sync::LazyLock;
 
+use game_tracing::span::EnteredSpan;
 use hashbrown::HashMap;
 use hecs::World;
 use openfo4_animation::Value;
 use openfo4_animation::driver::AnimationDriver;
+use openfo4_animation::systems::{GameAnimationEvent, GameEvent};
+use openfo4_core::events::EventBus;
 
 use crate::state::anim_starter::ActiveBehaviorGraphs;
+use crate::systems::GunFireEvent;
 
 #[derive(Clone, Debug)]
 pub struct AnimationParameters {
@@ -204,4 +208,21 @@ struct MovementMode {
 struct Direction {
     range: RangeInclusive<f32>,
     enter_event: &'static str,
+}
+
+pub fn bounce_animation_events(events: &mut EventBus) {
+    for event in events
+        .read::<GameAnimationEvent>()
+        .cloned()
+        .collect::<Vec<_>>()
+    {
+        match event.event {
+            GameEvent::WeaponFire => {
+                events.send(GunFireEvent {
+                    actor: event.entity,
+                });
+            }
+            _ => (),
+        }
+    }
 }

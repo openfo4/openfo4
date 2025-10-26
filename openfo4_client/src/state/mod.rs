@@ -57,7 +57,7 @@ use crate::state::actions::{Action, Actions};
 use crate::state::anim_starter::{AnimationEventQueue, AnimationSystem};
 use crate::state::animation::update_actor_animation_graphs;
 use crate::systems;
-use crate::systems::animation_sync::update_animation_parameters;
+use crate::systems::animation_sync::{bounce_animation_events, update_animation_parameters};
 use crate::systems::camera::CameraMode;
 use crate::systems::controller::apply_player_movements;
 use crate::systems::weapon::handle_weapon_fire_events;
@@ -236,7 +236,9 @@ impl GameState {
             &mut self.world,
             Duration::from_secs(1) / UPS,
             self.anim_event.take(),
+            &mut self.event_bus,
         );
+        bounce_animation_events(&mut self.event_bus);
 
         systems::hierarchy::compute_global_transform(&mut self.world);
         self.physics.step(&mut self.world);

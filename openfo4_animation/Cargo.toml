@@ -5,6 +5,7 @@ edition = "2024"
 
 [dependencies]
 openfo4_hkx = { version = "0.1.0", path = "../openfo4_hkx" }
+openfo4_core = { version = "0.1.0", path = "../openfo4_core" }
 game_common = { version = "0.1.0", path = "../game_common" }
 game_core = { version = "0.1.0", path = "../game_core" }
 game_tracing = { version = "0.1.0", path = "../game_tracing" }
