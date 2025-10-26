@@ -30,7 +30,7 @@ use game_tasks::TaskPool;
 use game_tracing::trace_span;
 use game_window::events::WindowEvent;
 use glam::{IVec2, Vec3};
-use hecs::World;
+use hecs::{CommandBuffer, World};
 use level::{Level, Streamer};
 use openfo4_asset::AssetLoader;
 use openfo4_core::events::EventBus;
@@ -51,6 +51,7 @@ use crate::components::{Camera, NiTransform, Player};
 use crate::events::Event;
 use crate::loader::FileLoader;
 use crate::render::RenderObject;
+use crate::render::physics_debug::despawn_expired;
 use crate::shared::SharedState;
 use crate::state::actions::{Action, Actions};
 use crate::state::anim_starter::{AnimationEventQueue, AnimationSystem};
@@ -59,6 +60,7 @@ use crate::systems;
 use crate::systems::animation_sync::update_animation_parameters;
 use crate::systems::camera::CameraMode;
 use crate::systems::controller::apply_player_movements;
+use crate::systems::weapon::handle_weapon_fire_events;
 
 pub const UPS: u32 = 60;
 
@@ -209,7 +211,8 @@ impl GameState {
 
         futures_lite::future::block_on(self.interval.wait(Instant::now()));
 
-        self.level.update(&mut self.world, &mut self.events);
+        self.level
+            .update(&mut self.world, &mut self.events, &mut self.event_bus);
 
         animation_test::animation_test(
             &mut self.event_bus,
@@ -217,6 +220,8 @@ impl GameState {
             &self.asset_loader,
             &self.esp_loader,
         );
+
+        despawn_expired(&mut self.world);
 
         apply_player_movements(&mut self.world, &mut self.physics);
         update_animation_parameters(&mut self.world);
@@ -251,6 +256,7 @@ impl GameState {
             &self.pool,
         );
         update_actor_animation_graphs(&mut self.world, &self.asset_loader, &self.pool);
+        handle_weapon_fire_events(&mut self.world, &self.physics, &self.event_bus);
 
         if self.physics_debug {
             self.physics.render_debug(gizmos);
@@ -265,7 +271,12 @@ impl GameState {
 
     pub fn send_event(&mut self, event: WindowEvent) {
         systems::camera::handle_free_camera(&mut self.world, &event);
-        systems::controller::handle_inputs(&mut self.world, &self.actions, &event);
+        systems::controller::handle_inputs(
+            &mut self.world,
+            &self.actions,
+            &event,
+            &mut self.event_bus,
+        );
 
         match event {
             WindowEvent::KeyboardInput(event) => {

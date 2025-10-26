@@ -2461,6 +2461,11 @@ pub struct WeaponData {
     /// Weight of the item in the inventory.
     pub weight: f32,
     pub value: u32,
+    /// The physical damage that this weapon deals.
+    ///
+    /// Other damage types are defined in [`damage_types`].
+    ///
+    /// [`damage_types`]: Weapon::damage_types
     pub base_damage: u16,
     pub sound_level: SoundLevel,
     pub sound_attack: FormId,

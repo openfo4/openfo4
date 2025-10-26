@@ -13,11 +13,10 @@ use crate::assets::nif_v2::NifScene;
 use crate::state::esp::EspLoader;
 use crate::state::hardcoded_formids::DAMAGE_TYPE_PHYSICAL;
 use crate::systems::equipment::{Equipment, EquipmentKey, equip_item};
+use crate::systems::inventory::{ItemData, ItemKind, WeaponItemData};
 
 #[derive(Clone, Debug)]
 pub struct EquipmentItem {
-    pub models: Vec<Handle<NifScene>>,
-    pub attachment_parents: HashMap<usize, usize>,
     pub resistances: HashMap<FormId, u32>,
     /// Keywords attached to the base item.
     pub base_keywords: HashSet<FormId>,
@@ -25,9 +24,17 @@ pub struct EquipmentItem {
     pub combined_keywords: HashSet<FormId>,
     pub weight: f32,
     pub value: f32,
+    pub kind: ItemKind,
+    pub data: ItemData,
 }
 
-impl EquipmentItem {
+#[derive(Clone, Debug)]
+pub struct EquipmentItemModels {
+    models: Vec<Handle<NifScene>>,
+    attachment_parents: HashMap<usize, usize>,
+}
+
+impl EquipmentItemModels {
     pub fn attach_scene(&self, world: &mut World, root: Entity) -> Vec<EquipmentKey> {
         // FIXME: We currently remove these components, then put them
         // back at the end to satisfy the borrowing impl of `equip_item`,
@@ -69,55 +76,23 @@ impl EquipmentItem {
 }
 
 pub async fn load_equipment_item(
-    loader: &AssetLoader,
     esp_loader: &EspLoader,
     form: FormId,
     attachments: &[FormId],
-    female: bool,
 ) -> EquipmentItem {
-    let mut models = Vec::new();
     let mut base_resistances = HashMap::new();
     let mut base_keywords = HashSet::new();
-
-    let mut attachment_point_parents = HashMap::new();
 
     let mut base_weight = 0.0;
     let mut base_value = 0.0;
 
-    match esp_loader.lookup(None, form).await.unwrap().data {
+    let mut base_weapon_capacity = 0;
+    let mut base_weapon_damage = HashMap::new();
+
+    let mut base_weapon_ammo_damage = 0;
+
+    let kind = match esp_loader.lookup(None, form).await.unwrap().data {
         RecordData::Armor(armor) => {
-            for model in &*armor.models {
-                let addon = esp_loader
-                    .lookup(Some(RecordKind::ArmorAddon), model.armor_addon)
-                    .await
-                    .unwrap();
-                let addon = match addon.data {
-                    RecordData::ArmorAddon(data) => data,
-                    _ => unreachable!(),
-                };
-
-                let mut model_path = None;
-                if female {
-                    if let Some(model) = addon.female_model.model {
-                        model_path = Some(model);
-                    }
-                } else {
-                    if let Some(model) = addon.male_model.model {
-                        model_path = Some(model);
-                    }
-                }
-
-                let Some(model_path) = model_path else {
-                    continue;
-                };
-
-                let scene = loader
-                    .load::<NifScene, _>(model_path.as_str().unwrap())
-                    .await
-                    .unwrap();
-                models.push(scene);
-            }
-
             for resistance in armor.resistances.iter().flatten() {
                 *base_resistances.entry(resistance.damage_type).or_default() += resistance.value;
             }
@@ -125,39 +100,62 @@ pub async fn load_equipment_item(
             if let Some(keywords) = armor.keywords {
                 base_keywords.extend(keywords);
             }
+
+            ItemKind::Armor
         }
         RecordData::Weapon(weapon) => {
-            let model_index = models.len();
-            if let Some(model) = &weapon.model.model {
-                let scene = loader
-                    .load::<NifScene, _>(model.as_str().unwrap())
-                    .await
-                    .unwrap();
-                models.push(scene);
-            }
-
-            if let Some(attach_parent_slots) = weapon.attach_parent_slots {
-                for slot in &attach_parent_slots {
-                    attachment_point_parents.insert(*slot, model_index);
-                }
-            }
-
             base_weight = weapon.data.weight;
             base_value = weapon.data.value as f32;
 
             if let Some(keywords) = weapon.keywords {
                 base_keywords.extend(keywords);
             }
+
+            base_weapon_capacity = weapon.data.capacity as u32;
+
+            // Physical damage is hardcoded in the data field.
+            // Other damage types are set in the damage_types field instead.
+            if weapon.data.base_damage != 0 {
+                base_weapon_damage.insert(DAMAGE_TYPE_PHYSICAL, u32::from(weapon.data.base_damage));
+            }
+
+            // FIXME: What happens when this field contains physical damage?
+            if let Some(damage_types) = weapon.damage_types {
+                for damage_type in &*damage_types {
+                    base_weapon_damage.insert(damage_type.typ, damage_type.amount);
+                }
+            }
+
+            if !weapon.data.ammo.is_null() {
+                match esp_loader
+                    .lookup(Some(RecordKind::Ammo), weapon.data.ammo)
+                    .await
+                    .unwrap()
+                    .data
+                {
+                    RecordData::Ammo(ammo) => {
+                        // The ammo damage is added to the final damage at the end. We must keep
+                        // the base_weapon_damage as is to not break attachment values.
+                        // FIXME: Also this seems to be a float? Why?
+                        base_weapon_ammo_damage = ammo.projectile_data.damage as u32;
+                    }
+                    _ => unreachable!(),
+                }
+            }
+
+            ItemKind::Weapon
         }
         _ => unreachable!(),
-    }
+    };
 
     let mut resistances = base_resistances.clone();
-    let mut attachment_parents = HashMap::new();
     let mut combined_keywords = base_keywords.clone();
 
     let mut total_weight = base_weight;
     let mut total_value = base_value;
+
+    let mut total_weapon_capacity = base_weapon_capacity;
+    let mut total_weapon_damage = base_weapon_damage.clone();
 
     for attachment in attachments {
         let RecordData::ObjectModification(attachment) =
@@ -165,32 +163,6 @@ pub async fn load_equipment_item(
         else {
             unreachable!()
         };
-
-        let Some(parent) = attachment_point_parents.get(&attachment.data.attach_point) else {
-            continue;
-        };
-
-        let model_index = if let Some(model) = &attachment.model.model {
-            let scene = loader
-                .load::<NifScene, _>(model.as_str().unwrap())
-                .await
-                .unwrap();
-
-            let model_index = models.len();
-            models.push(scene);
-
-            attachment_parents.insert(model_index, *parent);
-
-            model_index
-        } else {
-            // If the attachment does not have a model, but it does have further
-            // attachment points we directly attachment the parents to the parent.
-            *parent
-        };
-
-        for slot in &attachment.data.attach_parent_slots {
-            attachment_point_parents.insert(*slot, model_index);
-        }
 
         for property in &attachment.data.properties {
             let params = match property.value_type {
@@ -275,14 +247,133 @@ pub async fn load_equipment_item(
         }
     }
 
+    let data = match kind {
+        ItemKind::Armor => ItemData::Armor,
+        ItemKind::Weapon => {
+            let phys_dmg = total_weapon_damage.entry(DAMAGE_TYPE_PHYSICAL).or_default();
+            *phys_dmg = phys_dmg.saturating_add(base_weapon_ammo_damage);
+
+            ItemData::Weapon(WeaponItemData {
+                drawn: false,
+                current_ammo: 0,
+                ammo_capacity: total_weapon_capacity,
+                damage: total_weapon_damage,
+            })
+        }
+    };
+
     EquipmentItem {
-        models,
         resistances,
-        attachment_parents,
         base_keywords,
         combined_keywords,
         weight: total_weight,
         value: total_value,
+        data,
+        kind,
+    }
+}
+
+pub async fn load_equipment_item_models(
+    loader: &AssetLoader,
+    esp_loader: &EspLoader,
+    form: FormId,
+    attachments: &[FormId],
+    female: bool,
+) -> EquipmentItemModels {
+    let mut models = Vec::new();
+    let mut attachment_point_parents = HashMap::new();
+
+    match esp_loader.lookup(None, form).await.unwrap().data {
+        RecordData::Armor(armor) => {
+            for model in &*armor.models {
+                let addon = esp_loader
+                    .lookup(Some(RecordKind::ArmorAddon), model.armor_addon)
+                    .await
+                    .unwrap();
+                let addon = match addon.data {
+                    RecordData::ArmorAddon(data) => data,
+                    _ => unreachable!(),
+                };
+
+                let mut model_path = None;
+                if female {
+                    if let Some(model) = addon.female_model.model {
+                        model_path = Some(model);
+                    }
+                } else {
+                    if let Some(model) = addon.male_model.model {
+                        model_path = Some(model);
+                    }
+                }
+
+                let Some(model_path) = model_path else {
+                    continue;
+                };
+
+                let scene = loader
+                    .load::<NifScene, _>(model_path.as_str().unwrap())
+                    .await
+                    .unwrap();
+                models.push(scene);
+            }
+        }
+        RecordData::Weapon(weapon) => {
+            let model_index = models.len();
+            if let Some(model) = &weapon.model.model {
+                let scene = loader
+                    .load::<NifScene, _>(model.as_str().unwrap())
+                    .await
+                    .unwrap();
+                models.push(scene);
+            }
+
+            if let Some(attach_parent_slots) = weapon.attach_parent_slots {
+                for slot in &attach_parent_slots {
+                    attachment_point_parents.insert(*slot, model_index);
+                }
+            }
+        }
+        _ => unreachable!(),
+    }
+
+    let mut attachment_parents = HashMap::new();
+    for attachment in attachments {
+        let RecordData::ObjectModification(attachment) =
+            esp_loader.lookup(None, *attachment).await.unwrap().data
+        else {
+            unreachable!()
+        };
+
+        let Some(parent) = attachment_point_parents.get(&attachment.data.attach_point) else {
+            continue;
+        };
+
+        let model_index = if let Some(model) = &attachment.model.model {
+            let scene = loader
+                .load::<NifScene, _>(model.as_str().unwrap())
+                .await
+                .unwrap();
+
+            let model_index = models.len();
+            models.push(scene);
+
+            attachment_parents.insert(model_index, *parent);
+
+            model_index
+        } else {
+            // If the attachment does not have a model, but it does have further
+            // attachment points we directly attachment the parents to the parent.
+            *parent
+        };
+
+        for slot in &attachment.data.attach_parent_slots {
+            attachment_point_parents.insert(*slot, model_index);
+        }
+    }
+
+    EquipmentItemModels {
+        models,
+        attachment_parents,
     }
 }
 

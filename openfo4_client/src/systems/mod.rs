@@ -1,3 +1,6 @@
+use glam::Quat;
+use hecs::Entity;
+
 pub mod actor_value;
 pub mod aim;
 pub mod animation_sync;
@@ -22,4 +25,12 @@ pub struct PlayerControlState {
     pub sprinting: bool,
     pub walking: bool,
     pub jumping: bool,
+}
+
+#[derive(Copy, Clone, Debug, Default)]
+pub struct FacingDirection(pub Quat);
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub struct GunFireEvent {
+    pub actor: Entity,
 }

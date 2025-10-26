@@ -3,16 +3,13 @@ use std::sync::Arc;
 use game_tasks::TaskPool;
 use hashbrown::{HashMap, HashSet};
 use hecs::{Entity, World};
-use openfo4_animation::skeleton::SkeletonInstance;
 use openfo4_asset::AssetLoader;
 use openfo4_core::events::EventBus;
-use openfo4_esp::{FormId, RecordData, RecordKind};
+use openfo4_esp::FormId;
 use slab::Slab;
 
-use crate::assets::nif_v2::NifScene;
-use crate::state::equipment::load_equipment_item;
-use crate::state::esp::{self, EspLoader};
-use crate::systems::equipment::{Equipment, equip_item};
+use crate::state::equipment::{load_equipment_item, load_equipment_item_models};
+use crate::state::esp::EspLoader;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct InventoryKey(usize);
@@ -49,13 +46,45 @@ impl Inventory {
 #[derive(Clone, Debug)]
 pub struct ItemStack {
     pub item: FormId,
+    pub kind: ItemKind,
     pub count: u64,
     pub attachments: Vec<FormId>,
     pub equipped: bool,
-    /// If the weapon is currently drawn.
-    pub drawn: bool,
     pub base_keywords: HashSet<FormId>,
     pub combined_keywords: HashSet<FormId>,
+    pub data: ItemData,
+}
+
+#[derive(Clone, Debug)]
+pub enum ItemData {
+    Weapon(WeaponItemData),
+    Armor,
+    None,
+}
+
+#[derive(Clone, Debug)]
+pub struct WeaponItemData {
+    /// Whether the weapon is currently drawn.
+    ///
+    /// This is different from the [`equipped`] bit, which only defines whether the weapon is in
+    /// the active slot.
+    ///
+    /// [`equipped`]: ItemStack::equipped
+    pub drawn: bool,
+    /// Current ammo count of the weapon.
+    pub current_ammo: u32,
+    /// Maximum ammo count.
+    pub ammo_capacity: u32,
+    /// Damage of the weapon projectile for each damage type.
+    ///
+    /// The damage defined on the `AMMO` record is already included in this.
+    pub damage: HashMap<FormId, u32>,
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub enum ItemKind {
+    Weapon,
+    Armor,
 }
 
 impl ItemStack {
@@ -93,14 +122,21 @@ pub fn handle_inventory_events(
     for event in events.read::<AddItemEvent>() {
         let mut inventory = world.get::<&mut Inventory>(event.actor).unwrap();
 
+        let item = futures_lite::future::block_on(load_equipment_item(
+            esp_loader,
+            event.item,
+            &event.attachments,
+        ));
+
         inventory.insert(ItemStack {
             item: event.item,
+            kind: item.kind,
             count: 1,
             attachments: event.attachments.clone(),
             equipped: false,
-            drawn: false,
-            base_keywords: HashSet::new(),
-            combined_keywords: HashSet::new(),
+            base_keywords: item.base_keywords,
+            combined_keywords: item.combined_keywords,
+            data: item.data,
         });
     }
 
@@ -116,19 +152,21 @@ pub fn handle_inventory_events(
         }
 
         item.equipped = true;
-        item.drawn = true;
 
-        let equipment = futures_lite::future::block_on(load_equipment_item(
+        match &mut item.data {
+            ItemData::Weapon(weapon) => {
+                weapon.drawn = true;
+            }
+            _ => (),
+        }
+
+        let equipment = futures_lite::future::block_on(load_equipment_item_models(
             loader,
             esp_loader,
             item.item,
             &item.attachments,
             false,
         ));
-
-        item.base_keywords = equipment.base_keywords.clone();
-        item.combined_keywords = equipment.combined_keywords.clone();
-        dbg!(&item.combined_keywords);
 
         drop(inventory);
         equipment.attach_scene(world, event.actor);

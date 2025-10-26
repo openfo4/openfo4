@@ -341,7 +341,7 @@ impl PhysicsPipeline {
         )
     }
 
-    pub fn cast_ray(&self, ray: Ray, max_toi: f32) -> Option<QueryHit> {
+    pub fn cast_ray(&self, ray: Ray, max_toi: f32, filter: QueryFilter<'_>) -> Option<QueryHit> {
         let _span = trace_span!("PhysicsPipeline::cast_ray").entered();
 
         let ray = rapier3d::geometry::Ray {
@@ -349,7 +349,16 @@ impl PhysicsPipeline {
             dir: ray.direction.into(),
         };
 
+        let predicate = |handle: ColliderHandle, _: &rapier3d::prelude::Collider| -> bool {
+            let entity = self.collider_handle_entities.get(&handle).unwrap();
+            !filter.exclude_colliders.contains(entity)
+        };
+
         self.query_pipeline()
+            .with_filter(rapier3d::pipeline::QueryFilter {
+                predicate: Some(&predicate),
+                ..Default::default()
+            })
             .cast_ray(&ray, max_toi, true)
             .map(|(collider, toi)| {
                 let entity = *self.collider_handle_entities.get(&collider).unwrap();
@@ -527,4 +536,10 @@ pub struct QueryHit {
     pub entity: Entity,
     /// The distance of the entity.
     pub toi: f32,
+}
+
+#[derive(Copy, Clone, Debug)]
+pub struct QueryFilter<'a> {
+    /// Exclude all matching entities with a collider.
+    pub exclude_colliders: &'a [Entity],
 }

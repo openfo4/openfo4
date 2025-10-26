@@ -5,6 +5,7 @@ use game_input::keyboard::KeyCode;
 use game_window::events::WindowEvent;
 use glam::{Quat, Vec3};
 use hecs::{CommandBuffer, World};
+use openfo4_core::events::EventBus;
 use openfo4_physics::PhysicsPipeline;
 use openfo4_physics::components::ColliderShape;
 use openfo4_physics::controller::CharacterController;
@@ -16,23 +17,29 @@ use crate::state::actions::{Action, Actions};
 use crate::state::anim_starter::AnimationEventQueue;
 use crate::state::hardcoded_formids::KEYWORD_FEMALE;
 use crate::state::npc::ActorKeywords;
-use crate::systems::PlayerControlState;
 use crate::systems::animation_sync::AnimationParameters;
 use crate::systems::camera::{CameraMode, CameraOffset, PlayerControlled};
+use crate::systems::{FacingDirection, GunFireEvent, PlayerControlState};
 
-pub fn handle_inputs(world: &mut World, actions: &Actions, event: &WindowEvent) {
+pub fn handle_inputs(
+    world: &mut World,
+    actions: &Actions,
+    event: &WindowEvent,
+    events: &mut EventBus,
+) {
     for (_, camera) in world.query_mut::<&Camera>() {
         if matches!(camera.mode, CameraMode::Free) {
             return;
         }
     }
 
-    for (_, (transform, offset, _, queue, state)) in world.query_mut::<(
+    for (entity, (transform, offset, _, queue, state, facing_dir)) in world.query_mut::<(
         &mut Transform,
         &mut CameraOffset,
         &PlayerControlled,
         &mut AnimationEventQueue,
         &mut PlayerControlState,
+        &mut FacingDirection,
     )>() {
         match event {
             WindowEvent::MouseMotion(event) => {
@@ -45,6 +52,8 @@ pub fn handle_inputs(world: &mut World, actions: &Actions, event: &WindowEvent) 
                 offset.rotation = q1 * offset.rotation;
                 offset.rotation = offset.rotation * q2;
                 offset.rotation = offset.rotation.normalize();
+
+                facing_dir.0 = ((q1 * facing_dir.0) * q2).normalize();
 
                 transform.rotation = (q1 * transform.rotation).normalize();
             }
@@ -108,6 +117,9 @@ pub fn handle_inputs(world: &mut World, actions: &Actions, event: &WindowEvent) 
                     }
                     Some(KeyCode::Key1) if event.state.is_pressed() => {
                         state.walking ^= true;
+                    }
+                    Some(KeyCode::Key2) if event.state.is_pressed() => {
+                        events.send(GunFireEvent { actor: entity });
                     }
                     _ => continue,
                 }

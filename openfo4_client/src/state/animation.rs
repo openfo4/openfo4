@@ -7,7 +7,6 @@ use game_tasks::TaskPool;
 use game_tracing::trace_span;
 use hashbrown::HashSet;
 use hecs::{CommandBuffer, World};
-use openfo4_animation::animation::AnimationClip;
 use openfo4_animation::driver::AnimationDriver;
 use openfo4_animation::skeleton::{Bone, Skeleton};
 use openfo4_asset::{AssetLoader, Handle};
@@ -21,8 +20,8 @@ use crate::assets::nif_v2::NifScene;
 use crate::loader::fix_path;
 use crate::state::anim_starter::ActiveBehaviorGraphs;
 use crate::state::animation_test::load_behavior_data;
-use crate::state::npc::{ActorAnimationGraphData, ActorAnimationGraphs, ActorKeywords};
-use crate::systems::inventory::Inventory;
+use crate::state::npc::{ActorAnimationGraphData, ActorKeywords};
+use crate::systems::inventory::{Inventory, ItemData};
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct SkeletonConfig<'a> {
@@ -236,10 +235,16 @@ pub fn update_actor_animation_graphs(world: &mut World, loader: &AssetLoader, po
         let mut max_actor_keywords = 0;
         let mut max_target_keywords = 0;
 
-        let is_weapon_drawn = inventory.items().any(|v| v.drawn);
+        let is_weapon_drawn = inventory.items().any(|item| match &item.data {
+            ItemData::Weapon(weapon) => weapon.drawn,
+            _ => false,
+        });
         let weapon_keywords: HashSet<_> = inventory
             .items()
-            .filter(|v| v.drawn)
+            .filter(|item| match &item.data {
+                ItemData::Weapon(weapon) => weapon.drawn,
+                _ => false,
+            })
             .map(|v| v.combined_keywords.iter())
             .flatten()
             .copied()

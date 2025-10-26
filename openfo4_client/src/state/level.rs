@@ -15,6 +15,7 @@ use game_tracing::trace_span;
 use glam::{EulerRot, Quat, UVec2, Vec2, Vec3};
 use hecs::World;
 use openfo4_asset::{AssetLoader, Handle};
+use openfo4_core::events::EventBus;
 use openfo4_core::hierarchy::Children;
 use openfo4_esp::records::{
     Cell, LandLandTexture, LandTextureAlphaLayerPoint, LightDataFlags, Quadrant,
@@ -128,7 +129,7 @@ impl Level {
         }
     }
 
-    pub fn update(&mut self, world: &mut World, events: &mut Vec<Event>) {
+    pub fn update(&mut self, world: &mut World, events: &mut Vec<Event>, event_bus: &mut EventBus) {
         let _span = trace_span!("Level::update").entered();
 
         self.unload_cells(world);
@@ -169,7 +170,7 @@ impl Level {
                     let entity = if let Some(scene) = event.scene {
                         scene.instantiate(event.transform.into(), world)
                     } else if let Some(actor) = event.actor {
-                        actor.instantiate(world)
+                        actor.instantiate(world, event_bus)
                     } else {
                         world.reserve_entity()
                     };

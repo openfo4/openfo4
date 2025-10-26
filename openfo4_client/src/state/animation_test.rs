@@ -100,7 +100,7 @@ pub fn animation_test(
                 futures_lite::future::block_on(spawn_actor(asset_loader, esp_loader, FormId(0x7)))
                     .unwrap();
 
-            let root = actor.instantiate(world);
+            let root = actor.instantiate(world, events);
 
             // let race = futures_lite::future::block_on(
             //     esp_loader.lookup(Some(RecordKind::Race), FormId(0x13746)),
@@ -127,35 +127,32 @@ pub fn animation_test(
             let inventory = Inventory::default();
             let armor = FormId(0x001BBCB5);
 
-            // let root = world.spawn((Transform::from(*offset),));
-            // let skeleton_instance = character.instantiate(root, world).skeleton;
+            events.send(AddItemEvent {
+                actor: root,
+                item: armor,
+                attachments: Vec::new(),
+            });
+            events.send(EquipItemEvent {
+                actor: root,
+                item: armor,
+            });
 
-            // events.send(AddItemEvent {
-            //     actor: root,
-            //     item: armor,
-            //     attachments: Vec::new(),
-            // });
-            // events.send(EquipItemEvent {
-            //     actor: root,
-            //     item: armor,
-            // });
-
-            // events.send(AddItemEvent {
-            //     actor: root,
-            //     item: FormId(0x9983b),
-            //     // OMODs
-            //     attachments: vec![
-            //         FormId(0x12eced),
-            //         FormId(0x9983d),
-            //         FormId(0x99836),
-            //         FormId(0x1877fa),
-            //         FormId(0x4f21d),
-            //     ],
-            // });
-            // events.send(EquipItemEvent {
-            //     actor: root,
-            //     item: FormId(0x9983b),
-            // });
+            events.send(AddItemEvent {
+                actor: root,
+                item: FormId(0x9983b),
+                // OMODs
+                attachments: vec![
+                    FormId(0x12eced),
+                    FormId(0x9983d),
+                    FormId(0x99836),
+                    FormId(0x1877fa),
+                    FormId(0x4f21d),
+                ],
+            });
+            events.send(EquipItemEvent {
+                actor: root,
+                item: FormId(0x9983b),
+            });
 
             world.insert_one(root, inventory).unwrap();
             world.insert_one(root, Transform::from(*offset)).unwrap();

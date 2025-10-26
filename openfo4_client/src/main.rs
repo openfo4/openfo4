@@ -40,7 +40,7 @@ use render::physics_debug::{
 use shared::SharedState;
 use state::GameState;
 
-use crate::render::physics_debug::draw_light_markers;
+use crate::render::physics_debug::{despawn_expired, draw_hitscan_markers, draw_light_markers};
 
 #[main]
 fn main() {
@@ -145,6 +145,10 @@ impl game_window::App for App {
                 if event.key_code == Some(KeyCode::F10) && event.state.is_pressed() {
                     self.debug_options.draw_light_markers ^= true;
                 }
+
+                if event.key_code == Some(KeyCode::F11) && event.state.is_pressed() {
+                    self.debug_options.draw_hitscan_raycast_markers ^= true;
+                }
             }
             _ => (),
         }
@@ -198,6 +202,10 @@ impl game_window::App for App {
             draw_light_markers(self.game.world(), &self.state.gizmos);
         }
 
+        if self.debug_options.draw_hitscan_raycast_markers {
+            draw_hitscan_markers(self.game.world(), &self.state.gizmos);
+        }
+
         self.time.update();
 
         self.game.update(&self.time, &self.state.gizmos);
@@ -215,4 +223,5 @@ struct DebugOptions {
     pub draw_cell_boundaries: bool,
     pub draw_skeletons: bool,
     pub draw_light_markers: bool,
+    pub draw_hitscan_raycast_markers: bool,
 }

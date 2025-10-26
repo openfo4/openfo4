@@ -1,34 +1,28 @@
 use std::collections::VecDeque;
 use std::hash::Hash;
 use std::num::NonZeroU16;
-use std::sync::Arc;
 
 use hashbrown::{HashMap, HashSet};
 use hecs::{Entity, World};
-use openfo4_animation::AnimationGraph;
-use openfo4_animation::driver::AnimationDriver;
 use openfo4_asset::AssetLoader;
 use openfo4_core::WorldExt;
+use openfo4_core::events::EventBus;
 use openfo4_esp::records::{
     Class, LeveledActorFlags, NpcBaseFlags, NpcTemplateFlags, Race, RaceSubgraphData, SubgraphFlags,
 };
 use openfo4_esp::{FormId, RecordData, RecordKind};
-use openfo4_hkx::character::CharacterData;
 use openfo4_physics::components::{Collider, RigidBody};
 use rand::distr::Distribution;
 use rand::distr::weighted::WeightedIndex;
 
-use crate::assets::animation::AnimationSet;
-use crate::loader::fix_path;
-use crate::state::animation_test::{
-    ActorCharacter, BodyPartBoneProps, load_behavior_data, load_character,
-};
-use crate::state::equipment::{EquipmentItem, load_equipment_item};
+use crate::state::animation_test::{ActorCharacter, BodyPartBoneProps, load_character};
 use crate::state::esp::EspLoader;
 use crate::state::hardcoded_formids::KEYWORD_FEMALE;
+use crate::systems::FacingDirection;
 use crate::systems::actor_value::ActorValueProperties;
 use crate::systems::controller::ControllerShape;
-use crate::systems::equipment::{Equipment, equip_item};
+use crate::systems::equipment::Equipment;
+use crate::systems::inventory::{AddItemEvent, EquipItemEvent, Inventory};
 
 // FIXME: Unhardcode this guy.
 const PLAYER_LEVEL: u16 = 1000;
@@ -53,13 +47,13 @@ pub struct Actor {
     anim_graphs: ActorAnimationGraphData,
     character: ActorCharacter,
     controller: ControllerShape,
-    skin: Option<EquipmentItem>,
+    skin: Option<FormId>,
     properties: ActorValueProperties,
     keywords: ActorKeywords,
 }
 
 impl Actor {
-    pub fn instantiate(self, world: &mut World) -> Entity {
+    pub fn instantiate(self, world: &mut World, events: &mut EventBus) -> Entity {
         let collider = world.spawn((
             self.controller.offset,
             Collider {
@@ -73,24 +67,32 @@ impl Actor {
         let spawned_actor = self.character.instantiate(root, world);
         let instance = spawned_actor.skeleton;
 
-        let mut equipment = Equipment::default();
         if let Some(skin) = self.skin {
-            for scene in &skin.models {
-                equip_item(root, &scene, &instance, world, &mut equipment, None);
-            }
+            events.send(AddItemEvent {
+                actor: root,
+                item: skin,
+                attachments: Vec::new(),
+            });
+
+            events.send(EquipItemEvent {
+                actor: root,
+                item: skin,
+            });
         }
 
         world
             .insert(
                 root,
                 (
+                    Inventory::default(),
+                    Equipment::default(),
                     self.anim_graphs,
                     RigidBody::FIXED,
                     self.controller,
                     instance,
-                    equipment,
                     self.properties,
                     self.keywords,
+                    FacingDirection::default(),
                 ),
             )
             .unwrap();
@@ -176,10 +178,7 @@ pub async fn spawn_actor(
         });
     }
 
-    let mut skin = None;
-    if let Some(skin_form) = props.skin.or(data.skin) {
-        skin = Some(load_equipment_item(loader, esp_loader, skin_form, &[], props.female).await);
-    }
+    let skin = props.skin.or(data.skin);
 
     let mut keywords: HashSet<FormId> = props.keywords.into_iter().collect();
     keywords.extend(data.keywords.iter().flatten());

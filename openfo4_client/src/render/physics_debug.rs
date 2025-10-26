@@ -1,9 +1,11 @@
 use std::f32::consts::PI;
+use std::time::Instant;
 
 use game_common::components::{Axis, Color, GlobalTransform, PointLight, Transform};
+use game_common::math::Ray;
 use game_gizmos::Gizmos;
 use glam::{Quat, Vec3};
-use hecs::World;
+use hecs::{CommandBuffer, World};
 use openfo4_animation::skeleton::BoneMarker;
 use openfo4_core::hierarchy::Children;
 use openfo4_physics::components::{Collider, ColliderShape};
@@ -13,6 +15,34 @@ use crate::components::{Camera, NiTransform};
 use crate::state::npc::BodyPartBone;
 
 const COLOR: Color = Color::RED;
+
+const HITSCAN_RAYCAST_LINE_HIT_COLOR: Color = Color::GREEN;
+const HITSCAN_RAYCAST_LINE_MISS_COLOR: Color = Color::RED;
+const HITSCAN_RAYCAST_HIT_COLOR: Color = Color::GREEN;
+
+#[derive(Copy, Clone, Debug)]
+pub struct HitscanRaycast {
+    pub ray: Ray,
+    pub max_toi: f32,
+    pub impact_toi: Option<f32>,
+}
+
+/// Entities with this component are despawned when the time is reached.
+#[derive(Copy, Clone, Debug)]
+pub struct DespawnAt(pub Instant);
+
+pub fn despawn_expired(world: &mut World) {
+    let mut commands = CommandBuffer::new();
+
+    let now = Instant::now();
+    for (entity, expires) in world.query::<&DespawnAt>().iter() {
+        if now >= expires.0 {
+            commands.despawn(entity);
+        }
+    }
+
+    commands.run_on(world);
+}
 
 pub fn draw_colliers(world: &World, gizmos: &Gizmos) {
     for (_, (transform, collider, body_part)) in world
@@ -164,5 +194,30 @@ pub fn draw_skeletons(world: &World, gizmos: &Gizmos) {
 pub fn draw_light_markers(world: &World, gizmos: &Gizmos) {
     for (_, (transform, light)) in world.query::<(&GlobalTransform, &PointLight)>().iter() {
         gizmos.sphere(transform.0.translation, light.radius, light.color);
+    }
+}
+
+pub fn draw_hitscan_markers(world: &World, gizmos: &Gizmos) {
+    for (_, raycast) in world.query::<&HitscanRaycast>().iter() {
+        let toi = raycast.impact_toi.unwrap_or(raycast.max_toi);
+
+        let color = if raycast.impact_toi.is_some() {
+            HITSCAN_RAYCAST_LINE_HIT_COLOR
+        } else {
+            HITSCAN_RAYCAST_LINE_MISS_COLOR
+        };
+
+        gizmos.line(raycast.ray.origin, raycast.ray.point(toi), color);
+
+        if let Some(toi) = raycast.impact_toi {
+            raycast.ray.point(toi);
+
+            gizmos.circle(
+                raycast.ray.point(toi),
+                raycast.ray.direction,
+                0.5,
+                HITSCAN_RAYCAST_HIT_COLOR,
+            );
+        }
     }
 }
