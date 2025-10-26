@@ -10,14 +10,42 @@ use openfo4_physics::components::{Collider, CollisionLayer};
 use openfo4_physics::{PhysicsPipeline, QueryFilter};
 
 use crate::render::physics_debug::{DespawnAt, HitscanRaycast};
+use crate::state::actions::{Action, Actions};
+use crate::state::anim_starter::AnimationEventQueue;
 use crate::state::npc::BodyPartBone;
 use crate::systems::inventory::{Inventory, ItemData};
-use crate::systems::{FacingDirection, GunFireEvent, GunReloadEvent, ProjectileHitEvent};
+use crate::systems::{
+    FacingDirection, GunFireEvent, GunReloadEvent, GunReloadRequest, ProjectileHitEvent,
+};
 
 #[derive(Clone, Debug)]
 pub struct EquippedGun {
     pub ammo: u32,
     pub damage: u32,
+}
+
+pub fn handle_weapon_reload_requests(world: &mut World, actions: &Actions, events: &EventBus) {
+    for event in events.read::<GunReloadRequest>() {
+        let Ok(entity) = world.entity(event.actor) else {
+            continue;
+        };
+
+        let inventory = entity.get::<&Inventory>().unwrap();
+        let mut animation_events = entity.get::<&mut AnimationEventQueue>().unwrap();
+
+        let can_reload = inventory.items().any(|item| match &item.data {
+            ItemData::Weapon(weapon) => {
+                item.equipped && weapon.current_ammo != weapon.ammo_capacity
+            }
+            _ => false,
+        });
+
+        if can_reload {
+            if let Some(action) = actions.0.get(&Action::Reload) {
+                animation_events.0.push_back(*action);
+            }
+        }
+    }
 }
 
 pub fn handle_weapon_fire_events(

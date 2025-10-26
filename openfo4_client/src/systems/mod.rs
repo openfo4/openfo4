@@ -53,3 +53,8 @@ pub struct ProjectileHitEvent {
     /// The damage applied by the projectile.
     pub damage: HashMap<FormId, u32>,
 }
+
+#[derive(Copy, Clone, Debug)]
+pub struct GunReloadRequest {
+    pub actor: Entity,
+}
