@@ -1,7 +1,6 @@
 use std::ops::RangeInclusive;
 use std::sync::LazyLock;
 
-use game_tracing::span::EnteredSpan;
 use hashbrown::HashMap;
 use hecs::World;
 use openfo4_animation::Value;
@@ -10,7 +9,7 @@ use openfo4_animation::systems::{GameAnimationEvent, GameEvent};
 use openfo4_core::events::EventBus;
 
 use crate::state::anim_starter::ActiveBehaviorGraphs;
-use crate::systems::GunFireEvent;
+use crate::systems::{GunFireEvent, GunReloadEvent};
 
 #[derive(Clone, Debug)]
 pub struct AnimationParameters {
@@ -219,6 +218,12 @@ pub fn bounce_animation_events(events: &mut EventBus) {
         match event.event {
             GameEvent::WeaponFire => {
                 events.send(GunFireEvent {
+                    actor: event.entity,
+                });
+            }
+            GameEvent::ReloadComplete => {
+                dbg!(&event);
+                events.send(GunReloadEvent {
                     actor: event.entity,
                 });
             }

@@ -37,6 +37,11 @@ pub struct GunFireEvent {
     pub actor: Entity,
 }
 
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub struct GunReloadEvent {
+    pub actor: Entity,
+}
+
 #[derive(Clone, Debug)]
 pub struct ProjectileHitEvent {
     /// The actor that was hit.

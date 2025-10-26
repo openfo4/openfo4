@@ -60,7 +60,7 @@ use crate::systems;
 use crate::systems::animation_sync::{bounce_animation_events, update_animation_parameters};
 use crate::systems::camera::CameraMode;
 use crate::systems::controller::apply_player_movements;
-use crate::systems::weapon::handle_weapon_fire_events;
+use crate::systems::weapon::{handle_weapon_fire_events, handle_weapon_reload_events};
 
 pub const UPS: u32 = 60;
 
@@ -259,6 +259,7 @@ impl GameState {
         );
         update_actor_animation_graphs(&mut self.world, &self.asset_loader, &self.pool);
         handle_weapon_fire_events(&mut self.world, &self.physics, &mut self.event_bus);
+        handle_weapon_reload_events(&mut self.world, &mut self.event_bus);
 
         if self.physics_debug {
             self.physics.render_debug(gizmos);

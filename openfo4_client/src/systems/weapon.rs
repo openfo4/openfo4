@@ -12,7 +12,7 @@ use openfo4_physics::{PhysicsPipeline, QueryFilter};
 use crate::render::physics_debug::{DespawnAt, HitscanRaycast};
 use crate::state::npc::BodyPartBone;
 use crate::systems::inventory::{Inventory, ItemData};
-use crate::systems::{FacingDirection, GunFireEvent, ProjectileHitEvent};
+use crate::systems::{FacingDirection, GunFireEvent, GunReloadEvent, ProjectileHitEvent};
 
 #[derive(Clone, Debug)]
 pub struct EquippedGun {
@@ -36,12 +36,12 @@ pub fn handle_weapon_fire_events(
 
         let transform = entity.get::<&GlobalTransform>().unwrap();
         let facing_dir = entity.get::<&FacingDirection>().unwrap();
-        let inventory = entity.get::<&Inventory>().unwrap();
+        let mut inventory = entity.get::<&mut Inventory>().unwrap();
 
         let mut equipped_weapons = Vec::new();
 
-        for item in inventory.items() {
-            let ItemData::Weapon(weapon) = &item.data else {
+        for item in inventory.items_mut() {
+            let ItemData::Weapon(weapon) = &mut item.data else {
                 continue;
             };
 
@@ -54,6 +54,8 @@ pub fn handle_weapon_fire_events(
             if weapon.current_ammo == 0 {
                 continue;
             }
+
+            weapon.current_ammo -= 1;
 
             equipped_weapons.push(weapon);
         }
@@ -118,4 +120,27 @@ pub fn handle_weapon_fire_events(
     }
 
     commands.run_on(world);
+}
+
+pub fn handle_weapon_reload_events(world: &mut World, events: &mut EventBus) {
+    for event in events.read::<GunReloadEvent>() {
+        let Ok(entity) = world.entity(event.actor) else {
+            continue;
+        };
+
+        let mut inventory = entity.get::<&mut Inventory>().unwrap();
+
+        for item in inventory.items_mut() {
+            let ItemData::Weapon(weapon) = &mut item.data else {
+                continue;
+            };
+
+            if !weapon.drawn {
+                debug_assert!(!item.equipped);
+                continue;
+            }
+
+            weapon.current_ammo = weapon.ammo_capacity;
+        }
+    }
 }
