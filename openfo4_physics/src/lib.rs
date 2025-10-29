@@ -253,11 +253,6 @@ impl PhysicsPipeline {
                 let translation = collider_parent.transform.translation * scale_to_parent;
                 let rotation = collider_parent.transform.rotation;
 
-                state.set_position_wrt_parent(Isometry {
-                    translation: Vector::from(translation).into(),
-                    rotation: rotation.into(),
-                });
-
                 state.set_friction(collider.friction);
                 state.set_restitution(collider.restitution);
                 state.set_collision_groups(collider.layer.to_interaction_groups());
@@ -267,6 +262,15 @@ impl PhysicsPipeline {
                     Some(collider_parent.body),
                     &mut self.bodies,
                 );
+
+                // We can only set the translation AFTER setting the parent. Setting the
+                // parent requires access to all colliders for some reason. (rapiers API
+                // is probably just weird...).
+                let state = self.colliders.get_mut(spawned_collider.handle).unwrap();
+                state.set_position_wrt_parent(Isometry {
+                    translation: Vector::from(translation).into(),
+                    rotation: rotation.into(),
+                });
             }
         }
 
@@ -552,4 +556,53 @@ pub struct QueryFilter<'a> {
     pub layers: &'a [CollisionLayer],
     /// Exclude all matching entities with a collider.
     pub exclude_colliders: &'a [Entity],
+}
+
+#[cfg(test)]
+mod tests {
+    use game_common::components::{Axis, Transform};
+    use glam::Vec3;
+    use hecs::World;
+    use openfo4_core::hierarchy::Children;
+
+    use crate::collect_collider_children;
+    use crate::components::{Capsule, Collider, ColliderShape, CollisionLayer, RigidBody};
+
+    fn create_dummy_collider() -> Collider {
+        Collider {
+            friction: 1.0,
+            restitution: 0.0,
+            shape: ColliderShape::Capsule(Capsule {
+                axis: Axis::X,
+                half_height: 1.0,
+                radius: 1.0,
+            }),
+            layer: CollisionLayer::STATIC,
+        }
+    }
+
+    #[test]
+    fn test_collect_collider_children() {
+        let mut world = World::new();
+        let e0 = world.spawn((
+            Transform::from_translation(Vec3::splat(2.0)),
+            create_dummy_collider(),
+        ));
+        let e1 = world.spawn((
+            Transform::from_translation(Vec3::splat(1.0)),
+            Children(vec![e0]),
+            create_dummy_collider(),
+        ));
+        let root = world.spawn((Transform::default(), RigidBody::DYNAMIC, Children(vec![e1])));
+
+        assert_eq!(
+            collect_collider_children(root, &world),
+            [
+                (e0, Transform::from_translation(Vec3::splat(3.0))),
+                (e1, Transform::from_translation(Vec3::splat(1.0)))
+            ]
+            .into_iter()
+            .collect()
+        );
+    }
 }
