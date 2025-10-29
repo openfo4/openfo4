@@ -60,7 +60,8 @@ use crate::systems::animation_sync::{bounce_animation_events, update_animation_p
 use crate::systems::camera::CameraMode;
 use crate::systems::controller::apply_player_movements;
 use crate::systems::weapon::{
-    handle_weapon_fire_events, handle_weapon_reload_events, handle_weapon_reload_requests,
+    handle_weapon_fire_events, handle_weapon_hit_damage, handle_weapon_reload_events,
+    handle_weapon_reload_requests,
 };
 use crate::systems::{self, GunReloadRequest};
 
@@ -264,6 +265,7 @@ impl GameState {
         handle_weapon_reload_requests(&mut self.world, &self.actions, &self.event_bus);
         handle_weapon_fire_events(&mut self.world, &self.physics, &mut self.event_bus);
         handle_weapon_reload_events(&mut self.world, &mut self.event_bus);
+        handle_weapon_hit_damage(&mut self.world, &mut self.event_bus);
 
         if self.physics_debug {
             self.physics.render_debug(gizmos);

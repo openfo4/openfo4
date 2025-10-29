@@ -42,6 +42,23 @@ pub struct BodyPartBone {
 #[derive(Clone, Debug)]
 pub struct ActorAnimationGraphs(pub Vec<ActorAnimationGraph>);
 
+#[derive(Clone, Debug)]
+pub struct ActorBodyParts(Vec<ActorBodyPart>);
+
+impl ActorBodyParts {
+    pub fn get(&self, id: u32) -> Option<&ActorBodyPart> {
+        self.0.get(id as usize)
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct ActorBodyPart {
+    /// The actor value of the body part local health condition.
+    pub condition: FormId,
+    /// Factor applied to incoming damage hitting this body part.
+    pub damage_factor: f32,
+}
+
 #[derive(Debug)]
 pub struct Actor {
     anim_graphs: ActorAnimationGraphData,
@@ -50,6 +67,7 @@ pub struct Actor {
     skin: Option<FormId>,
     properties: ActorValueProperties,
     keywords: ActorKeywords,
+    body_parts: ActorBodyParts,
 }
 
 impl Actor {
@@ -94,6 +112,7 @@ impl Actor {
                     self.properties,
                     self.keywords,
                     FacingDirection::default(),
+                    self.body_parts,
                 ),
             )
             .unwrap();
@@ -138,6 +157,7 @@ pub async fn spawn_actor(
 
     let mut character = load_character(data, props.female, &loader).await.unwrap();
 
+    let mut actor_body_parts = Vec::new();
     if let Some(body_part_form) = data.body_part_data {
         let mut body_parts = Vec::new();
 
@@ -154,6 +174,11 @@ pub async fn spawn_actor(
             body_parts.push(BodyPartBoneProps {
                 id: id as u32,
                 start_bone: part.part_node.as_str().unwrap().to_owned(),
+            });
+
+            actor_body_parts.push(ActorBodyPart {
+                condition: part.data.actor_value,
+                damage_factor: part.data.damage_mult,
             });
         }
 
@@ -199,6 +224,7 @@ pub async fn spawn_actor(
         skin,
         properties,
         keywords: ActorKeywords(keywords),
+        body_parts: ActorBodyParts(actor_body_parts),
     })
 }
 

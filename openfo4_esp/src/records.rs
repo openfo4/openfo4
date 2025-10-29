@@ -2695,7 +2695,7 @@ pub struct Npc {
     #[record("PRKR")]
     pub perks: Vec<NpcPerk>,
     #[record("PRPS")]
-    pub properties: Vec<Property>,
+    pub properties: Array<Property>,
     #[record("COCT")]
     count_of_container: Option<u32>,
     #[record("CNTO")]

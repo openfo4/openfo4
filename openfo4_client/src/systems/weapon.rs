@@ -1,3 +1,4 @@
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use game_common::components::GlobalTransform;
@@ -12,10 +13,12 @@ use openfo4_physics::{PhysicsPipeline, QueryFilter};
 use crate::render::physics_debug::{DespawnAt, HitscanRaycast};
 use crate::state::actions::{Action, Actions};
 use crate::state::anim_starter::AnimationEventQueue;
-use crate::state::npc::BodyPartBone;
+use crate::state::hardcoded_formids::ACTOR_VALUE_HEALTH;
+use crate::state::npc::{ActorBodyParts, BodyPartBone, BodyParts};
+use crate::systems::actor_value::ActorValueProperties;
 use crate::systems::inventory::{Inventory, ItemData};
 use crate::systems::{
-    FacingDirection, GunFireEvent, GunReloadEvent, GunReloadRequest, ProjectileHitEvent,
+    DeathEvent, FacingDirection, GunFireEvent, GunReloadEvent, GunReloadRequest, ProjectileHitEvent,
 };
 
 #[derive(Clone, Debug)]
@@ -143,8 +146,8 @@ pub fn handle_weapon_fire_events(
         }
     }
 
-    if !hit_events.is_empty() {
-        dbg!(&hit_events);
+    for event in hit_events {
+        events.send(event);
     }
 
     commands.run_on(world);
@@ -170,5 +173,40 @@ pub fn handle_weapon_reload_events(world: &mut World, events: &mut EventBus) {
 
             weapon.current_ammo = weapon.ammo_capacity;
         }
+    }
+}
+
+pub fn handle_weapon_hit_damage(world: &mut World, events: &mut EventBus) {
+    let mut death_events = Vec::new();
+
+    for event in events.read::<ProjectileHitEvent>() {
+        let Ok(entity) = world.entity(event.target) else {
+            continue;
+        };
+
+        let mut properties = entity.get::<&mut ActorValueProperties>().unwrap();
+        let body_parts = entity.get::<&ActorBodyParts>().unwrap();
+
+        let Some(body_part) = body_parts.get(event.body_part) else {
+            continue;
+        };
+
+        let mut damage = 0.0;
+        for (damage_type, damage_value) in &event.damage {
+            damage += *damage_value as f32 * body_part.damage_factor;
+            // TODO: Damage resistance
+        }
+
+        let mut health = properties.get(ACTOR_VALUE_HEALTH).unwrap();
+        health = f32::max(health - damage, 0.0);
+        properties.set(ACTOR_VALUE_HEALTH, health);
+
+        death_events.push(DeathEvent {
+            actor: event.target,
+        });
+    }
+
+    for event in death_events {
+        events.send(event);
     }
 }

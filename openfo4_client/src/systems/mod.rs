@@ -58,3 +58,8 @@ pub struct ProjectileHitEvent {
 pub struct GunReloadRequest {
     pub actor: Entity,
 }
+
+#[derive(Clone, Debug)]
+pub struct DeathEvent {
+    pub actor: Entity,
+}
