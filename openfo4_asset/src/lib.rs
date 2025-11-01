@@ -1,6 +1,5 @@
 use std::any::TypeId;
 use std::borrow::Borrow;
-use std::collections::HashMap;
 use std::fmt::{self, Debug, Formatter};
 use std::hash::Hash;
 use std::ops::Deref;
@@ -8,6 +7,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use event_listener::Event;
+use hashbrown::HashMap;
 use parking_lot::RwLock;
 
 /// A loader for [`Asset`]s.
@@ -62,7 +62,7 @@ impl AssetLoader {
             panic!("asset {} not registered", std::any::type_name::<T>());
         };
 
-        if let Some(asset) = assets.assets.get(key) {
+        if let Some(AssetEntry::Loaded(asset)) = assets.assets.get(key) {
             asset.ref_count.fetch_add(1, Ordering::Relaxed);
 
             Some(Handle {
@@ -105,25 +105,27 @@ impl AssetLoader {
                     panic!("asset {} not registered", std::any::type_name::<T>());
                 };
 
-                if let Some(asset) = assets.assets.get(key) {
-                    // If we were awoken from another thread that thread
-                    // will already have inserted our refcount value.
-                    if !was_awoken {
-                        asset.ref_count.fetch_add(1, Ordering::Relaxed);
+                match assets.assets.get(key) {
+                    Some(AssetEntry::Loaded(asset)) => {
+                        // If we were awoken from another thread that thread
+                        // will already have inserted our refcount value.
+                        if !was_awoken {
+                            asset.ref_count.fetch_add(1, Ordering::Relaxed);
+                        }
+
+                        return Ok(Handle {
+                            registry: self.registry.clone(),
+                            asset: asset.clone(),
+                        });
                     }
-
-                    return Ok(Handle {
-                        registry: self.registry.clone(),
-                        asset: asset.clone(),
-                    });
-                }
-
-                // If another thread is loading the asset the waker exists and
-                // we can synchronize with it.
-                // Otherwise it is our turn to load the asset by creating a waker
-                // and then releasing the lock.
-                match assets.wakers.get(key) {
-                    Some(waker) => waker.listen(),
+                    // If another thread is loading the asset the waker exists and
+                    // we can synchronize with it.
+                    Some(AssetEntry::Loading(waker)) => {
+                        // Note that the wake-up operation can only complete once
+                        // we drop our read mutex, so there is no race condition
+                        // between checking the asset state and `waker.listen()`.
+                        waker.listen()
+                    }
                     None => {
                         // No waker exists, i.e. no other thread is loading the asset.
                         // Upgrade our lock from readable to writable. Note that this
@@ -135,23 +137,24 @@ impl AssetLoader {
 
                         // Note that it is possible for another thread to interlave
                         // and load the entire asset while we upgrade our lock.
-                        if let Some(asset) = assets.assets.get(key) {
-                            asset.ref_count.fetch_add(1, Ordering::Relaxed);
-                            return Ok(Handle {
-                                registry: self.registry.clone(),
-                                asset: asset.clone(),
-                            });
-                        }
-
-                        // Note that it is possible for another thread to interlave
-                        // and start loading while we upgrade our lock.
-                        // In this case we will subscribe to that thread and go back
-                        // to sleep.
-                        match assets.wakers.get(key) {
-                            Some(waker) => waker.listen(),
+                        match assets.assets.get(key) {
+                            Some(AssetEntry::Loaded(asset)) => {
+                                asset.ref_count.fetch_add(1, Ordering::Relaxed);
+                                return Ok(Handle {
+                                    registry: self.registry.clone(),
+                                    asset: asset.clone(),
+                                });
+                            }
+                            // Note that it is possible for another thread to interlave
+                            // and start loading while we upgrade our lock.
+                            // In this case we will subscribe to that thread and go back
+                            // to sleep.
+                            Some(AssetEntry::Loading(waker)) => waker.listen(),
                             None => {
                                 // The asset slot is now ours!
-                                assets.wakers.insert(key.to_owned(), Event::new());
+                                assets
+                                    .assets
+                                    .insert(key.to_owned(), AssetEntry::Loading(Event::new()));
                                 ctx = registry.context::<T>().unwrap();
                                 break;
                             }
@@ -178,13 +181,23 @@ impl AssetLoader {
         // above and if an asset exists once it can never be removed.
         let assets = unsafe { registry.get_mut::<T>().unwrap_unchecked() };
 
+        let entry = assets.assets.get_mut(key).unwrap();
+        let AssetEntry::Loading(waker) = entry else {
+            unreachable!();
+        };
+
         // Wake up all threads listening for our result.
         // Note that the number of listeners cannot change while we have
         // an exclusive lock.
-        let waker = assets.wakers.remove(key).unwrap();
         waker.notify(waker.total_listeners());
 
-        let value = res?;
+        let value = match res {
+            Ok(value) => value,
+            Err(err) => {
+                assets.assets.remove(key).unwrap();
+                return Err(err);
+            }
+        };
 
         // If other threads are waiting for our value we will initialize
         // the refcount with the number that all handles will return.
@@ -199,30 +212,7 @@ impl AssetLoader {
             ref_count,
         });
 
-        debug_assert!(!assets.assets.contains_key(key));
-        assets.assets.insert(owned_key, asset.clone());
-
-        // Note that it is possible for another thread to have loaded the exact
-        // same asset at the same time as us.
-        // FIXME: For now we drop our asset and use theirs instead, but in the future
-        // we should block all other threads while we load the asset (asynchronously).
-        // if let Some(asset) = assets.assets.get(key) {
-        //     asset.ref_count.fetch_add(1, Ordering::Relaxed);
-
-        //     return Ok(Handle {
-        //         registry: self.registry.clone(),
-        //         asset: asset.clone(),
-        //     });
-        // }
-
-        // let asset = Arc::new(AssetState {
-        //     value,
-        //     key: owned_key.clone(),
-        //     // Refcount of one for the handle that we will return.
-        //     ref_count: AtomicUsize::new(1),
-        // });
-
-        // assets.assets.insert(owned_key, asset.clone());
+        *entry = AssetEntry::Loaded(asset.clone());
 
         Ok(Handle {
             registry: self.registry.clone(),
@@ -252,13 +242,23 @@ pub trait Asset: Sized + Send + Sync + 'static {
     ) -> impl Future<Output = Result<Self, Self::Error>>;
 }
 
-#[derive(Debug)]
 pub struct Assets<T>
 where
     T: Asset,
 {
-    assets: HashMap<T::Key, Arc<AssetState<T>>>,
-    wakers: HashMap<T::Key, Event>,
+    assets: HashMap<T::Key, AssetEntry<T>>,
+}
+
+enum AssetEntry<T>
+where
+    T: Asset,
+{
+    /// The asset is already loaded.
+    Loaded(Arc<AssetState<T>>),
+    /// The asset is currently loading.
+    ///
+    /// The event token is used to wake all up all listeners.
+    Loading(Event),
 }
 
 impl<T> Assets<T>
@@ -268,14 +268,13 @@ where
     fn new() -> Self {
         Self {
             assets: HashMap::new(),
-            wakers: HashMap::new(),
         }
     }
 }
 
 #[derive(Debug, Default)]
 struct AssetRegistry {
-    // Type erased HashMap<TypeId, Box<AssetMap>
+    // Type erased HashMap<TypeId, Box<Assets<T>>
     // where T is Asset assocaited with the TypeId.
     // Also note that the number of asset types should be relatively constant
     // over the entire program duration, so we do not bother removing elements

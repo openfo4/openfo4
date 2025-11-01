@@ -8,6 +8,7 @@ game_tasks = { version = "0.1.0", path = "../game_tasks" }
 
 parking_lot = "0.12.4"
 event-listener = "5.4.0"
+hashbrown = "0.16.0"
 
 [dev-dependencies]
 futures-lite = "2.6.0"
