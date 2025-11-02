@@ -268,24 +268,41 @@ impl AnimationDriver {
             return;
         };
 
-        let mut queue = VecDeque::new();
-        queue.push_back((root, 1.0));
+        let mut global_speed_values: HashMap<usize, Vec<_>> = HashMap::new();
 
-        while let Some((id, parent_speed)) = queue.pop_front() {
+        let mut queue = VecDeque::new();
+        queue.push_back((root, usize::MAX, 1.0));
+
+        while let Some((id, parent, parent_speed)) = queue.pop_front() {
             let node = &self.nodes[id];
 
-            let local_speed = self.properties.speed.get(&id).copied().unwrap_or(1.0);
+            let speed = self
+                .properties
+                .speed
+                .get(&id)
+                .map(|v| v.get(&parent))
+                .flatten()
+                .unwrap_or(&1.0);
 
-            let speed = parent_speed * local_speed;
-            self.properties.global_speed.insert(id, speed);
+            let global_speed = parent_speed * *speed;
+            global_speed_values
+                .entry(id)
+                .or_default()
+                .push(global_speed);
 
             for children in node.children() {
                 if !self.active_nodes.contains_key(&children) {
                     continue;
                 }
 
-                queue.push_back((children, speed));
+                queue.push_back((children, id, global_speed));
             }
+        }
+
+        for (id, speed) in global_speed_values {
+            let speed = speed.into_iter().max_by(f32::total_cmp).unwrap_or(1.0);
+
+            self.properties.global_speed.insert(id, speed);
         }
     }
 }
@@ -404,7 +421,12 @@ impl Context for UpdateContext<'_> {
             Property::GlobalWeight => {}
             Property::Speed => {
                 let speed = value.to_f32().unwrap();
-                self.properties.speed.insert(node, speed);
+
+                self.properties
+                    .speed
+                    .entry(node)
+                    .or_default()
+                    .insert(self.node, speed);
             }
             Property::GlobalSpeed => {}
         }
@@ -420,7 +442,7 @@ struct PropertySet {
     /// [`compute_global_weights`]: AnimationDriver::compute_global_weights
     weight: HashMap<NodeId, HashMap<NodeId, BoneWeights>>,
     global_weight: HashMap<NodeId, BoneWeights>,
-    speed: HashMap<NodeId, f32>,
+    speed: HashMap<NodeId, HashMap<NodeId, f32>>,
     global_speed: HashMap<NodeId, f32>,
 }
 
