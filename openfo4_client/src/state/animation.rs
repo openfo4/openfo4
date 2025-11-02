@@ -10,7 +10,9 @@ use hecs::{CommandBuffer, World};
 use openfo4_animation::driver::AnimationDriver;
 use openfo4_animation::skeleton::{Bone, Skeleton};
 use openfo4_asset::{AssetLoader, Handle};
+use openfo4_core::events::EventBus;
 use openfo4_esp::records::{SubgraphPerspective, SubgraphRole};
+use openfo4_hkx::behavior::EventBase;
 use openfo4_hkx::{HkObject, HkxFile};
 
 use crate::assets::Error;
@@ -18,10 +20,12 @@ use crate::assets::animation::FileAnimationClip;
 use crate::assets::data_file::DataFile;
 use crate::assets::nif_v2::NifScene;
 use crate::loader::fix_path;
-use crate::state::anim_starter::ActiveBehaviorGraphs;
+use crate::state::actions::{Action, Actions};
+use crate::state::anim_starter::{ActiveBehaviorGraphs, AnimationEventQueue};
 use crate::state::animation_test::load_behavior_data;
 use crate::state::npc::{ActorAnimationGraphData, ActorKeywords};
 use crate::systems::inventory::{Inventory, ItemData};
+use crate::systems::{WeaponDrawnEvent, WeaponSheathEvent};
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct SkeletonConfig<'a> {

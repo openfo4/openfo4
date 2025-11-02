@@ -18,7 +18,8 @@ use crate::state::npc::{ActorBodyParts, BodyPartBone, BodyParts};
 use crate::systems::actor_value::ActorValueProperties;
 use crate::systems::inventory::{Inventory, ItemData};
 use crate::systems::{
-    DeathEvent, FacingDirection, GunFireEvent, GunReloadEvent, GunReloadRequest, ProjectileHitEvent,
+    DeathEvent, FacingDirection, GunFireEvent, GunReloadEvent, GunReloadRequest,
+    ProjectileHitEvent, WeaponDrawRequest, WeaponDrawnEvent, WeaponSheathEvent,
 };
 
 #[derive(Clone, Debug)]
@@ -207,6 +208,48 @@ pub fn handle_weapon_hit_damage(world: &mut World, events: &mut EventBus) {
     }
 
     for event in death_events {
+        events.send(event);
+    }
+}
+
+pub fn handle_weapon_draw_events(world: &mut World, events: &mut EventBus) {
+    let mut drawn_events = Vec::new();
+    let mut sheath_events = Vec::new();
+
+    for event in events.read::<WeaponDrawRequest>() {
+        let Ok(entity) = world.entity(event.actor) else {
+            continue;
+        };
+
+        let mut inventory = entity.get::<&mut Inventory>().unwrap();
+
+        for item in inventory.items_mut() {
+            match &mut item.data {
+                ItemData::Weapon(weapon) => {
+                    if weapon.drawn {
+                        sheath_events.push(WeaponSheathEvent {
+                            actor: event.actor,
+                            item: item.item,
+                        });
+                    } else {
+                        drawn_events.push(WeaponDrawnEvent {
+                            actor: event.actor,
+                            item: item.item,
+                        });
+                    }
+
+                    weapon.drawn ^= true;
+                }
+                _ => (),
+            }
+        }
+    }
+
+    for event in drawn_events {
+        events.send(event);
+    }
+
+    for event in sheath_events {
         events.send(event);
     }
 }

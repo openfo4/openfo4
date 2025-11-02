@@ -63,3 +63,23 @@ pub struct GunReloadRequest {
 pub struct DeathEvent {
     pub actor: Entity,
 }
+
+/// Event sent when an actor wants to draw their equipped weapon.
+#[derive(Copy, Clone, Debug)]
+pub struct WeaponDrawRequest {
+    pub actor: Entity,
+}
+
+#[derive(Clone, Debug)]
+pub struct WeaponDrawnEvent {
+    pub actor: Entity,
+    // TODO: Replace with InventorySlotId or similar.
+    pub item: FormId,
+}
+
+#[derive(Clone, Debug)]
+pub struct WeaponSheathEvent {
+    pub actor: Entity,
+    // TODO: Replace with InventorySlotId or similar.
+    pub item: FormId,
+}

@@ -8,6 +8,7 @@ use openfo4_core::events::EventBus;
 use openfo4_esp::FormId;
 use slab::Slab;
 
+use crate::state::anim_starter::AnimationEventQueue;
 use crate::state::equipment::{load_equipment_item, load_equipment_item_models};
 use crate::state::esp::EspLoader;
 
@@ -155,7 +156,8 @@ pub fn handle_inventory_events(
 
         match &mut item.data {
             ItemData::Weapon(weapon) => {
-                weapon.drawn = true;
+                // Start without weapon drawn.
+                weapon.drawn = false;
             }
             _ => (),
         }
