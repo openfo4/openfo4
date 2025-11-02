@@ -6,8 +6,9 @@ use std::ops::Deref;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
+use dashmap::{DashMap, Entry};
 use event_listener::Event;
-use hashbrown::HashMap;
+use hashbrown::{DefaultHashBuilder, HashMap};
 use parking_lot::RwLock;
 
 /// A loader for [`Asset`]s.
@@ -62,7 +63,7 @@ impl AssetLoader {
             panic!("asset {} not registered", std::any::type_name::<T>());
         };
 
-        if let Some(AssetEntry::Loaded(asset)) = assets.assets.get(key) {
+        if let Some(AssetEntry::Loaded(asset)) = assets.assets.get(key).as_deref() {
             asset.ref_count.fetch_add(1, Ordering::Relaxed);
 
             Some(Handle {
@@ -105,7 +106,8 @@ impl AssetLoader {
                     panic!("asset {} not registered", std::any::type_name::<T>());
                 };
 
-                match assets.assets.get(key) {
+                let asset_ref = assets.assets.get(key);
+                match asset_ref.as_deref() {
                     Some(AssetEntry::Loaded(asset)) => {
                         // If we were awoken from another thread that thread
                         // will already have inserted our refcount value.
@@ -130,31 +132,32 @@ impl AssetLoader {
                         // No waker exists, i.e. no other thread is loading the asset.
                         // Upgrade our lock from readable to writable. Note that this
                         // will fully release the read lock, before acquiring the write
-                        // lock so any threads may interleave.
-                        drop(registry);
-                        let mut registry = self.registry.write();
-                        let assets = registry.get_mut::<T>().unwrap();
+                        // lock so any threads may interleave and also start loading
+                        // before we can acquire the new lock.
 
-                        // Note that it is possible for another thread to interlave
-                        // and load the entire asset while we upgrade our lock.
-                        match assets.assets.get(key) {
-                            Some(AssetEntry::Loaded(asset)) => {
-                                asset.ref_count.fetch_add(1, Ordering::Relaxed);
-                                return Ok(Handle {
-                                    registry: self.registry.clone(),
-                                    asset: asset.clone(),
-                                });
-                            }
-                            // Note that it is possible for another thread to interlave
-                            // and start loading while we upgrade our lock.
-                            // In this case we will subscribe to that thread and go back
-                            // to sleep.
-                            Some(AssetEntry::Loading(waker)) => waker.listen(),
-                            None => {
-                                // The asset slot is now ours!
-                                assets
-                                    .assets
-                                    .insert(key.to_owned(), AssetEntry::Loading(Event::new()));
+                        // Drop the existing shared borrow of the bucket before
+                        // we try to acquire a mutable borrow of the same bucket.
+                        drop(asset_ref);
+
+                        let asset_entry = assets.assets.entry(key.to_owned());
+                        match asset_entry {
+                            Entry::Occupied(entry) => match entry.get() {
+                                AssetEntry::Loaded(asset) => {
+                                    asset.ref_count.fetch_add(1, Ordering::Relaxed);
+                                    return Ok(Handle {
+                                        registry: self.registry.clone(),
+                                        asset: asset.clone(),
+                                    });
+                                }
+                                // Note that it is possible for another thread to interlave
+                                // and start loading while we upgrade our lock.
+                                // In this case we will subscribe to that thread and go back
+                                // to sleep.
+                                AssetEntry::Loading(waker) => waker.listen(),
+                            },
+                            // The asset slot is now ours!
+                            Entry::Vacant(entry) => {
+                                entry.insert(AssetEntry::Loading(Event::new()));
                                 ctx = registry.context::<T>().unwrap();
                                 break;
                             }
@@ -176,25 +179,38 @@ impl AssetLoader {
         let owned_key = key.to_owned();
         let res = T::load(self, &owned_key, ctx).await;
 
-        let mut registry = self.registry.write();
+        let registry = self.registry.read();
         // SAFETY: We have already accessed the registry for `T`
         // above and if an asset exists once it can never be removed.
-        let assets = unsafe { registry.get_mut::<T>().unwrap_unchecked() };
+        let assets = unsafe { registry.get::<T>().unwrap_unchecked() };
 
-        let entry = assets.assets.get_mut(key).unwrap();
-        let AssetEntry::Loading(waker) = entry else {
+        // NOTE: We have to use the entry API here, even if we know that
+        // the entry exists, because we need to have the ability to atomically
+        // remove the entry without releasing the slot previously.
+        let Entry::Occupied(mut entry) = assets.assets.entry(key.to_owned()) else {
+            unreachable!();
+        };
+
+        // let entry = assets.assets.get_mut(key).unwrap();
+        let AssetEntry::Loading(waker) = entry.get() else {
             unreachable!();
         };
 
         // Wake up all threads listening for our result.
         // Note that the number of listeners cannot change while we have
-        // an exclusive lock.
+        // an exclusive lock on the slot.
         waker.notify(waker.total_listeners());
 
         let value = match res {
             Ok(value) => value,
             Err(err) => {
-                assets.assets.remove(key).unwrap();
+                // Remove the entry slot. All other threads listening
+                // on this slot are already awoken from the previous
+                // wake and may now try to access this slot.
+                // This means we must remove the slot from the map
+                // atomically.
+                entry.remove();
+
                 return Err(err);
             }
         };
@@ -212,7 +228,7 @@ impl AssetLoader {
             ref_count,
         });
 
-        *entry = AssetEntry::Loaded(asset.clone());
+        *entry.get_mut() = AssetEntry::Loaded(asset.clone());
 
         Ok(Handle {
             registry: self.registry.clone(),
@@ -246,7 +262,7 @@ pub struct Assets<T>
 where
     T: Asset,
 {
-    assets: HashMap<T::Key, AssetEntry<T>>,
+    assets: DashMap<T::Key, AssetEntry<T>, DefaultHashBuilder>,
 }
 
 enum AssetEntry<T>
@@ -267,7 +283,7 @@ where
 {
     fn new() -> Self {
         Self {
-            assets: HashMap::new(),
+            assets: DashMap::default(),
         }
     }
 }
