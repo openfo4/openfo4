@@ -402,7 +402,7 @@ where
     T: Point,
 {
     // The caller guarantees that knot_span_index is in bounds.
-    debug_assert!(knot_span_index < knots.len());
+    assert!(knot_span_index < knots.len());
 
     // FIXME: Can we validate these ahead of time?
     assert!(knot_span_index >= usize::from(degree));
@@ -419,7 +419,16 @@ where
 
     for i in 1..=degree {
         for j in (0..=i - 1).rev() {
+            // j is always between 0 and i-1 (inclusive). Since i is between 1 and degree (inclusive),
+            // j is between 0 and degree-1. We have asserted that `knot_span_index` is in bounds for
+            // `knots`, and that `knot_span_index` >= `degree`.
+            // As such the indices are between `knot_span_index` and `knot_span_index - (degree - 1)`,
+            // both of which are always in bounds.
             let nom = frame - knots[knot_span_index - j] as f32;
+            // See previous comment on why `knot_span_index - j` is always in bounds.
+            // If `knot_span_index - j` is in bounds, `knot_span_index + i` is the maximum possible
+            // index. `i` is between 1 and degree (inclusive), as such `knot_span_index + degree` needs
+            // to be valid and we have already asserted that case above.
             let denom = knots[knot_span_index + i - j] as f32 - knots[knot_span_index - j] as f32;
             let a = nom / denom;
 
