@@ -10,6 +10,7 @@ use hashbrown::HashSet;
 use hecs::{Entity, EntityBuilder, World};
 use openfo4_asset::{Asset, AssetLoader, Handle, HandleOrAsset};
 use openfo4_core::hierarchy::Children;
+use openfo4_hkx::mesh::ExtractCompressedMeshShapeError;
 use openfo4_hkx::{HkObject, HkxFile};
 use openfo4_nif::material::{AlphaTestFunction, NiAlphaProperty};
 use openfo4_nif::mesh::{BSMeshLODTriShape, BSSubIndexTriShape, BSTriShape};
@@ -762,6 +763,8 @@ enum LoadColliderError {
     PointerCylce,
     #[error("unknown mesh shape")]
     UnknownMeshShape,
+    #[error("invalid compressed mesh shape: {0}")]
+    InvalidCompressedMeshShape(ExtractCompressedMeshShapeError),
 }
 
 fn load_collider(
@@ -831,7 +834,11 @@ fn load_collider(
 
         match hkx.get(ptr) {
             Some(HkObject::CompressedMeshShape(shape)) => {
-                let mesh = shape.data.mesh();
+                let mesh = shape
+                    .data
+                    .mesh()
+                    .map_err(LoadColliderError::InvalidCompressedMeshShape)?;
+
                 meshes.push((mesh, transform));
                 all_meshes_are_convex = false;
             }

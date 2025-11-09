@@ -1,8 +1,19 @@
 use glam::{Mat4, Vec3, Vec4};
 use openfo4_hkx_derive::{HkStruct, signature};
+use thiserror::Error;
 
 use crate::physics::Shape;
 use crate::{Array, OpaquePtr, Ptr, ReferencedObject, RelArray};
+
+#[derive(Clone, Debug, Error)]
+pub enum ExtractCompressedMeshShapeError {
+    #[error("invalid shared vertex index {0}")]
+    InvalidSharedVertexIndex(u32),
+    #[error("invalid shared vertex {0}")]
+    InvalidSharedVertex(u16),
+    #[error("invalid packed vertex {0}")]
+    InvalidPackedVertex(u32),
+}
 
 #[derive(Clone, Debug, HkStruct)]
 pub struct CompressedMeshShape {
@@ -36,7 +47,7 @@ pub struct CompressedMeshShapeData {
 }
 
 impl CompressedMeshShapeData {
-    pub fn mesh(&self) -> TriMesh {
+    pub fn mesh(&self) -> Result<TriMesh, ExtractCompressedMeshShapeError> {
         let mut vertices = Vec::new();
         let mut indices = Vec::new();
 
@@ -54,13 +65,15 @@ impl CompressedMeshShapeData {
                 // Sometimes there are primitives that are degenerate (duplicte indices)
                 // and point outside of the valid buffer.
                 // Filtering them out seems to fix this?
-                if primitive[0] == primitive[1]
+                // Note that a face is composed of two triangles and we can only filter the
+                // face is both triangles are degenerate.
+                let is_tri_a_degen = primitive[0] == primitive[1]
                     || primitive[0] == primitive[2]
-                    || primitive[0] == primitive[3]
-                    || primitive[1] == primitive[2]
-                    || primitive[1] == primitive[3]
-                    || primitive[2] == primitive[3]
-                {
+                    || primitive[1] == primitive[2];
+                let is_tri_b_degen = primitive[2] == primitive[3]
+                    || primitive[2] == primitive[0]
+                    || primitive[2] == primitive[3];
+                if is_tri_a_degen && is_tri_b_degen {
                     continue;
                 }
 
@@ -75,27 +88,49 @@ impl CompressedMeshShapeData {
                     section.codec_params3,
                 );
 
-                let vs = primitive.map(|index| {
-                    debug_assert!(
-                        index <= section.num_packed_vertices + section.num_shared_indices
-                    );
-
-                    if index >= section.num_packed_vertices {
+                // FIXME: We are duplicating the vertices for each face here,
+                // but we should reuse vertices across faces if possible.
+                let mut vs = [Vec3::ZERO; 4];
+                for (i, &index) in primitive.iter().enumerate() {
+                    let vertex = if index >= section.num_packed_vertices {
                         let offset = shared_vertices_offset + u32::from(index)
                             - u32::from(section.num_packed_vertices);
-                        let vertex_index = self.mesh_tree.shared_vertices_index[offset as usize];
-                        let vertex = self.mesh_tree.shared_vertices[usize::from(vertex_index)];
+                        let vertex_index = *self
+                            .mesh_tree
+                            .shared_vertices_index
+                            .get(offset as usize)
+                            .ok_or(ExtractCompressedMeshShapeError::InvalidSharedVertexIndex(
+                                offset,
+                            ))?;
+
+                        let vertex = *self
+                            .mesh_tree
+                            .shared_vertices
+                            .get(usize::from(vertex_index))
+                            .ok_or(ExtractCompressedMeshShapeError::InvalidSharedVertex(
+                                vertex_index,
+                            ))?;
+
                         decompress_shared_vertex(
                             vertex,
                             self.mesh_tree.aabb.min,
                             self.mesh_tree.aabb.max,
                         )
                     } else {
-                        let vertex = self.mesh_tree.packed_vertices
-                            [usize::from(index) + section.first_packed_vertex as usize];
+                        let vertex_index = section.first_packed_vertex + u32::from(index);
+                        let vertex = *self
+                            .mesh_tree
+                            .packed_vertices
+                            .get(vertex_index as usize)
+                            .ok_or(ExtractCompressedMeshShapeError::InvalidPackedVertex(
+                                vertex_index,
+                            ))?;
+
                         decompress_packed_vertex(vertex, scale, offset)
-                    }
-                });
+                    };
+
+                    vs[i] = vertex;
+                }
 
                 // A->B->C C->D->A
                 indices.extend([
@@ -115,7 +150,7 @@ impl CompressedMeshShapeData {
 
         debug_assert_eq!(indices.len() % 3, 0);
 
-        TriMesh { vertices, indices }
+        Ok(TriMesh { vertices, indices })
     }
 }
 
@@ -185,14 +220,14 @@ pub struct CompressedMeshShapeTreeSection {
 
 pub struct SimdTree {}
 
-pub fn decompress_packed_vertex(vertex: u32, scale: Vec3, offset: Vec3) -> Vec3 {
+fn decompress_packed_vertex(vertex: u32, scale: Vec3, offset: Vec3) -> Vec3 {
     let x = ((vertex & 0x7FF) as f32) * scale.x + offset.x;
     let y = (((vertex >> 11) & 0x7FF) as f32) * scale.y + offset.y;
     let z = (((vertex >> 22) & 0x3FF) as f32) * scale.z + offset.z;
     Vec3 { x, y, z }
 }
 
-pub fn decompress_shared_vertex(vertex: u64, min: Vec4, max: Vec4) -> Vec3 {
+fn decompress_shared_vertex(vertex: u64, min: Vec4, max: Vec4) -> Vec3 {
     let scale_x = (max.x - min.x) / ((1 << 21) - 1) as f32;
     let scale_y = (max.y - min.y) / ((1 << 21) - 1) as f32;
     let scale_z = (max.z - min.z) / ((1 << 22) - 1) as f32;
