@@ -189,9 +189,15 @@ impl Level {
                     if let Some(light_flicker) = event.light_flicker {
                         world.insert_one(entity, light_flicker).unwrap();
                     }
+
+                    world.insert_one(entity, Root).unwrap();
                 }
                 SpawnEvent::SpawnTerrain(transform, object, collider) => {
-                    dbg!("TERRAIN");
+                    let cell = CellId::from(NiTransform::from(transform));
+                    if !self.cells_loaded.contains(&cell) {
+                        continue;
+                    }
+
                     world.spawn((
                         transform,
                         object,
@@ -201,6 +207,7 @@ impl Level {
                             linvel: Vec3::ZERO,
                             angvel: Vec3::ZERO,
                         },
+                        Root,
                     ));
                 }
             }
