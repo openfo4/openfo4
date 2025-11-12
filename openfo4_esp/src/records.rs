@@ -5208,7 +5208,7 @@ pub struct AimModelData {
     pub cone_of_fire_max_angle: f32,
     pub cone_of_fire_increase_per_shot: f32,
     pub cone_of_fire_decrease_per_second: f32,
-    pub cone_of_fire_decrease_delay_ms: f32,
+    pub cone_of_fire_decrease_delay_ms: u32,
     pub cone_of_fire_sneak_mult: f32,
     pub recoil_diminish_sprint_force: f32,
     pub recoil_diminish_sights_mult: f32,
@@ -5379,7 +5379,7 @@ impl ObjectModificationProperty {
                     return Err(Error::BadEnumValue(
                         stringify!(ObjectModificationFunctionType),
                         function_type.into(),
-                    ))
+                    ));
                 }
             },
             ObjectModificationValueType::Bool => match function_type {
@@ -5390,14 +5390,14 @@ impl ObjectModificationProperty {
                     return Err(Error::BadEnumValue(
                         stringify!(ObjectModificationFunctionType),
                         function_type.into(),
-                    ))
+                    ));
                 }
             },
             ObjectModificationValueType::String => {
                 return Err(Error::BadEnumValue(
                     stringify!(ObjectModificationFunctionType),
                     function_type.into(),
-                ))
+                ));
             }
             ObjectModificationValueType::Enum => match function_type {
                 0 => ObjectModificationFunctionType::Set,
@@ -5405,7 +5405,7 @@ impl ObjectModificationProperty {
                     return Err(Error::BadEnumValue(
                         stringify!(ObjectModificationFunctionType),
                         function_type.into(),
-                    ))
+                    ));
                 }
             },
             ObjectModificationValueType::FormIdFloat | ObjectModificationValueType::FormIdInt => {
@@ -5417,7 +5417,7 @@ impl ObjectModificationProperty {
                         return Err(Error::BadEnumValue(
                             stringify!(ObjectModificationFunctionType),
                             function_type.into(),
-                        ))
+                        ));
                     }
                 }
             }
@@ -5428,7 +5428,7 @@ impl ObjectModificationProperty {
                     return Err(Error::BadEnumValue(
                         stringify!(ObjectModificationFunctionType),
                         function_type.into(),
-                    ))
+                    ));
                 }
             },
         };

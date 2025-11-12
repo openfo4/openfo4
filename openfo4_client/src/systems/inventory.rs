@@ -1,4 +1,6 @@
+use std::ops::Range;
 use std::sync::Arc;
+use std::time::Duration;
 
 use game_tasks::TaskPool;
 use hashbrown::{HashMap, HashSet};
@@ -80,6 +82,20 @@ pub struct WeaponItemData {
     ///
     /// The damage defined on the `AMMO` record is already included in this.
     pub damage: HashMap<FormId, u32>,
+    pub aim_props: AimProps,
+}
+
+/// Defines properties for the aiming of guns.
+#[derive(Clone, Debug)]
+pub struct AimProps {
+    /// Min and max cone of fire angles in radians.
+    pub cone_of_fire_angle_min: f32,
+    pub cone_of_fire_angle_max: f32,
+    /// Angle added to cone of fire per shot in radians.
+    pub cone_of_fire_inc_per_shot: f32,
+    pub cone_of_fire_dec_per_sec: f32,
+    /// The idle time (no shots) fired until `cone_of_fire_dec_per_sec` kicks in.
+    pub cone_of_fire_dec_delay: Duration,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]

@@ -3,6 +3,9 @@ use std::time::{Duration, Instant};
 use glam::Vec2;
 
 #[derive(Clone, Debug)]
+pub struct RecoilState {}
+
+#[derive(Clone, Debug)]
 pub struct AimProps {
     pub min_angle: f32,
     pub max_angle: f32,
