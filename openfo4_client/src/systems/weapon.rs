@@ -1,9 +1,9 @@
-use std::sync::Arc;
+use std::f32::consts::PI;
 use std::time::{Duration, Instant};
 
 use game_common::components::GlobalTransform;
 use game_common::math::Ray;
-use glam::Vec3;
+use glam::{Quat, Vec2, Vec3};
 use hecs::{CommandBuffer, World};
 use openfo4_core::events::EventBus;
 use openfo4_core::hierarchy::Children;
@@ -14,7 +14,7 @@ use crate::render::physics_debug::{DespawnAt, HitscanRaycast};
 use crate::state::actions::{Action, Actions};
 use crate::state::anim_starter::AnimationEventQueue;
 use crate::state::hardcoded_formids::ACTOR_VALUE_HEALTH;
-use crate::state::npc::{ActorBodyParts, BodyPartBone, BodyParts};
+use crate::state::npc::{ActorBodyParts, BodyPartBone};
 use crate::systems::actor_value::ActorValueProperties;
 use crate::systems::inventory::{Inventory, ItemData};
 use crate::systems::{
@@ -70,8 +70,6 @@ pub fn handle_weapon_fire_events(
         let facing_dir = entity.get::<&FacingDirection>().unwrap();
         let mut inventory = entity.get::<&mut Inventory>().unwrap();
 
-        let mut equipped_weapons = Vec::new();
-
         for item in inventory.items_mut() {
             let ItemData::Weapon(weapon) = &mut item.data else {
                 continue;
@@ -89,53 +87,73 @@ pub fn handle_weapon_fire_events(
 
             weapon.current_ammo -= 1;
 
-            equipped_weapons.push(weapon);
-        }
+            // We must exclude the actor itself, otherwise we're just gonna
+            // hit ourselves immediately.
+            let mut exclude_colliders = Vec::new();
+            let mut queue = vec![event.actor];
+            while let Some(entity) = queue.pop() {
+                if world.entity(entity).unwrap().has::<Collider>() {
+                    exclude_colliders.push(entity);
+                }
 
-        if equipped_weapons.is_empty() {
-            continue;
-        }
-
-        // We must exclude the actor itself, otherwise we're just gonna
-        // hit ourselves immediately.
-        let mut exclude_colliders = Vec::new();
-        let mut queue = vec![event.actor];
-        while let Some(entity) = queue.pop() {
-            if world.entity(entity).unwrap().has::<Collider>() {
-                exclude_colliders.push(entity);
+                if let Some(children) = world.entity(entity).unwrap().get::<&Children>() {
+                    queue.extend_from_slice(&children.0);
+                }
             }
 
-            if let Some(children) = world.entity(entity).unwrap().get::<&Children>() {
-                queue.extend_from_slice(&children.0);
-            }
-        }
+            // FIXME: Implement increase of cof when shot and decrease on timer.
+            // FIXME: We need a radius, do we divde by 2 here?
+            let cof = weapon.aim_props.cone_of_fire_angle_min / 2.0;
 
-        let ray = Ray {
-            origin: transform.0.translation,
-            direction: facing_dir.0 * -Vec3::Z,
-        };
-        let max_toi = 1000.0;
-        let hit = physics.cast_ray(
-            ray,
-            max_toi,
-            QueryFilter {
-                layers: &[CollisionLayer::STATIC],
-                exclude_colliders: &exclude_colliders,
-            },
-        );
+            // Sample a random point on the circle that represents
+            // the cone of fire.
+            // See https://stackoverflow.com/a/50746409
+            let r = cof * rand::random::<f32>().sqrt();
+            let theta = rand::random::<f32>() * 2.0 * PI;
+            let offset = Vec2::new(r * theta.cos(), r * theta.sin());
 
-        commands.spawn((
-            HitscanRaycast {
+            let direction = facing_dir.0
+                * Quat::from_axis_angle(Vec3::X, offset.x)
+                * Quat::from_axis_angle(Vec3::Y, offset.y)
+                * -Vec3::Z;
+
+            let ray = Ray {
+                origin: transform.0.translation,
+                direction,
+            };
+            let max_toi = 1000.0;
+            let hit = physics.cast_ray(
                 ray,
                 max_toi,
-                impact_toi: hit.map(|v| v.toi),
-            },
-            DespawnAt(Instant::now() + Duration::from_secs(5)),
-        ));
+                QueryFilter {
+                    layers: &[CollisionLayer::STATIC],
+                    exclude_colliders: &exclude_colliders,
+                },
+            );
 
-        if let Some(hit) = hit {
-            if let Ok(body_part) = world.get::<&BodyPartBone>(hit.entity) {
-                for weapon in equipped_weapons {
+            commands.spawn((
+                HitscanRaycast {
+                    ray,
+                    max_toi,
+                    impact_toi: hit.map(|v| v.toi),
+                },
+                DespawnAt(Instant::now() + Duration::from_secs(5)),
+            ));
+
+            commands.spawn((
+                HitscanRaycast {
+                    ray: Ray {
+                        origin: transform.0.translation,
+                        direction: facing_dir.0 * -Vec3::Z,
+                    },
+                    max_toi,
+                    impact_toi: None,
+                },
+                DespawnAt(Instant::now() + Duration::from_secs(5)),
+            ));
+
+            if let Some(hit) = hit {
+                if let Ok(body_part) = world.get::<&BodyPartBone>(hit.entity) {
                     hit_events.push(ProjectileHitEvent {
                         target: body_part.actor,
                         body_part: body_part.id,
