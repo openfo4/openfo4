@@ -10,10 +10,14 @@ pub mod manual_selector;
 pub mod modify_once;
 pub mod state_machine;
 pub mod timer;
+pub mod twist;
 
 use std::time::Duration;
 
+use game_common::components::Transform;
+
 use crate::events::EventSet;
+use crate::skeleton::Skeleton;
 use crate::variables::VariableSet;
 use crate::{AnimationProvider, BoneWeights, Event, NodeId, Value, VariableId};
 
@@ -80,6 +84,10 @@ pub trait Context {
     fn set_playback_speed(&mut self, node: NodeId, speed: f32) {
         self.set_property(node, Property::Speed, Value::F32(speed));
     }
+
+    fn add_modifier(&mut self, modifier: Modifier);
+
+    fn skeleton(&self) -> &Skeleton;
 }
 
 #[derive(Clone, Debug)]
@@ -186,6 +194,7 @@ impl_node_inner! {
         Clip(clip::Clip),
         ManualSelector(manual_selector::ManualSelector),
         EventsFromRange(events_from_range::EventsFromRange),
+        Twist(twist::Twist),
     }
 }
 
@@ -229,4 +238,16 @@ pub enum Property {
     GlobalWeight,
     Speed,
     GlobalSpeed,
+}
+
+#[derive(Clone, Debug)]
+pub enum Modifier {
+    Offset(OffsetModifier),
+}
+
+/// Apply an offset to a bone.
+#[derive(Copy, Clone, Debug)]
+pub struct OffsetModifier {
+    pub bone: usize,
+    pub transform: Transform,
 }

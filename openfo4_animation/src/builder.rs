@@ -20,6 +20,7 @@ mod modifier_list;
 mod pose_matching_generator;
 mod state_machine;
 mod timer_modifier;
+mod twist_modifier;
 
 use std::collections::HashMap;
 use std::hash::Hash;
@@ -490,7 +491,7 @@ impl BuildNode for HkObject {
             Self::BSRandomAlarmModifier(node) => node.dependencies(ctx),
             Self::BSInterpValueModifier(node) => Ok(Vec::new()),
             Self::BSEventOnFalseToTrueModifier(node) => Ok(Vec::new()),
-            Self::TwistModifier(node) => Ok(Vec::new()),
+            Self::TwistModifier(node) => node.dependencies(ctx),
             Self::BSDirectAtCapturePoseModifier(node) => Ok(Vec::new()),
             Self::ReferencePoseGenerator(node) => Ok(Vec::new()),
             Self::GetHandleOnBoneModifier(node) => Ok(Vec::new()),
@@ -541,7 +542,7 @@ impl BuildNode for HkObject {
             Self::BSRandomAlarmModifier(node) => node.build(state),
             Self::BSInterpValueModifier(node) => Ok(None),
             Self::BSEventOnFalseToTrueModifier(node) => Ok(None),
-            Self::TwistModifier(node) => Ok(None),
+            Self::TwistModifier(node) => node.build(state),
             Self::BSDirectAtCapturePoseModifier(node) => Ok(None),
             Self::ReferencePoseGenerator(node) => Ok(None),
             Self::GetHandleOnBoneModifier(node) => Ok(None),

@@ -6,7 +6,8 @@ use game_tracing::trace_span;
 use slab::Slab;
 
 use crate::events::EventSet;
-use crate::nodes::{Context, GraphNode, Node, NodeEvent, NodeInner, Property};
+use crate::nodes::{Context, GraphNode, Modifier, Node, NodeEvent, NodeInner, Property};
+use crate::skeleton::Skeleton;
 use crate::variables::VariableSet;
 use crate::{AnimationGraph, AnimationProvider, BoneWeights, Event, NodeId, Value, VariableId};
 
@@ -18,6 +19,7 @@ pub struct AnimationDriver {
     queue: VecDeque<NodeEvent>,
     properties: PropertySet,
     active_nodes: HashMap<NodeId, NodeState>,
+    modifiers: Vec<Modifier>,
 }
 
 impl AnimationDriver {
@@ -29,6 +31,7 @@ impl AnimationDriver {
             active_nodes: HashMap::new(),
             properties: PropertySet::default(),
             graph,
+            modifiers: Vec::new(),
         };
         driver.reset();
         driver
@@ -46,13 +49,21 @@ impl AnimationDriver {
         self.properties.global_weight.get(&node)
     }
 
+    pub fn modifiers(&self) -> &[Modifier] {
+        &self.modifiers
+    }
+
     pub fn update(
         &mut self,
         delta: Duration,
         animations: &dyn AnimationProvider,
         events: &mut Vec<Event>,
+        skeleton: &Skeleton,
     ) {
         let _span = trace_span!("AnimationDriver::update").entered();
+
+        // Modifiers are only valid for a single frame.
+        self.modifiers.clear();
 
         while let Some(event) = self.queue.pop_front() {
             match event {
@@ -71,6 +82,8 @@ impl AnimationDriver {
                             &mut self.properties,
                             animations,
                             &mut state,
+                            &mut self.modifiers,
+                            skeleton,
                         );
                         node.activate(ctx);
 
@@ -95,6 +108,8 @@ impl AnimationDriver {
                             &mut self.properties,
                             animations,
                             state,
+                            &mut self.modifiers,
+                            skeleton,
                         );
                         node.deactivate(ctx);
 
@@ -123,6 +138,8 @@ impl AnimationDriver {
                             &mut self.properties,
                             animations,
                             state,
+                            &mut self.modifiers,
+                            skeleton,
                         );
                         node.handle_event(ctx, &event);
                     }
@@ -147,6 +164,8 @@ impl AnimationDriver {
                 &mut self.properties,
                 animations,
                 state,
+                &mut self.modifiers,
+                skeleton,
             );
             node.update(ctx);
         }
@@ -322,6 +341,8 @@ struct UpdateContext<'a> {
     properties: &'a mut PropertySet,
     animations: &'a dyn AnimationProvider,
     state: &'a mut NodeState,
+    modifiers: &'a mut Vec<Modifier>,
+    skeleton: &'a Skeleton,
 }
 
 impl<'a> UpdateContext<'a> {
@@ -334,6 +355,8 @@ impl<'a> UpdateContext<'a> {
         properties: &'a mut PropertySet,
         animations: &'a dyn AnimationProvider,
         state: &'a mut NodeState,
+        modifiers: &'a mut Vec<Modifier>,
+        skeleton: &'a Skeleton,
     ) -> Self {
         Self {
             node,
@@ -344,6 +367,8 @@ impl<'a> UpdateContext<'a> {
             properties,
             animations,
             state,
+            modifiers,
+            skeleton,
         }
     }
 }
@@ -430,6 +455,14 @@ impl Context for UpdateContext<'_> {
             }
             Property::GlobalSpeed => {}
         }
+    }
+
+    fn add_modifier(&mut self, modifier: Modifier) {
+        self.modifiers.push(modifier);
+    }
+
+    fn skeleton(&self) -> &Skeleton {
+        self.skeleton
     }
 }
 

@@ -416,6 +416,7 @@ fn find_leaf_nodes(nodes: &Slab<Node>, root: NodeId) -> Vec<NodeId> {
             NodeInner::EventDriven(_) => true,
             NodeInner::IsActive(_) => true,
             NodeInner::EventsFromRange(_) => true,
+            NodeInner::Twist(_) => true,
         };
 
         if is_leaf {

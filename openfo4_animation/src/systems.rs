@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::time::Duration;
 
 use game_common::components::Transform;
@@ -7,6 +8,7 @@ use openfo4_core::events::EventBus;
 
 use crate::animation::{AnimationClip, AnimationClipFlags, BlendMode};
 use crate::driver::AnimationDriver;
+use crate::nodes::Modifier;
 use crate::skeleton::SkeletonInstance;
 use crate::{AnimationProvider, BoneWeights, Value};
 
@@ -25,8 +27,10 @@ pub fn drive_animations<T>(
     for (entity, (skeleton, driver, set)) in
         world.query_mut::<(&mut SkeletonInstance, &mut AnimationDriver, &T)>()
     {
+        let mut new_transforms = HashMap::new();
+
         let mut events = Vec::new();
-        driver.update(delta, set, &mut events);
+        driver.update(delta, set, &mut events, &skeleton.skeleton);
 
         let game_events = events
             .into_iter()
@@ -46,7 +50,7 @@ pub fn drive_animations<T>(
                     for index in skeleton.culled.drain() {
                         let transform = *skeleton.bones_bind_pose.get(&index).unwrap();
                         let entity = skeleton.bones.get(&index).unwrap();
-                        commands.insert_one(*entity, transform);
+                        new_transforms.insert(*entity, transform);
                     }
                 }
                 GameEvent::CullBone(name) => {
@@ -62,7 +66,7 @@ pub fn drive_animations<T>(
                     // FIXME: Setting this to NAN will cause a NAN for the MVP matrix
                     // effectively hiding the entity, but saying this is hacky is the
                     // understatement of the century.
-                    commands.insert_one(*entity, Transform::from_translation(Vec3::NAN));
+                    new_transforms.insert(*entity, Transform::from_translation(Vec3::NAN));
                     skeleton.culled.insert(index);
                 }
                 GameEvent::UncullBone(name) => {
@@ -76,7 +80,7 @@ pub fn drive_animations<T>(
                     let transform = *skeleton.bones_bind_pose.get(&index).unwrap();
 
                     let entity = skeleton.bones.get(&index).unwrap();
-                    commands.insert_one(*entity, transform);
+                    new_transforms.insert(*entity, transform);
                     skeleton.culled.remove(&index);
                 }
                 GameEvent::WeaponFire => {}
@@ -265,7 +269,7 @@ pub fn drive_animations<T>(
                 debug_assert_ne!(rotation.length(), 0.0);
                 rotation = rotation.normalize();
 
-                commands.insert_one(
+                new_transforms.insert(
                     *entity,
                     Transform {
                         translation,
@@ -274,6 +278,24 @@ pub fn drive_animations<T>(
                     },
                 );
             }
+        }
+
+        // Apply post process modifiers.
+        for modifier in driver.modifiers() {
+            match modifier {
+                Modifier::Offset(offset) => {
+                    let bone_entity = skeleton.bones[&offset.bone];
+
+                    // FIXME: This only works for bones inserted this frame,
+                    // what if a modifier is applied to another bone?
+                    let transform = new_transforms.get_mut(&bone_entity).unwrap();
+                    *transform *= offset.transform;
+                }
+            }
+        }
+
+        for (entity, transform) in new_transforms {
+            commands.insert_one(entity, transform);
         }
     }
 
