@@ -8,5 +8,7 @@ game_common = { version = "0.1.0", path = "../game_common" }
 openfo4_pex = { version = "0.1.0", path = "../openfo4_pex" }
 openfo4_jit = { version = "0.1.0", path = "../openfo4_jit" }
 
+indexmap = "2.12.1"
+
 [lints]
 workspace = true

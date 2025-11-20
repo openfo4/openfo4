@@ -274,22 +274,64 @@ impl<'a> FunctionBuilder<'a> {
         self.binop(lhs, rhs, Instruction::SDiv)
     }
 
+    pub fn urem(&mut self, lhs: Value, rhs: Value) -> Value {
+        self.binop(lhs, rhs, Instruction::URem)
+    }
+
+    pub fn srem(&mut self, lhs: Value, rhs: Value) -> Value {
+        self.binop(lhs, rhs, Instruction::SRem)
+    }
+
     pub fn ineg(&mut self, value: Value) -> Value {
         self.unop(value, Instruction::INeg)
     }
 
+    /// Floating point addition.
+    ///
+    /// Performs the floating point addition of `lhs + rhs`. The result is a floating point value.
+    ///
+    /// # Codegen Safety
+    ///
+    /// - `lhs` must be a floating point value.
+    /// - `rhs` must be a floating point value.
     pub fn fadd(&mut self, lhs: Value, rhs: Value) -> Value {
         self.binop(lhs, rhs, Instruction::FAdd)
     }
 
+    /// Floating point subtraction.
+    ///
+    /// Performs the floating point subtraction of `lhs - rhs`. The result is a floating point
+    /// value.
+    ///
+    /// # Codegen Safety
+    ///
+    /// - `lhs` must be a floating point value.
+    /// - `rhs` must be a floating point value.
     pub fn fsub(&mut self, lhs: Value, rhs: Value) -> Value {
         self.binop(lhs, rhs, Instruction::FSub)
     }
 
+    /// Floating point multiplication.
+    ///
+    /// Performs the floating point multiplication of `lhs * rhs`. The result is a floating point
+    /// value.
+    ///
+    /// # Codegen Safety
+    ///
+    /// - `lhs` must be a floating point value.
+    /// - `rhs` must be a floating point value.
     pub fn fmul(&mut self, lhs: Value, rhs: Value) -> Value {
         self.binop(lhs, rhs, Instruction::FMul)
     }
 
+    /// Floating point division.
+    ///
+    /// Performs the floating point division of `lhs / rhs`. The result is a floating point value.
+    ///
+    /// # Codegen Safety
+    ///
+    /// - `lhs` must be a floating point value.
+    /// - `rhs` must be a floating point value.
     pub fn fdiv(&mut self, lhs: Value, rhs: Value) -> Value {
         self.binop(lhs, rhs, Instruction::FDiv)
     }
@@ -304,6 +346,19 @@ impl<'a> FunctionBuilder<'a> {
 
     pub fn fneg(&mut self, value: Value) -> Value {
         self.unop(value, Instruction::FNeg)
+    }
+
+    /// Absolute floating point value
+    pub fn fabs(&mut self, value: Value) -> Value {
+        self.unop(value, Instruction::FAbs)
+    }
+
+    pub fn floor(&mut self, value: Value) -> Value {
+        self.unop(value, Instruction::Floor)
+    }
+
+    pub fn ceil(&mut self, value: Value) -> Value {
+        self.unop(value, Instruction::Ceil)
     }
 
     pub fn call(&mut self, func: FunctionId, args: &[Value]) -> Vec<Value> {
@@ -401,6 +456,18 @@ impl<'a> FunctionBuilder<'a> {
         });
     }
 
+    /// Integer comparision.
+    ///
+    /// Performs the interger comparison of `lhs $op rhs`. If the comparison is evaluates to `true`
+    /// a non-zero integer value is returned, otherwise a zero integer value is returned.
+    pub fn icmp(&mut self, lhs: Value, rhs: Value, op: IntCompareOp) -> Value {
+        let dst = self.produce_value();
+
+        self.instructions
+            .push(Instruction::ICmp { lhs, rhs, dst, op });
+        dst
+    }
+
     /// Finalize the function definition.
     pub fn finalize(self) {
         let func_id = self.compiler.functions[self.id.0].id;
@@ -414,14 +481,6 @@ impl<'a> FunctionBuilder<'a> {
                 stack_slots: self.stack_slots,
             },
         );
-    }
-
-    pub fn icmp(&mut self, lhs: Value, rhs: Value, op: IntCompareOp) -> Value {
-        let dst = self.produce_value();
-
-        self.instructions
-            .push(Instruction::ICmp { lhs, rhs, dst, op });
-        dst
     }
 }
 
@@ -446,6 +505,8 @@ enum Instruction {
     IMul(Binop),
     SDiv(Binop),
     UDiv(Binop),
+    URem(Binop),
+    SRem(Binop),
     FAdd(Binop),
     FSub(Binop),
     FMul(Binop),
@@ -481,6 +542,9 @@ enum Instruction {
     },
     INeg(Unop),
     FNeg(Unop),
+    FAbs(Unop),
+    Floor(Unop),
+    Ceil(Unop),
 }
 
 #[derive(Copy, Clone, Debug)]

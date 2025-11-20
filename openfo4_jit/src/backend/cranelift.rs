@@ -277,6 +277,20 @@ impl CraneliftModule {
                         let res = builder.ins().sdiv(lhs, rhs);
                         values[op.dst.0] = Some(res);
                     }
+                    Instruction::URem(op) => {
+                        let lhs = values[op.lhs.0].unwrap();
+                        let rhs = values[op.rhs.0].unwrap();
+
+                        let res = builder.ins().urem(lhs, rhs);
+                        values[op.dst.0] = Some(res);
+                    }
+                    Instruction::SRem(op) => {
+                        let lhs = values[op.lhs.0].unwrap();
+                        let rhs = values[op.rhs.0].unwrap();
+
+                        let res = builder.ins().srem(lhs, rhs);
+                        values[op.dst.0] = Some(res);
+                    }
                     Instruction::FAdd(op) => {
                         let lhs = values[op.lhs.0].unwrap();
                         let rhs = values[op.rhs.0].unwrap();
@@ -329,6 +343,24 @@ impl CraneliftModule {
                         let src = values[op.src.0].unwrap();
 
                         let res = builder.ins().fneg(src);
+                        values[op.dst.0] = Some(res);
+                    }
+                    Instruction::FAbs(op) => {
+                        let src = values[op.src.0].unwrap();
+
+                        let res = builder.ins().fabs(src);
+                        values[op.dst.0] = Some(res);
+                    }
+                    Instruction::Floor(op) => {
+                        let src = values[op.src.0].unwrap();
+
+                        let res = builder.ins().floor(src);
+                        values[op.dst.0] = Some(res);
+                    }
+                    Instruction::Ceil(op) => {
+                        let src = values[op.src.0].unwrap();
+
+                        let res = builder.ins().ceil(src);
                         values[op.dst.0] = Some(res);
                     }
                     Instruction::Call(func, params, returns) => {

@@ -1,6 +1,8 @@
+mod layout;
+mod translator;
+mod types;
+
 use std::collections::{HashMap, HashSet};
-use std::slice::RChunks;
-use std::thread::panicking;
 
 use game_common::collections::arena::{Arena, Key};
 use openfo4_jit::{
@@ -9,8 +11,9 @@ use openfo4_jit::{
 };
 use openfo4_pex::{Function, Instruction, Value, Variable, VariableDefinition};
 
+use crate::compiler::codegen::types::Types;
+
 pub struct CodegenPass {
-    compiler: Compiler,
     types: Arena<JitType>,
     primitives: Primitives,
     classes: HashMap<String, ClassDef>,
@@ -20,8 +23,6 @@ impl CodegenPass {
     pub fn new() -> Self {
         let mut types = Arena::new();
 
-        let mut compiler = Compiler::new();
-
         let none = types.insert(JitType::I32);
         let bool = types.insert(JitType::I32);
         let int = types.insert(JitType::I32);
@@ -29,7 +30,6 @@ impl CodegenPass {
         let ptr = types.insert(JitType::Pointer);
 
         Self {
-            compiler,
             types,
             primitives: Primitives {
                 none,
@@ -387,7 +387,10 @@ impl CodegenPass {
                     translator.store(&op.dst, res);
                 }
                 Instruction::IMod(op) => {
-                    todo!();
+                    let lhs = translator.load(&op.lhs);
+                    let rhs = translator.load(&op.rhs);
+                    let res = translator.builder.srem(lhs, rhs);
+                    translator.store(&op.dst, res);
                 }
                 Instruction::INeg(op) => {
                     let src = translator.load(&op.src);
@@ -551,23 +554,71 @@ impl CodegenPass {
                         _ => unreachable!(),
                     };
 
-                    let func = self
-                        .classes
-                        .get(&class_name.to_lowercase())
-                        .unwrap()
-                        .functions
-                        .get(&function_name.to_lowercase())
-                        .unwrap()
-                        .func_id
-                        .unwrap();
-
                     let args = op
                         .args
                         .iter()
                         .map(|v| translator.load(v))
                         .collect::<Vec<_>>();
 
-                    let returns = translator.builder.call(func, &args);
+                    // For some functions we can provide better directly translated
+                    // implementations. This avoid the need to go through guest->host->guest
+                    // shim and provides the optimizer more freedom.
+                    let returns =
+                        match (&*class_name.to_lowercase(), &*function_name.to_lowercase()) {
+                            // Math Script
+                            // Math.abs(float) -> float
+                            ("math", "abs") => {
+                                let src = args[0];
+                                let res = translator.builder.fabs(src);
+                                vec![res]
+                            }
+                            // Math.Floor(float) -> float
+                            ("math", "floor") => {
+                                let src = args[0];
+                                let res = translator.builder.floor(src);
+                                vec![res]
+                            }
+                            // Math.Ceiling(float) -> float
+                            ("math", "ceiling") => {
+                                let src = args[0];
+                                let res = translator.builder.ceil(src);
+                                vec![res]
+                            }
+                            // Math.DegreesToRadians(float) -> float
+                            ("math", "degreestoradians") => {
+                                // See f32::to_radians
+                                const RADS_PER_DEG: f32 = core::f32::consts::PI / 180.0;
+
+                                let lhs = args[0];
+                                let rhs = translator.builder.fconst(JitType::F32, RADS_PER_DEG);
+                                let res = translator.builder.fmul(lhs, rhs);
+                                vec![res]
+                            }
+                            // Math.RadiansToDegrees(float) -> float
+                            ("math", "radianstodegrees") => {
+                                // See f32::to_degrees
+                                const PIS_IN_180: f32 = 57.2957795130823208767981548141051703_f32;
+
+                                let lhs = args[0];
+                                let rhs = translator.builder.fconst(JitType::F32, PIS_IN_180);
+                                let res = translator.builder.fmul(lhs, rhs);
+                                vec![res]
+                            }
+                            (class_name, function_name) => {
+                                let func = self
+                                    .classes
+                                    .get(class_name)
+                                    .unwrap()
+                                    .functions
+                                    .get(function_name)
+                                    .unwrap()
+                                    .func_id
+                                    .unwrap();
+
+                                translator.builder.call(func, &args)
+                            }
+                        };
+
                     if let Some(res) = returns.get(0).copied() {
                         translator.store(&op.return_assignment, res);
                     }
@@ -590,6 +641,19 @@ impl CodegenPass {
         println!("{}", compiled.text().unwrap());
 
         func_id
+    }
+}
+
+#[derive(Clone, Debug)]
+struct CodegenData {
+    types: Types,
+}
+
+impl CodegenData {
+    fn new() -> Self {
+        let mut types = Types::default();
+
+        Self { types }
     }
 }
 
@@ -618,7 +682,7 @@ impl<'a> FunctionTranslator<'a> {
                     return self.builder.iconst(*ty, 0);
                 }
 
-                todo!()
+                panic!("undefined variable {}", name);
             }
         }
     }
