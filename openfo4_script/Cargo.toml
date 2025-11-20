@@ -1,0 +1,12 @@
+[package]
+name = "openfo4_script"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+game_common = { version = "0.1.0", path = "../game_common" }
+openfo4_pex = { version = "0.1.0", path = "../openfo4_pex" }
+openfo4_jit = { version = "0.1.0", path = "../openfo4_jit" }
+
+[lints]
+workspace = true
