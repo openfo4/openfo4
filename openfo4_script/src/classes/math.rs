@@ -1,19 +1,30 @@
-extern "C" fn acos(x: f32) -> f32 {
+//! `Math` Script
+//!
+//! TODO: We should directly expand these in assembly.
+
+use crate::classes::State;
+use crate::runtime::Caller;
+
+pub fn acos(_caller: Caller<'_, State>, x: f32) -> f32 {
     x.acos()
 }
 
-extern "C" fn asin(x: f32) -> f32 {
+pub fn asin(_caller: Caller<'_, State>, x: f32) -> f32 {
     x.asin()
 }
 
-extern "C" fn atan(x: f32) -> f32 {
+pub fn atan(_caller: Caller<'_, State>, x: f32) -> f32 {
     x.atan()
 }
 
-extern "C" fn ceiling(x: f32) -> f32 {
-    x.ceil()
+pub fn cos(_caller: Caller<'_, State>, x: f32) -> f32 {
+    x.cos()
 }
 
-extern "C" fn cos(x: f32) -> f32 {
-    x.cos()
+pub fn sin(_caller: Caller<'_, State>, x: f32) -> f32 {
+    x.sin()
+}
+
+pub fn tan(_caller: Caller<'_, State>, x: f32) -> f32 {
+    x.tan()
 }
