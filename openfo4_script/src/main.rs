@@ -1,8 +1,5 @@
-use std::path::PathBuf;
-
-use openfo4_script::compiler::NativeFunction;
-use openfo4_script::runtime::{Caller, HostState, IntoFunc, RawVal, call_host_trampoline};
-use openfo4_script::{ClassId, Engine, Registry};
+use openfo4_script::runtime::{Caller, RawVal};
+use openfo4_script::{Engine, Registry, classes};
 
 fn main() {
     let mut registry = Registry::new();
@@ -25,6 +22,7 @@ fn main() {
     let mut engine = Engine::new();
 
     for p in [
+        "../../archive/raw/Data/scripts/math.pex",
         "../../archive/raw/Data/scripts/faction.pex",
         "../../archive/raw/Data/scripts/keyword.pex",
         "../../archive/raw/Data/scripts/location.pex",
@@ -100,55 +98,29 @@ fn main() {
         0
     }
 
-    engine.register_native_function(
-        "ObjectReference",
-        "SetValue",
-        |caller: Caller<'_, ()>, self_ptr: isize, avif: isize, value: f32| {
-            println!("ObjectReference.SetValue");
-        },
-    );
-    engine.register_native_function(
-        "ObjectReference",
-        "GetBaseValue",
-        |caller: Caller<'_, ()>, self_ptr: isize, av: isize| -> f32 {
-            println!("ObjectReference.GetBaseValue");
-
-            0.0
-        },
-    );
-    engine.register_native_function("Game", "GetPlayer", |caller: Caller<'_, ()>| -> isize {
-        println!("Game.GetPlayer");
-        0
-    });
-    engine.register_native_function("Message", "Show", show);
-
-    // registry.define_native_function("Game", "GetPlayer", show);
-    // registry.define_native_function("ObjectReference", "SetValue", show);
-    // registry.define_native_function("ObjectReference", "GetBaseValue", show);
-    // registry.define_native_function("Message", "Show", show);
+    classes::register_builtins(&mut engine);
 
     let instance = engine.compile("YoureSPECIALscript");
-
-    // let instance = registry
-    //     .compile(ClassId("YoureSPECIALscript".to_lowercase()))
-    //     .unwrap();
 
     let func = instance.get_func("onactivate").unwrap();
     dbg!(&func);
 
-    unsafe {
-        func.call_unchecked(
-            &engine.state,
-            &mut [
-                RawVal {
-                    ptr: 0 as *const u8,
-                },
-                RawVal {
-                    ptr: 0 as *const u8,
-                },
-            ],
-        );
-    }
+    let typed = func.typed::<(isize, isize), ()>().unwrap();
+    typed.call(&engine.state, (0, 0));
+
+    // unsafe {
+    //     func.call_unchecked(
+    //         &engine.state,
+    //         &mut [
+    //             RawVal {
+    //                 ptr: 0 as *const u8,
+    //             },
+    //             RawVal {
+    //                 ptr: 0 as *const u8,
+    //             },
+    //         ],
+    //     );
+    // }
 
     println!("exit");
 }

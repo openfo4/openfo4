@@ -1,5 +1,6 @@
 use std::any::Any;
 use std::marker::PhantomData;
+use std::mem::MaybeUninit;
 
 use openfo4_jit::{Signature, Type};
 
@@ -29,9 +30,61 @@ pub struct Func {
 impl Func {
     pub fn call(&self) {}
 
-    pub unsafe fn call_unchecked(&self, state: &HostState, values: &mut [RawVal]) {
+    pub unsafe fn call_unchecked(&self, state: &HostState, values: *mut RawVal) {
         unsafe {
-            (self.ptr)(state, 0, values.as_mut_ptr());
+            (self.ptr)(state, 0, values);
+        }
+    }
+
+    pub fn typed<Params, Returns>(&self) -> Result<TypedFunc<'_, Params, Returns>, ()>
+    where
+        Params: NativeTuple,
+        Returns: NativeTuple,
+    {
+        if &self.signature.params[1..] != Params::TYPES || &self.signature.returns != Returns::TYPES
+        {
+            return Err(());
+        }
+
+        Ok(TypedFunc {
+            func: self,
+            _marker: PhantomData,
+        })
+    }
+}
+
+pub struct TypedFunc<'a, Params, Returns> {
+    func: &'a Func,
+    _marker: PhantomData<fn(Params) -> Returns>,
+}
+
+impl<'a, Params, Returns> TypedFunc<'a, Params, Returns>
+where
+    Params: NativeTuple,
+    Returns: NativeTuple,
+{
+    pub fn call(&self, state: &HostState, params: Params) -> Returns {
+        // TODO: When const_generics is stabilized we can avoid the heap allocation
+        // and use a regular array.
+        let mut values = vec![MaybeUninit::<RawVal>::uninit(); Params::SIZE + Returns::SIZE];
+
+        unsafe {
+            params.write_raw(values.as_mut_ptr().cast::<RawVal>());
+        }
+
+        // SAFETY:
+        // - When we have constructed this `TypedFunc` we have asserted that the signature
+        //   matches.
+        // - We have filled the first N values with initialized values according to the
+        //   function signature.
+        unsafe {
+            self.func
+                .call_unchecked(state, values.as_mut_ptr().cast::<RawVal>());
+        }
+
+        unsafe {
+            let returns = values.as_ptr().add(Params::SIZE).cast::<RawVal>();
+            Returns::from_raw(returns)
         }
     }
 }
@@ -87,8 +140,7 @@ macro_rules! impl_into_func {
     ($($params:ident),* => $($returns:ident),*) => {
         #[allow(unused_assignments)]
         #[allow(non_snake_case)]
-        #[allow(unused_parens)]
-        #[allow(unused_mut)]
+        #[allow(unused)]
         impl<F, T, $($params,)* $($returns,)*> IntoFunc<T, ($($params,)*), ($($returns,)*)> for F
         where
             F: Fn(Caller<'_, T>, $($params),*) -> ($($returns),*) + Send + Sync + 'static,
@@ -246,3 +298,89 @@ pub unsafe extern "C" fn call_host_trampoline(
     let func = &ctx.call_table.functions[index];
     func(ctx, args);
 }
+
+pub unsafe trait NativeTuple {
+    const SIZE: usize;
+    const TYPES: &[Type];
+
+    unsafe fn write_raw(self, ptr: *mut RawVal);
+
+    unsafe fn from_raw(ptr: *const RawVal) -> Self;
+}
+
+unsafe impl NativeTuple for () {
+    const SIZE: usize = 0;
+    const TYPES: &[Type] = &[];
+
+    unsafe fn from_raw(_ptr: *const RawVal) -> Self {
+        ()
+    }
+
+    unsafe fn write_raw(self, _ptr: *mut RawVal) {}
+}
+
+unsafe impl<T> NativeTuple for T
+where
+    T: NativeType,
+{
+    const SIZE: usize = Self::TYPES.len();
+    const TYPES: &[Type] = &[T::TYPE];
+
+    unsafe fn from_raw(ptr: *const RawVal) -> Self {
+        unsafe { T::from_raw(&*ptr) }
+    }
+
+    unsafe fn write_raw(self, ptr: *mut RawVal) {
+        unsafe {
+            ptr.write(self.to_raw());
+        }
+    }
+}
+
+macro_rules! impl_native_tuple {
+    ($($t:ident),*) => {
+        #[allow(unused_assignments)]
+        #[allow(non_snake_case)]
+        unsafe impl<$($t,)*> NativeTuple for ( $($t,)* )
+        where
+            $(
+                $t: NativeType,
+            )*
+        {
+            const TYPES: &[Type] = &[ $($t::TYPE,)* ];
+            const SIZE: usize = Self::TYPES.len();
+
+            unsafe fn from_raw(ptr: *const RawVal) -> Self {
+                let mut offset = 0;
+                $(
+                    let $t = unsafe { $t::from_raw(&*ptr.add(offset)) };
+                    offset += 1;
+                )*
+
+                ($($t,)*)
+            }
+
+            unsafe fn write_raw(self, ptr: *mut RawVal) {
+                let ( $($t,)* ) = self;
+
+                let mut offset = 0;
+                $(
+                    unsafe { ptr.add(offset).write($t.to_raw()); }
+                    offset += 1;
+                )*
+            }
+
+        }
+    };
+}
+
+impl_native_tuple!(T0);
+impl_native_tuple!(T0, T1);
+impl_native_tuple!(T0, T1, T2);
+impl_native_tuple!(T0, T1, T2, T3);
+impl_native_tuple!(T0, T1, T2, T3, T4);
+impl_native_tuple!(T0, T1, T2, T3, T4, T5);
+impl_native_tuple!(T0, T1, T2, T3, T4, T5, T6);
+impl_native_tuple!(T0, T1, T2, T3, T4, T5, T6, T7);
+impl_native_tuple!(T0, T1, T2, T3, T4, T5, T6, T7, T8);
+impl_native_tuple!(T0, T1, T2, T3, T4, T5, T6, T7, T8, T9);

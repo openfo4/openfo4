@@ -1,4 +1,4 @@
-mod classes;
+pub mod classes;
 pub mod compiler;
 pub mod runtime;
 
