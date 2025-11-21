@@ -7,12 +7,18 @@ use std::collections::{HashMap, HashSet};
 
 use game_common::collections::arena::{Arena, Key};
 use openfo4_jit::{CompiledFunction, Compiler, FunctionId, Signature, Type as JitType};
-use openfo4_pex::{Function, Instruction, Value, Variable};
+use openfo4_pex::{Function, Instruction, Module, Value};
+use thiserror::Error;
 
 use crate::compiler::NativeFunction;
 use crate::compiler::codegen::function::FunctionResult;
-use crate::compiler::codegen::types::{Type, Types};
+use crate::compiler::codegen::types::Types;
 
+#[derive(Clone, Debug, Error)]
+#[error("codegen error")]
+pub struct Error;
+
+#[derive(Clone, Debug)]
 pub struct CodegenPass {
     types: Arena<JitType>,
     primitives: Primitives,
@@ -42,81 +48,59 @@ impl CodegenPass {
         }
     }
 
-    pub fn declare_class(&mut self, class: &str) {
-        self.data
-            .classes
-            .insert(class.to_lowercase(), ClassDef::default());
-    }
+    pub fn register_module(&mut self, module: &Module) {
+        for class in &module.classes {
+            let parent = (!matches!(class.parent.to_lowercase().as_str(), "" | "none"))
+                .then(|| class.parent.clone());
 
-    pub fn declare_class_function(&mut self, class: &str, f: &Function) {
-        let mut params = Vec::new();
-        let mut returns = Vec::new();
+            let mut fields = HashMap::new();
+            for var in &class.variables {
+                fields.insert(
+                    var.definition.name.to_lowercase(),
+                    var.definition.ty.to_lowercase(),
+                );
+            }
 
-        for param in &f.params {
-            let ty = self.resolve_ty(&param.ty);
-            let ty = *self.types.get(ty).unwrap();
+            // FIXME: Handle multi states
+            let mut functions = HashMap::new();
+            for state in &class.states {
+                for func in &state.functions {
+                    functions.insert(
+                        func.name.to_lowercase(),
+                        FunctionDef {
+                            signature: None,
+                            func_id: None,
+                            function: func.clone(),
+                            native: None,
+                            trampoline_func_id: None,
+                        },
+                    );
+                }
+            }
 
-            params.push(ty);
+            self.data.classes.insert(
+                class.name.to_lowercase(),
+                ClassDef {
+                    functions,
+                    parent,
+                    fields,
+                },
+            );
         }
-
-        if !f.return_ty.is_empty() {
-            let ty = self.resolve_ty(&f.return_ty);
-            let ty = *self.types.get(ty).unwrap();
-
-            returns.push(ty);
-        }
-
-        let def = self.data.classes.get_mut(class).unwrap();
-        def.functions.insert(
-            f.name.to_lowercase(),
-            FunctionDef {
-                signature: Signature { params, returns },
-                func_id: None,
-                function: f.clone(),
-                native: None,
-                trampoline_func_id: None,
-            },
-        );
-    }
-
-    pub fn declare_parent_class(&mut self, class: &str, parent: &str) {
-        let def = self.data.classes.get_mut(class).unwrap();
-        def.parent = Some(parent.to_lowercase());
-    }
-
-    pub fn declare_class_field(&mut self, class: &str, field: &Variable) {
-        let def = self.data.classes.get_mut(class).unwrap();
-
-        def.fields.insert(
-            field.definition.name.to_lowercase(),
-            field.definition.ty.to_lowercase(),
-        );
     }
 
     pub fn define_native_function(&mut self, class: &str, function: &str, func: NativeFunction) {
-        let def = self.data.classes.get_mut(class).unwrap();
-        let func_def = def.functions.get_mut(function).unwrap();
+        let def = self.data.classes.get_mut(&class.to_lowercase()).unwrap();
+        let func_def = def.functions.get_mut(&function.to_lowercase()).unwrap();
         func_def.native = Some(func);
     }
 
-    fn resolve_ty(&self, mut ty: &str) -> Key {
-        match &*ty.to_lowercase() {
-            "none" => self.primitives.none,
-            "bool" => self.primitives.bool,
-            "int" => self.primitives.int,
-            "float" => self.primitives.float,
-            "string" => self.primitives.ptr,
-            "var" => self.primitives.ptr,
-            _ => self.primitives.ptr,
-        }
-    }
-
-    pub fn compile_fn(&mut self, class: &str, f: &Function) -> CompiledFunction {
+    pub fn compile_fn(&mut self, class: &str, f: &str) -> Result<CompiledFunction, Error> {
         let mut compiler = Compiler::new();
 
         // The compile the function we must also compile all functions that
         // are called.
-        let mut queue = vec![(class.to_lowercase(), f.name.to_lowercase())];
+        let mut queue = vec![(class.to_lowercase(), f.to_lowercase())];
         let mut dependencies = HashMap::<(String, String), HashSet<(String, String)>>::new();
         while let Some((class, function)) = queue.pop() {
             let def = self.data.get_function(&class, &function).unwrap();
@@ -150,7 +134,7 @@ impl CodegenPass {
                 self.data
                     .get_function_mut(&class, &function)
                     .unwrap()
-                    .signature = res.signature;
+                    .signature = Some(res.signature);
 
                 // Mark all dependend callers as ready.
                 dependencies.retain(|(class_name, func_name), depends| {
@@ -169,18 +153,18 @@ impl CodegenPass {
             dependencies.insert((class, function), depends_on);
         }
 
-        let def = self.data.get_function_mut(class, &f.name).unwrap();
+        let def = self.data.get_function_mut(class, &f).unwrap();
 
         if def.trampoline_func_id.is_none() {
             let trampoline = trampoline::generate_host_to_guest_trampoline(
                 &mut compiler,
                 def.func_id.unwrap(),
-                &def.signature,
+                &def.signature.as_ref().unwrap(),
             );
             def.trampoline_func_id = Some(trampoline);
         }
 
-        compiler.compile_function(def.trampoline_func_id.unwrap())
+        Ok(compiler.compile_function(def.trampoline_func_id.unwrap()))
     }
 
     fn compile_function_internal(
@@ -217,15 +201,13 @@ struct CodegenData {
 
 impl CodegenData {
     fn new() -> Self {
-        let mut types = Types::default();
-
         Self {
-            types,
+            types: Types::default(),
             classes: HashMap::new(),
         }
     }
 
-    fn resolve_ty(&self, mut ty: &str) -> JitType {
+    fn resolve_ty(&self, ty: &str) -> JitType {
         match &*ty.to_lowercase() {
             "none" => JitType::I32,
             "bool" => JitType::I32,
@@ -272,7 +254,7 @@ struct ClassDef {
 
 #[derive(Clone, Debug)]
 struct FunctionDef {
-    signature: Signature,
+    signature: Option<Signature>,
     func_id: Option<FunctionId>,
     function: Function,
     native: Option<NativeFunction>,

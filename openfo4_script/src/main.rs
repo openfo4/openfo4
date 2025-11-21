@@ -1,23 +1,25 @@
+use std::path::PathBuf;
+
 use openfo4_script::runtime::{Caller, RawVal};
 use openfo4_script::{Engine, Registry, classes};
 
 fn main() {
     let mut registry = Registry::new();
 
-    // let mut files = Vec::new();
-    // let mut dirs = vec![PathBuf::from("../../archive/raw/Data/scripts")];
+    let mut files = Vec::new();
+    let mut dirs = vec![PathBuf::from("../../archive/raw/Data/scripts")];
 
-    // while let Some(dir) = dirs.pop() {
-    //     for entry in std::fs::read_dir(dir).unwrap() {
-    //         let entry = entry.unwrap();
+    while let Some(dir) = dirs.pop() {
+        for entry in std::fs::read_dir(dir).unwrap() {
+            let entry = entry.unwrap();
 
-    //         if entry.file_type().unwrap().is_dir() {
-    //             dirs.push(entry.path());
-    //         } else {
-    //             files.push(entry.path());
-    //         }
-    //     }
-    // }
+            if entry.file_type().unwrap().is_dir() {
+                dirs.push(entry.path());
+            } else {
+                files.push(entry.path());
+            }
+        }
+    }
 
     let mut engine = Engine::new();
 
@@ -73,54 +75,28 @@ fn main() {
         "../../archive/raw/Data/scripts/camerashot.pex",
         "../../archive/raw/Data/scripts/sound.pex",
         "../../archive/raw/Data/scripts/commonpropertiesscript.pex",
+        // files
     ] {
-        let buf = std::fs::read(p).unwrap();
-        let m = openfo4_pex::Module::decode(&buf[..]).unwrap();
+        dbg!(&p);
+        let buf = std::fs::read(&p).unwrap();
+        let Ok(m) = openfo4_pex::Module::decode(&buf[..]) else {
+            continue;
+        };
 
         let x = engine.register(&m);
         dbg!(x);
     }
 
-    fn show(
-        ctx: Caller<'_, ()>,
-        self_ptr: isize,
-        arg1: f32,
-        arg2: f32,
-        arg3: f32,
-        arg4: f32,
-        arg5: f32,
-        arg6: f32,
-        arg7: f32,
-        arg8: f32,
-        arg9: f32,
-    ) -> i32 {
-        println!("Message.show");
-        0
-    }
-
     classes::register_builtins(&mut engine);
 
     let instance = engine.compile("YoureSPECIALscript");
+    // let room = engine.compile("RentRoomScript");
 
-    let func = instance.get_func("onactivate").unwrap();
-    dbg!(&func);
+    // let func = instance.get_func("onactivate").unwrap();
+    // dbg!(&func);
 
-    let typed = func.typed::<(isize, isize), ()>().unwrap();
-    typed.call(&engine.state, (0, 0));
-
-    // unsafe {
-    //     func.call_unchecked(
-    //         &engine.state,
-    //         &mut [
-    //             RawVal {
-    //                 ptr: 0 as *const u8,
-    //             },
-    //             RawVal {
-    //                 ptr: 0 as *const u8,
-    //             },
-    //         ],
-    //     );
-    // }
+    // let typed = func.typed::<(isize, isize), ()>().unwrap();
+    // typed.call(&engine.state, (0, 0));
 
     println!("exit");
 }

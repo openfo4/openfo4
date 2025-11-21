@@ -9,6 +9,7 @@ mod script_object;
 
 pub type Int = i32;
 pub type Float = f32;
+pub type Object = isize;
 
 pub fn register_builtins(engine: &mut Engine) {
     engine.register_native_function("Math", "sin", math::sin);

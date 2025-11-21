@@ -1,4 +1,4 @@
-use crate::classes::{Float, State};
+use crate::classes::{Float, Object, State};
 use crate::runtime::Caller;
 
 /// `GetValue`
@@ -6,7 +6,7 @@ use crate::runtime::Caller;
 /// ```text
 /// float Function GetValue(ActorValue akAV) native
 /// ```
-pub fn get_value(caller: Caller<'_, State>, self_ptr: isize, actor_value: isize) -> Float {
+pub fn get_value(caller: Caller<'_, State>, self_ptr: Object, actor_value: Object) -> Float {
     todo!()
 }
 
@@ -15,7 +15,7 @@ pub fn get_value(caller: Caller<'_, State>, self_ptr: isize, actor_value: isize)
 /// ```text
 /// Function SetValue(ActorValue akAV, float afValue) native
 /// ```
-pub fn set_value(caller: Caller<'_, State>, self_ptr: isize, actor_value: isize, value: Float) {
+pub fn set_value(caller: Caller<'_, State>, self_ptr: Object, actor_value: Object, value: Float) {
     todo!()
 }
 
@@ -24,6 +24,6 @@ pub fn set_value(caller: Caller<'_, State>, self_ptr: isize, actor_value: isize,
 /// ```text
 /// float Function GetBaseValue(ActorValue akAV) native
 /// ```
-pub fn get_base_value(caller: Caller<'_, State>, self_ptr: isize, actor_value: isize) -> Float {
+pub fn get_base_value(caller: Caller<'_, State>, self_ptr: Object, actor_value: Object) -> Float {
     todo!()
 }
