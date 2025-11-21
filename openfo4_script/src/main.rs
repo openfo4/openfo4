@@ -1,7 +1,28 @@
-use openfo4_script::{ClassId, Registry};
+use std::path::PathBuf;
+
+use openfo4_script::compiler::NativeFunction;
+use openfo4_script::runtime::{Caller, HostState, IntoFunc, RawVal, call_host_trampoline};
+use openfo4_script::{ClassId, Engine, Registry};
 
 fn main() {
     let mut registry = Registry::new();
+
+    // let mut files = Vec::new();
+    // let mut dirs = vec![PathBuf::from("../../archive/raw/Data/scripts")];
+
+    // while let Some(dir) = dirs.pop() {
+    //     for entry in std::fs::read_dir(dir).unwrap() {
+    //         let entry = entry.unwrap();
+
+    //         if entry.file_type().unwrap().is_dir() {
+    //             dirs.push(entry.path());
+    //         } else {
+    //             files.push(entry.path());
+    //         }
+    //     }
+    // }
+
+    let mut engine = Engine::new();
 
     for p in [
         "../../archive/raw/Data/scripts/faction.pex",
@@ -58,16 +79,76 @@ fn main() {
         let buf = std::fs::read(p).unwrap();
         let m = openfo4_pex::Module::decode(&buf[..]).unwrap();
 
-        let x = registry.register(&m).unwrap();
+        let x = engine.register(&m);
         dbg!(x);
     }
 
-    registry.define_native_function("Game", "GetPlayer", 420 as *const u8);
-    registry.define_native_function("ObjectReference", "SetValue", 69 as *const u8);
-    registry.define_native_function("ObjectReference", "GetBaseValue", 69 as *const u8);
-    registry.define_native_function("Message", "Show", 69 as *const u8);
+    fn show(
+        ctx: Caller<'_, ()>,
+        self_ptr: isize,
+        arg1: f32,
+        arg2: f32,
+        arg3: f32,
+        arg4: f32,
+        arg5: f32,
+        arg6: f32,
+        arg7: f32,
+        arg8: f32,
+        arg9: f32,
+    ) -> i32 {
+        println!("Message.show");
+        0
+    }
 
-    registry
-        .compile(ClassId("YoureSPECIALscript".to_lowercase()))
-        .unwrap();
+    engine.register_native_function(
+        "ObjectReference",
+        "SetValue",
+        |caller: Caller<'_, ()>, self_ptr: isize, avif: isize, value: f32| {
+            println!("ObjectReference.SetValue");
+        },
+    );
+    engine.register_native_function(
+        "ObjectReference",
+        "GetBaseValue",
+        |caller: Caller<'_, ()>, self_ptr: isize, av: isize| -> f32 {
+            println!("ObjectReference.GetBaseValue");
+
+            0.0
+        },
+    );
+    engine.register_native_function("Game", "GetPlayer", |caller: Caller<'_, ()>| -> isize {
+        println!("Game.GetPlayer");
+        0
+    });
+    engine.register_native_function("Message", "Show", show);
+
+    // registry.define_native_function("Game", "GetPlayer", show);
+    // registry.define_native_function("ObjectReference", "SetValue", show);
+    // registry.define_native_function("ObjectReference", "GetBaseValue", show);
+    // registry.define_native_function("Message", "Show", show);
+
+    let instance = engine.compile("YoureSPECIALscript");
+
+    // let instance = registry
+    //     .compile(ClassId("YoureSPECIALscript".to_lowercase()))
+    //     .unwrap();
+
+    let func = instance.get_func("onactivate").unwrap();
+    dbg!(&func);
+
+    unsafe {
+        func.call_unchecked(
+            &engine.state,
+            &mut [
+                RawVal {
+                    ptr: 0 as *const u8,
+                },
+                RawVal {
+                    ptr: 0 as *const u8,
+                },
+            ],
+        );
+    }
+
+    println!("exit");
 }

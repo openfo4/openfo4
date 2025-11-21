@@ -6,7 +6,8 @@ use std::sync::{Arc, Mutex};
 use cranelift_codegen::control::ControlPlane;
 use cranelift_codegen::ir::condcodes::IntCC;
 use cranelift_codegen::ir::{
-    self, ArgumentExtension, ArgumentPurpose, BlockArg, InstBuilder, StackSlotData, StackSlotKind,
+    self, ArgumentExtension, ArgumentPurpose, BlockArg, InstBuilder, MemFlags, StackSlotData,
+    StackSlotKind,
 };
 use cranelift_codegen::settings::Configurable;
 use cranelift_codegen::{Context, settings};
@@ -472,6 +473,18 @@ impl CraneliftModule {
 
                         builder.ins().stack_store(value, slot, *offset as i32);
                     }
+                    Instruction::StackAddr {
+                        slot,
+                        ty,
+                        dst,
+                        offset,
+                    } => {
+                        let slot = stack_slots[slot.0].unwrap();
+                        let ty = map_type(*ty);
+
+                        let res = builder.ins().stack_addr(ty, slot, *offset as i32);
+                        values[dst.0] = Some(res);
+                    }
                     Instruction::ICmp { lhs, rhs, dst, op } => {
                         let lhs = values[lhs.0].unwrap();
                         let rhs = values[rhs.0].unwrap();
@@ -495,6 +508,32 @@ impl CraneliftModule {
 
                         let res = builder.ins().icmp(cond, lhs, rhs);
                         values[dst.0] = Some(res);
+                    }
+                    Instruction::Load {
+                        ty,
+                        addr,
+                        dst,
+                        offset,
+                    } => {
+                        let ty = map_type(*ty);
+                        let addr = values[addr.0].unwrap();
+
+                        let res = builder
+                            .ins()
+                            .load(ty, MemFlags::trusted(), addr, *offset as i32);
+                        values[dst.0] = Some(res);
+                    }
+                    Instruction::Store {
+                        value,
+                        addr,
+                        offset,
+                    } => {
+                        let value = values[value.0].unwrap();
+                        let addr = values[addr.0].unwrap();
+
+                        builder
+                            .ins()
+                            .store(MemFlags::trusted(), value, addr, *offset as i32);
                     }
                 }
             }

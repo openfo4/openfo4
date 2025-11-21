@@ -4,6 +4,7 @@ mod typecheck;
 use std::collections::HashMap;
 
 use game_common::collections::arena::{Arena, Key};
+use openfo4_jit::{CompiledFunction, Signature};
 use openfo4_pex::{Instruction, Value, Variable, VariableDefinition};
 
 use crate::Error;
@@ -14,7 +15,7 @@ pub struct Context {
     types: Arena<Type>,
     primitives: Primitives,
     classes: HashMap<String, Class>,
-    native_functions: Vec<(String, String, *const u8)>,
+    native_functions: Vec<(String, String, NativeFunction)>,
 }
 
 impl Context {
@@ -145,12 +146,16 @@ impl Context {
             .insert(field.definition.name.to_lowercase(), field.clone());
     }
 
-    pub fn define_native_function(&mut self, class: &str, function: &str, ptr: *const u8) {
+    pub fn define_native_function(&mut self, class: &str, function: &str, func: NativeFunction) {
         self.native_functions
-            .push((class.to_lowercase(), function.to_lowercase(), ptr));
+            .push((class.to_lowercase(), function.to_lowercase(), func));
     }
 
-    pub fn compile_fn<'a>(&mut self, class: &str, f: &openfo4_pex::Function) -> Result<(), Error> {
+    pub fn compile_fn<'a>(
+        &mut self,
+        class: &str,
+        f: &openfo4_pex::Function,
+    ) -> Result<CompiledFunction, Error> {
         let mut ctx = FunctionContext {
             class: class.to_lowercase(),
             locals: HashMap::new(),
@@ -286,12 +291,12 @@ impl Context {
         }
 
         for (class, func, ptr) in &self.native_functions {
-            codegen.define_native_function(&class, &func, *ptr);
+            codegen.define_native_function(&class, &func, ptr.clone());
         }
 
-        codegen.compile_fn(class, f);
+        let res = codegen.compile_fn(class, f);
 
-        Ok(())
+        Ok(res)
     }
 }
 
@@ -435,4 +440,11 @@ pub trait Pass {
     fn declare_class_field(&mut self, class: &str, field: &openfo4_pex::Variable) -> Self::Result;
 
     fn compile_fn(&mut self, class: &str, f: &openfo4_pex::Function) -> Self::Result;
+}
+
+#[derive(Clone, Debug)]
+pub struct NativeFunction {
+    pub ptr: *const u8,
+    pub index: usize,
+    pub signature: Signature,
 }

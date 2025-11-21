@@ -1,22 +1,22 @@
+mod function;
 mod layout;
-mod translator;
+mod trampoline;
 mod types;
 
 use std::collections::{HashMap, HashSet};
 
 use game_common::collections::arena::{Arena, Key};
-use openfo4_jit::{
-    Compiler, FunctionBuilder, FunctionId, IntCompareOp, Signature, StackSlot, Type as JitType,
-    Value as JitValue,
-};
-use openfo4_pex::{Function, Instruction, Value, Variable, VariableDefinition};
+use openfo4_jit::{CompiledFunction, Compiler, FunctionId, Signature, Type as JitType};
+use openfo4_pex::{Function, Instruction, Value, Variable};
 
-use crate::compiler::codegen::types::Types;
+use crate::compiler::NativeFunction;
+use crate::compiler::codegen::function::FunctionResult;
+use crate::compiler::codegen::types::{Type, Types};
 
 pub struct CodegenPass {
     types: Arena<JitType>,
     primitives: Primitives,
-    classes: HashMap<String, ClassDef>,
+    data: CodegenData,
 }
 
 impl CodegenPass {
@@ -38,12 +38,13 @@ impl CodegenPass {
                 float,
                 ptr,
             },
-            classes: HashMap::new(),
+            data: CodegenData::new(),
         }
     }
 
     pub fn declare_class(&mut self, class: &str) {
-        self.classes
+        self.data
+            .classes
             .insert(class.to_lowercase(), ClassDef::default());
     }
 
@@ -65,7 +66,7 @@ impl CodegenPass {
             returns.push(ty);
         }
 
-        let def = self.classes.get_mut(class).unwrap();
+        let def = self.data.classes.get_mut(class).unwrap();
         def.functions.insert(
             f.name.to_lowercase(),
             FunctionDef {
@@ -73,17 +74,18 @@ impl CodegenPass {
                 func_id: None,
                 function: f.clone(),
                 native: None,
+                trampoline_func_id: None,
             },
         );
     }
 
     pub fn declare_parent_class(&mut self, class: &str, parent: &str) {
-        let def = self.classes.get_mut(class).unwrap();
+        let def = self.data.classes.get_mut(class).unwrap();
         def.parent = Some(parent.to_lowercase());
     }
 
     pub fn declare_class_field(&mut self, class: &str, field: &Variable) {
-        let def = self.classes.get_mut(class).unwrap();
+        let def = self.data.classes.get_mut(class).unwrap();
 
         def.fields.insert(
             field.definition.name.to_lowercase(),
@@ -91,10 +93,10 @@ impl CodegenPass {
         );
     }
 
-    pub fn define_native_function(&mut self, class: &str, function: &str, ptr: *const u8) {
-        let def = self.classes.get_mut(class).unwrap();
+    pub fn define_native_function(&mut self, class: &str, function: &str, func: NativeFunction) {
+        let def = self.data.classes.get_mut(class).unwrap();
         let func_def = def.functions.get_mut(function).unwrap();
-        func_def.native = Some(ptr);
+        func_def.native = Some(func);
     }
 
     fn resolve_ty(&self, mut ty: &str) -> Key {
@@ -109,7 +111,7 @@ impl CodegenPass {
         }
     }
 
-    pub fn compile_fn(&mut self, class: &str, f: &Function) {
+    pub fn compile_fn(&mut self, class: &str, f: &Function) -> CompiledFunction {
         let mut compiler = Compiler::new();
 
         // The compile the function we must also compile all functions that
@@ -117,35 +119,18 @@ impl CodegenPass {
         let mut queue = vec![(class.to_lowercase(), f.name.to_lowercase())];
         let mut dependencies = HashMap::<(String, String), HashSet<(String, String)>>::new();
         while let Some((class, function)) = queue.pop() {
-            let def = self
-                .classes
-                .get(&class)
-                .unwrap()
-                .functions
-                .get(&function)
-                .unwrap();
+            let def = self.data.get_function(&class, &function).unwrap();
 
             // Function is already compiled.
             if def.func_id.is_some() {
                 continue;
             }
 
-            let callees = find_function_callees(&self.classes, &class, &def.function);
+            let callees = find_function_callees(&self.data.classes, &class, &def.function);
 
             let mut depends_on = HashSet::new();
             for (callee_class, callee_func) in callees {
-                // The callee function may also be only available on a parent class.
-                let callee_class =
-                    get_parent_class_with_function(&self.classes, &callee_class, &callee_func)
-                        .unwrap();
-
-                let def = self
-                    .classes
-                    .get(&callee_class)
-                    .unwrap()
-                    .functions
-                    .get(&callee_func)
-                    .unwrap();
+                let def = self.data.get_function(&callee_class, &callee_func).unwrap();
 
                 if !def.func_id.is_some() {
                     depends_on.insert((callee_class.clone(), callee_func.clone()));
@@ -155,15 +140,17 @@ impl CodegenPass {
 
             if depends_on.is_empty() {
                 // Compile the function.
-                let func_id = self.compile_function_internal(&class, &function, &mut compiler);
+                let res = self.compile_function_internal(&class, &function, &mut compiler);
 
-                self.classes
-                    .get_mut(&class)
+                self.data
+                    .get_function_mut(&class, &function)
                     .unwrap()
-                    .functions
-                    .get_mut(&function)
+                    .func_id = Some(res.id);
+
+                self.data
+                    .get_function_mut(&class, &function)
                     .unwrap()
-                    .func_id = Some(func_id);
+                    .signature = res.signature;
 
                 // Mark all dependend callers as ready.
                 dependencies.retain(|(class_name, func_name), depends| {
@@ -182,543 +169,89 @@ impl CodegenPass {
             dependencies.insert((class, function), depends_on);
         }
 
-        let def = self
-            .classes
-            .get(&class.to_lowercase())
-            .unwrap()
-            .functions
-            .get(&f.name.to_lowercase())
-            .unwrap();
+        let def = self.data.get_function_mut(class, &f.name).unwrap();
 
-        dbg!(&def.func_id);
+        if def.trampoline_func_id.is_none() {
+            let trampoline = trampoline::generate_host_to_guest_trampoline(
+                &mut compiler,
+                def.func_id.unwrap(),
+                &def.signature,
+            );
+            def.trampoline_func_id = Some(trampoline);
+        }
 
-        todo!()
+        compiler.compile_function(def.trampoline_func_id.unwrap())
     }
 
     fn compile_function_internal(
-        &mut self,
+        &self,
         class: &str,
-        function: &str,
+        function_name: &str,
         compiler: &mut Compiler,
-    ) -> FunctionId {
-        let current_class = self.classes.get(class).unwrap();
-        let function = self
-            .classes
-            .get(class)
-            .unwrap()
-            .functions
-            .get(function)
-            .unwrap();
+    ) -> FunctionResult {
+        tracing::debug!("comiling {}.{}", class, function_name);
 
-        let f = &function.function;
+        let current_class = self.data.classes.get(class).unwrap();
+        let function = self.data.get_function(class, function_name).unwrap();
 
-        let mut params = Vec::new();
-        let mut returns = Vec::new();
+        let res = function::translate_function(&self.data, current_class, &function, compiler);
 
-        // For non-static function (methods) the first argument is the object pointer.
-        if !f.is_static {
-            params.push(JitType::Pointer);
+        if function.function.is_native {
+            return res;
         }
 
-        for param in &f.params {
-            let ty = self.resolve_ty(&param.ty);
-            let ty = *self.types.get(ty).unwrap();
+        let compiled = compiler.compile_function(res.id);
 
-            params.push(ty);
-        }
-
-        if !f.return_ty.is_empty() && f.return_ty.to_lowercase() != "none" {
-            let ty = self.resolve_ty(&f.return_ty);
-            let ty = *self.types.get(ty).unwrap();
-
-            returns.push(ty);
-        }
-
-        let func_id = compiler.declare_function(Signature { params, returns });
-
-        if f.is_native {
-            let Some(native_func_ptr) = function.native else {
-                panic!(
-                    "native function {}.{} is called but not defined",
-                    class, &function.function.name
-                );
-            };
-
-            compiler.define_native_function(func_id, native_func_ptr);
-
-            return func_id;
-        }
-
-        let mut builder = compiler.define_function(func_id);
-
-        let entry_block = builder.create_entry_block();
-        builder.switch_to_block(entry_block);
-
-        builder.block_params(entry_block);
-
-        let mut locals = HashMap::with_capacity(f.locals.len());
-
-        // Create stack slots for local variables.
-        for local in &f.locals {
-            let ty = self.resolve_ty(&local.ty);
-            let ty = *self.types.get(ty).unwrap();
-
-            let slot = builder.create_typed_stack_slot(ty);
-            locals.insert(
-                local.name.to_lowercase(),
-                Local {
-                    ty,
-                    slot,
-                    ty_name: local.ty.to_lowercase(),
-                },
-            );
-
-            let value = builder.iconst(JitType::I32, 0);
-            builder.stack_store(slot, value, 0);
-        }
-
-        // Move function parameters into stack slots.
-        for (index, param) in f.params.iter().enumerate() {
-            let ty = self.resolve_ty(&param.ty);
-            let ty = *self.types.get(ty).unwrap();
-
-            let slot = builder.create_typed_stack_slot(ty);
-
-            locals.insert(
-                param.name.to_lowercase(),
-                Local {
-                    ty,
-                    slot,
-                    ty_name: param.ty.to_lowercase(),
-                },
-            );
-
-            let value = builder.block_params(entry_block)[index];
-            builder.stack_store(slot, value, 0);
-        }
-
-        let mut fields = HashMap::new();
-        for (name, ty) in &current_class.fields {
-            let ty = self.resolve_ty(&ty);
-            let ty = *self.types.get(ty).unwrap();
-
-            fields.insert(name.to_lowercase(), ty);
-        }
-
-        let mut translator = FunctionTranslator {
-            builder,
-            locals,
-            fields,
-        };
-
-        // Setup blocks
-        let mut blocks = HashMap::new();
-        for (index, instruction) in f.instructions.iter().enumerate() {
-            match instruction {
-                Instruction::Branch(offset) => {
-                    let offset = match offset {
-                        Value::Int(offset) => *offset,
-                        _ => unreachable!(),
-                    };
-
-                    let addr = usize::min((index as i32 + offset) as usize, f.instructions.len());
-
-                    if !blocks.contains_key(&addr) {
-                        let block = translator.builder.create_block();
-                        blocks.insert(addr, block);
-                    }
-                }
-                Instruction::BranchIfTrue(op) | Instruction::BranchIfFalse(op) => {
-                    let offset = match &op.offset {
-                        Value::Int(offset) => *offset,
-                        _ => unreachable!(),
-                    };
-
-                    let addr = usize::min((index as i32 + offset) as usize, f.instructions.len());
-
-                    if !blocks.contains_key(&addr) {
-                        let then_block = translator.builder.create_block();
-                        blocks.insert(addr, then_block);
-                    }
-
-                    let next_addr = index + 1;
-                    if !blocks.contains_key(&next_addr) {
-                        let else_block = translator.builder.create_block();
-                        blocks.insert(next_addr, else_block);
-                    }
-                }
-                _ => {}
-            }
-        }
-
-        for (index, instruction) in f.instructions.iter().enumerate() {
-            if let Some(block) = blocks.get(&index) {
-                if !translator.builder.is_current_block_full() {
-                    translator.builder.jump(*block, &[]);
-                }
-
-                translator.builder.switch_to_block(*block);
-            }
-
-            match instruction {
-                Instruction::Nop => {}
-                Instruction::IAdd(op) => {
-                    let lhs = translator.load(&op.lhs);
-                    let rhs = translator.load(&op.rhs);
-                    let res = translator.builder.iadd(lhs, rhs);
-                    translator.store(&op.dst, res);
-                }
-                Instruction::ISub(op) => {
-                    let lhs = translator.load(&op.lhs);
-                    let rhs = translator.load(&op.rhs);
-                    let res = translator.builder.isub(lhs, rhs);
-                    translator.store(&op.dst, res);
-                }
-                Instruction::IMul(op) => {
-                    let lhs = translator.load(&op.lhs);
-                    let rhs = translator.load(&op.rhs);
-                    let res = translator.builder.imul(lhs, rhs);
-                    translator.store(&op.dst, res);
-                }
-                Instruction::IDiv(op) => {
-                    let lhs = translator.load(&op.lhs);
-                    let rhs = translator.load(&op.rhs);
-                    let res = translator.builder.sdiv(lhs, rhs);
-                    translator.store(&op.dst, res);
-                }
-                Instruction::IMod(op) => {
-                    let lhs = translator.load(&op.lhs);
-                    let rhs = translator.load(&op.rhs);
-                    let res = translator.builder.srem(lhs, rhs);
-                    translator.store(&op.dst, res);
-                }
-                Instruction::INeg(op) => {
-                    let src = translator.load(&op.src);
-                    let res = translator.builder.ineg(src);
-                    translator.store(&op.dst, res);
-                }
-                Instruction::FAdd(op) => {
-                    let lhs = translator.load(&op.lhs);
-                    let rhs = translator.load(&op.rhs);
-                    let res = translator.builder.fadd(lhs, rhs);
-                    translator.store(&op.dst, res);
-                }
-                Instruction::FSub(op) => {
-                    let lhs = translator.load(&op.lhs);
-                    let rhs = translator.load(&op.rhs);
-                    let res = translator.builder.fsub(lhs, rhs);
-                    translator.store(&op.dst, res);
-                }
-                Instruction::FMul(op) => {
-                    let lhs = translator.load(&op.lhs);
-                    let rhs = translator.load(&op.rhs);
-                    let res = translator.builder.fmul(lhs, rhs);
-                    translator.store(&op.dst, res);
-                }
-                Instruction::FDiv(op) => {
-                    let lhs = translator.load(&op.lhs);
-                    let rhs = translator.load(&op.rhs);
-                    let res = translator.builder.fdiv(lhs, rhs);
-                    translator.store(&op.dst, res);
-                }
-                Instruction::FNeg(op) => {
-                    let src = translator.load(&op.src);
-                    let res = translator.builder.fneg(src);
-                    translator.store(&op.dst, res);
-                }
-                Instruction::Store(op) => {
-                    let value = translator.load(&op.src);
-                    translator.store(&op.dst, value);
-                }
-                Instruction::CmpEq(op)
-                | Instruction::CmpLt(op)
-                | Instruction::CmpLe(op)
-                | Instruction::CmpGt(op)
-                | Instruction::CmpGe(op) => {
-                    let cmp_op = match instruction {
-                        Instruction::CmpEq(_) => IntCompareOp::Equal,
-                        Instruction::CmpLt(_) => IntCompareOp::SignedLessThan,
-                        Instruction::CmpLe(_) => IntCompareOp::SignedLessThanOrEqual,
-                        Instruction::CmpGt(_) => IntCompareOp::SignedGreaterThan,
-                        Instruction::CmpGe(_) => IntCompareOp::SignedGreaterThanOrEqual,
-                        _ => unreachable!(),
-                    };
-
-                    let lhs = translator.load(&op.lhs);
-                    let rhs = translator.load(&op.rhs);
-                    let res = translator.builder.icmp(lhs, rhs, cmp_op);
-                    translator.store(&op.dst, res);
-                }
-                Instruction::Branch(offset) => {
-                    let offset = match offset {
-                        Value::Int(offset) => *offset,
-                        _ => unreachable!(),
-                    };
-
-                    let addr = usize::min((index as i32 + offset) as usize, f.instructions.len());
-
-                    let block = *blocks.get(&addr).unwrap();
-                    translator.builder.jump(block, &[]);
-                }
-                Instruction::BranchIfTrue(op) => {
-                    let offset = match &op.offset {
-                        Value::Int(offset) => *offset,
-                        _ => unreachable!(),
-                    };
-
-                    let addr = usize::min((index as i32 + offset) as usize, f.instructions.len());
-                    let then_block = *blocks.get(&addr).unwrap();
-                    let else_block = *blocks.get(&(index + 1)).unwrap();
-
-                    let condition = translator.load(&op.condition);
-
-                    translator
-                        .builder
-                        .brif(condition, then_block, &[], else_block, &[]);
-                }
-                Instruction::BranchIfFalse(op) => {
-                    let offset = match &op.offset {
-                        Value::Int(offset) => *offset,
-                        _ => unreachable!(),
-                    };
-
-                    let addr = usize::min((index as i32 + offset) as usize, f.instructions.len());
-                    let else_block = *blocks.get(&addr).unwrap();
-                    let then_block = *blocks.get(&(index + 1)).unwrap();
-
-                    let condition = translator.load(&op.condition);
-
-                    translator
-                        .builder
-                        .brif(condition, then_block, &[], else_block, &[]);
-                }
-                Instruction::CallMethod(op) => {
-                    let Value::Ident(object) = &op.object else {
-                        unreachable!();
-                    };
-
-                    let function_name = match &op.function_name {
-                        Value::Ident(v) => v,
-                        _ => unreachable!(),
-                    };
-
-                    let find_var = |var_name: &str| -> String {
-                        if let Some(local) = translator.locals.get(&var_name.to_lowercase()) {
-                            return local.ty_name.clone();
-                        }
-
-                        if let Some(ty) = current_class.fields.get(&var_name.to_lowercase()) {
-                            return ty.to_lowercase();
-                        }
-
-                        todo!()
-                    };
-
-                    let mut class_name = find_var(&object);
-                    class_name = get_parent_class_with_function(
-                        &self.classes,
-                        &class_name,
-                        &function_name.to_lowercase(),
-                    )
-                    .unwrap();
-
-                    let func = self
-                        .classes
-                        .get(&class_name.to_lowercase())
-                        .unwrap()
-                        .functions
-                        .get(&function_name.to_lowercase())
-                        .unwrap()
-                        .func_id
-                        .unwrap();
-
-                    let mut args = op
-                        .args
-                        .iter()
-                        .map(|v| translator.load(v))
-                        .collect::<Vec<_>>();
-
-                    // In our ABI the first argument is the object pointer.
-                    let object = translator.load(&op.object);
-                    args.insert(0, object);
-
-                    let returns = translator.builder.call(func, &args);
-                    if let Some(res) = returns.get(0).copied() {
-                        translator.store(&op.return_assignment, res);
-                    }
-                }
-                Instruction::CallParent(op) => {}
-                Instruction::CallStatic(op) => {
-                    let (class_name, function_name) = match (&op.class, &op.function) {
-                        (Value::Ident(class), Value::Ident(func)) => (class, func),
-                        _ => unreachable!(),
-                    };
-
-                    let args = op
-                        .args
-                        .iter()
-                        .map(|v| translator.load(v))
-                        .collect::<Vec<_>>();
-
-                    // For some functions we can provide better directly translated
-                    // implementations. This avoid the need to go through guest->host->guest
-                    // shim and provides the optimizer more freedom.
-                    let returns =
-                        match (&*class_name.to_lowercase(), &*function_name.to_lowercase()) {
-                            // Math Script
-                            // Math.abs(float) -> float
-                            ("math", "abs") => {
-                                let src = args[0];
-                                let res = translator.builder.fabs(src);
-                                vec![res]
-                            }
-                            // Math.Floor(float) -> float
-                            ("math", "floor") => {
-                                let src = args[0];
-                                let res = translator.builder.floor(src);
-                                vec![res]
-                            }
-                            // Math.Ceiling(float) -> float
-                            ("math", "ceiling") => {
-                                let src = args[0];
-                                let res = translator.builder.ceil(src);
-                                vec![res]
-                            }
-                            // Math.DegreesToRadians(float) -> float
-                            ("math", "degreestoradians") => {
-                                // See f32::to_radians
-                                const RADS_PER_DEG: f32 = core::f32::consts::PI / 180.0;
-
-                                let lhs = args[0];
-                                let rhs = translator.builder.fconst(JitType::F32, RADS_PER_DEG);
-                                let res = translator.builder.fmul(lhs, rhs);
-                                vec![res]
-                            }
-                            // Math.RadiansToDegrees(float) -> float
-                            ("math", "radianstodegrees") => {
-                                // See f32::to_degrees
-                                const PIS_IN_180: f32 = 57.2957795130823208767981548141051703_f32;
-
-                                let lhs = args[0];
-                                let rhs = translator.builder.fconst(JitType::F32, PIS_IN_180);
-                                let res = translator.builder.fmul(lhs, rhs);
-                                vec![res]
-                            }
-                            (class_name, function_name) => {
-                                let func = self
-                                    .classes
-                                    .get(class_name)
-                                    .unwrap()
-                                    .functions
-                                    .get(function_name)
-                                    .unwrap()
-                                    .func_id
-                                    .unwrap();
-
-                                translator.builder.call(func, &args)
-                            }
-                        };
-
-                    if let Some(res) = returns.get(0).copied() {
-                        translator.store(&op.return_assignment, res);
-                    }
-                }
-                op => todo!("{:?}", op),
-            }
-        }
-
-        if let Some(block) = blocks.get(&f.instructions.len()) {
-            translator.builder.switch_to_block(*block);
-            translator.builder.return_(&[]);
-        }
-
-        println!("{}", f.text());
-
-        // translator.builder.return_(&[]);
-        translator.builder.finalize();
-
-        let compiled = compiler.compile_function(func_id);
+        println!("{}", function.function.text());
         println!("{}", compiled.text().unwrap());
 
-        func_id
+        res
     }
 }
 
 #[derive(Clone, Debug)]
 struct CodegenData {
     types: Types,
+    classes: HashMap<String, ClassDef>,
 }
 
 impl CodegenData {
     fn new() -> Self {
         let mut types = Types::default();
 
-        Self { types }
-    }
-}
-
-struct FunctionTranslator<'a> {
-    builder: FunctionBuilder<'a>,
-    locals: HashMap<String, Local>,
-    fields: HashMap<String, JitType>,
-}
-
-impl<'a> FunctionTranslator<'a> {
-    fn load(&mut self, value: &Value) -> JitValue {
-        match value {
-            Value::Null => self.builder.iconst(JitType::I32, 0),
-            Value::Bool(value) => self.builder.iconst(JitType::I32, u8::from(*value)),
-            Value::Int(value) => self.builder.iconst(JitType::I32, *value),
-            Value::Float(value) => self.builder.fconst(JitType::F32, *value),
-            Value::String(value) => todo!(),
-            Value::Ident(name) => {
-                if let Some(local) = self.locals.get(&name.to_lowercase()) {
-                    return self.builder.stack_load(local.slot, local.ty, 0);
-                }
-
-                dbg!(&self.fields);
-                if let Some(ty) = self.fields.get(&name.to_lowercase()) {
-                    // TODO
-                    return self.builder.iconst(*ty, 0);
-                }
-
-                panic!("undefined variable {}", name);
-            }
+        Self {
+            types,
+            classes: HashMap::new(),
         }
     }
 
-    fn store(&mut self, slot: &Value, value: JitValue) {
-        let Value::Ident(name) = slot else {
-            return;
-        };
-
-        if let Some(local) = self.locals.get(&name.to_lowercase()) {
-            self.builder.stack_store(local.slot, value, 0);
-            return;
+    fn resolve_ty(&self, mut ty: &str) -> JitType {
+        match &*ty.to_lowercase() {
+            "none" => JitType::I32,
+            "bool" => JitType::I32,
+            "int" => JitType::I32,
+            "float" => JitType::F32,
+            "string" => JitType::Pointer,
+            "var" => JitType::Pointer,
+            _ => JitType::Pointer,
         }
-
-        // TODO
     }
-}
 
-#[derive(Clone, Debug)]
-struct Local {
-    ty: JitType,
-    ty_name: String,
-    slot: StackSlot,
-}
+    fn get_function(&self, class: &str, func: &str) -> Option<&FunctionDef> {
+        let class = get_parent_class_with_function(&self.classes, class, func)?;
+        self.classes
+            .get(&class)?
+            .functions
+            .get(&func.to_lowercase())
+    }
 
-struct Type {
-    size: usize,
-    align: usize,
-}
-
-impl Type {
-    const NONE: Self = Self { size: 0, align: 0 };
-    const BOOL: Self = Self { size: 1, align: 1 };
-    const INT: Self = Self { size: 4, align: 4 };
-    const FLOAT: Self = Self { size: 4, align: 4 };
-    const STRING: Self = Self { size: 8, align: 8 };
+    fn get_function_mut(&mut self, class: &str, func: &str) -> Option<&mut FunctionDef> {
+        let class = get_parent_class_with_function(&self.classes, class, func)?;
+        self.classes
+            .get_mut(&class)?
+            .functions
+            .get_mut(&func.to_lowercase())
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -742,7 +275,8 @@ struct FunctionDef {
     signature: Signature,
     func_id: Option<FunctionId>,
     function: Function,
-    native: Option<*const u8>,
+    native: Option<NativeFunction>,
+    trampoline_func_id: Option<FunctionId>,
 }
 
 fn find_function_callees(

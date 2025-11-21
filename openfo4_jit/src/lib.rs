@@ -1,3 +1,5 @@
+use std::fmt::{self, Debug, Formatter};
+
 use slab::Slab;
 
 use crate::backend::cranelift::{self, CraneliftModule};
@@ -79,8 +81,12 @@ impl Compiler {
 
     /// Compiles a function and all its dependencies.
     pub fn compile_function(&mut self, id: FunctionId) -> CompiledFunction {
-        let id = self.functions[id.0].id;
-        CompiledFunction(self.inner.compile_function(id, true))
+        let func = &self.functions[id.0];
+
+        CompiledFunction {
+            inner: self.inner.compile_function(func.id, true),
+            signature: func.signature.clone(),
+        }
     }
 }
 
@@ -113,7 +119,7 @@ struct FuncState {
     id: cranelift::FunctionId,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Signature {
     pub params: Vec<Type>,
     pub returns: Vec<Type>,
@@ -456,6 +462,19 @@ impl<'a> FunctionBuilder<'a> {
         });
     }
 
+    pub fn stack_addr(&mut self, slot: StackSlot, ty: Type, offset: u32) -> Value {
+        debug_assert!(self.stack_slots.contains(slot.0));
+
+        let dst = self.produce_value();
+        self.instructions.push(Instruction::StackAddr {
+            slot,
+            ty,
+            offset,
+            dst,
+        });
+        dst
+    }
+
     /// Integer comparision.
     ///
     /// Performs the interger comparison of `lhs $op rhs`. If the comparison is evaluates to `true`
@@ -466,6 +485,25 @@ impl<'a> FunctionBuilder<'a> {
         self.instructions
             .push(Instruction::ICmp { lhs, rhs, dst, op });
         dst
+    }
+
+    pub fn load(&mut self, ty: Type, addr: Value, offset: u32) -> Value {
+        let dst = self.produce_value();
+        self.instructions.push(Instruction::Load {
+            ty,
+            addr,
+            dst,
+            offset,
+        });
+        dst
+    }
+
+    pub fn store(&mut self, value: Value, addr: Value, offset: u32) {
+        self.instructions.push(Instruction::Store {
+            value,
+            addr,
+            offset,
+        });
     }
 
     /// Finalize the function definition.
@@ -534,6 +572,12 @@ enum Instruction {
         value: Value,
         offset: u32,
     },
+    StackAddr {
+        slot: StackSlot,
+        ty: Type,
+        dst: Value,
+        offset: u32,
+    },
     ICmp {
         lhs: Value,
         rhs: Value,
@@ -545,6 +589,17 @@ enum Instruction {
     FAbs(Unop),
     Floor(Unop),
     Ceil(Unop),
+    Load {
+        ty: Type,
+        addr: Value,
+        dst: Value,
+        offset: u32,
+    },
+    Store {
+        value: Value,
+        addr: Value,
+        offset: u32,
+    },
 }
 
 #[derive(Copy, Clone, Debug)]
@@ -576,7 +631,10 @@ pub enum IntCompareOp {
 
 /// A compiled function ready to be called.
 #[derive(Clone)]
-pub struct CompiledFunction(cranelift::CompiledFunction);
+pub struct CompiledFunction {
+    inner: cranelift::CompiledFunction,
+    signature: Signature,
+}
 
 impl CompiledFunction {
     /// Returns a pointer to the compiled function.
@@ -613,7 +671,7 @@ impl CompiledFunction {
     ///
     /// ```
     pub fn as_ptr(&self) -> *const u8 {
-        self.0.as_ptr()
+        self.inner.as_ptr()
     }
 
     /// Returns a textual representation of the compiled code.
@@ -621,6 +679,18 @@ impl CompiledFunction {
     /// This is only available when debug was enabled. The text format is unspecified and only
     /// meant for debugging purposes.
     pub fn text(&self) -> Option<&str> {
-        self.0.text()
+        self.inner.text()
+    }
+
+    pub fn signature(&self) -> &Signature {
+        &self.signature
+    }
+}
+
+impl Debug for CompiledFunction {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        f.debug_struct("CompiledFunction")
+            .field("ptr", &self.as_ptr())
+            .finish_non_exhaustive()
     }
 }

@@ -1,7 +1,3 @@
-extern "C" fn abs(x: f32) -> f32 {
-    x.abs()
-}
-
 extern "C" fn acos(x: f32) -> f32 {
     x.acos()
 }
