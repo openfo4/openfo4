@@ -204,6 +204,11 @@ impl ValidationPass {
             variables.insert(var.definition.name.to_lowercase(), ty);
         }
 
+        for param in &func.params {
+            let ty = self.resolve_ty(&param.ty)?;
+            variables.insert(param.name.to_lowercase(), ty);
+        }
+
         for local in &func.locals {
             let ty = self.resolve_ty(&local.ty)?;
             variables.insert(local.name.to_lowercase(), ty);
