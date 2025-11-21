@@ -217,13 +217,19 @@ impl ValidationPass {
                 Value::Float(_) => Ok(Type::Float),
                 Value::String(_) => Ok(Type::String),
                 Value::Ident(name) => {
-                    variables.get(&name.to_lowercase()).cloned().ok_or_else(|| {
-                        Error::UnknownVariable {
-                            class: class.name.clone(),
-                            function: func.name.clone(),
-                            variable: name.clone(),
-                        }
-                    })
+                    let name = name.to_lowercase();
+                    match &*name {
+                        // Magic variable that holds the current state as a string.
+                        "::state" => Ok(Type::String),
+                        _ => variables
+                            .get(&name)
+                            .cloned()
+                            .ok_or_else(|| Error::UnknownVariable {
+                                class: class.name.clone(),
+                                function: func.name.clone(),
+                                variable: name.clone(),
+                            }),
+                    }
                 }
             }
         };
