@@ -146,6 +146,7 @@ impl ValidationPass {
                 (Type::String, Value::Null | Value::String(_)) => true,
                 (Type::Array(_), Value::Null) => true,
                 (Type::Class(_), Value::Null) => true,
+                (Type::Struct(_), Value::Null) => true,
                 _ => false,
             };
 
@@ -212,9 +213,29 @@ impl ValidationPass {
     fn validate_function(&self, class: &Class, func: &Function) -> Result<(), Error> {
         let mut variables = HashMap::new();
 
-        for var in &class.variables {
-            let ty = self.resolve_ty(&var.definition.ty)?;
-            variables.insert(var.definition.name.to_lowercase(), ty);
+        // A class can access any fields defined by its parents,
+        // however if both child and parent have the same field defined
+        // the child field takes precedence.
+        {
+            let mut current_class = class;
+            loop {
+                for var in &current_class.variables {
+                    let name = var.definition.name.to_lowercase();
+                    if variables.contains_key(&name) {
+                        continue;
+                    }
+
+                    let ty = self.resolve_ty(&var.definition.ty)?;
+                    variables.insert(name, ty);
+                }
+
+                let parent = current_class.parent.to_lowercase();
+                if matches!(parent.as_str(), "" | "none") {
+                    break;
+                }
+
+                current_class = self.classes.get(&parent).unwrap();
+            }
         }
 
         for param in &func.params {
@@ -370,6 +391,8 @@ impl ValidationPass {
                         (Type::Struct(src), Type::Struct(dst)) if src == dst => {}
                         // None can be assigned to any struct.
                         (Type::None, Type::Struct(_)) => {}
+                        (Type::None, Type::Array(_)) => {}
+                        (Type::Array(src), Type::Array(dst)) if src == dst => {}
                         (src, dst) => {
                             dbg!(&src, &dst);
                             todo!();
