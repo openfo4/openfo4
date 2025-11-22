@@ -21,8 +21,6 @@ pub enum Error {
         function: String,
         variable: String,
     },
-    #[error("invalid instruction operands")]
-    InvalidInstructionOperands,
     #[error("duplicate state name {state} in class {class}")]
     DuplicateStateName { class: String, state: String },
     #[error("default state {class} for class {default_state} does not exist")]
@@ -32,6 +30,11 @@ pub enum Error {
     },
     #[error("mismatching function signatures accross states")]
     MismatchingFunctionSignaturesAcrossStates,
+    #[error("invalid operands: expected {expected:?}, found {found:?}")]
+    InvalidOperands {
+        expected: Vec<Type>,
+        found: Vec<Type>,
+    },
 }
 
 #[derive(Clone, Debug, Default)]
@@ -259,7 +262,10 @@ impl ValidationPass {
         let assert_types_eq = |types: &[Type], expect: Type| -> Result<(), Error> {
             for ty in types {
                 if ty != &expect {
-                    return Err(Error::InvalidInstructionOperands);
+                    return Err(Error::InvalidOperands {
+                        expected: std::iter::repeat_n(expect, types.len()).collect(),
+                        found: types.to_vec(),
+                    });
                 }
             }
 
@@ -334,17 +340,40 @@ impl ValidationPass {
                     let dst = variable_type(&op.dst)?;
                     assert_types_eq(&[src, dst], Type::Float)?;
                 }
-                Instruction::Not(op) => {
-                    let src = variable_type(&op.src)?;
-                    let dst = variable_type(&op.dst)?;
-                    assert_types_eq(&[src, dst], Type::Bool)?;
-                }
+                // Instruction::Not(op) => {
+                //     let src = variable_type(&op.src)?;
+                //     let dst = variable_type(&op.dst)?;
+                //     assert_types_eq(&[src, dst], Type::Bool)?;
+                // }
                 Instruction::Store(op) => {
                     let src = variable_type(&op.src)?;
                     let dst = variable_type(&op.dst)?;
 
-                    if src != dst {
-                        return Err(Error::InvalidInstructionOperands);
+                    match (src, dst) {
+                        (Type::None, Type::None) => {}
+                        (Type::Bool, Type::Bool) => {}
+                        (Type::Int, Type::Int) => {}
+                        (Type::Float, Type::Float) => {}
+                        (Type::String, Type::String) => {}
+                        // Storing an object is possible if src > dst,
+                        // i.e. dst is a parent of src.
+                        (Type::Class(mut src), Type::Class(dst)) => loop {
+                            if src == dst {
+                                break;
+                            }
+
+                            let class = self.classes.get(&src).unwrap();
+                            src = class.parent.to_lowercase();
+                        },
+                        // None can be assigned to any object.
+                        (Type::None, Type::Class(_)) => {}
+                        (Type::Struct(src), Type::Struct(dst)) if src == dst => {}
+                        // None can be assigned to any struct.
+                        (Type::None, Type::Struct(_)) => {}
+                        (src, dst) => {
+                            dbg!(&src, &dst);
+                            todo!();
+                        }
                     }
                 }
                 _ => (),
