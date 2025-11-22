@@ -37,6 +37,7 @@ pub enum Error {
 #[derive(Clone, Debug, Default)]
 pub struct ValidationPass {
     classes: HashMap<String, Class>,
+    structs: HashMap<String, Type>,
 }
 
 impl ValidationPass {
@@ -44,14 +45,22 @@ impl ValidationPass {
         for class in &module.classes {
             self.classes
                 .insert(class.name.to_lowercase(), class.clone());
+
+            for st in &class.structs {
+                let name = format!("{}#{}", class.name.to_lowercase(), st.name.to_lowercase());
+
+                let mut members = Vec::new();
+                for member in &st.members {
+                    members.push((member.name.to_lowercase(), member.ty.to_lowercase()));
+                }
+
+                self.structs
+                    .insert(name.to_lowercase(), Type::Struct(members));
+            }
         }
     }
 
     fn resolve_ty(&self, mut ty: &str) -> Result<Type, Error> {
-        if ty.contains("#") {
-            todo!();
-        }
-
         let mut array_depth = 0;
         while let Some(p) = ty.strip_suffix("[]") {
             ty = p;
@@ -65,6 +74,7 @@ impl ValidationPass {
             "float" => Type::Float,
             "string" => Type::String,
             "var" => Type::Var,
+            name if self.structs.contains_key(name) => self.structs[name].clone(),
             name if self.classes.contains_key(name) => Type::Class(name.to_owned()),
             _ => return Err(Error::UndefinedType(ty.to_owned())),
         };
@@ -212,6 +222,13 @@ impl ValidationPass {
         for local in &func.locals {
             let ty = self.resolve_ty(&local.ty)?;
             variables.insert(local.name.to_lowercase(), ty);
+        }
+
+        // Non-static functions have a magic "self" variable for the self object.
+        // The type is equal to the class of the function.
+        if !func.is_static {
+            let ty = self.resolve_ty(&class.name)?;
+            variables.insert("self".to_owned(), ty);
         }
 
         let variable_type = |value: &Value| -> Result<Type, Error> {
@@ -362,6 +379,7 @@ pub enum Type {
     Var,
     Array(Box<Type>),
     Class(String),
+    Struct(Vec<(String, String)>),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
