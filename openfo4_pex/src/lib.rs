@@ -1,6 +1,7 @@
 //! Parser for the PEX file format used in compiled scripts.
 
 mod raw;
+mod text;
 
 const MAGIC_LE: [u8; 4] = [0xde, 0xc0, 0x57, 0xfa];
 const MAGIC_BE: [u8; 4] = [0xfa, 0x57, 0xc0, 0xde];
@@ -203,6 +204,7 @@ impl Module {
                 states,
                 default_state: default_state.to_owned(),
                 variables,
+                properties,
             });
         }
 
@@ -274,6 +276,7 @@ pub struct Class {
     pub states: Vec<State>,
     pub default_state: String,
     pub variables: Vec<Variable>,
+    pub properties: Vec<Property>,
 }
 
 #[derive(Clone, Debug)]
@@ -326,6 +329,12 @@ pub struct Function {
     pub return_ty: String,
     pub locals: Vec<VariableDefinition>,
     pub instructions: Vec<Instruction>,
+}
+
+impl Function {
+    pub fn text(&self) -> String {
+        text::for_function(self)
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -754,8 +763,8 @@ pub struct StructGet {
 
 impl StructGet {
     fn from_raw(instruction: &raw::Instruction, strings: &[String]) -> Result<Self, Error> {
-        let struct_value = Value::convert(&instruction.args[0], strings)?;
-        let return_assignment = Value::convert(&instruction.args[1], strings)?;
+        let return_assignment = Value::convert(&instruction.args[0], strings)?;
+        let struct_value = Value::convert(&instruction.args[1], strings)?;
         let member_name = Value::convert(&instruction.args[2], strings)?;
 
         Ok(Self {
@@ -925,6 +934,30 @@ pub enum Value {
 }
 
 impl Value {
+    pub const fn is_null(&self) -> bool {
+        matches!(self, Self::Null)
+    }
+
+    pub const fn is_bool(&self) -> bool {
+        matches!(self, Self::Bool(_))
+    }
+
+    pub const fn is_int(&self) -> bool {
+        matches!(self, Self::Int(_))
+    }
+
+    pub const fn is_float(&self) -> bool {
+        matches!(self, Self::Float(_))
+    }
+
+    pub const fn is_string(&self) -> bool {
+        matches!(self, Self::String(_))
+    }
+
+    pub const fn is_ident(&self) -> bool {
+        matches!(self, Self::Ident(_))
+    }
+
     fn convert(value: &raw::Value, strings: &[String]) -> Result<Self, Error> {
         match value {
             raw::Value::Null => Ok(Self::Null),

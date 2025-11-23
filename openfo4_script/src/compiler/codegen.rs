@@ -81,6 +81,7 @@ impl CodegenPass {
             self.data.classes.insert(
                 class.name.to_lowercase(),
                 ClassDef {
+                    name: class.name.to_lowercase(),
                     functions,
                     parent,
                     fields,
@@ -247,6 +248,7 @@ struct Primitives {
 
 #[derive(Clone, Debug, Default)]
 struct ClassDef {
+    name: String,
     functions: HashMap<String, FunctionDef>,
     parent: Option<String>,
     fields: HashMap<String, String>,
@@ -271,6 +273,11 @@ fn find_function_callees(
     let current_class = classes.get(class).unwrap();
 
     let find_var = |var_name: &str| -> String {
+        match &*var_name.to_lowercase() {
+            "self" => return class.to_lowercase(),
+            _ => (),
+        }
+
         for local in &function.locals {
             if local.name.to_lowercase() == var_name.to_lowercase() {
                 return local.ty.to_lowercase();
@@ -280,6 +287,8 @@ fn find_function_callees(
         if let Some(ty) = current_class.fields.get(&var_name.to_lowercase()) {
             return ty.to_lowercase();
         }
+
+        dbg!(&var_name);
 
         todo!()
     };

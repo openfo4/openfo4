@@ -136,6 +136,7 @@ fn translate_function_body(
         builder,
         locals,
         fields,
+        self_ptr,
     };
 
     // Setup blocks
@@ -345,6 +346,11 @@ fn translate_function_body(
                 };
 
                 let find_var = |var_name: &str| -> String {
+                    match &*var_name.to_lowercase() {
+                        "self" => return class.name.clone(),
+                        _ => (),
+                    }
+
                     if let Some(local) = translator.locals.get(&var_name.to_lowercase()) {
                         return local.ty_name.clone();
                     }
@@ -448,6 +454,10 @@ fn translate_function_body(
                     translator.store(&op.return_assignment, res);
                 }
             }
+            Instruction::PropertyGet(op) => {
+                dbg!(&op);
+                todo!();
+            }
             op => todo!("{:?}", op),
         }
     }
@@ -464,6 +474,7 @@ struct FunctionTranslator<'a> {
     builder: FunctionBuilder<'a>,
     locals: HashMap<String, Local>,
     fields: HashMap<String, JitType>,
+    self_ptr: Option<JitValue>,
 }
 
 impl<'a> FunctionTranslator<'a> {
@@ -475,6 +486,12 @@ impl<'a> FunctionTranslator<'a> {
             Value::Float(value) => self.builder.fconst(JitType::F32, *value),
             Value::String(value) => todo!(),
             Value::Ident(name) => {
+                let name = name.to_lowercase();
+
+                if name == "self" {
+                    return self.self_ptr.unwrap();
+                }
+
                 if let Some(local) = self.locals.get(&name.to_lowercase()) {
                     return self.builder.stack_load(local.slot, local.ty, 0);
                 }

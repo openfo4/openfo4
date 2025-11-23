@@ -26,10 +26,26 @@ pub fn register_builtins(engine: &mut Engine) {
         "GetBaseValue",
         object_reference::get_base_value,
     );
+    engine.register_native_function(
+        "ObjectReference",
+        "SetActorOwner",
+        object_reference::set_actor_owner,
+    );
+    engine.register_native_function(
+        "ObjectReference",
+        "GetBaseObject",
+        object_reference::get_base_object,
+    );
 
     engine.register_native_function("Game", "GetPlayer", game::get_player);
 
     engine.register_native_function("Message", "Show", message::show);
+
+    engine.register_native_function(
+        "ScriptObject",
+        "CancelTimerGameTime",
+        script_object::cancel_timer_game_time,
+    );
 }
 
 pub struct State {}

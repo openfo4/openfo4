@@ -289,6 +289,19 @@ unsafe impl NativeType for isize {
     }
 }
 
+unsafe impl NativeType for bool {
+    const TYPE: Type = Type::I32;
+
+    unsafe fn from_raw(val: &RawVal) -> Self {
+        let v = unsafe { <i32 as NativeType>::from_raw(val) };
+        v != 0
+    }
+
+    fn to_raw(self) -> RawVal {
+        (self as i32).to_raw()
+    }
+}
+
 pub unsafe extern "C" fn call_host_trampoline(
     ctx: *const HostState,
     index: usize,
