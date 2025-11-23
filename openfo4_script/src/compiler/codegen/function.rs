@@ -440,6 +440,11 @@ fn translate_function_body(
                         let res = translator.builder.fmul(lhs, rhs);
                         vec![res]
                     }
+                    // Form Script
+                    // Not implemented by us.
+                    ("form", "startobjectprofiling") => Vec::new(),
+                    // Not implemented by us.
+                    ("form", "stopobjectprofiling") => Vec::new(),
                     (class_name, function_name) => {
                         let func = data.get_function(class_name, function_name).unwrap();
                         let func = func.func_id.unwrap();
