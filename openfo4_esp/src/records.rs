@@ -4626,12 +4626,142 @@ bitflags! {
 impl_decode_bitflags!(EnableParentFlags: u8);
 
 #[derive(Clone, Debug, Record)]
+#[record(ordered)]
 pub struct Quest {
     #[record("EDID")]
     pub id: Option<ZString>,
     #[record("VMAD")]
     pub virtual_machine_adapter: Option<VirtualMachineAdapter<QuestFragments>>,
+    #[record("FULL")]
+    pub full_name: Option<LString>,
+    #[record("DNAM")]
+    pub data: QuestData,
+    #[record("ENAM")]
+    pub event: Option<u32>,
+    #[record("LNAM")]
+    pub location: Option<FormId>,
+    #[record("XNAM")]
+    pub quest_completion_xp: Option<FormId>,
+    #[record("QTGL")]
+    pub text_display_globals: Vec<FormId>,
+    #[record("FLTR")]
+    pub filter: Option<ZString>,
+    #[record("CTDA")]
+    pub quest_dialogue_conditions: SubRecordArray<Condition>,
+    #[record("NEXT")]
+    _marker: Option<()>,
+    #[record("CTDA")]
+    pub story_manager_conditions: SubRecordArray<Condition>,
+    #[record("INDX")]
+    pub stages: SubRecordArray<QuestStage>,
+    // ...
 }
+
+#[derive(Copy, Clone, Debug, BinaryStruct)]
+pub struct QuestData {
+    pub flags: QuestDataFlags,
+    pub priority: u8,
+    _pad0: u8,
+    pub delay_time: f32,
+    pub r#type: QuestDataType,
+    _pad1: [u8; 3],
+}
+
+bitflags! {
+    #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+    pub struct QuestDataFlags: u16 {
+        const START_GAME_ENABLED = 0x0001;
+        const COMPLETED = 0x0002;
+        const ADD_IDLE_TOPIC_TO_HELLOS = 0x0004;
+        const ALLOW_REPEATED_STAGES = 0x0008;
+        const STARTS_ENABLED = 0x0010;
+        const DISPLAYED_IN_HUD = 0x0020;
+        const FAILED = 0x0040;
+        const STAGE_WAIT = 0x0080;
+        const RUN_ONCE = 0x0100;
+        const EXCLUDE_FROM_DIALOGUE_EXPORT = 0x0200;
+        const WARN_ON_ALIAS_FILL_FAILURE = 0x0400;
+        const ACTIVE = 0x0800;
+        const REPEATS_CONDITIONS = 0x1000;
+        const KEEP_INSTANCE = 0x2000;
+        const WANT_DORMANT = 0x4000;
+        const HAS_DIALOGUE_DATA = 0x8000;
+    }
+}
+
+impl_decode_bitflags!(QuestDataFlags: u16);
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, BinaryStruct)]
+#[primitive(u8)]
+pub enum QuestDataType {
+    None = 0,
+    MainQuest = 1,
+    BrotherhoodOfSteel = 2,
+    Institute = 3,
+    Minutemen = 4,
+    Railroad = 5,
+    Misc = 6,
+    SideQuest = 7,
+    Dlc1 = 8,
+    Dlc2 = 9,
+    Dlc3 = 10,
+    Dlc4 = 11,
+    Dlc5 = 12,
+    Dlc6 = 13,
+    Dlc7 = 14,
+}
+
+#[derive(Clone, Debug, Record)]
+#[record(ordered)]
+pub struct QuestStage {
+    #[record("INDX")]
+    pub index: QuestStageIndex,
+    #[record("QSDT")]
+    pub log_entries: SubRecordArray<QuestStageLogEntry>,
+}
+
+#[derive(Clone, Debug, BinaryStruct)]
+pub struct QuestStageIndex {
+    pub stage_index: u16,
+    pub flags: QuestStageFlags,
+    _pad0: u8,
+}
+
+bitflags! {
+    #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+    pub struct QuestStageFlags: u8 {
+        const RUN_ON_START = 0x02;
+        const RUN_ON_STOP = 0x04;
+        const KEEP_INSTANCE_DATA_FROM_HERE_ON = 0x08;
+    }
+}
+
+impl_decode_bitflags!(QuestStageFlags: u8);
+
+#[derive(Clone, Debug, Record)]
+#[record(ordered)]
+pub struct QuestStageLogEntry {
+    #[record("QSDT")]
+    pub flags: QuestStageLogEntryFlags,
+    #[record("CTDA")]
+    pub conditions: SubRecordArray<Condition>,
+    #[record("NAM2")]
+    pub note: Option<ZString>,
+    #[record("CNAM")]
+    pub log_entry: Option<LString>,
+    #[record("NAM0")]
+    pub next_quest: Option<FormId>,
+}
+
+bitflags! {
+    #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+    pub struct QuestStageLogEntryFlags: u8 {
+        const COMPLETE_QUEST = 0x01;
+        const FAIL_QUEST = 0x02;
+    }
+}
+
+impl_decode_bitflags!(QuestStageLogEntryFlags: u8);
 
 #[derive(Clone, Debug, Record)]
 pub struct DialogueBranch {
