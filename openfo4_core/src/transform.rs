@@ -1,7 +1,8 @@
 use game_common::components::Transform;
-use glam::{Mat3, Mat4, Quat};
+use glam::{Mat3, Mat4, Quat, Vec3};
 
-pub const NIF_TO_OPENGL: Mat3 = Mat3::from_cols_array_2d(&[
+const NIF_TO_METERS: f32 = 1.0 / 69.99125;
+const NIF_TO_OPENGL: Mat3 = Mat3::from_cols_array_2d(&[
     // X => X
     [1.0, 0.0, 0.0],
     // Y => -Z
@@ -10,7 +11,7 @@ pub const NIF_TO_OPENGL: Mat3 = Mat3::from_cols_array_2d(&[
     [0.0, 1.0, 0.0],
 ]);
 // Inverse of NIF_TO_OPENGL
-pub const OPENGL_TO_NIF: Mat3 = Mat3::from_cols_array_2d(&[
+const OPENGL_TO_NIF: Mat3 = Mat3::from_cols_array_2d(&[
     // X => X
     [1.0, 0.0, 0.0],
     // Y => Z
@@ -26,6 +27,16 @@ pub trait ConvertCoordinateSystem {
 
     /// Converts this value from NIF to OpenGL coordinate system.
     fn to_opengl(self) -> Self;
+}
+
+impl ConvertCoordinateSystem for Vec3 {
+    fn to_nif(self) -> Self {
+        OPENGL_TO_NIF * self
+    }
+
+    fn to_opengl(self) -> Self {
+        NIF_TO_OPENGL * self
+    }
 }
 
 impl ConvertCoordinateSystem for Quat {
@@ -47,7 +58,7 @@ impl ConvertCoordinateSystem for Transform {
         Self {
             translation,
             rotation,
-            scale,
+            scale: scale / NIF_TO_METERS,
         } * self
     }
 
@@ -57,7 +68,7 @@ impl ConvertCoordinateSystem for Transform {
         Self {
             translation,
             rotation,
-            scale,
+            scale: scale * NIF_TO_METERS,
         } * self
     }
 }
