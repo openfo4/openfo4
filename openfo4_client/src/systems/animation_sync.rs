@@ -1,6 +1,7 @@
 use std::ops::RangeInclusive;
 use std::sync::LazyLock;
 
+use glam::Vec3;
 use hashbrown::HashMap;
 use hecs::World;
 use openfo4_animation::Value;
@@ -20,6 +21,10 @@ pub struct AnimationParameters {
     pub is_jumping: bool,
     pub is_player: bool,
     pub is_female: bool,
+    /// The facing direction of the entity in entity space.
+    ///
+    /// This uses the NIF coordinate system.
+    pub facing_direction: Vec3,
 }
 
 pub fn update_animation_parameters(world: &mut World) {
@@ -65,6 +70,18 @@ pub fn update_animation_parameters(world: &mut World) {
 
         if let Some(var) = driver.get_variable_mut("bIsFemale") {
             *var = Value::Bool(params.is_female);
+        }
+
+        if let Some(var) = driver.get_variable_mut("camerafromx") {
+            *var = Value::F32(params.facing_direction.x);
+        }
+
+        if let Some(var) = driver.get_variable_mut("camerafromy") {
+            *var = Value::F32(params.facing_direction.y);
+        }
+
+        if let Some(var) = driver.get_variable_mut("camerafromz") {
+            *var = Value::F32(params.facing_direction.z);
         }
 
         // Hardcoded variables that come from "animtextdata/animspeedinfo".

@@ -3,9 +3,10 @@ use std::f32::consts::PI;
 use game_common::components::Transform;
 use game_input::keyboard::KeyCode;
 use game_window::events::WindowEvent;
-use glam::{Quat, Vec3};
+use glam::{Mat3, Quat, Vec3};
 use hecs::{CommandBuffer, World};
 use openfo4_core::events::EventBus;
+use openfo4_core::transform::ConvertCoordinateSystem;
 use openfo4_physics::PhysicsPipeline;
 use openfo4_physics::components::ColliderShape;
 use openfo4_physics::controller::CharacterController;
@@ -242,6 +243,11 @@ pub fn apply_player_movements(world: &mut World, pipeline: &mut PhysicsPipeline)
 
         dir /= 2.0 * PI;
 
+        // Both rotation are world-space, but we want entity-space, so
+        // we must remove the entity rotation.
+        // The result is in the NIF coordinate system.
+        let facing_direction = (transform.rotation.conjugate() * offset.rotation) * -Vec3::Z;
+
         buffer.insert_one(
             entity,
             AnimationParameters {
@@ -255,6 +261,7 @@ pub fn apply_player_movements(world: &mut World, pipeline: &mut PhysicsPipeline)
                 is_player: player.is_some(),
                 is_female: actor_keywords.0.contains(&KEYWORD_FEMALE),
                 is_jumping: state.jumping,
+                facing_direction,
             },
         );
     }
