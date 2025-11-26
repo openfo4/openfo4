@@ -4,6 +4,8 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+game_common = { version = "0.1.0", path = "../game_common" }
+
 hecs = "0.10.5"
 glam = { version = "0.28.0", features = ["bytemuck"] }
 
