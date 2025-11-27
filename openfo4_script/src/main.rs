@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use openfo4_script::runtime::{Caller, RawVal};
+use openfo4_script::runtime::{Caller, Context, RawVal};
 use openfo4_script::{Engine, Registry, classes};
 
 fn main() {
@@ -106,14 +106,16 @@ fn main() {
 
     classes::register_builtins(&mut engine);
 
-    // let instance = engine.compile("YoureSPECIALscript");
-    let room = engine.compile("RentRoomScript");
+    let instance = engine.compile("YoureSPECIALscript");
+    // let room = engine.compile("RentRoomScript");
 
-    // let func = instance.get_func("onactivate").unwrap();
+    let func = instance.get_func("onactivate").unwrap();
     // dbg!(&func);
 
-    // let typed = func.typed::<(isize, isize), ()>().unwrap();
-    // typed.call(&engine.state, (0, 0));
+    let ctx = Context::new(&engine, ());
+
+    let typed = func.typed::<(isize, isize), ()>().unwrap();
+    typed.call(&ctx, (0, 0));
 
     println!("exit");
 }

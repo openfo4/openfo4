@@ -5,7 +5,9 @@ pub mod runtime;
 use std::collections::{HashMap, HashSet};
 use std::hash::Hash;
 use std::mem::transmute;
+use std::sync::{Arc, RwLock};
 
+use game_common::cell::UnsafeRefCell;
 use game_common::collections::arena::{Arena, Key};
 use openfo4_jit::{CompiledFunction, Type};
 use openfo4_pex::{Class, Module};
@@ -25,16 +27,14 @@ pub enum Error {
 
 pub struct Engine {
     registry: Registry,
-    pub state: HostState,
-    instances: HashMap<String, ScriptInstance>,
+    shared: Arc<EngineShared>,
 }
 
 impl Engine {
     pub fn new() -> Self {
         Self {
             registry: Registry::new(),
-            state: HostState::default(),
-            instances: HashMap::new(),
+            shared: Arc::new(EngineShared::default()),
         }
     }
 
@@ -46,8 +46,11 @@ impl Engine {
     where
         F: IntoFunc<T, Params, Returns>,
     {
+        let _lock = self.shared.state_lock.write();
+        let mut state = unsafe { self.shared.state.borrow_mut() };
+
         let ptr = call_host_trampoline as *const u8;
-        let index = f.into_func(&mut self.state);
+        let index = f.into_func(&mut state);
 
         let mut signature = F::signature();
         // Our VM context pointer.
@@ -64,11 +67,15 @@ impl Engine {
         );
     }
 
-    pub fn compile(&mut self, class: &str) -> &ScriptInstance {
-        let instance = self.registry.compile(class).unwrap();
-        self.instances.insert(class.to_owned(), instance);
-        self.instances.get(class).unwrap()
+    pub fn compile(&mut self, class: &str) -> Instance {
+        self.registry.compile(self.shared.clone(), class).unwrap()
     }
+}
+
+#[derive(Default)]
+struct EngineShared {
+    state_lock: RwLock<()>,
+    state: UnsafeRefCell<HostState>,
 }
 
 #[derive(Clone, Debug)]
@@ -108,7 +115,7 @@ impl Registry {
         self.ctx.define_native_function(class, func, f);
     }
 
-    pub fn compile(&mut self, class: &str) -> Result<ScriptInstance, Error> {
+    fn compile(&mut self, engine: Arc<EngineShared>, class: &str) -> Result<Instance, Error> {
         let mut functions = HashMap::new();
 
         let class = self.classes.get(&class.to_lowercase()).unwrap();
@@ -122,11 +129,27 @@ impl Registry {
                 dbg!(&f.name);
                 let fn_ptr = self.ctx.compile(&class.name, &f.name).unwrap();
 
-                functions.insert(f.name.to_lowercase(), fn_ptr);
+                let func = unsafe { Func::new(&fn_ptr) };
+
+                functions.insert(f.name.to_lowercase(), (fn_ptr, func));
             }
         }
 
-        Ok(ScriptInstance { functions })
+        Ok(Instance { engine, functions })
+    }
+}
+
+/// An compiled instance of a script.
+#[derive(Clone)]
+pub struct Instance {
+    engine: Arc<EngineShared>,
+    functions: HashMap<String, (CompiledFunction, Func)>,
+}
+
+impl Instance {
+    pub fn get_func(&self, name: &str) -> Option<&Func> {
+        let (_, func) = self.functions.get(&name.to_lowercase())?;
+        Some(func)
     }
 }
 

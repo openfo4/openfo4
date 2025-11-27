@@ -1,12 +1,30 @@
 use std::any::Any;
 use std::marker::PhantomData;
-use std::mem::MaybeUninit;
+use std::mem::{MaybeUninit, transmute};
+use std::sync::Arc;
 
-use openfo4_jit::{Signature, Type};
+use openfo4_jit::{CompiledFunction, Signature, Type};
+use thiserror::Error;
+
+use crate::{Engine, EngineShared};
 
 mod object;
 
 pub type NativeFnPtr = unsafe extern "C" fn(*const HostState, usize, *mut RawVal);
+
+pub struct Context<T> {
+    engine: Arc<EngineShared>,
+    data: T,
+}
+
+impl<T> Context<T> {
+    pub fn new(engine: &Engine, data: T) -> Self {
+        Self {
+            engine: engine.shared.clone(),
+            data,
+        }
+    }
+}
 
 #[derive(Copy, Clone)]
 #[repr(C)]
@@ -28,22 +46,45 @@ pub struct Func {
 }
 
 impl Func {
-    pub fn call(&self) {}
-
-    pub unsafe fn call_unchecked(&self, state: &HostState, values: *mut RawVal) {
-        unsafe {
-            (self.ptr)(state, 0, values);
+    /// # Safety
+    ///
+    /// - The function pointer must point to a [`NativeFnPtr`] function.
+    pub(crate) unsafe fn new(f: &CompiledFunction) -> Self {
+        Self {
+            // SAFETY: The caller guarantees that the function is a valid
+            // function pointer of type `NativeFnPtr`.
+            ptr: unsafe { transmute::<*const u8, NativeFnPtr>(f.as_ptr()) },
+            signature: f.signature().clone(),
         }
     }
 
-    pub fn typed<Params, Returns>(&self) -> Result<TypedFunc<'_, Params, Returns>, ()>
+    pub fn call(&self) {}
+
+    pub unsafe fn call_unchecked<T>(&self, ctx: &Context<T>, values: *mut RawVal) {
+        let _lock = ctx.engine.state_lock.read();
+        let state = unsafe { ctx.engine.state.borrow() };
+
+        unsafe {
+            (self.ptr)(&*state, 0, values);
+        }
+    }
+
+    pub fn typed<Params, Returns>(
+        &self,
+    ) -> Result<TypedFunc<'_, Params, Returns>, FuncSignatureMismatch>
     where
         Params: NativeTuple,
         Returns: NativeTuple,
     {
         if &self.signature.params[1..] != Params::TYPES || &self.signature.returns != Returns::TYPES
         {
-            return Err(());
+            let expected = Signature {
+                params: Params::TYPES.to_vec(),
+                returns: Returns::TYPES.to_vec(),
+            };
+            let found = self.signature.clone();
+
+            return Err(FuncSignatureMismatch { expected, found });
         }
 
         Ok(TypedFunc {
@@ -53,6 +94,14 @@ impl Func {
     }
 }
 
+#[derive(Clone, Debug, Error)]
+#[error("expected {expected:?} found {found:?}")]
+pub struct FuncSignatureMismatch {
+    expected: Signature,
+    found: Signature,
+}
+
+/// A statically typed function.
 pub struct TypedFunc<'a, Params, Returns> {
     func: &'a Func,
     _marker: PhantomData<fn(Params) -> Returns>,
@@ -63,7 +112,7 @@ where
     Params: NativeTuple,
     Returns: NativeTuple,
 {
-    pub fn call(&self, state: &HostState, params: Params) -> Returns {
+    pub fn call<T>(&self, ctx: &Context<T>, params: Params) -> Returns {
         // TODO: When const_generics is stabilized we can avoid the heap allocation
         // and use a regular array.
         let mut values = vec![MaybeUninit::<RawVal>::uninit(); Params::SIZE + Returns::SIZE];
@@ -79,7 +128,7 @@ where
         //   function signature.
         unsafe {
             self.func
-                .call_unchecked(state, values.as_mut_ptr().cast::<RawVal>());
+                .call_unchecked(ctx, values.as_mut_ptr().cast::<RawVal>());
         }
 
         unsafe {
@@ -111,7 +160,7 @@ impl<'a, T> Caller<'a, T> {
 #[derive(Default)]
 pub struct HostState {
     data: Option<Box<dyn Any>>,
-    pub call_table: CallTable,
+    call_table: CallTable,
 }
 
 #[derive(Default)]
