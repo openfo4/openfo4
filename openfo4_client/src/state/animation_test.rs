@@ -1,6 +1,6 @@
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::path::PathBuf;
-use std::sync::{Arc, OnceLock};
+use std::sync::OnceLock;
 
 use game_common::components::{Axis, Transform};
 use game_core_pipeline::entities::MaterialHandle;
@@ -9,34 +9,30 @@ use game_tasks::TaskPool;
 use glam::{IVec2, Vec3, Vec4};
 use hecs::{Entity, World};
 use openfo4_animation::builder::{Builder, Hint};
-use openfo4_animation::driver::AnimationDriver;
 use openfo4_animation::skeleton::{BoneMarker, Skeleton, SkeletonInstance};
 use openfo4_animation::{AnimationGraph, Value};
 use openfo4_asset::{AssetLoader, Handle};
 use openfo4_core::WorldExt;
 use openfo4_core::events::EventBus;
 use openfo4_core::hierarchy::Children;
+use openfo4_esp::FormId;
 use openfo4_esp::records::Race;
-use openfo4_esp::{FormId, RecordData, RecordKind};
 use openfo4_hkx::behavior::VariableType;
 use openfo4_hkx::{HkObject, HkxFile};
-use openfo4_physics::components::{Capsule, Collider, ColliderShape, RigidBody};
+use openfo4_physics::components::{Capsule, ColliderShape};
 
-use crate::assets::animation::{AnimationSet, FileAnimationClip};
+use crate::assets::animation::AnimationSet;
 use crate::assets::data_file::DataFile;
 use crate::assets::nif_v2::{Instantiate, NIF_TO_METERS, NifScene};
 use crate::cell::CellId;
 use crate::components::{NiTransform, Player};
-use crate::loader::{FileLoader, fix_path};
-use crate::shared::SharedState;
-use crate::state::anim_starter::{ActiveBehaviorGraphs, AnimationEventQueue};
+use crate::loader::fix_path;
+use crate::state::anim_starter::AnimationEventQueue;
 use crate::state::animation::{self, SkeletonConfig, load_anim};
 use crate::state::esp::EspLoader;
 use crate::state::npc::{BodyPartBone, spawn_actor};
 use crate::systems::PlayerControlState;
-use crate::systems::controller::ControllerShape;
-use crate::systems::equipment::{Equipment, equip_item};
-use crate::systems::inventory::{AddItemEvent, EquipItemEvent, Inventory, ItemStack};
+use crate::systems::inventory::{AddItemEvent, EquipItemEvent, Inventory};
 
 #[derive(Clone, Debug)]
 pub struct SkinInstance {
@@ -563,18 +559,22 @@ pub struct ActorBehaviorData {
     pub behavior_files: Vec<String>,
 }
 
-pub async fn load_behavior_data(
+#[derive(Clone, Debug)]
+pub enum LoadBehaviorGraphError {
+    Load(Vec<(String, crate::assets::Error)>),
+    Build(openfo4_animation::builder::Error),
+}
+
+pub async fn load_behavior_graph(
+    loader: &AssetLoader,
     root_path: &str,
     behavior_path: &str,
     subgraph_path: &str,
     character: &ActorCharacter,
-    search_paths: &[&str],
-    loader: &AssetLoader,
-    pool: &TaskPool,
-) -> Result<ActorBehaviorData, ()> {
+) -> Result<(AnimationGraph, Vec<String>), LoadBehaviorGraphError> {
     let mut behavior_path = fix_path(behavior_path);
     if !behavior_path.starts_with("meshes") {
-        behavior_path = format!("meshes/{}", behavior_path)
+        behavior_path = format!("meshes/{}", behavior_path);
     }
 
     let mut subgraph_path = fix_path(subgraph_path);
@@ -582,48 +582,65 @@ pub async fn load_behavior_data(
         subgraph_path = format!("meshes/{}", subgraph_path);
     }
 
-    let behavior_file = loader
-        .load::<DataFile<HkxFile>, _>(&behavior_path)
-        .await
-        .unwrap();
+    let behavior_file = match loader.load::<DataFile<HkxFile>, _>(&behavior_path).await {
+        Ok(f) => f,
+        Err(err) => {
+            return Err(LoadBehaviorGraphError::Load(vec![(behavior_path, err)]));
+        }
+    };
 
-    let mut builder = Builder::new((**behavior_file).clone(), character.props.clone()).unwrap();
+    let mut builder = Builder::new((**behavior_file).clone(), character.props.clone())
+        .map_err(LoadBehaviorGraphError::Build)?;
 
     let mut behavior_files = Vec::new();
 
     let graph = loop {
-        match builder.build().unwrap() {
+        match builder.build().map_err(LoadBehaviorGraphError::Build)? {
             Ok(graph) => break graph,
             Err(Hint::NeedFile(path)) => {
-                let p = format!("{}/{}", root_path, path.to_lowercase().replace("\\", "/"));
+                let mut file_loaded = false;
+                let mut errors = Vec::new();
 
-                let file = match loader.load::<DataFile<HkxFile>, _>(&p).await {
-                    Ok(f) => {
-                        behavior_files.push(p);
-                        f
+                for p in [
+                    format!("{}/{}", root_path, path.to_lowercase().replace("\\", "/")),
+                    // The game seems to also load from this directory for all races.
+                    // This doesn't seem to be referenced anywhere, so it might be hardcoded?
+                    format!(
+                        "meshes/actors/shared/{}",
+                        path.to_lowercase().replace("\\", "/")
+                    ),
+                ] {
+                    match loader.load::<DataFile<HkxFile>, _>(&p).await {
+                        Ok(file) => {
+                            behavior_files.push(p);
+                            builder
+                                .register_file(&path, (**file).clone())
+                                .map_err(LoadBehaviorGraphError::Build)?;
+
+                            file_loaded = true;
+                            break;
+                        }
+                        Err(err) => {
+                            errors.push((p, err));
+                        }
                     }
-                    Err(err) => {
-                        // The game seems to also load from this directory for all races.
-                        // This doesn't seem to be referenced anywhere, so it might be hardcoded?
-                        let shared_path = "meshes/actors/shared";
-                        let p =
-                            format!("{}/{}", shared_path, path.to_lowercase().replace("\\", "/"));
+                }
 
-                        let f = loader.load::<DataFile<HkxFile>, _>(&p).await.unwrap();
-                        behavior_files.push(p);
-                        f
+                if !file_loaded {
+                    return Err(LoadBehaviorGraphError::Load(errors));
+                }
+            }
+            Err(Hint::NeedSwapGenerator) => {
+                let file = match loader.load::<DataFile<HkxFile>, _>(&subgraph_path).await {
+                    Ok(f) => f,
+                    Err(err) => {
+                        return Err(LoadBehaviorGraphError::Load(vec![(subgraph_path, err)]));
                     }
                 };
 
-                builder.register_file(&path, (**file).clone()).unwrap();
-            }
-            Err(Hint::NeedSwapGenerator) => {
-                let file = loader
-                    .load::<DataFile<HkxFile>, _>(&subgraph_path)
-                    .await
-                    .unwrap();
-
-                builder.register_swap_generator((**file).clone()).unwrap();
+                builder
+                    .register_swap_generator((**file).clone())
+                    .map_err(LoadBehaviorGraphError::Build)?;
             }
         }
     };
@@ -638,6 +655,23 @@ pub async fn load_behavior_data(
             .unwrap_or(file)
             .to_owned();
     }
+
+    Ok((graph, behavior_files))
+}
+
+pub async fn load_behavior_data(
+    root_path: &str,
+    behavior_path: &str,
+    subgraph_path: &str,
+    character: &ActorCharacter,
+    search_paths: &[&str],
+    loader: &AssetLoader,
+    pool: &TaskPool,
+) -> Result<ActorBehaviorData, ()> {
+    let (graph, behavior_files) =
+        load_behavior_graph(loader, root_path, behavior_path, subgraph_path, character)
+            .await
+            .unwrap();
 
     let animation_files = graph.animation_files();
     let mut tasks = HashMap::with_capacity(animation_files.len());

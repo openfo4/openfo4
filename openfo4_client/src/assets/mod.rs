@@ -13,7 +13,7 @@ pub struct FileLoadContext {
     pub entities: Entities,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum Error {
     NotFound,
     Other(String),
