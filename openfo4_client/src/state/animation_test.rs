@@ -340,7 +340,16 @@ pub async fn load_character(
                     Some(HkObject::BoneWeightArray(weights)) => {
                         Value::BoneWeights(weights.bone_weights.to_vec())
                     }
-                    _ => todo!(),
+                    Some(object) => {
+                        tracing::warn!(
+                            "unknown character pointer property {:?} in {}; ignoring",
+                            object,
+                            character_path.to_string_lossy(),
+                        );
+
+                        continue;
+                    }
+                    None => todo!(),
                 }
             }
             _ => todo!(),
