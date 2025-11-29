@@ -8,7 +8,7 @@ use glam::{UVec2, Vec2, Vec3};
 use openfo4_esp::records::{Land, LandLandTexture, LandTextureAlphaLayerPoint, Quadrant};
 use openfo4_esp::{FormId, RecordData, RecordKind};
 use openfo4_nif::bgsm::Bgsm;
-use openfo4_physics::components::{Collider, ColliderShape, CollisionLayer, TriMesh};
+use openfo4_physics::components::{Collider, ColliderShape, CollisionLayer, RigidBody, TriMesh};
 
 use crate::cell::CELL_SIZE;
 use crate::components::NiTransform;
@@ -167,6 +167,7 @@ pub async fn load_land(ctx: &LoadContext<'_>, land: &Land) -> SpawnEntity {
     SpawnEntity {
         transform: NiTransform::from_translation(ctx.grid_offset().extend(0.0) + LAND_OFFSET),
         collider: Some(collider),
+        rigid_body: Some(RigidBody::FIXED),
         object: Some(RenderObject { mesh, material }),
         ..Default::default()
     }

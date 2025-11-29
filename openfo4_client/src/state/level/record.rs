@@ -245,6 +245,7 @@ impl SpawnEntity {
             light,
             light_flicker,
             actor,
+            rigid_body: Some(RigidBody::FIXED),
             ..Default::default()
         })
     }
