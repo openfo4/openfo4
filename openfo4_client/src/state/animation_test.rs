@@ -591,6 +591,8 @@ pub async fn load_behavior_graph(
         subgraph_path = format!("meshes/{}", subgraph_path);
     }
 
+    let subgraph_root = extract_behavior_root_path(&subgraph_path);
+
     let behavior_file = match loader.load::<DataFile<HkxFile>, _>(&behavior_path).await {
         Ok(f) => f,
         Err(err) => {
@@ -612,6 +614,12 @@ pub async fn load_behavior_graph(
 
                 for p in [
                     format!("{}/{}", root_path, path.to_lowercase().replace("\\", "/")),
+                    // Loading from the subgraph directory can also happen.
+                    format!(
+                        "{}/{}",
+                        subgraph_root,
+                        path.to_lowercase().replace("\\", "/")
+                    ),
                     // The game seems to also load from this directory for all races.
                     // This doesn't seem to be referenced anywhere, so it might be hardcoded?
                     format!(
@@ -734,4 +742,22 @@ pub async fn load_behavior_data(
 pub struct BodyPartBoneProps {
     pub id: u32,
     pub start_bone: String,
+}
+
+fn extract_behavior_root_path(file_path: &str) -> &str {
+    let mut path = file_path;
+
+    // Remove file part (x.hkx).
+    if let Some(index) = path.rfind('/') {
+        path = &path[..index];
+    }
+
+    // Remove behaviors section if present.
+    if path.ends_with("behaviors") {
+        if let Some(index) = path.rfind('/') {
+            path = &path[..index];
+        }
+    }
+
+    path
 }
