@@ -4,6 +4,7 @@ mod terrain;
 use std::collections::HashSet;
 use std::sync::Arc;
 
+use async_channel::Receiver;
 use crossbeam::queue::SegQueue;
 use game_common::components::Transform;
 use game_tasks::TaskPool;
@@ -34,7 +35,7 @@ pub struct Streamer {
 
 pub struct Level {
     events: Arc<SegQueue<SpawnEntity>>,
-    tx: async_channel::Sender<CellId>,
+    tx: async_channel::Sender<Request>,
     cells_loaded: HashSet<CellId>,
     cells_to_unload_next_tick: HashSet<CellId>,
 }
@@ -47,52 +48,24 @@ impl Level {
         file_loader: Arc<FileLoader>,
         shared: Arc<SharedState>,
     ) -> Self {
-        let (tx, rx) = async_channel::unbounded::<CellId>();
+        let (tx, rx) = async_channel::unbounded::<Request>();
         let events = Arc::new(SegQueue::new());
 
         pool.spawn({
-            let loader = loader.clone();
             let events = events.clone();
             let pool = pool.clone();
 
             async move {
-                let worldspace = FormId(0x3C);
-
-                while let Ok(cell_id) = rx.recv().await {
-                    let mut form_id = None;
-                    for record in loader
-                        .children(RecordChildren::Cells, worldspace)
-                        .await
-                        .unwrap()
-                    {
-                        match record.data {
-                            RecordData::Cell(Cell {
-                                grid: Some(grid), ..
-                            }) => {
-                                if grid.x == cell_id.0.x && grid.y == cell_id.0.y {
-                                    form_id = Some(record.id);
-                                    break;
-                                }
-                            }
-                            _ => (),
-                        }
-                    }
-
-                    let Some(form_id) = form_id else {
-                        continue;
-                    };
-
-                    load_cell(
-                        &asset_loader,
-                        &loader,
-                        &events,
-                        &pool,
-                        &file_loader,
-                        &shared,
-                        form_id,
-                    )
-                    .await;
-                }
+                load_cells_task(
+                    rx,
+                    &loader,
+                    &asset_loader,
+                    &file_loader,
+                    &events,
+                    &pool,
+                    &shared,
+                )
+                .await;
             }
         })
         .deatch();
@@ -123,7 +96,12 @@ impl Level {
                 // This should happen at most once in the current tick.
                 if !prev_cells_loaded.contains(&cell) && !self.cells_loaded.contains(&cell) {
                     tracing::debug!("loading cell {:?}", cell);
-                    self.tx.try_send(cell).unwrap();
+                    self.tx
+                        .try_send(Request::Exterior {
+                            worldspace: FormId(0x3c),
+                            cell,
+                        })
+                        .unwrap();
                 }
 
                 self.cells_loaded.insert(cell);
@@ -196,6 +174,48 @@ impl Level {
         }
 
         self.cells_to_unload_next_tick.clear();
+    }
+}
+
+#[derive(Copy, Clone, Debug)]
+enum Request {
+    /// An exterior cell.
+    Exterior { worldspace: FormId, cell: CellId },
+    /// An interior cell.
+    Interior { cell: FormId },
+}
+
+async fn load_cells_task(
+    rx: Receiver<Request>,
+    esp_loader: &Arc<EspLoader>,
+    loader: &AssetLoader,
+    file_loader: &Arc<FileLoader>,
+    events: &Arc<SegQueue<SpawnEntity>>,
+    pool: &Arc<TaskPool>,
+    shared: &Arc<SharedState>,
+) {
+    while let Ok(req) = rx.recv().await {
+        let cell = match req {
+            Request::Exterior { worldspace, cell } => {
+                let cells = esp_loader
+                    .children(RecordChildren::Cells, worldspace)
+                    .await
+                    .unwrap();
+
+                cells
+                    .iter()
+                    .find_map(|record| match &record.data {
+                        RecordData::Cell(Cell {
+                            grid: Some(grid), ..
+                        }) if cell.0.x == grid.x && cell.0.y == grid.y => Some(record.id),
+                        _ => None,
+                    })
+                    .unwrap()
+            }
+            Request::Interior { cell } => cell,
+        };
+
+        load_cell(loader, esp_loader, events, pool, file_loader, shared, cell).await;
     }
 }
 
