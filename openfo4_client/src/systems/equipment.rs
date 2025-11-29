@@ -2,10 +2,9 @@ use std::collections::VecDeque;
 
 use game_common::components::Transform;
 use hashbrown::{HashMap, HashSet};
-use hecs::{CommandBuffer, Entity, World};
+use hecs::{Entity, World};
 use openfo4_animation::skeleton::SkeletonInstance;
 use openfo4_core::WorldExt;
-use openfo4_core::hierarchy::Children;
 use slab::Slab;
 
 use crate::assets::nif_v2::NifScene;
@@ -81,12 +80,18 @@ pub fn equip_item(
 
                 let mut bone_indices = Vec::new();
                 for name in &skin.bones {
-                    let bone = skeleton
+                    let Some(bone) = skeleton
                         .skeleton
                         .bones
                         .iter()
                         .find(|b| b.name.to_lowercase() == name.to_lowercase())
-                        .unwrap();
+                    else {
+                        tracing::warn!(
+                            "cannot map skinned bone {}; no such bone in skeleton",
+                            name
+                        );
+                        continue;
+                    };
 
                     bone_indices.push(bone.index);
                 }
