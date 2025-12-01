@@ -86,6 +86,7 @@ struct EquipmentProperties {
     keywords: HashSet<FormId>,
     weight: f32,
     value: f32,
+    weapon_ammo: Option<FormId>,
     weapon_capacity: u32,
     weapon_damage: HashMap<FormId, u32>,
     weapon_ammo_damage: u32,
@@ -172,6 +173,8 @@ pub async fn load_equipment_item(
             }
 
             if !weapon.data.ammo.is_null() {
+                base_props.weapon_ammo = Some(weapon.data.ammo);
+
                 match esp_loader
                     .lookup(Some(RecordKind::Ammo), weapon.data.ammo)
                     .await
@@ -212,6 +215,10 @@ pub async fn load_equipment_item(
             }
 
             ItemKind::Weapon
+        }
+        RecordData::Ammo(ammo) => {
+            name = ammo.id.as_str().unwrap().to_owned();
+            ItemKind::Ammo
         }
         _ => unreachable!(),
     };
@@ -299,6 +306,9 @@ pub async fn load_equipment_item(
                     }
 
                     continue;
+                }
+                ObjectModificationPropertyProperty::Ammo => {
+                    todo!();
                 }
                 ObjectModificationPropertyProperty::AimModelMinConeDegrees => {
                     ModificationClass::ScalarF32(
@@ -390,8 +400,10 @@ pub async fn load_equipment_item(
                         combined_props.weapon_cone_of_fire_decrease_delay_milliseconds,
                     )),
                 },
+                ammo: combined_props.weapon_ammo,
             })
         }
+        ItemKind::Ammo | ItemKind::Misc => ItemData::None,
     };
 
     EquipmentItem {

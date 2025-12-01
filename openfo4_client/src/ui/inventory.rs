@@ -1,5 +1,5 @@
 use game_ui::runtime::Context;
-use game_ui::widgets::{Button, Container, Text, Widget};
+use game_ui::widgets::{Container, Text, Widget};
 use hecs::World;
 
 use crate::components::Player;
@@ -13,7 +13,7 @@ pub fn draw_inventory(ctx: &Context, world: &World) {
 
     let root = Container::default().mount(ctx);
 
-    for item in inventory.items() {
+    for (_, item) in inventory.items() {
         if item.hidden {
             continue;
         }

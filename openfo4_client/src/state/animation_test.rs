@@ -145,6 +145,14 @@ pub fn animation_test(
                     FormId(0x4f21d),
                 ],
                 hidden: false,
+                count: 1,
+            });
+            events.send(AddItemEvent {
+                actor: root,
+                item: FormId(0x000C1897),
+                attachments: Vec::new(),
+                hidden: false,
+                count: 100,
             });
             events.send(EquipItemEvent {
                 actor: root,

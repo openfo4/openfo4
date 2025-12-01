@@ -92,6 +92,7 @@ impl Actor {
                 item: skin,
                 attachments: Vec::new(),
                 hidden: true,
+                count: 1,
             });
 
             events.send(EquipItemEvent {

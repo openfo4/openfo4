@@ -37,14 +37,24 @@ pub fn handle_weapon_reload_requests(world: &mut World, actions: &Actions, event
         let inventory = entity.get::<&Inventory>().unwrap();
         let mut animation_events = entity.get::<&mut AnimationEventQueue>().unwrap();
 
-        let can_reload = inventory.items().any(|item| match &item.data {
+        let mut ammo = None;
+        let can_reload = inventory.items().any(|(_, item)| match &item.data {
             ItemData::Weapon(weapon) => {
+                ammo = weapon.ammo;
                 item.equipped && weapon.current_ammo != weapon.ammo_capacity
             }
             _ => false,
         });
 
-        if can_reload {
+        let Some(ammo) = ammo else {
+            continue;
+        };
+
+        let Some((_, ammo)) = inventory.get_by_form(ammo).next() else {
+            continue;
+        };
+
+        if can_reload && ammo.count > 0 {
             if let Some(action) = actions.0.get(&Action::Reload) {
                 animation_events.0.push_back(*action);
             }
@@ -70,7 +80,7 @@ pub fn handle_weapon_fire_events(
         let facing_dir = entity.get::<&FacingDirection>().unwrap();
         let mut inventory = entity.get::<&mut Inventory>().unwrap();
 
-        for item in inventory.items_mut() {
+        for (_, item) in inventory.items_mut() {
             let ItemData::Weapon(weapon) = &mut item.data else {
                 continue;
             };
@@ -180,8 +190,10 @@ pub fn handle_weapon_reload_events(world: &mut World, events: &mut EventBus) {
 
         let mut inventory = entity.get::<&mut Inventory>().unwrap();
 
-        for item in inventory.items_mut() {
-            let ItemData::Weapon(weapon) = &mut item.data else {
+        let mut weapons_reloaded = Vec::new();
+
+        for (weapon_id, item) in inventory.items() {
+            let ItemData::Weapon(weapon) = &item.data else {
                 continue;
             };
 
@@ -190,7 +202,35 @@ pub fn handle_weapon_reload_events(world: &mut World, events: &mut EventBus) {
                 continue;
             }
 
-            weapon.current_ammo = weapon.ammo_capacity;
+            let Some(ammo) = weapon.ammo else {
+                continue;
+            };
+
+            let Some((ammo_id, ammo)) = inventory.items().find(|(_, v)| v.item == ammo) else {
+                continue;
+            };
+
+            let amount = u32::min(
+                ammo.count as u32,
+                weapon.ammo_capacity.saturating_sub(weapon.current_ammo),
+            );
+            weapons_reloaded.push((weapon_id, ammo_id, amount));
+        }
+
+        for (weapon_id, ammo_id, amount) in weapons_reloaded {
+            let weapon = inventory.get_mut(weapon_id).unwrap();
+            let ItemData::Weapon(weapon) = &mut weapon.data else {
+                unreachable!();
+            };
+
+            weapon.current_ammo += amount;
+            debug_assert!(weapon.current_ammo <= weapon.ammo_capacity);
+
+            let ammo = inventory.get_mut(ammo_id).unwrap();
+            ammo.count -= u64::from(amount);
+            if ammo.count == 0 {
+                inventory.remove(ammo_id);
+            }
         }
     }
 }
@@ -241,7 +281,7 @@ pub fn handle_weapon_draw_events(world: &mut World, events: &mut EventBus) {
 
         let mut inventory = entity.get::<&mut Inventory>().unwrap();
 
-        for item in inventory.items_mut() {
+        for (_, item) in inventory.items_mut() {
             match &mut item.data {
                 ItemData::Weapon(weapon) => {
                     if weapon.drawn {

@@ -1,4 +1,4 @@
-use std::ops::Range;
+use std::fmt::Debug;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -10,10 +10,10 @@ use openfo4_core::events::EventBus;
 use openfo4_esp::FormId;
 use slab::Slab;
 
-use crate::state::anim_starter::AnimationEventQueue;
 use crate::state::equipment::{load_equipment_item, load_equipment_item_models};
 use crate::state::esp::EspLoader;
 
+/// Unique identifier for an item inside a container.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct InventoryKey(usize);
 
@@ -25,8 +25,32 @@ pub struct Inventory {
 
 impl Inventory {
     pub fn insert(&mut self, item: ItemStack) -> InventoryKey {
+        // Attempt to merge the new items into an existing stack.
+        for index in self.by_id.get(&item.item).into_iter().flatten() {
+            if self.items[*index].merge(&item) {
+                return InventoryKey(*index);
+            }
+        }
+
+        let form = item.item;
         let index = self.items.insert(item);
+        self.by_id.entry(form).or_default().push(index);
+
         InventoryKey(index)
+    }
+
+    pub fn remove(&mut self, id: InventoryKey) {
+        if !self.items.contains(id.0) {
+            return;
+        }
+
+        let item = self.items.remove(id.0);
+
+        let keys = self.by_id.get_mut(&item.item).unwrap();
+        keys.retain(|k| *k != id.0);
+        if keys.is_empty() {
+            self.by_id.remove(&item.item);
+        }
     }
 
     pub fn get(&self, id: InventoryKey) -> Option<&ItemStack> {
@@ -37,12 +61,21 @@ impl Inventory {
         self.items.get_mut(id.0)
     }
 
-    pub fn items(&self) -> impl Iterator<Item = &ItemStack> {
-        self.items.iter().map(|(_, v)| v)
+    pub fn get_by_form(&self, form: FormId) -> impl Iterator<Item = (InventoryKey, &ItemStack)> {
+        self.by_id
+            .get(&form)
+            .into_iter()
+            .map(|v| v.into_iter())
+            .flatten()
+            .map(|v| (InventoryKey(*v), &self.items[*v]))
     }
 
-    pub fn items_mut(&mut self) -> impl Iterator<Item = &mut ItemStack> {
-        self.items.iter_mut().map(|(_, v)| v)
+    pub fn items(&self) -> impl Iterator<Item = (InventoryKey, &ItemStack)> {
+        self.items.iter().map(|(k, v)| (InventoryKey(k), v))
+    }
+
+    pub fn items_mut(&mut self) -> impl Iterator<Item = (InventoryKey, &mut ItemStack)> {
+        self.items.iter_mut().map(|(k, v)| (InventoryKey(k), v))
     }
 }
 
@@ -59,6 +92,26 @@ pub struct ItemStack {
     pub base_keywords: HashSet<FormId>,
     pub combined_keywords: HashSet<FormId>,
     pub data: ItemData,
+}
+
+impl ItemStack {
+    /// Returns `true` if `other` can be merged into `self`.
+    fn mergeable(&self, other: &Self) -> bool {
+        self.item == other.item
+            && self.hidden == other.hidden
+            && self.attachments == other.attachments
+            && self.base_keywords == other.base_keywords
+            && self.combined_keywords == other.combined_keywords
+    }
+
+    fn merge(&mut self, other: &Self) -> bool {
+        if self.mergeable(other) {
+            self.count += other.count;
+            true
+        } else {
+            false
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -86,10 +139,12 @@ pub struct WeaponItemData {
     /// The damage defined on the `AMMO` record is already included in this.
     pub damage: HashMap<FormId, u32>,
     pub aim_props: AimProps,
+    /// Ammo consumed by this weapon.
+    pub ammo: Option<FormId>,
 }
 
 /// Defines properties for the aiming of guns.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct AimProps {
     /// Min and max cone of fire angles in radians.
     pub cone_of_fire_angle_min: f32,
@@ -105,6 +160,8 @@ pub struct AimProps {
 pub enum ItemKind {
     Weapon,
     Armor,
+    Ammo,
+    Misc,
 }
 
 impl ItemStack {
@@ -125,6 +182,7 @@ pub struct AddItemEvent {
     pub item: FormId,
     pub attachments: Vec<FormId>,
     pub hidden: bool,
+    pub count: u64,
 }
 
 #[derive(Clone, Debug)]
@@ -152,7 +210,7 @@ pub fn handle_inventory_events(
         inventory.insert(ItemStack {
             item: event.item,
             kind: item.kind,
-            count: 1,
+            count: event.count,
             attachments: event.attachments.clone(),
             equipped: false,
             base_keywords: item.base_keywords,
@@ -166,7 +224,7 @@ pub fn handle_inventory_events(
     for event in events.read::<EquipItemEvent>() {
         let mut inventory = world.get::<&mut Inventory>(event.actor).unwrap();
 
-        let Some(item) = inventory.items_mut().find(|v| v.item == event.item) else {
+        let Some((_, item)) = inventory.items_mut().find(|(_, v)| v.item == event.item) else {
             continue;
         };
 

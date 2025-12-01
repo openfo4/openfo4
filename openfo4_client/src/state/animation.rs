@@ -239,17 +239,17 @@ pub fn update_actor_animation_graphs(world: &mut World, loader: &AssetLoader, po
         let mut max_actor_keywords = 0;
         let mut max_target_keywords = 0;
 
-        let is_weapon_drawn = inventory.items().any(|item| match &item.data {
+        let is_weapon_drawn = inventory.items().any(|(_, item)| match &item.data {
             ItemData::Weapon(weapon) => weapon.drawn,
             _ => false,
         });
         let weapon_keywords: HashSet<_> = inventory
             .items()
-            .filter(|item| match &item.data {
+            .filter(|(_, item)| match &item.data {
                 ItemData::Weapon(weapon) => weapon.drawn,
                 _ => false,
             })
-            .map(|v| v.combined_keywords.iter())
+            .map(|(_, v)| v.combined_keywords.iter())
             .flatten()
             .copied()
             .collect();
