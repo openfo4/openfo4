@@ -7,6 +7,7 @@ mod render;
 mod shared;
 mod state;
 mod systems;
+mod ui;
 
 use std::num::NonZeroUsize;
 use std::sync::Arc;
@@ -180,6 +181,8 @@ impl game_window::App for App {
                 }
                 .mount(&root);
             }
+
+            ui::inventory::draw_inventory(&root, self.game.world());
         }
 
         if self.debug_options.draw_colliders {

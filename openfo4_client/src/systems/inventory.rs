@@ -49,6 +49,9 @@ impl Inventory {
 #[derive(Clone, Debug)]
 pub struct ItemStack {
     pub item: FormId,
+    pub name: String,
+    /// Whether the item should not be seen by the player in UIs.
+    pub hidden: bool,
     pub kind: ItemKind,
     pub count: u64,
     pub attachments: Vec<FormId>,
@@ -121,6 +124,7 @@ pub struct AddItemEvent {
     pub actor: Entity,
     pub item: FormId,
     pub attachments: Vec<FormId>,
+    pub hidden: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -154,6 +158,8 @@ pub fn handle_inventory_events(
             base_keywords: item.base_keywords,
             combined_keywords: item.combined_keywords,
             data: item.data,
+            name: item.name,
+            hidden: event.hidden,
         });
     }
 

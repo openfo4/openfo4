@@ -18,6 +18,7 @@ use crate::systems::inventory::{AimProps, ItemData, ItemKind, WeaponItemData};
 
 #[derive(Clone, Debug)]
 pub struct EquipmentItem {
+    pub name: String,
     pub resistances: HashMap<FormId, u32>,
     /// Keywords attached to the base item.
     pub base_keywords: HashSet<FormId>,
@@ -98,9 +99,12 @@ pub async fn load_equipment_item(
     attachments: &[FormId],
 ) -> EquipmentItem {
     let mut base_props = EquipmentProperties::default();
+    let name;
 
     let kind = match esp_loader.lookup(None, form).await.unwrap().data {
         RecordData::Armor(armor) => {
+            name = armor.id.as_str().unwrap().to_owned();
+
             base_props.weight = armor.data.weight;
             base_props.value = armor.data.value as f32;
 
@@ -118,6 +122,8 @@ pub async fn load_equipment_item(
             ItemKind::Armor
         }
         RecordData::Weapon(weapon) => {
+            name = weapon.id.as_str().unwrap().to_owned();
+
             base_props.weight = weapon.data.weight;
             base_props.value = weapon.data.value as f32;
 
@@ -375,6 +381,7 @@ pub async fn load_equipment_item(
         value: combined_props.value,
         data,
         kind,
+        name,
     }
 }
 

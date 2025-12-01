@@ -104,7 +104,7 @@ pub async fn load_land(ctx: &LoadContext<'_>, land: &Land) -> SpawnEntity {
     }
 
     for alpha_layer in &land.alpha_layer.0 {
-        // continue;
+        continue;
 
         if alpha_layer.texture.land_texture == FormId(0) {
             continue;

@@ -144,6 +144,7 @@ pub fn animation_test(
                     FormId(0x1877fa),
                     FormId(0x4f21d),
                 ],
+                hidden: false,
             });
             events.send(EquipItemEvent {
                 actor: root,

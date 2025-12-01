@@ -59,7 +59,7 @@ pub struct ActorBodyPart {
     pub damage_factor: f32,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Actor {
     anim_graphs: ActorAnimationGraphData,
     character: ActorCharacter,
@@ -91,6 +91,7 @@ impl Actor {
                 actor: root,
                 item: skin,
                 attachments: Vec::new(),
+                hidden: true,
             });
 
             events.send(EquipItemEvent {
