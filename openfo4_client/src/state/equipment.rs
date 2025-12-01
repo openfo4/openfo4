@@ -6,7 +6,8 @@ use hecs::{Entity, World};
 use openfo4_animation::skeleton::SkeletonInstance;
 use openfo4_asset::{AssetLoader, Handle};
 use openfo4_esp::records::{
-    ObjectModificationFunctionType, ObjectModificationPropertyProperty, ObjectModificationValueType,
+    BipedObjectFlags, ObjectModificationFunctionType, ObjectModificationPropertyProperty,
+    ObjectModificationValueType,
 };
 use openfo4_esp::{FormId, RecordData, RecordKind};
 
@@ -28,6 +29,8 @@ pub struct EquipmentItem {
     pub value: f32,
     pub kind: ItemKind,
     pub data: ItemData,
+    pub equipment_slots: HashSet<u32>,
+    pub visibility_slots: HashSet<u32>,
 }
 
 #[derive(Clone, Debug)]
@@ -101,6 +104,9 @@ pub async fn load_equipment_item(
     let mut base_props = EquipmentProperties::default();
     let name;
 
+    let mut equipment_slots = HashSet::new();
+    let mut visibility_slots = HashSet::new();
+
     let kind = match esp_loader.lookup(None, form).await.unwrap().data {
         RecordData::Armor(armor) => {
             name = armor.id.as_str().unwrap().to_owned();
@@ -117,6 +123,21 @@ pub async fn load_equipment_item(
 
             if let Some(keywords) = armor.keywords {
                 base_props.keywords.extend(keywords);
+            }
+
+            extract_biped_object_flags(armor.biped_body_template, &mut equipment_slots);
+
+            for model in &*armor.models {
+                let RecordData::ArmorAddon(addon) = esp_loader
+                    .lookup(None, model.armor_addon)
+                    .await
+                    .unwrap()
+                    .data
+                else {
+                    todo!();
+                };
+
+                extract_biped_object_flags(addon.biped_body_template, &mut visibility_slots);
             }
 
             ItemKind::Armor
@@ -382,6 +403,8 @@ pub async fn load_equipment_item(
         data,
         kind,
         name,
+        equipment_slots,
+        visibility_slots,
     }
 }
 
@@ -539,6 +562,16 @@ impl Parameters {
                 _ => None,
             },
             _ => unreachable!(),
+        }
+    }
+}
+
+fn extract_biped_object_flags(slots: BipedObjectFlags, dst: &mut HashSet<u32>) {
+    let bits: u32 = slots.bits();
+    for index in 0..u32::BITS {
+        let bit = bits & (1 << index);
+        if bit != 0 {
+            dst.insert(bit);
         }
     }
 }
