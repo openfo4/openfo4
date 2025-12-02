@@ -1,13 +1,13 @@
 use std::collections::{HashMap, HashSet};
 
 use openfo4_jit::{
-    Compiler, FunctionBuilder, FunctionId, IntCompareOp, Signature, StackSlot, Type as JitType,
-    Value as JitValue,
+    Block, Compiler, FunctionBuilder, FunctionId, IntCompareOp, Signature, StackSlot,
+    Type as JitType, Value as JitValue,
 };
 use openfo4_pex::{Function, Instruction, Value};
 
 use crate::compiler::codegen::trampoline::generate_guest_to_host_trampoline;
-use crate::compiler::codegen::{ClassDef, CodegenData, FunctionDef};
+use crate::compiler::codegen::{ClassDef, CodegenData, FunctionDef, Type};
 
 #[derive(Clone, Debug)]
 pub struct FunctionResult {
@@ -62,12 +62,12 @@ fn translate_function_signature(data: &CodegenData, function: &Function) -> Sign
     }
 
     for param in &function.params {
-        let ty = data.resolve_ty(&param.ty);
+        let ty = data.resolve_ty_jit(&param.ty);
         params.push(ty);
     }
 
     if !function.return_ty.is_empty() && function.return_ty.to_lowercase() != "none" {
-        let ty = data.resolve_ty(&function.return_ty);
+        let ty = data.resolve_ty_jit(&function.return_ty);
         returns.push(ty);
     }
 
@@ -90,7 +90,7 @@ fn translate_function_body(
 
     // Create stack slots for local variables.
     for local in &function.locals {
-        let ty = data.resolve_ty(&local.ty);
+        let ty = data.resolve_ty_jit(&local.ty);
 
         let slot = builder.create_typed_stack_slot(ty);
         locals.insert(
@@ -108,7 +108,7 @@ fn translate_function_body(
 
     // Move function parameters into stack slots.
     for (index, param) in function.params.iter().enumerate() {
-        let ty = data.resolve_ty(&param.ty);
+        let ty = data.resolve_ty_jit(&param.ty);
 
         let slot = builder.create_typed_stack_slot(ty);
 
@@ -127,16 +127,22 @@ fn translate_function_body(
 
     let mut fields = HashMap::new();
     for (name, ty) in &class.fields {
-        let ty = data.resolve_ty(&ty);
-
-        fields.insert(name.to_lowercase(), ty);
+        fields.insert(
+            name.to_lowercase(),
+            Field {
+                ty: data.resolve_ty_jit(&ty),
+                ty_name: ty.clone(),
+            },
+        );
     }
 
     let mut translator = FunctionTranslator {
+        data,
         builder,
         locals,
         fields,
         self_ptr,
+        self_ty: class.name.to_lowercase(),
     };
 
     // Setup blocks
@@ -160,7 +166,7 @@ fn translate_function_body(
                 );
 
                 if !blocks.contains_key(&addr) {
-                    let block = translator.builder.create_block();
+                    let block = translator.builder.create_block(&[]);
                     blocks.insert(addr, block);
                     unterminated_blocks.insert(block);
                 }
@@ -177,14 +183,14 @@ fn translate_function_body(
                 );
 
                 if !blocks.contains_key(&addr) {
-                    let then_block = translator.builder.create_block();
+                    let then_block = translator.builder.create_block(&[]);
                     blocks.insert(addr, then_block);
                     unterminated_blocks.insert(then_block);
                 }
 
                 let next_addr = index + 1;
                 if !blocks.contains_key(&next_addr) {
-                    let else_block = translator.builder.create_block();
+                    let else_block = translator.builder.create_block(&[]);
                     blocks.insert(next_addr, else_block);
                     unterminated_blocks.insert(else_block);
                 }
@@ -487,6 +493,11 @@ fn translate_function_body(
                 let rval = translator.load(value);
                 translator.builder.return_(&[rval]);
             }
+            Instruction::Cast(op) => {
+                let res = perform_cast(&mut translator, &op.src, &op.dst);
+                translator.store(&op.dst, res);
+            }
+            Instruction::Is(op) => {}
             op => todo!("{:?}", op),
         }
     }
@@ -503,10 +514,12 @@ fn translate_function_body(
 }
 
 struct FunctionTranslator<'a> {
+    data: &'a CodegenData,
     builder: FunctionBuilder<'a>,
     locals: HashMap<String, Local>,
-    fields: HashMap<String, JitType>,
+    fields: HashMap<String, Field>,
     self_ptr: Option<JitValue>,
+    self_ty: String,
 }
 
 impl<'a> FunctionTranslator<'a> {
@@ -529,9 +542,9 @@ impl<'a> FunctionTranslator<'a> {
                 }
 
                 dbg!(&self.fields);
-                if let Some(ty) = self.fields.get(&name.to_lowercase()) {
+                if let Some(field) = self.fields.get(&name.to_lowercase()) {
                     // TODO
-                    return self.builder.iconst(*ty, 0);
+                    return self.builder.iconst(field.ty, 0);
                 }
 
                 panic!("undefined variable {}", name);
@@ -551,6 +564,39 @@ impl<'a> FunctionTranslator<'a> {
 
         // TODO
     }
+
+    fn get_type(&self, value: &Value) -> Type {
+        match value {
+            Value::Null => Type::None,
+            Value::Bool(_) => Type::Bool,
+            Value::Int(_) => Type::Int,
+            Value::Float(_) => Type::Float,
+            Value::String(_) => Type::String,
+            Value::Ident(name) => {
+                let name = name.to_lowercase();
+
+                if name == "self" {
+                    return self.data.resolve_ty(&self.self_ty);
+                };
+
+                if let Some(local) = self.locals.get(&name.to_lowercase()) {
+                    return self.data.resolve_ty(&local.ty_name);
+                }
+
+                if let Some(global) = self.fields.get(&name.to_lowercase()) {
+                    return self.data.resolve_ty(&global.ty_name);
+                }
+
+                panic!("undefined variable {}", name);
+            }
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+struct Field {
+    ty: JitType,
+    ty_name: String,
 }
 
 #[derive(Clone, Debug)]
@@ -558,4 +604,121 @@ struct Local {
     ty: JitType,
     ty_name: String,
     slot: StackSlot,
+}
+
+fn perform_cast(translator: &mut FunctionTranslator<'_>, src: &Value, dst: &Value) -> JitValue {
+    let src_ty = translator.get_type(&src);
+    let dst_ty = translator.get_type(&dst);
+    let src = translator.load(&src);
+
+    // Identity casts are allowed.
+    if src_ty == dst_ty {
+        return src;
+    }
+
+    match (src_ty, dst_ty) {
+        // Integer <-> float conversions
+        (Type::Int, Type::Float) => translator.builder.convert_sint_to_float(src, JitType::F32),
+        (Type::Float, Type::Int) => translator.builder.convert_float_to_sint(src, JitType::I32),
+        // Bool conversions
+        (Type::Int, Type::Bool) => src,
+        (Type::Float, Type::Bool) => {
+            let zero = translator.builder.fconst(JitType::F32, 0.0);
+            todo!();
+        }
+        // The pointers are set to zero if they are semantically none/empty.
+        // The pointers already represent valid boolean values as is.
+        (Type::String, Type::Bool) => src,
+        (Type::Class(_), Type::Bool) => src,
+        (Type::Struct(_), Type::Bool) => src,
+        (Type::Array(_), Type::Bool) => src,
+        // Bools and ints 0..1 have the same integer representation.
+        (Type::Bool, Type::Int) => src,
+        (Type::Bool, Type::Float) => translator.builder.convert_uint_to_float(src, JitType::F32),
+        (Type::Class(src_class), Type::Class(dst_class)) => {
+            // Try upcasting.
+            let mut class_name = src_class.to_lowercase();
+            loop {
+                if class_name == dst_class.to_lowercase() {
+                    return src;
+                }
+
+                let class = translator.data.classes.get(&class_name).unwrap();
+                if let Some(parent) = &class.parent {
+                    class_name = parent.to_lowercase();
+                } else {
+                    break;
+                }
+            }
+
+            // Try downcasting.
+            let mut class_name = dst_class.to_lowercase();
+            loop {
+                if class_name == src_class.to_lowercase() {
+                    todo!();
+                }
+
+                let class = translator.data.classes.get(&class_name).unwrap();
+                if let Some(parent) = &class.parent {
+                    class_name = parent.to_lowercase();
+                } else {
+                    break;
+                }
+            }
+
+            unreachable!("cannot cast unrelated classes")
+        }
+        _ => todo!(),
+    }
+}
+
+fn perform_typecheck(
+    translator: &mut FunctionTranslator<'_>,
+    src: &Value,
+    dst_class: &str,
+    block: Block,
+) -> JitValue {
+    let src_ty = translator.get_type(src);
+
+    let Type::Class(_) = src_ty else {
+        return translator.builder.iconst(JitType::I32, 0);
+    };
+
+    let dst_id = translator
+        .data
+        .classes
+        .get(&dst_class.to_lowercase())
+        .unwrap()
+        .type_id;
+    let dst_id = translator.builder.iconst(JitType::I64, dst_id as i64);
+
+    let src = translator.load(src);
+    let type_info_ptr = translator.builder.load(JitType::Pointer, src, 0);
+
+    // The first word of an object contains a constant pointer to the type
+    // info. The type info starts with a single word containing the number
+    // of type ids that follow.
+    // If any type id matches we have a valid object of that class.
+
+    let count = translator.builder.load(JitType::Pointer, type_info_ptr, 0);
+
+    // Note that every object has at least one typeid. This means count is
+    // always >= 1.
+    let iter_block = translator.builder.create_block(&[count]);
+
+    let one = translator.builder.iconst(JitType::I64, 1);
+    let next_count = translator.builder.isub(count, one);
+
+    let addr = translator.builder.iadd(type_info_ptr, count);
+    let type_id = translator.builder.load(JitType::I64, addr, 0);
+
+    let is_eq = translator
+        .builder
+        .icmp(type_id, dst_id, IntCompareOp::Equal);
+
+    translator
+        .builder
+        .brif(count, iter_block, &[next_count], block, &[]);
+
+    is_eq
 }

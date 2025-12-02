@@ -5,9 +5,9 @@ mod types;
 
 use std::collections::{HashMap, HashSet};
 
-use game_common::collections::arena::{Arena, Key};
+use game_common::collections::arena::Key;
 use openfo4_jit::{CompiledFunction, Compiler, FunctionId, Signature, Type as JitType};
-use openfo4_pex::{Function, Instruction, Module, Value};
+use openfo4_pex::{Function, Instruction, Module, Struct, Value};
 use thiserror::Error;
 
 use crate::compiler::NativeFunction;
@@ -20,31 +20,15 @@ pub struct Error;
 
 #[derive(Clone, Debug)]
 pub struct CodegenPass {
-    types: Arena<JitType>,
-    primitives: Primitives,
     data: CodegenData,
+    next_type_id: usize,
 }
 
 impl CodegenPass {
     pub fn new() -> Self {
-        let mut types = Arena::new();
-
-        let none = types.insert(JitType::I32);
-        let bool = types.insert(JitType::I32);
-        let int = types.insert(JitType::I32);
-        let float = types.insert(JitType::F32);
-        let ptr = types.insert(JitType::Pointer);
-
         Self {
-            types,
-            primitives: Primitives {
-                none,
-                bool,
-                int,
-                float,
-                ptr,
-            },
             data: CodegenData::new(),
+            next_type_id: 0,
         }
     }
 
@@ -78,6 +62,10 @@ impl CodegenPass {
                 }
             }
 
+            for st in &class.structs {
+                self.data.structs.insert(st.name.to_lowercase(), st.clone());
+            }
+
             self.data.classes.insert(
                 class.name.to_lowercase(),
                 ClassDef {
@@ -85,8 +73,10 @@ impl CodegenPass {
                     functions,
                     parent,
                     fields,
+                    type_id: self.next_type_id,
                 },
             );
+            self.next_type_id += 1;
         }
     }
 
@@ -200,6 +190,7 @@ impl CodegenPass {
 struct CodegenData {
     types: Types,
     classes: HashMap<String, ClassDef>,
+    structs: HashMap<String, Struct>,
 }
 
 impl CodegenData {
@@ -207,10 +198,43 @@ impl CodegenData {
         Self {
             types: Types::default(),
             classes: HashMap::new(),
+            structs: HashMap::new(),
         }
     }
 
-    fn resolve_ty(&self, ty: &str) -> JitType {
+    fn resolve_ty(&self, mut ty: &str) -> Type {
+        let mut array_depth = 0;
+        while let Some(p) = ty.strip_suffix("[]") {
+            ty = p;
+            array_depth += 1;
+        }
+
+        let mut typ = match &*ty.to_lowercase() {
+            "none" => Type::None,
+            "bool" => Type::Bool,
+            "int" => Type::Int,
+            "float" => Type::Float,
+            "string" => Type::String,
+            "var" => Type::Var,
+            name if self.structs.contains_key(name) => Type::Struct(
+                self.structs[name]
+                    .members
+                    .iter()
+                    .map(|v| (v.name.clone(), v.ty.clone()))
+                    .collect(),
+            ),
+            name if self.classes.contains_key(name) => Type::Class(name.to_owned()),
+            _ => unreachable!(),
+        };
+
+        for _ in 0..array_depth {
+            typ = Type::Array(Box::new(typ));
+        }
+
+        typ
+    }
+
+    fn resolve_ty_jit(&self, ty: &str) -> JitType {
         match &*ty.to_lowercase() {
             "none" => JitType::I32,
             "bool" => JitType::I32,
@@ -254,6 +278,8 @@ struct ClassDef {
     functions: HashMap<String, FunctionDef>,
     parent: Option<String>,
     fields: HashMap<String, String>,
+    /// Unique RTTI number stored in the header to identify objects of this class.
+    type_id: usize,
 }
 
 #[derive(Clone, Debug)]
@@ -347,4 +373,17 @@ fn get_parent_class_with_function<'a>(
 
         class_name = parent.to_lowercase();
     }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+enum Type {
+    None,
+    Bool,
+    Int,
+    Float,
+    String,
+    Var,
+    Array(Box<Type>),
+    Class(String),
+    Struct(Vec<(String, String)>),
 }
