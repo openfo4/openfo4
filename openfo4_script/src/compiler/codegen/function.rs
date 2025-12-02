@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use openfo4_jit::{
     Compiler, FunctionBuilder, FunctionId, IntCompareOp, Signature, StackSlot, Type as JitType,
@@ -141,6 +141,11 @@ fn translate_function_body(
 
     // Setup blocks
     let mut blocks = HashMap::new();
+    blocks.insert(0, entry_block);
+
+    let mut unterminated_blocks = HashSet::new();
+    unterminated_blocks.insert(entry_block);
+
     for (index, instruction) in function.instructions.iter().enumerate() {
         match instruction {
             Instruction::Branch(offset) => {
@@ -157,6 +162,7 @@ fn translate_function_body(
                 if !blocks.contains_key(&addr) {
                     let block = translator.builder.create_block();
                     blocks.insert(addr, block);
+                    unterminated_blocks.insert(block);
                 }
             }
             Instruction::BranchIfTrue(op) | Instruction::BranchIfFalse(op) => {
@@ -173,25 +179,31 @@ fn translate_function_body(
                 if !blocks.contains_key(&addr) {
                     let then_block = translator.builder.create_block();
                     blocks.insert(addr, then_block);
+                    unterminated_blocks.insert(then_block);
                 }
 
                 let next_addr = index + 1;
                 if !blocks.contains_key(&next_addr) {
                     let else_block = translator.builder.create_block();
                     blocks.insert(next_addr, else_block);
+                    unterminated_blocks.insert(else_block);
                 }
             }
             _ => {}
         }
     }
 
+    let mut current_block = entry_block;
     for (index, instruction) in function.instructions.iter().enumerate() {
-        if let Some(block) = blocks.get(&index) {
+        if let Some(block) = blocks.get(&index)
+            && *block != current_block
+        {
             if !translator.builder.is_current_block_full() {
                 translator.builder.jump(*block, &[]);
             }
 
             translator.builder.switch_to_block(*block);
+            current_block = *block;
         }
 
         match instruction {
@@ -284,6 +296,8 @@ fn translate_function_body(
                 translator.store(&op.dst, res);
             }
             Instruction::Branch(offset) => {
+                unterminated_blocks.remove(&current_block);
+
                 let offset = match offset {
                     Value::Int(offset) => *offset,
                     _ => unreachable!(),
@@ -298,6 +312,8 @@ fn translate_function_body(
                 translator.builder.jump(block, &[]);
             }
             Instruction::BranchIfTrue(op) => {
+                unterminated_blocks.remove(&current_block);
+
                 let offset = match &op.offset {
                     Value::Int(offset) => *offset,
                     _ => unreachable!(),
@@ -317,6 +333,8 @@ fn translate_function_body(
                     .brif(condition, then_block, &[], else_block, &[]);
             }
             Instruction::BranchIfFalse(op) => {
+                unterminated_blocks.remove(&current_block);
+
                 let offset = match &op.offset {
                     Value::Int(offset) => *offset,
                     _ => unreachable!(),
@@ -463,12 +481,21 @@ fn translate_function_body(
                 dbg!(&op);
                 todo!();
             }
+            Instruction::Return(value) => {
+                unterminated_blocks.remove(&current_block);
+
+                let rval = translator.load(value);
+                translator.builder.return_(&[rval]);
+            }
             op => todo!("{:?}", op),
         }
     }
 
-    if let Some(block) = blocks.get(&function.instructions.len()) {
-        translator.builder.switch_to_block(*block);
+    // Sometimes the final return instruction is missing and we must insert it.
+    // This is only possible for functions that return "none" and the fact we
+    // return "none" in this case is checked by the validation pass.
+    for block in unterminated_blocks {
+        translator.builder.switch_to_block(block);
         translator.builder.return_(&[]);
     }
 
