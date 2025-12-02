@@ -76,6 +76,7 @@ impl Compiler {
             block_params: Vec::new(),
             stack_slots: Slab::new(),
             current_block_full: false,
+            current_block: None,
         }
     }
 
@@ -137,6 +138,20 @@ pub enum Type {
     Pointer,
 }
 
+impl Type {
+    pub const fn as_str(&self) -> &'static str {
+        match self {
+            Self::I8 => "i8",
+            Self::I16 => "i16",
+            Self::I32 => "i32",
+            Self::I64 => "i64",
+            Self::F32 => "f32",
+            Self::F64 => "f64",
+            Self::Pointer => "ptr",
+        }
+    }
+}
+
 /// An opaque identifier for a function.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct FunctionId(usize);
@@ -154,6 +169,7 @@ pub struct FunctionBuilder<'a> {
     stack_slots: Slab<StackSlotDesc>,
     block_params: Vec<Vec<Value>>,
     current_block_full: bool,
+    current_block: Option<Block>,
 }
 
 impl<'a> FunctionBuilder<'a> {
@@ -210,7 +226,7 @@ impl<'a> FunctionBuilder<'a> {
         Block(block)
     }
 
-    pub fn create_block(&mut self) -> Block {
+    pub fn create_block(&mut self, params: &[Value]) -> Block {
         let block = self.next_block;
         self.next_block += 1;
         self.block_params
@@ -218,7 +234,7 @@ impl<'a> FunctionBuilder<'a> {
 
         self.instructions.push(Instruction::CreateBlock {
             id: Block(block),
-            params: Vec::new(),
+            params: params.to_vec(),
             is_entry: false,
         });
 
@@ -232,8 +248,13 @@ impl<'a> FunctionBuilder<'a> {
     pub fn switch_to_block(&mut self, block: Block) {
         debug_assert!(block.0 < self.next_block);
 
+        if self.current_block == Some(block) {
+            return;
+        }
+
         self.instructions.push(Instruction::SwitchBlock(block));
         self.current_block_full = false;
+        self.current_block = Some(block);
     }
 
     pub fn is_current_block_full(&mut self) -> bool {
@@ -506,6 +527,62 @@ impl<'a> FunctionBuilder<'a> {
         });
     }
 
+    /// Converts a floating point value to an unsigned integer value.
+    ///
+    /// `NaN` values are mapped to `0`.
+    ///
+    /// # Codegen Safety
+    ///
+    /// - `value` must be a floating point value.
+    /// - `ty` must be an integer type.
+    pub fn convert_float_to_uint(&mut self, value: Value, ty: Type) -> Value {
+        let dst = self.produce_value();
+
+        self.instructions.push(Instruction::FToU { value, ty, dst });
+        dst
+    }
+
+    /// Converts a floating point value to a signed integer value.
+    ///
+    /// `NaN` values are mapped to `0`.
+    ///
+    /// # Codegen Safety
+    ///
+    /// - `value` must be a floating point value.
+    /// - `ty` must be an integer type.
+    pub fn convert_float_to_sint(&mut self, value: Value, ty: Type) -> Value {
+        let dst = self.produce_value();
+
+        self.instructions.push(Instruction::FToS { value, ty, dst });
+        dst
+    }
+
+    /// Converts an unsigned integer value to a floating point value.
+    ///
+    /// # Codegen Safety
+    ///
+    /// - `value` must be an integer value.
+    /// - `ty` must be a floating point type.
+    pub fn convert_uint_to_float(&mut self, value: Value, ty: Type) -> Value {
+        let dst = self.produce_value();
+
+        self.instructions.push(Instruction::UToF { value, ty, dst });
+        dst
+    }
+
+    /// Converts a signed integer value to a floating point value.
+    ///
+    /// # Codegen Safety
+    ///
+    /// - `value` must be an integer value.
+    /// - `ty` must be a floating point type.
+    pub fn convert_sint_to_float(&mut self, value: Value, ty: Type) -> Value {
+        let dst = self.produce_value();
+
+        self.instructions.push(Instruction::SToF { value, ty, dst });
+        dst
+    }
+
     /// Finalize the function definition.
     pub fn finalize(self) {
         let func_id = self.compiler.functions[self.id.0].id;
@@ -599,6 +676,26 @@ enum Instruction {
         value: Value,
         addr: Value,
         offset: u32,
+    },
+    FToU {
+        value: Value,
+        ty: Type,
+        dst: Value,
+    },
+    FToS {
+        value: Value,
+        ty: Type,
+        dst: Value,
+    },
+    UToF {
+        value: Value,
+        ty: Type,
+        dst: Value,
+    },
+    SToF {
+        value: Value,
+        ty: Type,
+        dst: Value,
     },
 }
 

@@ -535,6 +535,34 @@ impl CraneliftModule {
                             .ins()
                             .store(MemFlags::trusted(), value, addr, *offset as i32);
                     }
+                    Instruction::FToU { value, ty, dst } => {
+                        let value = values[value.0].unwrap();
+                        let ty = map_type(*ty);
+
+                        let res = builder.ins().fcvt_to_uint_sat(ty, value);
+                        values[dst.0] = Some(res);
+                    }
+                    Instruction::FToS { value, ty, dst } => {
+                        let value = values[value.0].unwrap();
+                        let ty = map_type(*ty);
+
+                        let res = builder.ins().fcvt_to_sint_sat(ty, value);
+                        values[dst.0] = Some(res);
+                    }
+                    Instruction::UToF { value, ty, dst } => {
+                        let value = values[value.0].unwrap();
+                        let ty = map_type(*ty);
+
+                        let res = builder.ins().fcvt_from_uint(ty, value);
+                        values[dst.0] = Some(res);
+                    }
+                    Instruction::SToF { value, ty, dst } => {
+                        let value = values[value.0].unwrap();
+                        let ty = map_type(*ty);
+
+                        let res = builder.ins().fcvt_from_sint(ty, value);
+                        values[dst.0] = Some(res);
+                    }
                 }
             }
 
