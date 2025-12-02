@@ -179,6 +179,9 @@ impl CodegenPass {
         let current_class = self.data.classes.get(class).unwrap();
         let function = self.data.get_function(class, function_name).unwrap();
 
+        println!("{}.{}", class, function_name);
+        println!("{}", function.function.text());
+
         let res = function::translate_function(&self.data, current_class, &function, compiler);
 
         if function.function.is_native {
@@ -187,7 +190,6 @@ impl CodegenPass {
 
         let compiled = compiler.compile_function(res.id);
 
-        println!("{}", function.function.text());
         println!("{}", compiled.text().unwrap());
 
         res

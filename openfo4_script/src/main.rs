@@ -106,8 +106,8 @@ fn main() {
 
     classes::register_builtins(&mut engine);
 
-    let instance = engine.compile("YoureSPECIALscript");
-    // let room = engine.compile("RentRoomScript");
+    // let instance = engine.compile("YoureSPECIALscript");
+    let instance = engine.compile("Hardcore:HC_ManagerScript");
 
     let func = instance.get_func("onactivate").unwrap();
     // dbg!(&func);

@@ -1,4 +1,4 @@
-use crate::classes::{Int, Object, State};
+use crate::classes::{Float, Int, Object, State};
 use crate::runtime::Caller;
 
 /// CallFunction
@@ -8,6 +8,19 @@ use crate::runtime::Caller;
 /// ```
 pub fn call_function(Caller: Caller<'_, State>) {
     todo!()
+}
+
+/// `StartTimerGameTime`
+///
+/// ```text
+/// Function StartTimerGameTime(float afInterval, int aiTimerID = 0) native
+/// ```
+pub fn start_timer_game_time(
+    Caller: Caller<'_, State>,
+    self_ptr: Object,
+    interval: Float,
+    timer_id: Int,
+) {
 }
 
 /// `CancelTimerGameTime`

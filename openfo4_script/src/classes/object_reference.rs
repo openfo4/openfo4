@@ -1,4 +1,4 @@
-use crate::classes::{Float, Object, State};
+use crate::classes::{Bool, Float, Int, Object, State};
 use crate::runtime::Caller;
 
 /// `GetValue`
@@ -48,5 +48,21 @@ pub fn set_actor_owner(
 /// Form Function GetBaseObject() native
 /// ```
 pub fn get_base_object(caller: Caller<'_, State>, self_ptr: Object) -> Object {
+    todo!()
+}
+
+/// `RemoveItem`
+///
+/// ```text
+/// Function RemoveItem(Form akItemToRemove, int aiCount = 1, bool abSilent = false, ObjectReference akOtherContainer = None) native
+/// ```
+pub fn remove_item(
+    caller: Caller<'_, State>,
+    self_ptr: Object,
+    item: Object,
+    count: Int,
+    silent: Bool,
+    other: Object,
+) {
     todo!()
 }
