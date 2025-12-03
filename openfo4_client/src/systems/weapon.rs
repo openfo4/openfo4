@@ -22,12 +22,6 @@ use crate::systems::{
     ProjectileHitEvent, WeaponDrawRequest, WeaponDrawnEvent, WeaponSheathEvent,
 };
 
-#[derive(Clone, Debug)]
-pub struct EquippedGun {
-    pub ammo: u32,
-    pub damage: u32,
-}
-
 pub fn handle_weapon_reload_requests(world: &mut World, actions: &Actions, events: &EventBus) {
     for event in events.read::<GunReloadRequest>() {
         let Ok(entity) = world.entity(event.actor) else {
@@ -256,7 +250,10 @@ pub fn handle_weapon_hit_damage(world: &mut World, events: &mut EventBus) {
             // TODO: Damage resistance
         }
 
-        let mut health = properties.get(ACTOR_VALUE_HEALTH).unwrap();
+        let Some(mut health) = properties.get(ACTOR_VALUE_HEALTH) else {
+            continue;
+        };
+
         health = f32::max(health - damage, 0.0);
         properties.set(ACTOR_VALUE_HEALTH, health);
 
