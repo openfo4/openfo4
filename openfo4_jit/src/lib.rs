@@ -150,6 +150,18 @@ impl Type {
             Self::Pointer => "ptr",
         }
     }
+
+    pub const fn size(&self) -> usize {
+        match self {
+            Self::I8 => size_of::<i8>(),
+            Self::I16 => size_of::<i16>(),
+            Self::I32 => size_of::<i32>(),
+            Self::I64 => size_of::<i64>(),
+            Self::F32 => size_of::<f32>(),
+            Self::F64 => size_of::<f64>(),
+            Self::Pointer => size_of::<*const ()>(),
+        }
+    }
 }
 
 /// An opaque identifier for a function.
@@ -206,37 +218,44 @@ impl<'a> FunctionBuilder<'a> {
     pub fn create_entry_block(&mut self) -> Block {
         let state = &self.compiler.functions[self.id.0];
 
-        let values: Vec<_> = (0..state.signature.params.len())
-            .map(|_| self.produce_value())
-            .collect();
-
         let block = self.next_block;
         self.next_block += 1;
-        self.block_params
-            .resize_with(self.next_block, || Vec::new());
+
+        let params = state.signature.params.clone();
+        let values = (0..state.signature.params.len())
+            .map(|_| self.produce_value())
+            .collect::<Vec<_>>();
 
         self.instructions.push(Instruction::CreateBlock {
             id: Block(block),
-            params: values.clone(),
+            params,
+            values: values.clone(),
             is_entry: true,
         });
 
-        self.block_params[block] = values;
+        debug_assert_eq!(block, self.block_params.len());
+        self.block_params.push(values);
 
         Block(block)
     }
 
-    pub fn create_block(&mut self, params: &[Value]) -> Block {
+    pub fn create_block(&mut self, params: &[Type]) -> Block {
         let block = self.next_block;
         self.next_block += 1;
-        self.block_params
-            .resize_with(self.next_block, || Vec::new());
+
+        let values = (0..params.len())
+            .map(|_| self.produce_value())
+            .collect::<Vec<_>>();
 
         self.instructions.push(Instruction::CreateBlock {
             id: Block(block),
             params: params.to_vec(),
+            values: values.clone(),
             is_entry: false,
         });
+
+        debug_assert_eq!(block, self.block_params.len());
+        self.block_params.push(values);
 
         Block(block)
     }
@@ -388,8 +407,11 @@ impl<'a> FunctionBuilder<'a> {
         self.unop(value, Instruction::Ceil)
     }
 
+    #[track_caller]
     pub fn call(&mut self, func: FunctionId, args: &[Value]) -> Vec<Value> {
-        let state = self.compiler.functions.get(func.0).unwrap();
+        let Some(state) = self.compiler.functions.get(func.0) else {
+            panic!("cannot call: function {:?} not declared", func);
+        };
 
         let returns: Vec<_> = (0..state.signature.returns.len())
             .map(|_| self.produce_value())
@@ -500,6 +522,10 @@ impl<'a> FunctionBuilder<'a> {
     ///
     /// Performs the interger comparison of `lhs $op rhs`. If the comparison is evaluates to `true`
     /// a non-zero integer value is returned, otherwise a zero integer value is returned.
+    ///
+    /// Returns a value of type [`I8`].
+    ///
+    /// [`I8`]: Type::I8
     pub fn icmp(&mut self, lhs: Value, rhs: Value, op: IntCompareOp) -> Value {
         let dst = self.produce_value();
 
@@ -583,6 +609,37 @@ impl<'a> FunctionBuilder<'a> {
         dst
     }
 
+    /// Bitwise and.
+    pub fn band(&mut self, lhs: Value, rhs: Value) -> Value {
+        self.binop(lhs, rhs, Instruction::BAnd)
+    }
+
+    pub fn bor(&mut self, lhs: Value, rhs: Value) -> Value {
+        self.binop(lhs, rhs, Instruction::BOr)
+    }
+
+    pub fn bxor(&mut self, lhs: Value, rhs: Value) -> Value {
+        self.binop(lhs, rhs, Instruction::BXor)
+    }
+
+    pub fn bnot(&mut self, value: Value) -> Value {
+        self.unop(value, Instruction::BNot)
+    }
+
+    pub fn uextend(&mut self, value: Value, ty: Type) -> Value {
+        let dst = self.produce_value();
+        self.instructions
+            .push(Instruction::UExtend { value, dst, ty });
+        dst
+    }
+
+    pub fn sextend(&mut self, value: Value, ty: Type) -> Value {
+        let dst = self.produce_value();
+        self.instructions
+            .push(Instruction::SExtend { value, dst, ty });
+        dst
+    }
+
     /// Finalize the function definition.
     pub fn finalize(self) {
         let func_id = self.compiler.functions[self.id.0].id;
@@ -609,7 +666,8 @@ pub struct StackSlot(usize);
 enum Instruction {
     CreateBlock {
         id: Block,
-        params: Vec<Value>,
+        params: Vec<Type>,
+        values: Vec<Value>,
         is_entry: bool,
     },
     SwitchBlock(Block),
@@ -696,6 +754,20 @@ enum Instruction {
         value: Value,
         ty: Type,
         dst: Value,
+    },
+    BAnd(Binop),
+    BOr(Binop),
+    BXor(Binop),
+    BNot(Unop),
+    UExtend {
+        value: Value,
+        dst: Value,
+        ty: Type,
+    },
+    SExtend {
+        value: Value,
+        dst: Value,
+        ty: Type,
     },
 }
 

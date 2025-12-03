@@ -206,6 +206,7 @@ impl CraneliftModule {
                     Instruction::CreateBlock {
                         id,
                         params,
+                        values: dst,
                         is_entry,
                     } => {
                         let block = builder.create_block();
@@ -215,12 +216,12 @@ impl CraneliftModule {
                             builder.switch_to_block(block);
                             builder.seal_block(block);
                         } else {
-                            if !params.is_empty() {
-                                todo!()
+                            for param in params {
+                                builder.append_block_param(block, map_type(*param));
                             }
                         }
 
-                        for (block_param, param) in builder.block_params(block).iter().zip(params) {
+                        for (block_param, param) in builder.block_params(block).iter().zip(dst) {
                             values[param.0] = Some(*block_param);
                         }
 
@@ -561,6 +562,42 @@ impl CraneliftModule {
                         let ty = map_type(*ty);
 
                         let res = builder.ins().fcvt_from_sint(ty, value);
+                        values[dst.0] = Some(res);
+                    }
+                    Instruction::BAnd(op) => {
+                        let lhs = values[op.lhs.0].unwrap();
+                        let rhs = values[op.rhs.0].unwrap();
+
+                        let res = builder.ins().band(lhs, rhs);
+                        values[op.dst.0] = Some(res);
+                    }
+                    Instruction::BOr(op) => {
+                        let lhs = values[op.lhs.0].unwrap();
+                        let rhs = values[op.rhs.0].unwrap();
+
+                        let res = builder.ins().bor(lhs, rhs);
+                        values[op.dst.0] = Some(res);
+                    }
+                    Instruction::BXor(op) => {
+                        let lhs = values[op.lhs.0].unwrap();
+                        let rhs = values[op.rhs.0].unwrap();
+
+                        let res = builder.ins().bxor(lhs, rhs);
+                        values[op.dst.0] = Some(res);
+                    }
+                    Instruction::BNot(op) => {
+                        let src = values[op.src.0].unwrap();
+                        let res = builder.ins().bnot(src);
+                        values[op.dst.0] = Some(res);
+                    }
+                    Instruction::UExtend { value, dst, ty } => {
+                        let src = values[value.0].unwrap();
+                        let res = builder.ins().uextend(map_type(*ty), src);
+                        values[dst.0] = Some(res);
+                    }
+                    Instruction::SExtend { value, dst, ty } => {
+                        let src = values[value.0].unwrap();
+                        let res = builder.ins().sextend(map_type(*ty), src);
                         values[dst.0] = Some(res);
                     }
                 }

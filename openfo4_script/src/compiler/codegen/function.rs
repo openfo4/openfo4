@@ -23,6 +23,8 @@ pub fn translate_function(
 ) -> FunctionResult {
     let signature = translate_function_signature(data, &function.function);
 
+    debug_assert!(function.func_id.is_none());
+
     let func_id = if function.function.is_native {
         let Some(native) = &function.native else {
             panic!("native function {} is not defined", function.function.name);
@@ -85,26 +87,9 @@ fn translate_function_body(
 
     let ctx_ptr = builder.block_params(entry_block)[0];
     let self_ptr = builder.block_params(entry_block).get(1).copied();
+    let params_offset = if self_ptr.is_some() { 2 } else { 1 };
 
     let mut locals = HashMap::with_capacity(function.locals.len());
-
-    // Create stack slots for local variables.
-    for local in &function.locals {
-        let ty = data.resolve_ty_jit(&local.ty);
-
-        let slot = builder.create_typed_stack_slot(ty);
-        locals.insert(
-            local.name.to_lowercase(),
-            Local {
-                ty,
-                slot,
-                ty_name: local.ty.to_lowercase(),
-            },
-        );
-
-        let value = builder.iconst(JitType::I32, 0);
-        builder.stack_store(slot, value, 0);
-    }
 
     // Move function parameters into stack slots.
     for (index, param) in function.params.iter().enumerate() {
@@ -121,7 +106,25 @@ fn translate_function_body(
             },
         );
 
-        let value = builder.block_params(entry_block)[index];
+        let value = builder.block_params(entry_block)[params_offset + index];
+        builder.stack_store(slot, value, 0);
+    }
+
+    // Create stack slots for local variables.
+    for local in &function.locals {
+        let ty = data.resolve_ty_jit(&local.ty);
+
+        let slot = builder.create_typed_stack_slot(ty);
+        locals.insert(
+            local.name.to_lowercase(),
+            Local {
+                ty,
+                slot,
+                ty_name: local.ty.to_lowercase(),
+            },
+        );
+
+        let value = builder.iconst(JitType::I32, 0);
         builder.stack_store(slot, value, 0);
     }
 
@@ -497,7 +500,20 @@ fn translate_function_body(
                 let res = perform_cast(&mut translator, &op.src, &op.dst);
                 translator.store(&op.dst, res);
             }
-            Instruction::Is(op) => {}
+            Instruction::Is(op) => {
+                let Value::Ident(class) = &op.class else {
+                    unreachable!();
+                };
+
+                // Current block gets updated in `perform_typecheck`.
+                unterminated_blocks.remove(&current_block);
+
+                let res =
+                    perform_typecheck(&mut translator, &op.object, &class, &mut current_block);
+                translator.store(&op.return_assignment, res);
+
+                unterminated_blocks.insert(current_block);
+            }
             op => todo!("{:?}", op),
         }
     }
@@ -529,7 +545,8 @@ impl<'a> FunctionTranslator<'a> {
             Value::Bool(value) => self.builder.iconst(JitType::I32, u8::from(*value)),
             Value::Int(value) => self.builder.iconst(JitType::I32, *value),
             Value::Float(value) => self.builder.fconst(JitType::F32, *value),
-            Value::String(value) => todo!(),
+            // TODO
+            Value::String(value) => self.builder.iconst(JitType::Pointer, 0),
             Value::Ident(name) => {
                 let name = name.to_lowercase();
 
@@ -537,11 +554,15 @@ impl<'a> FunctionTranslator<'a> {
                     return self.self_ptr.unwrap();
                 }
 
+                if name == "::state" {
+                    // TODO
+                    return self.builder.iconst(JitType::Pointer, 0);
+                }
+
                 if let Some(local) = self.locals.get(&name.to_lowercase()) {
                     return self.builder.stack_load(local.slot, local.ty, 0);
                 }
 
-                dbg!(&self.fields);
                 if let Some(field) = self.fields.get(&name.to_lowercase()) {
                     // TODO
                     return self.builder.iconst(field.ty, 0);
@@ -676,7 +697,7 @@ fn perform_typecheck(
     translator: &mut FunctionTranslator<'_>,
     src: &Value,
     dst_class: &str,
-    block: Block,
+    block: &mut Block,
 ) -> JitValue {
     let src_ty = translator.get_type(src);
 
@@ -702,23 +723,43 @@ fn perform_typecheck(
 
     let count = translator.builder.load(JitType::Pointer, type_info_ptr, 0);
 
+    let next_block = translator.builder.create_block(&[]);
+
     // Note that every object has at least one typeid. This means count is
     // always >= 1.
-    let iter_block = translator.builder.create_block(&[count]);
+    let iter_block = translator.builder.create_block(&[JitType::I64]);
 
-    let one = translator.builder.iconst(JitType::I64, 1);
-    let next_count = translator.builder.isub(count, one);
+    translator.builder.jump(iter_block, &[count]);
+    translator.builder.switch_to_block(iter_block);
+    let offset = translator.builder.block_params(iter_block)[0];
 
-    let addr = translator.builder.iadd(type_info_ptr, count);
+    // Load and check current offset.
+    let word_size = translator
+        .builder
+        .iconst(JitType::I64, JitType::I64.size() as i64);
+    let byte_offset = translator.builder.imul(offset, word_size);
+    let addr = translator.builder.iadd(type_info_ptr, byte_offset);
     let type_id = translator.builder.load(JitType::I64, addr, 0);
+
+    // Decrement offset.
+    let one = translator.builder.iconst(JitType::I64, 1);
+    let next_offset = translator.builder.isub(offset, one);
 
     let is_eq = translator
         .builder
         .icmp(type_id, dst_id, IntCompareOp::Equal);
 
+    // Equivalent to `next_offset != 0 && !is_eq`.
+    let is_eq_wide = translator.builder.uextend(is_eq, JitType::I64);
+    let is_neq = translator.builder.bnot(is_eq_wide);
+    let should_continue = translator.builder.band(next_offset, is_neq);
+
     translator
         .builder
-        .brif(count, iter_block, &[next_count], block, &[]);
+        .brif(should_continue, iter_block, &[next_offset], next_block, &[]);
+
+    translator.builder.switch_to_block(next_block);
+    *block = next_block;
 
     is_eq
 }

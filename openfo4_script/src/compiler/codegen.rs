@@ -76,6 +76,7 @@ impl CodegenPass {
                     type_id: self.next_type_id,
                 },
             );
+            dbg!(self.next_type_id, &class.name);
             self.next_type_id += 1;
         }
     }
@@ -304,6 +305,12 @@ fn find_function_callees(
         match &*var_name.to_lowercase() {
             "self" => return class.to_lowercase(),
             _ => (),
+        }
+
+        for param in &function.params {
+            if param.name.to_lowercase() == var_name.to_lowercase() {
+                return param.ty.to_lowercase();
+            }
         }
 
         for local in &function.locals {

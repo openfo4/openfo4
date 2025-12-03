@@ -1,6 +1,58 @@
 use crate::classes::{Bool, Float, Int, Object, State};
 use crate::runtime::Caller;
 
+/// `Activate`
+///
+/// ```text
+/// bool Function Activate(ObjectReference akActivator, bool abDefaultProcessingOnly = false) native
+/// ```
+pub fn activate(
+    caller: Caller<'_, State>,
+    object: Object,
+    activator: Object,
+    default_processing_only: Bool,
+) -> Bool {
+    todo!()
+}
+
+/// `AddItem`
+///
+/// ```text
+/// Function AddItem(Form akItemToAdd, int aiCount = 1, bool abSilent = false) native
+/// ```
+pub fn add_item(caller: Caller<'_, State>, object: Object, item: Object, count: Int, silent: Bool) {
+    todo!()
+}
+
+/// `Delete`
+///
+/// ```text
+/// Function Delete() native
+/// ```
+pub fn delete(caller: Caller<'_, State>, object: Object) {
+    todo!()
+}
+
+/// `DeleteWhenAble`
+///
+/// Overwritten non-native function.
+///
+/// ```text
+/// Function DeleteWhenAble()
+/// ```
+pub fn delete_when_able(caller: Caller<'_, State>, object: Object) {
+    todo!()
+}
+
+/// `Disable`
+///
+/// ```text
+/// Function Disable(bool abFadeOut = False) native
+/// ```
+pub fn disable(caller: Caller<'_, State>, object: Object, fade: Bool) {
+    todo!()
+}
+
 /// `GetValue`
 ///
 /// ```text

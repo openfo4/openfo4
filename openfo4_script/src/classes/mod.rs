@@ -28,6 +28,11 @@ pub fn register_builtins(engine: &mut Engine) {
     engine.register_native_function("Math", "asin", math::asin);
     engine.register_native_function("Math", "atan", math::atan);
 
+    engine.register_native_function("ObjectReference", "Activate", object_reference::activate);
+    engine.register_native_function("ObjectReference", "AddItem", object_reference::add_item);
+    engine.register_native_function("ObjectReference", "Delete", object_reference::delete);
+    engine.register_native_function("ObjectReference", "DeleteWhenAble", object_reference::delete_when_able);
+    engine.register_native_function("ObjectReference", "Disable", object_reference::disable);
     engine.register_native_function("ObjectReference", "GetValue", object_reference::get_value);
     engine.register_native_function("ObjectReference", "SetValue", object_reference::set_value);
     engine.register_native_function(
@@ -56,11 +61,10 @@ pub fn register_builtins(engine: &mut Engine) {
 
     engine.register_native_function("Message", "Show", message::show);
 
-    engine.register_native_function(
-        "ScriptObject",
-        "CancelTimerGameTime",
-        script_object::cancel_timer_game_time,
-    );
+    engine.register_native_function("ScriptObject", "CancelTimerGameTime", script_object::cancel_timer_game_time);
+    engine.register_native_function("ScriptObject", "RegisterForAnimationEvent", script_object::register_for_animation_event);
+    engine.register_native_function("ScriptObject", "UnregisterForLOS", script_object::unregister_for_los);
+    engine.register_native_function("ScriptObject", "UnregisterForRemoteEvent", script_object::unregister_for_remove_event);
 
     engine.register_native_function("Form", "GetFormID", form::get_form_id);
     engine.register_native_function("Form", "GetGoldValue", form::get_gold_value);
