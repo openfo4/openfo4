@@ -35,8 +35,6 @@ pub fn generate_host_to_guest_trampoline(
 
     let res = builder.call(target, &args);
 
-    dbg!(&target_signature);
-
     debug_assert_eq!(res.len(), target_signature.returns.len());
     for value in res {
         builder.store(value, ptr, offset);

@@ -1,4 +1,5 @@
 use std::collections::{HashMap, HashSet};
+use std::panic::resume_unwind;
 
 use openfo4_jit::{
     Block, Compiler, FunctionBuilder, FunctionId, IntCompareOp, Signature, StackSlot,
@@ -6,8 +7,10 @@ use openfo4_jit::{
 };
 use openfo4_pex::{Function, Instruction, Value};
 
+use crate::compiler::codegen::function_props::{FunctionProps, Stage, function_properties};
 use crate::compiler::codegen::trampoline::generate_guest_to_host_trampoline;
 use crate::compiler::codegen::{ClassDef, CodegenData, FunctionDef, Type};
+use crate::runtime::{Func, RESULT_ERROR, RESULT_OK, RESULT_SUSPEND};
 
 #[derive(Clone, Debug)]
 pub struct FunctionResult {
@@ -22,6 +25,7 @@ pub fn translate_function(
     compiler: &mut Compiler,
 ) -> FunctionResult {
     let signature = translate_function_signature(data, &function.function);
+    let props = function_properties(data, class, &function.function);
 
     debug_assert!(function.func_id.is_none());
 
@@ -40,7 +44,7 @@ pub fn translate_function(
         let func_id = compiler.declare_function(signature.clone());
 
         let builder = compiler.define_function(func_id);
-        translate_function_body(data, class, &function.function, builder);
+        translate_function_body(data, class, &function.function, &props, builder);
 
         func_id
     };
@@ -73,6 +77,9 @@ fn translate_function_signature(data: &CodegenData, function: &Function) -> Sign
         returns.push(ty);
     }
 
+    // VM error value
+    returns.push(JitType::I32);
+
     Signature { params, returns }
 }
 
@@ -80,12 +87,16 @@ fn translate_function_body(
     data: &CodegenData,
     class: &ClassDef,
     function: &Function,
+    props: &FunctionProps,
     mut builder: FunctionBuilder<'_>,
 ) {
     let entry_block = builder.create_entry_block();
     builder.switch_to_block(entry_block);
 
     let ctx_ptr = builder.block_params(entry_block)[0];
+
+    let stack_base = builder.load(JitType::Pointer, ctx_ptr, 0);
+
     let self_ptr = builder.block_params(entry_block).get(1).copied();
     let params_offset = if self_ptr.is_some() { 2 } else { 1 };
 
@@ -148,12 +159,16 @@ fn translate_function_body(
         self_ty: class.name.to_lowercase(),
     };
 
+    let start_block = translator.builder.create_block(&[]);
+
     // Setup blocks
     let mut blocks = HashMap::new();
-    blocks.insert(0, entry_block);
+    blocks.insert(0, start_block);
 
-    let mut unterminated_blocks = HashSet::new();
-    unterminated_blocks.insert(entry_block);
+    let mut next_stage = 0;
+    let mut resume_points = HashMap::new();
+
+    let result_ok = translator.builder.iconst(JitType::I32, RESULT_OK);
 
     for (index, instruction) in function.instructions.iter().enumerate() {
         match instruction {
@@ -171,7 +186,6 @@ fn translate_function_body(
                 if !blocks.contains_key(&addr) {
                     let block = translator.builder.create_block(&[]);
                     blocks.insert(addr, block);
-                    unterminated_blocks.insert(block);
                 }
             }
             Instruction::BranchIfTrue(op) | Instruction::BranchIfFalse(op) => {
@@ -188,21 +202,45 @@ fn translate_function_body(
                 if !blocks.contains_key(&addr) {
                     let then_block = translator.builder.create_block(&[]);
                     blocks.insert(addr, then_block);
-                    unterminated_blocks.insert(then_block);
                 }
 
                 let next_addr = index + 1;
                 if !blocks.contains_key(&next_addr) {
                     let else_block = translator.builder.create_block(&[]);
                     blocks.insert(next_addr, else_block);
-                    unterminated_blocks.insert(else_block);
                 }
+            }
+            Instruction::CallMethod(_)
+            | Instruction::CallParent(_)
+            | Instruction::CallStatic(_) => {
+                let stage = &props.stages[next_stage];
+                next_stage += 1;
+
+                dbg!(blocks.get(&index));
+
+                let block = blocks
+                    .entry(index)
+                    .or_insert_with(|| translator.builder.create_block(&[]));
+                dbg!(&block);
+
+                resume_points.insert(stage.index, *block);
             }
             _ => {}
         }
     }
 
-    let mut current_block = entry_block;
+    resumse_stack(
+        &mut translator,
+        stack_base,
+        &props.stages,
+        &resume_points,
+        start_block,
+    );
+    translator.builder.switch_to_block(start_block);
+
+    let mut next_stage = 0;
+
+    let mut current_block = start_block;
     for (index, instruction) in function.instructions.iter().enumerate() {
         if let Some(block) = blocks.get(&index)
             && *block != current_block
@@ -305,8 +343,6 @@ fn translate_function_body(
                 translator.store(&op.dst, res);
             }
             Instruction::Branch(offset) => {
-                unterminated_blocks.remove(&current_block);
-
                 let offset = match offset {
                     Value::Int(offset) => *offset,
                     _ => unreachable!(),
@@ -321,8 +357,6 @@ fn translate_function_body(
                 translator.builder.jump(block, &[]);
             }
             Instruction::BranchIfTrue(op) => {
-                unterminated_blocks.remove(&current_block);
-
                 let offset = match &op.offset {
                     Value::Int(offset) => *offset,
                     _ => unreachable!(),
@@ -342,8 +376,6 @@ fn translate_function_body(
                     .brif(condition, then_block, &[], else_block, &[]);
             }
             Instruction::BranchIfFalse(op) => {
-                unterminated_blocks.remove(&current_block);
-
                 let offset = match &op.offset {
                     Value::Int(offset) => *offset,
                     _ => unreachable!(),
@@ -392,7 +424,6 @@ fn translate_function_body(
                 let class_name = find_var(&object);
 
                 let func = data.get_function(&class_name, &function_name).unwrap();
-                let func = func.func_id.unwrap();
 
                 let mut args = op
                     .args
@@ -406,8 +437,19 @@ fn translate_function_body(
 
                 args.insert(0, ctx_ptr);
 
-                let returns = translator.builder.call(func, &args);
-                if let Some(res) = returns.get(0).copied() {
+                let stage = &props.stages[next_stage];
+                next_stage += 1;
+
+                if let Some(res) = perform_checked_call(
+                    &mut translator,
+                    function,
+                    func,
+                    &args,
+                    &mut current_block,
+                    stage,
+                    ctx_ptr,
+                    stack_base,
+                ) {
                     translator.store(&op.return_assignment, res);
                 }
             }
@@ -474,11 +516,29 @@ fn translate_function_body(
                     ("form", "stopobjectprofiling") => Vec::new(),
                     (class_name, function_name) => {
                         let func = data.get_function(class_name, function_name).unwrap();
-                        let func = func.func_id.unwrap();
 
                         args.insert(0, ctx_ptr);
 
-                        translator.builder.call(func, &args)
+                        let stage = &props.stages[next_stage];
+                        next_stage += 1;
+
+                        let res = if let Some(res) = perform_checked_call(
+                            &mut translator,
+                            function,
+                            func,
+                            &args,
+                            &mut current_block,
+                            stage,
+                            ctx_ptr,
+                            stack_base,
+                        ) {
+                            translator.store(&op.return_assignment, res);
+                            vec![res]
+                        } else {
+                            vec![]
+                        };
+
+                        res
                     }
                 };
 
@@ -491,10 +551,8 @@ fn translate_function_body(
                 todo!();
             }
             Instruction::Return(value) => {
-                unterminated_blocks.remove(&current_block);
-
                 let rval = translator.load(value);
-                translator.builder.return_(&[rval]);
+                translator.builder.return_(&[rval, result_ok]);
             }
             Instruction::Cast(op) => {
                 let res = perform_cast(&mut translator, &op.src, &op.dst);
@@ -505,14 +563,9 @@ fn translate_function_body(
                     unreachable!();
                 };
 
-                // Current block gets updated in `perform_typecheck`.
-                unterminated_blocks.remove(&current_block);
-
                 let res =
                     perform_typecheck(&mut translator, &op.object, &class, &mut current_block);
                 translator.store(&op.return_assignment, res);
-
-                unterminated_blocks.insert(current_block);
             }
             op => todo!("{:?}", op),
         }
@@ -521,10 +574,16 @@ fn translate_function_body(
     // Sometimes the final return instruction is missing and we must insert it.
     // This is only possible for functions that return "none" and the fact we
     // return "none" in this case is checked by the validation pass.
-    for block in unterminated_blocks {
-        translator.builder.switch_to_block(block);
-        translator.builder.return_(&[]);
+    if let Some(block) = blocks.get(&function.instructions.len()) {
+        translator.builder.switch_to_block(*block);
+        if !translator.builder.is_current_block_full() {
+            translator.builder.return_(&[result_ok]);
+        }
     }
+    // for block in unterminated_blocks {
+    //     translator.builder.switch_to_block(block);
+    //     translator.builder.return_(&[result_ok]);
+    // }
 
     translator.builder.finalize();
 }
@@ -547,30 +606,32 @@ impl<'a> FunctionTranslator<'a> {
             Value::Float(value) => self.builder.fconst(JitType::F32, *value),
             // TODO
             Value::String(value) => self.builder.iconst(JitType::Pointer, 0),
-            Value::Ident(name) => {
-                let name = name.to_lowercase();
-
-                if name == "self" {
-                    return self.self_ptr.unwrap();
-                }
-
-                if name == "::state" {
-                    // TODO
-                    return self.builder.iconst(JitType::Pointer, 0);
-                }
-
-                if let Some(local) = self.locals.get(&name.to_lowercase()) {
-                    return self.builder.stack_load(local.slot, local.ty, 0);
-                }
-
-                if let Some(field) = self.fields.get(&name.to_lowercase()) {
-                    // TODO
-                    return self.builder.iconst(field.ty, 0);
-                }
-
-                panic!("undefined variable {}", name);
-            }
+            Value::Ident(name) => self.load_var(name),
         }
+    }
+
+    fn load_var(&mut self, name: &str) -> JitValue {
+        let name = name.to_lowercase();
+
+        if name == "self" {
+            return self.self_ptr.unwrap();
+        }
+
+        if name == "::state" {
+            // TODO
+            return self.builder.iconst(JitType::Pointer, 0);
+        }
+
+        if let Some(local) = self.locals.get(&name.to_lowercase()) {
+            return self.builder.stack_load(local.slot, local.ty, 0);
+        }
+
+        if let Some(field) = self.fields.get(&name.to_lowercase()) {
+            // TODO
+            return self.builder.iconst(field.ty, 0);
+        }
+
+        panic!("undefined variable {}", name);
     }
 
     fn store(&mut self, slot: &Value, value: JitValue) {
@@ -578,6 +639,10 @@ impl<'a> FunctionTranslator<'a> {
             return;
         };
 
+        self.store_var(name, value);
+    }
+
+    fn store_var(&mut self, name: &str, value: JitValue) {
         if let Some(local) = self.locals.get(&name.to_lowercase()) {
             self.builder.stack_store(local.slot, value, 0);
             return;
@@ -762,4 +827,158 @@ fn perform_typecheck(
     *block = next_block;
 
     is_eq
+}
+
+fn perform_checked_call(
+    translator: &mut FunctionTranslator<'_>,
+    caller: &Function,
+    callee: &FunctionDef,
+    args: &[JitValue],
+    block: &mut Block,
+    stage: &Stage,
+    ctx_ptr: JitValue,
+    stack_base: JitValue,
+) -> Option<JitValue> {
+    let func_id = callee.func_id.unwrap();
+
+    // We need to be able to jump straight to the function call
+    // to resume a suspended call.
+    let call_block = translator.builder.create_block(&[]);
+    translator.builder.jump(call_block, &[]);
+    translator.builder.switch_to_block(call_block);
+
+    // Set the stack base pointer for the callee.
+    // Note that we don't need to reset this value after the call because we use our
+    // initially loaded local value for all future uses.
+    let local_stack_size = translator.builder.iconst(JitType::I64, stage.size() as i64);
+    let new_stack_base = translator.builder.iadd(stack_base, local_stack_size);
+    translator.builder.store(new_stack_base, ctx_ptr, 0);
+
+    let res = translator.builder.call(func_id, args);
+
+    if let Some(result) = res.get(1) {
+        let result_ok = translator.builder.iconst(JitType::I32, RESULT_OK);
+        let is_ok = translator
+            .builder
+            .icmp(*result, result_ok, IntCompareOp::Equal);
+
+        let continue_block = translator.builder.create_block(&[]);
+        let suspend_block = translator.builder.create_block(&[]);
+
+        translator
+            .builder
+            .brif(is_ok, continue_block, &[], suspend_block, &[]);
+
+        translator.builder.switch_to_block(suspend_block);
+
+        let mut rvals = Vec::new();
+
+        if !caller.return_ty.is_empty() && caller.return_ty.to_lowercase() != "none" {
+            let ty = translator.data.resolve_ty_jit(&caller.return_ty);
+            rvals.push(translator.builder.uninit(ty));
+        }
+
+        rvals.push(*result);
+
+        translator.builder.switch_to_block(suspend_block);
+        suspend_stack(translator, stack_base, stage);
+        translator.builder.return_(&rvals);
+
+        translator.builder.switch_to_block(continue_block);
+        *block = continue_block;
+    }
+
+    res.get(0).copied()
+}
+
+fn suspend_stack(translator: &mut FunctionTranslator<'_>, stack_base: JitValue, stage: &Stage) {
+    let mut offset = 0;
+
+    let index = translator.builder.iconst(JitType::I64, stage.index as i64);
+    translator.builder.store(index, stack_base, 0);
+    offset += JitType::I64.size();
+
+    for var in &stage.variables {
+        if offset % var.ty_jit.align() != 0 {
+            offset += var.ty_jit.align() - (offset % var.ty_jit.align());
+        }
+
+        let value = translator.load_var(&var.name);
+        translator.builder.store(value, stack_base, offset as u32);
+        translator.store_var(&var.name, value);
+
+        offset += var.ty_jit.size();
+    }
+}
+
+fn resumse_stack(
+    translator: &mut FunctionTranslator<'_>,
+    stack_base: JitValue,
+    stages: &[Stage],
+    resume_points: &HashMap<usize, Block>,
+    start_block: Block,
+) {
+    let mut offset = 0;
+
+    let index = translator.builder.load(JitType::I64, stack_base, 0);
+    offset += JitType::I64.size();
+
+    if stages.len() == 0 {
+        translator.builder.jump(start_block, &[]);
+        translator.builder.switch_to_block(start_block);
+        return;
+    }
+
+    let next_block = translator.builder.create_block(&[]);
+
+    // Don't resume if index == 0.
+    translator
+        .builder
+        .brif(index, next_block, &[], start_block, &[]);
+    translator.builder.switch_to_block(next_block);
+
+    for (i, stage) in stages.iter().enumerate() {
+        let stage_index = translator.builder.iconst(JitType::I64, stage.index as i64);
+
+        // No next stage. `index` is guaranteed to be a valid stage index, so it must
+        // be this stage.
+        let next_block = if stages.get(i + 1).is_none() {
+            None
+        } else {
+            let true_block = translator.builder.create_block(&[]);
+            let next_block = translator.builder.create_block(&[]);
+
+            let is_eq = translator
+                .builder
+                .icmp(index, stage_index, IntCompareOp::Equal);
+
+            translator
+                .builder
+                .brif(is_eq, true_block, &[], next_block, &[]);
+
+            translator.builder.switch_to_block(true_block);
+            Some(next_block)
+        };
+
+        for var in &stage.variables {
+            if offset % var.ty_jit.align() != 0 {
+                offset += var.ty_jit.align() - (offset % var.ty_jit.align());
+            }
+
+            let value = translator
+                .builder
+                .load(var.ty_jit, stack_base, offset as u32);
+            translator.store_var(&var.name, value);
+
+            offset += var.ty_jit.size();
+        }
+
+        translator.builder.jump(resume_points[&stage.index], &[]);
+
+        if let Some(next_block) = next_block {
+            translator.builder.switch_to_block(next_block);
+        }
+    }
+
+    translator.builder.switch_to_block(start_block);
 }

@@ -1,4 +1,6 @@
-use crate::classes::{Bool, Float, Int, Object, State};
+use std::time::Duration;
+
+use crate::classes::{Bool, Float, Int, Object, State, Timer};
 use crate::runtime::Caller;
 
 /// CallFunction
@@ -16,11 +18,22 @@ pub fn call_function(Caller: Caller<'_, State>) {
 /// Function StartTimerGameTime(float afInterval, int aiTimerID = 0) native
 /// ```
 pub fn start_timer_game_time(
-    Caller: Caller<'_, State>,
-    self_ptr: Object,
+    caller: Caller<'_, State>,
+    object: Object,
     interval: Float,
     timer_id: Int,
 ) {
+    let mut objects = caller.data().objects.write().unwrap();
+    let Some(state) = objects.get_mut(&object) else {
+        return;
+    };
+
+    let interval = Duration::from_secs_f32(interval);
+    state
+        .timers
+        .entry(timer_id)
+        .or_default()
+        .push(Timer::GameTime(interval));
 }
 
 /// `CancelTimerGameTime`
@@ -65,7 +78,7 @@ pub fn unregister_for_los(
 /// ```text
 /// Function UnregisterForRemoteEvent(ScriptObject akEventSource, string asEventName) native
 /// ```
-pub fn unregister_for_remove_event(
+pub fn unregister_for_remote_event(
     caller: Caller<'_, State>,
     object: Object,
     event_source: Object,

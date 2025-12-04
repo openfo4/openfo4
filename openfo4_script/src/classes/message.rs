@@ -1,5 +1,11 @@
+use std::cell::OnceCell;
+use std::sync::OnceLock;
+use std::sync::atomic::AtomicBool;
+
 use crate::classes::{Float, Int, State};
-use crate::runtime::Caller;
+use crate::runtime::{Caller, Exception};
+
+static X: OnceLock<()> = OnceLock::new();
 
 pub fn show(
     caller: Caller<'_, State>,
@@ -13,6 +19,12 @@ pub fn show(
     arg7: Float,
     arg8: Float,
     arg9: Float,
-) -> Int {
-    todo!()
+) -> Result<Int, Exception> {
+    if X.get().is_some() {
+        Ok(0)
+    } else {
+        X.set(()).unwrap();
+
+        Err(Exception::Suspend)
+    }
 }

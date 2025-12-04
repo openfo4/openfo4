@@ -1,18 +1,21 @@
 mod function;
+mod function_props;
 mod layout;
 mod trampoline;
 mod types;
 
 use std::collections::{HashMap, HashSet};
 
-use game_common::collections::arena::Key;
 use openfo4_jit::{CompiledFunction, Compiler, FunctionId, Signature, Type as JitType};
 use openfo4_pex::{Function, Instruction, Module, Struct, Value};
 use thiserror::Error;
 
 use crate::compiler::NativeFunction;
 use crate::compiler::codegen::function::FunctionResult;
+use crate::compiler::codegen::function_props::{FunctionProps, function_properties};
 use crate::compiler::codegen::types::Types;
+
+pub const MAX_INSTRUCTIONS_BEFORE_PREEMPT: usize = 1024;
 
 #[derive(Clone, Debug, Error)]
 #[error("codegen error")]
@@ -57,6 +60,7 @@ impl CodegenPass {
                             function: func.clone(),
                             native: None,
                             trampoline_func_id: None,
+                            props: None,
                         },
                     );
                 }
@@ -115,6 +119,13 @@ impl CodegenPass {
             }
 
             if depends_on.is_empty() {
+                {
+                    let current_class = self.data.classes.get(&class).unwrap();
+                    let func = self.data.get_function(&class, &function).unwrap();
+                    let props = function_properties(&self.data, current_class, &func.function);
+                    self.data.get_function_mut(&class, &function).unwrap().props = Some(props);
+                }
+
                 // Compile the function.
                 let res = self.compile_function_internal(&class, &function, &mut compiler);
 
@@ -264,15 +275,6 @@ impl CodegenData {
     }
 }
 
-#[derive(Clone, Debug)]
-struct Primitives {
-    none: Key,
-    bool: Key,
-    int: Key,
-    float: Key,
-    ptr: Key,
-}
-
 #[derive(Clone, Debug, Default)]
 struct ClassDef {
     name: String,
@@ -290,6 +292,7 @@ struct FunctionDef {
     function: Function,
     native: Option<NativeFunction>,
     trampoline_func_id: Option<FunctionId>,
+    props: Option<FunctionProps>,
 }
 
 fn find_function_callees(

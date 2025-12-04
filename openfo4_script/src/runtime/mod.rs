@@ -1,3 +1,6 @@
+mod object;
+mod stack;
+
 use std::any::Any;
 use std::marker::PhantomData;
 use std::mem::{MaybeUninit, transmute};
@@ -6,24 +9,50 @@ use std::sync::Arc;
 use openfo4_jit::{CompiledFunction, Signature, Type};
 use thiserror::Error;
 
+pub use stack::Stack;
+
 use crate::{Engine, EngineShared};
 
-mod object;
+pub(crate) const RESULT_OK: i32 = 0;
+pub(crate) const RESULT_ERROR: i32 = 1;
+pub(crate) const RESULT_SUSPEND: i32 = 2;
 
-pub type NativeFnPtr = unsafe extern "C" fn(*const HostState, usize, *mut RawVal);
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+#[repr(i32)]
+pub enum Exception {
+    Error = RESULT_ERROR,
+    Suspend = RESULT_SUSPEND,
+}
 
+pub type NativeFnPtr = unsafe extern "C" fn(*const RawContext, usize, *mut RawVal);
+
+/// Context passed to guest functions.
 pub struct Context<T> {
     engine: Arc<EngineShared>,
+    stack: Stack,
     data: T,
 }
 
 impl<T> Context<T> {
-    pub fn new(engine: &Engine, data: T) -> Self {
+    pub fn new(engine: &Engine, stack: Stack, data: T) -> Self {
         Self {
             engine: engine.shared.clone(),
+            stack,
             data,
         }
     }
+
+    pub fn stack(&self) -> &Stack {
+        &self.stack
+    }
+}
+
+// The stack pointer must be at offset 0.
+#[derive(Clone, Debug)]
+#[repr(C)]
+pub struct RawContext {
+    pub stack: *mut u8,
+    pub state: *const HostState,
 }
 
 #[derive(Copy, Clone)]
@@ -60,12 +89,17 @@ impl Func {
 
     pub fn call(&self) {}
 
-    pub unsafe fn call_unchecked<T>(&self, ctx: &Context<T>, values: *mut RawVal) {
+    pub unsafe fn call_unchecked<T>(&self, ctx: &mut Context<T>, values: *mut RawVal) {
         let _lock = ctx.engine.state_lock.read();
         let state = unsafe { ctx.engine.state.borrow() };
 
+        let ctx = RawContext {
+            stack: ctx.stack.as_ptr(),
+            state: &*state,
+        };
+
         unsafe {
-            (self.ptr)(&*state, 0, values);
+            (self.ptr)(&ctx, 0, values);
         }
     }
 
@@ -76,6 +110,7 @@ impl Func {
         Params: NativeTuple,
         Returns: NativeTuple,
     {
+        dbg!(&self.signature.returns, &self.signature.params);
         if &self.signature.params[1..] != Params::TYPES || &self.signature.returns != Returns::TYPES
         {
             let expected = Signature {
@@ -112,10 +147,11 @@ where
     Params: NativeTuple,
     Returns: NativeTuple,
 {
-    pub fn call<T>(&self, ctx: &Context<T>, params: Params) -> Returns {
+    pub fn call<T>(&self, ctx: &mut Context<T>, params: Params) -> Result<Returns, Exception> {
+        dbg!(Params::SIZE, Returns::SIZE);
         // TODO: When const_generics is stabilized we can avoid the heap allocation
         // and use a regular array.
-        let mut values = vec![MaybeUninit::<RawVal>::uninit(); Params::SIZE + Returns::SIZE];
+        let mut values = vec![MaybeUninit::<RawVal>::uninit(); Params::SIZE + Returns::SIZE + 1];
 
         unsafe {
             params.write_raw(values.as_mut_ptr().cast::<RawVal>());
@@ -131,9 +167,26 @@ where
                 .call_unchecked(ctx, values.as_mut_ptr().cast::<RawVal>());
         }
 
+        let result = unsafe {
+            &*values
+                .as_ptr()
+                .add(Params::SIZE + Returns::SIZE)
+                .cast::<RawVal>()
+        };
+
+        let result = unsafe { <i32 as NativeType>::from_raw(result) };
+
+        if result != RESULT_OK {
+            // SAFETY: The result parameter is only created as RESULT_OK from inside
+            // compiled functions. All other values are only produced by host functions
+            // that return a Exception, so we are doing a type roundtrip.
+            let exception = unsafe { transmute::<i32, Exception>(result) };
+            return Err(exception);
+        }
+
         unsafe {
             let returns = values.as_ptr().add(Params::SIZE).cast::<RawVal>();
-            Returns::from_raw(returns)
+            Ok(Returns::from_raw(returns))
         }
     }
 }
@@ -142,18 +195,14 @@ pub struct Caller<'a, T>
 where
     T: 'static,
 {
-    state: &'a HostState,
+    ctx: &'a RawContext,
     _marker: PhantomData<T>,
 }
 
 impl<'a, T> Caller<'a, T> {
     pub fn data(&self) -> &T {
-        self.state
-            .data
-            .as_ref()
-            .unwrap()
-            .downcast_ref::<T>()
-            .unwrap()
+        let state = unsafe { &*self.ctx.state };
+        state.data.as_ref().unwrap().downcast_ref::<T>().unwrap()
     }
 }
 
@@ -165,13 +214,13 @@ pub struct HostState {
 
 #[derive(Default)]
 pub struct CallTable {
-    functions: Vec<Box<dyn Fn(*const HostState, *mut RawVal)>>,
+    functions: Vec<Box<dyn Fn(*const RawContext, *mut RawVal)>>,
 }
 
 impl CallTable {
     pub fn insert<F>(&mut self, func: F) -> usize
     where
-        F: Fn(*const HostState, *mut RawVal) + Send + Sync + 'static,
+        F: Fn(*const RawContext, *mut RawVal) + Send + Sync + 'static,
     {
         let index = self.functions.len();
         self.functions.push(Box::new(func));
@@ -192,7 +241,7 @@ macro_rules! impl_into_func {
         #[allow(unused)]
         impl<F, T, $($params,)* $($returns,)*> IntoFunc<T, ($($params,)*), ($($returns,)*)> for F
         where
-            F: Fn(Caller<'_, T>, $($params),*) -> ($($returns),*) + Send + Sync + 'static,
+            F: Fn(Caller<'_, T>, $($params),*) -> Result<($($returns),*), Exception> + Send + Sync + 'static,
             T: 'static,
             $(
                 $params: NativeType,
@@ -202,7 +251,7 @@ macro_rules! impl_into_func {
             )*
         {
             fn into_func(self, ctx: &mut HostState) -> usize {
-                let callback = move |ctx: *const HostState, args: *mut RawVal| {
+                let callback = move |ctx: *const RawContext, args: *mut RawVal| {
                     let ctx = unsafe { &*ctx };
 
                     let mut index = 0;
@@ -212,19 +261,40 @@ macro_rules! impl_into_func {
                     )*
 
                     let caller = Caller {
-                        state: ctx,
+                        ctx,
                         _marker: PhantomData,
                     };
 
-                    let ($($returns),*) = self(caller, $($params),*);
 
-                    $(
-                        unsafe {
-                            args.add(index).write($returns.to_raw());
-                            index += 1;
+                    let ($($returns),*) = match self(caller, $($params),*) {
+                        Ok(($($returns),*)) => {
+                            $(
+                                unsafe {
+                                    args.add(index).write($returns.to_raw());
+                                    index += 1;
+                                }
+                            )*
+
+                            unsafe {
+                                args.add(index).write(RESULT_OK.to_raw());
+                            }
+                        },
+                        Err(err) => {
+                            // Count all return values.
+                            {
+                                $(
+                                    let $returns = 0;
+                                    index += 1;
+                                )*
+                            }
+
+                            // Write the error value.
+                            // The other return values are left uninitialized.
+                            unsafe {
+                                args.add(index).write((err as i32).to_raw());
+                            }
                         }
-                    )*
-
+                    };
                 };
 
                 ctx.call_table.insert(callback)
@@ -352,12 +422,13 @@ unsafe impl NativeType for bool {
 }
 
 pub unsafe extern "C" fn call_host_trampoline(
-    ctx: *const HostState,
+    ctx: *const RawContext,
     index: usize,
     args: *mut RawVal,
 ) {
     let ctx = unsafe { &*ctx };
-    let func = &ctx.call_table.functions[index];
+    let state = unsafe { &*ctx.state };
+    let func = &state.call_table.functions[index];
     func(ctx, args);
 }
 

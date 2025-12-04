@@ -1,5 +1,5 @@
 use crate::classes::{Bool, Float, Int, Object, State};
-use crate::runtime::Caller;
+use crate::runtime::{Caller, Exception};
 
 /// `Activate`
 ///
@@ -11,7 +11,7 @@ pub fn activate(
     object: Object,
     activator: Object,
     default_processing_only: Bool,
-) -> Bool {
+) -> Result<Bool, Exception> {
     todo!()
 }
 
@@ -20,7 +20,13 @@ pub fn activate(
 /// ```text
 /// Function AddItem(Form akItemToAdd, int aiCount = 1, bool abSilent = false) native
 /// ```
-pub fn add_item(caller: Caller<'_, State>, object: Object, item: Object, count: Int, silent: Bool) {
+pub fn add_item(
+    caller: Caller<'_, State>,
+    object: Object,
+    item: Object,
+    count: Int,
+    silent: Bool,
+) -> Result<(), Exception> {
     todo!()
 }
 
@@ -29,7 +35,7 @@ pub fn add_item(caller: Caller<'_, State>, object: Object, item: Object, count: 
 /// ```text
 /// Function Delete() native
 /// ```
-pub fn delete(caller: Caller<'_, State>, object: Object) {
+pub fn delete(caller: Caller<'_, State>, object: Object) -> Result<(), Exception> {
     todo!()
 }
 
@@ -40,7 +46,7 @@ pub fn delete(caller: Caller<'_, State>, object: Object) {
 /// ```text
 /// Function DeleteWhenAble()
 /// ```
-pub fn delete_when_able(caller: Caller<'_, State>, object: Object) {
+pub fn delete_when_able(caller: Caller<'_, State>, object: Object) -> Result<(), Exception> {
     todo!()
 }
 
@@ -49,7 +55,7 @@ pub fn delete_when_able(caller: Caller<'_, State>, object: Object) {
 /// ```text
 /// Function Disable(bool abFadeOut = False) native
 /// ```
-pub fn disable(caller: Caller<'_, State>, object: Object, fade: Bool) {
+pub fn disable(caller: Caller<'_, State>, object: Object, fade: Bool) -> Result<(), Exception> {
     todo!()
 }
 
@@ -58,7 +64,11 @@ pub fn disable(caller: Caller<'_, State>, object: Object, fade: Bool) {
 /// ```text
 /// float Function GetValue(ActorValue akAV) native
 /// ```
-pub fn get_value(caller: Caller<'_, State>, self_ptr: Object, actor_value: Object) -> Float {
+pub fn get_value(
+    caller: Caller<'_, State>,
+    self_ptr: Object,
+    actor_value: Object,
+) -> Result<Float, Exception> {
     todo!()
 }
 
@@ -67,7 +77,12 @@ pub fn get_value(caller: Caller<'_, State>, self_ptr: Object, actor_value: Objec
 /// ```text
 /// Function SetValue(ActorValue akAV, float afValue) native
 /// ```
-pub fn set_value(caller: Caller<'_, State>, self_ptr: Object, actor_value: Object, value: Float) {
+pub fn set_value(
+    caller: Caller<'_, State>,
+    self_ptr: Object,
+    actor_value: Object,
+    value: Float,
+) -> Result<(), Exception> {
     todo!()
 }
 
@@ -76,7 +91,11 @@ pub fn set_value(caller: Caller<'_, State>, self_ptr: Object, actor_value: Objec
 /// ```text
 /// float Function GetBaseValue(ActorValue akAV) native
 /// ```
-pub fn get_base_value(caller: Caller<'_, State>, self_ptr: Object, actor_value: Object) -> Float {
+pub fn get_base_value(
+    caller: Caller<'_, State>,
+    self_ptr: Object,
+    actor_value: Object,
+) -> Result<Float, Exception> {
     todo!()
 }
 
@@ -90,7 +109,7 @@ pub fn set_actor_owner(
     self_ptr: Object,
     actor_base: Object,
     no_crime: bool,
-) {
+) -> Result<(), Exception> {
     todo!()
 }
 
@@ -99,7 +118,7 @@ pub fn set_actor_owner(
 /// ```text
 /// Form Function GetBaseObject() native
 /// ```
-pub fn get_base_object(caller: Caller<'_, State>, self_ptr: Object) -> Object {
+pub fn get_base_object(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Exception> {
     todo!()
 }
 
@@ -115,6 +134,6 @@ pub fn remove_item(
     count: Int,
     silent: Bool,
     other: Object,
-) {
+) -> Result<(), Exception> {
     todo!()
 }

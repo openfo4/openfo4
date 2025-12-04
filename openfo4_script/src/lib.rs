@@ -55,6 +55,8 @@ impl Engine {
         let mut signature = F::signature();
         // Our VM context pointer.
         signature.params.insert(0, Type::Pointer);
+        // VM error
+        signature.returns.push(Type::I32);
 
         self.registry.define_native_function(
             class,
@@ -126,7 +128,6 @@ impl Registry {
                     continue;
                 }
 
-                dbg!(&f.name);
                 let fn_ptr = self.ctx.compile(&class.name, &f.name).unwrap();
 
                 let func = unsafe { Func::new(&fn_ptr) };

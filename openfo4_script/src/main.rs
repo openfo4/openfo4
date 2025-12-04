@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use openfo4_script::runtime::{Caller, Context, RawVal};
+use openfo4_script::runtime::{Caller, Context, RawVal, Stack};
 use openfo4_script::{Engine, Registry, classes};
 
 fn main() {
@@ -106,16 +106,29 @@ fn main() {
 
     classes::register_builtins(&mut engine);
 
-    // let instance = engine.compile("YoureSPECIALscript");
-    let instance = engine.compile("Hardcore:HC_ManagerScript");
+    let instance = engine.compile("YoureSPECIALscript");
+    // let instance = engine.compile("CastleArtilleryScrapScript");
 
     let func = instance.get_func("onactivate").unwrap();
-    // dbg!(&func);
+    // // dbg!(&func);
 
-    let ctx = Context::new(&engine, ());
+    let mut ctx = Context::new(&engine, Stack::new(), ());
 
     let typed = func.typed::<(isize, isize), ()>().unwrap();
-    typed.call(&ctx, (0, 0));
+
+    let header: [usize; 3] = [3_usize, 709_usize, 69_usize];
+    let object = &header as *const usize;
+    let object_ptr = &object as *const *const usize;
+
+    dbg!(object_ptr as isize);
+
+    let res = typed.call(&mut ctx, (object_ptr as isize, object_ptr as isize));
+    dbg!(&res);
+
+    let res = typed.call(&mut ctx, (object_ptr as isize, object_ptr as isize));
+    dbg!(&res);
+
+    // dbg!(ctx.stack());
 
     println!("exit");
 }
