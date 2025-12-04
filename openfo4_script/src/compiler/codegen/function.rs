@@ -1,5 +1,4 @@
-use std::collections::{HashMap, HashSet};
-use std::panic::resume_unwind;
+use std::collections::HashMap;
 
 use openfo4_jit::{
     Block, Compiler, FunctionBuilder, FunctionId, IntCompareOp, Signature, StackSlot,
@@ -7,10 +6,12 @@ use openfo4_jit::{
 };
 use openfo4_pex::{Function, Instruction, Value};
 
-use crate::compiler::codegen::function_props::{FunctionProps, Stage, function_properties};
+use crate::compiler::codegen::function_props::{
+    FunctionProps, Stage, StageVariable, function_properties,
+};
 use crate::compiler::codegen::trampoline::generate_guest_to_host_trampoline;
 use crate::compiler::codegen::{ClassDef, CodegenData, FunctionDef, Type};
-use crate::runtime::{Func, RESULT_ERROR, RESULT_OK, RESULT_SUSPEND};
+use crate::runtime::RESULT_OK;
 
 #[derive(Clone, Debug)]
 pub struct FunctionResult {
@@ -911,6 +912,12 @@ fn suspend_stack(translator: &mut FunctionTranslator<'_>, stack_base: JitValue, 
     }
 }
 
+#[derive(Clone, Debug)]
+struct ResumeStage<'a> {
+    variables: &'a [StageVariable],
+    stages: Vec<usize>,
+}
+
 fn resumse_stack(
     translator: &mut FunctionTranslator<'_>,
     stack_base: JitValue,
@@ -918,10 +925,8 @@ fn resumse_stack(
     resume_points: &HashMap<usize, Block>,
     start_block: Block,
 ) {
-    let mut offset = 0;
-
     let index = translator.builder.load(JitType::I64, stack_base, 0);
-    offset += JitType::I64.size();
+    let offset = JitType::I64.size();
 
     if stages.len() == 0 {
         translator.builder.jump(start_block, &[]);
@@ -929,38 +934,39 @@ fn resumse_stack(
         return;
     }
 
-    let next_block = translator.builder.create_block(&[]);
+    let match_index_block = translator.builder.create_block(&[]);
 
     // Don't resume if index == 0.
     translator
         .builder
-        .brif(index, next_block, &[], start_block, &[]);
-    translator.builder.switch_to_block(next_block);
+        .brif(index, match_index_block, &[], start_block, &[]);
 
-    for (i, stage) in stages.iter().enumerate() {
-        let stage_index = translator.builder.iconst(JitType::I64, stage.index as i64);
-
-        // No next stage. `index` is guaranteed to be a valid stage index, so it must
-        // be this stage.
-        let next_block = if stages.get(i + 1).is_none() {
-            None
+    // There commonly are suspension points with the same active variables.
+    // Variable resumption can generate a lot of code, so we group the loading
+    // code for stages with the same variables together.
+    let mut resume_stages = Vec::<ResumeStage<'_>>::new();
+    for stage in stages {
+        if let Some(s) = resume_stages
+            .iter_mut()
+            .find(|s| s.variables == &stage.variables)
+        {
+            s.stages.push(stage.index);
         } else {
-            let true_block = translator.builder.create_block(&[]);
-            let next_block = translator.builder.create_block(&[]);
+            resume_stages.push(ResumeStage {
+                variables: &stage.variables,
+                stages: vec![stage.index],
+            });
+        }
+    }
 
-            let is_eq = translator
-                .builder
-                .icmp(index, stage_index, IntCompareOp::Equal);
+    let mut loading_blocks = Vec::new();
+    for stage in resume_stages.iter() {
+        let load_block = translator.builder.create_block(&[]);
+        translator.builder.switch_to_block(load_block);
+        loading_blocks.push(load_block);
 
-            translator
-                .builder
-                .brif(is_eq, true_block, &[], next_block, &[]);
-
-            translator.builder.switch_to_block(true_block);
-            Some(next_block)
-        };
-
-        for var in &stage.variables {
+        let mut offset = offset;
+        for var in stage.variables {
             if offset % var.ty_jit.align() != 0 {
                 offset += var.ty_jit.align() - (offset % var.ty_jit.align());
             }
@@ -973,12 +979,56 @@ fn resumse_stack(
             offset += var.ty_jit.size();
         }
 
-        translator.builder.jump(resume_points[&stage.index], &[]);
+        debug_assert!(!stage.stages.is_empty());
 
-        if let Some(next_block) = next_block {
+        if stage.stages.len() == 1 {
+            translator
+                .builder
+                .jump(resume_points[&stage.stages[0]], &[]);
+            continue;
+        }
+
+        for (i, stage_index) in stage.stages.iter().enumerate() {
+            // No next stage. `index` is guaranteed to be a valid stage index, so it must
+            // be this stage.
+            if stage.stages.get(i + 1).is_none() {
+                translator.builder.jump(resume_points[&stage_index], &[]);
+                continue;
+            }
+
+            let stage_index_value = translator.builder.iconst(JitType::I64, *stage_index as i64);
+            let is_eq = translator
+                .builder
+                .icmp(index, stage_index_value, IntCompareOp::Equal);
+
+            let next_block = translator.builder.create_block(&[]);
+
+            translator
+                .builder
+                .brif(is_eq, resume_points[&stage_index], &[], next_block, &[]);
+
             translator.builder.switch_to_block(next_block);
         }
     }
 
-    translator.builder.switch_to_block(start_block);
+    translator.builder.switch_to_block(match_index_block);
+
+    for (i, (stage, block)) in resume_stages.iter().zip(loading_blocks).enumerate() {
+        for (j, stage_index) in stage.stages.iter().enumerate() {
+            if resume_stages.get(i + 1).is_none() && stage.stages.get(j + 1).is_none() {
+                translator.builder.jump(block, &[]);
+                continue;
+            }
+
+            let stage_index_value = translator.builder.iconst(JitType::I64, *stage_index as i64);
+            let is_eq = translator
+                .builder
+                .icmp(index, stage_index_value, IntCompareOp::Equal);
+
+            let next_block = translator.builder.create_block(&[]);
+
+            translator.builder.brif(is_eq, block, &[], next_block, &[]);
+            translator.builder.switch_to_block(next_block);
+        }
+    }
 }

@@ -196,7 +196,7 @@ impl Stage {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct StageVariable {
     pub name: String,
     pub ty: Type,

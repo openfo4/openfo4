@@ -125,7 +125,7 @@ fn main() {
     let res = typed.call(&mut ctx, (object_ptr as isize, object_ptr as isize));
     dbg!(&res);
 
-    let res = typed.call(&mut ctx, (object_ptr as isize, object_ptr as isize));
+    let res = typed.call(&mut ctx, (0, 0));
     dbg!(&res);
 
     // dbg!(ctx.stack());

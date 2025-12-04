@@ -77,6 +77,7 @@ impl Compiler {
             stack_slots: Slab::new(),
             current_block_full: false,
             current_block: None,
+            blocks_filled: Vec::new(),
         }
     }
 
@@ -162,6 +163,18 @@ impl Type {
             Self::Pointer => size_of::<*const ()>(),
         }
     }
+
+    pub const fn align(&self) -> usize {
+        match self {
+            Self::I8 => align_of::<i8>(),
+            Self::I16 => align_of::<i16>(),
+            Self::I32 => align_of::<i32>(),
+            Self::I64 => align_of::<i64>(),
+            Self::F32 => align_of::<f32>(),
+            Self::F64 => align_of::<f64>(),
+            Self::Pointer => align_of::<*const ()>(),
+        }
+    }
 }
 
 /// An opaque identifier for a function.
@@ -180,12 +193,16 @@ pub struct FunctionBuilder<'a> {
     next_block: usize,
     stack_slots: Slab<StackSlotDesc>,
     block_params: Vec<Vec<Value>>,
+    blocks_filled: Vec<bool>,
     current_block_full: bool,
     current_block: Option<Block>,
 }
 
 impl<'a> FunctionBuilder<'a> {
+    #[track_caller]
     fn produce_value(&mut self) -> Value {
+        debug_assert!(!self.current_block_full);
+
         let id = self.next_value;
         self.next_value += 1;
         Value(id)
@@ -196,6 +213,7 @@ impl<'a> FunctionBuilder<'a> {
         F: FnOnce(Unop) -> Instruction,
     {
         debug_assert!(src.0 < self.next_value);
+        debug_assert!(!self.current_block_full);
 
         let dst = self.produce_value();
         self.instructions.push(op(Unop { src, dst }));
@@ -209,6 +227,7 @@ impl<'a> FunctionBuilder<'a> {
     {
         debug_assert!(lhs.0 < self.next_value);
         debug_assert!(rhs.0 < self.next_value);
+        debug_assert!(!self.current_block_full);
 
         let dst = self.produce_value();
         self.instructions.push(op(Binop { lhs, rhs, dst }));
@@ -235,6 +254,7 @@ impl<'a> FunctionBuilder<'a> {
 
         debug_assert_eq!(block, self.block_params.len());
         self.block_params.push(values);
+        self.blocks_filled.push(false);
 
         Block(block)
     }
@@ -256,6 +276,7 @@ impl<'a> FunctionBuilder<'a> {
 
         debug_assert_eq!(block, self.block_params.len());
         self.block_params.push(values);
+        self.blocks_filled.push(false);
 
         Block(block)
     }
@@ -264,8 +285,10 @@ impl<'a> FunctionBuilder<'a> {
         &self.block_params[block.0]
     }
 
+    #[track_caller]
     pub fn switch_to_block(&mut self, block: Block) {
         debug_assert!(block.0 < self.next_block);
+        debug_assert!(!self.blocks_filled[block.0]);
 
         if self.current_block == Some(block) {
             return;
@@ -281,11 +304,20 @@ impl<'a> FunctionBuilder<'a> {
     }
 
     /// Create an integer constant.
+    #[track_caller]
     pub fn iconst<T: Into<i64>>(&mut self, ty: Type, value: T) -> Value {
         let id = self.produce_value();
         self.instructions
             .push(Instruction::IConst(ty, value.into(), id));
         id
+    }
+
+    /// Creates a uninitialized value.
+    pub fn uninit(&mut self, ty: Type) -> Value {
+        match ty {
+            Type::I8 | Type::I16 | Type::I32 | Type::I64 | Type::Pointer => self.iconst(ty, 0),
+            Type::F32 | Type::F64 => self.fconst(ty, 0.0),
+        }
     }
 
     pub fn fconst<T: Into<f64>>(&mut self, ty: Type, value: T) -> Value {
@@ -425,6 +457,7 @@ impl<'a> FunctionBuilder<'a> {
     pub fn return_(&mut self, rvals: &[Value]) {
         self.instructions.push(Instruction::Return(rvals.to_vec()));
         self.current_block_full = true;
+        self.blocks_filled[self.current_block.unwrap().0] = true;
     }
 
     /// Unconditional jump.
@@ -436,6 +469,7 @@ impl<'a> FunctionBuilder<'a> {
         self.instructions
             .push(Instruction::Jump(block, block_args.to_vec()));
         self.current_block_full = true;
+        self.blocks_filled[self.current_block.unwrap().0] = true;
     }
 
     /// Conditional branch.
@@ -460,6 +494,7 @@ impl<'a> FunctionBuilder<'a> {
             false_block_args: false_block_args.to_vec(),
         });
         self.current_block_full = true;
+        self.blocks_filled[self.current_block.unwrap().0] = true;
     }
 
     pub fn create_stack_slot(&mut self, size: usize, align: usize) -> StackSlot {
