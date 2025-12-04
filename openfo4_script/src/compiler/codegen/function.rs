@@ -575,16 +575,16 @@ fn translate_function_body(
     // Sometimes the final return instruction is missing and we must insert it.
     // This is only possible for functions that return "none" and the fact we
     // return "none" in this case is checked by the validation pass.
+    if !translator.builder.is_current_block_full() {
+        translator.builder.return_(&[result_ok]);
+    }
+
     if let Some(block) = blocks.get(&function.instructions.len()) {
-        translator.builder.switch_to_block(*block);
-        if !translator.builder.is_current_block_full() {
+        if !translator.builder.is_block_full(*block) {
+            translator.builder.switch_to_block(*block);
             translator.builder.return_(&[result_ok]);
         }
     }
-    // for block in unterminated_blocks {
-    //     translator.builder.switch_to_block(block);
-    //     translator.builder.return_(&[result_ok]);
-    // }
 
     translator.builder.finalize();
 }

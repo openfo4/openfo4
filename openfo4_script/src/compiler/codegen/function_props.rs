@@ -45,6 +45,9 @@ pub fn function_properties(
     }
 
     let mut locals = HashMap::new();
+    for param in &function.params {
+        locals.insert(param.name.to_lowercase(), param.ty.to_lowercase());
+    }
     for local in &function.locals {
         locals.insert(local.name.to_lowercase(), local.ty.to_lowercase());
     }
@@ -57,6 +60,7 @@ pub fn function_properties(
     let find_var = |var_name: &str| -> String {
         match &*var_name.to_lowercase() {
             "self" => return class.name.clone(),
+            "::state" => return "string".to_owned(),
             _ => (),
         }
 
