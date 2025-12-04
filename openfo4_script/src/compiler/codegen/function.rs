@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use openfo4_jit::{
     Block, Compiler, FunctionBuilder, FunctionId, IntCompareOp, Signature, StackSlot,
-    Type as JitType, Value as JitValue,
+    Type as JitType, Value as JitValue, Variable as JitVariable,
 };
 use openfo4_pex::{Function, Instruction, Value};
 
@@ -107,37 +107,41 @@ fn translate_function_body(
     for (index, param) in function.params.iter().enumerate() {
         let ty = data.resolve_ty_jit(&param.ty);
 
-        let slot = builder.create_typed_stack_slot(ty);
+        let value = builder.block_params(entry_block)[params_offset + index];
+        let variable = builder.def_var(ty, value);
 
         locals.insert(
             param.name.to_lowercase(),
             Local {
                 ty,
-                slot,
                 ty_name: param.ty.to_lowercase(),
+                variable,
             },
         );
-
-        let value = builder.block_params(entry_block)[params_offset + index];
-        builder.stack_store(slot, value, 0);
     }
 
     // Create stack slots for local variables.
     for local in &function.locals {
         let ty = data.resolve_ty_jit(&local.ty);
 
-        let slot = builder.create_typed_stack_slot(ty);
+        let value = match data.resolve_ty(&local.ty) {
+            Type::None | Type::Bool | Type::Int => builder.iconst(JitType::I32, 0),
+            Type::Float => builder.fconst(JitType::F32, 0.0),
+            Type::String | Type::Class(_) | Type::Array(_) | Type::Struct(_) | Type::Var => {
+                builder.iconst(JitType::Pointer, 0)
+            }
+        };
+
+        let variable = builder.def_var(ty, value);
+
         locals.insert(
             local.name.to_lowercase(),
             Local {
                 ty,
-                slot,
                 ty_name: local.ty.to_lowercase(),
+                variable,
             },
         );
-
-        let value = builder.iconst(JitType::I32, 0);
-        builder.stack_store(slot, value, 0);
     }
 
     let mut fields = HashMap::new();
@@ -150,6 +154,8 @@ fn translate_function_body(
             },
         );
     }
+
+    dbg!(&locals);
 
     let mut translator = FunctionTranslator {
         data,
@@ -217,12 +223,9 @@ fn translate_function_body(
                 let stage = &props.stages[next_stage];
                 next_stage += 1;
 
-                dbg!(blocks.get(&index));
-
                 let block = blocks
                     .entry(index)
                     .or_insert_with(|| translator.builder.create_block(&[]));
-                dbg!(&block);
 
                 resume_points.insert(stage.index, *block);
             }
@@ -341,6 +344,7 @@ fn translate_function_body(
                 let lhs = translator.load(&op.lhs);
                 let rhs = translator.load(&op.rhs);
                 let res = translator.builder.icmp(lhs, rhs, cmp_op);
+                let res = translator.builder.uextend(res, JitType::I32);
                 translator.store(&op.dst, res);
             }
             Instruction::Branch(offset) => {
@@ -566,6 +570,7 @@ fn translate_function_body(
 
                 let res =
                     perform_typecheck(&mut translator, &op.object, &class, &mut current_block);
+                let res = translator.builder.uextend(res, JitType::I32);
                 translator.store(&op.return_assignment, res);
             }
             op => todo!("{:?}", op),
@@ -624,7 +629,7 @@ impl<'a> FunctionTranslator<'a> {
         }
 
         if let Some(local) = self.locals.get(&name.to_lowercase()) {
-            return self.builder.stack_load(local.slot, local.ty, 0);
+            return self.builder.get_var(local.variable);
         }
 
         if let Some(field) = self.fields.get(&name.to_lowercase()) {
@@ -645,7 +650,7 @@ impl<'a> FunctionTranslator<'a> {
 
     fn store_var(&mut self, name: &str, value: JitValue) {
         if let Some(local) = self.locals.get(&name.to_lowercase()) {
-            self.builder.stack_store(local.slot, value, 0);
+            self.builder.set_var(local.variable, value);
             return;
         }
 
@@ -690,7 +695,7 @@ struct Field {
 struct Local {
     ty: JitType,
     ty_name: String,
-    slot: StackSlot,
+    variable: JitVariable,
 }
 
 fn perform_cast(translator: &mut FunctionTranslator<'_>, src: &Value, dst: &Value) -> JitValue {

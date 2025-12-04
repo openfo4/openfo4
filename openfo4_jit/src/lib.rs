@@ -73,6 +73,7 @@ impl Compiler {
             instructions: Vec::new(),
             next_value: 0,
             next_block: 0,
+            next_variable: 0,
             block_params: Vec::new(),
             stack_slots: Slab::new(),
             current_block_full: false,
@@ -191,6 +192,7 @@ pub struct FunctionBuilder<'a> {
     instructions: Vec<Instruction>,
     next_value: usize,
     next_block: usize,
+    next_variable: usize,
     stack_slots: Slab<StackSlotDesc>,
     block_params: Vec<Vec<Value>>,
     blocks_filled: Vec<bool>,
@@ -283,6 +285,10 @@ impl<'a> FunctionBuilder<'a> {
 
     pub fn block_params(&self, block: Block) -> &[Value] {
         &self.block_params[block.0]
+    }
+
+    pub fn is_block_full(&self, block: Block) -> bool {
+        self.blocks_filled[block.0]
     }
 
     #[track_caller]
@@ -675,6 +681,27 @@ impl<'a> FunctionBuilder<'a> {
         dst
     }
 
+    pub fn def_var(&mut self, ty: Type, value: Value) -> Variable {
+        let var = Variable(self.next_variable);
+        self.next_variable += 1;
+
+        self.instructions
+            .push(Instruction::DefVar { ty, var, value });
+
+        var
+    }
+
+    pub fn set_var(&mut self, var: Variable, value: Value) {
+        self.instructions.push(Instruction::SetVar { var, value });
+    }
+
+    pub fn get_var(&mut self, var: Variable) -> Value {
+        let dst = self.produce_value();
+
+        self.instructions.push(Instruction::GetVar { var, dst });
+        dst
+    }
+
     /// Finalize the function definition.
     pub fn finalize(self) {
         let func_id = self.compiler.functions[self.id.0].id;
@@ -684,6 +711,7 @@ impl<'a> FunctionBuilder<'a> {
                 instructions: self.instructions,
                 num_values: self.next_value,
                 num_blocks: self.next_block,
+                num_variables: self.next_variable,
                 block_params: self.block_params,
                 stack_slots: self.stack_slots,
             },
@@ -696,6 +724,9 @@ pub struct Block(usize);
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct StackSlot(usize);
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub struct Variable(usize);
 
 #[derive(Clone, Debug)]
 enum Instruction {
@@ -803,6 +834,19 @@ enum Instruction {
         value: Value,
         dst: Value,
         ty: Type,
+    },
+    DefVar {
+        ty: Type,
+        var: Variable,
+        value: Value,
+    },
+    SetVar {
+        var: Variable,
+        value: Value,
+    },
+    GetVar {
+        var: Variable,
+        dst: Value,
     },
 }
 

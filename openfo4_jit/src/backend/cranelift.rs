@@ -64,6 +64,7 @@ impl CraneliftModule {
             num_blocks: definition.num_blocks,
             block_params: definition.block_params,
             stack_slots: definition.stack_slots,
+            num_variables: definition.num_variables,
         }));
     }
 
@@ -174,6 +175,7 @@ impl CraneliftModule {
             let mut values = vec![const { None }; func_def.num_values];
             let mut blocks = vec![const { None }; func_def.num_blocks];
             let mut stack_slots = vec![const { None }; func_def.stack_slots.len()];
+            let mut variables = vec![const { None }; func_def.num_variables];
 
             let ptr_type = module.isa().pointer_type();
             let map_type = |ty: Type| -> ir::Type {
@@ -600,6 +602,22 @@ impl CraneliftModule {
                         let res = builder.ins().sextend(map_type(*ty), src);
                         values[dst.0] = Some(res);
                     }
+                    Instruction::DefVar { ty, var, value } => {
+                        let res = builder.declare_var(map_type(*ty));
+                        let value = values[value.0].unwrap();
+                        builder.def_var(res, value);
+                        variables[var.0] = Some(res);
+                    }
+                    Instruction::GetVar { var, dst } => {
+                        let var = variables[var.0].unwrap();
+                        let res = builder.use_var(var);
+                        values[dst.0] = Some(res);
+                    }
+                    Instruction::SetVar { var, value } => {
+                        let var = variables[var.0].unwrap();
+                        let value = values[value.0].unwrap();
+                        builder.def_var(var, value);
+                    }
                 }
             }
 
@@ -685,6 +703,7 @@ struct GuestFunctionDefinition {
     instructions: Vec<Instruction>,
     num_values: usize,
     num_blocks: usize,
+    num_variables: usize,
     block_params: Vec<Vec<Value>>,
     stack_slots: Slab<StackSlotDesc>,
 }

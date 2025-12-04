@@ -10,6 +10,7 @@ pub struct FunctionDefinitionDesc {
     pub instructions: Vec<Instruction>,
     pub num_values: usize,
     pub num_blocks: usize,
+    pub num_variables: usize,
     pub block_params: Vec<Vec<Value>>,
     pub stack_slots: Slab<StackSlotDesc>,
 }
