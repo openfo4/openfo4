@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, num::NonZeroUsize};
 
 use openfo4_jit::Type as JitType;
 use openfo4_pex::{Function, Instruction, Value};
@@ -25,7 +25,6 @@ pub fn function_properties(
 ) -> FunctionProps {
     let mut may_error = false;
 
-    let mut stages = Vec::new();
     let mut variables = Vec::new();
 
     for param in &function.params {
@@ -78,6 +77,7 @@ pub fn function_properties(
     let mut preemption_points = Vec::new();
     let mut instructions_no_preempt = 0;
     let mut stack_size = 0;
+    let mut stages = Vec::new();
 
     for (index, instruction) in function.instructions.iter().enumerate() {
         // Insert preemption point.
@@ -119,10 +119,7 @@ pub fn function_properties(
 
                 if offset < 0 {
                     preemption_points.push(index);
-                    stages.push(Stage {
-                        index: stages.len() + 1,
-                        variables: variables.clone(),
-                    });
+                    stages.push(variables.clone());
                 }
             }
             Instruction::BranchIfFalse(op) | Instruction::BranchIfTrue(op) => {
@@ -132,10 +129,7 @@ pub fn function_properties(
 
                 if offset < 0 {
                     preemption_points.push(index);
-                    stages.push(Stage {
-                        index: stages.len() + 1,
-                        variables: variables.clone(),
-                    });
+                    stages.push(variables.clone());
                 }
             }
             // Preemption should always happen before we call another function.
@@ -160,10 +154,7 @@ pub fn function_properties(
                 stack_size = stack_size.max(props.stack_size);
 
                 preemption_points.push(index);
-                stages.push(Stage {
-                    index: stages.len() + 1,
-                    variables: variables.clone(),
-                });
+                stages.push(variables.clone());
             }
             Instruction::CallParent(op) => {
                 todo!();
@@ -174,10 +165,7 @@ pub fn function_properties(
                 may_error = true;
 
                 preemption_points.push(index);
-                stages.push(Stage {
-                    index: stages.len() + 1,
-                    variables: variables.clone(),
-                });
+                stages.push(variables.clone());
             }
             Instruction::CallStatic(op) => {
                 let (Value::Ident(class_name), Value::Ident(func_name)) = (&op.class, &op.function)
@@ -192,11 +180,7 @@ pub fn function_properties(
                 stack_size = stack_size.max(props.stack_size);
 
                 preemption_points.push(index);
-                stages.push(Stage {
-                    index: stages.len() + 1,
-                    variables: variables.clone(),
-                });
-                stages.extend(props.stages.clone());
+                stages.push(variables.clone());
             }
             Instruction::PropertyGet(op) => {}
             Instruction::PropertySet(op) => {}
@@ -206,6 +190,35 @@ pub fn function_properties(
             _ => (),
         }
     }
+
+    // Reshuffle stage indices so that stages with the variables are next to each other.
+    // This allows matching the entire section of stages with a single icmp(LessThan) op.
+    let stages = {
+        let mut vars = HashMap::<_, Vec<_>>::new();
+        for (index, stage_var) in stages.iter().enumerate() {
+            vars.entry(stage_var).or_default().push(index);
+        }
+
+        let mut next_index = 1;
+        let mut stages = vec![
+            Stage {
+                index: 0,
+                variables: Vec::new()
+            };
+            stages.len()
+        ];
+        for (vars, indices) in vars {
+            for index in indices {
+                stages[index] = Stage {
+                    index: next_index,
+                    variables: vars.clone(),
+                };
+                next_index += 1;
+            }
+        }
+
+        stages
+    };
 
     let may_suspend = !preemption_points.is_empty();
 
@@ -247,7 +260,7 @@ impl Stage {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct StageVariable {
     pub name: String,
     pub ty: Type,

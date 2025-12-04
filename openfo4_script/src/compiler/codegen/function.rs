@@ -916,6 +916,8 @@ fn suspend_stack(translator: &mut FunctionTranslator<'_>, stack_base: JitValue, 
 struct ResumeStage<'a> {
     variables: &'a [StageVariable],
     stages: Vec<usize>,
+    /// Max stage index (inclusive).
+    max_stage_index: usize,
 }
 
 fn resumse_stack(
@@ -946,15 +948,17 @@ fn resumse_stack(
     // code for stages with the same variables together.
     let mut resume_stages = Vec::<ResumeStage<'_>>::new();
     for stage in stages {
-        if let Some(s) = resume_stages
-            .iter_mut()
-            .find(|s| s.variables == &stage.variables)
+        if let Some(last) = resume_stages.last_mut()
+            && last.variables == stage.variables
         {
-            s.stages.push(stage.index);
+            debug_assert!(last.max_stage_index < stage.index);
+            last.stages.push(stage.index);
+            last.max_stage_index = stage.index;
         } else {
             resume_stages.push(ResumeStage {
                 variables: &stage.variables,
                 stages: vec![stage.index],
+                max_stage_index: stage.index,
             });
         }
     }
@@ -1014,21 +1018,23 @@ fn resumse_stack(
     translator.builder.switch_to_block(match_index_block);
 
     for (i, (stage, block)) in resume_stages.iter().zip(loading_blocks).enumerate() {
-        for (j, stage_index) in stage.stages.iter().enumerate() {
-            if resume_stages.get(i + 1).is_none() && stage.stages.get(j + 1).is_none() {
-                translator.builder.jump(block, &[]);
-                continue;
-            }
-
-            let stage_index_value = translator.builder.iconst(JitType::I64, *stage_index as i64);
-            let is_eq = translator
-                .builder
-                .icmp(index, stage_index_value, IntCompareOp::Equal);
-
-            let next_block = translator.builder.create_block(&[]);
-
-            translator.builder.brif(is_eq, block, &[], next_block, &[]);
-            translator.builder.switch_to_block(next_block);
+        if resume_stages.get(i + 1).is_none() {
+            translator.builder.jump(block, &[]);
+            continue;
         }
+
+        let max_stage_index = translator
+            .builder
+            .iconst(JitType::I64, stage.max_stage_index as i64);
+        let is_eq = translator.builder.icmp(
+            index,
+            max_stage_index,
+            IntCompareOp::UnsignedLessThanOrEqual,
+        );
+
+        let next_block = translator.builder.create_block(&[]);
+
+        translator.builder.brif(is_eq, block, &[], next_block, &[]);
+        translator.builder.switch_to_block(next_block);
     }
 }
