@@ -15,7 +15,7 @@ use openfo4_pex::{Class, Module};
 pub type NativeFuncPtr =
     unsafe extern "C" fn(*const runtime::HostState, usize, *mut runtime::RawVal);
 
-use crate::compiler::{Context, NativeFunction};
+use crate::compiler::{CompilationResult, Context, NativeFunction};
 use crate::runtime::{Func, HostState, IntoFunc, NativeFnPtr, call_host_trampoline};
 
 #[derive(Clone, Debug)]
@@ -128,11 +128,11 @@ impl Registry {
                     continue;
                 }
 
-                let fn_ptr = self.ctx.compile(&class.name, &f.name).unwrap();
+                let res = self.ctx.compile(&class.name, &f.name).unwrap();
 
-                let func = unsafe { Func::new(&fn_ptr) };
+                let func = unsafe { Func::new(&res) };
 
-                functions.insert(f.name.to_lowercase(), (fn_ptr, func));
+                functions.insert(f.name.to_lowercase(), (res, func));
             }
         }
 
@@ -144,7 +144,7 @@ impl Registry {
 #[derive(Clone)]
 pub struct Instance {
     engine: Arc<EngineShared>,
-    functions: HashMap<String, (CompiledFunction, Func)>,
+    functions: HashMap<String, (CompilationResult, Func)>,
 }
 
 impl Instance {
@@ -156,16 +156,17 @@ impl Instance {
 
 #[derive(Clone, Debug)]
 pub struct ScriptInstance {
-    functions: HashMap<String, CompiledFunction>,
+    functions: HashMap<String, CompilationResult>,
 }
 
 impl ScriptInstance {
     pub fn get_func(&self, name: &str) -> Option<Func> {
-        let func = self.functions.get(&name.to_lowercase())?;
+        let res = self.functions.get(&name.to_lowercase())?;
 
         Some(Func {
-            ptr: unsafe { transmute::<*const u8, NativeFnPtr>(func.as_ptr()) },
-            signature: func.signature().clone(),
+            ptr: unsafe { transmute::<*const u8, NativeFnPtr>(res.function.as_ptr()) },
+            signature: res.function.signature().clone(),
+            stack_size: res.stack_size,
         })
     }
 }

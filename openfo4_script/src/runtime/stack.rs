@@ -4,9 +4,9 @@ pub struct Stack {
 }
 
 impl Stack {
-    pub fn new() -> Self {
+    pub fn new(size: usize) -> Self {
         Self {
-            memory: vec![0; 512],
+            memory: vec![0; size],
         }
     }
 

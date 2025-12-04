@@ -10,10 +10,10 @@ use openfo4_jit::{CompiledFunction, Compiler, FunctionId, Signature, Type as Jit
 use openfo4_pex::{Function, Instruction, Module, Struct, Value};
 use thiserror::Error;
 
-use crate::compiler::NativeFunction;
 use crate::compiler::codegen::function::FunctionResult;
 use crate::compiler::codegen::function_props::{FunctionProps, function_properties};
 use crate::compiler::codegen::types::Types;
+use crate::compiler::{CompilationResult, NativeFunction};
 
 pub const MAX_INSTRUCTIONS_BEFORE_PREEMPT: usize = 1024;
 
@@ -91,7 +91,7 @@ impl CodegenPass {
         func_def.native = Some(func);
     }
 
-    pub fn compile_fn(&mut self, class: &str, f: &str) -> Result<CompiledFunction, Error> {
+    pub fn compile_fn(&mut self, class: &str, f: &str) -> Result<CompilationResult, Error> {
         let mut compiler = Compiler::new();
 
         // The compile the function we must also compile all functions that
@@ -167,7 +167,12 @@ impl CodegenPass {
             def.trampoline_func_id = Some(trampoline);
         }
 
-        Ok(compiler.compile_function(def.trampoline_func_id.unwrap()))
+        let props = def.props.as_ref().unwrap();
+
+        Ok(CompilationResult {
+            function: compiler.compile_function(def.trampoline_func_id.unwrap()),
+            stack_size: props.stack_size,
+        })
     }
 
     fn compile_function_internal(

@@ -11,6 +11,7 @@ use thiserror::Error;
 
 pub use stack::Stack;
 
+use crate::compiler::CompilationResult;
 use crate::{Engine, EngineShared};
 
 pub(crate) const RESULT_OK: i32 = 0;
@@ -72,19 +73,26 @@ pub union RawVal {
 pub struct Func {
     pub ptr: NativeFnPtr,
     pub signature: Signature,
+    pub stack_size: usize,
 }
 
 impl Func {
     /// # Safety
     ///
     /// - The function pointer must point to a [`NativeFnPtr`] function.
-    pub(crate) unsafe fn new(f: &CompiledFunction) -> Self {
+    pub(crate) unsafe fn new(res: &CompilationResult) -> Self {
         Self {
             // SAFETY: The caller guarantees that the function is a valid
             // function pointer of type `NativeFnPtr`.
-            ptr: unsafe { transmute::<*const u8, NativeFnPtr>(f.as_ptr()) },
-            signature: f.signature().clone(),
+            ptr: unsafe { transmute::<*const u8, NativeFnPtr>(res.function.as_ptr()) },
+            signature: res.function.signature().clone(),
+            stack_size: res.stack_size,
         }
+    }
+
+    /// Returns the minimum stack size required to call this function.
+    pub fn stack_size(&self) -> usize {
+        self.stack_size
     }
 
     pub fn call(&self) {}

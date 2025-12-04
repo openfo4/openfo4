@@ -112,7 +112,8 @@ fn main() {
     let func = instance.get_func("onactivate").unwrap();
     // // dbg!(&func);
 
-    let mut ctx = Context::new(&engine, Stack::new(), ());
+    dbg!(func.stack_size());
+    let mut ctx = Context::new(&engine, Stack::new(func.stack_size), ());
 
     let typed = func.typed::<(isize, isize), ()>().unwrap();
 
@@ -125,10 +126,10 @@ fn main() {
     let res = typed.call(&mut ctx, (object_ptr as isize, object_ptr as isize));
     dbg!(&res);
 
+    dbg!(ctx.stack());
+
     let res = typed.call(&mut ctx, (0, 0));
     dbg!(&res);
-
-    // dbg!(ctx.stack());
 
     println!("exit");
 }

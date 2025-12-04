@@ -40,7 +40,7 @@ impl Context {
         self.codegen.define_native_function(class, func, f);
     }
 
-    pub fn compile(&mut self, class: &str, func: &str) -> Result<CompiledFunction, Error> {
+    pub fn compile(&mut self, class: &str, func: &str) -> Result<CompilationResult, Error> {
         self.validation.validate().map_err(Error::Validation)?;
         let res = self
             .codegen
@@ -55,4 +55,10 @@ pub struct NativeFunction {
     pub ptr: *const u8,
     pub index: usize,
     pub signature: Signature,
+}
+
+#[derive(Clone, Debug)]
+pub struct CompilationResult {
+    pub function: CompiledFunction,
+    pub stack_size: usize,
 }

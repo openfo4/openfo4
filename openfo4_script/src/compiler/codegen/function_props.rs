@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use openfo4_jit::Type as JitType;
 use openfo4_pex::{Function, Instruction, Value};
 
@@ -12,6 +14,8 @@ pub struct FunctionProps {
     /// Instructions indices BEFORE preemption is inserted.
     pub preemption_points: Vec<usize>,
     pub stages: Vec<Stage>,
+    /// Stack size that this function requires.
+    pub stack_size: usize,
 }
 
 pub fn function_properties(
@@ -40,8 +44,36 @@ pub fn function_properties(
         });
     }
 
+    let mut locals = HashMap::new();
+    for local in &function.locals {
+        locals.insert(local.name.to_lowercase(), local.ty.to_lowercase());
+    }
+
+    let mut globals = HashMap::new();
+    for global in &class.fields {
+        globals.insert(global.0.to_lowercase(), global.1.to_lowercase());
+    }
+
+    let find_var = |var_name: &str| -> String {
+        match &*var_name.to_lowercase() {
+            "self" => return class.name.clone(),
+            _ => (),
+        }
+
+        if let Some(ty) = locals.get(&var_name.to_lowercase()) {
+            return ty.clone();
+        }
+
+        if let Some(ty) = class.fields.get(&var_name.to_lowercase()) {
+            return ty.to_lowercase();
+        }
+
+        todo!()
+    };
+
     let mut preemption_points = Vec::new();
     let mut instructions_no_preempt = 0;
+    let mut stack_size = 0;
 
     for (index, instruction) in function.instructions.iter().enumerate() {
         // Insert preemption point.
@@ -115,7 +147,13 @@ pub fn function_properties(
                     unreachable!();
                 };
 
-                may_error = true;
+                let class_name = find_var(object);
+
+                let func = data.get_function(&class_name, func_name).unwrap();
+                let props = func.props.as_ref().unwrap();
+
+                may_error |= props.may_error;
+                stack_size = stack_size.max(props.stack_size);
 
                 preemption_points.push(index);
                 stages.push(Stage {
@@ -124,6 +162,7 @@ pub fn function_properties(
                 });
             }
             Instruction::CallParent(op) => {
+                todo!();
                 let Value::Ident(func_name) = &op.function else {
                     unreachable!();
                 };
@@ -146,6 +185,7 @@ pub fn function_properties(
                 let props = func.props.as_ref().unwrap();
 
                 may_error |= props.may_error;
+                stack_size = stack_size.max(props.stack_size);
 
                 preemption_points.push(index);
                 stages.push(Stage {
@@ -165,11 +205,19 @@ pub fn function_properties(
 
     let may_suspend = !preemption_points.is_empty();
 
+    let mut local_stack_size = 0;
+    for stage in &stages {
+        local_stack_size = local_stack_size.max(stage.size());
+    }
+
+    stack_size += local_stack_size;
+
     FunctionProps {
         may_suspend,
         may_error,
         stages,
         preemption_points,
+        stack_size,
     }
 }
 
@@ -181,7 +229,6 @@ pub struct Stage {
 
 impl Stage {
     pub fn size(&self) -> usize {
-        let mut size = JitType::Pointer.size();
         let mut offset = JitType::Pointer.size();
 
         for var in &self.variables {
@@ -189,10 +236,10 @@ impl Stage {
                 offset += var.ty_jit.align() - (offset % var.ty_jit.align());
             }
 
-            size = offset + var.ty_jit.size();
+            offset += var.ty_jit.size();
         }
 
-        size
+        offset
     }
 }
 
