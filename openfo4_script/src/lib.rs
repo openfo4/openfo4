@@ -15,7 +15,7 @@ use openfo4_pex::{Class, Module};
 pub type NativeFuncPtr =
     unsafe extern "C" fn(*const runtime::HostState, usize, *mut runtime::RawVal);
 
-use crate::compiler::{CompilationResult, Context, NativeFunction};
+use crate::compiler::{ClassFieldLayout, CompilationResult, Context, NativeFunction};
 use crate::runtime::{Func, HostState, IntoFunc, NativeFnPtr, call_host_trampoline};
 
 #[derive(Clone, Debug)]
@@ -152,6 +152,14 @@ impl Instance {
         let (_, func) = self.functions.get(&name.to_lowercase())?;
         Some(func)
     }
+
+    pub fn fields(&self) -> &[ClassFieldLayout] {
+        self.functions
+            .iter()
+            .next()
+            .map(|v| &v.1.0.class_fields)
+            .unwrap()
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -169,4 +177,11 @@ impl ScriptInstance {
             stack_size: res.stack_size,
         })
     }
+}
+
+#[derive(Clone, Debug)]
+pub struct InstanceField {
+    pub class: String,
+    pub name: String,
+    pub offset: usize,
 }

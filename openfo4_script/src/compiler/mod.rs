@@ -1,6 +1,9 @@
 mod codegen;
 mod validation;
 
+use std::collections::HashMap;
+use std::str::SplitTerminator;
+
 use openfo4_jit::{CompiledFunction, Signature};
 use openfo4_pex::Module;
 use thiserror::Error;
@@ -61,4 +64,12 @@ pub struct NativeFunction {
 pub struct CompilationResult {
     pub function: CompiledFunction,
     pub stack_size: usize,
+    pub class_fields: Vec<ClassFieldLayout>,
+}
+
+#[derive(Clone, Debug)]
+pub struct ClassFieldLayout {
+    pub class: String,
+    pub name: String,
+    pub offset: usize,
 }

@@ -6,14 +6,15 @@ mod types;
 
 use std::collections::{HashMap, HashSet};
 
-use openfo4_jit::{CompiledFunction, Compiler, FunctionId, Signature, Type as JitType};
+use openfo4_jit::{Compiler, FunctionId, Signature, Type as JitType};
 use openfo4_pex::{Function, Instruction, Module, Struct, Value};
 use thiserror::Error;
 
 use crate::compiler::codegen::function::FunctionResult;
 use crate::compiler::codegen::function_props::{FunctionProps, function_properties};
+use crate::compiler::codegen::layout::ClassLayout;
 use crate::compiler::codegen::types::Types;
-use crate::compiler::{CompilationResult, NativeFunction};
+use crate::compiler::{ClassFieldLayout, CompilationResult, NativeFunction};
 
 pub const MAX_INSTRUCTIONS_BEFORE_PREEMPT: usize = 1024;
 
@@ -78,6 +79,7 @@ impl CodegenPass {
                     parent,
                     fields,
                     type_id: self.next_type_id,
+                    layout: None,
                 },
             );
             dbg!(self.next_type_id, &class.name);
@@ -91,7 +93,41 @@ impl CodegenPass {
         func_def.native = Some(func);
     }
 
+    pub fn compute_type_layouts(&mut self) {
+        let mut queue = Vec::new();
+        let mut dependencies = HashMap::<_, Vec<_>>::new();
+
+        for class in self.data.classes.values() {
+            let Some(parent) = &class.parent else {
+                queue.push(class.name.to_lowercase());
+                continue;
+            };
+
+            dependencies
+                .entry(parent.to_lowercase())
+                .or_default()
+                .push(class.name.to_lowercase());
+        }
+
+        while let Some(class_name) = queue.pop() {
+            let class = self.data.classes.get(&class_name.to_lowercase()).unwrap();
+            let layout = layout::compute_class_layout(&self.data, &class);
+            let class = self
+                .data
+                .classes
+                .get_mut(&class_name.to_lowercase())
+                .unwrap();
+            class.layout = Some(layout);
+
+            if let Some(children) = dependencies.remove(&class_name) {
+                queue.extend(children);
+            }
+        }
+    }
+
     pub fn compile_fn(&mut self, class: &str, f: &str) -> Result<CompilationResult, Error> {
+        self.compute_type_layouts();
+
         let mut compiler = Compiler::new();
 
         // The compile the function we must also compile all functions that
@@ -156,6 +192,23 @@ impl CodegenPass {
             dependencies.insert((class, function), depends_on);
         }
 
+        let mut class_fields = Vec::new();
+        let mut next_class = Some(class);
+        while let Some(class_name) = next_class.take() {
+            let class = self.data.get_class(class_name).unwrap();
+            let layout = class.layout.as_ref().unwrap();
+
+            for (field_name, field_offset) in &layout.field_offsets {
+                class_fields.push(ClassFieldLayout {
+                    class: class_name.to_lowercase(),
+                    name: field_name.to_lowercase(),
+                    offset: *field_offset,
+                });
+            }
+
+            next_class = class.parent.as_ref().map(|v| v.as_str());
+        }
+
         let def = self.data.get_function_mut(class, &f).unwrap();
 
         if def.trampoline_func_id.is_none() {
@@ -172,6 +225,7 @@ impl CodegenPass {
         Ok(CompilationResult {
             function: compiler.compile_function(def.trampoline_func_id.unwrap()),
             stack_size: props.stack_size,
+            class_fields,
         })
     }
 
@@ -263,6 +317,10 @@ impl CodegenData {
         }
     }
 
+    fn get_class(&self, class: &str) -> Option<&ClassDef> {
+        self.classes.get(&class.to_lowercase())
+    }
+
     fn get_function(&self, class: &str, func: &str) -> Option<&FunctionDef> {
         let class = get_parent_class_with_function(&self.classes, class, func)?;
         self.classes
@@ -288,6 +346,7 @@ struct ClassDef {
     fields: HashMap<String, String>,
     /// Unique RTTI number stored in the header to identify objects of this class.
     type_id: usize,
+    layout: Option<ClassLayout>,
 }
 
 #[derive(Clone, Debug)]

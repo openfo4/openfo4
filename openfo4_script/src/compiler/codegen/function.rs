@@ -633,8 +633,13 @@ impl<'a> FunctionTranslator<'a> {
         }
 
         if let Some(field) = self.fields.get(&name.to_lowercase()) {
-            // TODO
-            return self.builder.iconst(field.ty, 0);
+            let class = self.data.get_class(&self.self_ty).unwrap();
+            let layout = class.layout.as_ref().unwrap();
+
+            let offset = layout.offset(&name).unwrap();
+            return self
+                .builder
+                .load(field.ty, self.self_ptr.unwrap(), offset as u32);
         }
 
         panic!("undefined variable {}", name);
@@ -649,12 +654,28 @@ impl<'a> FunctionTranslator<'a> {
     }
 
     fn store_var(&mut self, name: &str, value: JitValue) {
+        if name.to_lowercase() == "::state" {
+            // TODO
+            return;
+        }
+
         if let Some(local) = self.locals.get(&name.to_lowercase()) {
             self.builder.set_var(local.variable, value);
             return;
         }
 
-        // TODO
+        if let Some(_) = self.fields.get(&name.to_lowercase()) {
+            let class = self.data.get_class(&self.self_ty).unwrap();
+            let layout = class.layout.as_ref().unwrap();
+
+            let offset = layout.offset(&name).unwrap();
+            self.builder
+                .store(value, self.self_ptr.unwrap(), offset as u32);
+
+            return;
+        }
+
+        panic!("undefiend variable {}", name);
     }
 
     fn get_type(&self, value: &Value) -> Type {
