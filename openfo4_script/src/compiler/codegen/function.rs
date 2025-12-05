@@ -6,6 +6,7 @@ use openfo4_jit::{
 };
 use openfo4_pex::{Function, Instruction, Value};
 
+use crate::compiler::codegen::builtin::call_builtin;
 use crate::compiler::codegen::function_props::{
     FunctionProps, Stage, StageVariable, function_properties,
 };
@@ -465,6 +466,9 @@ fn translate_function_body(
                     _ => unreachable!(),
                 };
 
+                let class_name = class_name.to_lowercase();
+                let function_name = function_name.to_lowercase();
+
                 let mut args = op
                     .args
                     .iter()
@@ -474,78 +478,36 @@ fn translate_function_body(
                 // For some functions we can provide better directly translated
                 // implementations. This avoid the need to go through guest->host->guest
                 // shim and provides the optimizer more freedom.
-                let returns = match (&*class_name.to_lowercase(), &*function_name.to_lowercase()) {
-                    // Math Script
-                    // Math.abs(float) -> float
-                    ("math", "abs") => {
-                        let src = args[0];
-                        let res = translator.builder.fabs(src);
-                        vec![res]
-                    }
-                    // Math.Floor(float) -> float
-                    ("math", "floor") => {
-                        let src = args[0];
-                        let res = translator.builder.floor(src);
-                        vec![res]
-                    }
-                    // Math.Ceiling(float) -> float
-                    ("math", "ceiling") => {
-                        let src = args[0];
-                        let res = translator.builder.ceil(src);
-                        vec![res]
-                    }
-                    // Math.DegreesToRadians(float) -> float
-                    ("math", "degreestoradians") => {
-                        // See f32::to_radians
-                        const RADS_PER_DEG: f32 = core::f32::consts::PI / 180.0;
+                let returns =
+                    match call_builtin(&mut translator, &class_name, &function_name, &args) {
+                        Some(res) => res,
+                        None => {
+                            let func = data.get_function(&class_name, &function_name).unwrap();
 
-                        let lhs = args[0];
-                        let rhs = translator.builder.fconst(JitType::F32, RADS_PER_DEG);
-                        let res = translator.builder.fmul(lhs, rhs);
-                        vec![res]
-                    }
-                    // Math.RadiansToDegrees(float) -> float
-                    ("math", "radianstodegrees") => {
-                        // See f32::to_degrees
-                        const PIS_IN_180: f32 = 57.2957795130823208767981548141051703_f32;
+                            args.insert(0, ctx_ptr);
 
-                        let lhs = args[0];
-                        let rhs = translator.builder.fconst(JitType::F32, PIS_IN_180);
-                        let res = translator.builder.fmul(lhs, rhs);
-                        vec![res]
-                    }
-                    // Form Script
-                    // Not implemented by us.
-                    ("form", "startobjectprofiling") => Vec::new(),
-                    // Not implemented by us.
-                    ("form", "stopobjectprofiling") => Vec::new(),
-                    (class_name, function_name) => {
-                        let func = data.get_function(class_name, function_name).unwrap();
+                            let stage = &props.stages[next_stage];
+                            next_stage += 1;
 
-                        args.insert(0, ctx_ptr);
+                            let res = if let Some(res) = perform_checked_call(
+                                &mut translator,
+                                function,
+                                func,
+                                &args,
+                                &mut current_block,
+                                stage,
+                                ctx_ptr,
+                                stack_base,
+                            ) {
+                                translator.store(&op.return_assignment, res);
+                                vec![res]
+                            } else {
+                                vec![]
+                            };
 
-                        let stage = &props.stages[next_stage];
-                        next_stage += 1;
-
-                        let res = if let Some(res) = perform_checked_call(
-                            &mut translator,
-                            function,
-                            func,
-                            &args,
-                            &mut current_block,
-                            stage,
-                            ctx_ptr,
-                            stack_base,
-                        ) {
-                            translator.store(&op.return_assignment, res);
-                            vec![res]
-                        } else {
-                            vec![]
-                        };
-
-                        res
-                    }
-                };
+                            res
+                        }
+                    };
 
                 if let Some(res) = returns.get(0).copied() {
                     translator.store(&op.return_assignment, res);
@@ -594,9 +556,9 @@ fn translate_function_body(
     translator.builder.finalize();
 }
 
-struct FunctionTranslator<'a> {
+pub struct FunctionTranslator<'a> {
     data: &'a CodegenData,
-    builder: FunctionBuilder<'a>,
+    pub builder: FunctionBuilder<'a>,
     locals: HashMap<String, Local>,
     fields: HashMap<String, Field>,
     self_ptr: Option<JitValue>,
@@ -604,7 +566,7 @@ struct FunctionTranslator<'a> {
 }
 
 impl<'a> FunctionTranslator<'a> {
-    fn load(&mut self, value: &Value) -> JitValue {
+    pub fn load(&mut self, value: &Value) -> JitValue {
         match value {
             Value::Null => self.builder.iconst(JitType::I32, 0),
             Value::Bool(value) => self.builder.iconst(JitType::I32, u8::from(*value)),
@@ -616,7 +578,7 @@ impl<'a> FunctionTranslator<'a> {
         }
     }
 
-    fn load_var(&mut self, name: &str) -> JitValue {
+    pub fn load_var(&mut self, name: &str) -> JitValue {
         let name = name.to_lowercase();
 
         if name == "self" {
@@ -645,7 +607,7 @@ impl<'a> FunctionTranslator<'a> {
         panic!("undefined variable {}", name);
     }
 
-    fn store(&mut self, slot: &Value, value: JitValue) {
+    pub fn store(&mut self, slot: &Value, value: JitValue) {
         let Value::Ident(name) = slot else {
             return;
         };
@@ -653,7 +615,7 @@ impl<'a> FunctionTranslator<'a> {
         self.store_var(name, value);
     }
 
-    fn store_var(&mut self, name: &str, value: JitValue) {
+    pub fn store_var(&mut self, name: &str, value: JitValue) {
         if name.to_lowercase() == "::state" {
             // TODO
             return;
@@ -678,7 +640,7 @@ impl<'a> FunctionTranslator<'a> {
         panic!("undefiend variable {}", name);
     }
 
-    fn get_type(&self, value: &Value) -> Type {
+    pub fn get_type(&self, value: &Value) -> Type {
         match value {
             Value::Null => Type::None,
             Value::Bool(_) => Type::Bool,
