@@ -14,7 +14,7 @@ use crate::compiler::codegen::function::FunctionResult;
 use crate::compiler::codegen::function_props::{FunctionProps, function_properties};
 use crate::compiler::codegen::layout::ClassLayout;
 use crate::compiler::codegen::types::Types;
-use crate::compiler::{ClassFieldLayout, CompilationResult, NativeFunction};
+use crate::compiler::{ClassFieldLayout, CompilationResult, FieldType, NativeFunction};
 
 pub const MAX_INSTRUCTIONS_BEFORE_PREEMPT: usize = 1024;
 
@@ -68,7 +68,8 @@ impl CodegenPass {
             }
 
             for st in &class.structs {
-                self.data.structs.insert(st.name.to_lowercase(), st.clone());
+                let name = format!("{}#{}", class.name, st.name);
+                self.data.structs.insert(name.to_lowercase(), st.clone());
             }
 
             self.data.classes.insert(
@@ -82,7 +83,6 @@ impl CodegenPass {
                     layout: None,
                 },
             );
-            dbg!(self.next_type_id, &class.name);
             self.next_type_id += 1;
         }
     }
@@ -192,21 +192,34 @@ impl CodegenPass {
             dependencies.insert((class, function), depends_on);
         }
 
-        let mut class_fields = Vec::new();
-        let mut next_class = Some(class);
-        while let Some(class_name) = next_class.take() {
-            let class = self.data.get_class(class_name).unwrap();
-            let layout = class.layout.as_ref().unwrap();
+        let mut class_layouts = HashMap::new();
+        for class in self.data.classes.values() {
+            let mut class_fields = Vec::new();
+            let mut next_class = Some(&class.name);
+            while let Some(class_name) = next_class.take() {
+                let class = self.data.get_class(class_name).unwrap();
+                let layout = class.layout.as_ref().unwrap();
 
-            for (field_name, field_offset) in &layout.field_offsets {
-                class_fields.push(ClassFieldLayout {
-                    class: class_name.to_lowercase(),
-                    name: field_name.to_lowercase(),
-                    offset: *field_offset,
-                });
+                for (field_name, field_offset) in &layout.field_offsets {
+                    let field_ty = self.data.resolve_ty(&class.fields.get(field_name).unwrap());
+
+                    class_fields.push(ClassFieldLayout {
+                        class: class_name.to_lowercase(),
+                        name: field_name.to_lowercase(),
+                        offset: *field_offset,
+                        ty: match field_ty {
+                            Type::Bool => FieldType::Bool,
+                            Type::Int => FieldType::I32,
+                            Type::Float => FieldType::F32,
+                            _ => FieldType::Pointer,
+                        },
+                    });
+                }
+
+                next_class = class.parent.as_ref();
             }
 
-            next_class = class.parent.as_ref().map(|v| v.as_str());
+            class_layouts.insert(class.name.to_lowercase(), class_fields);
         }
 
         let def = self.data.get_function_mut(class, &f).unwrap();
@@ -225,7 +238,7 @@ impl CodegenPass {
         Ok(CompilationResult {
             function: compiler.compile_function(def.trampoline_func_id.unwrap()),
             stack_size: props.stack_size,
-            class_fields,
+            class_layouts,
         })
     }
 

@@ -64,7 +64,7 @@ pub struct NativeFunction {
 pub struct CompilationResult {
     pub function: CompiledFunction,
     pub stack_size: usize,
-    pub class_fields: Vec<ClassFieldLayout>,
+    pub class_layouts: HashMap<String, Vec<ClassFieldLayout>>,
 }
 
 #[derive(Clone, Debug)]
@@ -72,4 +72,14 @@ pub struct ClassFieldLayout {
     pub class: String,
     pub name: String,
     pub offset: usize,
+    pub ty: FieldType,
+}
+
+#[derive(Clone, Debug)]
+pub enum FieldType {
+    Bool,
+    I32,
+    F32,
+    String,
+    Pointer,
 }

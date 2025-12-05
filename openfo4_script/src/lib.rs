@@ -28,6 +28,7 @@ pub enum Error {
 pub struct Engine {
     registry: Registry,
     shared: Arc<EngineShared>,
+    layouts: HashMap<String, Vec<ClassFieldLayout>>,
 }
 
 impl Engine {
@@ -35,6 +36,7 @@ impl Engine {
         Self {
             registry: Registry::new(),
             shared: Arc::new(EngineShared::default()),
+            layouts: HashMap::new(),
         }
     }
 
@@ -70,7 +72,19 @@ impl Engine {
     }
 
     pub fn compile(&mut self, class: &str) -> Instance {
-        self.registry.compile(self.shared.clone(), class).unwrap()
+        let instance = self.registry.compile(self.shared.clone(), class).unwrap();
+
+        for (_, (f, _)) in &instance.functions {
+            self.layouts.extend(f.class_layouts.clone());
+        }
+
+        instance
+    }
+
+    pub fn get_class_layout(&self, class: &str) -> Option<&[ClassFieldLayout]> {
+        self.layouts
+            .get(&class.to_lowercase())
+            .map(|v| v.as_slice())
     }
 }
 
@@ -151,14 +165,6 @@ impl Instance {
     pub fn get_func(&self, name: &str) -> Option<&Func> {
         let (_, func) = self.functions.get(&name.to_lowercase())?;
         Some(func)
-    }
-
-    pub fn fields(&self) -> &[ClassFieldLayout] {
-        self.functions
-            .iter()
-            .next()
-            .map(|v| &v.1.0.class_fields)
-            .unwrap()
     }
 }
 
