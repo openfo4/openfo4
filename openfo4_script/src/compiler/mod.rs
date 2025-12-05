@@ -3,6 +3,7 @@ mod validation;
 
 use std::collections::HashMap;
 use std::str::SplitTerminator;
+use std::sync::Arc;
 
 use openfo4_jit::{CompiledFunction, Signature};
 use openfo4_pex::Module;
@@ -64,11 +65,34 @@ pub struct NativeFunction {
 pub struct CompilationResult {
     pub function: CompiledFunction,
     pub stack_size: usize,
-    pub class_layouts: HashMap<String, Vec<ClassFieldLayout>>,
+    pub layouts: HashMap<String, TypeLayout>,
 }
 
 #[derive(Clone, Debug)]
-pub struct ClassFieldLayout {
+pub struct TypeLayout {
+    pub header: Option<Arc<[usize]>>,
+    pub fields: Vec<ObjectField>,
+}
+
+impl TypeLayout {
+    /// Returns the size in bytes required for the object.
+    pub fn size(&self) -> usize {
+        let mut size = if self.header.is_some() {
+            FieldType::Pointer.size()
+        } else {
+            0
+        };
+
+        for field in &self.fields {
+            size = size.max(field.offset + field.ty.size());
+        }
+
+        size
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct ObjectField {
     pub class: String,
     pub name: String,
     pub offset: usize,
@@ -82,4 +106,15 @@ pub enum FieldType {
     F32,
     String,
     Pointer,
+}
+
+impl FieldType {
+    pub fn size(&self) -> usize {
+        match self {
+            Self::Bool => 4,
+            Self::I32 => 4,
+            Self::F32 => 4,
+            Self::String | Self::Pointer => 8,
+        }
+    }
 }

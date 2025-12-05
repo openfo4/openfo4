@@ -6,6 +6,7 @@ mod trampoline;
 mod types;
 
 use std::collections::{HashMap, HashSet};
+use std::sync::Arc;
 
 use openfo4_jit::{Compiler, FunctionId, Signature, Type as JitType};
 use openfo4_pex::{Function, Instruction, Module, Struct, Value};
@@ -15,7 +16,7 @@ use crate::compiler::codegen::function::FunctionResult;
 use crate::compiler::codegen::function_props::{FunctionProps, function_properties};
 use crate::compiler::codegen::layout::ClassLayout;
 use crate::compiler::codegen::types::Types;
-use crate::compiler::{ClassFieldLayout, CompilationResult, FieldType, NativeFunction};
+use crate::compiler::{CompilationResult, FieldType, NativeFunction, ObjectField, TypeLayout};
 
 pub const MAX_INSTRUCTIONS_BEFORE_PREEMPT: usize = 1024;
 
@@ -82,6 +83,7 @@ impl CodegenPass {
                     fields,
                     type_id: self.next_type_id,
                     layout: None,
+                    header: None,
                 },
             );
             self.next_type_id += 1;
@@ -123,6 +125,36 @@ impl CodegenPass {
             if let Some(children) = dependencies.remove(&class_name) {
                 queue.extend(children);
             }
+        }
+
+        let mut class_headers = Vec::new();
+
+        // Create class header
+        for class in self.data.classes.values() {
+            if class.header.is_some() {
+                continue;
+            }
+
+            let mut type_ids = Vec::new();
+
+            let mut next_class = Some(&class.name);
+            while let Some(class_name) = next_class {
+                let class = self.data.get_class(class_name).unwrap();
+                type_ids.push(class.type_id);
+                next_class = class.parent.as_ref();
+            }
+
+            type_ids.push(type_ids.len());
+            // Reverse such that the root class ID is at the start and the leaf is at the bottom.
+            type_ids.reverse();
+
+            let header: Arc<[usize]> = type_ids.into_boxed_slice().into();
+            class_headers.push((class.name.clone(), header));
+        }
+
+        for (class, header) in class_headers {
+            let class = self.data.classes.get_mut(&class.to_lowercase()).unwrap();
+            class.header = Some(header);
         }
     }
 
@@ -204,7 +236,7 @@ impl CodegenPass {
                 for (field_name, field_offset) in &layout.field_offsets {
                     let field_ty = self.data.resolve_ty(&class.fields.get(field_name).unwrap());
 
-                    class_fields.push(ClassFieldLayout {
+                    class_fields.push(ObjectField {
                         class: class_name.to_lowercase(),
                         name: field_name.to_lowercase(),
                         offset: *field_offset,
@@ -220,7 +252,13 @@ impl CodegenPass {
                 next_class = class.parent.as_ref();
             }
 
-            class_layouts.insert(class.name.to_lowercase(), class_fields);
+            class_layouts.insert(
+                class.name.to_lowercase(),
+                TypeLayout {
+                    header: class.header.clone(),
+                    fields: class_fields,
+                },
+            );
         }
 
         let def = self.data.get_function_mut(class, &f).unwrap();
@@ -239,7 +277,7 @@ impl CodegenPass {
         Ok(CompilationResult {
             function: compiler.compile_function(def.trampoline_func_id.unwrap()),
             stack_size: props.stack_size,
-            class_layouts,
+            layouts: class_layouts,
         })
     }
 
@@ -361,6 +399,7 @@ struct ClassDef {
     /// Unique RTTI number stored in the header to identify objects of this class.
     type_id: usize,
     layout: Option<ClassLayout>,
+    header: Option<Arc<[usize]>>,
 }
 
 #[derive(Clone, Debug)]

@@ -15,7 +15,7 @@ use openfo4_pex::{Class, Module};
 pub type NativeFuncPtr =
     unsafe extern "C" fn(*const runtime::HostState, usize, *mut runtime::RawVal);
 
-use crate::compiler::{ClassFieldLayout, CompilationResult, Context, NativeFunction};
+use crate::compiler::{CompilationResult, Context, NativeFunction, TypeLayout};
 use crate::runtime::{Func, HostState, IntoFunc, NativeFnPtr, call_host_trampoline};
 
 #[derive(Clone, Debug)]
@@ -28,7 +28,7 @@ pub enum Error {
 pub struct Engine {
     registry: Registry,
     shared: Arc<EngineShared>,
-    layouts: HashMap<String, Vec<ClassFieldLayout>>,
+    layouts: HashMap<String, TypeLayout>,
 }
 
 impl Engine {
@@ -75,16 +75,14 @@ impl Engine {
         let instance = self.registry.compile(self.shared.clone(), class).unwrap();
 
         for (_, (f, _)) in &instance.functions {
-            self.layouts.extend(f.class_layouts.clone());
+            self.layouts.extend(f.layouts.clone());
         }
 
         instance
     }
 
-    pub fn get_class_layout(&self, class: &str) -> Option<&[ClassFieldLayout]> {
-        self.layouts
-            .get(&class.to_lowercase())
-            .map(|v| v.as_slice())
+    pub fn get_class_layout(&self, class: &str) -> Option<&TypeLayout> {
+        self.layouts.get(&class.to_lowercase())
     }
 }
 

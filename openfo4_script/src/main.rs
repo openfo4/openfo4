@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use openfo4_script::runtime::{Caller, Context, RawVal, Stack};
+use openfo4_script::runtime::{Caller, Context, Object, RawVal, Stack};
 use openfo4_script::{Engine, Registry, classes};
 
 fn main() {
@@ -109,6 +109,9 @@ fn main() {
     let instance = engine.compile("YoureSPECIALscript");
     // let instance = engine.compile("CastleArtilleryScrapScript");
 
+    dbg!(engine.get_class_layout("YoureSPECIALscript"));
+    // dbg!(engine.get_class_layout("CastleArtilleryScrapScript"));
+
     let func = instance.get_func("onactivate").unwrap();
     // // dbg!(&func);
 
@@ -117,10 +120,18 @@ fn main() {
 
     let typed = func.typed::<(isize, isize), ()>().unwrap();
 
-    let header: [usize; 3] = [3_usize, 709_usize, 69_usize];
-    let object = &header as *const usize;
-    let object_ptr = &object as *const *const usize;
+    let layout = engine.get_class_layout("YoureSpecialScript").unwrap();
 
+    let mut object = Object::new(layout.clone());
+    dbg!(object.set("::hasbeenread_var", 0));
+    let object_ptr = object.as_ptr();
+
+    // let mut header = vec![0_usize; 256];
+    // header[..3].copy_from_slice(&[3_usize, 709_usize, 69_usize]);
+    // let object = header.as_ptr();
+    // let object_ptr = &object as *const *const usize;
+
+    dbg!(object_ptr);
     dbg!(object_ptr as isize);
 
     let res = typed.call(&mut ctx, (object_ptr as isize, object_ptr as isize));
@@ -128,7 +139,7 @@ fn main() {
 
     dbg!(ctx.stack());
 
-    let res = typed.call(&mut ctx, (0, 0));
+    let res = typed.call(&mut ctx, (object_ptr as isize, 0));
     dbg!(&res);
 
     println!("exit");

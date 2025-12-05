@@ -6,9 +6,10 @@ use std::marker::PhantomData;
 use std::mem::{MaybeUninit, transmute};
 use std::sync::Arc;
 
-use openfo4_jit::{CompiledFunction, Signature, Type};
+use openfo4_jit::{Signature, Type};
 use thiserror::Error;
 
+pub use object::Object;
 pub use stack::Stack;
 
 use crate::compiler::CompilationResult;
