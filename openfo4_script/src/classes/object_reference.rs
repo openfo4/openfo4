@@ -96,6 +96,7 @@ pub fn get_base_value(
     self_ptr: Object,
     actor_value: Object,
 ) -> Result<Float, Exception> {
+    dbg!(&self_ptr);
     todo!()
 }
 

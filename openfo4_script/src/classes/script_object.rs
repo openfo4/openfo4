@@ -23,17 +23,6 @@ pub fn start_timer_game_time(
     interval: Float,
     timer_id: Int,
 ) {
-    let mut objects = caller.data().objects.write().unwrap();
-    let Some(state) = objects.get_mut(&object) else {
-        return;
-    };
-
-    let interval = Duration::from_secs_f32(interval);
-    state
-        .timers
-        .entry(timer_id)
-        .or_default()
-        .push(Timer::GameTime(interval));
 }
 
 /// `CancelTimerGameTime`

@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 
-use openfo4_script::runtime::{Caller, Context, Object, RawVal, Stack};
+use openfo4_script::classes::State;
+use openfo4_script::runtime::{Caller, Context, Object, ObjectPool, RawVal, Stack};
 use openfo4_script::{Engine, Registry, classes};
 
 fn main() {
@@ -116,23 +117,27 @@ fn main() {
     // // dbg!(&func);
 
     dbg!(func.stack_size());
-    let mut ctx = Context::new(&engine, Stack::new(func.stack_size), ());
 
     let typed = func.typed::<(isize, isize), ()>().unwrap();
 
     let layout = engine.get_class_layout("YoureSpecialScript").unwrap();
 
-    let mut object = Object::new(layout.clone());
-    dbg!(object.set("::hasbeenread_var", 0));
-    let object_ptr = object.as_ptr();
-
     // let mut header = vec![0_usize; 256];
     // header[..3].copy_from_slice(&[3_usize, 709_usize, 69_usize]);
     // let object = header.as_ptr();
     // let object_ptr = &object as *const *const usize;
+    //
+    let mut pool = ObjectPool::default();
+    let (_, player_ref) = pool.insert(engine.get_class_layout("Actor").unwrap().clone());
 
-    dbg!(object_ptr);
-    dbg!(object_ptr as isize);
+    dbg!(player_ref.addr());
+
+    let (object, object_ref) = pool.insert(layout.clone());
+
+    let state = State { player: player_ref };
+    let mut ctx = Context::new(&engine, Stack::new(func.stack_size), state);
+
+    let object_ptr = object.as_ptr() as usize;
 
     let res = typed.call(&mut ctx, (object_ptr as isize, object_ptr as isize));
     dbg!(&res);

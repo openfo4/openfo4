@@ -4,6 +4,7 @@ use std::sync::RwLock;
 use std::time::Duration;
 
 use crate::Engine;
+use crate::runtime::ObjectRef;
 
 mod actor;
 mod form;
@@ -156,7 +157,7 @@ pub fn register_builtins(engine: &mut Engine) {
 }
 
 pub struct State {
-    objects: RwLock<HashMap<Object, ObjectData>>,
+    pub player: ObjectRef,
 }
 
 pub struct ObjectData {

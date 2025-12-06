@@ -1,7 +1,7 @@
 mod object;
 mod stack;
 
-use std::any::Any;
+use std::any::{Any, TypeId};
 use std::marker::PhantomData;
 use std::mem::{MaybeUninit, transmute};
 use std::sync::Arc;
@@ -9,7 +9,7 @@ use std::sync::Arc;
 use openfo4_jit::{Signature, Type};
 use thiserror::Error;
 
-pub use object::Object;
+pub use object::{Object, ObjectAddr, ObjectPool, ObjectRef};
 pub use stack::Stack;
 
 use crate::compiler::CompilationResult;
@@ -47,6 +47,10 @@ impl<T> Context<T> {
     pub fn stack(&self) -> &Stack {
         &self.stack
     }
+
+    pub fn data_mut(&mut self) -> &mut T {
+        &mut self.data
+    }
 }
 
 // The stack pointer must be at offset 0.
@@ -55,6 +59,7 @@ impl<T> Context<T> {
 pub struct RawContext {
     pub stack: *mut u8,
     pub state: *const HostState,
+    pub data: *const dyn Any,
 }
 
 #[derive(Copy, Clone)]
@@ -98,13 +103,17 @@ impl Func {
 
     pub fn call(&self) {}
 
-    pub unsafe fn call_unchecked<T>(&self, ctx: &mut Context<T>, values: *mut RawVal) {
+    pub unsafe fn call_unchecked<T>(&self, ctx: &mut Context<T>, values: *mut RawVal)
+    where
+        T: 'static,
+    {
         let _lock = ctx.engine.state_lock.read();
         let state = unsafe { ctx.engine.state.borrow() };
 
         let ctx = RawContext {
             stack: ctx.stack.as_ptr(),
             state: &*state,
+            data: &ctx.data as *const dyn Any,
         };
 
         unsafe {
@@ -156,8 +165,10 @@ where
     Params: NativeTuple,
     Returns: NativeTuple,
 {
-    pub fn call<T>(&self, ctx: &mut Context<T>, params: Params) -> Result<Returns, Exception> {
-        dbg!(Params::SIZE, Returns::SIZE);
+    pub fn call<T>(&self, ctx: &mut Context<T>, params: Params) -> Result<Returns, Exception>
+    where
+        T: 'static,
+    {
         // TODO: When const_generics is stabilized we can avoid the heap allocation
         // and use a regular array.
         let mut values = vec![MaybeUninit::<RawVal>::uninit(); Params::SIZE + Returns::SIZE + 1];
@@ -210,8 +221,7 @@ where
 
 impl<'a, T> Caller<'a, T> {
     pub fn data(&self) -> &T {
-        let state = unsafe { &*self.ctx.state };
-        state.data.as_ref().unwrap().downcast_ref::<T>().unwrap()
+        unsafe { &*self.ctx.data }.downcast_ref().unwrap()
     }
 }
 
@@ -427,6 +437,18 @@ unsafe impl NativeType for bool {
 
     fn to_raw(self) -> RawVal {
         (self as i32).to_raw()
+    }
+}
+
+unsafe impl NativeType for ObjectAddr {
+    const TYPE: Type = Type::Pointer;
+
+    unsafe fn from_raw(val: &RawVal) -> Self {
+        Self::from_raw(unsafe { <isize as NativeType>::from_raw(val) } as usize)
+    }
+
+    fn to_raw(self) -> RawVal {
+        (self.to_raw() as isize).to_raw()
     }
 }
 

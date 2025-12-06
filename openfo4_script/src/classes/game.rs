@@ -1,13 +1,13 @@
 use crate::classes::{Int, Object, State};
-use crate::runtime::{Caller, Exception};
+use crate::runtime::{Caller, Exception, ObjectAddr};
 
 /// `GetPlayer`
 ///
 /// ```text
 /// Actor Function GetPlayer() native global
 /// ```
-pub fn get_player(caller: Caller<'_, State>) -> Result<Object, Exception> {
-    todo!()
+pub fn get_player(caller: Caller<'_, State>) -> Result<ObjectAddr, Exception> {
+    Ok(caller.data().player.addr())
 }
 
 /// `GetForm`
