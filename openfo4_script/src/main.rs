@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use openfo4_script::classes::State;
+use openfo4_script::classes::{CoreActorValues, State};
 use openfo4_script::runtime::{Caller, Context, Object, ObjectPool, RawVal, Stack};
 use openfo4_script::{Engine, Registry, classes};
 
@@ -126,15 +126,38 @@ fn main() {
     // header[..3].copy_from_slice(&[3_usize, 709_usize, 69_usize]);
     // let object = header.as_ptr();
     // let object_ptr = &object as *const *const usize;
-    //
     let mut pool = ObjectPool::default();
-    let (_, player_ref) = pool.insert(engine.get_class_layout("Actor").unwrap().clone());
-
-    dbg!(player_ref.addr());
+    let (_, player) = pool.insert(engine.get_class_layout("Actor").unwrap().clone());
+    let (_, health) = pool.insert(engine.get_class_layout("ActorValue").unwrap().clone());
+    let (_, strength) = pool.insert(engine.get_class_layout("ActorValue").unwrap().clone());
+    let (_, perception) = pool.insert(engine.get_class_layout("ActorValue").unwrap().clone());
+    let (_, endurance) = pool.insert(engine.get_class_layout("ActorValue").unwrap().clone());
+    let (_, charisma) = pool.insert(engine.get_class_layout("ActorValue").unwrap().clone());
+    let (_, intelligence) = pool.insert(engine.get_class_layout("ActorValue").unwrap().clone());
+    let (_, agility) = pool.insert(engine.get_class_layout("ActorValue").unwrap().clone());
+    let (_, luck) = pool.insert(engine.get_class_layout("ActorValue").unwrap().clone());
+    let (_, aggression) = pool.insert(engine.get_class_layout("ActorValue").unwrap().clone());
+    let (_, confidence) = pool.insert(engine.get_class_layout("ActorValue").unwrap().clone());
+    let (_, suspicous) = pool.insert(engine.get_class_layout("ActorValue").unwrap().clone());
 
     let (object, object_ref) = pool.insert(layout.clone());
 
-    let state = State { player: player_ref };
+    let state = State {
+        player,
+        actor_values: CoreActorValues {
+            health,
+            strength,
+            perception,
+            endurance,
+            charisma,
+            intelligence,
+            agility,
+            luck,
+            aggression,
+            confidence,
+            suspicious: suspicous,
+        },
+    };
     let mut ctx = Context::new(&engine, Stack::new(func.stack_size), state);
 
     let object_ptr = object.as_ptr() as usize;

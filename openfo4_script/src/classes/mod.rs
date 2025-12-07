@@ -1,6 +1,4 @@
 use std::collections::HashMap;
-use std::f32::consts::E;
-use std::sync::RwLock;
 use std::time::Duration;
 
 use crate::Engine;
@@ -45,8 +43,21 @@ pub fn register_builtins(engine: &mut Engine) {
     engine.register_native_function("ObjectReference", "GetBaseObject", object_reference::get_base_object);
     engine.register_native_function("ObjectReference", "RemoveItem", object_reference::remove_item);
 
-    engine.register_native_function("Game", "GetPlayer", game::get_player);
+    engine.register_native_function("Game", "GetAggressionAV", game::get_agression_av);
+    engine.register_native_function("Game", "GetAgilityAV", game::get_agility_av);
+    engine.register_native_function("Game", "GetCharismaAV",  game::get_charisma_av);
+    engine.register_native_function("Game", "GetConfidenceAV", game::get_confidence_av);
+    engine.register_native_function("Game", "GetDifficulty", game::get_difficulty);
+    engine.register_native_function("Game", "GetEnduranceAV", game::get_endurance_av);
     engine.register_native_function("Game", "GetForm", game::get_form);
+    engine.register_native_function("Game", "GetFormFromFile", game::get_form_from_file);
+    engine.register_native_function("Game", "GetHealthAV", game::get_health_av);
+    engine.register_native_function("Game", "GetIntelligenceAV", game::get_intelligence_av);
+    engine.register_native_function("Game", "GetLuckAV", game::get_luck_av);
+    engine.register_native_function("Game", "GetPerceptionAV", game::get_perception_av);
+    engine.register_native_function("Game", "GetPlayer", game::get_player);
+    engine.register_native_function("Game", "GetSuspiciousAV", game::get_suspicious_av);
+    engine.register_native_function("Game", "GetStrengthAV", game::get_strength_av);
 
     engine.register_native_function("Message", "Show", message::show);
 
@@ -156,8 +167,27 @@ pub fn register_builtins(engine: &mut Engine) {
 
 }
 
+#[derive(Debug)]
 pub struct State {
     pub player: ObjectRef,
+    pub actor_values: CoreActorValues,
+}
+
+#[derive(Debug)]
+pub struct CoreActorValues {
+    pub health: ObjectRef,
+    // SPECIAL
+    pub strength: ObjectRef,
+    pub perception: ObjectRef,
+    pub endurance: ObjectRef,
+    pub charisma: ObjectRef,
+    pub intelligence: ObjectRef,
+    pub agility: ObjectRef,
+    pub luck: ObjectRef,
+    // AI
+    pub aggression: ObjectRef,
+    pub confidence: ObjectRef,
+    pub suspicious: ObjectRef,
 }
 
 pub struct ObjectData {
