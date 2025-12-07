@@ -107,6 +107,8 @@ impl Func {
     where
         T: 'static,
     {
+        assert!(ctx.stack.size() <= self.stack_size);
+
         let _lock = ctx.engine.state_lock.read();
         let state = unsafe { ctx.engine.state.borrow() };
 

@@ -10,6 +10,10 @@ impl Stack {
         }
     }
 
+    pub fn size(&self) -> usize {
+        self.memory.len()
+    }
+
     pub fn as_ptr(&mut self) -> *mut u8 {
         self.memory.as_mut_ptr()
     }
