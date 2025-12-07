@@ -2,6 +2,7 @@ mod behavior_reference_generator;
 mod blender_generator;
 mod bs_assign_variables_modifier;
 mod bs_cyclic_blend_transition_generator;
+mod bs_direct_at_modifier;
 mod bs_event_on_deactivate_modifier;
 mod bs_events_every_n_events_modifier;
 mod bs_is_active_modifier;
@@ -501,6 +502,8 @@ impl BuildNode for HkObject {
             Self::BSGetTimeStepModifier(node) => Ok(Vec::new()),
             Self::BSBoneSwitchGenerator(node) => Ok(Vec::new()),
             Self::DynamicAnimationTaggingGenerator(node) => node.dependencies(ctx),
+            Self::BSTweenerModifier(node) => Ok(Vec::new()),
+            Self::BSPassByTargetTriggerModifier(node) => Ok(Vec::new()),
             x => todo!("{:?}", x),
             _ => todo!(),
         }
@@ -552,6 +555,8 @@ impl BuildNode for HkObject {
             Self::BSGetTimeStepModifier(node) => Ok(None),
             Self::BSBoneSwitchGenerator(node) => Ok(None),
             Self::DynamicAnimationTaggingGenerator(node) => node.build(state),
+            Self::BSTweenerModifier(node) => Ok(None),
+            Self::BSPassByTargetTriggerModifier(node) => Ok(None),
             _ => todo!(),
         }
     }

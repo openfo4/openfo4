@@ -2091,3 +2091,45 @@ pub struct DynamicAnimationTaggingGenerator {
     // Offset: 144
     pub p_default_generator: Option<Ptr<Generator>>,
 }
+
+#[derive(Clone, Debug, HkStruct)]
+#[signature(0xe49602af)]
+pub struct BSPassByTargetTriggerModifier {
+    // Offset: 0
+    pub parent: Modifier,
+    // Offset: 96
+    pub target_position: Vec4,
+    // Offset: 112
+    pub radius: f32,
+    // Offset: 128
+    pub movement_direction: Vec4,
+    // Offset: 144
+    pub trigger_event: EventProperty,
+    // Offset: 160
+    pub target_passed: bool,
+}
+
+#[derive(Clone, Debug, HkStruct)]
+#[signature(0xfe0a9cb4)]
+pub struct BSTweenerModifier {
+    // Offset: 0
+    pub parent: Modifier,
+    // Offset: 88
+    pub tween_position: bool,
+    // Offset: 89
+    pub tween_rotation: bool,
+    // Offset: 90
+    pub use_tween_duration: bool,
+    // Offset: 92
+    pub tween_duration: f32,
+    // Offset: 96
+    pub target_position: Vec4,
+    // Offset: 112
+    pub target_rotation: Quat,
+    // Offset: 128
+    pub duration: f32,
+    // Offset: 144
+    pub start_transform: QsTransform,
+    // Offset: 192
+    pub time: f32,
+}

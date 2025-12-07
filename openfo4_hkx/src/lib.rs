@@ -54,7 +54,8 @@ use skeleton::{
 use thiserror::Error;
 
 use crate::behavior::{
-    BSBoneSwitchGenerator, BSBoneSwitchGeneratorData, BSRandomAlarmModifier, BSRootTwistModifier,
+    BSBoneSwitchGenerator, BSBoneSwitchGeneratorData, BSPassByTargetTriggerModifier,
+    BSRandomAlarmModifier, BSRootTwistModifier, BSTweenerModifier,
     DynamicAnimationTaggingGenerator,
 };
 use crate::mesh::{ConvexShape, DynamicCompoundShape};
@@ -729,6 +730,8 @@ enum ClassSignature {
     BSBoneSwitchGenerator,
     BSBoneSwitchGeneratorData,
     DynamicAnimationTaggingGenerator,
+    BSPassByTargetTriggerModifier,
+    BSTweenerModifier,
 }
 
 impl ClassSignature {
@@ -841,6 +844,8 @@ impl ClassSignature {
             (ConvexShape::ID, _) => Ok(Self::ConvexShape),
             (BSBoneSwitchGenerator::ID, _) => Ok(Self::BSBoneSwitchGenerator),
             (BSBoneSwitchGeneratorData::ID, _) => Ok(Self::BSBoneSwitchGeneratorData),
+            (BSPassByTargetTriggerModifier::ID, _) => Ok(Self::BSPassByTargetTriggerModifier),
+            (BSTweenerModifier::ID, _) => Ok(Self::BSTweenerModifier),
             _ => Err(Error {
                 kind: ErrorKind::UnknownClassName(
                     sig,
@@ -964,6 +969,8 @@ pub enum HkObject {
     BSBoneSwitchGenerator(BSBoneSwitchGenerator),
     BSBoneSwitchGeneratorData(BSBoneSwitchGeneratorData),
     DynamicAnimationTaggingGenerator(DynamicAnimationTaggingGenerator),
+    BSPassByTargetTriggerModifier(BSPassByTargetTriggerModifier),
+    BSTweenerModifier(BSTweenerModifier),
     Ignored,
 }
 
@@ -1242,6 +1249,13 @@ impl Decode for HkObject {
             ClassSignature::DynamicAnimationTaggingGenerator => {
                 DynamicAnimationTaggingGenerator::decode(reader)
                     .map(Self::DynamicAnimationTaggingGenerator)
+            }
+            ClassSignature::BSPassByTargetTriggerModifier => {
+                BSPassByTargetTriggerModifier::decode(reader)
+                    .map(Self::BSPassByTargetTriggerModifier)
+            }
+            ClassSignature::BSTweenerModifier => {
+                BSTweenerModifier::decode(reader).map(Self::BSTweenerModifier)
             }
         }
     }
