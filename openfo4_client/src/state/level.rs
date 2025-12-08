@@ -15,11 +15,11 @@ use openfo4_asset::AssetLoader;
 use openfo4_core::events::EventBus;
 use openfo4_core::hierarchy::Children;
 use openfo4_esp::records::Cell;
-use openfo4_esp::{FormId, RecordChildren, RecordData, RecordKind};
+use openfo4_esp::{FormId, RecordChildren, RecordData, RecordHeaderFlags, RecordKind};
 use tracing::instrument;
 
 use crate::cell::CellId;
-use crate::components::{NiTransform, Root};
+use crate::components::{NiTransform, Persistent, Root};
 use crate::events::{Event, UnloadCell};
 use crate::loader::FileLoader;
 use crate::shared::SharedState;
@@ -50,6 +50,28 @@ impl Level {
     ) -> Self {
         let (tx, rx) = async_channel::unbounded::<Request>();
         let events = Arc::new(SegQueue::new());
+
+        pool.spawn({
+            let asset_loader = asset_loader.clone();
+            let loader = loader.clone();
+            let pool = pool.clone();
+            let events = events.clone();
+            let shared = shared.clone();
+            let file_loader = file_loader.clone();
+
+            async move {
+                load_persistent(
+                    &asset_loader,
+                    &loader,
+                    &events,
+                    &pool,
+                    &file_loader,
+                    &shared,
+                    FormId(0x3c),
+                )
+                .await;
+            }
+        });
 
         pool.spawn({
             let events = events.clone();
@@ -115,7 +137,7 @@ impl Level {
             // In this case we must not spawn the new entity to prevent
             // duplicating entities when the cell gets loaded again.
             let cell = CellId::from(entity.transform);
-            if !self.cells_loaded.contains(&cell) {
+            if !self.cells_loaded.contains(&cell) && !entity.persistent {
                 continue;
             }
 
@@ -143,9 +165,13 @@ impl Level {
         let mut entities = Vec::new();
         let mut queue = Vec::new();
 
-        for (entity, (cell, children, _)) in
-            world.query_mut::<(&CellId, Option<&Children>, &Root)>()
+        for (entity, (cell, children, _, persistent)) in
+            world.query_mut::<(&CellId, Option<&Children>, &Root, Option<&Persistent>)>()
         {
+            if persistent.is_some() {
+                continue;
+            }
+
             if !self.cells_to_unload_next_tick.contains(cell) {
                 continue;
             }
@@ -219,6 +245,39 @@ async fn load_cells_task(
     }
 }
 
+#[instrument(skip_all)]
+async fn load_persistent(
+    asset_loader: &AssetLoader,
+    loader: &Arc<EspLoader>,
+    events: &Arc<SegQueue<SpawnEntity>>,
+    pool: &Arc<TaskPool>,
+    file_loader: &Arc<FileLoader>,
+    shared: &Arc<SharedState>,
+    worldspace: FormId,
+) {
+    let cells = loader
+        .children(RecordChildren::Cells, worldspace)
+        .await
+        .unwrap();
+
+    for record in cells {
+        if !record.flags.contains(RecordHeaderFlags::PERSISTENT) {
+            continue;
+        }
+
+        load_cell(
+            asset_loader,
+            loader,
+            events,
+            pool,
+            file_loader,
+            shared,
+            record.id,
+        )
+        .await;
+    }
+}
+
 async fn load_cell(
     asset_loader: &AssetLoader,
     loader: &Arc<EspLoader>,
@@ -272,7 +331,8 @@ async fn load_cell(
                 shared: &shared,
             };
 
-            if let Some(entity) = SpawnEntity::load(&ctx, &record).await {
+            if let Some(mut entity) = SpawnEntity::load(&ctx, &record).await {
+                entity.persistent = record.flags.contains(RecordHeaderFlags::PERSISTENT);
                 events.push(entity);
             }
         });

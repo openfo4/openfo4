@@ -10,7 +10,7 @@ use openfo4_esp::{Record, RecordData, RecordHeaderFlags};
 use openfo4_physics::components::{Collider, RigidBody};
 
 use crate::assets::nif_v2::{Instantiate, NIF_TO_METERS, NifScene};
-use crate::components::{NiTransform, Root};
+use crate::components::{NiTransform, Persistent, Root};
 use crate::render::RenderObject;
 use crate::state::level::LoadContext;
 use crate::state::level::terrain::load_land;
@@ -27,6 +27,7 @@ pub struct SpawnEntity {
     pub light: Option<PointLight>,
     pub light_flicker: Option<LightFlicker>,
     pub actor: Option<Actor>,
+    pub persistent: bool,
 }
 
 impl SpawnEntity {
@@ -42,6 +43,7 @@ impl SpawnEntity {
             light,
             light_flicker,
             actor,
+            persistent,
         } = self;
 
         // FIXME: Modify this such that both scene and actor are valid.
@@ -75,6 +77,10 @@ impl SpawnEntity {
 
         if let Some(light_flicker) = light_flicker {
             world.insert_one(entity, light_flicker).unwrap();
+        }
+
+        if persistent {
+            world.insert_one(entity, Persistent).unwrap();
         }
 
         world.insert_one(entity, Root).unwrap();

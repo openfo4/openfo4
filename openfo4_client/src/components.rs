@@ -73,3 +73,6 @@ pub struct Root;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Player;
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub struct Persistent;

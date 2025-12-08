@@ -67,6 +67,10 @@ pub fn mesh_skinning(world: &mut World, shared: &SharedState) {
             assert_eq!(positions.len(), skin.mesh_bone_indices.len());
             assert_eq!(positions.len(), skin.mesh_bone_weights.len());
 
+            if bone_matrices.is_empty() {
+                continue;
+            }
+
             for ((((pos, normal), tangent), indices), weights) in positions
                 .iter_mut()
                 .zip(&mut normals)
