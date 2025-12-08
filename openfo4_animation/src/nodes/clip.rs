@@ -25,8 +25,7 @@ impl GraphNode for Clip {
     where
         T: Context,
     {
-        // TODO: Remove this extra clone.
-        let Some(anim) = ctx.animations().get(&self.path).cloned() else {
+        let Some(anim) = ctx.animations().get(&self.path) else {
             return;
         };
 
@@ -56,6 +55,10 @@ impl GraphNode for Clip {
 
         let end_time = self.time;
 
+        // Defer `ctx.send_event` calls until any access of `anim` is done,
+        // so we don't have to clone due to borrows.
+        let mut events = Vec::new();
+
         for trigger in &self.triggers {
             let trigger_time = if trigger.from_end {
                 // We will clamp the time at 0, if the would go negative.
@@ -66,7 +69,7 @@ impl GraphNode for Clip {
 
             // Only activate the trigger if the time was reached in the current frame.
             if trigger_time > start_time && trigger_time <= end_time {
-                ctx.send_event(trigger.event.clone());
+                events.push(trigger.event.clone());
             }
         }
 
@@ -76,11 +79,15 @@ impl GraphNode for Clip {
                     continue;
                 };
 
-                ctx.send_event(Event {
+                events.push(Event {
                     id,
                     payload: Value::String(annotation.payload.clone()),
                 });
             }
+        }
+
+        for event in events {
+            ctx.send_event(event);
         }
     }
 }
