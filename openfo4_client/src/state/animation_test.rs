@@ -722,7 +722,7 @@ pub async fn load_behavior_data(
             match load_anim(&loader, &search_paths).await {
                 Ok(clip) => Some(clip),
                 Err(err) => {
-                    tracing::error!(
+                    tracing::warn!(
                         "failed to load animation {} in searched paths {}",
                         path,
                         search_paths.join(", ")
