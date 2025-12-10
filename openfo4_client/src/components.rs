@@ -3,6 +3,7 @@ use std::ops::{Mul, MulAssign};
 use game_common::components::Transform;
 use glam::{Quat, Vec3};
 use openfo4_core::transform::ConvertCoordinateSystem;
+use openfo4_esp::FormId;
 
 use crate::systems::camera::CameraMode;
 
@@ -76,3 +77,7 @@ pub struct Player;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Persistent;
+
+/// Indicates the worldspace that the entity is contained in.
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub struct WorldSpace(pub FormId);

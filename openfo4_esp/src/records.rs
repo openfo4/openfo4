@@ -4229,6 +4229,9 @@ pub struct PlacedObjectPrimitive {
 
 #[derive(Copy, Clone, Debug, BinaryStruct)]
 pub struct DoorTeleport {
+    /// The reference to the other door.
+    ///
+    /// This is a [`PlacedObject`].
     pub destination: FormId,
     pub position: [f32; 3],
     pub rotation: [f32; 3],

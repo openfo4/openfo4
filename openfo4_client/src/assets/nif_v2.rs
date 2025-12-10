@@ -1,5 +1,6 @@
 use std::collections::{HashMap, VecDeque};
 
+use bitflags::bitflags;
 use game_common::components::{Color, Transform};
 use game_core::hierarchy::Hierarchy;
 use game_core_pipeline::entities::{Entities, MaterialHandle};
@@ -28,6 +29,19 @@ use crate::render::RenderObject;
 
 pub const NIF_TO_METERS: f32 = 1.0 / 69.99125;
 
+bitflags! {
+    /// Defines which components of a nif file should be loaded.
+    #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+    pub struct LoadNifFlags: u32 {
+        /// [`RenderObject`]s.
+        ///
+        /// This includes loading of meshes, materials and textures.
+        const RENDER_OBJECTS = 1 << 0;
+        /// [`Collider`]s.
+        const COLLIDERS = 1 << 1;
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct NifScene {
     pub nodes: Hierarchy<Node>,
@@ -50,21 +64,22 @@ pub struct NifScene {
 // every become stable we can use `fn instantiate(self: Handle<Self>, ..)`
 // instead.
 pub trait Instantiate {
-    fn instantiate(&self, transform: Transform, world: &mut World) -> Entity;
+    fn instantiate(&self, transform: Transform, world: &mut World, flags: LoadNifFlags) -> Entity;
 
     fn instantiate_with_feedback<'a, F>(
         &'a self,
         callback: F,
         transform: Transform,
         world: &mut World,
+        flags: LoadNifFlags,
     ) -> Entity
     where
         F: FnMut(&'a Node, Entity);
 }
 
 impl Instantiate for Handle<NifScene> {
-    fn instantiate(&self, transform: Transform, world: &mut World) -> Entity {
-        self.instantiate_with_feedback(|_, _| {}, transform, world)
+    fn instantiate(&self, transform: Transform, world: &mut World, flags: LoadNifFlags) -> Entity {
+        self.instantiate_with_feedback(|_, _| {}, transform, world, flags)
     }
 
     fn instantiate_with_feedback<'a, F>(
@@ -72,6 +87,7 @@ impl Instantiate for Handle<NifScene> {
         mut callback: F,
         transform: Transform,
         world: &mut World,
+        flags: LoadNifFlags,
     ) -> Entity
     where
         F: FnMut(&'a Node, Entity),
@@ -92,11 +108,15 @@ impl Instantiate for Handle<NifScene> {
 
             builder.add(node.transform);
 
-            if let Some(renderable) = &node.renderable {
+            if let Some(renderable) = &node.renderable
+                && flags.contains(LoadNifFlags::RENDER_OBJECTS)
+            {
                 builder.add(renderable.clone());
             }
 
-            if let Some(collider) = &node.collider {
+            if let Some(collider) = &node.collider
+                && flags.contains(LoadNifFlags::COLLIDERS)
+            {
                 builder.add(collider.clone());
             }
 

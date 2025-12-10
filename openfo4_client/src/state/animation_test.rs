@@ -23,9 +23,9 @@ use openfo4_physics::components::{Capsule, ColliderShape};
 
 use crate::assets::animation::AnimationSet;
 use crate::assets::data_file::DataFile;
-use crate::assets::nif_v2::{Instantiate, NIF_TO_METERS, NifScene};
+use crate::assets::nif_v2::{Instantiate, LoadNifFlags, NIF_TO_METERS, NifScene};
 use crate::cell::CellId;
-use crate::components::{NiTransform, Player};
+use crate::components::{NiTransform, Player, WorldSpace};
 use crate::loader::fix_path;
 use crate::state::anim_starter::AnimationEventQueue;
 use crate::state::animation::{self, SkeletonConfig, load_anim};
@@ -161,6 +161,7 @@ pub fn animation_test(
 
             world.insert_one(root, inventory).unwrap();
             world.insert_one(root, Transform::from(*offset)).unwrap();
+            world.insert_one(root, WorldSpace(FormId(0x3c))).unwrap();
 
             // let equipment = Equipment::default();
 
@@ -425,6 +426,7 @@ impl ActorCharacter {
             },
             Transform::default(),
             world,
+            LoadNifFlags::all(),
         );
 
         world.add_children(root, scene);

@@ -3,6 +3,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use game_tasks::TaskPool;
+use game_tracing::trace_span;
 use hashbrown::{HashMap, HashSet};
 use hecs::{Entity, World};
 use openfo4_asset::AssetLoader;
@@ -198,6 +199,8 @@ pub fn handle_inventory_events(
     events: &mut EventBus,
     tasks: &TaskPool,
 ) {
+    let _span = trace_span!("handle_inventory_events").entered();
+
     for event in events.read::<AddItemEvent>() {
         let mut inventory = world.get::<&mut Inventory>(event.actor).unwrap();
 

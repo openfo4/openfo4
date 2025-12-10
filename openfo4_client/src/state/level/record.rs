@@ -5,12 +5,13 @@ use glam::{EulerRot, Quat, Vec3};
 use hecs::{Entity, World};
 use openfo4_asset::Handle;
 use openfo4_core::events::EventBus;
+use openfo4_core::hierarchy::Children;
 use openfo4_esp::records::LightDataFlags;
 use openfo4_esp::{Record, RecordData, RecordHeaderFlags};
 use openfo4_physics::components::{Collider, RigidBody};
 
-use crate::assets::nif_v2::{Instantiate, NIF_TO_METERS, NifScene};
-use crate::components::{NiTransform, Persistent, Root};
+use crate::assets::nif_v2::{Instantiate, LoadNifFlags, NIF_TO_METERS, NifScene};
+use crate::components::{NiTransform, Persistent, Root, WorldSpace};
 use crate::render::RenderObject;
 use crate::state::level::LoadContext;
 use crate::state::level::terrain::load_land;
@@ -28,6 +29,7 @@ pub struct SpawnEntity {
     pub light_flicker: Option<LightFlicker>,
     pub actor: Option<Actor>,
     pub persistent: bool,
+    pub worldspace: Option<WorldSpace>,
 }
 
 impl SpawnEntity {
@@ -44,11 +46,12 @@ impl SpawnEntity {
             light_flicker,
             actor,
             persistent,
+            worldspace,
         } = self;
 
         // FIXME: Modify this such that both scene and actor are valid.
         let entity = if let Some(scene) = scene {
-            scene.instantiate(transform.into(), world)
+            scene.instantiate(transform.into(), world, LoadNifFlags::all())
         } else if let Some(actor) = actor {
             actor.instantiate(world, events)
         } else {
@@ -84,6 +87,17 @@ impl SpawnEntity {
         }
 
         world.insert_one(entity, Root).unwrap();
+
+        // FIXME: What about attached equipment items?
+        if let Some(worldspace) = worldspace {
+            let mut queue = vec![entity];
+            while let Some(e) = queue.pop() {
+                world.insert_one(e, worldspace).unwrap();
+                if let Ok(children) = world.get::<&Children>(e) {
+                    queue.extend(&children.0);
+                }
+            }
+        }
 
         entity
     }

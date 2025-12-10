@@ -1,3 +1,4 @@
+mod partial;
 mod record;
 mod terrain;
 
@@ -19,7 +20,7 @@ use openfo4_esp::{FormId, RecordChildren, RecordData, RecordHeaderFlags, RecordK
 use tracing::instrument;
 
 use crate::cell::CellId;
-use crate::components::{NiTransform, Persistent, Root};
+use crate::components::{NiTransform, Persistent, Root, WorldSpace};
 use crate::events::{Event, UnloadCell};
 use crate::loader::FileLoader;
 use crate::shared::SharedState;
@@ -67,7 +68,6 @@ impl Level {
                     &pool,
                     &file_loader,
                     &shared,
-                    FormId(0x3c),
                 )
                 .await;
             }
@@ -241,7 +241,28 @@ async fn load_cells_task(
             Request::Interior { cell } => cell,
         };
 
-        load_cell(loader, esp_loader, events, pool, file_loader, shared, cell).await;
+        let worldspace = match req {
+            Request::Exterior {
+                worldspace,
+                cell: _,
+            } => worldspace,
+            Request::Interior { cell } => cell,
+        };
+
+        dbg!(worldspace);
+
+        load_cell(
+            loader,
+            esp_loader,
+            events,
+            pool,
+            file_loader,
+            shared,
+            cell,
+            worldspace,
+            false,
+        )
+        .await;
     }
 }
 
@@ -253,15 +274,42 @@ async fn load_persistent(
     pool: &Arc<TaskPool>,
     file_loader: &Arc<FileLoader>,
     shared: &Arc<SharedState>,
-    worldspace: FormId,
 ) {
-    let cells = loader
-        .children(RecordChildren::Cells, worldspace)
-        .await
-        .unwrap();
+    let mut worldspace_cells = HashSet::new();
 
-    for record in cells {
-        if !record.flags.contains(RecordHeaderFlags::PERSISTENT) {
+    for worldspace in loader
+        .lookup_all(Some(RecordKind::Worldspace))
+        .await
+        .unwrap()
+    {
+        for cell in loader
+            .children(RecordChildren::Cells, worldspace.id)
+            .await
+            .unwrap()
+        {
+            if !cell.flags.contains(RecordHeaderFlags::PERSISTENT) {
+                continue;
+            }
+
+            worldspace_cells.insert(cell.id);
+
+            load_cell(
+                asset_loader,
+                loader,
+                events,
+                pool,
+                file_loader,
+                shared,
+                cell.id,
+                worldspace.id,
+                true,
+            )
+            .await;
+        }
+    }
+
+    for cell in loader.lookup_all(Some(RecordKind::Cell)).await.unwrap() {
+        if worldspace_cells.contains(&cell.id) {
             continue;
         }
 
@@ -272,7 +320,9 @@ async fn load_persistent(
             pool,
             file_loader,
             shared,
-            record.id,
+            cell.id,
+            cell.id,
+            true,
         )
         .await;
     }
@@ -286,6 +336,8 @@ async fn load_cell(
     file_loader: &Arc<FileLoader>,
     shared: &Arc<SharedState>,
     cell_form: FormId,
+    worldspace: FormId,
+    persistent_only: bool,
 ) {
     let cell = match loader.lookup(Some(RecordKind::Cell), cell_form).await {
         Ok(record) => match record.data {
@@ -306,14 +358,21 @@ async fn load_cell(
         cell_id = CellId::new(grid.x, grid.y);
     }
 
+    dbg!(&cell_form);
+
     let persistent = loader
         .children(RecordChildren::PersistentEntities, cell_form)
         .await
         .unwrap();
-    let temporary = loader
-        .children(RecordChildren::TemporaryEntities, cell_form)
-        .await
-        .unwrap();
+
+    let temporary = if persistent_only {
+        loader
+            .children(RecordChildren::TemporaryEntities, cell_form)
+            .await
+            .unwrap()
+    } else {
+        Vec::new()
+    };
 
     for record in persistent.into_iter().chain(temporary) {
         let loader = loader.clone();
@@ -333,6 +392,7 @@ async fn load_cell(
 
             if let Some(mut entity) = SpawnEntity::load(&ctx, &record).await {
                 entity.persistent = record.flags.contains(RecordHeaderFlags::PERSISTENT);
+                entity.worldspace = Some(WorldSpace(worldspace));
                 events.push(entity);
             }
         });

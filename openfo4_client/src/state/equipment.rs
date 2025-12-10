@@ -5,6 +5,7 @@ use hashbrown::{HashMap, HashSet};
 use hecs::{Entity, World};
 use openfo4_animation::skeleton::SkeletonInstance;
 use openfo4_asset::{AssetLoader, Handle};
+use openfo4_core::hierarchy::Children;
 use openfo4_esp::records::{
     BipedObjectFlags, ObjectModificationFunctionType, ObjectModificationPropertyProperty,
     ObjectModificationValueType,
@@ -12,6 +13,7 @@ use openfo4_esp::records::{
 use openfo4_esp::{FormId, RecordData, RecordKind};
 
 use crate::assets::nif_v2::NifScene;
+use crate::components::WorldSpace;
 use crate::state::esp::EspLoader;
 use crate::state::hardcoded_formids::DAMAGE_TYPE_PHYSICAL;
 use crate::systems::equipment::{Equipment, EquipmentKey, equip_item};
@@ -75,6 +77,18 @@ impl EquipmentItemModels {
         }
 
         world.insert(root, (skeleton, equipment)).unwrap();
+
+        // Copy worldspace to all new entities.
+        // This is required for them to get rendered correctly.
+        if let Ok(worldspace) = world.get::<&WorldSpace>(root).map(|v| *v) {
+            let mut queue = vec![root];
+            while let Some(e) = queue.pop() {
+                world.insert_one(e, worldspace).unwrap();
+                if let Ok(children) = world.get::<&Children>(e) {
+                    queue.extend(&children.0);
+                }
+            }
+        }
 
         keys.into_values().collect()
     }

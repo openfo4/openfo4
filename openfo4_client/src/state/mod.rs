@@ -34,7 +34,7 @@ use hecs::{CommandBuffer, World};
 use level::{Level, Streamer};
 use openfo4_asset::AssetLoader;
 use openfo4_core::events::EventBus;
-use openfo4_esp::EspFile;
+use openfo4_esp::{EspFile, FormId};
 use openfo4_hkx::HkxFile;
 use openfo4_nif::Nif;
 use openfo4_nif::bgsm::Bgsm;
@@ -47,7 +47,7 @@ use crate::assets::animation::{AnimationSet, FileAnimationClip};
 use crate::assets::data_file::{DataFile, DataFileContext};
 use crate::assets::nif_v2::NifLoaderContext;
 use crate::cell::CellId;
-use crate::components::{Camera, NiTransform, Player};
+use crate::components::{Camera, NiTransform, Player, WorldSpace};
 use crate::events::Event;
 use crate::loader::FileLoader;
 use crate::render::RenderObject;
@@ -206,6 +206,7 @@ impl GameState {
                 illuminance: 25_000.0,
             },
             Transform::from_translation(Vec3::splat(200.0)).looking_at(Vec3::ZERO, Vec3::Y),
+            WorldSpace(FormId(0x3c)),
         ));
     }
 
@@ -286,6 +287,12 @@ impl GameState {
             &self.actions,
             &event,
             &mut self.event_bus,
+        );
+        systems::activation::handle_activation_inputs(
+            &mut self.world,
+            &event,
+            &mut self.event_bus,
+            &self.physics,
         );
 
         match event {

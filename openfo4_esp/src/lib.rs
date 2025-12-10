@@ -16,12 +16,12 @@ use std::mem::MaybeUninit;
 
 use bytes::Buf;
 use records::{
-    AcousticSpace, Action, Activator, Ammo, Armor, Book, Cell, Class, Climate, Container, Empty,
-    Furniture, GameSetting, Hazard, IdleMarker, Ingestible, Key, Keyword, Land, LandTexture,
-    LeveledActor, LeveledItem, Light, LocationReferenceType, MagicEffect, MiscObject, Note, Npc,
-    PlacedGrenade, PlacedHazard, PlacedNpc, PlacedObject, Projectile, Race, ShaderParticleGeometry,
-    StaticCollection, Tes4, TextureSet, VisualEffect, Weather, Worldspace, CMPO, DMGT, DOOR, ENCH,
-    FACT, FLOR, GLOB, GRAS, HDPT, INGR, MSTT, SOUN, SPEL, STAT, TACT, TRNS,
+    AcousticSpace, Action, Activator, Ammo, Armor, Book, CMPO, Cell, Class, Climate, Container,
+    DMGT, DOOR, ENCH, Empty, FACT, FLOR, Furniture, GLOB, GRAS, GameSetting, HDPT, Hazard, INGR,
+    IdleMarker, Ingestible, Key, Keyword, Land, LandTexture, LeveledActor, LeveledItem, Light,
+    LocationReferenceType, MSTT, MagicEffect, MiscObject, Note, Npc, PlacedGrenade, PlacedHazard,
+    PlacedNpc, PlacedObject, Projectile, Race, SOUN, SPEL, STAT, ShaderParticleGeometry,
+    StaticCollection, TACT, TRNS, Tes4, TextureSet, VisualEffect, Weather, Worldspace,
 };
 
 use crate::records::{
@@ -32,12 +32,12 @@ use crate::records::{
     DialogueTopic, DialogueView, EffectShader, EncounterZone, EquipType, Explosion, Footstep,
     FootstepSet, FormList, GodRays, ImageSpace, ImageSpaceAdapter, Impact, ImpactDataSet,
     InstanceNamingRules, Layer, LensFlare, LightingTemplate, LoadScreen, Location, MaterialObject,
-    MaterialSwap, MaterialType, Message, MovementType, MusicTrack, MusicType,
+    MaterialSwap, MaterialType, Message, MovementType, MusicTrack, MusicType, NAVI,
     NavigationMeshObstacleManager, ObjectModification, ObjectVisibilityManager, Outfit, PackIn,
     Package, Perk, PlacedMissile, Quest, ReferenceGroup, Region, Relationship, ReverbParameters,
     Scene, SceneCollection, SoundCategory, SoundDescriptor, SoundKeywordMapping, SoundOutputModel,
     StoryManagerBranchNode, StoryManagerEventNode, StoryManagerQuestNode, Terminal, Tree,
-    VoiceType, Water, Weapon, Zoom, NAVI,
+    VoiceType, Water, Weapon, Zoom,
 };
 
 const MAX_INDEX_CAP: usize = 2 * 1024 * 1024;
@@ -276,7 +276,11 @@ where
                     return Ok(cells);
                 }
                 RecordChildren::PersistentEntities | RecordChildren::TemporaryEntities => {
-                    let header = self.read_record_header()?;
+                    let header = match self.read_record_header() {
+                        Ok(header) => header,
+                        Err(Error::EndOfFile) => return Ok(Vec::new()),
+                        Err(err) => return Err(err),
+                    };
 
                     // It is not clear if GRUPs are required or optional.
                     // There are some records with only a temporary group
@@ -1460,6 +1464,9 @@ bitflags::bitflags! {
         const NAV_MESH_GEN_GROUND = 0x40000000;
         const REFR_NO_RESPAWN = 0x40000000;
         const REFR_MUTI_BOUND = 0x80000000;
+
+        /// CELL
+        const PERSISTENT = 0x400;
     }
 }
 

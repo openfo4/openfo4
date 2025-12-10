@@ -7,6 +7,7 @@ use hecs::{CommandBuffer, World};
 use openfo4_animation::skeleton::SkeletonInstance;
 use openfo4_core::hierarchy::Children;
 
+use crate::components::WorldSpace;
 use crate::render::RenderObject;
 use crate::shared::SharedState;
 use crate::systems::equipment::Equipment;
@@ -15,8 +16,13 @@ pub fn mesh_skinning(world: &mut World, shared: &SharedState) {
     let _span = trace_span!("mesh_skinning").entered();
 
     let mut commands = CommandBuffer::new();
-    for (_, (skeleton, equipment, children)) in world
-        .query::<(&SkeletonInstance, &mut Equipment, &mut Children)>()
+    for (_, (skeleton, equipment, children, worldspace)) in world
+        .query::<(
+            &SkeletonInstance,
+            &mut Equipment,
+            &mut Children,
+            Option<&WorldSpace>,
+        )>()
         .iter()
     {
         // Compute "global" transform relative the the entity with the SkeletonInstance
@@ -119,6 +125,10 @@ pub fn mesh_skinning(world: &mut World, shared: &SharedState) {
                     },
                 ),
             );
+
+            if let Some(worldspace) = worldspace {
+                commands.insert_one(new_entity, *worldspace);
+            }
 
             skin.entity = Some(new_entity);
             children.0.push(new_entity);

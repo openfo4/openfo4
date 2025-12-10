@@ -1,8 +1,8 @@
 pub mod physics_debug;
 
-use std::sync::{Arc, OnceLock};
+use std::sync::Arc;
 
-use game_common::components::{Color, GlobalTransform, Transform};
+use game_common::components::{GlobalTransform, Transform};
 use game_core_pipeline::camera::{Camera, Projection};
 use game_core_pipeline::entities::{
     CameraHandle, Entities, LightHandle, MaterialHandle, MeshHandle, Object, ObjectHandle,
@@ -14,11 +14,11 @@ use game_render::Renderer;
 use game_render::camera::RenderTarget;
 use game_tasks::TaskPool;
 use game_tracing::trace_span;
-use glam::{UVec2, Vec3};
+use glam::UVec2;
 use hashbrown::HashMap;
 use hecs::{Entity, World};
 
-use crate::components::Camera as CameraComp;
+use crate::components::{Camera as CameraComp, Player, WorldSpace};
 use crate::shared::SharedState;
 
 pub struct RenderState {
@@ -70,6 +70,12 @@ impl RenderState {
     pub fn sync(&mut self, world: &World) {
         let _span = trace_span!("RenderState::sync").entered();
 
+        let Some((_, (&player_worldspace, _))) =
+            world.query::<(&WorldSpace, &Player)>().into_iter().next()
+        else {
+            return;
+        };
+
         self.cameras.clear();
         self.lights.clear();
 
@@ -91,9 +97,15 @@ impl RenderState {
 
         let mut lights_to_remove = self.lights.clone();
 
-        for (entity, (transform, light)) in
-            &mut world.query::<(&GlobalTransform, &game_common::components::DirectionalLight)>()
-        {
+        for (entity, (transform, light, worldspace)) in &mut world.query::<(
+            &GlobalTransform,
+            &game_common::components::DirectionalLight,
+            &WorldSpace,
+        )>() {
+            if *worldspace != player_worldspace {
+                continue;
+            }
+
             lights_to_remove.remove(&entity);
 
             let handle = self
@@ -108,9 +120,15 @@ impl RenderState {
             self.lights.insert(entity, handle);
         }
 
-        for (entity, (transform, light)) in
-            &mut world.query::<(&GlobalTransform, &game_common::components::PointLight)>()
-        {
+        for (entity, (transform, light, worldspace)) in &mut world.query::<(
+            &GlobalTransform,
+            &game_common::components::PointLight,
+            &WorldSpace,
+        )>() {
+            if *worldspace != player_worldspace {
+                continue;
+            }
+
             lights_to_remove.remove(&entity);
 
             let handle = self.entities.create_light(Light::Point(PointLight {
@@ -129,8 +147,13 @@ impl RenderState {
         }
 
         let mut objects_to_remove = self.objects.clone();
-        for (entity, (transform, object)) in &mut world.query::<(&GlobalTransform, &RenderObject)>()
+        for (entity, (transform, object, worldspace)) in
+            &mut world.query::<(&GlobalTransform, &RenderObject, &WorldSpace)>()
         {
+            if *worldspace != player_worldspace {
+                continue;
+            }
+
             objects_to_remove.remove(&entity);
 
             if let Some(prev_transform) = self.prev_transforms.get(&entity) {

@@ -3,6 +3,7 @@ use hashbrown::HashMap;
 use hecs::Entity;
 use openfo4_esp::FormId;
 
+pub mod activation;
 pub mod actor_value;
 pub mod aim;
 pub mod animation_sync;
@@ -82,4 +83,10 @@ pub struct WeaponSheathEvent {
     pub actor: Entity,
     // TODO: Replace with InventorySlotId or similar.
     pub item: FormId,
+}
+
+#[derive(Copy, Clone, Debug)]
+pub struct ActivationEvent {
+    pub actor: Entity,
+    pub target: Entity,
 }
