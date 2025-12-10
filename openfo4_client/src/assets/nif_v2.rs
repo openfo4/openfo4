@@ -42,6 +42,12 @@ bitflags! {
     }
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct NifKey {
+    pub path: String,
+    pub flags: LoadNifFlags,
+}
+
 #[derive(Clone, Debug)]
 pub struct NifScene {
     pub nodes: Hierarchy<Node>,
@@ -209,17 +215,17 @@ impl NifLoaderContext {
 }
 
 impl Asset for NifScene {
-    type Key = String;
+    type Key = NifKey;
     type Error = Error;
     type Context = NifLoaderContext;
 
     #[tracing::instrument(name = "NifScene::load", skip_all)]
     async fn load(
         loader: &AssetLoader,
-        path: &Self::Key,
+        key: &Self::Key,
         ctx: &Self::Context,
     ) -> Result<Self, Self::Error> {
-        let mut path = fix_path(path);
+        let mut path = fix_path(&key.path);
 
         // All nif files are located in the meshes directory.
         if !path.starts_with("meshes") {
@@ -376,184 +382,187 @@ impl Asset for NifScene {
                         queue.push_back((Some(block), collision_object));
                     }
 
-                    let mut transform = Transform {
+                    let transform = Transform {
                         translation: node.translation,
                         rotation: Quat::from_mat3(&node.rotation).normalize(),
                         scale: Vec3::splat(node.scale),
                     };
-                    // let transform = Transform::default();
 
-                    // let mut parent = parent;
-                    // let mut parent_transform = Transform::default();
-                    // while let Some(p) = parent {
-                    //     let parent_node: &Node = nodes.get(p).unwrap();
-                    //     parent_transform = parent_node.transform * parent_transform;
-                    //     parent = nodes.parent_key(p);
-                    // }
+                    let renderable = if key.flags.contains(LoadNifFlags::RENDER_OBJECTS) {
+                        let mesh = meshes.entry(block).or_insert_with(|| {
+                            let mesh = build_mesh(node);
+                            ctx.entities.create_mesh(mesh)
+                        });
 
-                    // dbg!(&parent_transform);
+                        let alpha_property =
+                            node.alpha_property.and_then(|alpha_property| {
+                                match nif.get(alpha_property) {
+                                    Some(Block::NiAlphaProperty(block)) => Some(block),
+                                    _ => None,
+                                }
+                            });
 
-                    // transform = Transform::from_matrix(
-                    //     parent_transform.compute_matrix().inverse() * transform.compute_matrix(),
-                    // );
+                        let material = match node.shader_property {
+                            Some(shader_property) => {
+                                if materials.get(&shader_property).is_none() {
+                                    let material = load_material(
+                                        loader,
+                                        &ctx.entities,
+                                        &nif,
+                                        shader_property,
+                                        alpha_property,
+                                    )
+                                    .await
+                                    .map_err(|err| {
+                                        Error::Other(format!(
+                                            "invalid material in nif file {}: {}",
+                                            path, err
+                                        ))
+                                    })?;
 
-                    let mesh = meshes.entry(block).or_insert_with(|| {
-                        let mesh = build_mesh(node);
-                        ctx.entities.create_mesh(mesh)
-                    });
-
-                    let alpha_property = node.alpha_property.and_then(|alpha_property| {
-                        match nif.get(alpha_property) {
-                            Some(Block::NiAlphaProperty(block)) => Some(block),
-                            _ => None,
-                        }
-                    });
-
-                    let material = match node.shader_property {
-                        Some(shader_property) => {
-                            if materials.get(&shader_property).is_none() {
-                                let material = load_material(
-                                    loader,
-                                    &ctx.entities,
-                                    &nif,
-                                    shader_property,
-                                    alpha_property,
-                                )
-                                .await
-                                .map_err(|err| {
-                                    Error::Other(format!(
-                                        "invalid material in nif file {}: {}",
-                                        path, err
-                                    ))
-                                })?;
-
-                                match &material {
-                                    HandleOrAsset::Asset(material) => {
-                                        texture_handles.extend(material.textures.clone());
+                                    match &material {
+                                        HandleOrAsset::Asset(material) => {
+                                            texture_handles.extend(material.textures.clone());
+                                        }
+                                        HandleOrAsset::Handle(handle) => {
+                                            material_handles.push(handle.clone());
+                                        }
                                     }
-                                    HandleOrAsset::Handle(handle) => {
-                                        material_handles.push(handle.clone());
-                                    }
+
+                                    materials.insert(shader_property, material.material.clone());
                                 }
 
-                                materials.insert(shader_property, material.material.clone());
+                                materials.get(&shader_property).unwrap()
                             }
+                            None => &ctx.default_material,
+                        };
 
-                            materials.get(&shader_property).unwrap()
-                        }
-                        None => &ctx.default_material,
+                        Some(RenderObject {
+                            mesh: mesh.clone(),
+                            material: material.clone(),
+                        })
+                    } else {
+                        None
                     };
 
-                    let skin = match node.skin {
-                        Some(skin) => match nif.get(skin) {
-                            Some(Block::BSSkinInstance(skin)) => {
-                                let bone_data = match nif.get(skin.data) {
-                                    Some(Block::BSSkinBoneData(data)) => data
-                                        .bones
-                                        .iter()
-                                        .map(|bone| Transform {
-                                            translation: bone.translation,
-                                            rotation: Quat::from_mat3(&bone.rotation).conjugate(),
-                                            scale: Vec3::splat(bone.scale),
-                                        })
-                                        .collect::<Vec<_>>(),
-                                    _ => todo!(),
-                                };
-
-                                let mut bones = Vec::new();
-                                let mut bone_transforms = Vec::new();
-
-                                for bone in &skin.bones {
-                                    match nif.get(*bone) {
-                                        Some(Block::NiNode(node)) => {
-                                            bones.push(node.name.clone());
-                                            bone_transforms.push(Transform {
-                                                translation: node.translation,
-                                                rotation: Quat::from_mat3(&node.rotation)
+                    let skin = if key.flags.contains(LoadNifFlags::RENDER_OBJECTS) {
+                        match node.skin {
+                            Some(skin) => match nif.get(skin) {
+                                Some(Block::BSSkinInstance(skin)) => {
+                                    let bone_data = match nif.get(skin.data) {
+                                        Some(Block::BSSkinBoneData(data)) => data
+                                            .bones
+                                            .iter()
+                                            .map(|bone| Transform {
+                                                translation: bone.translation,
+                                                rotation: Quat::from_mat3(&bone.rotation)
                                                     .conjugate(),
-                                                scale: Vec3::splat(node.scale),
-                                            });
-                                        }
+                                                scale: Vec3::splat(bone.scale),
+                                            })
+                                            .collect::<Vec<_>>(),
                                         _ => todo!(),
+                                    };
+
+                                    let mut bones = Vec::new();
+                                    let mut bone_transforms = Vec::new();
+
+                                    for bone in &skin.bones {
+                                        match nif.get(*bone) {
+                                            Some(Block::NiNode(node)) => {
+                                                bones.push(node.name.clone());
+                                                bone_transforms.push(Transform {
+                                                    translation: node.translation,
+                                                    rotation: Quat::from_mat3(&node.rotation)
+                                                        .conjugate(),
+                                                    scale: Vec3::splat(node.scale),
+                                                });
+                                            }
+                                            _ => todo!(),
+                                        }
                                     }
+
+                                    let Some(skinning) = &node.mesh.skinning else {
+                                        todo!();
+                                    };
+
+                                    let weights: Vec<_> =
+                                        skinning.bone_weights.iter().map(|v| v.as_vec4()).collect();
+                                    let indices: Vec<_> =
+                                        skinning.bone_indices.iter().map(|v| *v).collect();
+
+                                    let mut mesh = build_mesh(node);
+
+                                    let mut positions = vec![Vec3::ZERO; mesh.positions().len()];
+
+                                    for i in 0..weights.len() {
+                                        let weights = weights[i];
+                                        let indices = indices[i];
+                                        let pos = mesh.positions()[i];
+
+                                        let i0 = indices[0] as usize;
+                                        let i1 = indices[1] as usize;
+                                        let i2 = indices[2] as usize;
+                                        let i3 = indices[3] as usize;
+
+                                        let x = (bone_transforms[i0] * bone_data[i0])
+                                            .transform_point(pos);
+                                        let y = (bone_transforms[i1] * bone_data[i1])
+                                            .transform_point(pos);
+                                        let z = (bone_transforms[i2] * bone_data[i2])
+                                            .transform_point(pos);
+                                        let w = (bone_transforms[i3] * bone_data[i3])
+                                            .transform_point(pos);
+
+                                        positions[i] = x * weights.x
+                                            + y * weights.y
+                                            + z * weights.z
+                                            + w * weights.w;
+                                    }
+
+                                    mesh.set_positions(positions);
+
+                                    Some(Skin {
+                                        bones,
+                                        mesh,
+                                        weights,
+                                        indices,
+                                    })
                                 }
-
-                                let Some(skinning) = &node.mesh.skinning else {
-                                    todo!();
-                                };
-
-                                let weights: Vec<_> =
-                                    skinning.bone_weights.iter().map(|v| v.as_vec4()).collect();
-                                let indices: Vec<_> =
-                                    skinning.bone_indices.iter().map(|v| *v).collect();
-
-                                let mut mesh = build_mesh(node);
-
-                                let mut positions = vec![Vec3::ZERO; mesh.positions().len()];
-
-                                for i in 0..weights.len() {
-                                    let weights = weights[i];
-                                    let indices = indices[i];
-                                    let pos = mesh.positions()[i];
-
-                                    let i0 = indices[0] as usize;
-                                    let i1 = indices[1] as usize;
-                                    let i2 = indices[2] as usize;
-                                    let i3 = indices[3] as usize;
-
-                                    let x =
-                                        (bone_transforms[i0] * bone_data[i0]).transform_point(pos);
-                                    let y =
-                                        (bone_transforms[i1] * bone_data[i1]).transform_point(pos);
-                                    let z =
-                                        (bone_transforms[i2] * bone_data[i2]).transform_point(pos);
-                                    let w =
-                                        (bone_transforms[i3] * bone_data[i3]).transform_point(pos);
-
-                                    positions[i] = x * weights.x
-                                        + y * weights.y
-                                        + z * weights.z
-                                        + w * weights.w;
-                                }
-
-                                mesh.set_positions(positions);
-
-                                Some(Skin {
-                                    bones,
-                                    mesh,
-                                    weights,
-                                    indices,
-                                })
-                            }
-                            _ => todo!(),
-                        },
-                        None => None,
+                                _ => todo!(),
+                            },
+                            None => None,
+                        }
+                    } else {
+                        None
                     };
 
                     Node {
                         name: node.name.clone(),
                         transform,
-                        renderable: Some(RenderObject {
-                            mesh: mesh.clone(),
-                            material: material.clone(),
-                        }),
+                        renderable,
                         skin,
                         ..Default::default()
                     }
                 }
-                Some(Block::BhkNPCollisionObject(_)) => match load_collider(&nif, block) {
-                    Ok(Some(collider)) => Node {
-                        transform: Transform::from_scale(Vec3::splat(1.0 / NIF_TO_METERS))
-                            * collider.transform,
-                        collider: Some(collider.collider),
-                        ..Default::default()
-                    },
-                    Ok(None) => Node::default(),
-                    Err(err) => {
-                        tracing::error!("failed to load collider from {}: {}", path, err);
+                Some(Block::BhkNPCollisionObject(_)) => {
+                    if key.flags.contains(LoadNifFlags::COLLIDERS) {
+                        match load_collider(&nif, block) {
+                            Ok(Some(collider)) => Node {
+                                transform: Transform::from_scale(Vec3::splat(1.0 / NIF_TO_METERS))
+                                    * collider.transform,
+                                collider: Some(collider.collider),
+                                ..Default::default()
+                            },
+                            Ok(None) => Node::default(),
+                            Err(err) => {
+                                tracing::error!("failed to load collider from {}: {}", path, err);
+                                Node::default()
+                            }
+                        }
+                    } else {
                         Node::default()
                     }
-                },
+                }
                 _ => Node::default(),
             };
 

@@ -34,6 +34,7 @@ use hecs::{CommandBuffer, World};
 use level::{Level, Streamer};
 use openfo4_asset::AssetLoader;
 use openfo4_core::events::EventBus;
+use openfo4_core::object_ref_set::ObjectReferenceSet;
 use openfo4_esp::{EspFile, FormId};
 use openfo4_hkx::HkxFile;
 use openfo4_nif::Nif;
@@ -86,6 +87,7 @@ pub struct GameState {
     physics_debug: bool,
     interval: Interval,
     esp_loader: Arc<EspLoader>,
+    object_ref_set: ObjectReferenceSet,
 }
 
 impl GameState {
@@ -173,6 +175,7 @@ impl GameState {
             physics_debug: false,
             interval: Interval::new(Duration::from_secs(1) / UPS),
             esp_loader: loader,
+            object_ref_set: ObjectReferenceSet::default(),
         }
     }
 
@@ -215,8 +218,12 @@ impl GameState {
 
         futures_lite::future::block_on(self.interval.wait(Instant::now()));
 
-        self.level
-            .update(&mut self.world, &mut self.events, &mut self.event_bus);
+        self.level.update(
+            &mut self.world,
+            &mut self.events,
+            &mut self.event_bus,
+            &mut self.object_ref_set,
+        );
 
         animation_test::animation_test(
             &mut self.event_bus,

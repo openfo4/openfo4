@@ -15,6 +15,7 @@ use hecs::World;
 use openfo4_asset::AssetLoader;
 use openfo4_core::events::EventBus;
 use openfo4_core::hierarchy::Children;
+use openfo4_core::object_ref_set::ObjectReferenceSet;
 use openfo4_esp::records::Cell;
 use openfo4_esp::{FormId, RecordChildren, RecordData, RecordHeaderFlags, RecordKind};
 use tracing::instrument;
@@ -24,6 +25,7 @@ use crate::components::{NiTransform, Persistent, Root, WorldSpace};
 use crate::events::{Event, UnloadCell};
 use crate::loader::FileLoader;
 use crate::shared::SharedState;
+use crate::state::level::partial::PartialEntityFlags;
 use crate::state::level::record::SpawnEntity;
 
 use super::esp::EspLoader;
@@ -100,7 +102,13 @@ impl Level {
         }
     }
 
-    pub fn update(&mut self, world: &mut World, events: &mut Vec<Event>, event_bus: &mut EventBus) {
+    pub fn update(
+        &mut self,
+        world: &mut World,
+        events: &mut Vec<Event>,
+        event_bus: &mut EventBus,
+        object_ref_set: &mut ObjectReferenceSet,
+    ) {
         let _span = trace_span!("Level::update").entered();
 
         self.unload_cells(world);
@@ -141,7 +149,7 @@ impl Level {
                 continue;
             }
 
-            entity.instantiate(world, event_bus);
+            entity.instantiate(world, event_bus, object_ref_set);
         }
 
         for cell in prev_cells_loaded {
@@ -358,14 +366,12 @@ async fn load_cell(
         cell_id = CellId::new(grid.x, grid.y);
     }
 
-    dbg!(&cell_form);
-
     let persistent = loader
         .children(RecordChildren::PersistentEntities, cell_form)
         .await
         .unwrap();
 
-    let temporary = if persistent_only {
+    let temporary = if !persistent_only {
         loader
             .children(RecordChildren::TemporaryEntities, cell_form)
             .await
@@ -390,9 +396,16 @@ async fn load_cell(
                 shared: &shared,
             };
 
-            if let Some(mut entity) = SpawnEntity::load(&ctx, &record).await {
+            let flags = if persistent_only {
+                PartialEntityFlags::empty()
+            } else {
+                PartialEntityFlags::all()
+            };
+
+            if let Some(mut entity) = SpawnEntity::load(&ctx, &record, flags).await {
                 entity.persistent = record.flags.contains(RecordHeaderFlags::PERSISTENT);
                 entity.worldspace = Some(WorldSpace(worldspace));
+                // entity.form = Some(record.id);
                 events.push(entity);
             }
         });

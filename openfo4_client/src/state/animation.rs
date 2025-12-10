@@ -18,7 +18,7 @@ use openfo4_hkx::{HkObject, HkxFile};
 use crate::assets::Error;
 use crate::assets::animation::FileAnimationClip;
 use crate::assets::data_file::DataFile;
-use crate::assets::nif_v2::NifScene;
+use crate::assets::nif_v2::{LoadNifFlags, NifKey, NifScene};
 use crate::loader::fix_path;
 use crate::state::actions::{Action, Actions};
 use crate::state::anim_starter::{ActiveBehaviorGraphs, AnimationEventQueue};
@@ -42,7 +42,13 @@ pub async fn load(
     let nif_skeleton = format!("meshes/{}", fix_path(config.nif_skeleton));
     let project_path = format!("meshes/{}", fix_path(config.hkx_project));
 
-    let nif_skeleton = loader.load::<NifScene, _>(&nif_skeleton).await.unwrap();
+    let nif_skeleton = loader
+        .load::<NifScene, _>(&NifKey {
+            path: nif_skeleton.clone(),
+            flags: LoadNifFlags::all(),
+        })
+        .await
+        .unwrap();
 
     let mut root = project_path.clone();
     if let Some(position) = root.rfind("/") {

@@ -4,16 +4,19 @@ use game_common::components::{Color, PointLight, Transform};
 use glam::{EulerRot, Quat, Vec3};
 use hecs::{Entity, World};
 use openfo4_asset::Handle;
+use openfo4_core::WorldExt;
 use openfo4_core::events::EventBus;
 use openfo4_core::hierarchy::Children;
+use openfo4_core::object_ref_set::ObjectReferenceSet;
 use openfo4_esp::records::LightDataFlags;
-use openfo4_esp::{Record, RecordData, RecordHeaderFlags};
+use openfo4_esp::{FormId, Record, RecordData, RecordHeaderFlags};
 use openfo4_physics::components::{Collider, RigidBody};
 
-use crate::assets::nif_v2::{Instantiate, LoadNifFlags, NIF_TO_METERS, NifScene};
+use crate::assets::nif_v2::{Instantiate, LoadNifFlags, NIF_TO_METERS, NifKey, NifScene};
 use crate::components::{NiTransform, Persistent, Root, WorldSpace};
 use crate::render::RenderObject;
 use crate::state::level::LoadContext;
+use crate::state::level::partial::PartialEntityFlags;
 use crate::state::level::terrain::load_land;
 use crate::state::npc::Actor;
 use crate::systems::lights::{LightFlicker, LightFlickerMode};
@@ -30,10 +33,16 @@ pub struct SpawnEntity {
     pub actor: Option<Actor>,
     pub persistent: bool,
     pub worldspace: Option<WorldSpace>,
+    pub form: Option<FormId>,
 }
 
 impl SpawnEntity {
-    pub fn instantiate(self, world: &mut World, events: &mut EventBus) -> Entity {
+    pub fn instantiate(
+        self,
+        world: &mut World,
+        events: &mut EventBus,
+        object_ref_set: &mut ObjectReferenceSet,
+    ) -> Entity {
         // Destructure pattern so we get warned if we forget
         // to add new items here.
         let Self {
@@ -47,7 +56,15 @@ impl SpawnEntity {
             actor,
             persistent,
             worldspace,
+            form,
         } = self;
+
+        // If the object reference already exists we will overwrite it.
+        if let Some(form) = form
+            && let Some(entity) = object_ref_set.get(form)
+        {
+            world.despawn_recursive(entity);
+        }
 
         // FIXME: Modify this such that both scene and actor are valid.
         let entity = if let Some(scene) = scene {
@@ -88,7 +105,6 @@ impl SpawnEntity {
 
         world.insert_one(entity, Root).unwrap();
 
-        // FIXME: What about attached equipment items?
         if let Some(worldspace) = worldspace {
             let mut queue = vec![entity];
             while let Some(e) = queue.pop() {
@@ -99,10 +115,18 @@ impl SpawnEntity {
             }
         }
 
+        if let Some(form) = form {
+            object_ref_set.insert(form, entity);
+        }
+
         entity
     }
 
-    pub(super) async fn load(ctx: &LoadContext<'_>, record: &Record) -> Option<Self> {
+    pub(super) async fn load(
+        ctx: &LoadContext<'_>,
+        record: &Record,
+        flags: PartialEntityFlags,
+    ) -> Option<Self> {
         let position;
         let scale;
         let base_object;
@@ -186,9 +210,11 @@ impl SpawnEntity {
                 model = data.modl.model;
             }
             RecordData::Npc(_) => {
-                actor = crate::state::npc::spawn_actor(ctx.loader, ctx.esp_loader, base.id)
-                    .await
-                    .ok();
+                if flags.contains(PartialEntityFlags::ACTOR) {
+                    actor = crate::state::npc::spawn_actor(ctx.loader, ctx.esp_loader, base.id)
+                        .await
+                        .ok();
+                }
             }
             RecordData::IdleMarker(_) => return None,
             RecordData::Activator(data) => {
@@ -245,10 +271,25 @@ impl SpawnEntity {
             x => todo!("{:?}", x),
         }
 
+        let mut nif_flags = LoadNifFlags::empty();
+        if flags.contains(PartialEntityFlags::GRAPHICS) {
+            nif_flags |= LoadNifFlags::RENDER_OBJECTS;
+        }
+        if flags.contains(PartialEntityFlags::PHYSICS) {
+            nif_flags |= LoadNifFlags::COLLIDERS;
+        }
+
         let scene = match model {
-            Some(model) => {
+            Some(model) if flags.contains(PartialEntityFlags::SCENE) => {
                 let path = format!("meshes/{}", model.as_str().unwrap());
-                match ctx.loader.load::<NifScene, _>(&path).await {
+                match ctx
+                    .loader
+                    .load::<NifScene, _>(&NifKey {
+                        path: path.clone(),
+                        flags: nif_flags,
+                    })
+                    .await
+                {
                     Ok(scene) => Some(scene),
                     Err(err) => {
                         tracing::error!("{}", err);
@@ -256,16 +297,24 @@ impl SpawnEntity {
                     }
                 }
             }
-            None => None,
+            Some(_) | None => None,
         };
 
         Some(SpawnEntity {
             transform: NiTransform::from_ni_transform(transform),
             scene,
-            light,
-            light_flicker,
+            light: flags
+                .contains(PartialEntityFlags::GRAPHICS)
+                .then_some(light)
+                .flatten(),
+            light_flicker: flags
+                .contains(PartialEntityFlags::GRAPHICS)
+                .then_some(light_flicker)
+                .flatten(),
             actor,
-            rigid_body: Some(RigidBody::FIXED),
+            rigid_body: flags
+                .contains(PartialEntityFlags::PHYSICS)
+                .then_some(RigidBody::FIXED),
             ..Default::default()
         })
     }

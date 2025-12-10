@@ -4,11 +4,14 @@ use crate::hierarchy::Children;
 
 pub mod events;
 pub mod hierarchy;
+pub mod object_ref_set;
 pub mod path;
 pub mod transform;
 
 pub trait WorldExt {
     fn add_children(&mut self, parent: Entity, children: Entity);
+
+    fn despawn_recursive(&mut self, entity: Entity);
 }
 
 impl WorldExt for World {
@@ -19,6 +22,17 @@ impl WorldExt for World {
             c.0.push(children);
         } else {
             self.insert_one(parent, Children(vec![children])).unwrap();
+        }
+    }
+
+    fn despawn_recursive(&mut self, entity: Entity) {
+        let mut queue = vec![entity];
+        while let Some(e) = queue.pop() {
+            if let Ok(children) = self.get::<&Children>(e) {
+                queue.extend(&children.0);
+            }
+
+            self.despawn(e).ok();
         }
     }
 }

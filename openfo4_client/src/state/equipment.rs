@@ -12,7 +12,7 @@ use openfo4_esp::records::{
 };
 use openfo4_esp::{FormId, RecordData, RecordKind};
 
-use crate::assets::nif_v2::NifScene;
+use crate::assets::nif_v2::{LoadNifFlags, NifKey, NifScene};
 use crate::components::WorldSpace;
 use crate::state::esp::EspLoader;
 use crate::state::hardcoded_formids::DAMAGE_TYPE_PHYSICAL;
@@ -472,7 +472,10 @@ pub async fn load_equipment_item_models(
                 };
 
                 let scene = loader
-                    .load::<NifScene, _>(model_path.as_str().unwrap())
+                    .load::<NifScene, _>(&NifKey {
+                        path: model_path.as_str().unwrap().to_owned(),
+                        flags: LoadNifFlags::all(),
+                    })
                     .await
                     .unwrap();
                 models.push(scene);
@@ -482,7 +485,10 @@ pub async fn load_equipment_item_models(
             let model_index = models.len();
             if let Some(model) = &weapon.model.model {
                 let scene = loader
-                    .load::<NifScene, _>(model.as_str().unwrap())
+                    .load::<NifScene, _>(&NifKey {
+                        path: model.as_str().unwrap().to_owned(),
+                        flags: LoadNifFlags::all(),
+                    })
                     .await
                     .unwrap();
                 models.push(scene);
@@ -511,7 +517,10 @@ pub async fn load_equipment_item_models(
 
         let model_index = if let Some(model) = &attachment.model.model {
             let scene = loader
-                .load::<NifScene, _>(model.as_str().unwrap())
+                .load::<NifScene, _>(&NifKey {
+                    path: model.as_str().unwrap().to_owned(),
+                    flags: LoadNifFlags::all(),
+                })
                 .await
                 .unwrap();
 
