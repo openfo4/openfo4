@@ -34,12 +34,12 @@ pub fn handle_activation_inputs(
         _ => return,
     }
 
-    // Disable activation in free cam mode.
-    for (_, camera) in world.query_mut::<&Camera>() {
-        if matches!(camera.mode, CameraMode::Free) {
-            return;
-        }
-    }
+    // // Disable activation in free cam mode.
+    // for (_, camera) in world.query_mut::<&Camera>() {
+    //     if matches!(camera.mode, CameraMode::Free) {
+    //         return;
+    //     }
+    // }
 
     // Get the camera transform.
     let mut camera_transform = Transform::default();
@@ -108,9 +108,9 @@ pub fn handle_activation_inputs(
     };
 
     // Compute whether the target is reachable from the player actor.
-    if ray.point(target.toi).distance(transform.translation) > ACTIVATION_REACH {
-        return;
-    }
+    // if ray.point(target.toi).distance(transform.translation) > ACTIVATION_REACH {
+    //     return;
+    // }
 
     world.spawn((
         HitscanRaycast {
@@ -121,7 +121,6 @@ pub fn handle_activation_inputs(
         DespawnAt(Instant::now() + Duration::from_secs(5)),
     ));
 
-    dbg!(&target.entity);
     events.send(ActivationEvent {
         actor: player,
         target: target.entity,

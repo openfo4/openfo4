@@ -19,6 +19,7 @@ use crate::state::level::LoadContext;
 use crate::state::level::partial::PartialEntityFlags;
 use crate::state::level::terrain::load_land;
 use crate::state::npc::Actor;
+use crate::systems::door::{Door, PortalDoor};
 use crate::systems::lights::{LightFlicker, LightFlickerMode};
 
 #[derive(Debug, Default)]
@@ -34,6 +35,7 @@ pub struct SpawnEntity {
     pub persistent: bool,
     pub worldspace: Option<WorldSpace>,
     pub form: Option<FormId>,
+    pub door: Option<Door>,
 }
 
 impl SpawnEntity {
@@ -57,11 +59,12 @@ impl SpawnEntity {
             persistent,
             worldspace,
             form,
+            door,
         } = self;
 
         // If the object reference already exists we will overwrite it.
         if let Some(form) = form
-            && let Some(entity) = object_ref_set.get(form)
+            && let Some(entity) = object_ref_set.get_by_form(form)
         {
             world.despawn_recursive(entity);
         }
@@ -109,6 +112,11 @@ impl SpawnEntity {
             let mut queue = vec![entity];
             while let Some(e) = queue.pop() {
                 world.insert_one(e, worldspace).unwrap();
+
+                if let Some(door) = door {
+                    world.insert_one(e, door).unwrap();
+                }
+
                 if let Ok(children) = world.get::<&Children>(e) {
                     queue.extend(&children.0);
                 }
@@ -132,6 +140,7 @@ impl SpawnEntity {
         let base_object;
 
         let mut light_mod = LightModification::default();
+        let mut door = None;
 
         match &record.data {
             RecordData::PlacedObject(object) => {
@@ -146,6 +155,22 @@ impl SpawnEntity {
                 if let Some(light) = object.light_data {
                     light_mod.fov = light.fov_offset_from_base_object;
                     light_mod.fade = light.fade_offset_from_base_ojbect;
+                }
+
+                if let Some(door_teleport) = object.door_teleport {
+                    door = Some(Door::Portal(PortalDoor {
+                        target: door_teleport.destination,
+                        target_position: NiTransform::from_ni_transform(Transform {
+                            translation: Vec3::from_array(door_teleport.position),
+                            rotation: Quat::from_euler(
+                                EulerRot::XYZ,
+                                -position.rotation_x,
+                                -position.rotation_y,
+                                -position.rotation_z,
+                            ),
+                            scale: Vec3::ONE,
+                        }),
+                    }));
                 }
             }
             RecordData::PlacedNpc(npc) => {
@@ -315,6 +340,7 @@ impl SpawnEntity {
             rigid_body: flags
                 .contains(PartialEntityFlags::PHYSICS)
                 .then_some(RigidBody::FIXED),
+            door,
             ..Default::default()
         })
     }

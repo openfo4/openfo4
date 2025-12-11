@@ -9,6 +9,7 @@ pub mod aim;
 pub mod animation_sync;
 pub mod camera;
 pub mod controller;
+pub mod door;
 pub mod equipment;
 pub mod hierarchy;
 pub mod inventory;

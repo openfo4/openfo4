@@ -11,13 +11,15 @@ use game_common::components::Transform;
 use game_tasks::TaskPool;
 use game_tracing::trace_span;
 use glam::Vec2;
+use hashbrown::HashMap;
 use hecs::World;
 use openfo4_asset::AssetLoader;
+use openfo4_core::WorldExt;
 use openfo4_core::events::EventBus;
-use openfo4_core::hierarchy::Children;
 use openfo4_core::object_ref_set::ObjectReferenceSet;
 use openfo4_esp::records::Cell;
 use openfo4_esp::{FormId, RecordChildren, RecordData, RecordHeaderFlags, RecordKind};
+use parking_lot::RwLock;
 use tracing::instrument;
 
 use crate::cell::CellId;
@@ -53,6 +55,7 @@ impl Level {
     ) -> Self {
         let (tx, rx) = async_channel::unbounded::<Request>();
         let events = Arc::new(SegQueue::new());
+        let state = Arc::new(LoaderState::default());
 
         pool.spawn({
             let asset_loader = asset_loader.clone();
@@ -61,6 +64,7 @@ impl Level {
             let events = events.clone();
             let shared = shared.clone();
             let file_loader = file_loader.clone();
+            let state = state.clone();
 
             async move {
                 load_persistent(
@@ -70,6 +74,7 @@ impl Level {
                     &pool,
                     &file_loader,
                     &shared,
+                    &state,
                 )
                 .await;
             }
@@ -88,6 +93,7 @@ impl Level {
                     &events,
                     &pool,
                     &shared,
+                    &state,
                 )
                 .await;
             }
@@ -114,7 +120,9 @@ impl Level {
         self.unload_cells(world);
 
         let mut prev_cells_loaded = core::mem::take(&mut self.cells_loaded);
-        for (_, (transform, streamer)) in world.query_mut::<(&Transform, &Streamer)>() {
+        for (_, (transform, streamer, worldspace)) in
+            world.query_mut::<(&Transform, &Streamer, &WorldSpace)>()
+        {
             let ni_transform = NiTransform::from(*transform);
             let cell = CellId::from(ni_transform);
             let cells = cell.square(streamer.distance);
@@ -127,8 +135,8 @@ impl Level {
                 if !prev_cells_loaded.contains(&cell) && !self.cells_loaded.contains(&cell) {
                     tracing::debug!("loading cell {:?}", cell);
                     self.tx
-                        .try_send(Request::Exterior {
-                            worldspace: FormId(0x3c),
+                        .try_send(Request {
+                            worldspace: worldspace.0,
                             cell,
                         })
                         .unwrap();
@@ -171,10 +179,9 @@ impl Level {
         }
 
         let mut entities = Vec::new();
-        let mut queue = Vec::new();
 
-        for (entity, (cell, children, _, persistent)) in
-            world.query_mut::<(&CellId, Option<&Children>, &Root, Option<&Persistent>)>()
+        for (entity, (cell, _, persistent)) in
+            world.query_mut::<(&CellId, &Root, Option<&Persistent>)>()
         {
             if persistent.is_some() {
                 continue;
@@ -185,26 +192,10 @@ impl Level {
             }
 
             entities.push(entity);
-
-            if let Some(children) = children {
-                for children in &children.0 {
-                    queue.push(*children);
-                }
-            }
-        }
-
-        while let Some(entity) = queue.pop() {
-            entities.push(entity);
-
-            if let Ok(children) = world.get::<&Children>(entity) {
-                for children in &children.0 {
-                    queue.push(*children);
-                }
-            }
         }
 
         for entity in entities {
-            world.despawn(entity).unwrap();
+            world.despawn_recursive(entity);
         }
 
         self.cells_to_unload_next_tick.clear();
@@ -212,11 +203,25 @@ impl Level {
 }
 
 #[derive(Copy, Clone, Debug)]
-enum Request {
-    /// An exterior cell.
-    Exterior { worldspace: FormId, cell: CellId },
-    /// An interior cell.
-    Interior { cell: FormId },
+struct Request {
+    worldspace: FormId,
+    cell: CellId,
+}
+
+#[derive(Debug, Default)]
+struct LoaderState {
+    worldspaces: RwLock<HashMap<FormId, WorldspaceState>>,
+    interiors: RwLock<HashSet<FormId>>,
+}
+
+#[derive(Clone, Debug, Default)]
+struct WorldspaceState {
+    cells: HashMap<CellId, CellState>,
+}
+
+#[derive(Clone, Debug, Default)]
+struct CellState {
+    persistent: Vec<FormId>,
 }
 
 async fn load_cells_task(
@@ -227,37 +232,29 @@ async fn load_cells_task(
     events: &Arc<SegQueue<SpawnEntity>>,
     pool: &Arc<TaskPool>,
     shared: &Arc<SharedState>,
+    state: &Arc<LoaderState>,
 ) {
     while let Ok(req) = rx.recv().await {
-        let cell = match req {
-            Request::Exterior { worldspace, cell } => {
-                let cells = esp_loader
-                    .children(RecordChildren::Cells, worldspace)
-                    .await
-                    .unwrap();
+        let is_interior = state.interiors.read().contains(&req.worldspace);
 
-                cells
-                    .iter()
-                    .find_map(|record| match &record.data {
-                        RecordData::Cell(Cell {
-                            grid: Some(grid), ..
-                        }) if cell.0.x == grid.x && cell.0.y == grid.y => Some(record.id),
-                        _ => None,
-                    })
-                    .unwrap()
-            }
-            Request::Interior { cell } => cell,
+        let cell = if !is_interior {
+            let cells = esp_loader
+                .children(RecordChildren::Cells, req.worldspace)
+                .await
+                .unwrap();
+
+            cells
+                .iter()
+                .find_map(|record| match &record.data {
+                    RecordData::Cell(Cell {
+                        grid: Some(grid), ..
+                    }) if req.cell.0.x == grid.x && req.cell.0.y == grid.y => Some(record.id),
+                    _ => None,
+                })
+                .unwrap()
+        } else {
+            req.worldspace
         };
-
-        let worldspace = match req {
-            Request::Exterior {
-                worldspace,
-                cell: _,
-            } => worldspace,
-            Request::Interior { cell } => cell,
-        };
-
-        dbg!(worldspace);
 
         load_cell(
             loader,
@@ -267,8 +264,10 @@ async fn load_cells_task(
             file_loader,
             shared,
             cell,
-            worldspace,
+            req.worldspace,
             false,
+            state,
+            is_interior,
         )
         .await;
     }
@@ -282,6 +281,7 @@ async fn load_persistent(
     pool: &Arc<TaskPool>,
     file_loader: &Arc<FileLoader>,
     shared: &Arc<SharedState>,
+    state: &Arc<LoaderState>,
 ) {
     let mut worldspace_cells = HashSet::new();
 
@@ -311,6 +311,8 @@ async fn load_persistent(
                 cell.id,
                 worldspace.id,
                 true,
+                state,
+                false,
             )
             .await;
         }
@@ -321,6 +323,8 @@ async fn load_persistent(
             continue;
         }
 
+        state.interiors.write().insert(cell.id);
+
         load_cell(
             asset_loader,
             loader,
@@ -330,6 +334,8 @@ async fn load_persistent(
             shared,
             cell.id,
             cell.id,
+            true,
+            state,
             true,
         )
         .await;
@@ -346,6 +352,8 @@ async fn load_cell(
     cell_form: FormId,
     worldspace: FormId,
     persistent_only: bool,
+    state: &Arc<LoaderState>,
+    is_interior: bool,
 ) {
     let cell = match loader.lookup(Some(RecordKind::Cell), cell_form).await {
         Ok(record) => match record.data {
@@ -366,26 +374,44 @@ async fn load_cell(
         cell_id = CellId::new(grid.x, grid.y);
     }
 
-    let persistent = loader
-        .children(RecordChildren::PersistentEntities, cell_form)
-        .await
-        .unwrap();
+    let records = if persistent_only {
+        let persistent = loader
+            .children(RecordChildren::PersistentEntities, cell_form)
+            .await
+            .unwrap();
 
-    let temporary = if !persistent_only {
-        loader
+        persistent
+    } else {
+        let persistent_forms = {
+            let worldspaces = state.worldspaces.read();
+            worldspaces
+                .get(&worldspace)
+                .and_then(|wp| wp.cells.get(&cell_id))
+                .map(|cell| cell.persistent.to_vec())
+                .unwrap_or_default()
+        };
+
+        let mut persistent = Vec::new();
+        for form in persistent_forms {
+            persistent.push(loader.lookup(None, form).await.unwrap());
+        }
+
+        let temporary = loader
             .children(RecordChildren::TemporaryEntities, cell_form)
             .await
-            .unwrap()
-    } else {
-        Vec::new()
+            .unwrap();
+
+        persistent.extend(temporary);
+        persistent
     };
 
-    for record in persistent.into_iter().chain(temporary) {
+    for record in records {
         let loader = loader.clone();
         let file_loader = file_loader.clone();
         let shared = shared.clone();
         let events = events.clone();
         let asset_loader = asset_loader.clone();
+        let state = state.clone();
 
         pool.spawn(async move {
             let ctx = LoadContext {
@@ -405,7 +431,26 @@ async fn load_cell(
             if let Some(mut entity) = SpawnEntity::load(&ctx, &record, flags).await {
                 entity.persistent = record.flags.contains(RecordHeaderFlags::PERSISTENT);
                 entity.worldspace = Some(WorldSpace(worldspace));
-                // entity.form = Some(record.id);
+                entity.form = Some(record.id);
+
+                if persistent_only && entity.persistent {
+                    let cell = if is_interior {
+                        CellId::new(0, 0)
+                    } else {
+                        CellId::from(entity.transform)
+                    };
+
+                    let mut worldspaces = state.worldspaces.write();
+                    worldspaces
+                        .entry(worldspace)
+                        .or_default()
+                        .cells
+                        .entry(cell)
+                        .or_default()
+                        .persistent
+                        .push(record.id);
+                }
+
                 events.push(entity);
             }
         });

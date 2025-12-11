@@ -60,6 +60,7 @@ use crate::state::animation::update_actor_animation_graphs;
 use crate::systems::animation_sync::{bounce_animation_events, update_animation_parameters};
 use crate::systems::camera::CameraMode;
 use crate::systems::controller::apply_player_movements;
+use crate::systems::door::handle_door_activations;
 use crate::systems::weapon::{
     handle_weapon_draw_events, handle_weapon_fire_events, handle_weapon_hit_damage,
     handle_weapon_reload_events, handle_weapon_reload_requests,
@@ -180,10 +181,6 @@ impl GameState {
     }
 
     pub fn init_camera(&mut self) {
-        let distance = std::env::var("OF4_DIST")
-            .map(|v| v.parse().unwrap())
-            .unwrap_or(0);
-
         // let offset = Vec2::new(2.0, 7.0) * 4096.0 * NIF_TO_METERS;
         let offset = CellId(IVec2::new(2, 7)).min();
         let offset = NiTransform::from_translation(offset.extend(0.0));
@@ -193,7 +190,6 @@ impl GameState {
                 fov: PI / 4.0,
                 mode: CameraMode::Free,
             },
-            Streamer { distance },
         ));
     }
 
@@ -275,6 +271,8 @@ impl GameState {
         handle_weapon_reload_events(&mut self.world, &mut self.event_bus);
         handle_weapon_hit_damage(&mut self.world, &mut self.event_bus);
         handle_weapon_draw_events(&mut self.world, &mut self.event_bus);
+
+        handle_door_activations(&mut self.world, &mut self.event_bus, &self.object_ref_set);
 
         if self.physics_debug {
             self.physics.render_debug(gizmos);
