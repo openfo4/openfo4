@@ -17,7 +17,7 @@ use std::mem::MaybeUninit;
 use bytes::Buf;
 use records::{
     AcousticSpace, Action, Activator, Ammo, Armor, Book, CMPO, Cell, Class, Climate, Container,
-    DMGT, DOOR, ENCH, Empty, FACT, FLOR, Furniture, GLOB, GRAS, GameSetting, HDPT, Hazard, INGR,
+    DMGT, Door, ENCH, Empty, FACT, FLOR, Furniture, GLOB, GRAS, GameSetting, HDPT, Hazard, INGR,
     IdleMarker, Ingestible, Key, Keyword, Land, LandTexture, LeveledActor, LeveledItem, Light,
     LocationReferenceType, MSTT, MagicEffect, MiscObject, Note, Npc, PlacedGrenade, PlacedHazard,
     PlacedNpc, PlacedObject, Projectile, Race, SOUN, SPEL, STAT, ShaderParticleGeometry,
@@ -383,7 +383,7 @@ where
             Armor => Armor,
             Book => Book,
             Container => Container,
-            Door => DOOR,
+            Door => Door,
             Ingredient => INGR,
             Light => Light,
             MiscObject => MiscObject,
@@ -591,7 +591,7 @@ pub enum RecordData {
     Armor(Armor),
     Book(Book),
     Container(Container),
-    DOOR(DOOR),
+    Door(Door),
     INGR(INGR),
     Light(Light),
     MiscObject(MiscObject),

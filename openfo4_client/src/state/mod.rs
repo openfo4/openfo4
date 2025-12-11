@@ -60,7 +60,7 @@ use crate::state::animation::update_actor_animation_graphs;
 use crate::systems::animation_sync::{bounce_animation_events, update_animation_parameters};
 use crate::systems::camera::CameraMode;
 use crate::systems::controller::apply_player_movements;
-use crate::systems::door::handle_door_activations;
+use crate::systems::door::{handle_automatic_doors, handle_door_activations};
 use crate::systems::weapon::{
     handle_weapon_draw_events, handle_weapon_fire_events, handle_weapon_hit_damage,
     handle_weapon_reload_events, handle_weapon_reload_requests,
@@ -237,7 +237,7 @@ impl GameState {
         update_animation_parameters(&mut self.world);
 
         // systems::ni_transform::compute_transform_from_ni_transform(&mut self.world);
-        systems::ni_transform::compute_cell_ids_from_ni_transform(&mut self.world);
+        // systems::ni_transform::compute_cell_ids_from_ni_transform(&mut self.world);
         // systems::hierarchy::compute_global_transform(&mut self.world);
 
         self.animation.update(&mut self.world);
@@ -276,6 +276,7 @@ impl GameState {
         handle_weapon_draw_events(&mut self.world, &mut self.event_bus);
 
         handle_door_activations(&mut self.world, &mut self.event_bus, &self.object_ref_set);
+        handle_automatic_doors(&mut self.world, &self.object_ref_set);
 
         if self.physics_debug {
             self.physics.render_debug(gizmos);

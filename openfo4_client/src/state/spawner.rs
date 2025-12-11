@@ -56,8 +56,8 @@ async fn load_record(loader: &EspLoader, file_loader: &FileLoader, id: FormId) -
         RecordData::MSTT(data) => {
             model = data.model.model;
         }
-        RecordData::DOOR(data) => {
-            model = data.modl.model;
+        RecordData::Door(data) => {
+            model = data.model.model;
         }
         _ => (),
     }

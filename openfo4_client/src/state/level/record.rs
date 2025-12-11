@@ -8,12 +8,12 @@ use openfo4_core::WorldExt;
 use openfo4_core::events::EventBus;
 use openfo4_core::hierarchy::Children;
 use openfo4_core::object_ref_set::ObjectReferenceSet;
-use openfo4_esp::records::LightDataFlags;
+use openfo4_esp::records::{DoorFlags, LightDataFlags};
 use openfo4_esp::{FormId, Record, RecordData, RecordHeaderFlags};
 use openfo4_physics::components::{Collider, RigidBody};
 
 use crate::assets::nif_v2::{Instantiate, LoadNifFlags, NIF_TO_METERS, NifKey, NifScene};
-use crate::components::{NiTransform, Persistent, Root, WorldSpace};
+use crate::components::{ActorMarker, NiTransform, Persistent, Root, WorldSpace};
 use crate::render::RenderObject;
 use crate::state::level::LoadContext;
 use crate::state::level::partial::PartialEntityFlags;
@@ -69,6 +69,8 @@ impl SpawnEntity {
             world.despawn_recursive(entity);
         }
 
+        let is_actor = actor.is_some();
+
         // FIXME: Modify this such that both scene and actor are valid.
         let entity = if let Some(scene) = scene {
             scene.instantiate(transform.into(), world, LoadNifFlags::all())
@@ -107,6 +109,10 @@ impl SpawnEntity {
         }
 
         world.insert_one(entity, Root).unwrap();
+
+        if is_actor {
+            world.insert_one(entity, ActorMarker).unwrap();
+        }
 
         if let Some(worldspace) = worldspace {
             let mut queue = vec![entity];
@@ -228,8 +234,15 @@ impl SpawnEntity {
             RecordData::MSTT(data) => {
                 model = data.model.model;
             }
-            RecordData::DOOR(data) => {
-                model = data.modl.model;
+            RecordData::Door(data) => {
+                model = data.model.model;
+
+                if data.flags.contains(DoorFlags::AUTOMATIC) {
+                    door = door.map(|door| match door {
+                        Door::Portal(door) => Door::AutoPortal(door),
+                        door => door,
+                    });
+                }
             }
             RecordData::Container(data) => {
                 model = data.modl.model;

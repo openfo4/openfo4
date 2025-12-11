@@ -13,12 +13,15 @@ use openfo4_physics::components::{Collider, ColliderShape};
 use crate::cell::CellId;
 use crate::components::{Camera, NiTransform};
 use crate::state::npc::BodyPartBone;
+use crate::systems::door::{AUTOLOAD_DOOR_RADIUS, Door};
 
 const COLOR: Color = Color::RED;
 
 const HITSCAN_RAYCAST_LINE_HIT_COLOR: Color = Color::GREEN;
 const HITSCAN_RAYCAST_LINE_MISS_COLOR: Color = Color::RED;
 const HITSCAN_RAYCAST_HIT_COLOR: Color = Color::GREEN;
+
+const AUTO_DOOR_COLOR: Color = Color::GREEN;
 
 #[derive(Copy, Clone, Debug)]
 pub struct HitscanRaycast {
@@ -219,5 +222,15 @@ pub fn draw_hitscan_markers(world: &World, gizmos: &Gizmos) {
                 HITSCAN_RAYCAST_HIT_COLOR,
             );
         }
+    }
+}
+
+pub fn draw_doors(world: &World, gizmos: &Gizmos) {
+    for (_, (transform, door)) in world.query::<(&Transform, &Door)>().iter() {
+        if !matches!(door, Door::AutoPortal(_)) {
+            continue;
+        }
+
+        gizmos.sphere(transform.translation, AUTOLOAD_DOOR_RADIUS, AUTO_DOOR_COLOR);
     }
 }

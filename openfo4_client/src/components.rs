@@ -87,3 +87,7 @@ pub struct WorldSpace {
     pub form: FormId,
     pub is_interior: bool,
 }
+
+/// Marker for all actor entities (including player).
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Hash)]
+pub struct ActorMarker;

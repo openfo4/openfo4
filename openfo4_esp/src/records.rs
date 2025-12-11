@@ -1779,29 +1779,43 @@ bitflags! {
 impl_decode_bitflags!(ContainerDataFlags: u8);
 
 #[derive(Clone, Debug, Record)]
-pub struct DOOR {
+pub struct Door {
     #[record("EDID")]
-    pub edid: ZString,
+    pub id: ZString,
     #[record("VMAD")]
-    pub vmad: Option<VirtualMachineAdapter>,
+    pub virtual_machine_adapter: Option<VirtualMachineAdapter>,
     #[record("OBND")]
-    pub obnd: Bounds,
+    pub object_bounds: Bounds,
     #[record("FULL")]
-    pub full: Option<LString>,
+    pub full_name: Option<LString>,
     // TODOO
     #[record("MODL")]
-    pub modl: Model,
+    pub model: Model,
     #[record("SNAM")]
-    pub snam: Option<FormId>,
+    pub sound_open: Option<FormId>,
     #[record("ANAM")]
-    pub anam: Option<FormId>,
+    pub sound_close: Option<FormId>,
     #[record("BNAM")]
-    pub bnam: Option<FormId>,
+    pub sound_loop: Option<FormId>,
     #[record("FNAM")]
-    pub fnam: u8,
+    pub flags: DoorFlags,
     #[record("TNAM")]
     pub tnam: Vec<FormId>,
 }
+
+bitflags! {
+    #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+    pub struct DoorFlags: u8 {
+        const AUTOMATIC = 0x02;
+        const HIDDEN = 0x04;
+        const MINIMAL_USE = 0x08;
+        const SLIDING = 0x10;
+        const DO_NOT_OPEN_IN_COMBAT_SEARCH = 0x20;
+        const NO_TO_TEXT = 0x40;
+    }
+}
+
+impl_decode_bitflags!(DoorFlags: u8);
 
 #[derive(Clone, Debug, Record)]
 pub struct INGR {

@@ -25,7 +25,7 @@ use crate::assets::animation::AnimationSet;
 use crate::assets::data_file::DataFile;
 use crate::assets::nif_v2::{Instantiate, LoadNifFlags, NIF_TO_METERS, NifScene};
 use crate::cell::CellId;
-use crate::components::{NiTransform, Player, WorldSpace};
+use crate::components::{ActorMarker, NiTransform, Player, WorldSpace};
 use crate::loader::fix_path;
 use crate::state::anim_starter::AnimationEventQueue;
 use crate::state::animation::{self, SkeletonConfig, load_anim};
@@ -85,7 +85,16 @@ pub fn animation_test(
     // let raider_root_path = "meshes/actors/character/behaviors/raiderrootbehavior.hkx";
 
     ONCE.get_or_init(|| {
-        let offset = CellId(IVec2::new(2, 7)).min();
+        let start_x = std::env::var("OF4_SX")
+            .unwrap_or("2".to_owned())
+            .parse()
+            .unwrap();
+        let start_y = std::env::var("OF4_SX")
+            .unwrap_or("7".to_owned())
+            .parse()
+            .unwrap();
+
+        let offset = CellId(IVec2::new(start_x, start_y)).min();
         for (index, offset) in [
             NiTransform::from_translation(offset.extend(0.0) - Vec3::new(1024.0, 1024.0, 0.0)),
             NiTransform::from_translation(offset.extend(0.0) - Vec3::new(2000.0, 2000.0, 0.0)),
@@ -221,6 +230,7 @@ pub fn animation_test(
                             PlayerControlState::default(),
                             AnimationEventQueue::default(),
                             Streamer { distance },
+                            ActorMarker,
                         ),
                     )
                     .unwrap();
