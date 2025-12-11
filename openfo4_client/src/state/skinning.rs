@@ -5,6 +5,7 @@ use game_tracing::trace_span;
 use glam::{Vec3, Vec4Swizzles};
 use hecs::{CommandBuffer, World};
 use openfo4_animation::skeleton::SkeletonInstance;
+use openfo4_core::WorldExt;
 use openfo4_core::hierarchy::Children;
 
 use crate::components::WorldSpace;

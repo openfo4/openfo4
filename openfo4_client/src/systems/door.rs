@@ -1,7 +1,7 @@
 use game_common::components::Transform;
 use hecs::World;
+use openfo4_core::WorldExt;
 use openfo4_core::events::EventBus;
-use openfo4_core::hierarchy::Children;
 use openfo4_core::object_ref_set::ObjectReferenceSet;
 use openfo4_esp::FormId;
 
@@ -49,12 +49,8 @@ pub fn handle_door_activations(
 
                 world.insert(event.actor, (transform, worldspace)).unwrap();
 
-                let mut queue = vec![event.actor];
-                while let Some(e) = queue.pop() {
+                for e in world.hierarchy_recursive(event.actor) {
                     world.insert_one(e, worldspace).unwrap();
-                    if let Ok(children) = world.get::<&Children>(e) {
-                        queue.extend(&children.0);
-                    }
                 }
             }
         }

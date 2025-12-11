@@ -162,7 +162,15 @@ pub fn animation_test(
 
             world.insert_one(root, inventory).unwrap();
             world.insert_one(root, Transform::from(*offset)).unwrap();
-            world.insert_one(root, WorldSpace(FormId(0x3c))).unwrap();
+            world
+                .insert_one(
+                    root,
+                    WorldSpace {
+                        form: FormId(0x3c),
+                        is_interior: false,
+                    },
+                )
+                .unwrap();
 
             // let equipment = Equipment::default();
 

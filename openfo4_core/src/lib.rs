@@ -12,6 +12,11 @@ pub trait WorldExt {
     fn add_children(&mut self, parent: Entity, children: Entity);
 
     fn despawn_recursive(&mut self, entity: Entity);
+
+    /// Returns all entities in the hierarchy starting with `entity`.
+    ///
+    /// This includes the root, `entity`.
+    fn hierarchy_recursive(&self, entity: Entity) -> Vec<Entity>;
 }
 
 impl WorldExt for World {
@@ -26,6 +31,12 @@ impl WorldExt for World {
     }
 
     fn despawn_recursive(&mut self, entity: Entity) {
+        // Fast path if the entity doesn't exist
+        // that doesn't allocate.
+        if !self.contains(entity) {
+            return;
+        }
+
         let mut queue = vec![entity];
         while let Some(e) = queue.pop() {
             if let Ok(children) = self.get::<&Children>(e) {
@@ -34,5 +45,19 @@ impl WorldExt for World {
 
             self.despawn(e).ok();
         }
+    }
+
+    fn hierarchy_recursive(&self, entity: Entity) -> Vec<Entity> {
+        let mut entities = Vec::new();
+        let mut queue = vec![entity];
+        while let Some(e) = queue.pop() {
+            entities.push(e);
+
+            if let Ok(children) = self.get::<&Children>(e) {
+                queue.extend(&children.0);
+            }
+        }
+
+        entities
     }
 }

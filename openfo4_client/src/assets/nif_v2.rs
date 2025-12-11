@@ -23,7 +23,6 @@ use crate::assets::Error;
 use crate::assets::data_file::DataFile;
 use crate::assets::material::{BgsmMaterial, MaterialKey};
 use crate::assets::texture::FileImageHandle;
-use crate::components::Root;
 use crate::loader::fix_path;
 use crate::render::RenderObject;
 
@@ -143,7 +142,7 @@ impl Instantiate for Handle<NifScene> {
             .map(|key| *entities.get(&key).unwrap())
             .collect();
 
-        let root = world.spawn((transform, Children(root), Root));
+        let root = world.spawn((transform, Children(root)));
 
         // This will keep the scene cached until the root entity
         // is destroyed.

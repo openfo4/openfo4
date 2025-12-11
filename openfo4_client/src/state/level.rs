@@ -32,6 +32,8 @@ use crate::state::level::record::SpawnEntity;
 
 use super::esp::EspLoader;
 
+const INTERIOR_CELL: CellId = CellId::new(0, 0);
+
 /// A streamer is an entity that causes a region around it to be loaded (i.e. streamed in).
 #[derive(Copy, Clone, Debug)]
 pub struct Streamer {
@@ -41,8 +43,10 @@ pub struct Streamer {
 pub struct Level {
     events: Arc<SegQueue<SpawnEntity>>,
     tx: async_channel::Sender<Request>,
-    cells_loaded: HashSet<CellId>,
-    cells_to_unload_next_tick: HashSet<CellId>,
+    // Worldspace, Cell
+    cells_loaded: HashSet<(FormId, CellId)>,
+    // Worldspace, Cell
+    cells_to_unload_next_tick: HashSet<(FormId, CellId)>,
 }
 
 impl Level {
@@ -123,37 +127,48 @@ impl Level {
         for (_, (transform, streamer, worldspace)) in
             world.query_mut::<(&Transform, &Streamer, &WorldSpace)>()
         {
-            let ni_transform = NiTransform::from(*transform);
-            let cell = CellId::from(ni_transform);
-            let cells = cell.square(streamer.distance);
+            let cells = if worldspace.is_interior {
+                vec![INTERIOR_CELL]
+            } else {
+                let cell = CellId::from(NiTransform::from(*transform));
+                cell.square(streamer.distance)
+            };
 
             for cell in cells {
                 // Start streaming in the cell if it was not already
                 // loaded in the previous tick and we have not already started
                 // loading it this tick.
                 // This should happen at most once in the current tick.
-                if !prev_cells_loaded.contains(&cell) && !self.cells_loaded.contains(&cell) {
+                if !prev_cells_loaded.contains(&(worldspace.form, cell))
+                    && !self.cells_loaded.contains(&(worldspace.form, cell))
+                {
                     tracing::debug!("loading cell {:?}", cell);
                     self.tx
                         .try_send(Request {
-                            worldspace: worldspace.0,
+                            worldspace: worldspace.form,
                             cell,
                         })
                         .unwrap();
                 }
 
-                self.cells_loaded.insert(cell);
-                prev_cells_loaded.remove(&cell);
+                self.cells_loaded.insert((worldspace.form, cell));
+                prev_cells_loaded.remove(&(worldspace.form, cell));
             }
         }
 
         while let Some(entity) = self.events.pop() {
+            let worldspace = entity.worldspace.unwrap();
+            let cell = if worldspace.is_interior {
+                INTERIOR_CELL
+            } else {
+                CellId::from(entity.transform)
+            };
+
             // It is possible for the event to arrive after the cell
             // was already unloaded again.
             // In this case we must not spawn the new entity to prevent
             // duplicating entities when the cell gets loaded again.
-            let cell = CellId::from(entity.transform);
-            if !self.cells_loaded.contains(&cell) && !entity.persistent {
+            if !self.cells_loaded.contains(&(worldspace.form, cell)) && !entity.persistent {
                 continue;
             }
 
@@ -162,8 +177,6 @@ impl Level {
 
         for cell in prev_cells_loaded {
             tracing::debug!("unloading cell {:?}", cell);
-
-            events.push(Event::UnloadCell(UnloadCell { cell }));
 
             // Mark the cell for removal in the next tick.
             // We cannot immediately unload the cell so that
@@ -180,14 +193,23 @@ impl Level {
 
         let mut entities = Vec::new();
 
-        for (entity, (cell, _, persistent)) in
-            world.query_mut::<(&CellId, &Root, Option<&Persistent>)>()
+        for (entity, (transform, worldspace, _, persistent)) in
+            world.query_mut::<(&Transform, &WorldSpace, &Root, Option<&Persistent>)>()
         {
             if persistent.is_some() {
                 continue;
             }
 
-            if !self.cells_to_unload_next_tick.contains(cell) {
+            let cell = if worldspace.is_interior {
+                INTERIOR_CELL
+            } else {
+                CellId::from(NiTransform::from(*transform))
+            };
+
+            if !self
+                .cells_to_unload_next_tick
+                .contains(&(worldspace.form, cell))
+            {
                 continue;
             }
 
@@ -195,6 +217,7 @@ impl Level {
         }
 
         for entity in entities {
+            dbg!(&entity);
             world.despawn_recursive(entity);
         }
 
@@ -430,7 +453,10 @@ async fn load_cell(
 
             if let Some(mut entity) = SpawnEntity::load(&ctx, &record, flags).await {
                 entity.persistent = record.flags.contains(RecordHeaderFlags::PERSISTENT);
-                entity.worldspace = Some(WorldSpace(worldspace));
+                entity.worldspace = Some(WorldSpace {
+                    form: worldspace,
+                    is_interior,
+                });
                 entity.form = Some(record.id);
 
                 if persistent_only && entity.persistent {

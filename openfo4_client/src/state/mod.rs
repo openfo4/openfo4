@@ -205,7 +205,10 @@ impl GameState {
                 illuminance: 25_000.0,
             },
             Transform::from_translation(Vec3::splat(200.0)).looking_at(Vec3::ZERO, Vec3::Y),
-            WorldSpace(FormId(0x3c)),
+            WorldSpace {
+                form: FormId(0x3c),
+                is_interior: false,
+            },
         ));
     }
 

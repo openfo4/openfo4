@@ -202,7 +202,9 @@ pub fn handle_inventory_events(
     let _span = trace_span!("handle_inventory_events").entered();
 
     for event in events.read::<AddItemEvent>() {
-        let mut inventory = world.get::<&mut Inventory>(event.actor).unwrap();
+        let Ok(mut inventory) = world.get::<&mut Inventory>(event.actor) else {
+            continue;
+        };
 
         let item = futures_lite::future::block_on(load_equipment_item(
             esp_loader,
@@ -225,7 +227,9 @@ pub fn handle_inventory_events(
     }
 
     for event in events.read::<EquipItemEvent>() {
-        let mut inventory = world.get::<&mut Inventory>(event.actor).unwrap();
+        let Ok(mut inventory) = world.get::<&mut Inventory>(event.actor) else {
+            continue;
+        };
 
         let Some((_, item)) = inventory.items_mut().find(|(_, v)| v.item == event.item) else {
             continue;

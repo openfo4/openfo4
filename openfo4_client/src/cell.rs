@@ -8,7 +8,7 @@ pub const CELL_SIZE: UVec2 = UVec2::splat(4096);
 pub struct CellId(pub IVec2);
 
 impl CellId {
-    pub fn new(x: i32, y: i32) -> Self {
+    pub const fn new(x: i32, y: i32) -> Self {
         Self(IVec2::new(x, y))
     }
 

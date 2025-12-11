@@ -69,6 +69,9 @@ impl MulAssign for NiTransform {
 }
 
 /// A root entity.
+///
+/// A root entity represents a gameplay entity (such as Actor, Object, etc.) and has no
+/// [`Children`].
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Root;
 
@@ -80,4 +83,7 @@ pub struct Persistent;
 
 /// Indicates the worldspace that the entity is contained in.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
-pub struct WorldSpace(pub FormId);
+pub struct WorldSpace {
+    pub form: FormId,
+    pub is_interior: bool,
+}
