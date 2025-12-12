@@ -69,12 +69,21 @@ pub fn handle_automatic_doors(world: &mut World, object_ref_set: &ObjectReferenc
 
     let mut transitions = Vec::new();
 
-    for (_, (door_transform, door)) in world.query::<(&Transform, &Door)>().iter() {
+    for (_, (door_transform, door, door_worldspace)) in
+        world.query::<(&Transform, &Door, &WorldSpace)>().iter()
+    {
         let Door::AutoPortal(door) = door else {
             continue;
         };
 
-        for (actor, (actor_transform, _)) in world.query::<(&Transform, &ActorMarker)>().iter() {
+        for (actor, (actor_transform, _, actor_worldspace)) in world
+            .query::<(&Transform, &ActorMarker, &WorldSpace)>()
+            .iter()
+        {
+            if door_worldspace != actor_worldspace {
+                continue;
+            }
+
             let distance = door_transform
                 .translation
                 .distance(actor_transform.translation);
