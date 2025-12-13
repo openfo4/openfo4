@@ -1,6 +1,8 @@
 use game_egui::egui::Context;
+use hecs::World;
 
 use crate::ui::debug::DebugState;
+use crate::ui::inventory::InventoryState;
 
 pub mod debug;
 pub mod hud;
@@ -9,9 +11,11 @@ pub mod inventory;
 #[derive(Clone, Debug, Default)]
 pub struct UiState {
     pub debug: DebugState,
+    pub inventory: InventoryState,
 }
 
-pub fn draw_ui(ctx: &Context, state: &mut UiState) {
+pub fn draw_ui(ctx: &Context, state: &mut UiState, world: &World) {
     debug::draw_debug_ui(ctx, &mut state.debug);
     hud::draw_hud(ctx);
+    inventory::draw_inventory(ctx, &mut state.inventory, world);
 }

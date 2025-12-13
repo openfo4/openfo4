@@ -154,8 +154,6 @@ impl game_window::App for App {
                 }
                 .mount(&root);
             }
-
-            ui::inventory::draw_inventory(&root, self.game.world());
         }
 
         if self.ui_state.debug.draw_colliders {
@@ -187,7 +185,7 @@ impl game_window::App for App {
         }
 
         self.egui_ctx
-            .draw(|ctx| ui::draw_ui(ctx, &mut self.ui_state));
+            .draw(|ctx| ui::draw_ui(ctx, &mut self.ui_state, self.game.world()));
 
         self.time.update();
 
