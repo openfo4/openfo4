@@ -15,6 +15,8 @@ game_crash_handler = { version = "0.1.0", path = "../game_crash_handler", featur
 game_ui = { version = "0.1.0", path = "../game_ui" }
 game_core_pipeline = { version = "0.1.0", path = "../game_core_pipeline" }
 game_gizmos = { version = "0.1.0", path = "../game_gizmos" }
+game_egui = { version = "0.1.0", path = "../game_egui" }
+game_ui_render = { version = "0.1.0", path = "../game_ui_render" }
 
 openfo4_nif = { version = "0.1.0", path = "../openfo4_nif" }
 openfo4_esp = { version = "0.1.0", path = "../openfo4_esp" }

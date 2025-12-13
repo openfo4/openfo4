@@ -1,0 +1,20 @@
+[package]
+name = "game_egui"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+game_ui_render = { version = "0.1.0", path = "../game_ui_render" }
+
+game_window = { version = "0.1.0", path = "../game_window" }
+game_render = { version = "0.1.0", path = "../game_render" }
+game_tasks = { version = "0.1.0", path = "../game_tasks" }
+game_input = { version = "0.1.0", path = "../game_input" }
+
+egui = "0.33.3"
+glam = "0.28.0"
+
+pretty_env_logger = "0.5.0"
+
+[lints]
+workspace = true
