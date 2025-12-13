@@ -12,28 +12,23 @@ mod ui;
 use std::num::NonZeroUsize;
 use std::sync::Arc;
 
-use game_common::components::{Color, Transform};
 use game_core::time::Time;
 use game_crash_handler::main;
+use game_egui::EguiContext;
 use game_gizmos::Gizmos;
-use game_input::keyboard::KeyCode;
 use game_render::Renderer;
-use game_render::camera::{Camera, Projection, RenderTarget};
-use game_render::entities::{CameraId, Object, SceneId};
-use game_render::light::DirectionalLight;
-use game_render::mesh::{Indices, Mesh};
-use game_render::pbr::PbrMaterial;
+use game_render::camera::RenderTarget;
 use game_tasks::TaskPool;
 use game_ui::debug_widgets::gpu_timings::GpuTimings;
 use game_ui::debug_widgets::memory_visualizer::MemoryVisualizer;
 use game_ui::runtime::DocumentId;
 use game_ui::widgets::Widget;
 use game_ui::{UiState, WindowProperties};
+use game_ui_render::UiRenderer;
 use game_window::events::WindowEvent;
-use game_window::windows::{Window, WindowBuilder, WindowId};
+use game_window::windows::{WindowBuilder, WindowId};
 use game_window::{WindowManager, WindowManagerContext};
-use glam::{UVec2, Vec3};
-use openfo4_nif::{Block, Nif};
+use glam::UVec2;
 use render::RenderState;
 use render::physics_debug::{
     draw_cell_boundaries, draw_colliers, draw_skeletons, draw_translations,
@@ -41,9 +36,7 @@ use render::physics_debug::{
 use shared::SharedState;
 use state::GameState;
 
-use crate::render::physics_debug::{
-    despawn_expired, draw_doors, draw_hitscan_markers, draw_light_markers,
-};
+use crate::render::physics_debug::{draw_doors, draw_hitscan_markers, draw_light_markers};
 
 #[main]
 fn main() {
@@ -60,6 +53,9 @@ fn main() {
     let gizmos = Gizmos::new(&mut renderer);
 
     let shared = Arc::new(SharedState::new(entities.clone()));
+
+    let ui_renderer = Arc::new(UiRenderer::new(&mut renderer));
+    let egui_ctx = EguiContext::new(ui_renderer);
 
     let ui = UiState::new(&mut renderer);
     let mut game = GameState::new(shared.clone(), pool);
@@ -80,8 +76,9 @@ fn main() {
         doc: None,
         window,
         size: UVec2::ZERO,
-        debug_options: DebugOptions::default(),
         time: Time::new(),
+        egui_ctx,
+        ui_state: ui::UiState::default(),
     };
 
     wm.run(app);
@@ -94,8 +91,9 @@ struct App {
     doc: Option<DocumentId>,
     window: WindowId,
     size: UVec2,
-    debug_options: DebugOptions,
     time: Time,
+    egui_ctx: EguiContext,
+    ui_state: ui::UiState,
 }
 
 impl game_window::App for App {
@@ -124,41 +122,10 @@ impl game_window::App for App {
             WindowEvent::WindowDestroyed(event) => {
                 self.state.renderer.destroy(event.window);
             }
-            WindowEvent::KeyboardInput(event) => {
-                if event.key_code == Some(KeyCode::F3) && event.state.is_pressed() {
-                    self.debug_options.draw_colliders ^= true;
-                }
-
-                if event.key_code == Some(KeyCode::F4) && event.state.is_pressed() {
-                    self.debug_options.draw_object_translations ^= true;
-                }
-
-                if event.key_code == Some(KeyCode::F5) && event.state.is_pressed() {
-                    self.debug_options.show_memory_visualizer ^= true;
-                }
-
-                if event.key_code == Some(KeyCode::F6) && event.state.is_pressed() {
-                    self.debug_options.draw_cell_boundaries ^= true;
-                }
-
-                if event.key_code == Some(KeyCode::F7) && event.state.is_pressed() {
-                    self.debug_options.draw_skeletons ^= true;
-                }
-
-                if event.key_code == Some(KeyCode::F10) && event.state.is_pressed() {
-                    self.debug_options.draw_light_markers ^= true;
-                }
-
-                if event.key_code == Some(KeyCode::F11) && event.state.is_pressed() {
-                    self.debug_options.draw_hitscan_raycast_markers ^= true;
-                }
-
-                if event.key_code == Some(KeyCode::Numpad1) && event.state.is_pressed() {
-                    self.debug_options.draw_doors ^= true;
-                }
-            }
             _ => (),
         }
+
+        self.egui_ctx.handle_event(&event);
 
         self.game.send_event(event);
     }
@@ -176,7 +143,7 @@ impl game_window::App for App {
             let root = self.ui.runtime().root_context(*doc);
             root.clear_children();
 
-            if self.debug_options.show_memory_visualizer {
+            if self.ui_state.debug.draw_gpu_memory_visualizer {
                 MemoryVisualizer {
                     size: UVec2::splat(1024),
                     stats: self.state.renderer.statistics().clone(),
@@ -191,33 +158,36 @@ impl game_window::App for App {
             ui::inventory::draw_inventory(&root, self.game.world());
         }
 
-        if self.debug_options.draw_colliders {
+        if self.ui_state.debug.draw_colliders {
             draw_colliers(self.game.world(), &self.state.gizmos);
         }
 
-        if self.debug_options.draw_object_translations {
+        if self.ui_state.debug.draw_translations {
             draw_translations(self.game.world(), &self.state.gizmos);
         }
 
-        if self.debug_options.draw_cell_boundaries {
+        if self.ui_state.debug.draw_cell_boundaries {
             draw_cell_boundaries(self.game.world(), &self.state.gizmos);
         }
 
-        if self.debug_options.draw_skeletons {
+        if self.ui_state.debug.draw_skeletons {
             draw_skeletons(self.game.world(), &self.state.gizmos);
         }
 
-        if self.debug_options.draw_light_markers {
+        if self.ui_state.debug.draw_light_markers {
             draw_light_markers(self.game.world(), &self.state.gizmos);
         }
 
-        if self.debug_options.draw_hitscan_raycast_markers {
+        if self.ui_state.debug.draw_hitscan_marker {
             draw_hitscan_markers(self.game.world(), &self.state.gizmos);
         }
 
-        if self.debug_options.draw_doors {
+        if self.ui_state.debug.draw_doors {
             draw_doors(self.game.world(), &self.state.gizmos);
         }
+
+        self.egui_ctx
+            .draw(|ctx| ui::draw_ui(ctx, &mut self.ui_state));
 
         self.time.update();
 
@@ -226,16 +196,4 @@ impl game_window::App for App {
         self.ui.update();
         self.state.render();
     }
-}
-
-#[derive(Clone, Debug, Default)]
-struct DebugOptions {
-    pub draw_colliders: bool,
-    pub draw_object_translations: bool,
-    pub show_memory_visualizer: bool,
-    pub draw_cell_boundaries: bool,
-    pub draw_skeletons: bool,
-    pub draw_light_markers: bool,
-    pub draw_hitscan_raycast_markers: bool,
-    pub draw_doors: bool,
 }
