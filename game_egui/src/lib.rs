@@ -3,9 +3,11 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use egui::epaint::Primitive;
-use egui::{Context, Event, ImageData, Key, PointerButton, Pos2, RawInput, Rect, ViewportId};
+use egui::{
+    Context, Event, ImageData, Key, MouseWheelUnit, PointerButton, Pos2, RawInput, Rect, ViewportId,
+};
 use game_input::keyboard::KeyCode;
-use game_input::mouse::MouseButton;
+use game_input::mouse::{MouseButton, MouseScrollUnit};
 use game_render::backend::TextureFormat;
 use game_render::texture::Image;
 use game_ui_render::{Mesh, MeshId, TextureId, UiRenderer, Vertex};
@@ -79,6 +81,29 @@ impl EguiContext {
                     pos: self.cursor_position_in_points,
                     button,
                     pressed: event.state.is_pressed(),
+                    modifiers: self.input.modifiers,
+                });
+            }
+            WindowEvent::MouseWheel(event) => {
+                let unit = match event.unit {
+                    MouseScrollUnit::Line => MouseWheelUnit::Line,
+                    MouseScrollUnit::Pixel => MouseWheelUnit::Point,
+                };
+
+                let mut delta = Vec2 {
+                    x: event.x,
+                    y: event.y,
+                };
+                if event.unit == MouseScrollUnit::Pixel {
+                    delta /= self.ui_scale;
+                }
+
+                self.input.events.push(Event::MouseWheel {
+                    unit,
+                    delta: egui::Vec2 {
+                        x: delta.x,
+                        y: delta.y,
+                    },
                     modifiers: self.input.modifiers,
                 });
             }
