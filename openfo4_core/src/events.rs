@@ -44,6 +44,20 @@ impl EventBus {
     }
 }
 
+impl<T> Extend<T> for EventBus
+where
+    T: Event,
+{
+    fn extend<I>(&mut self, iter: I)
+    where
+        I: IntoIterator<Item = T>,
+    {
+        for event in iter {
+            self.send(event);
+        }
+    }
+}
+
 pub trait Event: Send + Sync + 'static {}
 
 impl<T> Event for T where T: Send + Sync + 'static {}
