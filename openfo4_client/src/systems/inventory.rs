@@ -13,6 +13,7 @@ use slab::Slab;
 
 use crate::state::equipment::{load_equipment_item, load_equipment_item_models};
 use crate::state::esp::EspLoader;
+use crate::systems::equipment::{Equipment, EquipmentKey, unequip_item};
 
 /// Unique identifier for an item inside a container.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
@@ -93,6 +94,7 @@ pub struct ItemStack {
     pub base_keywords: HashSet<FormId>,
     pub combined_keywords: HashSet<FormId>,
     pub data: ItemData,
+    pub equipment_keys: Vec<EquipmentKey>,
 }
 
 impl ItemStack {
@@ -194,6 +196,12 @@ pub struct EquipItemEvent {
     pub item: FormId,
 }
 
+#[derive(Clone, Debug)]
+pub struct UnequipItemEvent {
+    pub actor: Entity,
+    pub item: FormId,
+}
+
 pub fn handle_inventory_events(
     world: &mut World,
     loader: &AssetLoader,
@@ -225,6 +233,7 @@ pub fn handle_inventory_events(
             data: item.data,
             name: item.name,
             hidden: event.hidden,
+            equipment_keys: Vec::new(),
         });
     }
 
@@ -236,6 +245,11 @@ pub fn handle_inventory_events(
         let Some((_, item)) = inventory.items_mut().find(|(_, v)| v.item == event.item) else {
             continue;
         };
+
+        // Only weapons and armor can be equipped.
+        if item.kind != ItemKind::Weapon && item.kind != ItemKind::Armor {
+            continue;
+        }
 
         if item.equipped {
             continue;
@@ -260,6 +274,41 @@ pub fn handle_inventory_events(
         ));
 
         drop(inventory);
-        equipment.attach_scene(world, event.actor);
+        let keys = equipment.attach_scene(world, event.actor);
+
+        let Ok(mut inventory) = world.get::<&mut Inventory>(event.actor) else {
+            continue;
+        };
+
+        let Some((_, item)) = inventory.items_mut().find(|(_, v)| v.item == event.item) else {
+            continue;
+        };
+
+        item.equipment_keys.extend(keys);
+    }
+
+    for event in events.read::<UnequipItemEvent>() {
+        let Ok(mut inventory) = world.get::<&mut Inventory>(event.actor) else {
+            continue;
+        };
+
+        let Some((_, item)) = inventory.items_mut().find(|(_, v)| v.item == event.item) else {
+            continue;
+        };
+
+        // Only weapons and armor can be equipped.
+        if item.kind != ItemKind::Weapon && item.kind != ItemKind::Armor {
+            continue;
+        }
+
+        if !item.equipped {
+            continue;
+        }
+
+        item.equipped = false;
+        let keys = core::mem::take(&mut item.equipment_keys);
+
+        drop(inventory);
+        unequip_item(event.actor, keys, world);
     }
 }

@@ -1,5 +1,6 @@
 use game_egui::egui::Context;
 use hecs::World;
+use openfo4_core::events::EventBus;
 
 use crate::ui::debug::DebugState;
 use crate::ui::inventory::InventoryState;
@@ -14,8 +15,8 @@ pub struct UiState {
     pub inventory: InventoryState,
 }
 
-pub fn draw_ui(ctx: &Context, state: &mut UiState, world: &World) {
+pub fn draw_ui(ctx: &Context, state: &mut UiState, world: &World, events: &mut EventBus) {
     debug::draw_debug_ui(ctx, &mut state.debug);
     hud::draw_hud(ctx, world);
-    inventory::draw_inventory(ctx, &mut state.inventory, world);
+    inventory::draw_inventory(ctx, &mut state.inventory, world, events);
 }

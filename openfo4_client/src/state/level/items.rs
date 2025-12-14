@@ -40,6 +40,7 @@ pub async fn resolve_item(esp_loader: &EspLoader, form: FormId, count: u64) -> V
                     base_keywords: keywords.clone(),
                     combined_keywords: keywords,
                     data: ItemData::None,
+                    equipment_keys: Vec::new(),
                 });
             }
             RecordData::Weapon(_) | RecordData::Armor(_) => {
@@ -57,6 +58,7 @@ pub async fn resolve_item(esp_loader: &EspLoader, form: FormId, count: u64) -> V
                     base_keywords: item.base_keywords,
                     combined_keywords: item.combined_keywords,
                     data: item.data,
+                    equipment_keys: Vec::new(),
                 });
             }
             RecordData::Ammo(data) => {
@@ -73,6 +75,7 @@ pub async fn resolve_item(esp_loader: &EspLoader, form: FormId, count: u64) -> V
                     base_keywords: keywords.clone(),
                     combined_keywords: keywords,
                     data: ItemData::None,
+                    equipment_keys: Vec::new(),
                 });
             }
             RecordData::Ingestible(data) => {
@@ -89,6 +92,7 @@ pub async fn resolve_item(esp_loader: &EspLoader, form: FormId, count: u64) -> V
                     base_keywords: keywords.clone(),
                     combined_keywords: keywords,
                     data: ItemData::None,
+                    equipment_keys: Vec::new(),
                 });
             }
             RecordData::Key(data) => {
@@ -105,6 +109,7 @@ pub async fn resolve_item(esp_loader: &EspLoader, form: FormId, count: u64) -> V
                     base_keywords: keywords.clone(),
                     combined_keywords: keywords,
                     data: ItemData::None,
+                    equipment_keys: Vec::new(),
                 });
             }
             RecordData::Book(data) => {
@@ -121,6 +126,7 @@ pub async fn resolve_item(esp_loader: &EspLoader, form: FormId, count: u64) -> V
                     base_keywords: keywords.clone(),
                     combined_keywords: keywords,
                     data: ItemData::None,
+                    equipment_keys: Vec::new(),
                 });
             }
             RecordData::Component(data) => {
@@ -135,6 +141,7 @@ pub async fn resolve_item(esp_loader: &EspLoader, form: FormId, count: u64) -> V
                     base_keywords: HashSet::new(),
                     combined_keywords: HashSet::new(),
                     data: ItemData::None,
+                    equipment_keys: Vec::new(),
                 });
             }
             x => todo!("{:?}", x),

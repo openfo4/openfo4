@@ -75,7 +75,7 @@ pub const UPS: u32 = 60;
 
 pub struct GameState {
     pool: Arc<TaskPool>,
-    world: World,
+    pub world: World,
     shared: Arc<SharedState>,
     loader: Arc<FileLoader>,
     level: Level,
@@ -83,7 +83,7 @@ pub struct GameState {
     events: Vec<Event>,
     anim_event: Option<&'static str>,
     asset_loader: AssetLoader,
-    event_bus: EventBus,
+    pub event_bus: EventBus,
     animation: AnimationSystem,
     actions: Actions,
     physics_debug: bool,
@@ -289,6 +289,10 @@ impl GameState {
 
     pub fn world(&self) -> &World {
         &self.world
+    }
+
+    pub fn events_mut(&mut self) -> &mut EventBus {
+        &mut self.event_bus
     }
 
     pub fn send_event(&mut self, event: WindowEvent) {

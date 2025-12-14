@@ -5,6 +5,7 @@ use hashbrown::{HashMap, HashSet};
 use hecs::{Entity, World};
 use openfo4_animation::skeleton::SkeletonInstance;
 use openfo4_core::WorldExt;
+use openfo4_core::hierarchy::Children;
 use slab::Slab;
 
 use crate::assets::nif_v2::NifScene;
@@ -22,6 +23,14 @@ pub struct Equipment {
 impl Equipment {
     pub fn insert(&mut self, item: EquippedItem) -> EquipmentKey {
         EquipmentKey(self.items.insert(item))
+    }
+
+    fn remove(&mut self, key: EquipmentKey) -> Option<EquippedItem> {
+        if self.items.contains(key.0) {
+            Some(self.items.remove(key.0))
+        } else {
+            None
+        }
     }
 
     pub fn get(&self, key: EquipmentKey) -> Option<&EquippedItem> {
@@ -218,4 +227,46 @@ pub fn equip_item(
     }
 
     key
+}
+
+pub fn unequip_item(actor_root: Entity, mut keys: Vec<EquipmentKey>, world: &mut World) {
+    let Ok(mut equipment) = world.get::<&mut Equipment>(actor_root) else {
+        return;
+    };
+
+    let mut removed_entities = HashSet::<Entity>::new();
+
+    while let Some(key) = keys.pop() {
+        let Some(item) = equipment.remove(key) else {
+            continue;
+        };
+
+        removed_entities.extend(&item.entities);
+
+        for attachment in item.attachments.values() {
+            debug_assert!(removed_entities.contains(&attachment.entity));
+            keys.extend(&attachment.attachments);
+        }
+    }
+
+    // Walk the entire entity hierarchy starting with the actor root
+    // and cull all entities from Children that we just removed.
+    // FIXME: In the future maybe just remeber where we attached
+    // so we don't have to walk the entire tree.
+    let mut queue = vec![actor_root];
+    while let Some(entity) = queue.pop() {
+        if let Ok(mut children) = world.get::<&mut Children>(entity) {
+            children.0.retain(|v| !removed_entities.contains(v));
+            queue.extend(&children.0);
+        }
+    }
+
+    drop(equipment);
+
+    // Despawn all removed entities.
+    // Note that this will include all recursive children, so
+    // `despawn_recursive` is not needed here.
+    for entity in removed_entities {
+        world.despawn(entity);
+    }
 }

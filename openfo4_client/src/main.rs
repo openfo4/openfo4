@@ -184,8 +184,14 @@ impl game_window::App for App {
             draw_doors(self.game.world(), &self.state.gizmos);
         }
 
-        self.egui_ctx
-            .draw(|ctx| ui::draw_ui(ctx, &mut self.ui_state, self.game.world()));
+        self.egui_ctx.draw(|ctx| {
+            ui::draw_ui(
+                ctx,
+                &mut self.ui_state,
+                &self.game.world,
+                &mut self.game.event_bus,
+            )
+        });
 
         self.time.update();
 
