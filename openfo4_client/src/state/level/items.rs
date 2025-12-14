@@ -144,6 +144,21 @@ pub async fn resolve_item(esp_loader: &EspLoader, form: FormId, count: u64) -> V
                     equipment_keys: Vec::new(),
                 });
             }
+            RecordData::Note(data) => {
+                items.push(ItemStack {
+                    item: form,
+                    name: data.id.as_str().unwrap().to_string(),
+                    hidden: false,
+                    kind: ItemKind::Misc,
+                    count,
+                    attachments: Vec::new(),
+                    equipped: false,
+                    base_keywords: HashSet::new(),
+                    combined_keywords: HashSet::new(),
+                    data: ItemData::None,
+                    equipment_keys: Vec::new(),
+                });
+            }
             x => todo!("{:?}", x),
         }
     }

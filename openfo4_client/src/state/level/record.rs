@@ -13,7 +13,9 @@ use openfo4_esp::{FormId, Record, RecordData, RecordHeaderFlags};
 use openfo4_physics::components::{Collider, RigidBody};
 
 use crate::assets::nif_v2::{Instantiate, LoadNifFlags, NIF_TO_METERS, NifKey, NifScene};
-use crate::components::{ActorMarker, NiTransform, Persistent, Root, RootParent, WorldSpace};
+use crate::components::{
+    ActorMarker, NiTransform, Persistent, PlacedItem, Root, RootParent, WorldSpace,
+};
 use crate::render::RenderObject;
 use crate::state::level::LoadContext;
 use crate::state::level::items::resolve_item;
@@ -21,7 +23,7 @@ use crate::state::level::partial::PartialEntityFlags;
 use crate::state::level::terrain::load_land;
 use crate::state::npc::Actor;
 use crate::systems::door::{Door, PortalDoor};
-use crate::systems::inventory::Inventory;
+use crate::systems::inventory::{Inventory, ItemStack};
 use crate::systems::lights::{LightFlicker, LightFlickerMode};
 
 #[derive(Debug, Default)]
@@ -39,6 +41,7 @@ pub struct SpawnEntity {
     pub form: Option<FormId>,
     pub door: Option<Door>,
     pub inventory: Option<Inventory>,
+    pub placed_item: Option<PlacedItem>,
 }
 
 impl SpawnEntity {
@@ -64,6 +67,7 @@ impl SpawnEntity {
             form,
             door,
             inventory,
+            placed_item,
         } = self;
 
         // If the object reference already exists we will overwrite it.
@@ -110,6 +114,10 @@ impl SpawnEntity {
 
         if let Some(inventory) = inventory {
             world.insert_one(entity, inventory).unwrap();
+        }
+
+        if let Some(placed_item) = placed_item {
+            world.insert_one(entity, placed_item).unwrap();
         }
 
         if persistent {
@@ -233,6 +241,8 @@ impl SpawnEntity {
         let mut light_flicker = None;
         let mut actor = None;
         let mut inventory = None;
+
+        let item = load_item(ctx, &base).await;
 
         match base.data {
             RecordData::STAT(data) => {
@@ -376,6 +386,7 @@ impl SpawnEntity {
                 .then_some(RigidBody::FIXED),
             door,
             inventory,
+            placed_item: item.map(PlacedItem),
             ..Default::default()
         })
     }
@@ -386,4 +397,24 @@ struct LightModification {
     radius: f32,
     fov: f32,
     fade: f32,
+}
+
+async fn load_item(ctx: &LoadContext<'_>, record: &Record) -> Option<ItemStack> {
+    let is_item = match record.data {
+        RecordData::Ammo(_) => true,
+        RecordData::Armor(_) => true,
+        RecordData::Book(_) => true,
+        RecordData::Ingestible(_) => true,
+        RecordData::Key(_) => true,
+        RecordData::Note(_) => true,
+        RecordData::MiscObject(_) => true,
+        RecordData::Weapon(_) => true,
+        _ => false,
+    };
+
+    if is_item {
+        Some(resolve_item(ctx.esp_loader, record.id, 1).await.remove(0))
+    } else {
+        None
+    }
 }

@@ -7,14 +7,16 @@ use game_tracing::trace_span;
 use hashbrown::{HashMap, HashSet};
 use hecs::{Entity, World};
 use openfo4_asset::AssetLoader;
+use openfo4_core::WorldExt;
 use openfo4_core::events::EventBus;
 use openfo4_esp::FormId;
 use slab::Slab;
 
+use crate::components::PlacedItem;
 use crate::state::equipment::{load_equipment_item, load_equipment_item_models};
 use crate::state::esp::EspLoader;
-use crate::systems::TransferItemEvent;
 use crate::systems::equipment::{Equipment, EquipmentKey, unequip_item};
+use crate::systems::{PickupItemEvent, TransferItemEvent};
 
 /// Unique identifier for an item inside a container.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
@@ -353,5 +355,21 @@ pub fn handle_inventory_events(
         if stack.count == 0 {
             src_inventory.remove(event.item);
         }
+    }
+
+    for event in events.read::<PickupItemEvent>() {
+        let Ok(mut inventory) = world.get::<&mut Inventory>(event.actor) else {
+            continue;
+        };
+
+        let Ok(item) = world.get::<&mut PlacedItem>(event.item) else {
+            continue;
+        };
+
+        inventory.insert(item.0.clone());
+        drop(inventory);
+        drop(item);
+
+        world.despawn_recursive(event.item);
     }
 }

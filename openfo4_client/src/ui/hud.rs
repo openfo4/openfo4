@@ -1,14 +1,15 @@
 use std::fmt::Write;
 
+use game_egui::egui::menu::context_menu_opened;
 use game_egui::egui::{
     Color32, Context, CornerRadius, Frame, Key, LayerId, Painter, Pos2, Rect, RichText, Window,
 };
 use hecs::{Entity, World};
 use openfo4_core::events::EventBus;
 
-use crate::components::{LookingAtTarget, Player, RootParent};
-use crate::systems::TransferItemEvent;
+use crate::components::{LookingAtTarget, PlacedItem, Player, RootParent};
 use crate::systems::inventory::Inventory;
+use crate::systems::{PickupItemEvent, TransferItemEvent};
 
 const HP_HEIGHT: f32 = 10.0;
 const HP_WIDTH: f32 = 200.0;
@@ -36,6 +37,7 @@ pub fn draw_hud(ctx: &Context, state: &mut HudState, world: &World, events: &mut
     draw_crosshair(&painter, viewport, world);
     draw_health(&painter, viewport);
     draw_quickloot_menu(ctx, viewport, world, events, &mut state.quickloot);
+    draw_pickup_menu(ctx, world, events);
 }
 
 fn draw_crosshair(painter: &Painter, viewport: Rect, world: &World) {
@@ -324,6 +326,48 @@ fn draw_quickloot_menu(
                 }
 
                 ui.label(text);
+            }
+        });
+}
+
+fn draw_pickup_menu(ctx: &Context, world: &World, events: &mut EventBus) {
+    let Some((player, target)) = world
+        .query::<(&LookingAtTarget, &Player)>()
+        .iter()
+        .map(|(p, (v, _))| (p, *v))
+        .next()
+    else {
+        return;
+    };
+
+    let Ok(root_parent) = world.get::<&RootParent>(target.0) else {
+        return;
+    };
+
+    let target = root_parent.0;
+    let Ok(item) = world.get::<&PlacedItem>(target) else {
+        return;
+    };
+
+    let pickup_item = ctx.input(|input| input.key_down(Key::F));
+
+    Window::new("Pickup")
+        .frame(Frame::NONE)
+        .collapsible(false)
+        .interactable(false)
+        .resizable(false)
+        .movable(false)
+        .title_bar(false)
+        .show(ctx, |ui| {
+            ui.label("PICKUP");
+
+            ui.label(RichText::new(item.0.name.clone()).color(Color32::GREEN));
+
+            if pickup_item {
+                events.send(PickupItemEvent {
+                    actor: player,
+                    item: target,
+                });
             }
         });
 }

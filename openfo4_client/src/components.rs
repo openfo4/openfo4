@@ -7,6 +7,7 @@ use openfo4_core::transform::ConvertCoordinateSystem;
 use openfo4_esp::FormId;
 
 use crate::systems::camera::CameraMode;
+use crate::systems::inventory::ItemStack;
 
 #[derive(Copy, Clone, Debug)]
 pub struct Camera {
@@ -98,3 +99,7 @@ pub struct ActorMarker;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct LookingAtTarget(pub Entity);
+
+/// An item placed in the world.
+#[derive(Clone, Debug)]
+pub struct PlacedItem(pub ItemStack);

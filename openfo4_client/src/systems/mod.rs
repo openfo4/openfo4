@@ -101,3 +101,10 @@ pub struct TransferItemEvent {
     pub item: InventoryKey,
     pub count: u64,
 }
+
+#[derive(Clone, Debug)]
+pub struct PickupItemEvent {
+    pub actor: Entity,
+    /// The item in the world that is picked up.
+    pub item: Entity,
+}
