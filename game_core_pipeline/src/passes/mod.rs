@@ -23,6 +23,7 @@ use game_render::backend::{
 };
 use game_render::buffer::GpuBuffer;
 use game_render::buffer::slab::{CompactSlabBuffer, SlabBuffer, SlabIndex};
+use game_render::buffer::texture_slab::{TextureSlab, TextureSlabIndex};
 use game_render::graph::{NodeLabel, RenderGraph, SlotFlags, SlotKind, SlotLabel};
 use game_render::mesh::Mesh;
 use glam::UVec2;
@@ -302,64 +303,6 @@ impl SceneData {
 #[derive(Debug)]
 struct ObjectState {
     id: InstanceKey,
-}
-
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Zeroable, Pod)]
-#[repr(transparent)]
-pub struct TextureSlabIndex(u32);
-
-#[derive(Debug)]
-pub struct TextureSlab {
-    default: TextureView,
-    entries: Vec<Option<TextureView>>,
-    free_list: Vec<u32>,
-}
-
-impl TextureSlab {
-    pub fn new(default: TextureView) -> Self {
-        Self {
-            default,
-            entries: Vec::new(),
-            free_list: Vec::new(),
-        }
-    }
-
-    pub fn insert(&mut self, texture: TextureView) -> TextureSlabIndex {
-        let index = match self.free_list.pop() {
-            Some(index) => index as usize,
-            None => {
-                let index = self.entries.len();
-                self.entries.resize(index + 1, None);
-                index
-            }
-        };
-
-        let slot = &mut self.entries[index];
-        debug_assert!(slot.is_none());
-        *slot = Some(texture);
-
-        TextureSlabIndex(index as u32)
-    }
-
-    pub fn remove(&mut self, index: TextureSlabIndex) {
-        let entry = &mut self.entries[index.0 as usize];
-        debug_assert!(entry.is_some());
-        *entry = None;
-
-        self.free_list.push(index.0);
-        // TODO: We may want to compact the entries when the last
-        // entry is removed.
-        // This will require to iteratively pop entries from the
-        // back of the entries Vec AND remove the index from
-        // the free list.
-    }
-
-    pub fn views(&self) -> Vec<&TextureView> {
-        self.entries
-            .iter()
-            .map(|view| view.as_ref().unwrap_or(&self.default))
-            .collect()
-    }
 }
 
 #[derive(Copy, Clone, Debug, Zeroable, Pod)]

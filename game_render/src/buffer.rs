@@ -1,6 +1,7 @@
 pub mod block;
 pub mod slab;
 pub mod suballocated;
+pub mod texture_slab;
 
 use std::marker::PhantomData;
 

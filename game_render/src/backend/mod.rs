@@ -13,6 +13,7 @@ use glam::UVec2;
 use hashbrown::HashMap;
 use vulkan::{Buffer, DescriptorSetLayout, Fence, Sampler, Semaphore, Texture, TextureView};
 
+use crate::buffer::GpuBuffer;
 use crate::shader::ShaderInstance;
 
 #[derive(Clone, Debug)]
@@ -977,6 +978,11 @@ pub struct DrawIndirectCommand {
     pub first_instance: u32,
 }
 
+impl GpuBuffer for DrawIndirectCommand {
+    const SIZE: usize = size_of::<Self>();
+    const ALIGN: usize = align_of::<Self>();
+}
+
 #[derive(Copy, Clone, Debug, Zeroable, Pod)]
 #[repr(C)]
 pub struct DrawIndexedIndirectCommand {
@@ -990,6 +996,11 @@ pub struct DrawIndexedIndirectCommand {
     pub vertex_offset: u32,
     /// The index of the first instance to draw.
     pub first_instance: u32,
+}
+
+impl GpuBuffer for DrawIndexedIndirectCommand {
+    const SIZE: usize = size_of::<Self>();
+    const ALIGN: usize = align_of::<Self>();
 }
 
 #[derive(Copy, Clone, Debug)]
