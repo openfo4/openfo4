@@ -3,7 +3,7 @@ use std::fmt::Write;
 use game_egui::egui::{
     Color32, Context, CornerRadius, Frame, LayerId, Painter, Pos2, Rect, RichText, Window,
 };
-use hecs::World;
+use hecs::{Entity, World};
 
 use crate::components::{LookingAtTarget, Player, RootParent};
 use crate::systems::inventory::Inventory;
@@ -16,13 +16,24 @@ const STROKE_SIZE: f32 = 2.0;
 const CROSSHAIR_WIDTH: f32 = 40.0;
 const CROSSHAIR_HEIGHT: f32 = 40.0;
 
-pub fn draw_hud(ctx: &Context, world: &World) {
+#[derive(Clone, Debug, Default)]
+pub struct HudState {
+    quickloot: QuicklootState,
+}
+
+#[derive(Clone, Debug, Default)]
+struct QuicklootState {
+    target: Option<Entity>,
+    index: usize,
+}
+
+pub fn draw_hud(ctx: &Context, state: &mut HudState, world: &World) {
     let painter = ctx.layer_painter(LayerId::background());
     let viewport = ctx.content_rect();
 
     draw_crosshair(&painter, viewport, world);
     draw_health(&painter, viewport);
-    draw_quickloot_menu(ctx, viewport, world);
+    draw_quickloot_menu(ctx, viewport, world, &mut state.quickloot);
 }
 
 fn draw_crosshair(painter: &Painter, viewport: Rect, world: &World) {
@@ -221,7 +232,7 @@ fn draw_outline(painter: &Painter, area: Rect) {
     );
 }
 
-fn draw_quickloot_menu(ctx: &Context, viewport: Rect, world: &World) {
+fn draw_quickloot_menu(ctx: &Context, viewport: Rect, world: &World, state: &mut QuicklootState) {
     let Some(target) = world
         .query::<(&LookingAtTarget, &Player)>()
         .iter()
@@ -239,6 +250,19 @@ fn draw_quickloot_menu(ctx: &Context, viewport: Rect, world: &World) {
         return;
     };
 
+    if state.target != Some(root_parent.0) {
+        state.index = 0;
+    }
+    state.target = Some(root_parent.0);
+
+    ctx.input(|input| {
+        if input.raw_scroll_delta.y > 0.0 {
+            state.index = state.index.saturating_add(1);
+        } else if input.raw_scroll_delta.y < 0.0 {
+            state.index = state.index.saturating_sub(1);
+        }
+    });
+
     Window::new("Quickloot")
         .frame(Frame::NONE)
         .collapsible(false)
@@ -250,16 +274,17 @@ fn draw_quickloot_menu(ctx: &Context, viewport: Rect, world: &World) {
         .show(ctx, |ui| {
             ui.label("CONTAINER");
 
-            for (_, item) in inventory.items() {
+            // When index is out of bounds move it to the last item.
+            state.index = usize::min(state.index, inventory.items().count().saturating_sub(1));
+
+            for (index, (_, item)) in inventory.items().enumerate() {
                 let mut name = item.name.clone();
                 if item.count != 1 {
                     write!(name, " ({})", item.count).unwrap();
                 }
 
-                let is_selected = false;
-
                 let mut text = RichText::new(name);
-                if is_selected {
+                if state.index == index {
                     text = text.background_color(Color32::GREEN).color(Color32::BLACK);
                 } else {
                     text = text.color(Color32::GREEN);
