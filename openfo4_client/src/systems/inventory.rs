@@ -13,6 +13,7 @@ use slab::Slab;
 
 use crate::state::equipment::{load_equipment_item, load_equipment_item_models};
 use crate::state::esp::EspLoader;
+use crate::systems::TransferItemEvent;
 use crate::systems::equipment::{Equipment, EquipmentKey, unequip_item};
 
 /// Unique identifier for an item inside a container.
@@ -193,13 +194,14 @@ pub struct AddItemEvent {
 #[derive(Clone, Debug)]
 pub struct EquipItemEvent {
     pub actor: Entity,
+    // FIXME: Change to `InventoryKey`.
     pub item: FormId,
 }
 
 #[derive(Clone, Debug)]
 pub struct UnequipItemEvent {
     pub actor: Entity,
-    pub item: FormId,
+    pub item: InventoryKey,
 }
 
 pub fn handle_inventory_events(
@@ -210,6 +212,16 @@ pub fn handle_inventory_events(
     tasks: &TaskPool,
 ) {
     let _span = trace_span!("handle_inventory_events").entered();
+
+    // Before we transfer anything we must first unequip it.
+    let unequip_transfer_events = events
+        .read::<TransferItemEvent>()
+        .map(|e| UnequipItemEvent {
+            actor: e.source,
+            item: e.item,
+        })
+        .collect::<Vec<_>>();
+    events.extend(unequip_transfer_events);
 
     for event in events.read::<AddItemEvent>() {
         let Ok(mut inventory) = world.get::<&mut Inventory>(event.actor) else {
@@ -292,7 +304,7 @@ pub fn handle_inventory_events(
             continue;
         };
 
-        let Some((_, item)) = inventory.items_mut().find(|(_, v)| v.item == event.item) else {
+        let Some(item) = inventory.get_mut(event.item) else {
             continue;
         };
 
@@ -310,5 +322,36 @@ pub fn handle_inventory_events(
 
         drop(inventory);
         unequip_item(event.actor, keys, world);
+    }
+
+    // Transfering items must come after all unequip events have been processed.
+    // This ensures that any items to transfer are not unequipped.
+    for event in events.read::<TransferItemEvent>() {
+        // Transfering in the same container is a noop.
+        if event.source == event.destination {
+            continue;
+        }
+
+        let (Ok(mut src_inventory), Ok(mut dst_inventory)) = (
+            world.get::<&mut Inventory>(event.source),
+            world.get::<&mut Inventory>(event.destination),
+        ) else {
+            continue;
+        };
+
+        let Some(stack) = src_inventory.get_mut(event.item) else {
+            continue;
+        };
+
+        let count = u64::min(event.count, stack.count);
+        stack.count -= count;
+
+        let mut new_stack = stack.clone();
+        new_stack.count = count;
+        dst_inventory.insert(new_stack);
+
+        if stack.count == 0 {
+            src_inventory.remove(event.item);
+        }
     }
 }

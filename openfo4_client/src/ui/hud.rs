@@ -1,11 +1,13 @@
 use std::fmt::Write;
 
 use game_egui::egui::{
-    Color32, Context, CornerRadius, Frame, LayerId, Painter, Pos2, Rect, RichText, Window,
+    Color32, Context, CornerRadius, Frame, Key, LayerId, Painter, Pos2, Rect, RichText, Window,
 };
 use hecs::{Entity, World};
+use openfo4_core::events::EventBus;
 
 use crate::components::{LookingAtTarget, Player, RootParent};
+use crate::systems::TransferItemEvent;
 use crate::systems::inventory::Inventory;
 
 const HP_HEIGHT: f32 = 10.0;
@@ -27,13 +29,13 @@ struct QuicklootState {
     index: usize,
 }
 
-pub fn draw_hud(ctx: &Context, state: &mut HudState, world: &World) {
+pub fn draw_hud(ctx: &Context, state: &mut HudState, world: &World, events: &mut EventBus) {
     let painter = ctx.layer_painter(LayerId::background());
     let viewport = ctx.content_rect();
 
     draw_crosshair(&painter, viewport, world);
     draw_health(&painter, viewport);
-    draw_quickloot_menu(ctx, viewport, world, &mut state.quickloot);
+    draw_quickloot_menu(ctx, viewport, world, events, &mut state.quickloot);
 }
 
 fn draw_crosshair(painter: &Painter, viewport: Rect, world: &World) {
@@ -232,11 +234,17 @@ fn draw_outline(painter: &Painter, area: Rect) {
     );
 }
 
-fn draw_quickloot_menu(ctx: &Context, viewport: Rect, world: &World, state: &mut QuicklootState) {
-    let Some(target) = world
+fn draw_quickloot_menu(
+    ctx: &Context,
+    viewport: Rect,
+    world: &World,
+    events: &mut EventBus,
+    state: &mut QuicklootState,
+) {
+    let Some((player, target)) = world
         .query::<(&LookingAtTarget, &Player)>()
         .iter()
-        .map(|(_, (v, _))| *v)
+        .map(|(p, (v, _))| (p, *v))
         .next()
     else {
         return;
@@ -250,17 +258,22 @@ fn draw_quickloot_menu(ctx: &Context, viewport: Rect, world: &World, state: &mut
         return;
     };
 
-    if state.target != Some(root_parent.0) {
+    let target = root_parent.0;
+
+    if state.target != Some(target) {
         state.index = 0;
     }
-    state.target = Some(root_parent.0);
+    state.target = Some(target);
 
+    let mut transfer_current_item = false;
     ctx.input(|input| {
         if input.raw_scroll_delta.y > 0.0 {
             state.index = state.index.saturating_add(1);
         } else if input.raw_scroll_delta.y < 0.0 {
             state.index = state.index.saturating_sub(1);
         }
+
+        transfer_current_item = input.key_pressed(Key::F);
     });
 
     Window::new("Quickloot")
@@ -275,9 +288,20 @@ fn draw_quickloot_menu(ctx: &Context, viewport: Rect, world: &World, state: &mut
             ui.label("CONTAINER");
 
             // When index is out of bounds move it to the last item.
-            state.index = usize::min(state.index, inventory.items().count().saturating_sub(1));
+            state.index = usize::min(
+                state.index,
+                inventory
+                    .items()
+                    .filter(|(_, item)| !item.hidden)
+                    .count()
+                    .saturating_sub(1),
+            );
 
-            for (index, (_, item)) in inventory.items().enumerate() {
+            for (index, (key, item)) in inventory
+                .items()
+                .filter(|(_, item)| !item.hidden)
+                .enumerate()
+            {
                 let mut name = item.name.clone();
                 if item.count != 1 {
                     write!(name, " ({})", item.count).unwrap();
@@ -288,6 +312,15 @@ fn draw_quickloot_menu(ctx: &Context, viewport: Rect, world: &World, state: &mut
                     text = text.background_color(Color32::GREEN).color(Color32::BLACK);
                 } else {
                     text = text.color(Color32::GREEN);
+                }
+
+                if transfer_current_item && index == state.index {
+                    events.send(TransferItemEvent {
+                        source: target,
+                        destination: player,
+                        item: key,
+                        count: item.count,
+                    });
                 }
 
                 ui.label(text);

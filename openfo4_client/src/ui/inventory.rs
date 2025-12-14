@@ -22,7 +22,7 @@ pub fn draw_inventory(
     };
 
     Window::new("Inventory").show(ctx, |ui| {
-        for (_, item) in inventory.items() {
+        for (key, item) in inventory.items() {
             if item.hidden {
                 continue;
             }
@@ -36,7 +36,7 @@ pub fn draw_inventory(
                 if item.equipped {
                     events.send(UnequipItemEvent {
                         actor: player,
-                        item: item.item,
+                        item: key,
                     });
                 } else {
                     events.send(EquipItemEvent {

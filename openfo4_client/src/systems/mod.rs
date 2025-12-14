@@ -3,6 +3,8 @@ use hashbrown::HashMap;
 use hecs::Entity;
 use openfo4_esp::FormId;
 
+use crate::systems::inventory::InventoryKey;
+
 pub mod activation;
 pub mod actor_value;
 pub mod aim;
@@ -90,4 +92,12 @@ pub struct WeaponSheathEvent {
 pub struct ActivationEvent {
     pub actor: Entity,
     pub target: Entity,
+}
+
+#[derive(Clone, Debug)]
+pub struct TransferItemEvent {
+    pub source: Entity,
+    pub destination: Entity,
+    pub item: InventoryKey,
+    pub count: u64,
 }
