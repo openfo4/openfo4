@@ -13,13 +13,15 @@ use openfo4_esp::{FormId, Record, RecordData, RecordHeaderFlags};
 use openfo4_physics::components::{Collider, RigidBody};
 
 use crate::assets::nif_v2::{Instantiate, LoadNifFlags, NIF_TO_METERS, NifKey, NifScene};
-use crate::components::{ActorMarker, NiTransform, Persistent, Root, WorldSpace};
+use crate::components::{ActorMarker, NiTransform, Persistent, Root, RootParent, WorldSpace};
 use crate::render::RenderObject;
 use crate::state::level::LoadContext;
+use crate::state::level::items::resolve_item;
 use crate::state::level::partial::PartialEntityFlags;
 use crate::state::level::terrain::load_land;
 use crate::state::npc::Actor;
 use crate::systems::door::{Door, PortalDoor};
+use crate::systems::inventory::Inventory;
 use crate::systems::lights::{LightFlicker, LightFlickerMode};
 
 #[derive(Debug, Default)]
@@ -36,6 +38,7 @@ pub struct SpawnEntity {
     pub worldspace: Option<WorldSpace>,
     pub form: Option<FormId>,
     pub door: Option<Door>,
+    pub inventory: Option<Inventory>,
 }
 
 impl SpawnEntity {
@@ -60,6 +63,7 @@ impl SpawnEntity {
             worldspace,
             form,
             door,
+            inventory,
         } = self;
 
         // If the object reference already exists we will overwrite it.
@@ -104,6 +108,10 @@ impl SpawnEntity {
             world.insert_one(entity, light_flicker).unwrap();
         }
 
+        if let Some(inventory) = inventory {
+            world.insert_one(entity, inventory).unwrap();
+        }
+
         if persistent {
             world.insert_one(entity, Persistent).unwrap();
         }
@@ -118,6 +126,7 @@ impl SpawnEntity {
             let mut queue = vec![entity];
             while let Some(e) = queue.pop() {
                 world.insert_one(e, worldspace).unwrap();
+                world.insert_one(e, RootParent(entity)).unwrap();
 
                 if let Some(door) = door {
                     world.insert_one(e, door).unwrap();
@@ -223,6 +232,7 @@ impl SpawnEntity {
         let mut light = None;
         let mut light_flicker = None;
         let mut actor = None;
+        let mut inventory = None;
 
         match base.data {
             RecordData::STAT(data) => {
@@ -245,7 +255,18 @@ impl SpawnEntity {
                 }
             }
             RecordData::Container(data) => {
-                model = data.modl.model;
+                model = data.model.model;
+
+                let mut inv = Inventory::default();
+
+                for item in &data.items {
+                    let items = resolve_item(ctx.esp_loader, item.item, item.count.into()).await;
+                    for item in items {
+                        inv.insert(item);
+                    }
+                }
+
+                inventory = Some(inv);
             }
             RecordData::Npc(_) => {
                 if flags.contains(PartialEntityFlags::ACTOR) {
@@ -354,6 +375,7 @@ impl SpawnEntity {
                 .contains(PartialEntityFlags::PHYSICS)
                 .then_some(RigidBody::FIXED),
             door,
+            inventory,
             ..Default::default()
         })
     }

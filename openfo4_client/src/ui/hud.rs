@@ -1,4 +1,12 @@
-use game_egui::egui::{Color32, Context, CornerRadius, LayerId, Painter, Pos2, Rect};
+use std::fmt::Write;
+
+use game_egui::egui::{
+    Color32, Context, CornerRadius, Frame, LayerId, Painter, Pos2, Rect, RichText, Window,
+};
+use hecs::World;
+
+use crate::components::{LookingAtTarget, Player, RootParent};
+use crate::systems::inventory::Inventory;
 
 const HP_HEIGHT: f32 = 10.0;
 const HP_WIDTH: f32 = 200.0;
@@ -8,15 +16,20 @@ const STROKE_SIZE: f32 = 2.0;
 const CROSSHAIR_WIDTH: f32 = 40.0;
 const CROSSHAIR_HEIGHT: f32 = 40.0;
 
-pub fn draw_hud(ctx: &Context) {
+pub fn draw_hud(ctx: &Context, world: &World) {
     let painter = ctx.layer_painter(LayerId::background());
     let viewport = ctx.content_rect();
 
-    draw_crosshair(&painter, viewport);
+    draw_crosshair(&painter, viewport, world);
     draw_health(&painter, viewport);
+    draw_quickloot_menu(ctx, viewport, world);
 }
 
-fn draw_crosshair(painter: &Painter, viewport: Rect) {
+fn draw_crosshair(painter: &Painter, viewport: Rect, world: &World) {
+    draw_interaction_crosshair(painter, viewport);
+}
+
+fn draw_interaction_crosshair(painter: &Painter, viewport: Rect) {
     let area = Rect {
         min: Pos2 {
             x: (viewport.size().x - CROSSHAIR_WIDTH) / 2.0,
@@ -206,4 +219,53 @@ fn draw_outline(painter: &Painter, area: Rect) {
         CornerRadius::ZERO,
         Color32::GREEN,
     );
+}
+
+fn draw_quickloot_menu(ctx: &Context, viewport: Rect, world: &World) {
+    let Some(target) = world
+        .query::<(&LookingAtTarget, &Player)>()
+        .iter()
+        .map(|(_, (v, _))| *v)
+        .next()
+    else {
+        return;
+    };
+
+    let Ok(root_parent) = world.get::<&RootParent>(target.0) else {
+        return;
+    };
+
+    let Ok(inventory) = world.get::<&Inventory>(root_parent.0) else {
+        return;
+    };
+
+    Window::new("Quickloot")
+        .frame(Frame::NONE)
+        .collapsible(false)
+        .interactable(false)
+        .resizable(false)
+        .movable(false)
+        .title_bar(false)
+        .min_width(200.0)
+        .show(ctx, |ui| {
+            ui.label("CONTAINER");
+
+            for (_, item) in inventory.items() {
+                let mut name = item.name.clone();
+                if item.count != 1 {
+                    write!(name, " ({})", item.count).unwrap();
+                }
+
+                let is_selected = false;
+
+                let mut text = RichText::new(name);
+                if is_selected {
+                    text = text.background_color(Color32::GREEN).color(Color32::BLACK);
+                } else {
+                    text = text.color(Color32::GREEN);
+                }
+
+                ui.label(text);
+            }
+        });
 }

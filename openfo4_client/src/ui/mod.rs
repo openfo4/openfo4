@@ -16,6 +16,6 @@ pub struct UiState {
 
 pub fn draw_ui(ctx: &Context, state: &mut UiState, world: &World) {
     debug::draw_debug_ui(ctx, &mut state.debug);
-    hud::draw_hud(ctx);
+    hud::draw_hud(ctx, world);
     inventory::draw_inventory(ctx, &mut state.inventory, world);
 }

@@ -417,7 +417,7 @@ pub async fn load_equipment_item(
                 ammo: combined_props.weapon_ammo,
             })
         }
-        ItemKind::Ammo | ItemKind::Misc => ItemData::None,
+        ItemKind::Ammo | ItemKind::Misc | ItemKind::Aid | ItemKind::Junk => ItemData::None,
     };
 
     EquipmentItem {

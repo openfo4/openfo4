@@ -163,6 +163,8 @@ pub enum ItemKind {
     Armor,
     Ammo,
     Misc,
+    Aid,
+    Junk,
 }
 
 impl ItemStack {

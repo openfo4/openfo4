@@ -195,20 +195,21 @@ pub struct TRNS {
 }
 
 #[derive(Clone, Debug, Record)]
-pub struct CMPO {
+pub struct Component {
     #[record("EDID")]
-    pub edid: ZString,
-    #[record("GNAM")]
-    pub gnam: Option<u32>,
+    pub id: ZString,
     #[record("OBND")]
-    pub obnd: Option<Bounds>,
+    pub object_bounds: Bounds,
     #[record("FULL")]
-    pub full: Option<u32>,
-    /// Probably use "Crafting Use Sound"
+    pub full_name: Option<LString>,
     #[record("CUSD")]
-    pub cusd: Option<FormId>,
+    pub sound_crafting: Option<FormId>,
+    #[record("DATA")]
+    pub auto_calc_value: Option<u32>,
     #[record("MNAM")]
-    pub mnam: Option<u32>,
+    pub scrap_item: Option<FormId>,
+    #[record("GNAM")]
+    pub mod_scrap_scalar: Option<FormId>,
 }
 
 #[derive(Copy, Clone, Debug)]
@@ -1656,52 +1657,72 @@ pub struct ObjectModTemplateItemInclude {
 #[derive(Clone, Debug, Record)]
 pub struct Book {
     #[record("EDID")]
-    pub edid: ZString,
-    // TODO
+    pub id: ZString,
     #[record("VMAD")]
-    pub vmad: Option<()>,
+    pub virtual_machine_adapter: Option<()>,
     #[record("OBND")]
-    pub obnd: Bounds,
+    pub objet_bounds: Bounds,
+    #[record("PTRN")]
+    pub preview_transform: Option<FormId>,
     #[record("FULL")]
-    pub full: Option<LString>,
-    // TODO
+    pub full_name: Option<LString>,
     #[record("MODL")]
-    pub modl: Option<()>,
+    pub model: Model,
     #[record("ICON")]
-    pub icon: Option<ZString>,
+    pub inventory_image: Option<ZString>,
     #[record("MICO")]
-    pub mico: Option<ZString>,
+    pub message_icon: Option<ZString>,
     #[record("DESC")]
-    pub desc: LString,
+    pub description: Option<LString>,
     // TODO
     #[record("DEST")]
-    pub dest: Option<()>,
+    dest: Option<()>,
     #[record("YNAM")]
-    pub ynam: Option<FormId>,
+    pub sound_pick_up: Option<FormId>,
     #[record("ZNAM")]
-    pub znam: Option<FormId>,
+    pub sound_drop: Option<FormId>,
     #[record("KSIZ")]
-    pub ksiz: Option<u32>,
-    // #[record("KWDA")]
-    // pub kwda: Vec<FormId>,
+    _keyword_count: Option<u32>,
+    #[record("KWDA")]
+    pub keywords: Option<Array<FormId>>,
+    #[record("FIMD")]
+    pub featured_item_message: Option<FormId>,
     #[record("DATA")]
-    pub data: Option<BOOK_DATA>,
-    #[record("INAM")]
-    pub inam: Option<FormId>,
+    pub data: Option<BookData>,
+    #[record("DNAM")]
+    pub data2: Option<BookData2>,
     #[record("CNAM")]
-    pub cnam: LString,
+    pub description2: Option<LString>,
+    #[record("INAM")]
+    pub inventory_art: Option<FormId>,
 }
 
 #[derive(Copy, Clone, Debug, BinaryStruct)]
-pub struct BOOK_DATA {
-    pub flags: u8,
-    pub typ: u8,
-    _pad0: [u8; 2],
-    pub teaches: u32,
-    // Only 8 bytes in record?
-    // pub value: u32,
-    // pub weight: f32,
+pub struct BookData {
+    pub value: u32,
+    pub weight: f32,
 }
+
+#[derive(Copy, Clone, Debug, BinaryStruct)]
+pub struct BookData2 {
+    pub flags: BookFlags,
+    /// [`ActorValue`], [`Spell`] or [`Perk`] depending on `flags`. Unused otherwise.
+    pub form: FormId,
+    pub text_offset_x: u32,
+    pub text_offset_y: u32,
+}
+
+bitflags! {
+    #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+    pub struct BookFlags: u8 {
+        const ADVANCE_ACTOR_VALUE = 0x01;
+        const CANT_BE_TAKEN = 0x02;
+        const ADD_SPELL = 0x04;
+        const ADD_PERK = 0x08;
+    }
+}
+
+impl_decode_bitflags!(BookFlags: u8);
 
 /// A container represents an entity that holds items in its inventory.
 #[derive(Clone, Debug, Record)]
@@ -1715,9 +1736,9 @@ pub struct Container {
     #[record("PTRN")]
     pub preview_transform: Option<FormId>,
     #[record("FULL")]
-    pub full: Option<LString>,
+    pub full_name: Option<LString>,
     #[record("MODL")]
-    pub modl: Model,
+    pub model: Model,
     #[record("COCT")]
     items_count: Option<u32>,
     #[record("CNTO")]
@@ -2623,7 +2644,7 @@ pub struct Ammo {
     ///
     /// Reference to a [`Keyword`].
     #[record("KWDA")]
-    pub keywords: Array<FormId>,
+    pub keywords: Option<Array<FormId>>,
     #[record("DATA")]
     pub data: AmmoItemData,
     #[record("DNAM")]
@@ -3052,9 +3073,9 @@ pub struct Key {
     #[record("ZNAM")]
     pub sound_drop: Option<FormId>,
     #[record("KSIZ")]
-    keyword_count: Option<u32>,
+    _keyword_count: Option<u32>,
     #[record("KWDA")]
-    pub keywords: Option<Keywords>,
+    pub keywords: Option<Array<FormId>>,
     #[record("DATA")]
     pub data: KeyData,
 }
@@ -3078,9 +3099,9 @@ pub struct Ingestible {
     #[record("MODL")]
     pub model: Model,
     #[record("KSIZ")]
-    keyword_count: Option<u32>,
+    _keyword_count: Option<u32>,
     #[record("KWDA")]
-    pub keywords: Option<Keywords>,
+    pub keywords: Option<Array<FormId>>,
     //model
     #[record("ICON")]
     pub inventory_image: Option<ZString>,

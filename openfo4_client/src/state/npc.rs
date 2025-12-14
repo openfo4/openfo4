@@ -18,6 +18,7 @@ use rand::distr::weighted::WeightedIndex;
 use crate::state::animation_test::{ActorCharacter, BodyPartBoneProps, load_character};
 use crate::state::esp::EspLoader;
 use crate::state::hardcoded_formids::KEYWORD_FEMALE;
+use crate::state::level::leveled_list::select_from_leveled_list;
 use crate::systems::FacingDirection;
 use crate::systems::actor_value::ActorValueProperties;
 use crate::systems::controller::ControllerShape;
@@ -357,55 +358,10 @@ async fn resolve_actor_props(
                 }
             }
             RecordData::LeveledActor(data) => {
-                let mut weights = Vec::new();
-                let mut indices = Vec::new();
-
-                if data.flags.contains(LeveledActorFlags::ALL_LEVELS) {
-                    for (index, entry) in data.entries.iter().enumerate() {
-                        if entry.level > PLAYER_LEVEL {
-                            continue;
-                        }
-
-                        let weight = 100 - u8::min(100, entry.chance_none);
-                        if weight == 0 {
-                            continue;
-                        }
-
-                        indices.push(index);
-                        weights.push(u64::from(weight));
-                    }
-                } else {
-                    let mut max_level = 0;
-
-                    for (index, entry) in data.entries.iter().enumerate() {
-                        if entry.level > PLAYER_LEVEL || entry.level < max_level {
-                            continue;
-                        }
-
-                        // We found an entry with a higher level.
-                        // All previous entries become invalid.
-                        if entry.level != max_level {
-                            weights.clear();
-                            indices.clear();
-                            max_level = entry.level;
-                        }
-
-                        let weight = 100 - u8::min(100, entry.chance_none);
-                        if weight == 0 {
-                            continue;
-                        }
-
-                        indices.push(index);
-                        weights.push(u64::from(weight));
-                    }
-                }
-
-                if weights.len() == 0 {
+                let Some(index) = select_from_leveled_list(data.flags, &data.entries, PLAYER_LEVEL)
+                else {
                     continue;
-                }
-
-                let distribution = WeightedIndex::new(weights).unwrap();
-                let index = indices[distribution.sample(&mut rand::rng())];
+                };
 
                 let form = data.entries[index].reference;
                 let record = esp_loader.lookup(None, form).await.unwrap();

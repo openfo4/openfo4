@@ -8,6 +8,7 @@ use openfo4_core::WorldExt;
 use slab::Slab;
 
 use crate::assets::nif_v2::NifScene;
+use crate::components::RootParent;
 use crate::state::animation_test::SkinInstance;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
@@ -198,6 +199,10 @@ pub fn equip_item(
                 }
             }
         }
+    }
+
+    for entity in &entities {
+        world.insert_one(*entity, RootParent(actor_root)).unwrap();
     }
 
     let key = equipment.insert(EquippedItem {

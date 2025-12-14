@@ -57,6 +57,7 @@ use crate::shared::SharedState;
 use crate::state::actions::{Action, Actions};
 use crate::state::anim_starter::{AnimationEventQueue, AnimationSystem};
 use crate::state::animation::update_actor_animation_graphs;
+use crate::systems::activation::update_player_looking_at_target;
 use crate::systems::animation_sync::{bounce_animation_events, update_animation_parameters};
 use crate::systems::camera::CameraMode;
 use crate::systems::controller::apply_player_movements;
@@ -277,6 +278,7 @@ impl GameState {
 
         handle_door_activations(&mut self.world, &mut self.event_bus, &self.object_ref_set);
         handle_automatic_doors(&mut self.world, &self.object_ref_set);
+        update_player_looking_at_target(&mut self.world, &self.physics);
 
         if self.physics_debug {
             self.physics.render_debug(gizmos);

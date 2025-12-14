@@ -16,12 +16,13 @@ use std::mem::MaybeUninit;
 
 use bytes::Buf;
 use records::{
-    AcousticSpace, Action, Activator, Ammo, Armor, Book, CMPO, Cell, Class, Climate, Container,
-    DMGT, Door, ENCH, Empty, FACT, FLOR, Furniture, GLOB, GRAS, GameSetting, HDPT, Hazard, INGR,
-    IdleMarker, Ingestible, Key, Keyword, Land, LandTexture, LeveledActor, LeveledItem, Light,
-    LocationReferenceType, MSTT, MagicEffect, MiscObject, Note, Npc, PlacedGrenade, PlacedHazard,
-    PlacedNpc, PlacedObject, Projectile, Race, SOUN, SPEL, STAT, ShaderParticleGeometry,
-    StaticCollection, TACT, TRNS, Tes4, TextureSet, VisualEffect, Weather, Worldspace,
+    AcousticSpace, Action, Activator, Ammo, Armor, Book, Cell, Class, Climate, Component,
+    Container, DMGT, Door, ENCH, Empty, FACT, FLOR, Furniture, GLOB, GRAS, GameSetting, HDPT,
+    Hazard, INGR, IdleMarker, Ingestible, Key, Keyword, Land, LandTexture, LeveledActor,
+    LeveledItem, Light, LocationReferenceType, MSTT, MagicEffect, MiscObject, Note, Npc,
+    PlacedGrenade, PlacedHazard, PlacedNpc, PlacedObject, Projectile, Race, SOUN, SPEL, STAT,
+    ShaderParticleGeometry, StaticCollection, TACT, TRNS, Tes4, TextureSet, VisualEffect, Weather,
+    Worldspace,
 };
 
 use crate::records::{
@@ -364,7 +365,7 @@ where
             LocationReferenceType => LocationReferenceType,
             Action => Action,
             Transform => TRNS,
-            Component => CMPO,
+            Component => Component,
             TextureSet => TextureSet,
             GlobalVariable => GLOB,
             DamageType => DMGT,
@@ -572,7 +573,7 @@ pub enum RecordData {
     LocationReferenceType(LocationReferenceType),
     Action(Action),
     TRNS(TRNS),
-    CMPO(CMPO),
+    Component(Component),
     TextureSet(TextureSet),
     GLOB(GLOB),
     DMGT(DMGT),
@@ -763,7 +764,7 @@ as_record_kind_impl! {
     LocationReferenceType => RecordKind::LocationReferenceType,
     Action => RecordKind::Action,
     TRNS => RecordKind::Transform,
-    CMPO => RecordKind::Component,
+    Component => RecordKind::Component,
     TextureSet => RecordKind::TextureSet,
     GLOB => RecordKind::GlobalVariable,
     DMGT => RecordKind::DamageType,

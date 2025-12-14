@@ -2,6 +2,7 @@ use std::ops::{Mul, MulAssign};
 
 use game_common::components::Transform;
 use glam::{Quat, Vec3};
+use hecs::Entity;
 use openfo4_core::transform::ConvertCoordinateSystem;
 use openfo4_esp::FormId;
 
@@ -76,6 +77,9 @@ impl MulAssign for NiTransform {
 pub struct Root;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub struct RootParent(pub Entity);
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Player;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
@@ -91,3 +95,6 @@ pub struct WorldSpace {
 /// Marker for all actor entities (including player).
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Hash)]
 pub struct ActorMarker;
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub struct LookingAtTarget(pub Entity);
