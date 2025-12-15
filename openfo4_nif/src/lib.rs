@@ -7,7 +7,7 @@ use std::io::Cursor;
 use std::str::FromStr;
 
 use bitflags::bitflags;
-use bstr::{BStr, BString};
+use bstr::BString;
 use bytes::Buf;
 use glam::{Mat3, Quat, Vec2, Vec3, Vec4};
 use half::f16;
@@ -137,21 +137,7 @@ impl Nif {
                     Block::NiAlphaProperty(NiAlphaProperty::decode(&mut reader)?)
                 }
                 BlockType::BSSkinInstance => {
-                    let skeleton_root = BlockRef::decode(&mut reader).unwrap();
-                    let data = BlockRef::decode(&mut reader).unwrap();
-                    let num_bones = reader.get_u32().unwrap();
-                    let bones = (0..num_bones)
-                        .map(|_| BlockRef::decode(&mut reader))
-                        .collect::<Result<_, _>>()
-                        .unwrap();
-                    let num_scales = reader.get_u32().unwrap();
-                    assert_eq!(num_scales, 0, "todo");
-
-                    Block::BSSkinInstance(BSSkinInstance {
-                        skeleton_root,
-                        data,
-                        bones,
-                    })
+                    Block::BSSkinInstance(BSSkinInstance::decode(&mut reader)?)
                 }
                 BlockType::BSSkinBoneData => {
                     let num_bones = reader.get_u32().unwrap();
@@ -176,6 +162,30 @@ impl Nif {
                 BlockType::BSConnectPointParents => {
                     Block::BSConnectPointParents(BSConnectPointParents::decode(&mut reader)?)
                 }
+                BlockType::BSClothExtraData => {
+                    Block::BSClothExtraData(BSClothExtraData::decode(&mut reader)?)
+                }
+                BlockType::NiBinaryExtraData => {
+                    Block::NiBinaryExtraData(NiBinaryExtraData::decode(&mut reader)?)
+                }
+                BlockType::NiCamera => Block::NiCamera(NiCamera::decode(&mut reader)?),
+                BlockType::BSFrustumFOVController => {
+                    Block::BSFrustumFOVController(BSFrustumFOVController::decode(&mut reader)?)
+                }
+                BlockType::NiStringExtraData => {
+                    Block::NiStringExtraData(NiStringExtraData::decode(&mut reader)?)
+                }
+                BlockType::BSFurnitureMarkerNode => {
+                    Block::BSFurnitureMarkerNode(BSFurnitureMarkerNode::decode(&mut reader)?)
+                }
+                BlockType::NiLightRadiusController => {
+                    Block::NiLightRadiusController(NiLightRadiusController::decode(&mut reader)?)
+                }
+                BlockType::NiLightDimmerController => {
+                    Block::NiLightDimmerController(NiLightDimmerController::decode(&mut reader)?)
+                }
+                BlockType::NiPointLight => Block::NiPointLight(NiPointLight::decode(&mut reader)?),
+                BlockType::BSFadeNode => Block::BSFadeNode(BSFadeNode::decode(&mut reader)?),
                 _ => Block::Skipped,
             };
 
@@ -383,7 +393,7 @@ pub struct BsHeader {
     // sometimes contain garbage, so we handle them
     // as bytes instead.
     author: BString,
-    process_script: BString,
+    process_script: Option<BString>,
     export_script: BString,
     max_filepath: BString,
 }
@@ -396,9 +406,15 @@ impl Decode for BsHeader {
         let mut author = vec![0; author_len.into()];
         reader.copy_to_bytes(&mut author)?;
 
-        let process_script_len = u8::decode(reader)?;
-        let mut process_script = vec![0; process_script_len.into()];
-        reader.copy_to_bytes(&mut process_script)?;
+        let process_script = if version >= 132 {
+            u32::decode(reader)?;
+            None
+        } else {
+            let process_script_len = u8::decode(reader)?;
+            let mut process_script = vec![0; process_script_len.into()];
+            reader.copy_to_bytes(&mut process_script)?;
+            Some(BString::new(process_script))
+        };
 
         let export_script_len = u8::decode(reader)?;
         let mut export_script = vec![0; export_script_len.into()];
@@ -411,7 +427,7 @@ impl Decode for BsHeader {
         Ok(Self {
             version,
             author: BString::new(author),
-            process_script: BString::new(process_script),
+            process_script,
             export_script: BString::new(export_script),
             max_filepath: BString::new(max_filepath),
         })
@@ -449,6 +465,16 @@ pub enum Block {
     NiAlphaProperty(NiAlphaProperty),
     BSConnectPointChildren(BSConnectPointChildren),
     BSConnectPointParents(BSConnectPointParents),
+    BSClothExtraData(BSClothExtraData),
+    NiBinaryExtraData(NiBinaryExtraData),
+    NiCamera(NiCamera),
+    BSFrustumFOVController(BSFrustumFOVController),
+    NiStringExtraData(NiStringExtraData),
+    BSFurnitureMarkerNode(BSFurnitureMarkerNode),
+    NiLightRadiusController(NiLightRadiusController),
+    NiLightDimmerController(NiLightDimmerController),
+    NiPointLight(NiPointLight),
+    BSFadeNode(BSFadeNode),
 }
 
 #[derive(Clone, Debug)]
@@ -529,6 +555,30 @@ pub struct BSSkinInstance {
     pub skeleton_root: BlockRef,
     pub data: BlockRef,
     pub bones: Vec<BlockRef>,
+    pub scales: Vec<Vec3>,
+}
+
+impl Decode for BSSkinInstance {
+    fn decode(reader: &mut Reader<'_>) -> Result<Self, Error> {
+        let skeleton_root = BlockRef::decode(reader).unwrap();
+        let data = BlockRef::decode(reader).unwrap();
+        let num_bones = reader.get_u32().unwrap();
+        let bones = (0..num_bones)
+            .map(|_| BlockRef::decode(reader))
+            .collect::<Result<_, _>>()
+            .unwrap();
+        let num_scales = reader.get_u32().unwrap();
+        let scales = (0..num_scales)
+            .map(|_| Vec3::decode(reader))
+            .collect::<Result<_, _>>()?;
+
+        Ok(BSSkinInstance {
+            skeleton_root,
+            data,
+            bones,
+            scales,
+        })
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -662,6 +712,45 @@ pub enum BlockType {
     BSSkyShaderProperty,
     BSDamageStage,
     BSLagBoneController,
+    BSClothExtraData,
+    NiBinaryExtraData,
+    NiCamera,
+    BSFrustumFOVController,
+    NiStringExtraData,
+    BSFurnitureMarkerNode,
+    NiLightRadiusController,
+    NiLightDimmerController,
+    NiPointLight,
+    BSPSysInheritVelocityModifier,
+    BSWindModifier,
+    BSLightingShaderPropertyColorController,
+    NiPSysSphereEmitter,
+    NiPSysSphericalCollider,
+    NiLightColorController,
+    NiStringsExtraData,
+    NiPSysEmitterInitialRadiusCtlr,
+    BSProceduralLightningController,
+    BSMasterParticleSystem,
+    BSPSysMultiTargetEmitterCtlr,
+    NiExtraData,
+    BSEyeCenterExtraData,
+    BSFadeNode,
+    BSPSysRecycleBoundModifier,
+    NiPSysEmitterDeclinationCtlr,
+    BSParentVelocityModifier,
+    NiPSysGravityStrengthCtlr,
+    NiPSysEmitterPlanarAngleCtlr,
+    NiPSysInitialRotSpeedVarCtlr,
+    NiPSysInitialRotSpeedCtlr,
+    BSPackedCombinedSharedGeomDataExtra,
+    BSMultiBoundNode,
+    BSMultiBound,
+    BSMultiBoundOBB,
+    BSTreeNode,
+    NiSwitchNode,
+    NiPSysEmitterDeclinationVarCtlr,
+    BSWaterShaderProperty,
+    BSMultiBoundAABB,
 }
 
 impl FromStr for BlockType {
@@ -751,6 +840,47 @@ impl FromStr for BlockType {
             "BSSkyShaderProperty" => Ok(Self::BSSkyShaderProperty),
             "BSDamageStage" => Ok(Self::BSDamageStage),
             "BSLagBoneController" => Ok(Self::BSLagBoneController),
+            "BSClothExtraData" => Ok(Self::BSClothExtraData),
+            "NiBinaryExtraData" => Ok(Self::NiBinaryExtraData),
+            "NiCamera" => Ok(Self::NiCamera),
+            "BSFrustumFOVController" => Ok(Self::BSFrustumFOVController),
+            "NiStringExtraData" => Ok(Self::NiStringExtraData),
+            "BSFurnitureMarkerNode" => Ok(Self::BSFurnitureMarkerNode),
+            "NiLightRadiusController" => Ok(Self::NiLightRadiusController),
+            "NiLightDimmerController" => Ok(Self::NiLightDimmerController),
+            "NiPointLight" => Ok(Self::NiPointLight),
+            "BSPSysInheritVelocityModifier" => Ok(Self::BSPSysInheritVelocityModifier),
+            "BSWindModifier" => Ok(Self::BSWindModifier),
+            "BSLightingShaderPropertyColorController" => {
+                Ok(Self::BSLightingShaderPropertyColorController)
+            }
+            "NiPSysSphereEmitter" => Ok(Self::NiPSysSphereEmitter),
+            "NiPSysSphericalCollider" => Ok(Self::NiPSysSphericalCollider),
+            "NiLightColorController" => Ok(Self::NiLightColorController),
+            "NiStringsExtraData" => Ok(Self::NiStringsExtraData),
+            "NiPSysEmitterInitialRadiusCtlr" => Ok(Self::NiPSysEmitterInitialRadiusCtlr),
+            "BSProceduralLightningController" => Ok(Self::BSProceduralLightningController),
+            "BSMasterParticleSystem" => Ok(Self::BSMasterParticleSystem),
+            "BSPSysMultiTargetEmitterCtlr" => Ok(Self::BSPSysMultiTargetEmitterCtlr),
+            "NiExtraData" => Ok(Self::NiExtraData),
+            "BSEyeCenterExtraData" => Ok(Self::BSEyeCenterExtraData),
+            "BSFadeNode" => Ok(Self::BSFadeNode),
+            "BSPSysRecycleBoundModifier" => Ok(Self::BSPSysRecycleBoundModifier),
+            "NiPSysEmitterDeclinationCtlr" => Ok(Self::NiPSysEmitterDeclinationCtlr),
+            "BSParentVelocityModifier" => Ok(Self::BSParentVelocityModifier),
+            "NiPSysGravityStrengthCtlr" => Ok(Self::NiPSysGravityStrengthCtlr),
+            "NiPSysEmitterPlanarAngleCtlr" => Ok(Self::NiPSysEmitterPlanarAngleCtlr),
+            "NiPSysInitialRotSpeedVarCtlr" => Ok(Self::NiPSysInitialRotSpeedVarCtlr),
+            "NiPSysInitialRotSpeedCtlr" => Ok(Self::NiPSysInitialRotSpeedCtlr),
+            "BSPackedCombinedSharedGeomDataExtra" => Ok(Self::BSPackedCombinedSharedGeomDataExtra),
+            "BSMultiBoundNode" => Ok(Self::BSMultiBoundNode),
+            "BSMultiBound" => Ok(Self::BSMultiBound),
+            "BSMultiBoundOBB" => Ok(Self::BSMultiBoundOBB),
+            "BSTreeNode" => Ok(Self::BSTreeNode),
+            "NiSwitchNode" => Ok(Self::NiSwitchNode),
+            "NiPSysEmitterDeclinationVarCtlr" => Ok(Self::NiPSysEmitterDeclinationVarCtlr),
+            "BSWaterShaderProperty" => Ok(Self::BSWaterShaderProperty),
+            "BSMultiBoundAABB" => Ok(Self::BSMultiBoundAABB),
             _ => Err(BadBlockType),
         }
     }
@@ -1077,5 +1207,377 @@ impl Decode for BSBound {
             center,
             bounds,
         })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct BSClothExtraData {
+    pub data: Vec<u8>,
+}
+
+impl Decode for BSClothExtraData {
+    fn decode(reader: &mut Reader<'_>) -> Result<Self, Error> {
+        let data = reader.get_byte_array()?;
+        Ok(Self { data })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct NiBinaryExtraData {
+    pub name: String,
+    pub data: Vec<u8>,
+}
+
+impl Decode for NiBinaryExtraData {
+    fn decode(reader: &mut Reader<'_>) -> Result<Self, Error> {
+        let name = reader.get_u32()?;
+        let name = reader.string(name)?.to_owned();
+        let data = reader.get_byte_array()?;
+        Ok(Self { name, data })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct NiCamera {
+    pub name: String,
+    pub extra_data: Vec<BlockRef>,
+    pub controller: Option<BlockRef>,
+    pub flags: NiNodeFlags,
+    pub translation: Vec3,
+    pub rotation: Mat3,
+    pub scale: f32,
+    pub collision_object: Option<BlockRef>,
+    pub camera_flags: u16,
+    pub frustum_left: f32,
+    pub frustum_right: f32,
+    pub frustum_top: f32,
+    pub frustum_bottom: f32,
+    pub frustum_near: f32,
+    pub frustum_far: f32,
+    pub use_orthographic_projection: bool,
+    pub viewport_left: f32,
+    pub viewport_right: f32,
+    pub viewport_top: f32,
+    pub viewport_bottom: f32,
+    pub lod_adjust: f32,
+    pub scene: Option<BlockRef>,
+    pub num_screen_polygons: u32,
+    pub num_screen_textures: u32,
+}
+
+impl Decode for NiCamera {
+    fn decode(reader: &mut Reader<'_>) -> Result<Self, Error> {
+        let name = reader.get_u32()?;
+        let name = reader.string(name)?.to_owned();
+
+        let extra_data_len = reader.get_u32()?;
+        let extra_data = (0..extra_data_len)
+            .map(|_| BlockRef::decode(reader))
+            .collect::<Result<_, _>>()?;
+
+        let controller = <Option<BlockRef>>::decode(reader)?;
+        let flags = NiNodeFlags::from_bits_truncate(reader.get_u32()?);
+
+        let translation = Vec3::decode(reader)?;
+        let rotation = Mat3::decode(reader)?;
+        let scale = reader.get_f32()?;
+
+        let collision_object = <Option<BlockRef>>::decode(reader)?;
+
+        let camera_flags = u16::decode(reader)?;
+        let frustum_left = f32::decode(reader)?;
+        let frustum_right = f32::decode(reader)?;
+        let frustum_top = f32::decode(reader)?;
+        let frustum_bottom = f32::decode(reader)?;
+        let frustum_near = f32::decode(reader)?;
+        let frustum_far = f32::decode(reader)?;
+
+        let use_orthographic_projection = reader.get_bool()?;
+
+        let viewport_left = f32::decode(reader)?;
+        let viewport_right = f32::decode(reader)?;
+        let viewport_top = f32::decode(reader)?;
+        let viewport_bottom = f32::decode(reader)?;
+
+        let lod_adjust = f32::decode(reader)?;
+        let scene = <Option<BlockRef>>::decode(reader)?;
+        let num_screen_polygons = u32::decode(reader)?;
+        let num_screen_textures = u32::decode(reader)?;
+
+        Ok(Self {
+            name,
+            extra_data,
+            controller,
+            flags,
+            translation,
+            rotation,
+            scale,
+            collision_object,
+            camera_flags,
+            frustum_left,
+            frustum_right,
+            frustum_top,
+            frustum_bottom,
+            frustum_near,
+            frustum_far,
+            use_orthographic_projection,
+            viewport_left,
+            viewport_right,
+            viewport_top,
+            viewport_bottom,
+            lod_adjust,
+            scene,
+            num_screen_polygons,
+            num_screen_textures,
+        })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct BSFrustumFOVController {
+    pub next_controller: Option<BlockRef>,
+    pub flags: u16,
+    pub frequency: f32,
+    pub phase: f32,
+    pub start_time: f32,
+    pub stop_time: f32,
+    pub target: Option<BlockRef>,
+    pub interpolator: Option<BlockRef>,
+}
+
+impl Decode for BSFrustumFOVController {
+    fn decode(reader: &mut Reader<'_>) -> Result<Self, Error> {
+        let next_controller = <Option<BlockRef>>::decode(reader)?;
+        let flags = u16::decode(reader)?;
+        let frequency = f32::decode(reader)?;
+        let phase = f32::decode(reader)?;
+        let start_time = f32::decode(reader)?;
+        let stop_time = f32::decode(reader)?;
+        let target = <Option<BlockRef>>::decode(reader)?;
+        let interpolator = <Option<BlockRef>>::decode(reader)?;
+
+        Ok(Self {
+            next_controller,
+            flags,
+            frequency,
+            phase,
+            start_time,
+            stop_time,
+            target,
+            interpolator,
+        })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct NiStringExtraData {
+    pub name: String,
+    pub data: String,
+}
+
+impl Decode for NiStringExtraData {
+    fn decode(reader: &mut Reader<'_>) -> Result<Self, Error> {
+        let name = reader.get_u32()?;
+        let name = reader.string(name)?.to_owned();
+        let data = reader.get_u32()?;
+        let data = reader.string(data)?.to_owned();
+
+        Ok(Self { name, data })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct BSFurnitureMarkerNode {
+    pub name: String,
+    pub positions: Vec<FurniturePosition>,
+}
+
+impl Decode for BSFurnitureMarkerNode {
+    fn decode(reader: &mut Reader<'_>) -> Result<Self, Error> {
+        let name = reader.get_u32()?;
+        let name = reader.string(name)?.to_owned();
+
+        let num_positions = u32::decode(reader)?;
+        let positions = (0..num_positions)
+            .map(|_| FurniturePosition::decode(reader))
+            .collect::<Result<_, _>>()?;
+
+        Ok(Self { name, positions })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct FurniturePosition {
+    pub offset: Vec3,
+    pub heading: f32,
+    pub animation_type: u16,
+    pub entry_properties: u16,
+}
+
+impl Decode for FurniturePosition {
+    fn decode(reader: &mut Reader<'_>) -> Result<Self, Error> {
+        let offset = Vec3::decode(reader)?;
+        let heading = f32::decode(reader)?;
+        let animation_type = u16::decode(reader)?;
+        let entry_properties = u16::decode(reader)?;
+
+        Ok(Self {
+            offset,
+            heading,
+            animation_type,
+            entry_properties,
+        })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct NiLightRadiusController {
+    pub next_controller: Option<BlockRef>,
+    pub flags: u16,
+    pub frequency: f32,
+    pub phase: f32,
+    pub start_time: f32,
+    pub stop_time: f32,
+    pub target: Option<BlockRef>,
+    pub interpolator: Option<BlockRef>,
+}
+
+impl Decode for NiLightRadiusController {
+    fn decode(reader: &mut Reader<'_>) -> Result<Self, Error> {
+        let next_controller = <Option<BlockRef>>::decode(reader)?;
+        let flags = u16::decode(reader)?;
+        let frequency = f32::decode(reader)?;
+        let phase = f32::decode(reader)?;
+        let start_time = f32::decode(reader)?;
+        let stop_time = f32::decode(reader)?;
+        let target = <Option<BlockRef>>::decode(reader)?;
+        let interpolator = <Option<BlockRef>>::decode(reader)?;
+
+        Ok(Self {
+            next_controller,
+            flags,
+            frequency,
+            phase,
+            start_time,
+            stop_time,
+            target,
+            interpolator,
+        })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct NiLightDimmerController {
+    pub next_controller: Option<BlockRef>,
+    pub flags: u16,
+    pub frequency: f32,
+    pub phase: f32,
+    pub start_time: f32,
+    pub stop_time: f32,
+    pub target: Option<BlockRef>,
+    pub interpolator: Option<BlockRef>,
+}
+
+impl Decode for NiLightDimmerController {
+    fn decode(reader: &mut Reader<'_>) -> Result<Self, Error> {
+        let next_controller = <Option<BlockRef>>::decode(reader)?;
+        let flags = u16::decode(reader)?;
+        let frequency = f32::decode(reader)?;
+        let phase = f32::decode(reader)?;
+        let start_time = f32::decode(reader)?;
+        let stop_time = f32::decode(reader)?;
+        let target = <Option<BlockRef>>::decode(reader)?;
+        let interpolator = <Option<BlockRef>>::decode(reader)?;
+
+        Ok(Self {
+            next_controller,
+            flags,
+            frequency,
+            phase,
+            start_time,
+            stop_time,
+            target,
+            interpolator,
+        })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct NiPointLight {
+    pub name: String,
+    pub extra_data: Vec<BlockRef>,
+    pub controller: Option<BlockRef>,
+    pub flags: NiNodeFlags,
+    pub translation: Vec3,
+    pub rotation: Mat3,
+    pub scale: f32,
+    pub collision_object: Option<BlockRef>,
+    pub dimmer: f32,
+    pub ambient_color: Color3,
+    pub diffuse_color: Color3,
+    pub specular_color: Color3,
+    pub constant_attenuation: f32,
+    pub linear_attenuation: f32,
+    pub quadratic_attenuation: f32,
+}
+
+impl Decode for NiPointLight {
+    fn decode(reader: &mut Reader<'_>) -> Result<Self, Error> {
+        let name = reader.get_u32()?;
+        let name = reader.string(name)?.to_owned();
+
+        let extra_data_len = reader.get_u32()?;
+        let extra_data = (0..extra_data_len)
+            .map(|_| BlockRef::decode(reader))
+            .collect::<Result<_, _>>()?;
+
+        let controller = <Option<BlockRef>>::decode(reader)?;
+        let flags = NiNodeFlags::from_bits_truncate(reader.get_u32()?);
+
+        let translation = Vec3::decode(reader)?;
+        let rotation = Mat3::decode(reader)?;
+        let scale = reader.get_f32()?;
+
+        let collision_object = <Option<BlockRef>>::decode(reader)?;
+
+        let dimmer = f32::decode(reader)?;
+        let ambient_color = Color3::decode(reader)?;
+        let diffuse_color = Color3::decode(reader)?;
+        let specular_color = Color3::decode(reader)?;
+        let constant_attenuation = f32::decode(reader)?;
+        let linear_attenuation = f32::decode(reader)?;
+        let quadratic_attenuation = f32::decode(reader)?;
+
+        Ok(Self {
+            name,
+            extra_data,
+            controller,
+            flags,
+            translation,
+            rotation,
+            scale,
+            collision_object,
+            dimmer,
+            ambient_color,
+            diffuse_color,
+            specular_color,
+            constant_attenuation,
+            linear_attenuation,
+            quadratic_attenuation,
+        })
+    }
+}
+
+pub type Color3 = Vec3;
+
+#[derive(Clone, Debug)]
+pub struct BSFadeNode {
+    pub node: NiNode,
+}
+
+impl Decode for BSFadeNode {
+    fn decode(reader: &mut Reader<'_>) -> Result<Self, Error> {
+        let node = NiNode::decode(reader)?;
+        Ok(Self { node })
     }
 }
