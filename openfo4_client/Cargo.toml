@@ -48,6 +48,7 @@ image = { git = "https://github.com/RunDevelopment/image.git", rev = "637cf43ad5
 futures-lite = "2.6.0"
 bitflags = "2.9.4"
 rand = "0.9.2"
+nohash-hasher = "0.2.0"
 
 [lints]
 workspace = true

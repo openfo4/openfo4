@@ -1,8 +1,7 @@
-use std::collections::VecDeque;
-
 use game_common::components::{GlobalTransform, Transform};
 use hashbrown::HashMap;
 use hecs::World;
+use nohash_hasher::BuildNoHashHasher;
 use openfo4_core::hierarchy::Children;
 
 #[tracing::instrument(skip_all)]
@@ -12,31 +11,38 @@ pub fn compute_global_transform(world: &mut World) {
         .into_iter()
         .len();
 
-    let mut transforms = HashMap::with_capacity(len);
-    let mut parents = HashMap::with_capacity(len);
-
-    let x = world.query_mut::<(&Transform, Option<&Children>)>();
-    x.into_iter().len();
+    let mut transforms =
+        HashMap::<u32, Transform, BuildNoHashHasher<u32>>::with_capacity_and_hasher(
+            len,
+            BuildNoHashHasher::new(),
+        );
+    let mut parents = HashMap::<u32, u32, BuildNoHashHasher<u32>>::with_capacity_and_hasher(
+        len,
+        BuildNoHashHasher::new(),
+    );
 
     for (entity, (transform, children)) in world.query_mut::<(&Transform, Option<&Children>)>() {
-        transforms.insert(entity, *transform);
+        // SAFETY: The iterator will yield entity only once.
+        unsafe {
+            transforms.insert_unique_unchecked(entity.id(), *transform);
+        }
 
         if let Some(children) = children {
             for children in &children.0 {
-                parents.insert(*children, entity);
+                parents.insert(children.id(), entity.id());
             }
         }
     }
 
     // Queue all entities that have no parent entity.
-    let mut queue = VecDeque::with_capacity(len);
+    let mut queue = Vec::with_capacity(len);
     for entity in transforms.keys() {
         if !parents.contains_key(entity) {
-            queue.push_back(*entity);
+            queue.push(*entity);
         }
     }
 
-    while let Some(entity) = queue.pop_front() {
+    while let Some(entity) = queue.pop() {
         if let Some(parent) = parents.get(&entity) {
             let parent_transform = *transforms.get(parent).unwrap();
             let self_transform = *transforms.get(&entity).unwrap();
@@ -46,20 +52,44 @@ pub fn compute_global_transform(world: &mut World) {
             transforms.insert(entity, transform);
         }
 
+        // SAFETY: The entity is extracted in this function and no entities
+        // are deleted in this function.
+        let entity = unsafe { world.find_entity_from_id(entity) };
+
         // We have computed the transform of the entity and
         // can compute the transforms of all children.
         if let Ok(children) = world.get::<&Children>(entity) {
             for children in &children.0 {
-                queue.push_back(*children);
+                queue.push(children.id());
             }
         }
     }
 
     for (entity, transform) in transforms {
-        // We know the entity is valid, so this unwrap cannot panic.
-        world
-            .insert_one(entity, GlobalTransform(transform))
-            .unwrap();
+        // SAFETY: The entity is extracted in this function and no entities
+        // are deleted in this function.
+        let entity = unsafe { world.find_entity_from_id(entity) };
+
+        // Instead of just calling `world.insert(..)` for each entity we attempt
+        // to update the existing `GlobalTransform` value. `world.insert(..)`
+        // will reshuffle archetypes which is costly, event if the entity already
+        // containts `GlobalTransform`.
+
+        // SAFETY: The entity is extracted in this function and no entities
+        // are deleted in this function.
+        let entity_ref = unsafe { world.entity(entity).unwrap_unchecked() };
+        if let Some(mut dst) = entity_ref.get::<&mut GlobalTransform>() {
+            dst.0 = transform;
+            continue;
+        }
+
+        // SAFETY: The entity is extracted in this function and no entities
+        // are deleted in this function.
+        unsafe {
+            world
+                .insert_one(entity, GlobalTransform(transform))
+                .unwrap_unchecked();
+        }
     }
 }
 
