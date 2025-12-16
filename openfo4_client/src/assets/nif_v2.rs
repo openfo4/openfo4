@@ -624,7 +624,10 @@ fn build_mesh(shape: &BSTriShape) -> Mesh {
     mesh.set_indices(Indices::U32(indices));
 
     if let Some(tangents) = &shape.mesh.tangents {
-        let tangents = tangents.iter().map(|v| v.extend(1.0)).collect();
+        // FIXME: We have the tangent sign here, but they are different
+        // for indices in the same triangle.
+        // That shouldn't happen and strange artifacts appear.
+        let tangents = tangents.iter().map(|v| v.truncate().extend(1.0)).collect();
         mesh.set_tangents(tangents);
     } else {
         mesh.compute_tangents();

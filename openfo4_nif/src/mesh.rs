@@ -1,5 +1,5 @@
 use bitflags::bitflags;
-use glam::{FloatExt, Mat3, Vec3};
+use glam::{FloatExt, Mat3, Vec3, Vec4};
 
 use crate::{BlockRef, Decode, Error, HVec2, HVec3, HVec4, NiNodeFlags, Reader, Rgba, Sphere};
 
@@ -10,7 +10,7 @@ pub struct Mesh {
     pub positions: Option<Vec<Vec3>>,
     pub tex_coords: Option<Vec<HVec2>>,
     pub normals: Option<Vec<Vec3>>,
-    pub tangents: Option<Vec<Vec3>>,
+    pub tangents: Option<Vec<Vec4>>,
     pub colors: Option<Vec<Rgba<u8>>>,
     pub skinning: Option<MeshSkinning>,
     pub indices: Vec<[u16; 3]>,
@@ -124,7 +124,25 @@ impl Decode for BSTriShape {
                 let x = f32::lerp(-1.0, 1.0, reader.get_u8()? as f32 / 255.0);
                 let y = f32::lerp(-1.0, 1.0, reader.get_u8()? as f32 / 255.0);
                 let z = f32::lerp(-1.0, 1.0, reader.get_u8()? as f32 / 255.0);
-                tangents.push(Vec3::new(x, y, z));
+                let tangent = Vec3::new(x, y, z);
+
+                // The bitangent is mangled in between the other fields:
+                // X after Position, Y after Normal, Z after Tangent
+                // We only care about the sign of the cross(normal, tangent)
+                // which allows use to recreate the bitangent.
+                let bitan_z = f32::lerp(-1.0, 1.0, reader.get_u8()? as f32 / 255.0);
+                let sign = normals
+                    .as_ref()
+                    .map(|normals| {
+                        let normal = normals[usize::from(index)];
+                        let bitangent = normal.cross(tangent);
+
+                        // Take 1.0 if same sign, otherwise -1.0.
+                        1.0_f32.copysign(bitangent.z * bitan_z)
+                    })
+                    .unwrap_or(1.0);
+
+                tangents.push(tangent.extend(sign));
             }
 
             Some(tangents)
