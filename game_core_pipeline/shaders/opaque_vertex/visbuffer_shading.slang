@@ -106,8 +106,8 @@ void main(
     let normal = load_normal(barys, offsets, indices, material, uv, instance);
 
     let vert_color_a = fetch<4>(colors, offsets.color, index0);
-    let vert_color_b = fetch<4>(colors, offsets.color, index0);
-    let vert_color_c = fetch<4>(colors, offsets.color, index0);
+    let vert_color_b = fetch<4>(colors, offsets.color, index1);
+    let vert_color_c = fetch<4>(colors, offsets.color, index2);
     let vert_color = barys.interpolate(vert_color_a, vert_color_b, vert_color_c);
 
     let base_color = material.base_color * sample_material_texture(material.base_color_texture, uv) * vert_color;
