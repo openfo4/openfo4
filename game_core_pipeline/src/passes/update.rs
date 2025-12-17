@@ -329,7 +329,8 @@ fn create_material(
     let index = materials.insert(&RawMaterialData {
         flags,
         alpha_mask,
-        _pad0: [0; 2],
+        depth_bias: material.depth_bias,
+        _pad0: 0,
         base_color: material.base_color.as_rgba(),
         roughness: material.roughness,
         metallic: material.metallic,

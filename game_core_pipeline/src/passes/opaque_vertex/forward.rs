@@ -139,6 +139,13 @@ impl OpaqueVertexForwardPass {
                                 kind: DescriptorType::Storage,
                                 count: NonZeroU32::MIN,
                             },
+                            // Materials
+                            DescriptorBinding {
+                                binding: 4,
+                                visibility: ShaderStages::VERTEX,
+                                kind: DescriptorType::Storage,
+                                count: NonZeroU32::MIN,
+                            },
                         ],
                     },
                 ),
@@ -195,21 +202,28 @@ impl OpaqueVertexForwardPass {
                             kind: DescriptorType::Storage,
                             count: NonZeroU32::MIN,
                         },
+                        // MATERIALS
                         DescriptorBinding {
                             binding: 6,
-                            visibility: ShaderStages::FRAGMENT,
+                            visibility: ShaderStages::VERTEX,
                             kind: DescriptorType::Storage,
                             count: NonZeroU32::MIN,
                         },
                         DescriptorBinding {
                             binding: 7,
                             visibility: ShaderStages::FRAGMENT,
+                            kind: DescriptorType::Storage,
+                            count: NonZeroU32::MIN,
+                        },
+                        DescriptorBinding {
+                            binding: 8,
+                            visibility: ShaderStages::FRAGMENT,
                             kind: DescriptorType::Texture,
                             // FIXME: Unhardcode this
                             count: NonZeroU32::new(8192).unwrap(),
                         },
                         DescriptorBinding {
-                            binding: 8,
+                            binding: 9,
                             visibility: ShaderStages::FRAGMENT,
                             kind: DescriptorType::Sampler,
                             count: NonZeroU32::MIN,
@@ -442,6 +456,10 @@ impl OpaqueVertexForwardPass {
                         binding: 3,
                         resource: BindingResource::Buffer(index_buffer),
                     },
+                    DescriptorSetEntry {
+                        binding: 4,
+                        resource: BindingResource::Buffer(materials),
+                    },
                 ],
             });
 
@@ -579,10 +597,14 @@ impl OpaqueVertexForwardPass {
                     },
                     DescriptorSetEntry {
                         binding: 7,
-                        resource: BindingResource::TextureArray(&textures),
+                        resource: BindingResource::Buffer(materials),
                     },
                     DescriptorSetEntry {
                         binding: 8,
+                        resource: BindingResource::TextureArray(&textures),
+                    },
+                    DescriptorSetEntry {
+                        binding: 9,
                         resource: BindingResource::Sampler(&self.linear_sampler),
                     },
                 ],

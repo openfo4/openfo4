@@ -13,7 +13,7 @@ use openfo4_asset::{Asset, AssetLoader, Handle, HandleOrAsset};
 use openfo4_core::hierarchy::Children;
 use openfo4_hkx::mesh::ExtractCompressedMeshShapeError;
 use openfo4_hkx::{HkObject, HkxFile};
-use openfo4_nif::material::{AlphaTestFunction, NiAlphaProperty};
+use openfo4_nif::material::{AlphaTestFunction, NiAlphaProperty, ShaderFlags1};
 use openfo4_nif::mesh::{BSMeshLODTriShape, BSSubIndexTriShape, BSTriShape};
 use openfo4_nif::{BSXFlags, Block, BlockRef, Nif};
 use openfo4_physics::components::{Collider, ColliderShape, CollisionLayer, TriMesh};
@@ -27,6 +27,9 @@ use crate::loader::fix_path;
 use crate::render::RenderObject;
 
 pub const NIF_TO_METERS: f32 = 1.0 / 69.99125;
+
+/// Z Offset applied to decals are MVP transformation to prevent Z fighting.
+pub const DECAL_DEPTH_BIAS: f32 = 0.0001;
 
 bitflags! {
     /// Defines which components of a nif file should be loaded.
@@ -690,6 +693,11 @@ async fn load_material(
                 roughness: 1.0 - shader_property.smoothness,
                 specular_color: Color::from_rgb(shader_property.specular_color.to_array()),
                 specular_strength: shader_property.specular_strength,
+                depth_bias: if shader_property.shader_flags1.contains(ShaderFlags1::DECAL) {
+                    DECAL_DEPTH_BIAS
+                } else {
+                    0.0
+                },
                 ..Default::default()
             };
 

@@ -5,6 +5,7 @@ use openfo4_asset::{Asset, AssetLoader, Handle};
 use openfo4_nif::bgsm::Bgsm;
 
 use crate::assets::data_file::DataFile;
+use crate::assets::nif_v2::DECAL_DEPTH_BIAS;
 use crate::assets::texture::FileImageHandle;
 use crate::assets::{Error, FileLoadContext};
 
@@ -51,6 +52,7 @@ impl Asset for BgsmMaterial {
             roughness: 1.0 - bgsm.smoothness,
             specular_color: Color::from_rgb(bgsm.specular_color.to_array()),
             specular_strength: bgsm.specular_strength,
+            depth_bias: if bgsm.decal { DECAL_DEPTH_BIAS } else { 0.0 },
             ..Default::default()
         };
 

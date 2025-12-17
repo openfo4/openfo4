@@ -1,3 +1,4 @@
+use bitflags::bitflags;
 use glam::Vec2;
 
 use crate::{BlockRef, Decode, Error, Reader, Rgb, Rgba, TextureClampMode};
@@ -8,8 +9,8 @@ pub struct BSLightingShaderProperty {
     pub name: String,
     pub extra_data: Vec<BlockRef>,
     pub controller: Option<BlockRef>,
-    pub shader_flags1: u32,
-    pub shader_flags2: u32,
+    pub shader_flags1: ShaderFlags1,
+    pub shader_flags2: ShaderFlags2,
     pub uv_offset: Vec2,
     pub uv_scale: Vec2,
     pub texture_set: Option<BlockRef>,
@@ -47,8 +48,8 @@ impl Decode for BSLightingShaderProperty {
 
         let controller = <Option<BlockRef>>::decode(reader)?;
 
-        let shader_flags1 = reader.get_u32()?;
-        let shader_flags2 = reader.get_u32()?;
+        let shader_flags1 = ShaderFlags1::from_bits_truncate(reader.get_u32()?);
+        let shader_flags2 = ShaderFlags2::from_bits_truncate(reader.get_u32()?);
 
         let uv_offset = Vec2::decode(reader)?;
         let uv_scale = Vec2::decode(reader)?;
@@ -108,6 +109,82 @@ impl Decode for BSLightingShaderProperty {
             use_screen_space_reflections,
             wetness_control_use_ssr,
         })
+    }
+}
+
+bitflags! {
+    #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+    pub struct ShaderFlags1: u32 {
+        const SPECULAR = 1 << 0;
+        const SKINNED = 1 << 1;
+        const TEMP_REFRACTION = 1 << 2;
+        const VERTEX_ALPHA = 1 << 3;
+        const GRAYSCALE_TO_PALETTE_COLOR = 1 << 4;
+        const GRAYSCALE_TO_PALETTE_SCALE = 1 << 5;
+        const USE_FALLOFF = 1 << 6;
+        const ENVIRONMENT_MAPPING = 1 << 7;
+        const RGB_FALLOFF = 1 << 8;
+        const CAST_SHADOWS = 1 << 9;
+        const FACE = 1 << 10;
+        const UI_MASK_RECTS = 1 << 11;
+        const MODEL_SPACE_NORMALS = 1 << 12;
+        const NON_PROJECTIVE_SHADOWS = 1 << 13;
+        const LANDSCAPE = 1 << 14;
+        const REFRACTION = 1 << 15;
+        const FIRE_REFRACTION = 1 << 16;
+        const EYE_ENVIRONMENT_MAPPING = 1 << 17;
+        const HAIR = 1 << 18;
+        const SCREENDOOR_ALPHA_FADE = 1 << 19;
+        const LOCALMAP_HIDE_SECRET = 1 << 20;
+        const SKIN_TINT = 1 << 21;
+        const OWN_EMIT = 1 << 22;
+        const PROJECTED_UV = 1 << 23;
+        const MULTIPLE_TEXTURES = 1 << 24;
+        const TESSELATE = 1 << 25;
+        const DECAL = 1 << 26;
+        const DYNAMIC_DECAL = 1 << 27;
+        const CHARACTER_LIGHTING = 1 << 28;
+        const EXTERNAL_EMITTANCE = 1 << 29;
+        const SOFT_EFFECT = 1 << 30;
+        const ZBUFFER_TEST = 1 << 31;
+    }
+}
+
+bitflags! {
+    #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+    pub struct ShaderFlags2: u32 {
+        const ZBUFFER_WRITE = 1 << 0;
+        const LOD_LANDSCAPE = 1 << 1;
+        const LOD_OBJECTS = 1 << 2;
+        const NO_FADE = 1 << 3;
+        const DOUBLE_SIDED = 1 << 4;
+        const VERTEX_COLOR = 1 << 5;
+        const GLOW_MAP = 1 << 6;
+        const TRANSFORM_CHANGED = 1 << 7;
+        const DISMEMBERMENT_MEATCUFF = 1 << 8;
+        const TINT = 1 << 9;
+        const GRASS_VERTEX_LIGHTING = 1 << 10;
+        const GRASS_UNIFORM_SCALE = 1 << 11;
+        const GRASS_FIT_SLOPE = 1 << 12;
+        const GRASS_BILLBOARD = 1 << 13;
+        const NO_LOD_LAND_BLEND = 1 << 14;
+        const DISMEMBERMENT = 1 << 15;
+        const WIREFRAME = 1 << 16;
+        const WEAPON_BLOOD = 1 << 17;
+        const HIDE_ON_LOCAL_MAP = 1 << 18;
+        const PREMULT_ALPHA = 1 << 19;
+        const VATS_TARGET = 1 << 20;
+        const ANISOTROPIC_LIGHTING = 1 << 21;
+        const SKEW_SPECULAR_ALPHA = 1 << 22;
+        const MENU_SCREEN = 1 << 23;
+        const MULTI_LAYER_PARALLAX = 1 << 24;
+        const ALPHA_TEST = 1 << 25;
+        const GRADIENT_REMAP = 1 << 26;
+        const VATS_TARGET_DRAW_ALL = 1 << 27;
+        const PIPBOY_SCREEN = 1 << 28;
+        const TREE_ANIM = 1 << 29;
+        const EFFECT_LIGHTING = 1 << 30;
+        const REFRACTION_WRITES_DEPTH = 1 << 31;
     }
 }
 

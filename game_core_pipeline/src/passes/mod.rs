@@ -310,7 +310,8 @@ struct ObjectState {
 struct RawMaterialData {
     flags: MaterialFlags,
     alpha_mask: f32,
-    _pad0: [u32; 2],
+    depth_bias: f32,
+    _pad0: u32,
     base_color: [f32; 4],
     roughness: f32,
     metallic: f32,

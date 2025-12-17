@@ -13,21 +13,38 @@ pub struct Bgsm {
     pub uv_offset: Vec2,
     pub uv_scale: Vec2,
 
+    /// Path to the diffuse texture.
     pub diffuse_texture: String,
+    /// Path to the normal texture.
+    ///
+    /// The normal maps typically use DirectX convention.
     pub normal_texture: String,
+    /// Path to the smoothness/glossiness specular texture.
+    ///
+    /// - Specular strength is in the red channel.
+    /// - Smoothness/Glossiness is in the green channel.
     pub smooth_spec_texture: String,
-
+    /// Material wide alpha factor.
     pub alpha: f32,
 
+    /// Material wide specular color factor.
     pub specular_color: Rgb,
+    /// Material wide specular factor.
     pub specular_strength: f32,
-
+    /// Material wide smoothness/glossiness factor.
     pub smoothness: f32,
 
     pub grayscale_palette: Option<GreyscalePalette>,
 
+    /// Whether alpha testing should be enabled for this material.
     pub alpha_test: bool,
+    /// The alpha threshold below which pixels are transparent.
     pub alpha_test_threshold: u8,
+
+    /// Whether this material is for a decal.
+    pub decal: bool,
+    /// Whether this material is double sided.
+    pub double_sided: bool,
 }
 
 impl Bgsm {
@@ -63,7 +80,7 @@ impl Bgsm {
         let screen_space_reflections = reader.get_bool()?;
         let wetness_control_screen_space_reflections = reader.get_bool()?;
         let decal = reader.get_bool()?;
-        let two_sided = reader.get_bool()?;
+        let double_sided = reader.get_bool()?;
         let decal_no_fade = reader.get_bool()?;
         let non_occluder = reader.get_bool()?;
 
@@ -229,6 +246,8 @@ impl Bgsm {
             grayscale_palette,
             alpha_test,
             alpha_test_threshold,
+            decal,
+            double_sided,
         })
     }
 }

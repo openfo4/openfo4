@@ -1,5 +1,6 @@
 import types;
 import camera;
+import material;
 import shared;
 
 [[vk::push_constant]] Camera camera;
@@ -10,6 +11,7 @@ import shared;
 [[vk::binding(3, 0)]] StructuredBuffer<f32> positions;
 [[vk::binding(4, 0)]] StructuredBuffer<f32> uvs;
 [[vk::binding(5, 0)]] StructuredBuffer<f32> colors;
+[[vk::binding(6, 0)]] StructuredBuffer<Material> materials;
 
 struct Input {
     u32 draw_id: SV_DrawIndex;
@@ -32,6 +34,7 @@ struct Output {
 func main(input: Input) -> Output {
     let instance = instances[input.draw_id];
     let offsets = offsets[instance.offsets_index];
+    let material = materials[instance.material_index];
 
     let vertex_index = index_buffer[instance.index_offset + input.index];
 
@@ -41,6 +44,7 @@ func main(input: Input) -> Output {
 
     Output output;
     output.clip_position = mul(mul(camera.view_proj, instance.transform), Vec4(position, 1.0));
+    output.clip_position.z += material.depth_bias;
     output.uv = uv;
     output.alpha = color.a;
     output.instance_id = input.draw_id;

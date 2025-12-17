@@ -9,6 +9,7 @@ public static const u32 MATERIAL_FLAGS_NORMAL_ENCODING_TWO_COMPONENT = 1 << 4;
 public struct Material {
     public u32 flags;
     public f32 alpha_mask;
+    public f32 depth_bias;
     public Vec4 base_color;
     public f32 roughness;
     public f32 metallic;

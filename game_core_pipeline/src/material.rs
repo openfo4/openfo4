@@ -67,6 +67,13 @@ pub struct StandardMaterial {
     ///
     /// Defaults to `false`.
     pub unlit: bool,
+    /// Adjust the render depth in viewport space.
+    ///
+    /// A positive value will be rendered closer to the camera, negative values will be rendered
+    /// further from the camera. Must be a value between `-1.0` and `1.0`.
+    ///
+    /// Defaults to `0.0`.
+    pub depth_bias: f32,
 }
 
 impl Default for StandardMaterial {
@@ -86,6 +93,7 @@ impl Default for StandardMaterial {
             specular_strength: 1.0,
             specular_glossiness_texture: None,
             unlit: false,
+            depth_bias: 0.0,
         }
     }
 }
