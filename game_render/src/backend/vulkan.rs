@@ -707,6 +707,7 @@ impl Adapter {
             host_query_reset: cast(features12.host_query_reset),
             dynamic_rendering: cast(features13.dynamic_rendering),
             synchronization2: cast(features13.synchronization2),
+            maintenace4: cast(features13.maintenance4),
             swapchain_maintenace1: cast(swapchain_maintenance1.swapchain_maintenance1),
             task_shader: cast(mesh_shader.task_shader),
             mesh_shader: cast(mesh_shader.mesh_shader),
@@ -927,6 +928,7 @@ impl Adapter {
             storage_push_constant8: false,
             dynamic_rendering: true,
             synchronization2: true,
+            maintenace4: true,
             // Optional features
             task_shader: false,
             mesh_shader: false,
@@ -986,6 +988,7 @@ impl Adapter {
         let mut features13 = vk::PhysicalDeviceVulkan13Features::default()
             .dynamic_rendering(true)
             .synchronization2(true)
+            .maintenance4(true)
             .shader_demote_to_helper_invocation(true);
 
         let mut swapchain_maintenance1 =
@@ -5321,6 +5324,8 @@ pub struct DeviceFeatures {
     dynamic_rendering: bool,
     /// Vulkan 1.3 or `VK_KHR_synchronization2`
     synchronization2: bool,
+    /// Vulkan 1.3 or `VK_KHR_maintenance4`
+    maintenace4: bool,
     /// `VK_EXT_swapchain_maintenance1`
     swapchain_maintenace1: bool,
     /// `VK_EXT_mesh_shader`
@@ -5366,6 +5371,7 @@ impl DeviceFeatures {
             host_query_reset,
             dynamic_rendering,
             synchronization2,
+            maintenace4,
             swapchain_maintenace1,
             task_shader,
             mesh_shader,
@@ -5411,6 +5417,7 @@ impl DeviceFeatures {
             host_query_reset,
             dynamic_rendering,
             synchronization2,
+            maintenace4,
             swapchain_maintenace1,
             task_shader,
             mesh_shader,
@@ -5456,6 +5463,7 @@ impl DeviceFeatures {
             host_query_reset,
             dynamic_rendering,
             synchronization2,
+            maintenace4,
             swapchain_maintenace1,
             task_shader,
             mesh_shader,
@@ -5492,6 +5500,7 @@ impl DeviceFeatures {
             || host_query_reset
             || dynamic_rendering
             || synchronization2
+            || maintenace4
             || swapchain_maintenace1
             || task_shader
             || mesh_shader;
@@ -5534,6 +5543,7 @@ impl Display for DeviceFeatures {
             host_query_reset,
             dynamic_rendering,
             synchronization2,
+            maintenace4,
             swapchain_maintenace1,
             task_shader,
             mesh_shader,
@@ -5585,6 +5595,7 @@ impl Display for DeviceFeatures {
             host_query_reset,
             dynamic_rendering,
             synchronization2,
+            maintenace4,
             swapchain_maintenace1,
             task_shader,
             mesh_shader,

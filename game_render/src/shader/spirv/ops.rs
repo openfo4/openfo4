@@ -1162,6 +1162,7 @@ pub enum Decoration {
     InputAttachmentIndex(u32),
     Alignment(u32),
     NonUniform,
+    SpecId(u32),
 }
 
 impl Parse for Decoration {
@@ -1237,6 +1238,10 @@ impl Parse for Decoration {
                 Ok(Self::Alignment(align))
             }
             spirv::Decoration::NonUniform => Ok(Self::NonUniform),
+            spirv::Decoration::SpecId => {
+                let id = u32::parse(reader)?;
+                Ok(Self::SpecId(id))
+            }
             _ => Err(Error(ErrorImpl::UnknownDecoration(dec))),
         }
     }
@@ -1346,6 +1351,10 @@ impl Parse for Decoration {
             }
             Self::NonUniform => {
                 spirv::Decoration::NonUniform.write(writer);
+            }
+            Self::SpecId(id) => {
+                spirv::Decoration::SpecId.write(writer);
+                id.write(writer);
             }
         }
     }
@@ -1688,10 +1697,11 @@ spirv_op! {
 }
 
 spirv_op! {
-    #[derive(Copy, Clone, Debug)]
+    #[derive(Clone, Debug)]
     pub struct OpSpecConstant {
         pub result_type: Id,
         pub result: Id,
+        pub value: Vec<u32>,
     }
 }
 

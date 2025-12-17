@@ -154,6 +154,7 @@ impl PipelineBuilder for BuildPipeline {
             stages: &[PipelineStage::Compute(ComputeStage {
                 shader: &shaders[0],
                 entry: "main",
+                spec_consts: Default::default(),
             })],
             push_constant_ranges: &[PushConstantRange {
                 range: 0..4,

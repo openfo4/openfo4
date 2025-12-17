@@ -39,10 +39,11 @@ struct PushConstants {
 
 static const u32 NUM_THREADS = 64;
 
-static const u32 TILE_SIZE = 16;
+[SpecializationConstant]
+const u32 TILE_SIZE;
 
 [shader("compute")]
-[numthreads(16, 16, 1)]
+[numthreads(TILE_SIZE, TILE_SIZE, 1)]
 void main(
     vector<u32, 2> tid: SV_GroupThreadID,
     vector<u32, 2> gid: SV_GroupID,

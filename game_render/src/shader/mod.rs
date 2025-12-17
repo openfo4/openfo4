@@ -34,6 +34,10 @@ impl Shader {
     pub fn bindings(&self) -> Vec<ShaderBinding> {
         self.module.bindings()
     }
+
+    pub fn spec_constants(&self) -> Vec<SpecConstant> {
+        self.module.spec_constants()
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -41,6 +45,7 @@ pub struct Options<'a> {
     pub entry_point: &'a str,
     pub stage: ShaderStage,
     pub bindings: HashMap<BindingId, BindingInfo>,
+    pub spec_constants: HashMap<SpecConstantId, SpecConstantValue>,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
@@ -66,6 +71,73 @@ pub struct ShaderBinding {
     /// `None` indicates that the count is still undefined and needs to specialized on
     /// instantiation.
     pub count: Option<NonZeroU32>,
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub struct SpecConstantId(u32);
+
+#[derive(Clone, Debug)]
+pub struct SpecConstant {
+    pub id: SpecConstantId,
+    pub name: Option<String>,
+    pub ty: SpecConstantType,
+}
+
+/// The type of a [`SpecConstant`].
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub enum SpecConstantType {
+    Bool,
+    Int { bits: u32, signed: bool },
+    Float { bits: u32 },
+}
+
+/// A concrete value for a [`SpecConstant`].
+///
+/// Use [`Into`] to create this value from common primitive types.
+#[derive(Clone, Debug)]
+pub struct SpecConstantValue {
+    ty: SpecConstantType,
+    value: u32,
+}
+
+impl SpecConstantValue {
+    fn int(bits: u32, signed: bool, value: u32) -> Self {
+        Self {
+            ty: SpecConstantType::Int { bits, signed },
+            value,
+        }
+    }
+
+    fn float(bits: u32, value: u32) -> Self {
+        Self {
+            ty: SpecConstantType::Float { bits },
+            value,
+        }
+    }
+}
+
+impl From<u8> for SpecConstantValue {
+    fn from(value: u8) -> Self {
+        Self::int(8, false, value as u32)
+    }
+}
+
+impl From<u16> for SpecConstantValue {
+    fn from(value: u16) -> Self {
+        Self::int(16, false, value as u32)
+    }
+}
+
+impl From<u32> for SpecConstantValue {
+    fn from(value: u32) -> Self {
+        Self::int(32, false, value as u32)
+    }
+}
+
+impl From<f32> for SpecConstantValue {
+    fn from(value: f32) -> Self {
+        Self::float(32, value.to_bits() as u32)
+    }
 }
 
 #[derive(Clone, Debug)]

@@ -213,6 +213,7 @@ impl PipelineBuilder for ForwardPipelineBuilder {
                     shader: &shaders[0],
                     entry: "vs_main",
                     topology: PrimitiveTopology::TriangleList,
+                    spec_consts: Default::default(),
                 }),
                 PipelineStage::Fragment(FragmentStage {
                     shader: &shaders[1],
@@ -228,6 +229,7 @@ impl PipelineBuilder for ForwardPipelineBuilder {
                         depth_write_enabled: true,
                         depth_compare_op: CompareOp::Less,
                     }),
+                    spec_consts: Default::default(),
                 }),
             ],
             push_constant_ranges: &[PushConstantRange {

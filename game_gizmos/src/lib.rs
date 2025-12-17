@@ -7,7 +7,7 @@ use std::f32::consts::PI;
 use std::sync::Arc;
 
 use game_common::components::Color;
-use game_render::camera::Camera;
+use game_core_pipeline::camera::Camera;
 use game_render::graph::NodeLabel;
 use game_render::graph::SlotFlags;
 use game_render::graph::SlotKind;

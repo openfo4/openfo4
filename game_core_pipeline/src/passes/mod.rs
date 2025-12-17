@@ -1,5 +1,6 @@
 mod forward;
 mod opaque_vertex;
+mod pipeline;
 mod post_process;
 mod state;
 mod transparent_vertex;

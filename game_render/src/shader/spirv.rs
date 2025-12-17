@@ -27,7 +27,9 @@ use thiserror::Error;
 
 use crate::backend::{DescriptorType, ShaderStage};
 use crate::shader::spirv::ops::{OpExtInst, OpUndef};
-use crate::shader::{BindingId, ShaderAccess, ShaderInstanceBinding};
+use crate::shader::{
+    BindingId, ShaderAccess, ShaderInstanceBinding, SpecConstant, SpecConstantId, SpecConstantType,
+};
 
 use super::{BindingLocation, Options, ShaderBinding};
 
@@ -78,6 +80,16 @@ enum ErrorImpl {
     NoLocation(BindingId),
     #[error("array binding {0:?} requires count, but none was given")]
     NoArrayCount(BindingId),
+    #[error("cannot assign {assigned:?} to spec constant of type {is:?}")]
+    InvalidSpecConstantType {
+        is: SpecConstantType,
+        assigned: SpecConstantType,
+    },
+    #[error("spec constant {id:?} ({name:?}) not set")]
+    SpecConstantNotSet {
+        id: SpecConstantId,
+        name: Option<String>,
+    },
 }
 
 #[derive(Copy, Clone, Debug, Error)]
@@ -270,6 +282,52 @@ impl Module {
         self.bindings.values().cloned().collect()
     }
 
+    pub fn spec_constants(&self) -> Vec<SpecConstant> {
+        let mut spec_constants = Vec::new();
+
+        for (id, constant) in &self.module.constants {
+            let ty = match constant {
+                Constant::SpecConstantFalse(_) | Constant::SpecConstantTrue(_) => {
+                    SpecConstantType::Bool
+                }
+                Constant::SpecConstant(val) => match self.module.types[&val.result_type] {
+                    OpType::Int(ty) => SpecConstantType::Int {
+                        bits: ty.width,
+                        signed: ty.is_signed,
+                    },
+                    OpType::Float(ty) => SpecConstantType::Float { bits: ty.width },
+                    // Unreachable because `OpSpecConstant` is only allowed for
+                    // integer or float types.
+                    _ => unreachable!(),
+                },
+                Constant::SpecConstantOp(_) | Constant::SpecConstantComposite(_) => {
+                    todo!("SpecConstantOp and SpecConstantComposite are not yet supported");
+                }
+                _ => continue,
+            };
+
+            spec_constants.push(SpecConstant {
+                id: SpecConstantId(id.0),
+                name: None,
+                ty,
+            });
+        }
+
+        // OpName defines the name for constants.
+        for ins in &self.module.debug {
+            let Instruction::Name(ins) = ins else {
+                continue;
+            };
+
+            if let Some(spec_constant) = spec_constants.iter_mut().find(|v| v.id.0 == ins.target.0)
+            {
+                spec_constant.name = Some(ins.name.clone());
+            }
+        }
+
+        spec_constants
+    }
+
     pub fn instantiate(&self, options: &Options<'_>) -> Result<Instance, Error> {
         let Some(entry_point) = self.module.entry_points.get(options.entry_point) else {
             return Err(ErrorImpl::UnknownEntryPoint {
@@ -396,6 +454,80 @@ impl Module {
                 });
                 decorations.push(Decoration::DescriptorSet(location.group));
                 decorations.push(Decoration::Binding(location.binding));
+            }
+        }
+
+        // Spec Constants
+        for spec_const in self.spec_constants() {
+            let Some(value) = options.spec_constants.get(&spec_const.id) else {
+                return Err(Error(ErrorImpl::SpecConstantNotSet {
+                    id: spec_const.id,
+                    name: spec_const.name.clone(),
+                }));
+            };
+
+            if spec_const.ty != value.ty {
+                return Err(Error(ErrorImpl::InvalidSpecConstantType {
+                    is: spec_const.ty,
+                    assigned: value.ty,
+                }));
+            }
+
+            let id = Id(spec_const.id.0);
+
+            // Spec constant was returned by `self.spec_constants()`, so it must
+            // exist and be a valid SpecConstant.
+            module.constants.remove(&id).unwrap();
+            let result = id;
+
+            let constant = match spec_const.ty {
+                SpecConstantType::Bool => {
+                    let result_type = module.create_type(OpType::Bool);
+
+                    if value.value == 0 {
+                        Constant::ConstantFalse(OpConstantFalse {
+                            result_type,
+                            result,
+                        })
+                    } else {
+                        Constant::ConstantTrue(OpConstantTrue {
+                            result_type,
+                            result,
+                        })
+                    }
+                }
+                SpecConstantType::Int { bits, signed } => {
+                    let result_type = module.create_type(OpType::Int(OpTypeInt {
+                        result,
+                        width: bits,
+                        is_signed: signed,
+                    }));
+
+                    Constant::Constant(OpConstant {
+                        result_type,
+                        result,
+                        value: vec![value.value],
+                    })
+                }
+                SpecConstantType::Float { bits } => {
+                    let result_type = module.create_type(OpType::Float(OpTypeFloat {
+                        result,
+                        width: bits,
+                    }));
+
+                    Constant::Constant(OpConstant {
+                        result_type,
+                        result,
+                        value: vec![value.value],
+                    })
+                }
+            };
+
+            module.constants.insert(result, constant);
+
+            // We must remove any `SpecId` decorations from the constant.
+            if let Some(decorations) = module.decorations.get_mut(&result) {
+                decorations.retain(|decoration| !matches!(decoration, Decoration::SpecId(_)));
             }
         }
 
@@ -766,7 +898,7 @@ impl SpirvModule {
                         (Instruction::SpecConstantFalse(*v), vec![v.result_type])
                     }
                     Constant::SpecConstant(v) => {
-                        (Instruction::SpecConstant(*v), vec![v.result_type])
+                        (Instruction::SpecConstant(v.clone()), vec![v.result_type])
                     }
                     Constant::SpecConstantComposite(v) => {
                         let mut reqs = v.constituents.clone();
@@ -1541,12 +1673,15 @@ impl<'a> ExactSizeIterator for WordReader<'a> {
 mod tests {
     use std::num::NonZeroU32;
 
+    use hashbrown::HashMap;
     use spirv_tools::assembler::{Assembler, AssemblerOptions};
     use spirv_tools::val::Validator;
 
     use crate::backend::ShaderStage;
     use crate::shader::spirv::ops::Id;
-    use crate::shader::{BindingId, BindingInfo, Options, ShaderAccess};
+    use crate::shader::{
+        BindingId, BindingInfo, Options, ShaderAccess, SpecConstantType, SpecConstantValue,
+    };
 
     use super::{Constant, Module, OpType, SpirvModule};
 
@@ -1808,6 +1943,7 @@ mod tests {
                 )]
                 .into_iter()
                 .collect(),
+                spec_constants: HashMap::default(),
             })
             .unwrap();
 
@@ -1828,5 +1964,95 @@ mod tests {
         };
 
         assert_eq!(len.value, vec![420]);
+    }
+
+    #[test]
+    fn load_spec_constant() {
+        let text = r#"
+        OpCapability Shader
+
+        OpMemoryModel Logical GLSL450
+
+        OpEntryPoint GLCompute %1 "main"
+
+        OpName %spec_const_u32 "int_const"
+        OpName %spec_const_bool "bool_const"
+
+        %ty_void = OpTypeVoid
+        %ty_fn   = OpTypeFunction %ty_void
+        %ty_u32  = OpTypeInt 32 0
+        %ty_bool = OpTypeBool
+
+        %spec_const_u32  = OpSpecConstant %ty_u32 0
+        %spec_const_bool = OpSpecConstantTrue %ty_bool
+
+        %1 = OpFunction %ty_void None %ty_fn
+        %2 = OpLabel
+        OpReturn
+        OpFunctionEnd
+        "#;
+
+        let bytes = assemble(text);
+        let module = Module::new(&bytes).unwrap();
+        let spec_consts = module.spec_constants();
+        assert_eq!(spec_consts.len(), 2);
+
+        assert_eq!(spec_consts[0].name.as_ref().unwrap(), "int_const");
+        assert_eq!(
+            spec_consts[0].ty,
+            SpecConstantType::Int {
+                bits: 32,
+                signed: false,
+            }
+        );
+
+        assert_eq!(spec_consts[1].name.as_ref().unwrap(), "bool_const");
+        assert_eq!(spec_consts[1].ty, SpecConstantType::Bool);
+    }
+
+    #[test]
+    fn instantiate_specialize_spec_consants() {
+        let text = r#"
+        OpCapability Shader
+
+        OpMemoryModel Logical GLSL450
+
+        OpEntryPoint GLCompute %2 "main"
+
+        OpName %1 "spec_const"
+
+        %ty_void = OpTypeVoid
+        %ty_fn   = OpTypeFunction %ty_void
+        %ty_u32  = OpTypeInt 32 0
+
+        %1 = OpSpecConstant %ty_u32 0
+
+        %2 = OpFunction %ty_void None %ty_fn
+        %3 = OpLabel
+        OpReturn
+        OpFunctionEnd
+        "#;
+
+        let bytes = assemble(text);
+        let module = Module::new(&bytes).unwrap();
+
+        let spec_constant_id = module.spec_constants()[0].id;
+
+        let instance = module
+            .instantiate(&Options {
+                entry_point: "main",
+                stage: ShaderStage::Compute,
+                bindings: HashMap::new(),
+                spec_constants: ([(spec_constant_id, SpecConstantValue::from(420_u32))]
+                    .into_iter()
+                    .collect()),
+            })
+            .unwrap();
+
+        let Constant::Constant(op) = &instance.data.constants[&Id(1)] else {
+            unreachable!();
+        };
+
+        assert_eq!(op.value, vec![420]);
     }
 }

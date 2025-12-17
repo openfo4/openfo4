@@ -48,7 +48,10 @@ use crate::backend::{
     PushConstantRange, SamplerDescriptor, ShaderStage, ShaderStages, StoreOp, TextureDescriptor,
     TextureFormat, TextureUsage,
 };
-use crate::shader::{self, BindingInfo, Shader, ShaderAccess, ShaderInstanceBinding};
+use crate::shader::{
+    self, BindingInfo, Shader, ShaderAccess, ShaderInstanceBinding, SpecConstantId,
+    SpecConstantValue,
+};
 use crate::statistics::Statistics;
 
 pub use backend::DescriptorSetDescriptor as DescriptorSetLayoutDescriptor;
@@ -1170,6 +1173,7 @@ impl<'a> CommandQueue<'a> {
                         bindings: compute_shader_binding_options(stage.shader),
                         stage: ShaderStage::Vertex,
                         entry_point: &stage.entry,
+                        spec_constants: stage.spec_consts.clone(),
                     });
                     let instance = instances.insert(instance);
 
@@ -1204,6 +1208,7 @@ impl<'a> CommandQueue<'a> {
                         bindings: compute_shader_binding_options(stage.shader),
                         stage: ShaderStage::Fragment,
                         entry_point: &stage.entry,
+                        spec_constants: stage.spec_consts.clone(),
                     });
                     let instance = instances.insert(instance);
 
@@ -1241,6 +1246,7 @@ impl<'a> CommandQueue<'a> {
                         bindings: compute_shader_binding_options(stage.shader),
                         stage: ShaderStage::Task,
                         entry_point: &stage.entry,
+                        spec_constants: stage.spec_consts.clone(),
                     });
                     let instance = instances.insert(instance);
 
@@ -1274,6 +1280,7 @@ impl<'a> CommandQueue<'a> {
                         bindings: compute_shader_binding_options(stage.shader),
                         stage: ShaderStage::Mesh,
                         entry_point: &stage.entry,
+                        spec_constants: stage.spec_consts.clone(),
                     });
                     let instance = instances.insert(instance);
 
@@ -1307,6 +1314,7 @@ impl<'a> CommandQueue<'a> {
                         bindings: compute_shader_binding_options(stage.shader),
                         stage: ShaderStage::Compute,
                         entry_point: &stage.entry,
+                        spec_constants: stage.spec_consts.clone(),
                     });
                     let instance = instances.insert(instance);
 
@@ -1561,6 +1569,7 @@ pub struct VertexStage<'a> {
     pub shader: &'a Shader,
     pub entry: &'static str,
     pub topology: PrimitiveTopology,
+    pub spec_consts: HashMap<SpecConstantId, SpecConstantValue>,
 }
 
 #[derive(Debug)]
@@ -1571,24 +1580,28 @@ pub struct FragmentStage<'a> {
     pub front_face: FrontFace,
     pub cull_mode: Option<Face>,
     pub depth_stencil_state: Option<DepthStencilState>,
+    pub spec_consts: HashMap<SpecConstantId, SpecConstantValue>,
 }
 
 #[derive(Debug)]
 pub struct TaskStage<'a> {
     pub shader: &'a Shader,
     pub entry: &'static str,
+    pub spec_consts: HashMap<SpecConstantId, SpecConstantValue>,
 }
 
 #[derive(Debug)]
 pub struct MeshStage<'a> {
     pub shader: &'a Shader,
     pub entry: &'static str,
+    pub spec_consts: HashMap<SpecConstantId, SpecConstantValue>,
 }
 
 #[derive(Debug)]
 pub struct ComputeStage<'a> {
     pub shader: &'a Shader,
     pub entry: &'static str,
+    pub spec_consts: HashMap<SpecConstantId, SpecConstantValue>,
 }
 
 #[derive(Debug)]

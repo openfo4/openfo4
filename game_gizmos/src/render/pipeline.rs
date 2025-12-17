@@ -2,6 +2,7 @@ use std::num::NonZeroU32;
 use std::sync::Arc;
 
 use bytemuck::{Pod, Zeroable};
+use game_core_pipeline::camera::{Camera, CameraUniform};
 use game_render::api::{
     BindingResource, BufferInitDescriptor, CommandQueue, DescriptorSetDescriptor,
     DescriptorSetEntry, DescriptorSetLayout, DescriptorSetLayoutDescriptor, FragmentStage,
@@ -13,7 +14,6 @@ use game_render::backend::{
     BufferUsage, ColorTargetState, DescriptorBinding, DescriptorType, Face, FrontFace, LoadOp,
     PrimitiveTopology, ShaderStages, StoreOp, TextureFormat,
 };
-use game_render::camera::{Camera, CameraUniform};
 use game_render::graph::{Node, RenderContext, SlotLabel};
 use game_render::pipeline_cache::{PipelineBuilder, PipelineCache};
 use game_render::shader::{Shader, ShaderConfig, ShaderLanguage, ShaderSource};
@@ -85,6 +85,7 @@ impl PipelineBuilder for GizmoPipelineBuilder {
                     shader: &shaders[0],
                     entry: "vs_main",
                     topology: PrimitiveTopology::LineList,
+                    spec_consts: Default::default(),
                 }),
                 PipelineStage::Fragment(FragmentStage {
                     shader: &shaders[0],
@@ -96,6 +97,7 @@ impl PipelineBuilder for GizmoPipelineBuilder {
                     front_face: FrontFace::Ccw,
                     cull_mode: Some(Face::Back),
                     depth_stencil_state: None,
+                    spec_consts: Default::default(),
                 }),
             ],
             push_constant_ranges: &[],

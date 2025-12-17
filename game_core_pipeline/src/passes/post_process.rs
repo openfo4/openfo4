@@ -137,6 +137,7 @@ impl PipelineBuilder for PostProcessPipelineBuilder {
                     shader: &shaders[0],
                     entry: "vs_main",
                     topology: PrimitiveTopology::TriangleList,
+                    spec_consts: Default::default(),
                 }),
                 PipelineStage::Fragment(FragmentStage {
                     shader: &shaders[0],
@@ -148,6 +149,7 @@ impl PipelineBuilder for PostProcessPipelineBuilder {
                     front_face: FrontFace::Ccw,
                     cull_mode: None,
                     depth_stencil_state: None,
+                    spec_consts: Default::default(),
                 }),
             ],
             push_constant_ranges: &[],

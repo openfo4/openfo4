@@ -614,6 +614,7 @@ impl PipelineBuilder for DrawcallGenPipeline {
             stages: &[PipelineStage::Compute(ComputeStage {
                 shader: &shaders[0],
                 entry: "main",
+                spec_consts: Default::default(),
             })],
             descriptors: &[&self.descriptor],
             push_constant_ranges: &[PushConstantRange {
@@ -644,6 +645,7 @@ impl PipelineBuilder for BuildColorPipeline {
                     shader: &shaders[0],
                     entry: "main",
                     topology: PrimitiveTopology::TriangleList,
+                    spec_consts: Default::default(),
                 }),
                 PipelineStage::Fragment(FragmentStage {
                     shader: &shaders[1],
@@ -656,6 +658,7 @@ impl PipelineBuilder for BuildColorPipeline {
                         depth_write_enabled: false,
                         depth_compare_op: CompareOp::Greater,
                     }),
+                    spec_consts: Default::default(),
                 }),
             ],
             descriptors: &[
@@ -687,6 +690,7 @@ impl PipelineBuilder for BuildBlendPipeline {
             stages: &[PipelineStage::Compute(ComputeStage {
                 shader: &shaders[0],
                 entry: "main",
+                spec_consts: Default::default(),
             })],
             descriptors: &[&self.descriptor],
             push_constant_ranges: &[PushConstantRange {

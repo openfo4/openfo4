@@ -58,6 +58,8 @@ const DRAWCALL_GEN_SHADER: &str = concat!(
 
 const WORKGROUP_SIZE: u32 = 64;
 
+const TILE_SIZE: u32 = 16;
+
 #[derive(Debug)]
 pub struct OpaqueVertexForwardPass {
     state: Arc<Mutex<State>>,
@@ -764,8 +766,8 @@ impl OpaqueVertexForwardPass {
 
             pass.set_push_constants(ShaderStages::COMPUTE, 0, &push_constants);
 
-            let x = size.x.div_ceil(16);
-            let y = size.y.div_ceil(16);
+            let x = size.x.div_ceil(TILE_SIZE);
+            let y = size.y.div_ceil(TILE_SIZE);
             pass.dispatch(x, y, 1);
         }
 
@@ -851,6 +853,7 @@ impl PipelineBuilder for ForwardPipelineBuilder {
                     shader: &shaders[0],
                     entry: "main",
                     topology: PrimitiveTopology::TriangleList,
+                    spec_consts: Default::default(),
                 }),
                 PipelineStage::Fragment(FragmentStage {
                     shader: &shaders[1],
@@ -866,6 +869,7 @@ impl PipelineBuilder for ForwardPipelineBuilder {
                         depth_write_enabled: true,
                         depth_compare_op: CompareOp::Greater,
                     }),
+                    spec_consts: Default::default(),
                 }),
             ],
             descriptors: &[&self.mesh_descriptor],
@@ -891,10 +895,18 @@ impl PipelineBuilder for ShadingPipelineBuilder {
         shaders: &[Shader],
         _format: TextureFormat,
     ) -> Pipeline {
+        let tile_size = shaders[0]
+            .spec_constants()
+            .iter()
+            .find(|v| v.name.as_ref().is_some_and(|v| v == "TILE_SIZE"))
+            .unwrap()
+            .id;
+
         queue.create_pipeline(&PipelineDescriptor {
             stages: &[PipelineStage::Compute(ComputeStage {
                 shader: &shaders[0],
                 entry: "main",
+                spec_consts: [(tile_size, TILE_SIZE.into())].into_iter().collect(),
             })],
             descriptors: &[
                 &self.io_descriptor,
@@ -927,6 +939,7 @@ impl PipelineBuilder for AlphaMaskPipelineBuilder {
                     shader: &shaders[0],
                     entry: "main",
                     topology: PrimitiveTopology::TriangleList,
+                    spec_consts: Default::default(),
                 }),
                 PipelineStage::Fragment(FragmentStage {
                     shader: &shaders[1],
@@ -942,6 +955,7 @@ impl PipelineBuilder for AlphaMaskPipelineBuilder {
                         depth_write_enabled: true,
                         depth_compare_op: CompareOp::Greater,
                     }),
+                    spec_consts: Default::default(),
                 }),
             ],
             descriptors: &[&self.descriptor],
@@ -970,6 +984,7 @@ impl PipelineBuilder for BuildDrawcallGenPipeline {
             stages: &[PipelineStage::Compute(ComputeStage {
                 shader: &shaders[0],
                 entry: "main",
+                spec_consts: Default::default(),
             })],
             push_constant_ranges: &[PushConstantRange {
                 range: 0..4,

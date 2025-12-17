@@ -130,6 +130,7 @@ impl PipelineBuilder for UiPipelineBuilder {
                     shader: &shaders[0],
                     entry: "main",
                     topology: PrimitiveTopology::TriangleList,
+                    spec_consts: Default::default(),
                 }),
                 PipelineStage::Fragment(FragmentStage {
                     shader: &shaders[1],
@@ -141,6 +142,7 @@ impl PipelineBuilder for UiPipelineBuilder {
                     front_face: FrontFace::Ccw,
                     cull_mode: None,
                     depth_stencil_state: None,
+                    spec_consts: Default::default(),
                 }),
             ],
             descriptors: &[&self.descriptor_set_layout],

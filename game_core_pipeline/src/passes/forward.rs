@@ -366,10 +366,12 @@ impl PipelineBuilder for BuildForwardPipeline {
                 PipelineStage::Task(TaskStage {
                     shader: &shaders[0],
                     entry: "main",
+                    spec_consts: Default::default(),
                 }),
                 PipelineStage::Mesh(MeshStage {
                     shader: &shaders[1],
                     entry: "main",
+                    spec_consts: Default::default(),
                 }),
                 PipelineStage::Fragment(FragmentStage {
                     shader: &shaders[2],
@@ -385,6 +387,7 @@ impl PipelineBuilder for BuildForwardPipeline {
                         depth_write_enabled: true,
                         depth_compare_op: CompareOp::Greater,
                     }),
+                    spec_consts: Default::default(),
                 }),
             ],
             push_constant_ranges: &[PushConstantRange {
