@@ -4638,6 +4638,14 @@ impl<'a> DescriptorSet<'a> {
             image: vk::DescriptorImageInfo,
         }
 
+        // Sizes of ann non-header elements must be the size of the union.
+        // This is necessary so that we can cast `*[Info]` to `*[T]`
+        // (with sizeof(T) == sizeof(Info)) without changing the stride.
+        const {
+            assert!(size_of::<Info>() == size_of::<vk::DescriptorBufferInfo>());
+            assert!(size_of::<Info>() == size_of::<vk::DescriptorImageInfo>());
+        }
+
         // We include all necessary data in one array.
         // Every descriptor begins with a `Header`, which describes
         // which `DescriptorType` follows in the next `count` elements.
