@@ -798,7 +798,7 @@ impl<'a> CommandQueue<'a> {
         for entry in descriptor.entries {
             unset_descriptors.remove(&entry.binding);
 
-            let layout_binding = layout.bindings.get(entry.binding);
+            let layout_binding = layout.bindings.get(&entry.binding);
             let layout_ty = layout_binding.map(|l| l.kind);
 
             match (&entry.resource, layout_ty) {
@@ -1094,13 +1094,19 @@ impl<'a> CommandQueue<'a> {
 
             let get_descriptor_kind = |group: u32, binding: u32| -> Option<DescriptorType> {
                 let descriptor = descriptors.get(group as usize)?;
-                let binding = descriptor.bindings().get(binding as usize)?;
+                let binding = descriptor
+                    .bindings()
+                    .iter()
+                    .find(|v| v.binding == binding)?;
                 Some(binding.kind)
             };
 
             let get_descriptor_vis = |group: u32, binding: u32| -> Option<ShaderStages> {
                 let descriptor = descriptors.get(group as usize)?;
-                let binding = descriptor.bindings().get(binding as usize)?;
+                let binding = descriptor
+                    .bindings()
+                    .iter()
+                    .find(|v| v.binding == binding)?;
                 Some(binding.visibility)
             };
 
@@ -1564,6 +1570,19 @@ pub enum PipelineStage<'a> {
     Compute(ComputeStage<'a>),
 }
 
+impl PipelineStage<'_> {
+    /// Returns the [`ShaderStage`] associated with this `PipelineStage`.
+    pub const fn shader_stage(&self) -> ShaderStage {
+        match self {
+            Self::Vertex(_) => ShaderStage::Vertex,
+            Self::Fragment(_) => ShaderStage::Fragment,
+            Self::Task(_) => ShaderStage::Task,
+            Self::Mesh(_) => ShaderStage::Mesh,
+            Self::Compute(_) => ShaderStage::Compute,
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct VertexStage<'a> {
     pub shader: &'a Shader,
@@ -1812,11 +1831,30 @@ pub struct DescriptorSetEntry<'a> {
     pub resource: BindingResource<'a>,
 }
 
+#[derive(Copy, Clone, Debug)]
 pub enum BindingResource<'a> {
     Buffer(&'a Buffer),
     Sampler(&'a Sampler),
     Texture(&'a TextureView),
     TextureArray(&'a [&'a TextureView]),
+}
+
+impl<'a> From<&'a Buffer> for BindingResource<'a> {
+    fn from(value: &'a Buffer) -> Self {
+        Self::Buffer(value)
+    }
+}
+
+impl<'a> From<&'a Sampler> for BindingResource<'a> {
+    fn from(value: &'a Sampler) -> Self {
+        Self::Sampler(value)
+    }
+}
+
+impl<'a> From<&'a TextureView> for BindingResource<'a> {
+    fn from(value: &'a TextureView) -> Self {
+        Self::Texture(value)
+    }
 }
 
 #[derive(Copy, Clone, Debug)]
@@ -1961,7 +1999,7 @@ impl<'a, 'b> RenderPass<'a, 'b> {
         self.last_pipeline = Some(pipeline.id);
     }
 
-    pub fn set_descriptor_set(&mut self, index: u32, descriptor_set: &'b DescriptorSet) {
+    pub fn set_descriptor_set(&mut self, index: u32, descriptor_set: &DescriptorSet) {
         assert!(self.last_pipeline.is_some(), "Pipeline is not set");
 
         self.ctx

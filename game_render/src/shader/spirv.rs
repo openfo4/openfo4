@@ -328,6 +328,29 @@ impl Module {
         spec_constants
     }
 
+    pub fn set_binding_location(&mut self, id: BindingId, location: BindingLocation) {
+        let Some((id, binding)) = self.bindings.iter_mut().find(|(_, v)| v.id == id) else {
+            panic!("unknown binding id {:?}", id);
+        };
+
+        binding.location = Some(location);
+
+        // Remove old binding decorations, if they exist.
+        if let Some(decorations) = self.module.decorations.get_mut(id) {
+            decorations.retain(|decoration| {
+                !matches!(
+                    decoration,
+                    Decoration::DescriptorSet(_) | Decoration::Binding(_)
+                )
+            });
+        }
+
+        // Insert new binding decorations.
+        let decorations = self.module.decorations.entry(*id).or_default();
+        decorations.push(Decoration::DescriptorSet(location.group));
+        decorations.push(Decoration::Binding(location.binding));
+    }
+
     pub fn instantiate(&self, options: &Options<'_>) -> Result<Instance, Error> {
         let Some(entry_point) = self.module.entry_points.get(options.entry_point) else {
             return Err(ErrorImpl::UnknownEntryPoint {
@@ -1680,7 +1703,8 @@ mod tests {
     use crate::backend::ShaderStage;
     use crate::shader::spirv::ops::Id;
     use crate::shader::{
-        BindingId, BindingInfo, Options, ShaderAccess, SpecConstantType, SpecConstantValue,
+        BindingId, BindingInfo, BindingLocation, Options, ShaderAccess, SpecConstantType,
+        SpecConstantValue,
     };
 
     use super::{Constant, Module, OpType, SpirvModule};
@@ -2054,5 +2078,46 @@ mod tests {
         };
 
         assert_eq!(op.value, vec![420]);
+    }
+
+    #[test]
+    fn set_descriptor_set_overwrite() {
+        let text = r#"
+        OpCapability Shader
+
+        OpMemoryModel Logical GLSL450
+
+        OpEntryPoint GLCompute %2 "main"
+
+        OpDecorate %1 DescriptorSet 0
+        OpDecorate %1 Binding 0
+
+        %ty_void    = OpTypeVoid
+        %ty_u32     = OpTypeInt 32 0
+        %ty_fn      = OpTypeFunction %ty_void
+        %ty_ptr_u32 = OpTypePointer UniformConstant %ty_u32
+
+        %1 = OpVariable %ty_ptr_u32 UniformConstant
+
+        %2 = OpFunction %ty_void None %ty_fn
+        %3 = OpLabel
+        OpReturn
+        OpFunctionEnd
+        "#;
+
+        let bytes = assemble(text);
+        let mut module = Module::new(&bytes).unwrap();
+
+        module.set_binding_location(
+            BindingId(0),
+            BindingLocation {
+                group: 1,
+                binding: 2,
+            },
+        );
+
+        let bindings = module.bindings();
+        assert_eq!(bindings[0].location.unwrap().group, 1);
+        assert_eq!(bindings[0].location.unwrap().binding, 2);
     }
 }

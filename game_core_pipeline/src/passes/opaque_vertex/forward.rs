@@ -1,72 +1,44 @@
-use std::num::NonZeroU32;
 use std::sync::Arc;
 
+use bytemuck::{Pod, Zeroable};
 use game_common::components::Color;
 use game_render::api::{
-    BindingResource, Buffer, BufferDescriptor, CommandQueue, ComputePassDescriptor, ComputeStage,
-    DepthStencilAttachment, DescriptorSetDescriptor, DescriptorSetEntry, DescriptorSetLayout,
-    DescriptorSetLayoutDescriptor, FragmentStage, Pipeline, PipelineDescriptor, PipelineStage,
+    BufferDescriptor, BufferInitDescriptor, CommandQueue, DepthStencilAttachment,
     RenderPassColorAttachment, RenderPassDescriptor, Sampler, Texture, TextureViewDescriptor,
-    VertexStage,
 };
 use game_render::backend::allocator::UsageFlags;
 use game_render::backend::{
-    AddressMode, BufferUsage, ColorTargetState, CompareOp, DepthStencilState, DescriptorBinding,
-    DescriptorType, DrawIndirectCommand, Face, FilterMode, FrontFace, LoadOp, PrimitiveTopology,
-    PushConstantRange, SamplerDescriptor, ShaderStages, StoreOp, TextureDescriptor, TextureFormat,
-    TextureUsage,
+    AddressMode, BufferUsage, DrawIndirectCommand, FilterMode, LoadOp, SamplerDescriptor, StoreOp,
+    TextureDescriptor, TextureFormat, TextureUsage,
 };
 use game_render::graph::{Node, RenderContext, SlotLabel};
-use game_render::pipeline_cache::{PipelineBuilder, PipelineCache};
-use game_render::shader::{Shader, ShaderConfig, ShaderLanguage, ShaderSource};
 use game_tracing::trace_span;
 use glam::UVec2;
 use parking_lot::Mutex;
 
 use crate::camera::CameraUniform;
 use crate::entities::{CameraId, SceneId};
+use crate::passes::opaque_vertex::pipelines::drawcall_gen::{
+    DrawcallGenParams, DrawcallGenPipeline,
+};
+use crate::passes::opaque_vertex::pipelines::visbuffer_alpha_masked::{
+    AlphaMaskParams, VisbufferAlphaMaskPipeline,
+};
+use crate::passes::opaque_vertex::pipelines::visbuffer_opaque::{
+    ForwardParams, VisbufferForwardPipeline,
+};
+use crate::passes::opaque_vertex::pipelines::visbuffer_shading::{
+    ShadingParameters, ShadingPipeline,
+};
 use crate::passes::opaque_vertex::state::Instance;
 use crate::passes::{DEPTH_FORMAT, HDR_FORMAT, HDR_TEXTURE, MeshStateImpl, OPAQUE_DEPTH, State};
 
-use super::{INDIRECT_DRAW_BUFFER, INSTANCE_BUFFER};
-
-const FORWARD_VS_SHADER: &str = concat!(
-    env!("CARGO_MANIFEST_DIR"),
-    "/shaders/opaque_vertex/visbuffer_vert.slang"
-);
-const FORWARD_FS_SHADER: &str = concat!(
-    env!("CARGO_MANIFEST_DIR"),
-    "/shaders/opaque_vertex/visbuffer_frag.slang"
-);
-const SHADING_SHADER: &str = concat!(
-    env!("CARGO_MANIFEST_DIR"),
-    "/shaders/opaque_vertex/visbuffer_shading.slang"
-);
-const ALPHA_MASK_VS_SHADER: &str = concat!(
-    env!("CARGO_MANIFEST_DIR"),
-    "/shaders/opaque_vertex/transparent_mask_vert.slang"
-);
-const ALPHA_MASK_FS_SHADER: &str = concat!(
-    env!("CARGO_MANIFEST_DIR"),
-    "/shaders/opaque_vertex/transparent_mask_frag.slang"
-);
-
-const DRAWCALL_GEN_SHADER: &str = concat!(
-    env!("CARGO_MANIFEST_DIR"),
-    "/shaders/opaque_vertex/drawcall_gen.slang"
-);
-
-const WORKGROUP_SIZE: u32 = 64;
-
-const TILE_SIZE: u32 = 16;
-
-#[derive(Debug)]
 pub struct OpaqueVertexForwardPass {
     state: Arc<Mutex<State>>,
-    drawcall_gen_pipeline: PipelineCache<BuildDrawcallGenPipeline>,
-    forward_pipeline: PipelineCache<ForwardPipelineBuilder>,
-    alpha_mask_pipeline: PipelineCache<AlphaMaskPipelineBuilder>,
-    shading_pipeline: PipelineCache<ShadingPipelineBuilder>,
+    drawcall_gen_pipeline: Mutex<DrawcallGenPipeline>,
+    forward_opaque: Mutex<VisbufferForwardPipeline>,
+    forward_alpha_mask: Mutex<VisbufferAlphaMaskPipeline>,
+    shading_pipeline: Mutex<ShadingPipeline>,
     linear_sampler: Sampler,
 }
 
@@ -81,305 +53,13 @@ impl OpaqueVertexForwardPass {
             mipmap_filter: FilterMode::Linear,
         });
 
-        let drawcall_gen_pipeline = PipelineCache::new(
-            BuildDrawcallGenPipeline {
-                descriptor: queue.create_descriptor_set_layout(&DescriptorSetLayoutDescriptor {
-                    bindings: &[
-                        DescriptorBinding {
-                            binding: 0,
-                            visibility: ShaderStages::COMPUTE,
-                            kind: DescriptorType::Storage,
-                            count: NonZeroU32::MIN,
-                        },
-                        DescriptorBinding {
-                            binding: 1,
-                            visibility: ShaderStages::COMPUTE,
-                            kind: DescriptorType::Storage,
-                            count: NonZeroU32::MIN,
-                        },
-                        DescriptorBinding {
-                            binding: 2,
-                            visibility: ShaderStages::COMPUTE,
-                            kind: DescriptorType::Storage,
-                            count: NonZeroU32::MIN,
-                        },
-                    ],
-                }),
-            },
-            vec![ShaderConfig {
-                language: ShaderLanguage::Slang,
-                source: ShaderSource::File(DRAWCALL_GEN_SHADER.into()),
-            }],
-        );
-
-        let forward_pipeline = PipelineCache::new(
-            ForwardPipelineBuilder {
-                mesh_descriptor: queue.create_descriptor_set_layout(
-                    &DescriptorSetLayoutDescriptor {
-                        bindings: &[
-                            DescriptorBinding {
-                                binding: 0,
-                                visibility: ShaderStages::VERTEX,
-                                kind: DescriptorType::Storage,
-                                count: NonZeroU32::MIN,
-                            },
-                            DescriptorBinding {
-                                binding: 1,
-                                visibility: ShaderStages::VERTEX,
-                                kind: DescriptorType::Storage,
-                                count: NonZeroU32::MIN,
-                            },
-                            DescriptorBinding {
-                                binding: 2,
-                                visibility: ShaderStages::VERTEX,
-                                kind: DescriptorType::Storage,
-                                count: NonZeroU32::MIN,
-                            },
-                            DescriptorBinding {
-                                binding: 3,
-                                visibility: ShaderStages::VERTEX,
-                                kind: DescriptorType::Storage,
-                                count: NonZeroU32::MIN,
-                            },
-                            // Materials
-                            DescriptorBinding {
-                                binding: 4,
-                                visibility: ShaderStages::VERTEX,
-                                kind: DescriptorType::Storage,
-                                count: NonZeroU32::MIN,
-                            },
-                        ],
-                    },
-                ),
-            },
-            vec![
-                ShaderConfig {
-                    source: ShaderSource::File(FORWARD_VS_SHADER.into()),
-                    language: ShaderLanguage::Slang,
-                },
-                ShaderConfig {
-                    source: ShaderSource::File(FORWARD_FS_SHADER.into()),
-                    language: ShaderLanguage::Slang,
-                },
-            ],
-        );
-
-        let alpha_mask_pipeline = PipelineCache::new(
-            AlphaMaskPipelineBuilder {
-                descriptor: queue.create_descriptor_set_layout(&DescriptorSetLayoutDescriptor {
-                    bindings: &[
-                        DescriptorBinding {
-                            binding: 0,
-                            visibility: ShaderStages::VERTEX | ShaderStages::FRAGMENT,
-                            kind: DescriptorType::Storage,
-                            count: NonZeroU32::MIN,
-                        },
-                        DescriptorBinding {
-                            binding: 1,
-                            visibility: ShaderStages::VERTEX,
-                            kind: DescriptorType::Storage,
-                            count: NonZeroU32::MIN,
-                        },
-                        DescriptorBinding {
-                            binding: 2,
-                            visibility: ShaderStages::VERTEX,
-                            kind: DescriptorType::Storage,
-                            count: NonZeroU32::MIN,
-                        },
-                        DescriptorBinding {
-                            binding: 3,
-                            visibility: ShaderStages::VERTEX,
-                            kind: DescriptorType::Storage,
-                            count: NonZeroU32::MIN,
-                        },
-                        DescriptorBinding {
-                            binding: 4,
-                            visibility: ShaderStages::VERTEX,
-                            kind: DescriptorType::Storage,
-                            count: NonZeroU32::MIN,
-                        },
-                        DescriptorBinding {
-                            binding: 5,
-                            visibility: ShaderStages::VERTEX,
-                            kind: DescriptorType::Storage,
-                            count: NonZeroU32::MIN,
-                        },
-                        // MATERIALS
-                        DescriptorBinding {
-                            binding: 6,
-                            visibility: ShaderStages::VERTEX,
-                            kind: DescriptorType::Storage,
-                            count: NonZeroU32::MIN,
-                        },
-                        DescriptorBinding {
-                            binding: 7,
-                            visibility: ShaderStages::FRAGMENT,
-                            kind: DescriptorType::Storage,
-                            count: NonZeroU32::MIN,
-                        },
-                        DescriptorBinding {
-                            binding: 8,
-                            visibility: ShaderStages::FRAGMENT,
-                            kind: DescriptorType::Texture,
-                            // FIXME: Unhardcode this
-                            count: NonZeroU32::new(8192).unwrap(),
-                        },
-                        DescriptorBinding {
-                            binding: 9,
-                            visibility: ShaderStages::FRAGMENT,
-                            kind: DescriptorType::Sampler,
-                            count: NonZeroU32::MIN,
-                        },
-                    ],
-                }),
-            },
-            vec![
-                ShaderConfig {
-                    language: ShaderLanguage::Slang,
-                    source: ShaderSource::File(ALPHA_MASK_VS_SHADER.into()),
-                },
-                ShaderConfig {
-                    language: ShaderLanguage::Slang,
-                    source: ShaderSource::File(ALPHA_MASK_FS_SHADER.into()),
-                },
-            ],
-        );
-
-        let shading_pipeline = PipelineCache::new(
-            ShadingPipelineBuilder {
-                io_descriptor: queue.create_descriptor_set_layout(&DescriptorSetLayoutDescriptor {
-                    bindings: &[
-                        DescriptorBinding {
-                            binding: 0,
-                            visibility: ShaderStages::COMPUTE,
-                            kind: DescriptorType::Texture,
-                            count: NonZeroU32::MIN,
-                        },
-                        DescriptorBinding {
-                            binding: 1,
-                            visibility: ShaderStages::COMPUTE,
-                            kind: DescriptorType::StorageTexture,
-                            count: NonZeroU32::MIN,
-                        },
-                    ],
-                }),
-                mesh_descriptor: queue.create_descriptor_set_layout(
-                    &DescriptorSetLayoutDescriptor {
-                        bindings: &[
-                            DescriptorBinding {
-                                binding: 0,
-                                visibility: ShaderStages::COMPUTE,
-                                kind: DescriptorType::Storage,
-                                count: NonZeroU32::MIN,
-                            },
-                            DescriptorBinding {
-                                binding: 1,
-                                visibility: ShaderStages::COMPUTE,
-                                kind: DescriptorType::Storage,
-                                count: NonZeroU32::MIN,
-                            },
-                            DescriptorBinding {
-                                binding: 2,
-                                visibility: ShaderStages::COMPUTE,
-                                kind: DescriptorType::Storage,
-                                count: NonZeroU32::MIN,
-                            },
-                            DescriptorBinding {
-                                binding: 3,
-                                visibility: ShaderStages::COMPUTE,
-                                kind: DescriptorType::Storage,
-                                count: NonZeroU32::MIN,
-                            },
-                            DescriptorBinding {
-                                binding: 4,
-                                visibility: ShaderStages::COMPUTE,
-                                kind: DescriptorType::Storage,
-                                count: NonZeroU32::MIN,
-                            },
-                            DescriptorBinding {
-                                binding: 5,
-                                visibility: ShaderStages::COMPUTE,
-                                kind: DescriptorType::Storage,
-                                count: NonZeroU32::MIN,
-                            },
-                            DescriptorBinding {
-                                binding: 6,
-                                visibility: ShaderStages::COMPUTE,
-                                kind: DescriptorType::Storage,
-                                count: NonZeroU32::MIN,
-                            },
-                            DescriptorBinding {
-                                binding: 7,
-                                visibility: ShaderStages::COMPUTE,
-                                kind: DescriptorType::Storage,
-                                count: NonZeroU32::MIN,
-                            },
-                            DescriptorBinding {
-                                binding: 8,
-                                visibility: ShaderStages::COMPUTE,
-                                kind: DescriptorType::Storage,
-                                count: NonZeroU32::MIN,
-                            },
-                        ],
-                    },
-                ),
-                shading_descriptor: queue.create_descriptor_set_layout(
-                    &DescriptorSetLayoutDescriptor {
-                        bindings: &[
-                            DescriptorBinding {
-                                binding: 0,
-                                visibility: ShaderStages::COMPUTE,
-                                kind: DescriptorType::Storage,
-                                count: NonZeroU32::MIN,
-                            },
-                            DescriptorBinding {
-                                binding: 1,
-                                visibility: ShaderStages::COMPUTE,
-                                kind: DescriptorType::Storage,
-                                count: NonZeroU32::MIN,
-                            },
-                            DescriptorBinding {
-                                binding: 2,
-                                visibility: ShaderStages::COMPUTE,
-                                kind: DescriptorType::Storage,
-                                count: NonZeroU32::MIN,
-                            },
-                            DescriptorBinding {
-                                binding: 3,
-                                visibility: ShaderStages::COMPUTE,
-                                kind: DescriptorType::Storage,
-                                count: NonZeroU32::MIN,
-                            },
-                            DescriptorBinding {
-                                binding: 4,
-                                visibility: ShaderStages::COMPUTE,
-                                kind: DescriptorType::Texture,
-                                // TODO: Grow when needed instead of initializing this to a value.
-                                count: NonZeroU32::new(8192).unwrap(),
-                            },
-                            DescriptorBinding {
-                                binding: 5,
-                                visibility: ShaderStages::COMPUTE,
-                                kind: DescriptorType::Sampler,
-                                count: NonZeroU32::MIN,
-                            },
-                        ],
-                    },
-                ),
-            },
-            vec![ShaderConfig {
-                source: ShaderSource::File(SHADING_SHADER.into()),
-                language: ShaderLanguage::Slang,
-            }],
-        );
-
         Self {
             state,
             linear_sampler,
-            forward_pipeline,
-            shading_pipeline,
-            alpha_mask_pipeline,
-            drawcall_gen_pipeline,
+            forward_opaque: Mutex::new(VisbufferForwardPipeline::new()),
+            shading_pipeline: Mutex::new(ShadingPipeline::new()),
+            forward_alpha_mask: Mutex::new(VisbufferAlphaMaskPipeline::new()),
+            drawcall_gen_pipeline: Mutex::new(DrawcallGenPipeline::new()),
         }
     }
 
@@ -392,14 +72,6 @@ impl OpaqueVertexForwardPass {
         size: UVec2,
     ) {
         let _span = trace_span!("ForwardPass::render_scene_with_camera").entered();
-
-        let (Ok(instance_buffer), Ok(indirect_buffer)) = (
-            ctx.read::<Buffer>(INSTANCE_BUFFER),
-            ctx.read::<Buffer>(INDIRECT_DRAW_BUFFER),
-        ) else {
-            self.clear_pass(ctx, size);
-            return;
-        };
 
         let depth_texture = ctx.queue.create_texture(&TextureDescriptor {
             size,
@@ -422,6 +94,11 @@ impl OpaqueVertexForwardPass {
             unreachable!();
         };
 
+        if mesh_state.num_opauqe_instances == 0 && mesh_state.num_transparent_mask_instances == 0 {
+            self.clear_pass(ctx, size);
+            return;
+        }
+
         let positions = mesh_state.positions.buffer();
         let normals = mesh_state.normals.buffer();
         let tangents = mesh_state.tangents.buffer();
@@ -438,72 +115,54 @@ impl OpaqueVertexForwardPass {
             usage: TextureUsage::RENDER_ATTACHMENT | TextureUsage::TEXTURE_BINDING,
         });
 
-        {
-            let mesh_descriptor = ctx.queue.create_descriptor_set(&DescriptorSetDescriptor {
-                layout: &self.forward_pipeline.builder.mesh_descriptor,
-                entries: &[
-                    DescriptorSetEntry {
-                        binding: 0,
-                        resource: BindingResource::Buffer(positions),
-                    },
-                    DescriptorSetEntry {
-                        binding: 1,
-                        resource: BindingResource::Buffer(offsets),
-                    },
-                    DescriptorSetEntry {
-                        binding: 2,
-                        resource: BindingResource::Buffer(instance_buffer),
-                    },
-                    DescriptorSetEntry {
-                        binding: 3,
-                        resource: BindingResource::Buffer(index_buffer),
-                    },
-                    DescriptorSetEntry {
-                        binding: 4,
-                        resource: BindingResource::Buffer(materials),
-                    },
-                ],
+        let opauqe_instances = ctx.queue.create_buffer(&BufferDescriptor {
+            size: mesh_state
+                .opaque_instances
+                .buffer(ctx.queue)
+                .size()
+                .max(size_of::<Instance>() as u64),
+            usage: BufferUsage::STORAGE,
+            flags: UsageFlags::empty(),
+        });
+
+        // Opaque Forward
+        if mesh_state.num_opauqe_instances != 0 {
+            let mut pipeline = self.drawcall_gen_pipeline.lock();
+
+            let instances_in = mesh_state.opaque_instances.buffer(ctx.queue);
+            let draws = ctx.queue.create_buffer(&BufferDescriptor {
+                size: mesh_state.num_opauqe_instances as u64
+                    * size_of::<DrawIndirectCommand>() as u64,
+                usage: BufferUsage::STORAGE | BufferUsage::INDIRECT,
+                flags: UsageFlags::empty(),
             });
 
-            let pipeline = self
-                .forward_pipeline
-                .get(ctx.queue, TextureFormat::Rg32Uint);
-
-            let mut pass = ctx.queue.run_render_pass(&RenderPassDescriptor {
-                name: "Forward",
-                color_attachments: &[RenderPassColorAttachment {
-                    load_op: LoadOp::Clear(Color::BLACK),
-                    store_op: StoreOp::Store,
-                    target: &visbuffer.create_view(&TextureViewDescriptor::default()),
-                }],
-                depth_stencil_attachment: Some(&DepthStencilAttachment {
-                    texture: &depth_texture,
-                    load_op: LoadOp::Clear(0.0),
-                    store_op: StoreOp::Store,
-                }),
-            });
-
-            pass.set_pipeline(&pipeline);
-            pass.set_descriptor_set(0, &mesh_descriptor);
-
-            let mut push_constants = [0; 128];
-            push_constants[0..80].copy_from_slice(bytemuck::bytes_of(&CameraUniform::new(
-                camera.transform,
-                camera.projection,
-            )));
-            push_constants[80..84]
-                .copy_from_slice(&(scene.directional_lights.len() as u32).to_ne_bytes());
-            push_constants[84..88]
-                .copy_from_slice(&(scene.point_lights.len() as u32).to_ne_bytes());
-            push_constants[88..92].copy_from_slice(&(scene.spot_lights.len() as u32).to_ne_bytes());
-
-            pass.set_push_constants(
-                ShaderStages::VERTEX | ShaderStages::FRAGMENT,
-                0,
-                &push_constants,
+            pipeline.run(
+                ctx.queue,
+                DrawcallGenParams {
+                    instance_count: mesh_state.num_opauqe_instances,
+                    instances_in,
+                    instances_out: &opauqe_instances,
+                    draws: &draws,
+                },
             );
 
-            pass.draw_indirect(indirect_buffer);
+            let mut pipeline = self.forward_opaque.lock();
+
+            pipeline.run(
+                ctx.queue,
+                ForwardParams {
+                    camera: &camera,
+                    positions,
+                    offsets,
+                    instances: &opauqe_instances,
+                    index_buffer,
+                    materials,
+                    indirect_buffer: &draws,
+                    visbuffer: &visbuffer,
+                    depth: &depth_texture,
+                },
+            );
         }
 
         let alpha_mask_instances = ctx.queue.create_buffer(&BufferDescriptor {
@@ -528,118 +187,39 @@ impl OpaqueVertexForwardPass {
             });
 
             {
-                let pipeline = self.drawcall_gen_pipeline.get(ctx.queue, HDR_FORMAT);
-
-                let descriptor = ctx.queue.create_descriptor_set(&DescriptorSetDescriptor {
-                    layout: &self.drawcall_gen_pipeline.builder.descriptor,
-                    entries: &[
-                        DescriptorSetEntry {
-                            binding: 0,
-                            resource: BindingResource::Buffer(instance_in),
-                        },
-                        DescriptorSetEntry {
-                            binding: 1,
-                            resource: BindingResource::Buffer(&alpha_mask_instances),
-                        },
-                        DescriptorSetEntry {
-                            binding: 2,
-                            resource: BindingResource::Buffer(&draws),
-                        },
-                    ],
-                });
-
-                let mut compute_pass = ctx.queue.run_compute_pass(&ComputePassDescriptor {
-                    name: "Drawcall Gen (Transparent Mask)",
-                });
-
-                let workgroups = mesh_state
-                    .num_transparent_mask_instances
-                    .div_ceil(WORKGROUP_SIZE);
-
-                compute_pass.set_pipeline(&pipeline);
-                compute_pass.set_push_constants(
-                    ShaderStages::COMPUTE,
-                    0,
-                    bytemuck::bytes_of(&mesh_state.num_transparent_mask_instances),
+                let mut pipeline = self.drawcall_gen_pipeline.lock();
+                pipeline.run(
+                    ctx.queue,
+                    DrawcallGenParams {
+                        instance_count: mesh_state.num_transparent_mask_instances,
+                        instances_in: instance_in,
+                        instances_out: &alpha_mask_instances,
+                        draws: &draws,
+                    },
                 );
-                compute_pass.set_descriptor_set(0, &descriptor);
-                compute_pass.dispatch(workgroups, 1, 1);
             }
 
-            let descriptor = ctx.queue.create_descriptor_set(&DescriptorSetDescriptor {
-                layout: &self.alpha_mask_pipeline.builder.descriptor,
-                entries: &[
-                    DescriptorSetEntry {
-                        binding: 0,
-                        resource: BindingResource::Buffer(&alpha_mask_instances),
+            {
+                let mut pipeline = self.forward_alpha_mask.lock();
+                pipeline.run(
+                    ctx.queue,
+                    AlphaMaskParams {
+                        camera,
+                        positions,
+                        uvs,
+                        colors,
+                        index_buffer,
+                        materials,
+                        instances: &alpha_mask_instances,
+                        textures: &textures,
+                        sampler: &self.linear_sampler,
+                        visbuffer: &visbuffer,
+                        depth: &depth_texture,
+                        indirect_buffer: &draws,
+                        offsets,
                     },
-                    DescriptorSetEntry {
-                        binding: 1,
-                        resource: BindingResource::Buffer(&offsets),
-                    },
-                    DescriptorSetEntry {
-                        binding: 2,
-                        resource: BindingResource::Buffer(index_buffer),
-                    },
-                    DescriptorSetEntry {
-                        binding: 3,
-                        resource: BindingResource::Buffer(positions),
-                    },
-                    DescriptorSetEntry {
-                        binding: 4,
-                        resource: BindingResource::Buffer(uvs),
-                    },
-                    DescriptorSetEntry {
-                        binding: 5,
-                        resource: BindingResource::Buffer(colors),
-                    },
-                    DescriptorSetEntry {
-                        binding: 6,
-                        resource: BindingResource::Buffer(materials),
-                    },
-                    DescriptorSetEntry {
-                        binding: 7,
-                        resource: BindingResource::Buffer(materials),
-                    },
-                    DescriptorSetEntry {
-                        binding: 8,
-                        resource: BindingResource::TextureArray(&textures),
-                    },
-                    DescriptorSetEntry {
-                        binding: 9,
-                        resource: BindingResource::Sampler(&self.linear_sampler),
-                    },
-                ],
-            });
-
-            let pipeline = self.alpha_mask_pipeline.get(ctx.queue, HDR_FORMAT);
-
-            let mut pass = ctx.queue.run_render_pass(&RenderPassDescriptor {
-                name: "Alpha Mask Forward",
-                color_attachments: &[RenderPassColorAttachment {
-                    load_op: LoadOp::Load,
-                    store_op: StoreOp::Store,
-                    target: &visbuffer.create_view(&TextureViewDescriptor::default()),
-                }],
-                depth_stencil_attachment: Some(&DepthStencilAttachment {
-                    texture: &depth_texture,
-                    load_op: LoadOp::Load,
-                    store_op: StoreOp::Store,
-                }),
-            });
-
-            pass.set_pipeline(&pipeline);
-            pass.set_descriptor_set(0, &descriptor);
-
-            let mut push_constants = [0; 128];
-            push_constants[0..80].copy_from_slice(bytemuck::bytes_of(&CameraUniform::new(
-                camera.transform,
-                camera.projection,
-            )));
-
-            pass.set_push_constants(ShaderStages::VERTEX, 0, &push_constants);
-
-            pass.draw_indirect(&draws);
+                );
+            }
         }
 
         let output_texture = ctx.queue.create_texture(&TextureDescriptor {
@@ -652,123 +232,45 @@ impl OpaqueVertexForwardPass {
         });
 
         {
-            let io_descriptor = ctx.queue.create_descriptor_set(&DescriptorSetDescriptor {
-                layout: &self.shading_pipeline.builder.io_descriptor,
-                entries: &[
-                    DescriptorSetEntry {
-                        binding: 0,
-                        resource: BindingResource::Texture(
-                            &visbuffer.create_view(&TextureViewDescriptor::default()),
-                        ),
-                    },
-                    DescriptorSetEntry {
-                        binding: 1,
-                        resource: BindingResource::Texture(
-                            &output_texture.create_view(&TextureViewDescriptor::default()),
-                        ),
-                    },
-                ],
+            let mut pipeline = self.shading_pipeline.lock();
+
+            let constants = ctx.queue.create_buffer_init(&BufferInitDescriptor {
+                contents: bytemuck::bytes_of(&ShadingPipelineConstants {
+                    camera: CameraUniform::new(camera.transform, camera.projection),
+                    num_directional_lights: scene.directional_lights.len() as u32,
+                    num_point_lights: scene.point_lights.len() as u32,
+                    num_spot_lights: scene.spot_lights.len() as u32,
+                    _pad0: 0,
+                    viewport_size: size,
+                }),
+                usage: BufferUsage::UNIFORM,
+                flags: UsageFlags::empty(),
             });
 
-            let mesh_descriptor = ctx.queue.create_descriptor_set(&DescriptorSetDescriptor {
-                layout: &self.shading_pipeline.builder.mesh_descriptor,
-                entries: &[
-                    DescriptorSetEntry {
-                        binding: 0,
-                        resource: BindingResource::Buffer(positions),
-                    },
-                    DescriptorSetEntry {
-                        binding: 1,
-                        resource: BindingResource::Buffer(normals),
-                    },
-                    DescriptorSetEntry {
-                        binding: 2,
-                        resource: BindingResource::Buffer(uvs),
-                    },
-                    DescriptorSetEntry {
-                        binding: 3,
-                        resource: BindingResource::Buffer(tangents),
-                    },
-                    DescriptorSetEntry {
-                        binding: 4,
-                        resource: BindingResource::Buffer(colors),
-                    },
-                    DescriptorSetEntry {
-                        binding: 5,
-                        resource: BindingResource::Buffer(offsets),
-                    },
-                    DescriptorSetEntry {
-                        binding: 6,
-                        resource: BindingResource::Buffer(instance_buffer),
-                    },
-                    DescriptorSetEntry {
-                        binding: 7,
-                        resource: BindingResource::Buffer(index_buffer),
-                    },
-                    DescriptorSetEntry {
-                        binding: 8,
-                        resource: BindingResource::Buffer(&alpha_mask_instances),
-                    },
-                ],
-            });
-
-            let shading_descriptor = ctx.queue.create_descriptor_set(&DescriptorSetDescriptor {
-                layout: &self.shading_pipeline.builder.shading_descriptor,
-                entries: &[
-                    DescriptorSetEntry {
-                        binding: 0,
-                        resource: BindingResource::Buffer(directional_lights),
-                    },
-                    DescriptorSetEntry {
-                        binding: 1,
-                        resource: BindingResource::Buffer(point_lights),
-                    },
-                    DescriptorSetEntry {
-                        binding: 2,
-                        resource: BindingResource::Buffer(spot_lights),
-                    },
-                    DescriptorSetEntry {
-                        binding: 3,
-                        resource: BindingResource::Buffer(materials),
-                    },
-                    DescriptorSetEntry {
-                        binding: 4,
-                        resource: BindingResource::TextureArray(&textures),
-                    },
-                    DescriptorSetEntry {
-                        binding: 5,
-                        resource: BindingResource::Sampler(&self.linear_sampler),
-                    },
-                ],
-            });
-
-            let pipeline = self.shading_pipeline.get(ctx.queue, TextureFormat::R32Uint);
-            let mut pass = ctx.queue.run_compute_pass(&ComputePassDescriptor {
-                name: "Visbuffer Shading",
-            });
-
-            pass.set_pipeline(&pipeline);
-            pass.set_descriptor_set(0, &io_descriptor);
-            pass.set_descriptor_set(1, &mesh_descriptor);
-            pass.set_descriptor_set(2, &shading_descriptor);
-
-            let mut push_constants = [0; 128];
-            push_constants[0..80].copy_from_slice(bytemuck::bytes_of(&CameraUniform::new(
-                camera.transform,
-                camera.projection,
-            )));
-            push_constants[80..84]
-                .copy_from_slice(&(scene.directional_lights.len() as u32).to_ne_bytes());
-            push_constants[84..88]
-                .copy_from_slice(&(scene.point_lights.len() as u32).to_ne_bytes());
-            push_constants[88..92].copy_from_slice(&(scene.spot_lights.len() as u32).to_ne_bytes());
-            push_constants[96..104].copy_from_slice(bytemuck::bytes_of(&size));
-
-            pass.set_push_constants(ShaderStages::COMPUTE, 0, &push_constants);
-
-            let x = size.x.div_ceil(TILE_SIZE);
-            let y = size.y.div_ceil(TILE_SIZE);
-            pass.dispatch(x, y, 1);
+            pipeline.run(
+                ctx.queue,
+                ShadingParameters {
+                    viewport_size: size,
+                    constants: &constants,
+                    positions,
+                    normals,
+                    uvs,
+                    tangents,
+                    colors,
+                    offsets,
+                    instances: &opauqe_instances,
+                    index_buffer,
+                    instances_transparent_mask: &alpha_mask_instances,
+                    directional_lights,
+                    point_lights,
+                    spot_lights,
+                    materials,
+                    textures: &textures,
+                    sampler: &self.linear_sampler,
+                    visbuffer: &visbuffer,
+                    output: &output_texture,
+                },
+            );
         }
 
         ctx.write(HDR_TEXTURE, output_texture).unwrap();
@@ -835,161 +337,13 @@ impl Node for OpaqueVertexForwardPass {
     }
 }
 
-#[derive(Debug)]
-struct ForwardPipelineBuilder {
-    mesh_descriptor: DescriptorSetLayout,
-}
-
-impl PipelineBuilder for ForwardPipelineBuilder {
-    fn build(
-        &self,
-        queue: &CommandQueue<'_>,
-        shaders: &[Shader],
-        _format: TextureFormat,
-    ) -> Pipeline {
-        queue.create_pipeline(&PipelineDescriptor {
-            stages: &[
-                PipelineStage::Vertex(VertexStage {
-                    shader: &shaders[0],
-                    entry: "main",
-                    topology: PrimitiveTopology::TriangleList,
-                    spec_consts: Default::default(),
-                }),
-                PipelineStage::Fragment(FragmentStage {
-                    shader: &shaders[1],
-                    entry: "main",
-                    targets: &[ColorTargetState {
-                        format: TextureFormat::Rg32Uint,
-                        blend: None,
-                    }],
-                    front_face: FrontFace::Ccw,
-                    cull_mode: Some(Face::Back),
-                    depth_stencil_state: Some(DepthStencilState {
-                        format: DEPTH_FORMAT,
-                        depth_write_enabled: true,
-                        depth_compare_op: CompareOp::Greater,
-                    }),
-                    spec_consts: Default::default(),
-                }),
-            ],
-            descriptors: &[&self.mesh_descriptor],
-            push_constant_ranges: &[PushConstantRange {
-                range: 0..128,
-                stages: ShaderStages::VERTEX | ShaderStages::FRAGMENT,
-            }],
-        })
-    }
-}
-
-#[derive(Debug)]
-struct ShadingPipelineBuilder {
-    io_descriptor: DescriptorSetLayout,
-    mesh_descriptor: DescriptorSetLayout,
-    shading_descriptor: DescriptorSetLayout,
-}
-
-impl PipelineBuilder for ShadingPipelineBuilder {
-    fn build(
-        &self,
-        queue: &CommandQueue<'_>,
-        shaders: &[Shader],
-        _format: TextureFormat,
-    ) -> Pipeline {
-        let tile_size = shaders[0]
-            .spec_constants()
-            .iter()
-            .find(|v| v.name.as_ref().is_some_and(|v| v == "TILE_SIZE"))
-            .unwrap()
-            .id;
-
-        queue.create_pipeline(&PipelineDescriptor {
-            stages: &[PipelineStage::Compute(ComputeStage {
-                shader: &shaders[0],
-                entry: "main",
-                spec_consts: [(tile_size, TILE_SIZE.into())].into_iter().collect(),
-            })],
-            descriptors: &[
-                &self.io_descriptor,
-                &self.mesh_descriptor,
-                &self.shading_descriptor,
-            ],
-            push_constant_ranges: &[PushConstantRange {
-                range: 0..128,
-                stages: ShaderStages::COMPUTE,
-            }],
-        })
-    }
-}
-
-#[derive(Debug)]
-struct AlphaMaskPipelineBuilder {
-    descriptor: DescriptorSetLayout,
-}
-
-impl PipelineBuilder for AlphaMaskPipelineBuilder {
-    fn build(
-        &self,
-        queue: &CommandQueue<'_>,
-        shaders: &[Shader],
-        _format: TextureFormat,
-    ) -> Pipeline {
-        queue.create_pipeline(&PipelineDescriptor {
-            stages: &[
-                PipelineStage::Vertex(VertexStage {
-                    shader: &shaders[0],
-                    entry: "main",
-                    topology: PrimitiveTopology::TriangleList,
-                    spec_consts: Default::default(),
-                }),
-                PipelineStage::Fragment(FragmentStage {
-                    shader: &shaders[1],
-                    entry: "main",
-                    targets: &[ColorTargetState {
-                        format: TextureFormat::Rg32Uint,
-                        blend: None,
-                    }],
-                    front_face: FrontFace::Ccw,
-                    cull_mode: Some(Face::Back),
-                    depth_stencil_state: Some(DepthStencilState {
-                        format: DEPTH_FORMAT,
-                        depth_write_enabled: true,
-                        depth_compare_op: CompareOp::Greater,
-                    }),
-                    spec_consts: Default::default(),
-                }),
-            ],
-            descriptors: &[&self.descriptor],
-            push_constant_ranges: &[PushConstantRange {
-                range: 0..128,
-                stages: ShaderStages::VERTEX,
-            }],
-        })
-    }
-}
-
-#[derive(Debug)]
-struct BuildDrawcallGenPipeline {
-    descriptor: DescriptorSetLayout,
-}
-
-impl PipelineBuilder for BuildDrawcallGenPipeline {
-    fn build(
-        &self,
-        queue: &CommandQueue<'_>,
-        shaders: &[Shader],
-        _format: TextureFormat,
-    ) -> Pipeline {
-        queue.create_pipeline(&PipelineDescriptor {
-            descriptors: &[&self.descriptor],
-            stages: &[PipelineStage::Compute(ComputeStage {
-                shader: &shaders[0],
-                entry: "main",
-                spec_consts: Default::default(),
-            })],
-            push_constant_ranges: &[PushConstantRange {
-                range: 0..4,
-                stages: ShaderStages::COMPUTE,
-            }],
-        })
-    }
+#[derive(Copy, Clone, Debug, Zeroable, Pod)]
+#[repr(C)]
+struct ShadingPipelineConstants {
+    camera: CameraUniform,
+    num_directional_lights: u32,
+    num_point_lights: u32,
+    num_spot_lights: u32,
+    _pad0: u32,
+    viewport_size: UVec2,
 }

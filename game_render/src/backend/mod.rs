@@ -515,6 +515,21 @@ bitflags! {
     }
 }
 
+impl ShaderStages {
+    /// FIXME: Replace this with regular IntoIter impl, but
+    /// bitflags conflicts .
+    pub fn iter_stages(&self) -> impl Iterator<Item = ShaderStage> {
+        self.iter().map(|v| match v {
+            Self::VERTEX => ShaderStage::Vertex,
+            Self::FRAGMENT => ShaderStage::Fragment,
+            Self::TASK => ShaderStage::Task,
+            Self::MESH => ShaderStage::Mesh,
+            Self::COMPUTE => ShaderStage::Compute,
+            _ => unreachable!(),
+        })
+    }
+}
+
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub enum DescriptorType {
     Uniform,

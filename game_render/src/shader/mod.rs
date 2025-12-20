@@ -35,6 +35,10 @@ impl Shader {
         self.module.bindings()
     }
 
+    pub fn set_binding_location(&mut self, id: BindingId, location: BindingLocation) {
+        self.module.set_binding_location(id, location);
+    }
+
     pub fn spec_constants(&self) -> Vec<SpecConstant> {
         self.module.spec_constants()
     }

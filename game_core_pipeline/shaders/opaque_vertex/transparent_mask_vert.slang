@@ -3,15 +3,15 @@ import camera;
 import material;
 import shared;
 
-[[vk::push_constant]] Camera camera;
+ConstantBuffer<Camera> camera;
 
-[[vk::binding(0, 0)]] StructuredBuffer<InstanceOut> instances;
-[[vk::binding(1, 0)]] StructuredBuffer<MeshOffsets> offsets;
-[[vk::binding(2, 0)]] StructuredBuffer<u32> index_buffer;
-[[vk::binding(3, 0)]] StructuredBuffer<f32> positions;
-[[vk::binding(4, 0)]] StructuredBuffer<f32> uvs;
-[[vk::binding(5, 0)]] StructuredBuffer<f32> colors;
-[[vk::binding(6, 0)]] StructuredBuffer<Material> materials;
+StructuredBuffer<InstanceOut> instances;
+StructuredBuffer<MeshOffsets> offsets;
+StructuredBuffer<u32> index_buffer;
+StructuredBuffer<f32> positions;
+StructuredBuffer<f32> uvs;
+StructuredBuffer<f32> colors;
+StructuredBuffer<Material> materials;
 
 struct Input {
     u32 draw_id: SV_DrawIndex;

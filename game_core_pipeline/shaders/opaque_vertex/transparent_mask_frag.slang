@@ -2,10 +2,10 @@ import types;
 import shared;
 import material;
 
-[[vk::binding(0, 0)]] StructuredBuffer<InstanceOut> instances;
-[[vk::binding(7, 0)]] StructuredBuffer<Material> materials;
-[[vk::binding(8, 0)]] Texture2D<Vec4>[] textures;
-[[vk::binding(9, 0)]] SamplerState sampler;
+StructuredBuffer<InstanceOut> instances;
+StructuredBuffer<Material> materials;
+Texture2D<Vec4>[] textures;
+SamplerState sampler;
 
 struct Input {
     vector<f32, 4> clip_position: SV_Position;

@@ -4,6 +4,7 @@ use std::sync::Arc;
 use crossbeam_queue::SegQueue;
 use game_common::cell::UnsafeRefCell;
 use game_common::collections::vec_map::VecMap;
+use hashbrown::HashMap;
 use parking_lot::Mutex;
 use sharded_slab::Slab;
 
@@ -89,7 +90,7 @@ pub struct SamplerInner {
 pub struct DescriptorSetLayoutInner {
     pub inner: vulkan::DescriptorSetLayout,
     pub ref_count: RefCount,
-    pub bindings: VecMap<u32, DescriptorBinding>,
+    pub bindings: HashMap<u32, DescriptorBinding>,
 }
 
 #[derive(Debug)]

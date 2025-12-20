@@ -15,27 +15,27 @@ struct PushConstants {
     vector<u32, 2> scren_size;
 }
 
-[[vk::push_constant]] PushConstants push_constants;
+ConstantBuffer<PushConstants> constants;
 
-[[vk::binding(0, 0)]] Texture2D<vector<u32, 2>> visbuffer;
-[[vk::binding(1, 0)]] RWTexture2D<Vec4> output;
+Texture2D<vector<u32, 2>> visbuffer;
+RWTexture2D<Vec4> output;
 
-[[vk::binding(0, 1)]] StructuredBuffer<f32> positions;
-[[vk::binding(1, 1)]] StructuredBuffer<f32> normals;
-[[vk::binding(2, 1)]] StructuredBuffer<f32> uvs;
-[[vk::binding(3, 1)]] StructuredBuffer<f32> tangents;
-[[vk::binding(4, 1)]] StructuredBuffer<f32> colors;
-[[vk::binding(5, 1)]] StructuredBuffer<MeshOffsets> offsets;
-[[vk::binding(6, 1)]] StructuredBuffer<InstanceOut> instances;
-[[vk::binding(7, 1)]] StructuredBuffer<u32> index_buffer;
-[[vk::binding(8, 1)]] StructuredBuffer<InstanceOut> instances_transparent_mask;
+StructuredBuffer<f32> positions;
+StructuredBuffer<f32> normals;
+StructuredBuffer<f32> uvs;
+StructuredBuffer<f32> tangents;
+StructuredBuffer<f32> colors;
+StructuredBuffer<MeshOffsets> offsets;
+StructuredBuffer<InstanceOut> instances;
+StructuredBuffer<u32> index_buffer;
+StructuredBuffer<InstanceOut> instances_transparent_mask;
 
-[[vk::binding(0, 2)]] StructuredBuffer<DirectionalLight> directional_lights;
-[[vk::binding(1, 2)]] StructuredBuffer<PointLight> point_lights;
-[[vk::binding(2, 2)]] StructuredBuffer<SpotLight> spot_lights;
-[[vk::binding(3, 2)]] StructuredBuffer<Material> materials;
-[[vk::binding(4, 2)]] Texture2D<Vec4>[] textures;
-[[vk::binding(5, 2)]] SamplerState sampler;
+StructuredBuffer<DirectionalLight> directional_lights;
+StructuredBuffer<PointLight> point_lights;
+StructuredBuffer<SpotLight> spot_lights;
+StructuredBuffer<Material> materials;
+Texture2D<Vec4>[] textures;
+SamplerState sampler;
 
 static const u32 NUM_THREADS = 64;
 
@@ -50,7 +50,7 @@ void main(
 ) {
     let coords = gid * TILE_SIZE + tid;
 
-    if (coords.x >= push_constants.scren_size.x || coords.y >= push_constants.scren_size.y) {
+    if (coords.x >= constants.scren_size.x || coords.y >= constants.scren_size.y) {
         return;
     }
 
@@ -91,15 +91,15 @@ void main(
     let world_pos_b = mul(instance.transform, Vec4(pos_1, 1.0));
     let world_pos_c = mul(instance.transform, Vec4(pos_2, 1.0));
 
-    let pos_a = mul(push_constants.camera.view_proj, world_pos_a);
-    let pos_b = mul(push_constants.camera.view_proj, world_pos_b);
-    let pos_c = mul(push_constants.camera.view_proj, world_pos_c);
+    let pos_a = mul(constants.camera.view_proj, world_pos_a);
+    let pos_b = mul(constants.camera.view_proj, world_pos_b);
+    let pos_c = mul(constants.camera.view_proj, world_pos_c);
 
-    let ndc_x = (f32(coords.x) / f32(push_constants.scren_size.x)) * 2.0 - 1.0;
-    let ndc_y = (f32(coords.y) / f32(push_constants.scren_size.y)) * -2.0 + 1.0;
+    let ndc_x = (f32(coords.x) / f32(constants.scren_size.x)) * 2.0 - 1.0;
+    let ndc_y = (f32(coords.y) / f32(constants.scren_size.y)) * -2.0 + 1.0;
     let ndc = Vec2(ndc_x, ndc_y);
 
-    let barys = Barycentrics(pos_a, pos_b, pos_c, ndc, push_constants.scren_size);
+    let barys = Barycentrics(pos_a, pos_b, pos_c, ndc, constants.scren_size);
 
     let world_position = barys.interpolate(world_pos_a.xyz, world_pos_b.xyz, world_pos_c.xyz);
 
@@ -133,7 +133,7 @@ void main(
     }
 
     // BRDF parameters
-    let view_dir = normalize(push_constants.camera.position - world_position);
+    let view_dir = normalize(constants.camera.position - world_position);
     var pbr_material: pbr::Material;
     pbr_material.base_color = base_color.rgb;
     pbr_material.normal = normal;
@@ -145,17 +145,17 @@ void main(
 
     var luminance = Vec3(0.0);
 
-    for (var i = 0; i < push_constants.num_directional_lights; i++) {
+    for (var i = 0; i < constants.num_directional_lights; i++) {
         let light = directional_lights[i].eval();
         luminance += pbr::surface_shading(pbr_material, view_dir, light);
     }
 
-    for (var i = 0; i < push_constants.num_point_lights; i++) {
+    for (var i = 0; i < constants.num_point_lights; i++) {
         let light = point_lights[i].eval(FragParams(world_position));
         luminance += pbr::surface_shading(pbr_material, view_dir, light);
     }
 
-    for (var i = 0; i < push_constants.num_spot_lights; i++) {
+    for (var i = 0; i < constants.num_spot_lights; i++) {
         let light = spot_lights[i].eval(FragParams(world_position));
         luminance += pbr::surface_shading(pbr_material, view_dir, light);
     }

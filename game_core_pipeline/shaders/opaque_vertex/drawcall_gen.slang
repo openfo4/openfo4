@@ -3,11 +3,10 @@ import shared;
 
 static const u32 NUM_THREADS = 64;
 
-[[vk::push_constant]] u32 instance_count;
-
-[[vk::binding(0, 0)]] StructuredBuffer<InstanceIn> instances_in;
-[[vk::binding(1, 0)]] RWStructuredBuffer<InstanceOut> instances_out;
-[[vk::binding(2, 0)]] RWStructuredBuffer<DrawIndirectCommand> draws;
+ConstantBuffer<u32> instance_count;
+StructuredBuffer<InstanceIn> instances_in;
+RWStructuredBuffer<InstanceOut> instances_out;
+RWStructuredBuffer<DrawIndirectCommand> draws;
 
 [shader("compute")]
 [numthreads(NUM_THREADS, 1, 1)]

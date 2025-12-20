@@ -4646,7 +4646,8 @@ impl<'a> DescriptorSet<'a> {
         let mut infos = Vec::with_capacity(op.bindings.len() * 2);
 
         for binding in op.bindings {
-            let Some(layout_binding) = self.bindings.get(binding.binding as usize) else {
+            let Some(layout_binding) = self.bindings.iter().find(|v| v.binding == binding.binding)
+            else {
                 panic!(
                     "attempted to write to index {} of descriptor set with layout of {} elements",
                     binding.binding,
