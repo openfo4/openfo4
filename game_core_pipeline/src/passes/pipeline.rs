@@ -25,6 +25,7 @@ pub struct Pipeline {
     builder: Box<dyn for<'a> Fn(&CommandQueue<'_>, &'a [Shader]) -> Vec<PipelineStage<'a>> + Send>,
     cur_pipeline: Option<PipelineInstance>,
     compiled_shaders: Option<Vec<Shader>>,
+    shaders_changed: bool,
     bindings: Vec<PipelineBinding>,
 }
 
@@ -48,6 +49,7 @@ impl Pipeline {
             cur_pipeline: None,
             compiled_shaders: None,
             bindings: bindings.to_vec(),
+            shaders_changed: false,
         }
     }
 
@@ -128,6 +130,7 @@ impl Pipeline {
         }
 
         self.compiled_shaders = Some(prepared_shaders);
+        self.shaders_changed = true;
     }
 
     fn compile_with_limits(
@@ -135,7 +138,7 @@ impl Pipeline {
         queue: &CommandQueue<'_>,
         array_counts: &HashMap<(String, ShaderStage), u32>,
     ) {
-        let recreate = self.cur_pipeline.as_ref().is_none_or(|pipeline| {
+        let recreate_new_limits = self.cur_pipeline.as_ref().is_none_or(|pipeline| {
             array_counts.iter().any(|(key, count)| {
                 pipeline
                     .limits
@@ -144,9 +147,11 @@ impl Pipeline {
             })
         });
 
-        if !recreate {
+        if !recreate_new_limits && !self.shaders_changed {
             return;
         }
+
+        self.shaders_changed = false;
 
         let mut layouts = Vec::new();
         for stage in &self.stages {
