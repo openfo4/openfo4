@@ -13,12 +13,23 @@ use crate::backend::{vulkan, AccessFlags, DescriptorBinding};
 
 use super::{BindingMap, DeletionEvent, RawTextureView, ResourceId, ResourceMap};
 
-pub type BufferId = usize;
-pub type TextureId = usize;
-pub type DescriptorSetLayoutId = usize;
-pub type DescriptorSetId = usize;
-pub type SamplerId = usize;
-pub type PipelineId = usize;
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub struct BufferId(pub usize);
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub struct TextureId(pub usize);
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub struct DescriptorSetLayoutId(pub usize);
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub struct DescriptorSetId(pub usize);
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub struct SamplerId(pub usize);
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub struct PipelineId(pub usize);
 
 #[derive(Debug)]
 pub struct Resources {
@@ -40,12 +51,12 @@ impl<'a> ResourceMap for &'a Resources {
     fn access(&self, id: Self::Id) -> AccessFlags {
         match id {
             ResourceId::Buffer(buffer) => unsafe {
-                let buffer = self.buffers.get(buffer).unwrap_unchecked();
+                let buffer = self.buffers.get(buffer.0).unwrap_unchecked();
                 let access = *buffer.access.borrow();
                 access
             },
             ResourceId::Texture(texture) => unsafe {
-                let tex = self.textures.get(texture.id).unwrap_unchecked();
+                let tex = self.textures.get(texture.id.0).unwrap_unchecked();
                 let mip = tex.mip_access.get_unchecked(texture.mip_level as usize);
                 let access = *mip.borrow();
                 access
@@ -56,11 +67,11 @@ impl<'a> ResourceMap for &'a Resources {
     fn set_access(&mut self, id: Self::Id, access: AccessFlags) {
         match id {
             ResourceId::Buffer(buffer) => unsafe {
-                let buffer = self.buffers.get(buffer).unwrap_unchecked();
+                let buffer = self.buffers.get(buffer.0).unwrap_unchecked();
                 *buffer.access.borrow_mut() = access;
             },
             ResourceId::Texture(texture) => unsafe {
-                let tex = self.textures.get(texture.id).unwrap_unchecked();
+                let tex = self.textures.get(texture.id.0).unwrap_unchecked();
                 let mip = tex.mip_access.get_unchecked(texture.mip_level as usize);
                 *mip.borrow_mut() = access;
             },

@@ -148,30 +148,30 @@ impl CommandExecutor {
         while let Some(cmd) = self.resources.deletion_queue.pop() {
             match cmd {
                 DeletionEvent::Buffer(id) => {
-                    self.resources.buffers.remove(id);
+                    self.resources.buffers.remove(id.0);
 
                     self.cmds
                         .lock()
                         .push(&self.resources, Command::DestoryBuffer(id));
                 }
                 DeletionEvent::Texture(id) => {
-                    self.resources.textures.remove(id);
+                    self.resources.textures.remove(id.0);
 
                     self.cmds
                         .lock()
                         .push(&self.resources, Command::DestroyTexture(id));
                 }
                 DeletionEvent::DescriptorSetLayout(id) => {
-                    self.resources.descriptor_set_layouts.remove(id);
+                    self.resources.descriptor_set_layouts.remove(id.0);
                 }
                 DeletionEvent::Pipeline(id) => {
-                    self.resources.pipelines.remove(id);
+                    self.resources.pipelines.remove(id.0);
                 }
                 DeletionEvent::Sampler(id) => {
-                    self.resources.samplers.remove(id);
+                    self.resources.samplers.remove(id.0);
                 }
                 DeletionEvent::DescriptorSet(id) => {
-                    let set = self.resources.descriptor_sets.take(id).unwrap();
+                    let set = self.resources.descriptor_sets.take(id.0).unwrap();
 
                     self.cmds
                         .lock()
@@ -181,7 +181,7 @@ impl CommandExecutor {
                         match resource {
                             DescriptorSetResource::UniformBuffer(id)
                             | DescriptorSetResource::StorageBuffer(id) => {
-                                let buffer = self.resources.buffers.get(id).unwrap();
+                                let buffer = self.resources.buffers.get(id.0).unwrap();
 
                                 if buffer.ref_count.decrement_internal() {
                                     self.resources
@@ -193,7 +193,7 @@ impl CommandExecutor {
                             | DescriptorSetResource::StorageTexture(views) => {
                                 for view in views {
                                     let texture =
-                                        self.resources.textures.get(view.texture).unwrap();
+                                        self.resources.textures.get(view.texture.0).unwrap();
 
                                     if texture.ref_count.decrement_internal() {
                                         self.resources
@@ -203,7 +203,7 @@ impl CommandExecutor {
                                 }
                             }
                             DescriptorSetResource::Sampler(id) => {
-                                let sampler = self.resources.samplers.get(id).unwrap();
+                                let sampler = self.resources.samplers.get(id.0).unwrap();
 
                                 if sampler.ref_count.decrement_internal() {
                                     self.resources
@@ -217,7 +217,7 @@ impl CommandExecutor {
                     let layout = self
                         .resources
                         .descriptor_set_layouts
-                        .get(set.layout)
+                        .get(set.layout.0)
                         .unwrap();
                     if layout.ref_count.decrement_internal() {
                         self.resources
@@ -264,15 +264,16 @@ impl<'a> CommandQueue<'a> {
     pub fn create_buffer(&self, descriptor: &BufferDescriptor) -> Buffer {
         assert_ne!(descriptor.size, 0, "cannot create empty buffers");
 
-        let id = self
-            .executor
-            .resources
-            .buffers
-            .insert(BufferInner {
-                access: UnsafeRefCell::new(AccessFlags::empty()),
-                ref_count: RefCount::new(),
-            })
-            .unwrap();
+        let id = BufferId(
+            self.executor
+                .resources
+                .buffers
+                .insert(BufferInner {
+                    access: UnsafeRefCell::new(AccessFlags::empty()),
+                    ref_count: RefCount::new(),
+                })
+                .unwrap(),
+        );
 
         self.executor.cmds.lock().push(
             &self.executor.resources,
@@ -346,7 +347,7 @@ impl<'a> CommandQueue<'a> {
             self.executor
                 .resources
                 .buffers
-                .get(buffer.buffer.id)
+                .get(buffer.buffer.id.0)
                 .unwrap()
                 .ref_count
                 .increment_internal();
@@ -376,7 +377,7 @@ impl<'a> CommandQueue<'a> {
             self.executor
                 .resources
                 .buffers
-                .get(staging_buffer.id)
+                .get(staging_buffer.id.0)
                 .unwrap()
                 .ref_count
                 .increment_internal();
@@ -430,15 +431,16 @@ impl<'a> CommandQueue<'a> {
             mip_access.push(UnsafeRefCell::new(AccessFlags::empty()));
         }
 
-        let id = self
-            .executor
-            .resources
-            .textures
-            .insert(TextureInner {
-                mip_access,
-                ref_count: RefCount::new(),
-            })
-            .unwrap();
+        let id = TextureId(
+            self.executor
+                .resources
+                .textures
+                .insert(TextureInner {
+                    mip_access,
+                    ref_count: RefCount::new(),
+                })
+                .unwrap(),
+        );
 
         self.executor.cmds.lock().push(
             &self.executor.resources,
@@ -487,15 +489,16 @@ impl<'a> CommandQueue<'a> {
             mip_access.push(UnsafeRefCell::new(access));
         }
 
-        let id = self
-            .executor
-            .resources
-            .textures
-            .insert(TextureInner {
-                mip_access,
-                ref_count: RefCount::new(),
-            })
-            .unwrap();
+        let id = TextureId(
+            self.executor
+                .resources
+                .textures
+                .insert(TextureInner {
+                    mip_access,
+                    ref_count: RefCount::new(),
+                })
+                .unwrap(),
+        );
 
         self.executor.cmds.lock().push(
             &self.executor.resources,
@@ -520,7 +523,7 @@ impl<'a> CommandQueue<'a> {
     pub(crate) fn remove_imported_texture(&self, texture: Texture) {
         debug_assert!(texture.manually_managed);
 
-        let texture = self.executor.resources.textures.take(texture.id).unwrap();
+        let texture = self.executor.resources.textures.take(texture.id.0).unwrap();
         if !texture.ref_count.decrement_external() {
             panic!("Texture is still in use");
         }
@@ -580,7 +583,7 @@ impl<'a> CommandQueue<'a> {
         self.executor
             .resources
             .textures
-            .get(texture.texture.id)
+            .get(texture.texture.id.0)
             .unwrap()
             .ref_count
             .increment_internal();
@@ -664,14 +667,14 @@ impl<'a> CommandQueue<'a> {
         self.executor
             .resources
             .buffers
-            .get(src.buffer.id)
+            .get(src.buffer.id.0)
             .unwrap()
             .ref_count
             .increment_internal();
         self.executor
             .resources
             .buffers
-            .get(dst.buffer.id)
+            .get(dst.buffer.id.0)
             .unwrap()
             .ref_count
             .increment_internal();
@@ -714,14 +717,14 @@ impl<'a> CommandQueue<'a> {
         self.executor
             .resources
             .buffers
-            .get(src.id)
+            .get(src.id.0)
             .unwrap()
             .ref_count
             .increment_internal();
         self.executor
             .resources
             .textures
-            .get(dst.texture.id)
+            .get(dst.texture.id.0)
             .unwrap()
             .ref_count
             .increment_internal();
@@ -754,14 +757,14 @@ impl<'a> CommandQueue<'a> {
         self.executor
             .resources
             .textures
-            .get(src.texture.id)
+            .get(src.texture.id.0)
             .unwrap()
             .ref_count
             .increment_internal();
         self.executor
             .resources
             .textures
-            .get(dst.texture.id)
+            .get(dst.texture.id.0)
             .unwrap()
             .ref_count
             .increment_internal();
@@ -789,7 +792,7 @@ impl<'a> CommandQueue<'a> {
             .executor
             .resources
             .descriptor_set_layouts
-            .get(descriptor.layout.id)
+            .get(descriptor.layout.id.0)
             .unwrap();
 
         let mut unset_descriptors: HashSet<_> =
@@ -845,7 +848,7 @@ impl<'a> CommandQueue<'a> {
                     self.executor
                         .resources
                         .buffers
-                        .get(buffer.id)
+                        .get(buffer.id.0)
                         .unwrap()
                         .ref_count
                         .increment_internal();
@@ -862,7 +865,7 @@ impl<'a> CommandQueue<'a> {
                     self.executor
                         .resources
                         .buffers
-                        .get(buffer.id)
+                        .get(buffer.id.0)
                         .unwrap()
                         .ref_count
                         .increment_internal();
@@ -875,7 +878,7 @@ impl<'a> CommandQueue<'a> {
                     self.executor
                         .resources
                         .samplers
-                        .get(sampler.id)
+                        .get(sampler.id.0)
                         .unwrap()
                         .ref_count
                         .increment_internal();
@@ -892,7 +895,7 @@ impl<'a> CommandQueue<'a> {
                     self.executor
                         .resources
                         .textures
-                        .get(view.texture.id)
+                        .get(view.texture.id.0)
                         .unwrap()
                         .ref_count
                         .increment_internal();
@@ -916,7 +919,7 @@ impl<'a> CommandQueue<'a> {
                         self.executor
                             .resources
                             .textures
-                            .get(view.texture.id)
+                            .get(view.texture.id.0)
                             .unwrap()
                             .ref_count
                             .increment_internal();
@@ -944,7 +947,7 @@ impl<'a> CommandQueue<'a> {
                     self.executor
                         .resources
                         .textures
-                        .get(view.texture.id)
+                        .get(view.texture.id.0)
                         .unwrap()
                         .ref_count
                         .increment_internal();
@@ -970,7 +973,7 @@ impl<'a> CommandQueue<'a> {
                         self.executor
                             .resources
                             .textures
-                            .get(view.texture.id)
+                            .get(view.texture.id.0)
                             .unwrap()
                             .ref_count
                             .increment_internal();
@@ -1009,25 +1012,26 @@ impl<'a> CommandQueue<'a> {
         self.executor
             .resources
             .descriptor_set_layouts
-            .get(descriptor.layout.id)
+            .get(descriptor.layout.id.0)
             .unwrap()
             .ref_count
             .increment_internal();
 
-        let id = self
-            .executor
-            .resources
-            .descriptor_sets
-            .insert(DescriptorSetInner {
-                bindings,
-                num_buffers,
-                num_samplers,
-                num_sampled_texture_arrays,
-                num_storage_texture_arrays,
-                layout: descriptor.layout.id,
-                ref_count: RefCount::new(),
-            })
-            .unwrap();
+        let id = DescriptorSetId(
+            self.executor
+                .resources
+                .descriptor_sets
+                .insert(DescriptorSetInner {
+                    bindings,
+                    num_buffers,
+                    num_samplers,
+                    num_sampled_texture_arrays,
+                    num_storage_texture_arrays,
+                    layout: descriptor.layout.id,
+                    ref_count: RefCount::new(),
+                })
+                .unwrap(),
+        );
 
         self.executor
             .cmds
@@ -1049,20 +1053,21 @@ impl<'a> CommandQueue<'a> {
             .device
             .create_descriptor_layout(descriptor)
             .unwrap();
-        let id = self
-            .executor
-            .resources
-            .descriptor_set_layouts
-            .insert(DescriptorSetLayoutInner {
-                inner,
-                ref_count: RefCount::new(),
-                bindings: descriptor
-                    .bindings
-                    .iter()
-                    .map(|v| (v.binding, *v))
-                    .collect(),
-            })
-            .unwrap();
+        let id = DescriptorSetLayoutId(
+            self.executor
+                .resources
+                .descriptor_set_layouts
+                .insert(DescriptorSetLayoutInner {
+                    inner,
+                    ref_count: RefCount::new(),
+                    bindings: descriptor
+                        .bindings
+                        .iter()
+                        .map(|v| (v.binding, *v))
+                        .collect(),
+                })
+                .unwrap(),
+        );
 
         DescriptorSetLayout {
             id,
@@ -1079,7 +1084,7 @@ impl<'a> CommandQueue<'a> {
                 self.executor
                     .resources
                     .descriptor_set_layouts
-                    .get(layout.id)
+                    .get(layout.id.0)
                     .unwrap()
             })
             .collect();
@@ -1363,16 +1368,17 @@ impl<'a> CommandQueue<'a> {
                 push_constant_ranges: descriptor.push_constant_ranges,
             })
             .unwrap();
-        let id = self
-            .executor
-            .resources
-            .pipelines
-            .insert(PipelineInner {
-                inner: Arc::new(inner),
-                bindings,
-                ref_count: RefCount::new(),
-            })
-            .unwrap();
+        let id = PipelineId(
+            self.executor
+                .resources
+                .pipelines
+                .insert(PipelineInner {
+                    inner: Arc::new(inner),
+                    bindings,
+                    ref_count: RefCount::new(),
+                })
+                .unwrap(),
+        );
 
         Pipeline {
             id,
@@ -1382,15 +1388,16 @@ impl<'a> CommandQueue<'a> {
 
     pub fn create_sampler(&self, descriptor: &SamplerDescriptor) -> Sampler {
         let inner = self.executor.device.create_sampler(descriptor).unwrap();
-        let id = self
-            .executor
-            .resources
-            .samplers
-            .insert(SamplerInner {
-                inner,
-                ref_count: RefCount::new(),
-            })
-            .unwrap();
+        let id = SamplerId(
+            self.executor
+                .resources
+                .samplers
+                .insert(SamplerInner {
+                    inner,
+                    ref_count: RefCount::new(),
+                })
+                .unwrap(),
+        );
 
         Sampler {
             id,
@@ -1414,7 +1421,7 @@ impl<'a> CommandQueue<'a> {
                 self.executor
                     .resources
                     .textures
-                    .get(a.target.texture.id)
+                    .get(a.target.texture.id.0)
                     .unwrap()
                     .ref_count
                     .increment_internal();
@@ -1435,7 +1442,7 @@ impl<'a> CommandQueue<'a> {
             self.executor
                 .resources
                 .textures
-                .get(attachment.texture.id)
+                .get(attachment.texture.id.0)
                 .unwrap()
                 .ref_count
                 .increment_internal();
@@ -1472,7 +1479,7 @@ impl<'a> CommandQueue<'a> {
         self.executor
             .resources
             .textures
-            .get(texture.texture.id)
+            .get(texture.texture.id.0)
             .unwrap()
             .ref_count
             .increment_internal();
@@ -1504,7 +1511,7 @@ pub struct DescriptorSet {
 
 impl Clone for DescriptorSet {
     fn clone(&self) -> Self {
-        let set = self.resources.descriptor_sets.get(self.id).unwrap();
+        let set = self.resources.descriptor_sets.get(self.id.0).unwrap();
         set.ref_count.increment_external();
 
         Self {
@@ -1516,7 +1523,7 @@ impl Clone for DescriptorSet {
 
 impl Drop for DescriptorSet {
     fn drop(&mut self) {
-        let set = self.resources.descriptor_sets.get(self.id).unwrap();
+        let set = self.resources.descriptor_sets.get(self.id.0).unwrap();
         if set.ref_count.decrement_external() {
             self.resources
                 .deletion_queue
@@ -1533,7 +1540,7 @@ pub struct Sampler {
 
 impl Clone for Sampler {
     fn clone(&self) -> Self {
-        let sampler = self.resources.samplers.get(self.id).unwrap();
+        let sampler = self.resources.samplers.get(self.id.0).unwrap();
         sampler.ref_count.increment_external();
 
         Self {
@@ -1545,7 +1552,7 @@ impl Clone for Sampler {
 
 impl Drop for Sampler {
     fn drop(&mut self) {
-        let sampler = self.resources.samplers.get(self.id).unwrap();
+        let sampler = self.resources.samplers.get(self.id.0).unwrap();
         if sampler.ref_count.decrement_external() {
             self.resources
                 .deletion_queue
@@ -1631,7 +1638,11 @@ pub struct DescriptorSetLayout {
 
 impl Clone for DescriptorSetLayout {
     fn clone(&self) -> Self {
-        let layout = self.resources.descriptor_set_layouts.get(self.id).unwrap();
+        let layout = self
+            .resources
+            .descriptor_set_layouts
+            .get(self.id.0)
+            .unwrap();
         layout.ref_count.increment_external();
 
         Self {
@@ -1643,7 +1654,11 @@ impl Clone for DescriptorSetLayout {
 
 impl Drop for DescriptorSetLayout {
     fn drop(&mut self) {
-        let layout = self.resources.descriptor_set_layouts.get(self.id).unwrap();
+        let layout = self
+            .resources
+            .descriptor_set_layouts
+            .get(self.id.0)
+            .unwrap();
         if layout.ref_count.decrement_external() {
             self.resources
                 .deletion_queue
@@ -1660,7 +1675,7 @@ pub struct Pipeline {
 
 impl Clone for Pipeline {
     fn clone(&self) -> Self {
-        let pipeline = self.resources.pipelines.get(self.id).unwrap();
+        let pipeline = self.resources.pipelines.get(self.id.0).unwrap();
         pipeline.ref_count.increment_external();
 
         Self {
@@ -1672,7 +1687,7 @@ impl Clone for Pipeline {
 
 impl Drop for Pipeline {
     fn drop(&mut self) {
-        let pipeline = self.resources.pipelines.get(self.id).unwrap();
+        let pipeline = self.resources.pipelines.get(self.id.0).unwrap();
         if pipeline.ref_count.decrement_external() {
             self.resources
                 .deletion_queue
@@ -1766,7 +1781,7 @@ impl<'a> IntoBufferSlice for &'a Buffer {
 
 impl Clone for Buffer {
     fn clone(&self) -> Self {
-        let buffer = self.resources.buffers.get(self.id).unwrap();
+        let buffer = self.resources.buffers.get(self.id.0).unwrap();
         buffer.ref_count.increment_external();
 
         Self {
@@ -1781,7 +1796,7 @@ impl Clone for Buffer {
 
 impl Drop for Buffer {
     fn drop(&mut self) {
-        let buffer = self.resources.buffers.get(self.id).unwrap();
+        let buffer = self.resources.buffers.get(self.id.0).unwrap();
         if buffer.ref_count.decrement_external() {
             self.resources
                 .deletion_queue
@@ -1930,7 +1945,7 @@ impl Texture {
 impl Clone for Texture {
     fn clone(&self) -> Self {
         if !self.manually_managed {
-            let texture = self.resources.textures.get(self.id).unwrap();
+            let texture = self.resources.textures.get(self.id.0).unwrap();
             texture.ref_count.increment_external();
         }
 
@@ -1949,7 +1964,7 @@ impl Clone for Texture {
 impl Drop for Texture {
     fn drop(&mut self) {
         if !self.manually_managed {
-            let texture = self.resources.textures.get(self.id).unwrap();
+            let texture = self.resources.textures.get(self.id.0).unwrap();
             if texture.ref_count.decrement_external() {
                 self.resources
                     .deletion_queue
@@ -1990,7 +2005,7 @@ impl<'a, 'b> RenderPass<'a, 'b> {
             .executor
             .resources
             .pipelines
-            .get(pipeline.id)
+            .get(pipeline.id.0)
             .unwrap()
             .ref_count
             .increment_internal();
@@ -2006,7 +2021,7 @@ impl<'a, 'b> RenderPass<'a, 'b> {
             .executor
             .resources
             .descriptor_sets
-            .get(descriptor_set.id)
+            .get(descriptor_set.id.0)
             .unwrap()
             .ref_count
             .increment_internal();
@@ -2031,7 +2046,7 @@ impl<'a, 'b> RenderPass<'a, 'b> {
             .executor
             .resources
             .buffers
-            .get(buffer.id)
+            .get(buffer.id.0)
             .unwrap()
             .ref_count
             .increment_internal();
@@ -2066,7 +2081,7 @@ impl<'a, 'b> RenderPass<'a, 'b> {
             );
         };
 
-        let buffer = self.ctx.executor.resources.buffers.get(buffer).unwrap();
+        let buffer = self.ctx.executor.resources.buffers.get(buffer.0).unwrap();
         // let buffer_size = unsafe { buffer.buffer.borrow().size() };
         // assert!(
         //     buffer_size >= min_size.into(),
@@ -2113,7 +2128,7 @@ impl<'a, 'b> RenderPass<'a, 'b> {
             .executor
             .resources
             .buffers
-            .get(indirect_buffer.buffer.id)
+            .get(indirect_buffer.buffer.id.0)
             .unwrap()
             .ref_count
             .increment_internal();
@@ -2155,7 +2170,7 @@ impl<'a, 'b> RenderPass<'a, 'b> {
             .executor
             .resources
             .buffers
-            .get(indirect_buffer.buffer.id)
+            .get(indirect_buffer.buffer.id.0)
             .unwrap()
             .ref_count
             .increment_internal();
@@ -2210,7 +2225,7 @@ impl<'a> ComputePass<'a> {
             .executor
             .resources
             .pipelines
-            .get(pipeline.id)
+            .get(pipeline.id.0)
             .unwrap()
             .ref_count
             .increment_internal();
@@ -2227,14 +2242,14 @@ impl<'a> ComputePass<'a> {
             .executor
             .resources
             .pipelines
-            .get(pipeline)
+            .get(pipeline.0)
             .unwrap();
 
         self.queue
             .executor
             .resources
             .descriptor_sets
-            .get(descriptor_set.id)
+            .get(descriptor_set.id.0)
             .unwrap()
             .ref_count
             .increment_internal();

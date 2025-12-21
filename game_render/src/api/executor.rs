@@ -381,7 +381,7 @@ fn run_render_pass(
     for cmd in &cmd.cmds {
         match cmd {
             DrawCmd::SetPipeline(id) => {
-                let pipeline = resources.pipelines.get(*id).unwrap();
+                let pipeline = resources.pipelines.get(id.0).unwrap();
 
                 // We store the pipeline.inner `Arc` value in a Vec,
                 // preventing it to get dropped for the duration of the following
@@ -486,7 +486,7 @@ fn run_compute_pass(
     for cmd in &cmd.cmds {
         match cmd {
             ComputeCommand::SetPipeline(id) => {
-                let pipeline = resources.pipelines.get(*id).unwrap();
+                let pipeline = resources.pipelines.get(id.0).unwrap();
 
                 // We store the pipeline.inner `Arc` value in a Vec,
                 // preventing it to get dropped for the duration of the following
@@ -532,10 +532,10 @@ fn build_descriptor_set(
 ) -> DescriptorSetInner {
     let _span = trace_span!("build_descriptor_set").entered();
 
-    let descriptor_set = resources.descriptor_sets.get(id).unwrap();
+    let descriptor_set = resources.descriptor_sets.get(id.0).unwrap();
     let layout = resources
         .descriptor_set_layouts
-        .get(descriptor_set.layout)
+        .get(descriptor_set.layout.0)
         .unwrap();
 
     let mut bindings = Vec::new();
@@ -601,7 +601,7 @@ fn build_descriptor_set(
                 WriteDescriptorResource::StorageTexture(texture_views.as_slice())
             }
             DescriptorSetResource::Sampler(sampler) => {
-                let sampler = resources.samplers.get(*sampler).unwrap();
+                let sampler = resources.samplers.get(sampler.0).unwrap();
                 let sampler = unsafe { &*(&sampler.inner as *const vulkan::Sampler) };
 
                 WriteDescriptorResource::Sampler(slice::from_ref(&sampler))
@@ -706,7 +706,7 @@ impl TemporaryResources {
         drop(self.texture_views.drain(..));
 
         for (id, count) in self.buffers.drain() {
-            let buffer = resources.buffers.get(id).unwrap();
+            let buffer = resources.buffers.get(id.0).unwrap();
 
             if buffer.ref_count.decrement_many_internal(count) {
                 resources.deletion_queue.push(DeletionEvent::Buffer(id));
@@ -714,7 +714,7 @@ impl TemporaryResources {
         }
 
         for (id, count) in self.textures.drain() {
-            let texture = resources.textures.get(id).unwrap();
+            let texture = resources.textures.get(id.0).unwrap();
 
             if texture.ref_count.decrement_many_internal(count) {
                 resources.deletion_queue.push(DeletionEvent::Texture(id));
@@ -722,7 +722,7 @@ impl TemporaryResources {
         }
 
         for (id, count) in self.descriptor_sets.drain() {
-            let set = resources.descriptor_sets.get(id).unwrap();
+            let set = resources.descriptor_sets.get(id.0).unwrap();
 
             if set.ref_count.decrement_many_internal(count) {
                 resources
@@ -732,7 +732,7 @@ impl TemporaryResources {
         }
 
         for (id, count) in self.samplers.drain() {
-            let sampler = resources.samplers.get(id).unwrap();
+            let sampler = resources.samplers.get(id.0).unwrap();
 
             if sampler.ref_count.decrement_many_internal(count) {
                 resources.deletion_queue.push(DeletionEvent::Sampler(id));
@@ -740,7 +740,7 @@ impl TemporaryResources {
         }
 
         for (id, count) in self.pipelines.drain() {
-            let pipeline = resources.pipelines.get(id).unwrap();
+            let pipeline = resources.pipelines.get(id.0).unwrap();
 
             if pipeline.ref_count.decrement_many_internal(count) {
                 resources.deletion_queue.push(DeletionEvent::Pipeline(id));

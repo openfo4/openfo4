@@ -239,7 +239,7 @@ impl Command {
                 for cmd in &cmd.cmds {
                     match cmd {
                         DrawCmd::SetPipeline(id) => {
-                            pipeline = Some(resources.pipelines.get(*id).unwrap());
+                            pipeline = Some(resources.pipelines.get(id.0).unwrap());
                         }
                         DrawCmd::SetIndexBuffer(buffer, _) => {
                             *access_flags.entry(ResourceId::Buffer(*buffer)).or_default() |=
@@ -255,7 +255,7 @@ impl Command {
                             }
                             visited_descriptor_sets.insert(id);
 
-                            let descriptor_set = resources.descriptor_sets.get(*id).unwrap();
+                            let descriptor_set = resources.descriptor_sets.get(id.0).unwrap();
 
                             for (binding, resource) in &descriptor_set.bindings {
                                 match resource {
@@ -358,7 +358,7 @@ impl Command {
                 for cmd in &cmd.cmds {
                     match cmd {
                         ComputeCommand::SetPipeline(id) => {
-                            pipeline = Some(resources.pipelines.get(*id).unwrap());
+                            pipeline = Some(resources.pipelines.get(id.0).unwrap());
                         }
                         ComputeCommand::SetDescriptorSet(group, id) => {
                             let Some(pipeline) = &pipeline else {
@@ -370,7 +370,7 @@ impl Command {
                             }
                             visited_descriptor_sets.insert(id);
 
-                            let descriptor_set = resources.descriptor_sets.get(*id).unwrap();
+                            let descriptor_set = resources.descriptor_sets.get(id.0).unwrap();
 
                             for (binding, resource) in &descriptor_set.bindings {
                                 match resource {
