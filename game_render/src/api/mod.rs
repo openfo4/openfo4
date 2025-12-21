@@ -222,7 +222,7 @@ impl CommandExecutor {
                     if layout.ref_count.decrement_internal() {
                         self.resources
                             .deletion_queue
-                            .push(DeletionEvent::DescriptorSetLayout(id));
+                            .push(DeletionEvent::DescriptorSetLayout(set.layout));
                     }
                 }
             }
