@@ -197,9 +197,14 @@ Vec3 load_normal(Barycentrics barys, MeshOffsets offsets, u32 indices[3], Materi
     let tangent_c = fetch<4>(tangents, offsets.tangent, indices[2]);
     var tangent = barys.interpolate(tangent_a.xyz, tangent_b.xyz, tangent_c.xyz);
     tangent = normalize(mul(instance.normal, tangent));
-    // Tangent sign should be consistent across all vertices.
-    let tangent_sign = tangent_a.w;
-    let bitangent = cross(vert_normal, tangent) * tangent_sign;
+
+    // FIXME: This should be the same as cross(vert_normal, tangent) * tangent.w
+    // if tangent.w is consistent across all vertices, but somehow it is not?
+    let bitan_a = cross(normal_a, tangent_a.xyz) * tangent_a.w;
+    let bitan_b = cross(normal_b, tangent_b.xyz) * tangent_b.w;
+    let bitan_c = cross(normal_c, tangent_c.xyz) * tangent_c.w;
+    var bitangent = barys.interpolate(bitan_a, bitan_b, bitan_c);
+    bitangent = normalize(mul(instance.normal, bitangent));
 
     let tbn = Mat3(tangent, bitangent, vert_normal);
 
