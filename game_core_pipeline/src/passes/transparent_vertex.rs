@@ -5,9 +5,9 @@ use std::sync::Arc;
 
 use game_render::api::{
     BindingResource, BufferDescriptor, BufferInitDescriptor, CommandQueue, ComputePassDescriptor,
-    ComputeStage, DescriptorSetDescriptor, DescriptorSetEntry, DescriptorSetLayout,
-    DescriptorSetLayoutDescriptor, FragmentStage, Pipeline, PipelineDescriptor, PipelineStage,
-    RenderPassColorAttachment, RenderPassDescriptor, Sampler, Texture, TextureRegion,
+    ComputeStage, DepthStencilAttachment, DescriptorSetDescriptor, DescriptorSetEntry,
+    DescriptorSetLayout, DescriptorSetLayoutDescriptor, FragmentStage, Pipeline,
+    PipelineDescriptor, PipelineStage, RenderPassDescriptor, Sampler, Texture, TextureRegion,
     TextureViewDescriptor, VertexStage,
 };
 use game_render::backend::allocator::UsageFlags;
@@ -511,13 +511,20 @@ impl TransparentVertexPass {
                 .copy_from_slice(&(scene.point_lights.len() as u32).to_ne_bytes());
             push_constants[88..92].copy_from_slice(&(scene.spot_lights.len() as u32).to_ne_bytes());
 
+            // FIXME: We are attaching a dummy texture in the render pass.
+            // This is currently a workaround so that the render pass gets the size
+            // from the texture size. The depth function always suceeds.
+            // This can be removed once we can specify a render pass viewport size.
+            let dummy_target = ctx.queue.create_texture(&TextureDescriptor {
+                size: color_target.size(),
+                mip_levels: 1,
+                format: TextureFormat::Depth32Float,
+                usage: TextureUsage::RENDER_ATTACHMENT,
+            });
+
             let mut pass = ctx.queue.run_render_pass(&RenderPassDescriptor {
                 name: "Transparent (Vertex) Color Pass",
-                color_attachments: &[RenderPassColorAttachment {
-                    target: &color_target.create_view(&TextureViewDescriptor::default()),
-                    load_op: LoadOp::Load,
-                    store_op: StoreOp::Store,
-                }],
+                color_attachments: &[],
                 // We use the depth buffer from the opaque pass to reject
                 // as many pixels as possible early.
                 // depth_stencil_attachment: Some(&DepthStencilAttachment {
@@ -525,7 +532,11 @@ impl TransparentVertexPass {
                 //     load_op: LoadOp::Load,
                 //     store_op: StoreOp::Discard,
                 // }),
-                depth_stencil_attachment: None,
+                depth_stencil_attachment: Some(&DepthStencilAttachment {
+                    load_op: LoadOp::Load,
+                    store_op: StoreOp::Discard,
+                    texture: &dummy_target,
+                }),
             });
 
             pass.set_pipeline(&self.color_pipeline.get(ctx.queue, HDR_FORMAT));
@@ -656,7 +667,7 @@ impl PipelineBuilder for BuildColorPipeline {
                     depth_stencil_state: Some(DepthStencilState {
                         format: DEPTH_FORMAT,
                         depth_write_enabled: false,
-                        depth_compare_op: CompareOp::Greater,
+                        depth_compare_op: CompareOp::Always,
                     }),
                     spec_consts: Default::default(),
                 }),
