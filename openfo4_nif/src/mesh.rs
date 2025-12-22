@@ -148,15 +148,21 @@ impl Decode for BSTriShape {
             debug_assert_eq!(tangent_x.len(), bitangents.len());
 
             let mut tangents = Vec::with_capacity(tangent_x.len());
-            for (((x, y), z), bitangent) in tangent_x
+            for (index, (((x, y), z), bitangent)) in tangent_x
                 .into_iter()
                 .zip(tangent_y)
                 .zip(tangent_z)
                 .zip(bitangents)
+                .enumerate()
             {
-                let tangent_sign = 1.0_f32.copysign(z * bitangent.z);
-                let tangent = Vec3::new(x, y, z).extend(tangent_sign);
-                tangents.push(tangent);
+                let tangent = Vec3::new(x, y, z);
+                let normal = normals
+                    .as_ref()
+                    .map(|normals| normals[index])
+                    .unwrap_or(Vec3::Z);
+
+                let tangent_sign = -(1.0_f32.copysign(normal.cross(tangent).z * bitangent.z));
+                tangents.push(tangent.extend(tangent_sign));
             }
 
             Some(tangents)
