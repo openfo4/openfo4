@@ -128,6 +128,9 @@ impl GameState {
         asset_loader.register::<crate::assets::nif_v2::NifScene>(NifLoaderContext::new(
             shared.entities.clone(),
         ));
+        asset_loader.register::<crate::assets::gltf::GltfScene>(NifLoaderContext::new(
+            shared.entities.clone(),
+        ));
         asset_loader.register::<crate::assets::texture::FileImageHandle>(FileLoadContext {
             entities: shared.entities.clone(),
         });

@@ -1,5 +1,6 @@
 pub mod animation;
 pub mod data_file;
+pub mod gltf;
 pub mod material;
 pub mod nif_v2;
 pub mod texture;

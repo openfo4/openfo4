@@ -72,7 +72,11 @@ pub struct NifScene {
 // every become stable we can use `fn instantiate(self: Handle<Self>, ..)`
 // instead.
 pub trait Instantiate {
-    fn instantiate(&self, transform: Transform, world: &mut World, flags: LoadNifFlags) -> Entity;
+    type Node;
+
+    fn instantiate(&self, transform: Transform, world: &mut World, flags: LoadNifFlags) -> Entity {
+        self.instantiate_with_feedback(|_, _| {}, transform, world, flags)
+    }
 
     fn instantiate_with_feedback<'a, F>(
         &'a self,
@@ -82,13 +86,11 @@ pub trait Instantiate {
         flags: LoadNifFlags,
     ) -> Entity
     where
-        F: FnMut(&'a Node, Entity);
+        F: FnMut(&'a Self::Node, Entity);
 }
 
 impl Instantiate for Handle<NifScene> {
-    fn instantiate(&self, transform: Transform, world: &mut World, flags: LoadNifFlags) -> Entity {
-        self.instantiate_with_feedback(|_, _| {}, transform, world, flags)
-    }
+    type Node = Node;
 
     fn instantiate_with_feedback<'a, F>(
         &'a self,

@@ -17,6 +17,7 @@ game_core_pipeline = { version = "0.1.0", path = "../game_core_pipeline" }
 game_gizmos = { version = "0.1.0", path = "../game_gizmos" }
 game_egui = { version = "0.1.0", path = "../game_egui" }
 game_ui_render = { version = "0.1.0", path = "../game_ui_render" }
+game_gltf = { version = "0.1.0", path = "../game_gltf" }
 
 openfo4_nif = { version = "0.1.0", path = "../openfo4_nif" }
 openfo4_esp = { version = "0.1.0", path = "../openfo4_esp" }
