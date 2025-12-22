@@ -74,6 +74,14 @@ impl Decode for BSTriShape {
 
         let start = reader.buf.position();
 
+        // The tangents are inteleaved after position, normal and bitangents
+        // attributes.
+        // FIXME: It would probably be better to just compute the tangents from
+        // the bitangents and normals.
+        let mut tangent_x = Vec::with_capacity(init_buffer_size);
+        let mut tangent_y = Vec::with_capacity(init_buffer_size);
+        let mut tangent_z = Vec::with_capacity(init_buffer_size);
+
         let positions = if vertex_desc.flags().contains(VertexFlags::VERTEX) {
             let mut positions = Vec::with_capacity(init_buffer_size);
             let offset = vertex_desc.attribute_offset(VertexAttribute::Position);
@@ -84,8 +92,10 @@ impl Decode for BSTriShape {
 
                 if vertex_desc.flags().contains(VertexFlags::FULL_PRECISION) {
                     positions.push(Vec3::decode(reader)?);
+                    tangent_x.push(reader.get_f32()?);
                 } else {
                     positions.push(HVec3::decode(reader)?.as_vec3());
+                    tangent_x.push(reader.get_f16()?.to_f32());
                 }
             }
 
@@ -105,7 +115,9 @@ impl Decode for BSTriShape {
                 let x = f32::lerp(-1.0, 1.0, reader.get_u8()? as f32 / 255.0);
                 let y = f32::lerp(-1.0, 1.0, reader.get_u8()? as f32 / 255.0);
                 let z = f32::lerp(-1.0, 1.0, reader.get_u8()? as f32 / 255.0);
-                normals.push(Vec3::new(x, y, z));
+                normals.push(Vec3::new(x, y, z).normalize());
+
+                tangent_y.push(f32::lerp(-1.0, 1.0, reader.get_u8()? as f32 / 255.0));
             }
 
             Some(normals)
@@ -114,9 +126,10 @@ impl Decode for BSTriShape {
         };
 
         let tangents = if vertex_desc.flags().contains(VertexFlags::TANGENT) {
-            let mut tangents = Vec::with_capacity(init_buffer_size);
+            let mut bitangents = Vec::with_capacity(init_buffer_size);
             let offset = vertex_desc.attribute_offset(VertexAttribute::Tangent);
 
+            // The tangent values in the shape are actually the bitangents.
             for index in 0..num_vertices {
                 let pos = start + u64::from(index) * vertex_size + offset;
                 reader.buf.set_position(pos);
@@ -124,25 +137,26 @@ impl Decode for BSTriShape {
                 let x = f32::lerp(-1.0, 1.0, reader.get_u8()? as f32 / 255.0);
                 let y = f32::lerp(-1.0, 1.0, reader.get_u8()? as f32 / 255.0);
                 let z = f32::lerp(-1.0, 1.0, reader.get_u8()? as f32 / 255.0);
-                let tangent = Vec3::new(x, y, z);
+                let bitangent = Vec3::new(x, y, z);
+                bitangents.push(bitangent);
 
-                // The bitangent is mangled in between the other fields:
-                // X after Position, Y after Normal, Z after Tangent
-                // We only care about the sign of the cross(normal, tangent)
-                // which allows use to recreate the bitangent.
-                let bitan_z = f32::lerp(-1.0, 1.0, reader.get_u8()? as f32 / 255.0);
-                let sign = normals
-                    .as_ref()
-                    .map(|normals| {
-                        let normal = normals[usize::from(index)];
-                        let bitangent = normal.cross(tangent);
+                tangent_z.push(f32::lerp(-1.0, 1.0, reader.get_u8()? as f32 / 255.0));
+            }
 
-                        // Take 1.0 if same sign, otherwise -1.0.
-                        1.0_f32.copysign(bitangent.z * bitan_z)
-                    })
-                    .unwrap_or(1.0);
+            debug_assert_eq!(tangent_x.len(), tangent_y.len());
+            debug_assert_eq!(tangent_x.len(), tangent_z.len());
+            debug_assert_eq!(tangent_x.len(), bitangents.len());
 
-                tangents.push(tangent.extend(sign));
+            let mut tangents = Vec::with_capacity(tangent_x.len());
+            for (((x, y), z), bitangent) in tangent_x
+                .into_iter()
+                .zip(tangent_y)
+                .zip(tangent_z)
+                .zip(bitangents)
+            {
+                let tangent_sign = 1.0_f32.copysign(z * bitangent.z);
+                let tangent = Vec3::new(x, y, z).extend(tangent_sign);
+                tangents.push(tangent);
             }
 
             Some(tangents)
