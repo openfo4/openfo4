@@ -217,6 +217,7 @@ impl OpaqueVertexForwardPass {
                         depth: &depth_texture,
                         indirect_buffer: &draws,
                         offsets,
+                        clear_output_and_depth: mesh_state.num_opauqe_instances == 0,
                     },
                 );
             }

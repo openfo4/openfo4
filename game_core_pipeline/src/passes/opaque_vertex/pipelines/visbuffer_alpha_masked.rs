@@ -1,3 +1,4 @@
+use game_common::components::Color;
 use game_render::api::{
     BindingResource, Buffer, BufferInitDescriptor, CommandQueue, DepthStencilAttachment,
     FragmentStage, PipelineStage, RenderPassColorAttachment, RenderPassDescriptor, Sampler,
@@ -37,6 +38,7 @@ pub struct AlphaMaskParams<'a> {
     pub depth: &'a Texture,
     pub indirect_buffer: &'a Buffer,
     pub offsets: &'a Buffer,
+    pub clear_output_and_depth: bool,
 }
 
 pub struct VisbufferAlphaMaskPipeline {
@@ -180,12 +182,20 @@ impl VisbufferAlphaMaskPipeline {
             name: "Visbuffer Alpha Mask",
             color_attachments: &[RenderPassColorAttachment {
                 target: &visbuffer_view,
-                load_op: LoadOp::Load,
+                load_op: if params.clear_output_and_depth {
+                    LoadOp::Clear(Color::BLACK)
+                } else {
+                    LoadOp::Load
+                },
                 store_op: StoreOp::Store,
             }],
             depth_stencil_attachment: Some(&DepthStencilAttachment {
                 texture: params.depth,
-                load_op: LoadOp::Load,
+                load_op: if params.clear_output_and_depth {
+                    LoadOp::Clear(0.0)
+                } else {
+                    LoadOp::Load
+                },
                 store_op: StoreOp::Store,
             }),
         });
