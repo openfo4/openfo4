@@ -476,6 +476,9 @@ impl GltfStagingData {
                 Semantic::TexCoords(0) => {
                     self.load_uvs(&accessor, &mut mesh.uvs)?;
                 }
+                Semantic::Colors(0) => {
+                    self.load_colors(&accessor, &mut mesh.colors)?;
+                }
                 _ => {
                     tracing::warn!(
                         "invalid/unsupported gltf semantic: {}",
@@ -490,7 +493,7 @@ impl GltfStagingData {
         }
 
         if !tangents_set {
-            //mesh.compute_tangents();
+            mesh.compute_tangents();
             //todo!()
         }
 
@@ -595,6 +598,38 @@ impl GltfStagingData {
 
         let reader: ItemReader<'_, Uvs> = ItemReader::new("TEXCOORD_0", accessor, self)?;
         uvs.extend(reader.map(Vec2::from_array));
+
+        Ok(())
+    }
+
+    fn load_colors(&self, accessor: &Accessor<'_>, colors: &mut Vec<Vec4>) -> Result<(), Error> {
+        let data_type = accessor.data_type();
+        if accessor.data_type() != DataType::F32 {
+            return Err(Error::InvalidDataType(data_type));
+        }
+
+        let dimensions = accessor.dimensions();
+        if !matches!(dimensions, Dimensions::Vec3 | Dimensions::Vec4) {
+            return Err(Error::InvalidDimensions(dimensions));
+        }
+
+        match (data_type, dimensions) {
+            (DataType::F32, Dimensions::Vec3) => {
+                let reader = ItemReader::<[f32; 3]>::new("COLOR_0", accessor, self)?;
+                colors.extend(reader.map(|color| {
+                    Vec3::from_array(color)
+                        .extend(1.0)
+                        .clamp(Vec4::ZERO, Vec4::ONE)
+                }));
+            }
+            (DataType::F32, Dimensions::Vec4) => {
+                let reader = ItemReader::<[f32; 4]>::new("COLOR_0", accessor, self)?;
+                colors.extend(
+                    reader.map(|color| Vec4::from_array(color).clamp(Vec4::ZERO, Vec4::ONE)),
+                );
+            }
+            _ => todo!("TODO: Support unsigned byte and unsigned short norm colors"),
+        }
 
         Ok(())
     }

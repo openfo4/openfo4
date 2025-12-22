@@ -23,6 +23,8 @@ serde_json = "1.0.120"
 thiserror = "1.0.61"
 tracing = "0.1.40"
 
+mikktspace = "0.3.0"
+
 [[test]]
 name = "gltf_box"
 path = "tests/gltf_box/gltf_box.rs"
