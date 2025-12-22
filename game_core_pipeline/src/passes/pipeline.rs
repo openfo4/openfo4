@@ -242,7 +242,8 @@ impl<'a, 'b, 'c> PreparePass<'a, 'b, 'c> {
             }
 
             if !stage.bindings.contains_key(name) {
-                panic!("no binding {} in stage {:?}", name, stage.stage);
+                // tracing::warn!("no binding {} in stage {:?}", name, stage.stage);
+                continue;
             }
 
             if let BindingResource::TextureArray(textures) = resource {

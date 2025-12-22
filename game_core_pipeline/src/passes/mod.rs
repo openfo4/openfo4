@@ -15,9 +15,7 @@ use bytemuck::{NoUninit, Pod, Zeroable};
 use crossbeam::channel::Receiver;
 use game_common::collections::arena::Key;
 use game_common::components::Transform;
-use game_render::api::{
-    CommandQueue, DescriptorSetLayout, TextureRegion, TextureView, TextureViewDescriptor,
-};
+use game_render::api::{CommandQueue, DescriptorSetLayout, TextureRegion, TextureViewDescriptor};
 use game_render::backend::{
     BufferUsage, DescriptorBinding, DescriptorSetDescriptor, DescriptorType, ImageDataLayout,
     ShaderStages, TextureDescriptor, TextureFormat, TextureUsage,
@@ -323,6 +321,9 @@ struct RawMaterialData {
     normal_texture_index: TextureSlabIndex,
     metallic_roughness_texture_index: TextureSlabIndex,
     specular_glossiness_texture_index: TextureSlabIndex,
+    grayscale_palette_texture_index: TextureSlabIndex,
+    grayscale_palette_scale: f32,
+    _pad1: [u32; 2],
 }
 
 impl GpuBuffer for RawMaterialData {
@@ -339,6 +340,7 @@ bitflags! {
         const METALLIC_FROM_SPECULAR = 1 << 2;
         const ROUGHNESS_FROM_GLOSSINESS = 1 << 3;
         const NORMAL_ENCODING_TWO_CHANNEL = 1 << 4;
+        const GRAYSCALE_PALETTE = 1 << 5;
     }
 }
 

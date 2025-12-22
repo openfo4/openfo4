@@ -74,6 +74,8 @@ pub struct StandardMaterial {
     ///
     /// Defaults to `0.0`.
     pub depth_bias: f32,
+    pub grayscale_palette: Option<ImageHandle>,
+    pub grayscale_palette_scale: f32,
 }
 
 impl Default for StandardMaterial {
@@ -94,6 +96,8 @@ impl Default for StandardMaterial {
             specular_glossiness_texture: None,
             unlit: false,
             depth_bias: 0.0,
+            grayscale_palette: None,
+            grayscale_palette_scale: 1.0,
         }
     }
 }

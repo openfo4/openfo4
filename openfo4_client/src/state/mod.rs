@@ -16,10 +16,11 @@ pub mod terrain;
 use std::f32::consts::PI;
 use std::fs::File;
 use std::io::BufReader;
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 use std::time::{Duration, Instant};
 
 use esp::EspLoader;
+use futures_lite::FutureExt;
 use game_common::components::{Color, DirectionalLight, Transform};
 use game_core::counter::Interval;
 use game_core::time::Time;
@@ -29,12 +30,14 @@ use game_input::keyboard::KeyCode;
 use game_tasks::TaskPool;
 use game_tracing::trace_span;
 use game_window::events::WindowEvent;
-use glam::{IVec2, Vec3};
+use glam::{IVec2, Quat, Vec3};
 use hecs::{CommandBuffer, World};
 use level::{Level, Streamer};
 use openfo4_asset::AssetLoader;
 use openfo4_core::events::EventBus;
+use openfo4_core::hierarchy::Children;
 use openfo4_core::object_ref_set::ObjectReferenceSet;
+use openfo4_core::transform::ConvertCoordinateSystem;
 use openfo4_esp::{EspFile, FormId};
 use openfo4_hkx::HkxFile;
 use openfo4_nif::Nif;
@@ -46,7 +49,10 @@ use openfo4_physics::controller::CharacterController;
 use crate::assets::FileLoadContext;
 use crate::assets::animation::{AnimationSet, FileAnimationClip};
 use crate::assets::data_file::{DataFile, DataFileContext};
-use crate::assets::nif_v2::NifLoaderContext;
+use crate::assets::gltf::GltfScene;
+use crate::assets::nif_v2::{
+    Instantiate, LoadNifFlags, NIF_TO_METERS, NifKey, NifLoaderContext, NifScene,
+};
 use crate::cell::CellId;
 use crate::components::{Camera, NiTransform, Player, WorldSpace};
 use crate::events::Event;
@@ -220,6 +226,115 @@ impl GameState {
         let _span = trace_span!("GameState::update").entered();
 
         futures_lite::future::block_on(self.interval.wait(Instant::now()));
+
+        // static ONCE: OnceLock<()> = OnceLock::new();
+
+        // ONCE.get_or_init(|| {
+        //     let mut nifs = Vec::new();
+        //     let nif =
+        //         futures_lite::future::block_on(self.asset_loader.load::<NifScene, _>(&NifKey {
+        //             path: "meshes/actors/brahmin/characterassets/brahmin.nif".into(),
+        //             flags: LoadNifFlags::all(),
+        //         }))
+        //         .unwrap();
+        //     // let nif =
+        //     //     futures_lite::future::block_on(self.asset_loader.load::<NifScene, _>(&NifKey {
+        //     //         path: "meshes/setdressing/tires/tire01.nif".into(),
+        //     //         flags: LoadNifFlags::all(),
+        //     //     }))
+        //     //     .unwrap();
+        //     nifs.push(nif);
+        //     // let nif =
+        //     //     futures_lite::future::block_on(self.asset_loader.load::<NifScene, _>(&NifKey {
+        //     //         path: "translategizmo.nif".into(),
+        //     //         flags: LoadNifFlags::all(),
+        //     //     }))
+        //     //     .unwrap();
+        //     // nifs.push(nif);
+        //     // let nif =
+        //     //     futures_lite::future::block_on(self.asset_loader.load::<NifScene, _>(&NifKey {
+        //     //         path: "rotategizmo.nif".into(),
+        //     //         flags: LoadNifFlags::all(),
+        //     //     }))
+        //     // .unwrap();
+        //     // nifs.push(nif);
+        //     // let offset = Vec2::new(2.0, 7.0) * 4096.0 * NIF_TO_METERS;
+
+        //     let offset = CellId(IVec2::new(2, 7)).min();
+        //     let offset = NiTransform::from_translation(offset.extend(0.0));
+
+        //     for nif in nifs {
+        //         let offset = CellId(IVec2::new(2, 7)).min();
+        //         let offset = NiTransform::from_translation(offset.extend(0.0));
+        //         let mut offset = Transform::from(offset);
+        //         // offset.rotation *= Quat::from_rotation_y(PI);
+
+        //         let e = nif.instantiate(offset, &mut self.world, LoadNifFlags::all());
+        //         self.world
+        //             .insert_one(
+        //                 e,
+        //                 WorldSpace {
+        //                     form: FormId(0x3c),
+        //                     is_interior: false,
+        //                 },
+        //             )
+        //             .unwrap();
+
+        //         let mut q = vec![e];
+        //         while let Some(e) = q.pop() {
+        //             self.world
+        //                 .insert_one(
+        //                     e,
+        //                     WorldSpace {
+        //                         form: FormId(0x3c),
+        //                         is_interior: false,
+        //                     },
+        //                 )
+        //                 .unwrap();
+        //             if let Ok(c) = self.world.get::<&Children>(e) {
+        //                 q.extend_from_slice(&c.0);
+        //             }
+        //         }
+        //     }
+
+        //     self.world.spawn((
+        //         Player,
+        //         WorldSpace {
+        //             is_interior: false,
+        //             form: FormId(0x3c),
+        //         },
+        //     ));
+
+        //     // let scene = futures_lite::future::block_on(
+        //     //     self.asset_loader
+        //     //         .load::<GltfScene, _>("../../../game/sponza.glb"),
+        //     // )
+        //     // .unwrap();
+        //     // // let scene = futures_lite::future::block_on(
+        //     // //     self.asset_loader.load::<GltfScene, _>("/tmp/tire.glb"),
+        //     // // )
+        //     // // .unwrap();
+        //     // let mut t = Transform::from(offset);
+        //     // t.scale /= NIF_TO_METERS;
+        //     // // t.rotation = t.rotation.to_nif();
+        //     // let e = scene.instantiate(t, &mut self.world, LoadNifFlags::all());
+
+        //     // let mut q = vec![e];
+        //     // while let Some(e) = q.pop() {
+        //     //     self.world
+        //     //         .insert_one(
+        //     //             e,
+        //     //             WorldSpace {
+        //     //                 form: FormId(0x3c),
+        //     //                 is_interior: false,
+        //     //             },
+        //     //         )
+        //     //         .unwrap();
+        //     //     if let Ok(c) = self.world.get::<&Children>(e) {
+        //     //         q.extend_from_slice(&c.0);
+        //     //     }
+        //     // }
+        // });
 
         self.level.update(
             &mut self.world,

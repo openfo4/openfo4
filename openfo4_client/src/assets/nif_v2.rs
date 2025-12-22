@@ -410,6 +410,7 @@ impl Asset for NifScene {
                             Some(shader_property) => {
                                 if materials.get(&shader_property).is_none() {
                                     let material = load_material(
+                                        &path,
                                         loader,
                                         &ctx.entities,
                                         &nif,
@@ -642,6 +643,7 @@ fn build_mesh(shape: &BSTriShape) -> Mesh {
 }
 
 async fn load_material(
+    p: &str,
     loader: &AssetLoader,
     entities: &Entities,
     nif: &Nif,
@@ -700,6 +702,7 @@ async fn load_material(
                 } else {
                     0.0
                 },
+                grayscale_palette_scale: shader_property.grayscale_to_palette_scale,
                 ..Default::default()
             };
 
@@ -717,7 +720,7 @@ async fn load_material(
                 // 0. Diffuse
                 // 1. Normal
                 // 2. ?
-                // 3. ?
+                // 3. Grayscale Palette LUT
                 // 4. Environment
                 // 5. ?
                 // 6. ?
@@ -739,6 +742,15 @@ async fn load_material(
                         let handle = loader.load::<FileImageHandle, _>(path).await?;
 
                         material.normal_texture = Some(handle.0.clone());
+                        textures.push(handle);
+                    }
+                }
+
+                if let Some(path) = texture_set.textures.get(3) {
+                    if !path.is_empty() {
+                        let handle = loader.load::<FileImageHandle, _>(path).await?;
+
+                        material.grayscale_palette = Some(handle.0.clone());
                         textures.push(handle);
                     }
                 }

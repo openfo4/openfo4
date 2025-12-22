@@ -111,7 +111,13 @@ void main(
     let vert_color_c = fetch<4>(colors, offsets.color, index2);
     let vert_color = barys.interpolate(vert_color_a, vert_color_b, vert_color_c);
 
-    let base_color = material.base_color * sample_material_texture(material.base_color_texture, uv) * vert_color;
+    let base_color_texture = material.base_color * sample_material_texture(material.base_color_texture, uv);
+    var base_color = base_color_texture * vert_color;
+    if ((material.flags & MATERIAL_FLAGS_GRAYSCALE_PALETTE) != 0) {
+        let x = clamp(base_color_texture.g, 0.0, 1.0);
+        let y = clamp(material.grayscale_palette_scale - (1.0 - vert_color.r), 0.0, 1.0);
+        base_color =  textures[NonUniformResourceIndex(material.grayscale_palette_texture)].SampleLevel(sampler, Vec2(x, y), 0.0);
+    }
 
     if ((material.flags & MATERIAL_FLAGS_UNLIT) != 0) {
         output[coords] = Vec4(base_color.rgb, 1.0);

@@ -321,6 +321,22 @@ fn create_material(
         None => default_textures.specular_glossiness,
     };
 
+    // Default image does not matter here, we don't sample from it unless
+    // the flag is set.
+    let grayscale_palette = match material.grayscale_palette {
+        Some(handle) => match images.get(&handle.id()).copied() {
+            Some(texture) => {
+                flags |= MaterialFlags::GRAYSCALE_PALETTE;
+                texture
+            }
+            None => {
+                tracing::warn!("missing grayscale palette image: {:?}", handle);
+                default_textures.base_color
+            }
+        },
+        None => default_textures.base_color,
+    };
+
     let alpha_mask = match material.alpha_mode {
         AlphaMode::Mask(mask) => mask,
         _ => 0.0,
@@ -341,6 +357,9 @@ fn create_material(
         normal_texture_index: normal,
         metallic_roughness_texture_index: metallic_roughness,
         specular_glossiness_texture_index: specular_glossiness,
+        grayscale_palette_texture_index: grayscale_palette,
+        grayscale_palette_scale: material.grayscale_palette_scale,
+        _pad1: [0; 2],
     });
 
     MaterialState {

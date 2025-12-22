@@ -73,7 +73,13 @@ func shading(input: Input) -> Vec4 {
     let material = materials[input.material_index];
     let uv = input.uv;
 
-    var base_color = load_base_color(material, uv) * input.vertex_color;
+    let base_color_texture = material.base_color * load_base_color(material, uv);
+    var base_color = base_color_texture * input.vertex_color;
+    if ((material.flags & MATERIAL_FLAGS_GRAYSCALE_PALETTE) != 0) {
+        let x = clamp(base_color_texture.g, 0.0, 1.0);
+        let y = clamp(material.grayscale_palette_scale - (1.0 - input.vertex_color.r), 0.0, 1.0);
+        base_color = textures[material.grayscale_palette_texture].SampleLevel(sampler, Vec2(x, y), 0.0);
+    }
 
     if ((material.flags & MATERIAL_FLAGS_UNLIT) != 0) {
         return base_color;

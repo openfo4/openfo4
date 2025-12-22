@@ -5,6 +5,7 @@ public static const u32 MATERIAL_FLAGS_FLIP_NORMAL_Y = 1 << 1;
 public static const u32 MATERIAL_FLAGS_METALLIC_FROM_SPECULAR = 1 << 2;
 public static const u32 MATERIAL_FLAGS_ROUGHNESS_FROM_GLOSSINESS = 1 << 3;
 public static const u32 MATERIAL_FLAGS_NORMAL_ENCODING_TWO_COMPONENT = 1 << 4;
+public static const u32 MATERIAL_FLAGS_GRAYSCALE_PALETTE = 1 << 5;
 
 public struct Material {
     public u32 flags;
@@ -20,4 +21,6 @@ public struct Material {
     public u32 normal_texture;
     public u32 metallic_roughness_texture;
     public u32 specular_glossiness_texture;
+    public u32 grayscale_palette_texture;
+    public u32 grayscale_palette_scale;
 }
