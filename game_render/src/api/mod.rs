@@ -35,11 +35,12 @@ use resources::{
 };
 use scheduler::{Node, Resource, ResourceMap, Scheduler};
 use sharded_slab::Slab;
+use spirv::Op;
 
 use crate::api::commands::{ClearTexture, CreateBuffer, CreateTexture};
 use crate::api::executor::Executor;
 use crate::backend::allocator::{MemoryManager, UsageFlags};
-use crate::backend::descriptors::DescriptorSetAllocator;
+use crate::backend::descriptors::{self, DescriptorSetAllocator};
 use crate::backend::vulkan::{self, CommandEncoder, Device};
 use crate::backend::{
     self, AccessFlags, AdapterMemoryProperties, AdapterProperties, BufferUsage, ColorTargetState,
@@ -48,6 +49,7 @@ use crate::backend::{
     PushConstantRange, SamplerDescriptor, ShaderStage, ShaderStages, StoreOp, TextureDescriptor,
     TextureFormat, TextureUsage,
 };
+use crate::debug::debug_enabled;
 use crate::shader::{
     self, BindingInfo, Shader, ShaderAccess, ShaderInstanceBinding, SpecConstantId,
     SpecConstantValue,
@@ -1173,6 +1175,9 @@ impl<'a> CommandQueue<'a> {
             infos
         };
 
+        let mut color_attachments = Vec::new();
+        let mut depth_attachment = None;
+
         let instances = ScratchBuffer::new(descriptor.stages.len());
 
         let mut bindings = BindingMap::default();
@@ -1242,6 +1247,9 @@ impl<'a> CommandQueue<'a> {
                             );
                         }
                     }
+
+                    color_attachments = stage.targets.to_vec();
+                    depth_attachment = stage.depth_stencil_state;
 
                     backend::PipelineStage::Fragment(backend::FragmentStage {
                         shader: &*instance,
@@ -1383,6 +1391,8 @@ impl<'a> CommandQueue<'a> {
         Pipeline {
             id,
             resources: self.executor.resources.clone(),
+            color_attachments,
+            depth_attachment,
         }
     }
 
@@ -1406,6 +1416,12 @@ impl<'a> CommandQueue<'a> {
     }
 
     pub fn run_render_pass(&self, descriptor: &RenderPassDescriptor<'_>) -> RenderPass<'a, '_> {
+        // FIXME: Allow explicitly passing viewport size.
+        if descriptor.color_attachments.is_empty() && descriptor.depth_stencil_attachment.is_none()
+        {
+            panic!("Either a color target or depth target must be passed to run_render_pass.\nThis currently is a workaround for not being able to specify the render viewport size.");
+        }
+
         let color_attachments = descriptor
             .color_attachments
             .iter()
@@ -1426,6 +1442,11 @@ impl<'a> CommandQueue<'a> {
                     .ref_count
                     .increment_internal();
 
+                // Attachments must not be zero sized.
+                // This is already checked when the texture is created.
+                debug_assert_ne!(a.target.texture.size.x, 0);
+                debug_assert_ne!(a.target.texture.size.y, 0);
+
                 ColorAttachmentOwned {
                     target: RawTextureView {
                         texture: a.target.texture.id,
@@ -1434,6 +1455,7 @@ impl<'a> CommandQueue<'a> {
                     },
                     load_op: a.load_op,
                     store_op: a.store_op,
+                    format: a.target.texture.format,
                 }
             })
             .collect();
@@ -1447,10 +1469,16 @@ impl<'a> CommandQueue<'a> {
                 .ref_count
                 .increment_internal();
 
+            // Attachments must not be zero sized.
+            // This is already checked when the texture is created.
+            debug_assert_ne!(attachment.texture.size.x, 0);
+            debug_assert_ne!(attachment.texture.size.y, 0);
+
             DepthStencilAttachmentOwned {
                 texture: attachment.texture.id,
                 load_op: attachment.load_op,
                 store_op: attachment.store_op,
+                format: attachment.texture.format,
             }
         });
 
@@ -1671,6 +1699,8 @@ impl Drop for DescriptorSetLayout {
 pub struct Pipeline {
     id: PipelineId,
     resources: Arc<Resources>,
+    color_attachments: Vec<ColorTargetState>,
+    depth_attachment: Option<DepthStencilState>,
 }
 
 impl Clone for Pipeline {
@@ -1681,6 +1711,8 @@ impl Clone for Pipeline {
         Self {
             id: self.id,
             resources: self.resources.clone(),
+            color_attachments: self.color_attachments.clone(),
+            depth_attachment: self.depth_attachment,
         }
     }
 }
@@ -2000,6 +2032,7 @@ pub struct RenderPass<'a, 'b> {
 }
 
 impl<'a, 'b> RenderPass<'a, 'b> {
+    #[track_caller]
     pub fn set_pipeline(&mut self, pipeline: &Pipeline) {
         self.ctx
             .executor
@@ -2009,6 +2042,28 @@ impl<'a, 'b> RenderPass<'a, 'b> {
             .unwrap()
             .ref_count
             .increment_internal();
+
+        assert_eq!(
+            self.color_attachments.len(),
+            pipeline.color_attachments.len()
+        );
+        for (pass_attachment, pipeline_attachment) in self
+            .color_attachments
+            .iter()
+            .zip(&pipeline.color_attachments)
+        {
+            assert_eq!(pass_attachment.format, pipeline_attachment.format);
+        }
+
+        assert_eq!(
+            self.depth_stencil_attachment.is_some(),
+            pipeline.depth_attachment.is_some()
+        );
+        if let ((Some(pass_attachment), Some(pipeline_attachment))) =
+            (&self.depth_stencil_attachment, &pipeline.depth_attachment)
+        {
+            assert_eq!(pass_attachment.format, pipeline_attachment.format);
+        }
 
         self.cmds.push(DrawCmd::SetPipeline(pipeline.id));
         self.last_pipeline = Some(pipeline.id);
@@ -2312,6 +2367,7 @@ struct ColorAttachmentOwned {
     target: RawTextureView,
     load_op: LoadOp<Color>,
     store_op: StoreOp,
+    format: TextureFormat,
 }
 
 #[derive(Clone, Debug)]
@@ -2319,6 +2375,7 @@ struct DepthStencilAttachmentOwned {
     texture: TextureId,
     load_op: LoadOp<f32>,
     store_op: StoreOp,
+    format: TextureFormat,
 }
 
 #[derive(Clone, Debug)]
