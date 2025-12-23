@@ -39,6 +39,10 @@ public namespace pbr {
             this.specular_color = Vec3(1.0);
             this.specular_strength = 1.0;
         }
+
+        public func diffuse_color() -> Vec3 {
+            return compute_diffuse_color(this.base_color, this.metallic);
+        }
     }
 
     public struct Light {

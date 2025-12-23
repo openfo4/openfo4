@@ -25,6 +25,7 @@ use parking_lot::Mutex;
 
 use crate::camera::CameraUniform;
 use crate::entities::{CameraId, SceneId};
+use crate::passes::update::RawSceneData;
 use crate::passes::{DEPTH_FORMAT, HDR_FORMAT, HDR_TEXTURE, MeshStateImpl, OPAQUE_DEPTH, State};
 
 const DRAWGEN_SHADER: &str = concat!(
@@ -500,16 +501,26 @@ impl TransparentVertexPass {
                 ],
             });
 
+            let mut ambient = [0.0; 3];
+            for light in scene.ambient_lights.values() {
+                ambient[0] += light.color.as_rgb()[0] * light.brightness;
+                ambient[1] += light.color.as_rgb()[1] * light.brightness;
+                ambient[2] += light.color.as_rgb()[2] * light.brightness;
+            }
+
             let mut push_constants = [0; 128];
-            push_constants[0..80].copy_from_slice(bytemuck::bytes_of(&CameraUniform::new(
+            push_constants[0..16]
+                .copy_from_slice(bytemuck::bytes_of(&RawSceneData { ambient, _pad0: 0 }));
+            push_constants[16..96].copy_from_slice(bytemuck::bytes_of(&CameraUniform::new(
                 camera.transform,
                 camera.projection,
             )));
-            push_constants[80..84]
+            push_constants[96..100]
                 .copy_from_slice(&(scene.directional_lights.len() as u32).to_ne_bytes());
-            push_constants[84..88]
+            push_constants[100..104]
                 .copy_from_slice(&(scene.point_lights.len() as u32).to_ne_bytes());
-            push_constants[88..92].copy_from_slice(&(scene.spot_lights.len() as u32).to_ne_bytes());
+            push_constants[104..108]
+                .copy_from_slice(&(scene.spot_lights.len() as u32).to_ne_bytes());
 
             // FIXME: We are attaching a dummy texture in the render pass.
             // This is currently a workaround so that the render pass gets the size

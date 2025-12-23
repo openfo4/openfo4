@@ -3,11 +3,13 @@ import lights;
 import shared;
 import material;
 import camera;
+import scene;
 
 import barycentrics;
 import pbr;
 
 struct PushConstants {
+    SceneData scene;
     Camera camera;
     u32 num_directional_lights;
     u32 num_point_lights;
@@ -150,6 +152,9 @@ void main(
     pbr_material.specular_strength = specular_strength;
 
     var luminance = Vec3(0.0);
+
+    // Ambient light
+    luminance += pbr_material.diffuse_color() * constants.scene.ambient;
 
     for (var i = 0; i < constants.num_directional_lights; i++) {
         let light = directional_lights[i].eval();

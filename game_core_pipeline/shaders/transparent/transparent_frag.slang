@@ -4,8 +4,10 @@ import pbr;
 import lights;
 import material;
 import shared;
+import scene;
 
 struct PushConstants {
+    SceneData scene;
     Camera camera;
     u32 num_directional_lights;
     u32 num_point_lights;
@@ -112,6 +114,9 @@ func shading(input: Input) -> Vec4 {
     pbr_material.specular_strength = specular_strength;
 
     var luminance = Vec3(0.0);
+
+    // Ambient light
+    luminance += pbr_material.diffuse_color() * push_constants.scene.ambient;
 
     for (var i = 0; i < push_constants.num_directional_lights; i++) {
         let light = directional_lights[i].eval();

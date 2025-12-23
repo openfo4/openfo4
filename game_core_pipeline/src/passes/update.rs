@@ -168,6 +168,13 @@ impl Node for UpdatePass {
                         .insert(&SpotLightUniform::new(&light));
                     scene.spot_lights.insert(id, index);
                 }
+                Event::CreateLight(id, Light::Ambient(light)) => {
+                    let Some(scene) = state.scenes.get_mut(&light.scene.id()) else {
+                        continue;
+                    };
+
+                    scene.ambient_lights.insert(id, light);
+                }
                 Event::DestroyLight(scene, id) => {
                     let Some(scene) = state.scenes.get_mut(&scene) else {
                         continue;
@@ -184,6 +191,8 @@ impl Node for UpdatePass {
                     if let Some(index) = scene.spot_lights.remove(&id) {
                         scene.spot_lights_buffer.remove(index);
                     }
+
+                    scene.ambient_lights.remove(&id);
                 }
             }
         }
@@ -433,4 +442,11 @@ impl From<Transform> for TransformUniform {
             ],
         }
     }
+}
+
+#[derive(Copy, Clone, Debug, Zeroable, Pod)]
+#[repr(C)]
+pub struct RawSceneData {
+    pub ambient: [f32; 3],
+    pub _pad0: u32,
 }

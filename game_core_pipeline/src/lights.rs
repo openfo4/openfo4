@@ -10,6 +10,7 @@ pub enum Light {
     Directional(DirectionalLight),
     Point(PointLight),
     Spot(SpotLight),
+    Ambient(AmbientLight),
 }
 
 #[derive(Clone, Debug)]
@@ -38,6 +39,13 @@ pub struct SpotLight {
     pub radius: f32,
     pub inner_cutoff: f32,
     pub outer_cutoff: f32,
+}
+
+#[derive(Clone, Debug)]
+pub struct AmbientLight {
+    pub scene: SceneHandle,
+    pub color: Color,
+    pub brightness: f32,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Zeroable, Pod)]

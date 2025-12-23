@@ -34,7 +34,7 @@ use update::{TransformUniform, UpdatePass};
 
 use crate::camera::Camera;
 use crate::entities::{CameraId, Event, ImageId, LightId, MaterialId, MeshId, ObjectId, SceneId};
-use crate::lights::{DirectionalLightUniform, PointLightUniform, SpotLightUniform};
+use crate::lights::{AmbientLight, DirectionalLightUniform, PointLightUniform, SpotLightUniform};
 use crate::material::AlphaMode;
 use crate::passes::transparent_vertex::TransparentVertexPass;
 
@@ -278,6 +278,7 @@ struct SceneData {
     directional_lights: HashMap<LightId, SlabIndex>,
     point_lights: HashMap<LightId, SlabIndex>,
     spot_lights: HashMap<LightId, SlabIndex>,
+    ambient_lights: HashMap<LightId, AmbientLight>,
 
     directional_lights_buffer: CompactSlabBuffer<DirectionalLightUniform>,
     point_lights_buffer: CompactSlabBuffer<PointLightUniform>,
@@ -292,6 +293,7 @@ impl SceneData {
             directional_lights: HashMap::new(),
             point_lights: HashMap::new(),
             spot_lights: HashMap::new(),
+            ambient_lights: HashMap::new(),
             directional_lights_buffer: CompactSlabBuffer::new(BufferUsage::STORAGE),
             point_lights_buffer: CompactSlabBuffer::new(BufferUsage::STORAGE),
             spot_lights_buffer: CompactSlabBuffer::new(BufferUsage::STORAGE),

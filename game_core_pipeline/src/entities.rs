@@ -125,6 +125,7 @@ impl Entities {
             Light::Directional(light) => light.scene.id(),
             Light::Point(light) => light.scene.id(),
             Light::Spot(light) => light.scene.id(),
+            Light::Ambient(light) => light.scene.id(),
         };
 
         self.inner.events.send(Event::CreateLight(id, light)).ok();
