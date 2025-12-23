@@ -42,8 +42,8 @@ pub fn combine_texture_layers(layers: &[TerrainLayer], size: UVec2) -> Terrain {
             continue;
         }
 
-        for x in layer.position.x..layer.position.x + layer.size.x {
-            for y in layer.position.y..layer.position.y + layer.size.y {
+        for y in layer.position.y..layer.position.y + layer.size.y {
+            for x in layer.position.x..layer.position.x + layer.size.x {
                 let u = x as f32 / layer.size.x as f32;
                 let v = y as f32 / layer.size.y as f32;
 
@@ -67,8 +67,8 @@ pub fn combine_texture_layers(layers: &[TerrainLayer], size: UVec2) -> Terrain {
             continue;
         }
 
-        for x in layer.position.x..layer.position.x + layer.size.x {
-            for y in layer.position.y..layer.position.y + layer.size.y {
+        for y in layer.position.y..layer.position.y + layer.size.y {
+            for x in layer.position.x..layer.position.x + layer.size.x {
                 let u = x as f32 / layer.size.x as f32;
                 let v = y as f32 / layer.size.y as f32;
 
@@ -113,8 +113,8 @@ pub fn combine_texture_layers(layers: &[TerrainLayer], size: UVec2) -> Terrain {
             continue;
         }
 
-        for x in layer.position.x..layer.position.x + layer.size.x {
-            for y in layer.position.y..layer.position.y + layer.size.y {
+        for y in layer.position.y..layer.position.y + layer.size.y {
+            for x in layer.position.x..layer.position.x + layer.size.x {
                 let u = x as f32 / layer.size.x as f32;
                 let v = y as f32 / layer.size.y as f32;
 
