@@ -38,6 +38,8 @@ StructuredBuffer<SpotLight> spot_lights;
 StructuredBuffer<Material> materials;
 Texture2D<Vec4>[] textures;
 SamplerState sampler;
+Texture2D<Vec4> shadow_map;
+ConstantBuffer<Mat4> light_view_proj;
 
 static const u32 NUM_THREADS = 64;
 
@@ -157,8 +159,28 @@ void main(
     luminance += pbr_material.diffuse_color() * constants.scene.ambient;
 
     for (var i = 0; i < constants.num_directional_lights; i++) {
+        let frag_light_space = mul(light_view_proj, Vec4(world_position, 1.0));
+        var proj_coords = (frag_light_space.xyz / frag_light_space.w);
+        proj_coords.x = proj_coords.x * 0.5 + 0.5;
+        proj_coords.y = 1.0 - (proj_coords.y * 0.5 + 0.5);
+
+        let texture_size = Vec2(4096);
+        let texel_size = 1.0 / Vec2(4096);
+
+        var shadow = 0.0;
+        if (proj_coords.z > 1.0) {
+            shadow = 0.0;
+        } else {
+            shadow = sample_pcf_shadow(proj_coords.xy, proj_coords.z);
+        }
+
+        // FIXME: Early reject, good for performance or not?
+        if (shadow == 0.0) {
+            continue;
+        }
+
         let light = directional_lights[i].eval();
-        luminance += pbr::surface_shading(pbr_material, view_dir, light);
+        luminance += pbr::surface_shading(pbr_material, view_dir, light) * shadow;
     }
 
     for (var i = 0; i < constants.num_point_lights; i++) {
@@ -174,11 +196,31 @@ void main(
     output[coords] = Vec4(luminance, 1.0);
 }
 
+
 struct InputParams {
     Barycentrics barys;
     Material material;
     InstanceOut instance;
     MeshOffsets offsets;
+}
+
+func sample_pcf_shadow(coords: Vec2, depth: f32) -> f32 {
+    let range = 1;
+
+    let texel_size = 1.0 / Vec2(4096);
+
+    var value = 0.0;
+    for (int x = -range; x <= range; x++) {
+        for (int y = -range; y <= range; y++) {
+            let pcf = shadow_map.SampleGrad(sampler, coords + Vec2(x, y) * texel_size, Vec2(0.0), Vec2(0.0)).r;
+            if (depth > pcf) {
+                value += 1.0;
+            }
+        }
+    }
+
+    let size = range * 2 + 1;
+    return value / (size * size);
 }
 
 func fetch<let N: i32>(buffer: StructuredBuffer<f32>, offset: u32, index: u32) -> vector<f32, N> {

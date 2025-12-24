@@ -25,7 +25,7 @@ use game_render::buffer::slab::{CompactSlabBuffer, SlabBuffer, SlabIndex};
 use game_render::buffer::texture_slab::{TextureSlab, TextureSlabIndex};
 use game_render::graph::{NodeLabel, RenderGraph, SlotFlags, SlotKind, SlotLabel};
 use game_render::mesh::Mesh;
-use glam::UVec2;
+use glam::{UVec2, Vec3};
 use opaque_vertex::state::VertexMeshState;
 use parking_lot::Mutex;
 use post_process::PostProcessPass;
@@ -275,7 +275,7 @@ impl DefaultTextures {
 struct SceneData {
     cameras: HashMap<CameraId, Camera>,
     objects: HashMap<ObjectId, ObjectState>,
-    directional_lights: HashMap<LightId, SlabIndex>,
+    directional_lights: HashMap<LightId, DirectionalLightState>,
     point_lights: HashMap<LightId, SlabIndex>,
     spot_lights: HashMap<LightId, SlabIndex>,
     ambient_lights: HashMap<LightId, AmbientLight>,
@@ -283,6 +283,13 @@ struct SceneData {
     directional_lights_buffer: CompactSlabBuffer<DirectionalLightUniform>,
     point_lights_buffer: CompactSlabBuffer<PointLightUniform>,
     spot_lights_buffer: CompactSlabBuffer<SpotLightUniform>,
+}
+
+#[derive(Copy, Clone, Debug)]
+struct DirectionalLightState {
+    index: SlabIndex,
+    /// Facing direction
+    direction: Vec3,
 }
 
 impl SceneData {

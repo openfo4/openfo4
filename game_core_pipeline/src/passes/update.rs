@@ -18,14 +18,14 @@ use game_render::graph::{Node, RenderContext};
 use game_render::mipmap::MipMapGenerator;
 use game_render::texture::image::MipImage;
 use game_tracing::trace_span;
-use glam::{Mat3, Mat4, UVec2, Vec4};
+use glam::{Mat3, Mat4, UVec2, Vec3, Vec4};
 use parking_lot::Mutex;
 
 use crate::StandardMaterial;
 use crate::entities::{Event, ImageId};
 use crate::lights::{DirectionalLightUniform, Light, PointLightUniform, SpotLightUniform};
 use crate::material::AlphaMode;
-use crate::passes::MaterialState;
+use crate::passes::{DirectionalLightState, MaterialState};
 
 use super::{
     DefaultTextures, MaterialFlags, ObjectState, RawMaterialData, RawObjectData, SceneData, State,
@@ -146,7 +146,13 @@ impl Node for UpdatePass {
                     let index = scene
                         .directional_lights_buffer
                         .insert(&DirectionalLightUniform::new(&light));
-                    scene.directional_lights.insert(id, index);
+                    scene.directional_lights.insert(
+                        id,
+                        DirectionalLightState {
+                            index,
+                            direction: light.transform.rotation * -Vec3::Z,
+                        },
+                    );
                 }
                 Event::CreateLight(id, Light::Point(light)) => {
                     let Some(scene) = state.scenes.get_mut(&light.scene.id()) else {
@@ -180,8 +186,8 @@ impl Node for UpdatePass {
                         continue;
                     };
 
-                    if let Some(index) = scene.directional_lights.remove(&id) {
-                        scene.directional_lights_buffer.remove(index);
+                    if let Some(state) = scene.directional_lights.remove(&id) {
+                        scene.directional_lights_buffer.remove(state.index);
                     }
 
                     if let Some(index) = scene.point_lights.remove(&id) {

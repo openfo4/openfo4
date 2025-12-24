@@ -15,6 +15,7 @@ pub mod state;
 
 mod forward;
 mod pipelines;
+mod shadow;
 
 const FORWARD_PASS: NodeLabel = NodeLabel::new("opaque_vertex_forward_pass");
 

@@ -1,0 +1,3 @@
+
+[shader("fragment")]
+func main() {}

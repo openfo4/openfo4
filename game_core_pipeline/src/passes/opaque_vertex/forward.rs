@@ -13,14 +13,15 @@ use game_render::backend::{
 };
 use game_render::graph::{Node, RenderContext, SlotLabel};
 use game_tracing::trace_span;
-use glam::UVec2;
+use glam::{Mat4, UVec2, Vec3, Vec4};
 use parking_lot::Mutex;
 
-use crate::camera::CameraUniform;
+use crate::camera::{Camera, CameraUniform, REVERSE_Z};
 use crate::entities::{CameraId, SceneId};
 use crate::passes::opaque_vertex::pipelines::drawcall_gen::{
     DrawcallGenParams, DrawcallGenPipeline,
 };
+use crate::passes::opaque_vertex::pipelines::shadow_map::{ShadowMapParams, ShadowMapPipeline};
 use crate::passes::opaque_vertex::pipelines::visbuffer_alpha_masked::{
     AlphaMaskParams, VisbufferAlphaMaskPipeline,
 };
@@ -41,6 +42,7 @@ pub struct OpaqueVertexForwardPass {
     forward_alpha_mask: Mutex<VisbufferAlphaMaskPipeline>,
     shading_pipeline: Mutex<ShadingPipeline>,
     linear_sampler: Sampler,
+    shadow_map: Mutex<ShadowMapPipeline>,
 }
 
 impl OpaqueVertexForwardPass {
@@ -61,6 +63,7 @@ impl OpaqueVertexForwardPass {
             shading_pipeline: Mutex::new(ShadingPipeline::new()),
             forward_alpha_mask: Mutex::new(VisbufferAlphaMaskPipeline::new()),
             drawcall_gen_pipeline: Mutex::new(DrawcallGenPipeline::new()),
+            shadow_map: Mutex::new(ShadowMapPipeline::new()),
         }
     }
 
@@ -126,6 +129,15 @@ impl OpaqueVertexForwardPass {
             flags: UsageFlags::empty(),
         });
 
+        let shadow_depth = ctx.queue.create_texture(&TextureDescriptor {
+            size: UVec2::splat(4096),
+            mip_levels: 1,
+            format: TextureFormat::Depth32Float,
+            usage: TextureUsage::RENDER_ATTACHMENT | TextureUsage::TEXTURE_BINDING,
+        });
+
+        let mut light_view_proj = Mat4::IDENTITY;
+
         // Opaque Forward
         if mesh_state.num_opauqe_instances != 0 {
             let mut pipeline = self.drawcall_gen_pipeline.lock();
@@ -164,6 +176,27 @@ impl OpaqueVertexForwardPass {
                     depth: &depth_texture,
                 },
             );
+
+            for light in scene.directional_lights.values() {
+                let pv = compute_dir_light_space_matrix(camera, light.direction);
+                light_view_proj = pv;
+
+                let mut pipeline = self.shadow_map.lock();
+
+                pipeline.run(
+                    ctx.queue,
+                    ShadowMapParams {
+                        positions,
+                        offsets,
+                        instances: &opauqe_instances,
+                        materials,
+                        index_buffer,
+                        indirect_buffer: &draws,
+                        light: pv,
+                        shadow_depth: &shadow_depth,
+                    },
+                );
+            }
         }
 
         let alpha_mask_instances = ctx.queue.create_buffer(&BufferDescriptor {
@@ -279,6 +312,8 @@ impl OpaqueVertexForwardPass {
                     sampler: &self.linear_sampler,
                     visbuffer: &visbuffer,
                     output: &output_texture,
+                    shadow: &shadow_depth,
+                    light_view_proj,
                 },
             );
         }
@@ -357,4 +392,54 @@ struct ShadingPipelineConstants {
     num_spot_lights: u32,
     _pad0: u32,
     viewport_size: UVec2,
+}
+
+fn compute_dir_light_space_matrix(camera: &Camera, direction: Vec3) -> Mat4 {
+    let corners = frustum_corners(camera.view_matrix(), camera.projection_matrix());
+
+    let center = corners.iter().sum::<Vec3>() / corners.len() as f32;
+
+    let view = Mat4::look_at_rh(
+        center + direction,
+        center,
+        direction.any_orthonormal_vector(),
+    );
+
+    let mut min_x = f32::MAX;
+    let mut max_x = f32::MIN;
+    let mut min_y = f32::MAX;
+    let mut max_y = f32::MIN;
+    let mut min_z = f32::MAX;
+    let mut max_z = f32::MIN;
+    for corner in &corners {
+        let p = view * corner.extend(1.0);
+        min_x = f32::min(min_x, p.x);
+        max_x = f32::max(max_x, p.x);
+        min_y = f32::min(min_y, p.y);
+        max_y = f32::max(max_y, p.y);
+        min_z = f32::min(min_z, p.z);
+        max_z = f32::max(max_z, p.z);
+    }
+
+    let proj = Mat4::orthographic_rh(min_x, max_x, min_y, max_y, min_z, max_z);
+    proj * view
+}
+
+fn frustum_corners(view: Mat4, proj: Mat4) -> [Vec3; 8] {
+    let inv = (proj * view).inverse();
+
+    [
+        (-1.0, -1.0, -1.0),
+        (-1.0, -1.0, 1.0),
+        (-1.0, 1.0, -1.0),
+        (-1.0, 1.0, 1.0),
+        (1.0, -1.0, -1.0),
+        (1.0, -1.0, 1.0),
+        (1.0, 1.0, -1.0),
+        (1.0, 1.0, 1.0),
+    ]
+    .map(|(x, y, z)| {
+        let v = inv * Vec4::new(x, y, z, 1.0);
+        (v / v.w).truncate()
+    })
 }

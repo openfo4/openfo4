@@ -1,7 +1,7 @@
 use std::f32::consts::PI;
 
 use bytemuck::{Pod, Zeroable};
-use game_common::components::Transform;
+use game_common::components::{Transform, transform};
 use game_common::math::Ray;
 use game_render::camera::RenderTarget;
 use glam::{Mat4, UVec2, Vec2, Vec3};
@@ -11,7 +11,7 @@ use crate::entities::SceneHandle;
 /// Matrix to reverse Z for improved depth testing.
 // https://developer.nvidia.com/content/depth-precision-visualized
 // https://tomhultonharrop.com/mathematics/graphics/2023/08/06/reverse-z.html
-const REVERSE_Z: Mat4 = Mat4::from_cols_array_2d(&[
+pub const REVERSE_Z: Mat4 = Mat4::from_cols_array_2d(&[
     [1.0, 0.0, 0.0, 0.0],
     [0.0, 1.0, 0.0, 0.0],
     [0.0, 0.0, -1.0, 0.0],
@@ -53,6 +53,20 @@ impl Camera {
     pub fn update_aspect_ratio(&mut self, size: UVec2) {
         self.projection.aspect_ratio = size.x as f32 / size.y as f32;
     }
+
+    /// Computes the view matrix for the camera.
+    pub(crate) fn view_matrix(&self) -> Mat4 {
+        Mat4::look_to_rh(
+            self.transform.translation,
+            self.transform.rotation * -Vec3::Z,
+            self.transform.rotation * Vec3::Y,
+        )
+    }
+
+    /// Computes the projection matrix for the camera.
+    pub(crate) fn projection_matrix(&self) -> Mat4 {
+        self.projection.projection_matrix()
+    }
 }
 
 /// Perspective camera projection paramters
@@ -76,7 +90,7 @@ impl Default for Projection {
             aspect_ratio: 1.0,
             fov: PI / 4.0,
             near: 0.1,
-            far: 1000.0,
+            far: 30.0,
         }
     }
 }

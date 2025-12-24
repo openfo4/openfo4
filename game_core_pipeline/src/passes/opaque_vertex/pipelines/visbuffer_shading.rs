@@ -1,10 +1,11 @@
 use game_render::api::{
-    BindingResource, Buffer, CommandQueue, ComputePassDescriptor, ComputeStage, PipelineStage,
-    Sampler, Texture, TextureView, TextureViewDescriptor,
+    BindingResource, Buffer, BufferInitDescriptor, CommandQueue, ComputePassDescriptor,
+    ComputeStage, PipelineStage, Sampler, Texture, TextureView, TextureViewDescriptor,
 };
-use game_render::backend::{DescriptorType, ShaderStages};
+use game_render::backend::allocator::UsageFlags;
+use game_render::backend::{BufferUsage, DescriptorType, ShaderStages};
 use game_render::shader::{ShaderConfig, ShaderLanguage, ShaderSource};
-use glam::UVec2;
+use glam::{Mat4, UVec2};
 
 use crate::passes::pipeline::{Pipeline, PipelineBinding};
 
@@ -36,6 +37,8 @@ pub struct ShadingParameters<'a> {
     pub sampler: &'a Sampler,
     pub visbuffer: &'a Texture,
     pub output: &'a Texture,
+    pub shadow: &'a Texture,
+    pub light_view_proj: Mat4,
 }
 
 pub struct ShadingPipeline {
@@ -155,6 +158,16 @@ impl ShadingPipeline {
                         stages: ShaderStages::COMPUTE,
                         kind: DescriptorType::Sampler,
                     },
+                    PipelineBinding {
+                        name: "shadow_map",
+                        stages: ShaderStages::COMPUTE,
+                        kind: DescriptorType::Texture,
+                    },
+                    PipelineBinding {
+                        name: "light_view_proj",
+                        stages: ShaderStages::COMPUTE,
+                        kind: DescriptorType::Uniform,
+                    },
                 ],
             ),
         }
@@ -196,6 +209,16 @@ impl ShadingPipeline {
         pass.set("visbuffer", ShaderStages::COMPUTE, &visbuffer_view);
         let output_view = params.output.create_view(&TextureViewDescriptor::default());
         pass.set("output", ShaderStages::COMPUTE, &output_view);
+        let shadow_view = params.shadow.create_view(&TextureViewDescriptor::default());
+        pass.set("shadow_map", ShaderStages::COMPUTE, &shadow_view);
+
+        let light_view_proj = queue.create_buffer_init(&BufferInitDescriptor {
+            contents: bytemuck::bytes_of(&params.light_view_proj),
+            flags: UsageFlags::empty(),
+            usage: BufferUsage::UNIFORM,
+        });
+
+        pass.set("light_view_proj", ShaderStages::COMPUTE, &light_view_proj);
 
         let mut pass = pass.run_compute_pass(&ComputePassDescriptor {
             name: "Visbuffer Shading",

@@ -37,7 +37,7 @@ func main(input: Input) -> Output {
     let position = fetch<3>(positions, offsets.position, vertex_index);
 
     Output output;
-    output.clip_position = mul(mul(camera.view_proj, instance.transform), Vec4(position, 1.0));
+    output.clip_position = mul(camera.view_proj, mul(instance.transform, Vec4(position, 1.0)));
     output.clip_position.z += material.depth_bias;
     // ID 0 is reserved for no triangle.
     output.instance_id = input.draw_id + 1;
