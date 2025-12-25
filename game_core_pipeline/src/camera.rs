@@ -90,7 +90,7 @@ impl Default for Projection {
             aspect_ratio: 1.0,
             fov: PI / 4.0,
             near: 0.1,
-            far: 30.0,
+            far: 1000.0,
         }
     }
 }

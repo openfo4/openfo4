@@ -395,7 +395,9 @@ struct ShadingPipelineConstants {
 }
 
 fn compute_dir_light_space_matrix(camera: &Camera, direction: Vec3) -> Mat4 {
-    let corners = frustum_corners(camera.view_matrix(), camera.projection_matrix());
+    let mut camera_proj = camera.projection;
+    camera_proj.far = 20.0;
+    let corners = frustum_corners(camera.view_matrix(), camera_proj.projection_matrix());
 
     let center = corners.iter().sum::<Vec3>() / corners.len() as f32;
 
