@@ -169,7 +169,7 @@ void main(
 
         var shadow = 0.0;
         if (proj_coords.z > 1.0) {
-            shadow = 0.0;
+            shadow = 1.0;
         } else {
             shadow = sample_pcf_shadow(proj_coords.xy, proj_coords.z);
         }

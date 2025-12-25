@@ -423,7 +423,14 @@ fn compute_dir_light_space_matrix(camera: &Camera, direction: Vec3) -> Mat4 {
         max_z = f32::max(max_z, p.z);
     }
 
-    let proj = Mat4::orthographic_rh(min_x, max_x, min_y, max_y, min_z, max_z);
+    let proj = Mat4::orthographic_rh(
+        min_x,
+        max_x,
+        min_y,
+        max_y,
+        min_z - camera.projection.far,
+        max_z + camera.projection.far,
+    );
     proj * view
 }
 
