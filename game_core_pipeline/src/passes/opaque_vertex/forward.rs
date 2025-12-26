@@ -16,7 +16,7 @@ use game_tracing::trace_span;
 use glam::{Mat4, UVec2, Vec3, Vec4};
 use parking_lot::Mutex;
 
-use crate::camera::{Camera, CameraUniform, REVERSE_Z};
+use crate::camera::{Camera, CameraUniform};
 use crate::entities::{CameraId, SceneId};
 use crate::passes::opaque_vertex::pipelines::drawcall_gen::{
     DrawcallGenParams, DrawcallGenPipeline,

@@ -374,7 +374,8 @@ fn create_material(
         specular_glossiness_texture_index: specular_glossiness,
         grayscale_palette_texture_index: grayscale_palette,
         grayscale_palette_scale: material.grayscale_palette_scale,
-        _pad1: [0; 2],
+        uv_offset: material.uv_offset.to_array(),
+        uv_scale: material.uv_scale.to_array(),
     });
 
     MaterialState {

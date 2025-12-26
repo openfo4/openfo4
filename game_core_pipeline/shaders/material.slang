@@ -23,4 +23,6 @@ public struct Material {
     public u32 specular_glossiness_texture;
     public u32 grayscale_palette_texture;
     public u32 grayscale_palette_scale;
+    public Vec2 uv_offset;
+    public Vec2 uv_scale;
 }

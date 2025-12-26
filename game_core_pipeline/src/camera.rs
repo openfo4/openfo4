@@ -1,7 +1,7 @@
 use std::f32::consts::PI;
 
 use bytemuck::{Pod, Zeroable};
-use game_common::components::{Transform, transform};
+use game_common::components::Transform;
 use game_common::math::Ray;
 use game_render::camera::RenderTarget;
 use glam::{Mat4, UVec2, Vec2, Vec3};
@@ -11,7 +11,7 @@ use crate::entities::SceneHandle;
 /// Matrix to reverse Z for improved depth testing.
 // https://developer.nvidia.com/content/depth-precision-visualized
 // https://tomhultonharrop.com/mathematics/graphics/2023/08/06/reverse-z.html
-pub const REVERSE_Z: Mat4 = Mat4::from_cols_array_2d(&[
+const REVERSE_Z: Mat4 = Mat4::from_cols_array_2d(&[
     [1.0, 0.0, 0.0, 0.0],
     [0.0, 1.0, 0.0, 0.0],
     [0.0, 0.0, -1.0, 0.0],

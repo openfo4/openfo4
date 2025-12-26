@@ -1,6 +1,7 @@
 use std::hash::{Hash, Hasher};
 
 use game_common::components::Color;
+use glam::Vec2;
 
 use crate::entities::ImageHandle;
 
@@ -76,6 +77,14 @@ pub struct StandardMaterial {
     pub depth_bias: f32,
     pub grayscale_palette: Option<ImageHandle>,
     pub grayscale_palette_scale: f32,
+    /// Offset applied to the UV when sampling.
+    ///
+    /// Defaults to `[0.0, 0.0]`.
+    pub uv_offset: Vec2,
+    /// Scale applied to the UV when sampling.
+    ///
+    /// Defaults to `[1.0, 1.0]`.
+    pub uv_scale: Vec2,
 }
 
 impl Default for StandardMaterial {
@@ -98,6 +107,8 @@ impl Default for StandardMaterial {
             depth_bias: 0.0,
             grayscale_palette: None,
             grayscale_palette_scale: 1.0,
+            uv_offset: Vec2::ZERO,
+            uv_scale: Vec2::ONE,
         }
     }
 }

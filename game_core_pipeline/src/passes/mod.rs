@@ -332,7 +332,8 @@ struct RawMaterialData {
     specular_glossiness_texture_index: TextureSlabIndex,
     grayscale_palette_texture_index: TextureSlabIndex,
     grayscale_palette_scale: f32,
-    _pad1: [u32; 2],
+    uv_offset: [f32; 2],
+    uv_scale: [f32; 2],
 }
 
 impl GpuBuffer for RawMaterialData {
