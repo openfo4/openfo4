@@ -67,6 +67,10 @@ impl Camera {
     pub(crate) fn projection_matrix(&self) -> Mat4 {
         self.projection.projection_matrix()
     }
+
+    pub(crate) fn view_projection_matrix(&self) -> Mat4 {
+        REVERSE_Z * self.projection_matrix() * self.view_matrix()
+    }
 }
 
 /// Perspective camera projection paramters

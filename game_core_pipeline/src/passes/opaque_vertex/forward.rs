@@ -32,6 +32,7 @@ use crate::passes::opaque_vertex::pipelines::visbuffer_shading::{
     ShadingParameters, ShadingPipeline,
 };
 use crate::passes::opaque_vertex::state::Instance;
+use crate::passes::sky::SkyPass;
 use crate::passes::update::RawSceneData;
 use crate::passes::{DEPTH_FORMAT, HDR_FORMAT, HDR_TEXTURE, MeshStateImpl, OPAQUE_DEPTH, State};
 
@@ -43,6 +44,7 @@ pub struct OpaqueVertexForwardPass {
     shading_pipeline: Mutex<ShadingPipeline>,
     linear_sampler: Sampler,
     shadow_map: Mutex<ShadowMapPipeline>,
+    sky: SkyPass,
 }
 
 impl OpaqueVertexForwardPass {
@@ -57,6 +59,7 @@ impl OpaqueVertexForwardPass {
         });
 
         Self {
+            sky: { SkyPass::new(state.lock().sky.clone()) },
             state,
             linear_sampler,
             forward_opaque: Mutex::new(VisbufferForwardPipeline::new()),
@@ -263,8 +266,11 @@ impl OpaqueVertexForwardPass {
             format: HDR_FORMAT,
             usage: TextureUsage::TEXTURE_BINDING
                 | TextureUsage::RENDER_ATTACHMENT
-                | TextureUsage::STORAGE,
+                | TextureUsage::STORAGE
+                | TextureUsage::TRANSFER_DST,
         });
+
+        self.sky.run(ctx, camera, &output_texture);
 
         {
             let mut pipeline = self.shading_pipeline.lock();

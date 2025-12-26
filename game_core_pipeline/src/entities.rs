@@ -10,10 +10,13 @@ use parking_lot::Mutex;
 use crate::StandardMaterial;
 use crate::camera::Camera;
 use crate::lights::Light;
+use crate::passes::sky::SkyState;
+use crate::sky::SkyMaterial;
 
 #[derive(Clone, Debug)]
 pub struct Entities {
     inner: Arc<Inner>,
+    pub(super) sky: Arc<Mutex<SkyState>>,
 }
 
 impl Entities {
@@ -31,6 +34,7 @@ impl Entities {
                     objects: Mutex::new(Arena::new()),
                     lights: Mutex::new(Arena::new()),
                 }),
+                sky: Arc::default(),
             },
             rx,
         )
@@ -134,6 +138,14 @@ impl Entities {
             id,
             scene,
         }
+    }
+
+    pub fn set_sky_mesh(&self, mesh: Mesh) {
+        self.sky.lock().atomosphere = Some(mesh);
+    }
+
+    pub fn set_sky_material(&self, material: SkyMaterial) {
+        self.sky.lock().sky_colors = Some(material);
     }
 }
 

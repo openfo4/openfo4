@@ -2,6 +2,7 @@ mod forward;
 mod opaque_vertex;
 mod pipeline;
 mod post_process;
+pub mod sky;
 mod state;
 mod transparent_vertex;
 mod update;
@@ -36,6 +37,7 @@ use crate::camera::Camera;
 use crate::entities::{CameraId, Event, ImageId, LightId, MaterialId, MeshId, ObjectId, SceneId};
 use crate::lights::{AmbientLight, DirectionalLightUniform, PointLightUniform, SpotLightUniform};
 use crate::material::AlphaMode;
+use crate::passes::sky::SkyState;
 use crate::passes::transparent_vertex::TransparentVertexPass;
 
 const DEPTH_FORMAT: TextureFormat = TextureFormat::Depth32Float;
@@ -50,8 +52,13 @@ pub const FINAL_RENDER_PASS: NodeLabel = NodeLabel::new("FINAL_RENDER_PASS");
 const OPAQUE_DEPTH: SlotLabel = SlotLabel::new("OPAQUE_DEPTH");
 const HDR_TEXTURE: SlotLabel = SlotLabel::new("HDR_TEXTURE");
 
-pub(crate) fn init(graph: &mut RenderGraph, queue: &CommandQueue<'_>, events: Receiver<Event>) {
-    let state = Arc::new(Mutex::new(State::new(queue)));
+pub(crate) fn init(
+    graph: &mut RenderGraph,
+    queue: &CommandQueue<'_>,
+    events: Receiver<Event>,
+    sky: Arc<Mutex<SkyState>>,
+) {
+    let state = Arc::new(Mutex::new(State::new(queue, sky)));
 
     let update_pass = UpdatePass::new(queue, state.clone(), events);
     graph.add_node(UPDATE_PASS, update_pass);
@@ -127,10 +134,12 @@ struct State {
 
     textures: TextureSlab,
     material_slab: SlabBuffer<RawMaterialData>,
+
+    sky: Arc<Mutex<SkyState>>,
 }
 
 impl State {
-    fn new(queue: &CommandQueue<'_>) -> Self {
+    fn new(queue: &CommandQueue<'_>, sky: Arc<Mutex<SkyState>>) -> Self {
         let mesh_descriptor_layout = queue.create_descriptor_set_layout(&DescriptorSetDescriptor {
             bindings: &[
                 // POSITIONS
@@ -214,6 +223,7 @@ impl State {
             textures,
             material_slab: SlabBuffer::new(BufferUsage::STORAGE),
             mesh: MeshStateImpl::new(queue),
+            sky,
         }
     }
 }
