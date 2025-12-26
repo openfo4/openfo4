@@ -8,7 +8,7 @@ use game_core_pipeline::entities::{
     CameraHandle, Entities, LightHandle, MaterialHandle, MeshHandle, Object, ObjectHandle,
     SceneHandle,
 };
-use game_core_pipeline::lights::{DirectionalLight, Light, PointLight};
+use game_core_pipeline::lights::{AmbientLight, DirectionalLight, Light, PointLight};
 use game_gizmos::Gizmos;
 use game_render::Renderer;
 use game_render::camera::RenderTarget;
@@ -96,6 +96,24 @@ impl RenderState {
         }
 
         let mut lights_to_remove = self.lights.clone();
+
+        for (entity, (light, worldspace)) in
+            &mut world.query::<(&game_common::components::AmbientLight, &WorldSpace)>()
+        {
+            if *worldspace != player_worldspace {
+                continue;
+            }
+
+            lights_to_remove.remove(&entity);
+
+            let handle = self.entities.create_light(Light::Ambient(AmbientLight {
+                scene: self.scene.clone(),
+                color: light.color,
+                brightness: light.brightness,
+            }));
+
+            self.lights.insert(entity, handle);
+        }
 
         for (entity, (transform, light, worldspace)) in &mut world.query::<(
             &GlobalTransform,

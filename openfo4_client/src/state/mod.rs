@@ -16,11 +16,10 @@ pub mod terrain;
 use std::f32::consts::PI;
 use std::fs::File;
 use std::io::BufReader;
-use std::sync::{Arc, OnceLock};
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use esp::EspLoader;
-use futures_lite::FutureExt;
 use game_common::components::{Color, DirectionalLight, Transform};
 use game_core::counter::Interval;
 use game_core::time::Time;
@@ -30,14 +29,12 @@ use game_input::keyboard::KeyCode;
 use game_tasks::TaskPool;
 use game_tracing::trace_span;
 use game_window::events::WindowEvent;
-use glam::{IVec2, Quat, Vec3};
-use hecs::{CommandBuffer, World};
-use level::{Level, Streamer};
+use glam::{IVec2, Vec3};
+use hecs::World;
+use level::Level;
 use openfo4_asset::AssetLoader;
 use openfo4_core::events::EventBus;
-use openfo4_core::hierarchy::Children;
 use openfo4_core::object_ref_set::ObjectReferenceSet;
-use openfo4_core::transform::ConvertCoordinateSystem;
 use openfo4_esp::{EspFile, FormId};
 use openfo4_hkx::HkxFile;
 use openfo4_nif::Nif;
@@ -49,10 +46,7 @@ use openfo4_physics::controller::CharacterController;
 use crate::assets::FileLoadContext;
 use crate::assets::animation::{AnimationSet, FileAnimationClip};
 use crate::assets::data_file::{DataFile, DataFileContext};
-use crate::assets::gltf::GltfScene;
-use crate::assets::nif_v2::{
-    Instantiate, LoadNifFlags, NIF_TO_METERS, NifKey, NifLoaderContext, NifScene,
-};
+use crate::assets::nif_v2::NifLoaderContext;
 use crate::cell::CellId;
 use crate::components::{Camera, NiTransform, Player, WorldSpace};
 use crate::events::Event;
@@ -68,10 +62,12 @@ use crate::systems::animation_sync::{bounce_animation_events, update_animation_p
 use crate::systems::camera::CameraMode;
 use crate::systems::controller::apply_player_movements;
 use crate::systems::door::{handle_automatic_doors, handle_door_activations};
+use crate::systems::time::{init_time, update_time};
 use crate::systems::weapon::{
     handle_weapon_draw_events, handle_weapon_fire_events, handle_weapon_hit_damage,
     handle_weapon_reload_events, handle_weapon_reload_requests,
 };
+use crate::systems::weather::WeatherSystem;
 use crate::systems::{self, GunReloadRequest, WeaponDrawRequest};
 
 pub const UPS: u32 = 60;
@@ -96,6 +92,7 @@ pub struct GameState {
     interval: Interval,
     esp_loader: Arc<EspLoader>,
     object_ref_set: ObjectReferenceSet,
+    weather: WeatherSystem,
 }
 
 impl GameState {
@@ -170,9 +167,13 @@ impl GameState {
             shared.clone(),
         );
 
+        let mut world = World::new();
+        init_time(&mut world);
+
         Self {
+            weather: WeatherSystem::new(loader.clone(), pool.clone(), &asset_loader, &shared),
             pool,
-            world: World::new(),
+            world,
             shared,
             level,
             loader: file_loader.clone(),
@@ -214,7 +215,9 @@ impl GameState {
                 color: Color::WHITE,
                 illuminance: 25_000.0,
             },
-            Transform::from_translation(Vec3::splat(200.0)).looking_at(Vec3::ZERO, Vec3::Y),
+            // Transform::from_translation(Vec3::Y).looking_at(Vec3::ZERO, Vec3::Z),
+            Transform::from_translation(Vec3::new(10.0, 100.0, 10.0))
+                .looking_at(Vec3::ZERO, Vec3::Y),
             WorldSpace {
                 form: FormId(0x3c),
                 is_interior: false,
@@ -226,115 +229,6 @@ impl GameState {
         let _span = trace_span!("GameState::update").entered();
 
         futures_lite::future::block_on(self.interval.wait(Instant::now()));
-
-        // static ONCE: OnceLock<()> = OnceLock::new();
-
-        // ONCE.get_or_init(|| {
-        //     let mut nifs = Vec::new();
-        //     let nif =
-        //         futures_lite::future::block_on(self.asset_loader.load::<NifScene, _>(&NifKey {
-        //             path: "meshes/actors/brahmin/characterassets/brahmin.nif".into(),
-        //             flags: LoadNifFlags::all(),
-        //         }))
-        //         .unwrap();
-        //     // let nif =
-        //     //     futures_lite::future::block_on(self.asset_loader.load::<NifScene, _>(&NifKey {
-        //     //         path: "meshes/setdressing/tires/tire01.nif".into(),
-        //     //         flags: LoadNifFlags::all(),
-        //     //     }))
-        //     //     .unwrap();
-        //     nifs.push(nif);
-        //     // let nif =
-        //     //     futures_lite::future::block_on(self.asset_loader.load::<NifScene, _>(&NifKey {
-        //     //         path: "translategizmo.nif".into(),
-        //     //         flags: LoadNifFlags::all(),
-        //     //     }))
-        //     //     .unwrap();
-        //     // nifs.push(nif);
-        //     // let nif =
-        //     //     futures_lite::future::block_on(self.asset_loader.load::<NifScene, _>(&NifKey {
-        //     //         path: "rotategizmo.nif".into(),
-        //     //         flags: LoadNifFlags::all(),
-        //     //     }))
-        //     // .unwrap();
-        //     // nifs.push(nif);
-        //     // let offset = Vec2::new(2.0, 7.0) * 4096.0 * NIF_TO_METERS;
-
-        //     let offset = CellId(IVec2::new(2, 7)).min();
-        //     let offset = NiTransform::from_translation(offset.extend(0.0));
-
-        //     for nif in nifs {
-        //         let offset = CellId(IVec2::new(2, 7)).min();
-        //         let offset = NiTransform::from_translation(offset.extend(0.0));
-        //         let mut offset = Transform::from(offset);
-        //         // offset.rotation *= Quat::from_rotation_y(PI);
-
-        //         let e = nif.instantiate(offset, &mut self.world, LoadNifFlags::all());
-        //         self.world
-        //             .insert_one(
-        //                 e,
-        //                 WorldSpace {
-        //                     form: FormId(0x3c),
-        //                     is_interior: false,
-        //                 },
-        //             )
-        //             .unwrap();
-
-        //         let mut q = vec![e];
-        //         while let Some(e) = q.pop() {
-        //             self.world
-        //                 .insert_one(
-        //                     e,
-        //                     WorldSpace {
-        //                         form: FormId(0x3c),
-        //                         is_interior: false,
-        //                     },
-        //                 )
-        //                 .unwrap();
-        //             if let Ok(c) = self.world.get::<&Children>(e) {
-        //                 q.extend_from_slice(&c.0);
-        //             }
-        //         }
-        //     }
-
-        //     self.world.spawn((
-        //         Player,
-        //         WorldSpace {
-        //             is_interior: false,
-        //             form: FormId(0x3c),
-        //         },
-        //     ));
-
-        //     // let scene = futures_lite::future::block_on(
-        //     //     self.asset_loader
-        //     //         .load::<GltfScene, _>("../../../game/sponza.glb"),
-        //     // )
-        //     // .unwrap();
-        //     // // let scene = futures_lite::future::block_on(
-        //     // //     self.asset_loader.load::<GltfScene, _>("/tmp/tire.glb"),
-        //     // // )
-        //     // // .unwrap();
-        //     // let mut t = Transform::from(offset);
-        //     // t.scale /= NIF_TO_METERS;
-        //     // // t.rotation = t.rotation.to_nif();
-        //     // let e = scene.instantiate(t, &mut self.world, LoadNifFlags::all());
-
-        //     // let mut q = vec![e];
-        //     // while let Some(e) = q.pop() {
-        //     //     self.world
-        //     //         .insert_one(
-        //     //             e,
-        //     //             WorldSpace {
-        //     //                 form: FormId(0x3c),
-        //     //                 is_interior: false,
-        //     //             },
-        //     //         )
-        //     //         .unwrap();
-        //     //     if let Ok(c) = self.world.get::<&Children>(e) {
-        //     //         q.extend_from_slice(&c.0);
-        //     //     }
-        //     // }
-        // });
 
         self.level.update(
             &mut self.world,
@@ -349,6 +243,9 @@ impl GameState {
             &self.asset_loader,
             &self.esp_loader,
         );
+
+        update_time(&mut self.world, Duration::from_secs_f32(1.0 / UPS as f32));
+        self.weather.update(&mut self.world);
 
         despawn_expired(&mut self.world);
 

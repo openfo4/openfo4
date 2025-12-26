@@ -11,3 +11,5 @@ pub const ACTOR_VALUE_INTELLIGENCE: FormId = FormId(0x2c6);
 pub const ACTOR_VALUE_AGILITY: FormId = FormId(0x2c7);
 pub const ACTOR_VALUE_LUCK: FormId = FormId(0x2c8);
 pub const ACTOR_VALUE_HEALTH: FormId = FormId(0x2d4);
+
+pub const PATH_SKY_ATMOSPHERE: &str = "meshes/sky/atmosphere.nif";
