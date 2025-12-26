@@ -18,7 +18,7 @@ use crate::assets::data_file::DataFile;
 use crate::components::{Player, WorldSpace};
 use crate::shared::SharedState;
 use crate::state::esp::EspLoader;
-use crate::state::hardcoded_formids::PATH_SKY_ATMOSPHERE;
+use crate::state::hardcoded::PATH_SKY_ATMOSPHERE;
 use crate::systems::time::GameTime;
 
 pub struct WeatherSystem {

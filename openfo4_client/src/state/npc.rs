@@ -17,7 +17,7 @@ use rand::distr::weighted::WeightedIndex;
 
 use crate::state::animation_test::{ActorCharacter, BodyPartBoneProps, load_character};
 use crate::state::esp::EspLoader;
-use crate::state::hardcoded_formids::KEYWORD_FEMALE;
+use crate::state::hardcoded::KEYWORD_FEMALE;
 use crate::state::level::leveled_list::select_from_leveled_list;
 use crate::systems::FacingDirection;
 use crate::systems::actor_value::ActorValueProperties;

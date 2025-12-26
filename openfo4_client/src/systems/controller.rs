@@ -16,7 +16,7 @@ use crate::components::{Camera, Player};
 use crate::state::UPS;
 use crate::state::actions::{Action, Actions};
 use crate::state::anim_starter::AnimationEventQueue;
-use crate::state::hardcoded_formids::KEYWORD_FEMALE;
+use crate::state::hardcoded::KEYWORD_FEMALE;
 use crate::state::npc::ActorKeywords;
 use crate::systems::animation_sync::AnimationParameters;
 use crate::systems::camera::{CameraMode, CameraOffset, PlayerControlled};

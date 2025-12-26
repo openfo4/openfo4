@@ -221,6 +221,10 @@ impl Nif {
     pub fn get(&self, block: BlockRef) -> Option<&Block> {
         self.blocks.get(block.0 as usize)
     }
+
+    pub fn iter(&self) -> impl Iterator<Item = &Block> {
+        self.blocks.iter()
+    }
 }
 
 #[derive(Clone, Debug, Error)]

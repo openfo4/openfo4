@@ -15,7 +15,7 @@ use openfo4_esp::{FormId, RecordData, RecordKind};
 use crate::assets::nif_v2::{LoadNifFlags, NifKey, NifScene};
 use crate::components::WorldSpace;
 use crate::state::esp::EspLoader;
-use crate::state::hardcoded_formids::DAMAGE_TYPE_PHYSICAL;
+use crate::state::hardcoded::DAMAGE_TYPE_PHYSICAL;
 use crate::systems::equipment::{Equipment, EquipmentKey, equip_item};
 use crate::systems::inventory::{AimProps, ItemData, ItemKind, WeaponItemData};
 

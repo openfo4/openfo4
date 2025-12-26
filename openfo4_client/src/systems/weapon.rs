@@ -13,7 +13,7 @@ use openfo4_physics::{PhysicsPipeline, QueryFilter};
 use crate::render::physics_debug::{DespawnAt, HitscanRaycast};
 use crate::state::actions::{Action, Actions};
 use crate::state::anim_starter::AnimationEventQueue;
-use crate::state::hardcoded_formids::ACTOR_VALUE_HEALTH;
+use crate::state::hardcoded::ACTOR_VALUE_HEALTH;
 use crate::state::npc::{ActorBodyParts, BodyPartBone};
 use crate::systems::actor_value::ActorValueProperties;
 use crate::systems::inventory::{Inventory, ItemData};
