@@ -1,5 +1,6 @@
 pub mod bgsm;
 pub mod connect_points;
+pub mod controller;
 pub mod material;
 pub mod mesh;
 
@@ -16,6 +17,9 @@ use mesh::{BSMeshLODTriShape, BSSubIndexTriShape, BSTriShape};
 use thiserror::Error;
 
 use crate::connect_points::{BSConnectPointChildren, BSConnectPointParents};
+use crate::controller::{
+    BSLightingShaderPropertyFloatController, NiFloatData, NiFloatInterpolator,
+};
 use crate::material::{BSEffectShaderProperty, BSSkyShaderProperty, NiAlphaProperty};
 
 #[derive(Clone, Debug)]
@@ -186,6 +190,15 @@ impl Nif {
                 }
                 BlockType::NiPointLight => Block::NiPointLight(NiPointLight::decode(&mut reader)?),
                 BlockType::BSFadeNode => Block::BSFadeNode(BSFadeNode::decode(&mut reader)?),
+                BlockType::BSLightingShaderPropertyFloatController => {
+                    Block::BSLightingShaderPropertyFloatController(
+                        BSLightingShaderPropertyFloatController::decode(&mut reader)?,
+                    )
+                }
+                BlockType::NiFloatInterpolator => {
+                    Block::NiFloatInterpolator(NiFloatInterpolator::decode(&mut reader)?)
+                }
+                BlockType::NiFloatData => Block::NiFloatData(NiFloatData::decode(&mut reader)?),
                 _ => Block::Skipped,
             };
 
@@ -475,6 +488,9 @@ pub enum Block {
     NiLightDimmerController(NiLightDimmerController),
     NiPointLight(NiPointLight),
     BSFadeNode(BSFadeNode),
+    BSLightingShaderPropertyFloatController(BSLightingShaderPropertyFloatController),
+    NiFloatInterpolator(NiFloatInterpolator),
+    NiFloatData(NiFloatData),
 }
 
 #[derive(Clone, Debug)]
@@ -1581,3 +1597,48 @@ impl Decode for BSFadeNode {
         Ok(Self { node })
     }
 }
+
+macro_rules! nif_struct {
+    (
+        $(#[$($struct_attr:tt)*])*
+        $struct_vis:vis struct $struct_name:ident $(< $($generic:ident),* >)? {
+            $(
+                $(#[$($field_attr:tt)*])*
+                $field_vis:vis $field_name:ident : $field_ty:ty,
+            )*
+        }
+    ) => {
+        // Struct definition
+        $(
+            #[$($struct_attr)*]
+        )*
+        $struct_vis struct $struct_name  $(< $($generic),* >)? {
+            $(
+                $(
+                    #[$($field_attr)*]
+                )*
+                $field_vis $field_name: $field_ty,
+            )*
+        }
+
+        // Decode impl
+        impl $(< $($generic),* >)? crate::Decode for $struct_name $(< $($generic),* >)?
+        $(
+        where
+            $(
+            $generic: crate::Decode,
+            )*
+        )?
+        {
+            fn decode(reader: &mut crate::Reader<'_>) -> Result<Self, crate::Error> {
+                Ok(Self {
+                    $(
+                        $field_name: <$field_ty as crate::Decode>::decode(reader)?,
+                    )*
+                })
+            }
+        }
+    };
+}
+
+pub(crate) use nif_struct;
