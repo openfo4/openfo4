@@ -8,13 +8,12 @@ use openfo4_asset::AssetLoader;
 use openfo4_core::WorldExt;
 use openfo4_core::events::EventBus;
 use openfo4_esp::records::{
-    Class, LeveledActorFlags, NpcBaseFlags, NpcTemplateFlags, Race, RaceSubgraphData, SubgraphFlags,
+    Class, NpcBaseFlags, NpcTemplateFlags, Race, RaceSubgraphData, SubgraphFlags,
 };
 use openfo4_esp::{FormId, RecordData, RecordKind};
 use openfo4_physics::components::{Collider, CollisionLayer, RigidBody};
-use rand::distr::Distribution;
-use rand::distr::weighted::WeightedIndex;
 
+use crate::components::DeadActor;
 use crate::state::animation_test::{ActorCharacter, BodyPartBoneProps, load_character};
 use crate::state::esp::EspLoader;
 use crate::state::hardcoded::KEYWORD_FEMALE;
@@ -69,6 +68,7 @@ pub struct Actor {
     properties: ActorValueProperties,
     keywords: ActorKeywords,
     body_parts: ActorBodyParts,
+    dead: bool,
 }
 
 impl Actor {
@@ -121,14 +121,26 @@ impl Actor {
             .unwrap();
         world.add_children(root, collider);
 
+        if self.dead {
+            world.insert_one(root, DeadActor).unwrap();
+        }
+
         root
     }
+}
+
+/// Actor properties defined by an instantiation.
+#[derive(Clone, Debug)]
+pub struct ActorInstanceProps {
+    /// Whether the actor is dead.
+    pub dead: bool,
 }
 
 pub async fn spawn_actor(
     loader: &AssetLoader,
     esp_loader: &EspLoader,
     npc_form: FormId,
+    instance_props: &ActorInstanceProps,
 ) -> Result<Actor, ()> {
     let props = resolve_actor_props(&loader, esp_loader, npc_form).await;
 
@@ -228,6 +240,7 @@ pub async fn spawn_actor(
         properties,
         keywords: ActorKeywords(keywords),
         body_parts: ActorBodyParts(actor_body_parts),
+        dead: instance_props.dead,
     })
 }
 

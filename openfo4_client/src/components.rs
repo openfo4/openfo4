@@ -97,6 +97,10 @@ pub struct WorldSpace {
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Hash)]
 pub struct ActorMarker;
 
+/// Marker for dead actors.
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Hash)]
+pub struct DeadActor;
+
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct LookingAtTarget(pub Entity);
 

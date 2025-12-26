@@ -7,7 +7,7 @@ use game_egui::egui::{
 use hecs::{Entity, World};
 use openfo4_core::events::EventBus;
 
-use crate::components::{LookingAtTarget, PlacedItem, Player, RootParent};
+use crate::components::{ActorMarker, DeadActor, LookingAtTarget, PlacedItem, Player, RootParent};
 use crate::systems::inventory::Inventory;
 use crate::systems::{PickupItemEvent, TransferItemEvent};
 
@@ -255,12 +255,20 @@ fn draw_quickloot_menu(
     let Ok(root_parent) = world.get::<&RootParent>(target.0) else {
         return;
     };
+    let target = root_parent.0;
 
-    let Ok(inventory) = world.get::<&Inventory>(root_parent.0) else {
+    let Ok(target_entity) = world.entity(target) else {
         return;
     };
 
-    let target = root_parent.0;
+    // Don't allow looting from actors that are alive.
+    if target_entity.has::<ActorMarker>() && !target_entity.has::<DeadActor>() {
+        return;
+    }
+
+    let Some(inventory) = target_entity.get::<&Inventory>() else {
+        return;
+    };
 
     if state.target != Some(target) {
         state.index = 0;

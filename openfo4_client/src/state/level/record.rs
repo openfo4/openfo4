@@ -21,7 +21,7 @@ use crate::state::level::LoadContext;
 use crate::state::level::items::resolve_item;
 use crate::state::level::partial::PartialEntityFlags;
 use crate::state::level::terrain::load_land;
-use crate::state::npc::Actor;
+use crate::state::npc::{Actor, ActorInstanceProps};
 use crate::systems::door::{Door, PortalDoor};
 use crate::systems::inventory::{Inventory, ItemStack};
 use crate::systems::lights::{LightFlicker, LightFlickerMode};
@@ -280,9 +280,14 @@ impl SpawnEntity {
             }
             RecordData::Npc(_) => {
                 if flags.contains(PartialEntityFlags::ACTOR) {
-                    actor = crate::state::npc::spawn_actor(ctx.loader, ctx.esp_loader, base.id)
-                        .await
-                        .ok();
+                    let props = ActorInstanceProps {
+                        dead: record.flags.contains(RecordHeaderFlags::STARTS_DEAD),
+                    };
+
+                    actor =
+                        crate::state::npc::spawn_actor(ctx.loader, ctx.esp_loader, base.id, &props)
+                            .await
+                            .ok();
                 }
             }
             RecordData::IdleMarker(_) => return None,
