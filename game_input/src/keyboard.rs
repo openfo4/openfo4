@@ -182,6 +182,7 @@ pub enum KeyCode {
     Copy,
     Paste,
     Cut,
+    Backspace,
 }
 
 impl KeyCode {

@@ -180,6 +180,8 @@ pub(crate) fn convert_key_code(key: winit::keyboard::KeyCode) -> Option<KeyCode>
         winit::keyboard::KeyCode::End => Some(KeyCode::End),
         winit::keyboard::KeyCode::PageUp => Some(KeyCode::PageUp),
         winit::keyboard::KeyCode::PageDown => Some(KeyCode::PageDown),
+        winit::keyboard::KeyCode::Enter => Some(KeyCode::Return),
+        winit::keyboard::KeyCode::Backspace => Some(KeyCode::Backspace),
         _ => None,
     }
 }
