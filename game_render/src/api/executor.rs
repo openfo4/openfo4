@@ -706,17 +706,13 @@ impl TemporaryResources {
         drop(self.texture_views.drain(..));
 
         for (id, count) in self.buffers.drain() {
-            let buffer = resources.buffers.get(id.0).unwrap();
-
-            if buffer.ref_count.decrement_many_internal(count) {
+            if resources.with_buffer_rc(id, |ref_count| ref_count.decrement_many_internal(count)) {
                 resources.deletion_queue.push(DeletionEvent::Buffer(id));
             }
         }
 
         for (id, count) in self.textures.drain() {
-            let texture = resources.textures.get(id.0).unwrap();
-
-            if texture.ref_count.decrement_many_internal(count) {
+            if resources.with_texture_rc(id, |ref_count| ref_count.decrement_many_internal(count)) {
                 resources.deletion_queue.push(DeletionEvent::Texture(id));
             }
         }

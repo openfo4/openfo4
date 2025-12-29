@@ -2,14 +2,14 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 
 use crossbeam_queue::SegQueue;
-use game_common::cell::UnsafeRefCell;
 use game_common::collections::vec_map::VecMap;
 use hashbrown::HashMap;
-use parking_lot::Mutex;
+use parking_lot::{Mutex, MutexGuard};
 use sharded_slab::Slab;
 
 use crate::backend::descriptors::DescriptorSetAllocator;
-use crate::backend::{vulkan, AccessFlags, DescriptorBinding};
+use crate::backend::vulkan::Device;
+use crate::backend::{vulkan, AccessFlags, DescriptorBinding, TextureDescriptor};
 
 use super::{BindingMap, DeletionEvent, RawTextureView, ResourceId, ResourceMap};
 
@@ -33,8 +33,6 @@ pub struct PipelineId(pub usize);
 
 #[derive(Debug)]
 pub struct Resources {
-    pub buffers: Slab<BufferInner>,
-    pub textures: Slab<TextureInner>,
     pub samplers: Slab<SamplerInner>,
     pub descriptor_set_layouts: Slab<DescriptorSetLayoutInner>,
     pub descriptor_sets: Slab<DescriptorSetInner>,
@@ -43,23 +41,113 @@ pub struct Resources {
     pub deletion_queue: SegQueue<DeletionEvent>,
     /// Staging memory used to `WriteBuffer` commands.
     pub staging_memory: Mutex<Vec<u8>>,
+    // FIXME: These can go behind the same lock.
+    buffer_rcs: Mutex<slab::Slab<RefCount>>,
+    buffer_access: Mutex<slab::Slab<AccessFlags>>,
+    texture_rcs: Mutex<slab::Slab<RefCount>>,
+    // FIXME: Can we flatten this array?
+    texture_access: Mutex<slab::Slab<Vec<AccessFlags>>>,
 }
 
-impl<'a> ResourceMap for &'a Resources {
+impl Resources {
+    pub fn new(device: Device) -> Self {
+        Self {
+            pipelines: Slab::new(),
+            descriptor_sets: Slab::new(),
+            descriptor_set_layouts: Slab::new(),
+            descriptor_allocator: DescriptorSetAllocator::new(device),
+            samplers: Slab::new(),
+            deletion_queue: SegQueue::new(),
+            staging_memory: Mutex::new(Vec::new()),
+            buffer_rcs: Mutex::new(slab::Slab::new()),
+            buffer_access: Mutex::new(slab::Slab::new()),
+            texture_rcs: Mutex::new(slab::Slab::new()),
+            texture_access: Mutex::new(slab::Slab::new()),
+        }
+    }
+
+    pub fn create_buffer(&self) -> BufferId {
+        let mut buffer_rcs = self.buffer_rcs.lock();
+        let mut buffer_access = self.buffer_access.lock();
+
+        let index0 = buffer_rcs.insert(RefCount::new());
+        let index1 = buffer_access.insert(AccessFlags::empty());
+        debug_assert_eq!(index0, index1);
+
+        BufferId(index0)
+    }
+
+    pub fn with_buffer_rc<T, F>(&self, id: BufferId, f: F) -> T
+    where
+        F: FnOnce(&RefCount) -> T,
+    {
+        let buffers = self.buffer_rcs.lock();
+        let ref_count = buffers.get(id.0).unwrap();
+        f(&ref_count)
+    }
+
+    pub fn destroy_buffer(&self, id: BufferId) {
+        let mut buffer_rcs = self.buffer_rcs.lock();
+        let mut buffer_access = self.buffer_access.lock();
+
+        buffer_rcs.remove(id.0);
+        buffer_access.remove(id.0);
+    }
+
+    pub fn create_texture(&self, descriptor: &TextureDescriptor) -> TextureId {
+        let mut texture_rcs = self.texture_rcs.lock();
+        let mut texture_access = self.texture_access.lock();
+
+        let index0 = texture_rcs.insert(RefCount::new());
+        let index1 =
+            texture_access.insert(vec![AccessFlags::empty(); descriptor.mip_levels as usize]);
+        debug_assert_eq!(index0, index1);
+
+        TextureId(index0)
+    }
+
+    pub fn with_texture_rc<T, F>(&self, id: TextureId, f: F) -> T
+    where
+        F: FnOnce(&RefCount) -> T,
+    {
+        let textures = self.texture_rcs.lock();
+        let ref_count = textures.get(id.0).unwrap();
+        f(ref_count)
+    }
+
+    pub fn destroy_texture(&self, id: TextureId) {
+        let mut texture_rcs = self.texture_rcs.lock();
+        let mut texture_access = self.texture_access.lock();
+
+        texture_rcs.remove(id.0);
+        texture_access.remove(id.0);
+    }
+
+    pub fn access_view_mut(&self) -> ResourceAccessViewMut<'_> {
+        ResourceAccessViewMut {
+            buffers: self.buffer_access.lock(),
+            textures: self.texture_access.lock(),
+        }
+    }
+}
+
+/// View into [`Resources`] that provides exclusive access to [`AccessFlags`] of all resources.
+pub struct ResourceAccessViewMut<'a> {
+    buffers: MutexGuard<'a, slab::Slab<AccessFlags>>,
+    textures: MutexGuard<'a, slab::Slab<Vec<AccessFlags>>>,
+}
+
+impl<'a> ResourceMap for ResourceAccessViewMut<'a> {
     type Id = ResourceId;
 
     fn access(&self, id: Self::Id) -> AccessFlags {
         match id {
-            ResourceId::Buffer(buffer) => unsafe {
-                let buffer = self.buffers.get(buffer.0).unwrap_unchecked();
-                let access = *buffer.access.borrow();
-                access
-            },
+            ResourceId::Buffer(buffer) => unsafe { *self.buffers.get_unchecked(buffer.0) },
             ResourceId::Texture(texture) => unsafe {
-                let tex = self.textures.get(texture.id.0).unwrap_unchecked();
-                let mip = tex.mip_access.get_unchecked(texture.mip_level as usize);
-                let access = *mip.borrow();
-                access
+                *self
+                    .textures
+                    .get_unchecked(texture.id.0)
+                    .get_unchecked(texture.mip_level as usize)
             },
         }
     }
@@ -67,28 +155,16 @@ impl<'a> ResourceMap for &'a Resources {
     fn set_access(&mut self, id: Self::Id, access: AccessFlags) {
         match id {
             ResourceId::Buffer(buffer) => unsafe {
-                let buffer = self.buffers.get(buffer.0).unwrap_unchecked();
-                *buffer.access.borrow_mut() = access;
+                *self.buffers.get_unchecked_mut(buffer.0) = access;
             },
             ResourceId::Texture(texture) => unsafe {
-                let tex = self.textures.get(texture.id.0).unwrap_unchecked();
-                let mip = tex.mip_access.get_unchecked(texture.mip_level as usize);
-                *mip.borrow_mut() = access;
+                *self
+                    .textures
+                    .get_unchecked_mut(texture.id.0)
+                    .get_unchecked_mut(texture.mip_level as usize) = access;
             },
         }
     }
-}
-
-#[derive(Debug)]
-pub struct BufferInner {
-    pub access: UnsafeRefCell<AccessFlags>,
-    pub ref_count: RefCount,
-}
-
-#[derive(Debug)]
-pub struct TextureInner {
-    pub ref_count: RefCount,
-    pub mip_access: Vec<UnsafeRefCell<AccessFlags>>,
 }
 
 #[derive(Debug)]
