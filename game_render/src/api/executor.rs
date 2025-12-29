@@ -6,6 +6,7 @@ use std::slice;
 use std::sync::Arc;
 
 use game_common::collections::scratch_buffer::ScratchBuffer;
+use game_common::collections::vec_map::VecMap;
 use game_tracing::trace_span;
 use hashbrown::HashMap;
 
@@ -35,8 +36,8 @@ use allocator::MemoryAllocator;
 #[derive(Debug)]
 pub(super) struct Executor {
     allocator: MemoryAllocator,
-    buffers: HashMap<BufferId, BufferAlloc>,
-    textures: HashMap<TextureId, TextureData>,
+    buffers: VecMap<BufferId, BufferAlloc>,
+    textures: VecMap<TextureId, TextureData>,
     descriptor_sets: HashMap<DescriptorSetId, DescriptorSetInner>,
 }
 
@@ -44,8 +45,8 @@ impl Executor {
     pub fn new(device: Device, manager: MemoryManager, statistics: Arc<Statistics>) -> Self {
         Self {
             allocator: MemoryAllocator::new(device.clone(), manager, statistics),
-            buffers: HashMap::new(),
-            textures: HashMap::new(),
+            buffers: VecMap::new(),
+            textures: VecMap::new(),
             descriptor_sets: HashMap::new(),
         }
     }
@@ -134,18 +135,18 @@ impl Executor {
                         self.descriptor_sets.insert(*id, set);
                     }
                     Command::DestoryBuffer(id) => {
-                        debug_assert!(self.buffers.contains_key(id));
+                        debug_assert!(self.buffers.contains_key(*id));
 
-                        if let Some(buffer) = self.buffers.remove(id) {
+                        if let Some(buffer) = self.buffers.remove(*id) {
                             unsafe {
                                 self.allocator.dealloc(buffer.allocation);
                             }
                         }
                     }
                     Command::DestroyTexture(id) => {
-                        debug_assert!(self.textures.contains_key(id));
+                        debug_assert!(self.textures.contains_key(*id));
 
-                        if let Some(texture) = self.textures.remove(id) {
+                        if let Some(texture) = self.textures.remove(*id) {
                             match texture {
                                 TextureData::Physical(_) => {}
                                 TextureData::Virtual(texture) => unsafe {
@@ -160,7 +161,7 @@ impl Executor {
                         self.descriptor_sets.remove(id);
                     }
                     Command::WriteBuffer(cmd) => {
-                        let buffer = self.buffers.get_mut(&cmd.buffer).unwrap();
+                        let buffer = self.buffers.get_mut(cmd.buffer).unwrap();
 
                         let data = &staging_memory_pool
                             [cmd.staging_memory_offset..cmd.staging_memory_offset + cmd.count];
@@ -185,8 +186,8 @@ impl Executor {
                         tmp.buffers.insert(cmd.buffer);
                     }
                     Command::CopyBufferToBuffer(cmd) => {
-                        let src = self.buffers.get(&cmd.src).unwrap();
-                        let dst = self.buffers.get(&cmd.dst).unwrap();
+                        let src = self.buffers.get(cmd.src).unwrap();
+                        let dst = self.buffers.get(cmd.dst).unwrap();
 
                         // SAFETY:
                         // We have inserted the proper barriers such that the source is
@@ -207,8 +208,8 @@ impl Executor {
                         tmp.buffers.insert(cmd.dst);
                     }
                     Command::CopyBufferToTexture(cmd) => {
-                        let src = self.buffers.get(&cmd.src).unwrap();
-                        let dst = self.textures.get(&cmd.dst).unwrap();
+                        let src = self.buffers.get(cmd.src).unwrap();
+                        let dst = self.textures.get(cmd.dst).unwrap();
 
                         // SAFETY:
                         // We have inserted the proper barriers such that the source buffer
@@ -231,8 +232,8 @@ impl Executor {
                         tmp.textures.insert(cmd.dst);
                     }
                     Command::CopyTextureToTexture(cmd) => {
-                        let src = self.textures.get(&cmd.src).unwrap();
-                        let dst = self.textures.get(&cmd.dst).unwrap();
+                        let src = self.textures.get(cmd.src).unwrap();
+                        let dst = self.textures.get(cmd.dst).unwrap();
 
                         // Safety:
                         // We have inserted the propert barriers such that the source texture
@@ -252,7 +253,7 @@ impl Executor {
                         tmp.textures.insert(cmd.dst);
                     }
                     Command::ClearTexture(cmd) => {
-                        let texture = self.textures.get(&cmd.id).unwrap();
+                        let texture = self.textures.get(cmd.id).unwrap();
 
                         // SAFETY:
                         // - We have inserted barriers such that only TRANSFER_WRITE is set
@@ -313,7 +314,7 @@ fn run_render_pass(
 
     let mut color_attachments = Vec::new();
     for attachment in &cmd.color_attachments {
-        let texture = executor.textures.get(&attachment.target.texture).unwrap();
+        let texture = executor.textures.get(attachment.target.texture).unwrap();
 
         // Attachment must be kept alive until the render pass completes.
         tmp.textures.insert(attachment.target.texture);
@@ -337,7 +338,7 @@ fn run_render_pass(
     }
 
     let depth_attachment = cmd.depth_stencil_attachment.as_ref().map(|attachment| {
-        let texture = executor.textures.get(&attachment.texture).unwrap();
+        let texture = executor.textures.get(attachment.texture).unwrap();
 
         // Attachment must be kept alive until the render pass completes.
         tmp.textures.insert(attachment.texture);
@@ -403,7 +404,7 @@ fn run_render_pass(
                 tmp.descriptor_sets.insert(*id);
             }
             DrawCmd::SetIndexBuffer(id, format) => {
-                let buffer = executor.buffers.get(id).unwrap();
+                let buffer = executor.buffers.get(*id).unwrap();
 
                 render_pass.bind_index_buffer(buffer.buffer.slice(..), *format);
 
@@ -425,7 +426,7 @@ fn run_render_pass(
                 );
             }
             DrawCmd::Draw(DrawCall::DrawIndirect(call)) => {
-                let buffer = executor.buffers.get(&call.buffer).unwrap();
+                let buffer = executor.buffers.get(call.buffer).unwrap();
 
                 render_pass.draw_indirect(
                     &buffer.buffer,
@@ -437,7 +438,7 @@ fn run_render_pass(
                 tmp.buffers.insert(call.buffer);
             }
             DrawCmd::Draw(DrawCall::DrawIndexedIndirect(call)) => {
-                let buffer = executor.buffers.get(&call.buffer).unwrap();
+                let buffer = executor.buffers.get(call.buffer).unwrap();
 
                 render_pass.draw_indexed_indirect(
                     &buffer.buffer,
@@ -549,14 +550,14 @@ fn build_descriptor_set(
     for (binding, resource) in descriptor_set.bindings.iter() {
         let resource = match resource {
             DescriptorSetResource::UniformBuffer(buffer) => {
-                let buffer = executor.buffers.get(buffer).unwrap();
+                let buffer = executor.buffers.get(*buffer).unwrap();
                 let view = buffer.buffer.slice(..);
                 let view = buffer_views.insert(view);
 
                 WriteDescriptorResource::UniformBuffer(slice::from_ref(view))
             }
             DescriptorSetResource::StorageBuffer(buffer) => {
-                let buffer = executor.buffers.get(buffer).unwrap();
+                let buffer = executor.buffers.get(*buffer).unwrap();
                 let view = buffer.buffer.slice(..);
                 let view = buffer_views.insert(view);
 
@@ -566,7 +567,7 @@ fn build_descriptor_set(
                 let texture_views = texture_array_views.insert(ScratchBuffer::new(views.len()));
 
                 for view in views {
-                    let texture = executor.textures.get(&view.texture).unwrap();
+                    let texture = executor.textures.get(view.texture).unwrap();
 
                     texture_views.insert(unsafe {
                         texture
@@ -585,7 +586,7 @@ fn build_descriptor_set(
                 let texture_views = texture_array_views.insert(ScratchBuffer::new(views.len()));
 
                 for view in views {
-                    let texture = executor.textures.get(&view.texture).unwrap();
+                    let texture = executor.textures.get(view.texture).unwrap();
 
                     texture_views.insert(unsafe {
                         texture
@@ -639,7 +640,7 @@ fn insert_barriers(
     for barrier in barriers {
         match barrier.resource {
             ResourceId::Buffer(id) => {
-                let buffer = executor.buffers.get(&id).unwrap();
+                let buffer = executor.buffers.get(id).unwrap();
 
                 buffer_barriers.push(BufferBarrier {
                     buffer: &buffer.buffer,
@@ -650,7 +651,7 @@ fn insert_barriers(
                 });
             }
             ResourceId::Texture(tex) => {
-                let texture = executor.textures.get(&tex.id).unwrap();
+                let texture = executor.textures.get(tex.id).unwrap();
 
                 // If possible barriers are emitted in batches for each texture
                 // with the mip levels ascending, so if a chain of consecutive

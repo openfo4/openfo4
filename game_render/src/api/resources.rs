@@ -2,7 +2,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 
 use crossbeam_queue::SegQueue;
-use game_common::collections::vec_map::VecMap;
+use game_common::collections::vec_map::{Index, VecMap};
 use hashbrown::HashMap;
 use parking_lot::{Mutex, MutexGuard};
 use sharded_slab::Slab;
@@ -14,10 +14,22 @@ use crate::backend::{vulkan, AccessFlags, DescriptorBinding, TextureDescriptor};
 use super::{BindingMap, DeletionEvent, RawTextureView, ResourceId, ResourceMap};
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
-pub struct BufferId(pub usize);
+pub struct BufferId(usize);
+
+impl Index for BufferId {
+    fn index(&self) -> usize {
+        self.0
+    }
+}
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
-pub struct TextureId(pub usize);
+pub struct TextureId(usize);
+
+impl Index for TextureId {
+    fn index(&self) -> usize {
+        self.0
+    }
+}
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct DescriptorSetLayoutId(pub usize);
