@@ -422,31 +422,73 @@ pub struct FACT_PLVD {
 }
 
 #[derive(Clone, Debug, Record)]
-pub struct HDPT {
+pub struct HeadPart {
     #[record("EDID")]
-    pub edid: ZString,
+    pub id: ZString,
     #[record("FULL")]
-    pub full: Option<LString>,
+    pub full_name: Option<LString>,
     #[record("MODL")]
-    pub modl: Option<ZString>,
-    #[record("MODT")]
-    pub modt: Option<FormId>,
+    pub model: Model,
     #[record("DATA")]
-    pub data: u8,
+    pub data: HeadPartFlags,
     #[record("PNAM")]
-    pub pnam: u32,
+    pub r#type: HeadPartType,
     #[record("HNAM")]
-    pub hnam: Vec<FormId>,
+    pub extra_parts: Vec<FormId>,
     #[record("NAM0")]
-    pub nam0: Vec<u32>,
-    #[record("NAM1")]
-    pub nam1: Vec<ZString>,
+    pub assets: SubRecordArray<HeadPartAsset>,
     #[record("TNAM")]
-    pub tnam: Option<FormId>,
-    #[record("RNAM")]
-    pub rnam: Option<FormId>,
+    pub texture_set: Option<FormId>,
     #[record("CNAM")]
-    pub cnam: Option<FormId>,
+    pub color: Option<FormId>,
+    #[record("RNAM")]
+    pub valid_races: Option<FormId>,
+    // TODO: Conditions
+}
+
+bitflags! {
+    #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+    pub struct HeadPartFlags: u8 {
+        const PLAYABLE = 0x01;
+        const MALE = 0x02;
+        const FEMALE = 0x04;
+        const IS_EXTRA_PART = 0x10;
+        const USE_SOLID_TINT = 0x20;
+        const USES_BODY_TEXTURE = 0x40;
+    }
+}
+
+impl_decode_bitflags!(HeadPartFlags: u8);
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, BinaryStruct)]
+#[primitive(u32)]
+pub enum HeadPartType {
+    Misc = 0,
+    Face = 1,
+    Eyes = 2,
+    Hair = 3,
+    FacialHair = 4,
+    Scar = 5,
+    Eyebrows = 6,
+    Meatcaps = 7,
+    Teeth = 8,
+    HeadRear = 9,
+}
+
+#[derive(Clone, Debug, Record)]
+pub struct HeadPartAsset {
+    #[record("NAM0")]
+    pub r#type: HeadPartAssetType,
+    #[record("NAM1")]
+    pub file_name: ZString,
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, BinaryStruct)]
+#[primitive(u32)]
+pub enum HeadPartAssetType {
+    RaceMorph = 0,
+    Tri = 1,
+    ChargenMorph = 2,
 }
 
 #[derive(Clone, Debug, Record)]
@@ -3653,23 +3695,23 @@ pub struct TimeOfDaySetExtended<T> {
 
 #[derive(Copy, Clone, Debug, BinaryStruct)]
 pub struct WeatherColors {
-    pub sky_upper: TimeOfDaySet<Rgba<u8>>,
-    pub fog_near: TimeOfDaySet<Rgba<u8>>,
-    _unknown0: TimeOfDaySet<Rgba<u8>>,
-    pub ambient: TimeOfDaySet<Rgba<u8>>,
-    pub sunlight: TimeOfDaySet<Rgba<u8>>,
-    pub sun: TimeOfDaySet<Rgba<u8>>,
-    pub stars: TimeOfDaySet<Rgba<u8>>,
-    pub sky_lower: TimeOfDaySet<Rgba<u8>>,
-    pub horizon: TimeOfDaySet<Rgba<u8>>,
-    pub effect_lightning: TimeOfDaySet<Rgba<u8>>,
-    pub cloud_lod_diffuse: TimeOfDaySet<Rgba<u8>>,
-    pub cloud_lod_ambient: TimeOfDaySet<Rgba<u8>>,
-    pub fog_far: TimeOfDaySet<Rgba<u8>>,
-    pub sky_statics: TimeOfDaySet<Rgba<u8>>,
-    pub water_multiplier: TimeOfDaySet<Rgba<u8>>,
-    pub sun_glare: TimeOfDaySet<Rgba<u8>>,
-    pub moon_glare: TimeOfDaySet<Rgba<u8>>,
+    pub sky_upper: TimeOfDaySetExtended<Rgba<u8>>,
+    pub fog_near: TimeOfDaySetExtended<Rgba<u8>>,
+    _unknown0: TimeOfDaySetExtended<Rgba<u8>>,
+    pub ambient: TimeOfDaySetExtended<Rgba<u8>>,
+    pub sunlight: TimeOfDaySetExtended<Rgba<u8>>,
+    pub sun: TimeOfDaySetExtended<Rgba<u8>>,
+    pub stars: TimeOfDaySetExtended<Rgba<u8>>,
+    pub sky_lower: TimeOfDaySetExtended<Rgba<u8>>,
+    pub horizon: TimeOfDaySetExtended<Rgba<u8>>,
+    pub effect_lightning: TimeOfDaySetExtended<Rgba<u8>>,
+    pub cloud_lod_diffuse: TimeOfDaySetExtended<Rgba<u8>>,
+    pub cloud_lod_ambient: TimeOfDaySetExtended<Rgba<u8>>,
+    pub fog_far: TimeOfDaySetExtended<Rgba<u8>>,
+    pub sky_statics: TimeOfDaySetExtended<Rgba<u8>>,
+    pub water_multiplier: TimeOfDaySetExtended<Rgba<u8>>,
+    pub sun_glare: TimeOfDaySetExtended<Rgba<u8>>,
+    pub moon_glare: TimeOfDaySetExtended<Rgba<u8>>,
 }
 
 #[derive(Copy, Clone, Debug, BinaryStruct)]
@@ -3779,12 +3821,39 @@ pub struct ClimateWeather {
 
 #[derive(Copy, Clone, Debug, BinaryStruct)]
 pub struct ClimateTiming {
-    pub sunrise_begin: u8,
-    pub sunrise_end: u8,
-    pub sunset_begin: u8,
-    pub sunset_end: u8,
+    pub sunrise_begin: ClimateTime,
+    pub sunrise_end: ClimateTime,
+    pub sunset_begin: ClimateTime,
+    pub sunset_end: ClimateTime,
     pub volatility: u8,
     pub moons: u8,
+}
+
+/// Time for an event in [`ClimateTiming`].
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub struct ClimateTime {
+    /// Hour between 0 and 24 (exclusive).
+    pub hour: u8,
+    /// Minute between 0 and 60 (exclusive).
+    pub minute: u8,
+}
+
+impl Decode for ClimateTime {
+    type Error = Error;
+
+    fn decode<B>(buf: B) -> Result<Self, Self::Error>
+    where
+        B: Buf,
+    {
+        let mut value = u8::decode(buf)?;
+        // Clamp at 23:50, which is the maximum valid value.
+        value %= 23 * 6 + 5;
+
+        let hour = value / 6;
+        let minute = (value % 6) * 10;
+
+        Ok(Self { hour, minute })
+    }
 }
 
 #[derive(Clone, Debug, Record)]

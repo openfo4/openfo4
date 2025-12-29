@@ -17,8 +17,8 @@ use std::mem::MaybeUninit;
 use bytes::Buf;
 use records::{
     AcousticSpace, Action, Activator, Ammo, Armor, Book, Cell, Class, Climate, Component,
-    Container, DMGT, Door, ENCH, Empty, FACT, FLOR, Furniture, GLOB, GRAS, GameSetting, HDPT,
-    Hazard, INGR, IdleMarker, Ingestible, Key, Keyword, Land, LandTexture, LeveledActor,
+    Container, DMGT, Door, ENCH, Empty, FACT, FLOR, Furniture, GLOB, GRAS, GameSetting, Hazard,
+    HeadPart, INGR, IdleMarker, Ingestible, Key, Keyword, Land, LandTexture, LeveledActor,
     LeveledItem, Light, LocationReferenceType, MSTT, MagicEffect, MiscObject, Note, Npc,
     PlacedGrenade, PlacedHazard, PlacedNpc, PlacedObject, Projectile, Race, SOUN, SPEL, STAT,
     ShaderParticleGeometry, StaticCollection, TACT, TRNS, Tes4, TextureSet, VisualEffect, Weather,
@@ -371,7 +371,7 @@ where
             DamageType => DMGT,
             Class => Class,
             Faction => FACT,
-            HeadPart => HDPT,
+            HeadPart => HeadPart,
             Race => Race,
             Sound => SOUN,
             AcousticSpace => AcousticSpace,
@@ -579,7 +579,7 @@ pub enum RecordData {
     DMGT(DMGT),
     Class(Class),
     FACT(FACT),
-    HDPT(HDPT),
+    HeadPart(HeadPart),
     Race(Race),
     SOUN(SOUN),
     AcousticSpace(AcousticSpace),
@@ -770,7 +770,7 @@ as_record_kind_impl! {
     DMGT => RecordKind::DamageType,
     Class => RecordKind::Class,
     FACT => RecordKind::Faction,
-    HDPT => RecordKind::HeadPart,
+    HeadPart => RecordKind::HeadPart,
     Race => RecordKind::Race,
     SOUN => RecordKind::Sound,
     AcousticSpace => RecordKind::AcousticSpace,
@@ -1468,6 +1468,9 @@ bitflags::bitflags! {
 
         /// CELL
         const PERSISTENT = 0x400;
+
+        // ACHR
+        const STARTS_DEAD = 0x00000200;
     }
 }
 

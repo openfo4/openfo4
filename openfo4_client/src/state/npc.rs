@@ -4,7 +4,7 @@ use std::num::NonZeroU16;
 
 use hashbrown::{HashMap, HashSet};
 use hecs::{Entity, World};
-use openfo4_asset::AssetLoader;
+use openfo4_asset::{AssetLoader, Handle};
 use openfo4_core::WorldExt;
 use openfo4_core::events::EventBus;
 use openfo4_esp::records::{
@@ -13,6 +13,7 @@ use openfo4_esp::records::{
 use openfo4_esp::{FormId, RecordData, RecordKind};
 use openfo4_physics::components::{Collider, CollisionLayer, RigidBody};
 
+use crate::assets::nif_v2::{LoadNifFlags, NifKey, NifScene};
 use crate::components::DeadActor;
 use crate::state::animation_test::{ActorCharacter, BodyPartBoneProps, load_character};
 use crate::state::esp::EspLoader;
@@ -21,7 +22,7 @@ use crate::state::level::leveled_list::select_from_leveled_list;
 use crate::systems::FacingDirection;
 use crate::systems::actor_value::ActorValueProperties;
 use crate::systems::controller::ControllerShape;
-use crate::systems::equipment::Equipment;
+use crate::systems::equipment::{Equipment, equip_item};
 use crate::systems::inventory::{AddItemEvent, EquipItemEvent, Inventory};
 
 // FIXME: Unhardcode this guy.
@@ -69,6 +70,7 @@ pub struct Actor {
     keywords: ActorKeywords,
     body_parts: ActorBodyParts,
     dead: bool,
+    customization_scenes: Vec<Handle<NifScene>>,
 }
 
 impl Actor {
@@ -102,12 +104,18 @@ impl Actor {
             });
         }
 
+        let mut equipment = Equipment::default();
+
+        for scene in self.customization_scenes {
+            equip_item(root, &scene, &instance, world, &mut equipment, None);
+        }
+
         world
             .insert(
                 root,
                 (
                     Inventory::default(),
-                    Equipment::default(),
+                    equipment,
                     self.anim_graphs,
                     RigidBody::FIXED,
                     self.controller,
@@ -224,6 +232,8 @@ pub async fn spawn_actor(
     let mut keywords: HashSet<FormId> = props.keywords.into_iter().collect();
     keywords.extend(data.keywords.iter().flatten());
 
+    let customization_scenes = load_actor_customization(loader, esp_loader, npc_form).await;
+
     Ok(Actor {
         anim_graphs: ActorAnimationGraphData {
             character: character.clone(),
@@ -241,6 +251,7 @@ pub async fn spawn_actor(
         keywords: ActorKeywords(keywords),
         body_parts: ActorBodyParts(actor_body_parts),
         dead: instance_props.dead,
+        customization_scenes,
     })
 }
 
@@ -491,4 +502,51 @@ pub struct ActorAnimationGraph {
     pub target_keywords: Vec<FormId>,
     pub flags: SubgraphFlags,
     pub search_paths: Vec<String>,
+}
+
+async fn load_actor_customization(
+    loader: &AssetLoader,
+    esp_loader: &EspLoader,
+    npc_form: FormId,
+) -> Vec<Handle<NifScene>> {
+    let RecordData::Npc(npc) = esp_loader
+        .lookup(Some(RecordKind::Npc), npc_form)
+        .await
+        .unwrap()
+        .data
+    else {
+        unreachable!()
+    };
+
+    let mut queue = npc.head_parts.clone();
+    let mut scenes = Vec::new();
+
+    while let Some(id) = queue.pop() {
+        let RecordData::HeadPart(part) = esp_loader
+            .lookup(Some(RecordKind::HeadPart), id)
+            .await
+            .unwrap()
+            .data
+        else {
+            unreachable!();
+        };
+
+        queue.extend_from_slice(&part.extra_parts);
+
+        let Some(path) = &part.model.model else {
+            continue;
+        };
+
+        let scene = loader
+            .load::<NifScene, _>(&NifKey {
+                path: path.as_str().unwrap().to_owned(),
+                flags: LoadNifFlags::all(),
+            })
+            .await
+            .unwrap();
+
+        scenes.push(scene);
+    }
+
+    scenes
 }
