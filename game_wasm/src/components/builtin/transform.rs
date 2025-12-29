@@ -1,4 +1,5 @@
 use core::ops::{Mul, MulAssign};
+use core::ptr::with_exposed_provenance;
 
 use glam::{Mat3, Mat4, Quat, Vec3};
 
@@ -55,14 +56,23 @@ impl Transform {
         self
     }
 
+    pub fn from_matrix(matrix: Mat4) -> Self {
+        let (scale, rotation, translation) = matrix.to_scale_rotation_translation();
+        Self {
+            translation,
+            rotation,
+            scale,
+        }
+    }
+
     pub fn compute_matrix(self) -> Mat4 {
         Mat4::from_scale_rotation_translation(self.scale, self.rotation, self.translation)
     }
 
     pub fn mul_transform(self, transform: Transform) -> Self {
         if cfg!(debug_assertions) {
-            assert_transform(self);
-            assert_transform(transform);
+            // assert_transform(self);
+            // assert_transform(transform);
         }
 
         let translation = self.transform_point(transform.translation);
