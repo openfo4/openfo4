@@ -27,11 +27,12 @@ impl Index for u32 {
 /// This is more efficient alternative to a [`HashMap`] when the keys follow a linear pattern.
 #[derive(Clone, Debug)]
 pub struct VecMap<K, V> {
-    inner: Vec<Entry<K, V>>,
+    inner: Vec<Option<(K, V)>>,
     len: usize,
 }
 
 impl<K, V> VecMap<K, V> {
+    /// Creates a new, empty `VecMap`.
     pub const fn new() -> Self {
         Self {
             inner: Vec::new(),
@@ -44,60 +45,65 @@ impl<K, V> VecMap<K, V>
 where
     K: Index,
 {
+    /// Inserts a new value into this `VecMap`. Returns the previous value at this `key` or `None`
+    /// if no value at the key exists.
     pub fn insert(&mut self, key: K, value: V) -> Option<V> {
-        self.inner.resize_with(key.index() + 1, || Entry::None);
+        let min_cap = key.index() + 1;
+        if self.inner.len() < min_cap {
+            self.inner.resize_with(min_cap, || None);
+        }
 
         let slot = &mut self.inner[key.index()];
-        let old_value = std::mem::replace(slot, Entry::Occupied((key, value)));
 
-        match old_value {
-            Entry::None => {
-                self.len += 1;
-                None
-            }
-            Entry::Occupied((_, val)) => Some(val),
+        let old_value = slot.take();
+        *slot = Some((key, value));
+
+        // Don't increment len if we swapped a value.
+        if old_value.is_none() {
+            self.len += 1;
         }
+
+        old_value.map(|(_, v)| v)
     }
 
-    pub fn len(&self) -> usize {
+    /// Returns the number of elements in the `VecMap`.
+    pub const fn len(&self) -> usize {
         self.len
     }
 
-    pub fn is_empty(&self) -> bool {
+    /// Returns `true` if the `VecMap` contains no elements.
+    pub const fn is_empty(&self) -> bool {
         self.len() == 0
     }
 
+    /// Returns `true` if the `VecMap` contains a value for the given `key`.
+    pub fn contains_key(&self, key: K) -> bool {
+        self.get(key).is_some()
+    }
+
     pub fn get(&self, key: K) -> Option<&V> {
-        let entry = self.inner.get(key.index())?;
-        match entry {
-            Entry::Occupied((k, v)) if *k == key => Some(v),
+        match self.inner.get(key.index()) {
+            Some(Some((k, v))) if *k == key => Some(v),
             _ => None,
         }
     }
 
     pub fn get_mut(&mut self, key: K) -> Option<&mut V> {
-        let entry = self.inner.get_mut(key.index())?;
-        match entry {
-            Entry::Occupied((k, v)) if *k == key => Some(v),
+        match self.inner.get_mut(key.index()) {
+            Some(Some((k, v))) if *k == key => Some(v),
             _ => None,
         }
     }
 
     pub fn remove(&mut self, key: K) -> Option<V> {
-        let entry = self.inner.get_mut(key.index())?;
-        match entry {
-            Entry::Occupied((k, _)) if *k == key => {
-                let entry = std::mem::replace(entry, Entry::None);
-                self.len -= 1;
-                match entry {
-                    Entry::Occupied((_, v)) => Some(v),
-                    _ => unreachable!(),
-                }
-            }
-            _ => None,
-        }
+        let slot = self.inner.get_mut(key.index())?;
+        let (_, value) = slot.take_if(|(k, _)| *k == key)?;
+
+        self.len -= 1;
+        Some(value)
     }
 
+    /// Returns an iterator visiting all elements in the `VecMap`.
     pub fn iter(&self) -> Iter<'_, K, V> {
         Iter {
             iter: self.inner.iter(),
@@ -105,6 +111,7 @@ where
         }
     }
 
+    /// Returns an iterator visiting all elements in the `VecMap` mutably.
     pub fn iter_mut(&mut self) -> IterMut<'_, K, V> {
         IterMut {
             iter: self.inner.iter_mut(),
@@ -112,25 +119,29 @@ where
         }
     }
 
+    /// Returns an iterator visiting all values in the `VecMap`.
     pub fn values(&self) -> Values<'_, K, V> {
         Values { iter: self.iter() }
     }
 
+    /// Returns an iterator visiting all values in the `VecMap` mutably.
     pub fn values_mut(&mut self) -> ValuesMut<'_, K, V> {
         ValuesMut {
             iter: self.iter_mut(),
         }
     }
 
-    pub fn clear(&mut self) {
-        self.inner.clear();
-        self.len = 0;
-    }
-
+    /// Returns an iterator yielding all values in the `VecMap`.
     pub fn into_values(self) -> IntoValues<K, V> {
         IntoValues {
             iter: self.into_iter(),
         }
+    }
+
+    /// Removes all elements from the `VecMap`.
+    pub fn clear(&mut self) {
+        self.inner.clear();
+        self.len = 0;
     }
 }
 
@@ -176,15 +187,14 @@ impl<K, V> IntoIterator for VecMap<K, V> {
     }
 }
 
-#[derive(Clone, Debug)]
-enum Entry<K, V> {
-    None,
-    Occupied((K, V)),
-}
-
+/// An iterator visiting all elements inside a [`VecMap`].
+///
+/// Returned by [`iter`].
+///
+/// [`iter`]: VecMap::iter
 #[derive(Clone, Debug)]
 pub struct Iter<'a, K, V> {
-    iter: std::slice::Iter<'a, Entry<K, V>>,
+    iter: std::slice::Iter<'a, Option<(K, V)>>,
     len: usize,
 }
 
@@ -196,14 +206,12 @@ where
 
     fn next(&mut self) -> Option<Self::Item> {
         loop {
-            let entry = self.iter.next()?;
-            match entry {
-                Entry::None => (),
-                Entry::Occupied((key, val)) => {
-                    self.len -= 1;
-                    return Some((*key, val));
-                }
-            }
+            let slot = self.iter.next()?;
+
+            if let Some((key, value)) = slot {
+                self.len -= 1;
+                return Some((*key, value));
+            };
         }
     }
 
@@ -221,9 +229,14 @@ where
     }
 }
 
+/// An iterator visiting all elements inside a [`VecMap`] mutably.
+///
+/// Returned by [`iter_mut`].
+///
+/// [`iter_mut`]: VecMap::iter_mut
 #[derive(Debug)]
 pub struct IterMut<'a, K, V> {
-    iter: std::slice::IterMut<'a, Entry<K, V>>,
+    iter: std::slice::IterMut<'a, Option<(K, V)>>,
     len: usize,
 }
 
@@ -235,14 +248,12 @@ where
 
     fn next(&mut self) -> Option<Self::Item> {
         loop {
-            let entry = self.iter.next()?;
-            match entry {
-                Entry::None => (),
-                Entry::Occupied((key, val)) => {
-                    self.len -= 1;
-                    return Some((*key, val));
-                }
-            }
+            let slot = self.iter.next()?;
+
+            if let Some((key, value)) = slot {
+                self.len -= 1;
+                return Some((*key, value));
+            };
         }
     }
 
@@ -262,9 +273,14 @@ where
 
 impl<'a, K, V> FusedIterator for IterMut<'a, K, V> where K: Index {}
 
+/// An iterator yielding all elements inside a [`VecMap`].
+///
+/// Returned by [`into_iter`].
+///
+/// [`into_iter`]: VecMap::into_iter
 #[derive(Clone, Debug)]
 pub struct IntoIter<K, V> {
-    iter: std::vec::IntoIter<Entry<K, V>>,
+    iter: std::vec::IntoIter<Option<(K, V)>>,
     len: usize,
 }
 
@@ -273,14 +289,12 @@ impl<K, V> Iterator for IntoIter<K, V> {
 
     fn next(&mut self) -> Option<Self::Item> {
         loop {
-            let entry = self.iter.next()?;
-            match entry {
-                Entry::None => (),
-                Entry::Occupied((key, val)) => {
-                    self.len -= 1;
-                    return Some((key, val));
-                }
-            }
+            let slot = self.iter.next()?;
+
+            if let Some((key, value)) = slot {
+                self.len -= 1;
+                return Some((key, value));
+            };
         }
     }
 
@@ -297,6 +311,11 @@ impl<K, V> ExactSizeIterator for IntoIter<K, V> {
 
 impl<K, V> FusedIterator for IntoIter<K, V> {}
 
+/// An iterator visiting all values inside a [`VecMap`].
+///
+/// Returned by [`values`].
+///
+/// [`values`]: VecMap::values
 #[derive(Clone, Debug)]
 pub struct Values<'a, K, V>
 where
@@ -331,6 +350,11 @@ where
 
 impl<'a, K, V> FusedIterator for Values<'a, K, V> where K: Index {}
 
+/// An iterator visiting all values inside a [`VecMap`] mutably.
+///
+/// Returned by [`values_mut`].
+///
+/// [`values_mut`]: VecMap::values_mut
 #[derive(Debug)]
 pub struct ValuesMut<'a, K, V>
 where
@@ -365,6 +389,11 @@ where
 
 impl<'a, K, V> FusedIterator for ValuesMut<'a, K, V> where K: Index {}
 
+/// An iterator yielding all values inside a [`VecMap`].
+///
+/// Returned by [`into_values`].
+///
+/// [`into_values`]: VecMap::into_values
 #[derive(Clone, Debug)]
 pub struct IntoValues<K, V> {
     iter: IntoIter<K, V>,
@@ -403,5 +432,29 @@ where
             map.insert(key, value);
         }
         map
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::collections::vec_map::VecMap;
+
+    #[test]
+    fn vec_map() {
+        let mut map = VecMap::<usize, i32>::new();
+
+        map.insert(0_usize, 42_i32);
+        assert_eq!(*map.get(0_usize).unwrap(), 42_i32);
+        map.insert(42_usize, 21_i32);
+        assert_eq!(*map.get(42_usize).unwrap(), 21_i32);
+
+        assert_eq!(map.get(41), None);
+        assert_eq!(map.get(43), None);
+
+        assert_eq!(map.remove(42).unwrap(), 21);
+        assert_eq!(map.get(42), None);
+
+        map.insert(42, 22);
+        assert_eq!(*map.get(42).unwrap(), 22);
     }
 }
