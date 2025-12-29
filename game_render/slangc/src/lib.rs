@@ -127,8 +127,13 @@ pub fn load_imported_files(path: &Path) -> Result<Vec<PathBuf>, Error> {
             let extension = p.extension().unwrap().to_owned();
             // Remove the file name and extension.
 
+            // Remove file ending in current directory.
+            assert!(p.pop());
+
             // Remove the parent directory.
             if !p.pop() {
+                dbg!(&p);
+
                 return Err(Error::Other(format!(
                     "cannot find import: {}",
                     file_name.to_str().unwrap(),
@@ -136,7 +141,7 @@ pub fn load_imported_files(path: &Path) -> Result<Vec<PathBuf>, Error> {
             }
 
             // Add the file name and extension back.
-            p.set_file_name(file_name);
+            p.push(file_name);
             p.set_extension(extension);
         }
 
