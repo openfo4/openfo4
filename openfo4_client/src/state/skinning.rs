@@ -2,7 +2,7 @@ use std::collections::{HashMap, VecDeque};
 
 use game_common::components::Transform;
 use game_tracing::trace_span;
-use glam::{Vec3, Vec4Swizzles};
+use glam::{Mat4, Vec3, Vec4Swizzles};
 use hecs::{CommandBuffer, World};
 use openfo4_animation::skeleton::SkeletonInstance;
 use openfo4_core::WorldExt;
@@ -85,10 +85,21 @@ pub fn mesh_skinning(world: &mut World, shared: &SharedState) {
                 .zip(&skin.mesh_bone_indices)
                 .zip(&skin.mesh_bone_weights)
             {
-                let skin_matrix = bone_matrices[indices[0] as usize] * weights.x
-                    + bone_matrices[indices[1] as usize] * weights.y
-                    + bone_matrices[indices[2] as usize] * weights.z
-                    + bone_matrices[indices[3] as usize] * weights.w;
+                let compute_skin_matrix = || -> Option<_> {
+                    Some(
+                        *bone_matrices.get(indices[0] as usize)? * weights.x
+                            + *bone_matrices.get(indices[1] as usize)? * weights.y
+                            + *bone_matrices.get(indices[2] as usize)? * weights.z
+                            + *bone_matrices.get(indices[3] as usize)? * weights.w,
+                    )
+                };
+
+                // If we have a bone index that refers to a bone that does not exist
+                // we will not skin this primitive. It will render as the default
+                // value.
+                let Some(skin_matrix) = compute_skin_matrix() else {
+                    continue;
+                };
 
                 let final_pos = skin_matrix * pos.extend(1.0);
                 *pos = final_pos.truncate();
