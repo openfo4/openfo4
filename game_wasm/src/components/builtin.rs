@@ -88,6 +88,12 @@ impl Component for SpotLight {
     const ID: RecordReference = SPOT_LIGHT;
 }
 
+#[derive(Copy, Clone, Debug)]
+pub struct AmbientLight {
+    pub color: Color,
+    pub brightness: f32,
+}
+
 #[derive(Copy, Clone, Debug, PartialEq, Zeroable, Pod, Encode, Decode)]
 #[repr(transparent)]
 pub struct Color(pub [f32; 4]);
