@@ -4,11 +4,15 @@ use game_tracing::trace_span;
 use glam::{FloatExt, UVec2, Vec2, Vec3A, Vec3Swizzles, Vec4};
 use image::{ImageBuffer, Pixel, Rgba};
 
+use crate::cell::CELL_SIZE;
+
 const UV_SCALE: Vec2 = Vec2::splat(8.0);
 
 #[derive(Clone, Debug)]
 pub struct TerrainLayer {
+    /// Position between 0 and CELL_SIZE.
     pub position: UVec2,
+    /// Size such that position+size <= CELL_SIZE.
     pub size: UVec2,
     pub layer: i16,
     pub alpha: [[f32; 17]; 17],
@@ -33,109 +37,111 @@ pub fn combine_texture_layers(layers: &[TerrainLayer], size: UVec2) -> Terrain {
     let mut normal_texture = ImageBuffer::<Rgba<u8>, Vec<u8>>::new(size.x, size.y);
     let mut smooth_spec_texture = ImageBuffer::<Rgba<u8>, Vec<u8>>::new(size.x, size.y);
 
-    for layer in layers {
+    merge_layers(&mut diffuse_texture, layers, |dst, layer, u, v| {
         let Some(texture) = &layer.diffuse_texture else {
-            continue;
+            return;
         };
 
         if texture.width() == 0 || texture.height() == 0 {
-            continue;
+            return;
         }
 
-        for y in layer.position.y..layer.position.y + layer.size.y {
-            for x in layer.position.x..layer.position.x + layer.size.x {
-                let u = x as f32 / layer.size.x as f32;
-                let v = y as f32 / layer.size.y as f32;
+        let alpha = layer.alpha.sample_linear(u, v);
+        let mut color = texture.sample_linear(u * UV_SCALE.x, v * UV_SCALE.y);
+        color.0[3] = ((color.0[3] as f32 / 255.0) * alpha * 255.0) as u8;
 
-                let alpha = layer.alpha.sample_linear(u, v);
-                let mut color = texture.sample_linear(u * UV_SCALE.x, v * UV_SCALE.y);
+        dst.blend(&color);
+    });
 
-                color.0[3] = ((color.0[3] as f32 / 255.0) * alpha * 255.0) as u8;
-
-                let dst = diffuse_texture.get_pixel_mut(x, y);
-                dst.blend(&color);
-            }
-        }
-    }
-
-    for layer in layers {
+    merge_layers(&mut normal_texture, layers, |pixel, layer, u, v| {
         let Some(texture) = &layer.normal_texture else {
-            continue;
+            return;
         };
-
         if texture.width() == 0 || texture.height() == 0 {
-            continue;
+            return;
         }
 
-        for y in layer.position.y..layer.position.y + layer.size.y {
-            for x in layer.position.x..layer.position.x + layer.size.x {
-                let u = x as f32 / layer.size.x as f32;
-                let v = y as f32 / layer.size.y as f32;
+        let alpha = layer.alpha.sample_linear(u, v);
 
-                let alpha = layer.alpha.sample_linear(u, v);
-                let src_normal = texture.sample_linear(u * UV_SCALE.x, v * UV_SCALE.y);
-                let dst_normal = *normal_texture.get_pixel(x, y);
+        let src_normal = texture.sample_linear(u * UV_SCALE.x, v * UV_SCALE.y);
+        let dst_normal = *pixel;
 
-                let mut src =
-                    Vec3A::new(src_normal.0[0] as f32, src_normal.0[1] as f32, 0.0) / 255.0;
-                let mut dst =
-                    Vec3A::new(dst_normal.0[0] as f32, dst_normal.0[1] as f32, 0.0) / 255.0;
+        let mut src = Vec3A::new(src_normal.0[0] as f32, src_normal.0[1] as f32, 0.0) / 255.0;
+        let mut dst = Vec3A::new(dst_normal.0[0] as f32, dst_normal.0[1] as f32, 0.0) / 255.0;
 
-                // Map values from 0..1 to -1..1.
-                src = src * 2.0 - 1.0;
-                dst = dst * 2.0 - 1.0;
+        // Map values from 0..1 to -1..1.
+        src = src * 2.0 - 1.0;
+        dst = dst * 2.0 - 1.0;
 
-                // Reconstruct Z channel.
-                // Z = sqrt(1 - x^2 - y^2)
-                src.z = (1.0 - src.xy().dot(src.xy())).sqrt();
-                dst.z = (1.0 - dst.xy().dot(dst.xy())).sqrt();
+        // Reconstruct Z channel.
+        // Z = sqrt(1 - x^2 - y^2)
+        src.z = (1.0 - src.xy().dot(src.xy())).sqrt();
+        dst.z = (1.0 - dst.xy().dot(dst.xy())).sqrt();
 
-                // Blend normals.
-                let mut out = dst.lerp(src, alpha);
+        // Blend normals.
+        let mut out = dst.lerp(src, alpha);
 
-                // Map back from -1..1 to 0..1.
-                out = out / 2.0 + 0.5;
+        // Map back from -1..1 to 0..1.
+        out = out / 2.0 + 0.5;
 
-                out = out * 255.0;
-                let out = Rgba([out.x as u8, out.y as u8, 0, 0]);
+        out = out * 255.0;
+        let out = Rgba([out.x as u8, out.y as u8, 0, 0]);
 
-                *normal_texture.get_pixel_mut(x, y) = out;
-            }
-        }
-    }
+        *pixel = out;
+    });
 
-    for layer in layers {
+    merge_layers(&mut smooth_spec_texture, layers, |dst, layer, u, v| {
         let Some(texture) = &layer.smooth_spec_texture else {
-            continue;
+            return;
         };
 
         if texture.width() == 0 || texture.height() == 0 {
-            continue;
+            return;
         }
 
-        for y in layer.position.y..layer.position.y + layer.size.y {
-            for x in layer.position.x..layer.position.x + layer.size.x {
-                let u = x as f32 / layer.size.x as f32;
-                let v = y as f32 / layer.size.y as f32;
+        let alpha = layer.alpha.sample_linear(u, v);
+        let mut gloss_spec = texture.sample_linear(u * UV_SCALE.x, v * UV_SCALE.y);
 
-                let alpha = layer.alpha.sample_linear(u, v);
-                let mut gloss_spec = texture.sample_linear(u * UV_SCALE.x, v * UV_SCALE.y);
+        // Scale the glossiness/specular texture with the material factors.
+        // Specular strength in red channel, glossiness in green channel.
+        gloss_spec.0[0] = (gloss_spec.0[0] as f32 * layer.specular_strength) as u8;
+        gloss_spec.0[1] = (gloss_spec.0[1] as f32 * layer.smoothness) as u8;
 
-                // Scale the glossiness/specular texture with the material factors.
-                // Specular strength in red channel, glossiness in green channel.
-                gloss_spec.0[0] = (gloss_spec.0[0] as f32 * layer.specular_strength) as u8;
-                gloss_spec.0[1] = (gloss_spec.0[1] as f32 * layer.smoothness) as u8;
-
-                let dst = smooth_spec_texture.get_pixel_mut(x, y);
-                *dst = lerp_pixel(*dst, gloss_spec, alpha);
-            }
-        }
-    }
+        *dst = lerp_pixel(*dst, gloss_spec, alpha);
+    });
 
     Terrain {
         diffuse_texture,
         normal_texture,
         smooth_spec_texture,
+    }
+}
+
+fn merge_layers<F>(img: &mut ImageBuffer<Rgba<u8>, Vec<u8>>, layers: &[TerrainLayer], mut f: F)
+where
+    F: FnMut(&mut Rgba<u8>, &TerrainLayer, f32, f32),
+{
+    let size = UVec2::new(img.width(), img.height());
+
+    for (x, y, pixel) in img.enumerate_pixels_mut() {
+        let pos_x = x as f32 / size.x as f32;
+        let pos_y = y as f32 / size.y as f32;
+
+        for layer in layers {
+            let start_x = layer.position.x as f32 / CELL_SIZE.x as f32;
+            let start_y = layer.position.y as f32 / CELL_SIZE.y as f32;
+            let end_x = (layer.position.x + layer.size.x) as f32 / CELL_SIZE.x as f32;
+            let end_y = (layer.position.y + layer.size.y) as f32 / CELL_SIZE.y as f32;
+
+            if pos_x < start_x || pos_x >= end_x || pos_y < start_y || pos_y >= end_y {
+                continue;
+            }
+
+            let u = (pos_x - start_x) / (end_x - start_x);
+            let v = (pos_y - start_y) / (end_y - start_y);
+
+            f(pixel, layer, u, v);
+        }
     }
 }
 
@@ -203,4 +209,36 @@ fn lerp_pixel(a: Rgba<u8>, b: Rgba<u8>, s: f32) -> Rgba<u8> {
     let rhs = Vec4::new(b.0[0] as f32, b.0[1] as f32, b.0[2] as f32, b.0[3] as f32) / 255.0;
     let out = lhs.lerp(rhs, s) * 255.0;
     Rgba([out[0] as u8, out[1] as u8, out[2] as u8, out[3] as u8])
+}
+
+#[cfg(test)]
+mod tests {
+    use image::ImageBuffer;
+
+    use crate::cell::CELL_SIZE;
+    use crate::state::terrain::{TerrainLayer, merge_layers};
+
+    #[test]
+    fn test_merge_layers() {
+        let mut img = ImageBuffer::new(1024, 1024);
+
+        merge_layers(
+            &mut img,
+            &[TerrainLayer {
+                position: CELL_SIZE / 2,
+                size: CELL_SIZE / 2,
+                alpha: [[0.0; 17]; 17],
+                diffuse_texture: None,
+                normal_texture: None,
+                smooth_spec_texture: None,
+                layer: 0,
+                smoothness: 0.0,
+                specular_strength: 0.0,
+            }],
+            |_, _, u, v| {
+                assert!(u >= 0.0 && u <= 1.0);
+                assert!(v >= 0.0 && v <= 1.0);
+            },
+        );
+    }
 }
