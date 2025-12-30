@@ -2,6 +2,7 @@ mod forward;
 mod opaque_vertex;
 mod pipeline;
 mod post_process;
+mod skinning;
 pub mod sky;
 mod state;
 mod transparent_vertex;
@@ -37,6 +38,7 @@ use crate::camera::Camera;
 use crate::entities::{CameraId, Event, ImageId, LightId, MaterialId, MeshId, ObjectId, SceneId};
 use crate::lights::{AmbientLight, DirectionalLightUniform, PointLightUniform, SpotLightUniform};
 use crate::material::AlphaMode;
+use crate::passes::skinning::SkinningPass;
 use crate::passes::sky::SkyState;
 use crate::passes::transparent_vertex::TransparentVertexPass;
 
@@ -47,6 +49,8 @@ const TRANSPARENT_VERTEX_PASS: NodeLabel = NodeLabel::new("TRANSPARENT_VERTEX_PA
 const UPDATE_PASS: NodeLabel = NodeLabel::new("UPDATE_PASS");
 const FORWARD_PASS: NodeLabel = NodeLabel::new("FORWARD_PASS");
 const POST_PROCESS_PASS: NodeLabel = NodeLabel::new("POST_PROCESS_PASS");
+const SKINNING_PASS: NodeLabel = NodeLabel::new("SKINNING_PASS");
+
 pub const FINAL_RENDER_PASS: NodeLabel = NodeLabel::new("FINAL_RENDER_PASS");
 
 const OPAQUE_DEPTH: SlotLabel = SlotLabel::new("OPAQUE_DEPTH");
@@ -62,6 +66,10 @@ pub(crate) fn init(
 
     let update_pass = UpdatePass::new(queue, state.clone(), events);
     graph.add_node(UPDATE_PASS, update_pass);
+
+    let skinning_pass = SkinningPass::new(state.clone());
+    graph.add_node(SKINNING_PASS, skinning_pass);
+    graph.add_node_dependency(SKINNING_PASS, UPDATE_PASS);
 
     // if queue.features().mesh_shader {
     //     let forward_pass = ForwardPass::new(queue, state.clone(), HDR_TEXTURE);
@@ -406,13 +414,14 @@ impl MeshStateImpl {
 
     fn create_instance(
         &mut self,
+        queue: &CommandQueue<'_>,
         transform: Transform,
         mesh: MeshKey,
         material: &MaterialState,
     ) -> InstanceKey {
         match self {
             Self::Mesh(state) => state.create_instance(transform, mesh, material.index),
-            Self::Vertex(state) => state.create_instance(transform, mesh, material),
+            Self::Vertex(state) => state.create_instance(queue, transform, mesh, material),
         }
     }
 
@@ -420,6 +429,18 @@ impl MeshStateImpl {
         match self {
             Self::Mesh(state) => state.remove_instance(key),
             Self::Vertex(state) => state.remove_instance(key),
+        }
+    }
+
+    fn set_skinned_bones_transforms(
+        &mut self,
+        queue: &CommandQueue<'_>,
+        key: InstanceKey,
+        transforms: &[Transform],
+    ) {
+        match self {
+            Self::Vertex(state) => state.set_skinned_bones_transforms(queue, key, transforms),
+            _ => todo!(),
         }
     }
 }

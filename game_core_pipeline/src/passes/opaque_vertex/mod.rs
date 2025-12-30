@@ -7,7 +7,7 @@ use game_render::api::CommandQueue;
 use game_render::graph::{NodeLabel, RenderGraph, SlotFlags, SlotKind, SlotLabel};
 use parking_lot::Mutex;
 
-use crate::passes::{HDR_TEXTURE, OPAQUE_DEPTH};
+use crate::passes::{HDR_TEXTURE, OPAQUE_DEPTH, SKINNING_PASS};
 
 use super::State;
 
@@ -22,6 +22,8 @@ const FORWARD_PASS: NodeLabel = NodeLabel::new("opaque_vertex_forward_pass");
 pub fn init(graph: &mut RenderGraph, queue: &CommandQueue<'_>, state: Arc<Mutex<State>>) {
     let forward_pass = OpaqueVertexForwardPass::new(queue, state);
     graph.add_node(FORWARD_PASS, forward_pass);
+
+    graph.add_node_dependency(FORWARD_PASS, SKINNING_PASS);
 
     graph.add_slot_dependency(
         FORWARD_PASS,

@@ -3,10 +3,8 @@ use std::path::PathBuf;
 use std::sync::OnceLock;
 
 use game_common::components::{Axis, Transform};
-use game_core_pipeline::entities::MaterialHandle;
-use game_render::mesh::Mesh;
 use game_tasks::TaskPool;
-use glam::{IVec2, Vec3, Vec4};
+use glam::{IVec2, Vec3};
 use hecs::{Entity, World};
 use openfo4_animation::builder::{Builder, Hint};
 use openfo4_animation::skeleton::{BoneMarker, Skeleton, SkeletonInstance};
@@ -37,12 +35,8 @@ use crate::systems::inventory::{AddItemEvent, EquipItemEvent, Inventory};
 
 #[derive(Clone, Debug)]
 pub struct SkinInstance {
-    pub mesh: Mesh,
-    pub mesh_bone_weights: Vec<Vec4>,
-    pub mesh_bone_indices: Vec<[u8; 4]>,
+    pub entity: Entity,
     pub bones: Vec<usize>,
-    pub entity: Option<Entity>,
-    pub material: MaterialHandle,
 }
 
 pub fn animation_test(

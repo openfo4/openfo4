@@ -122,6 +122,24 @@ where
         index
     }
 
+    pub fn write(&mut self, queue: &CommandQueue<'_>, index: u64, values: &[T]) {
+        if values.is_empty() {
+            return;
+        }
+
+        let bytes = bytemuck::must_cast_slice(values);
+
+        let region = self
+            .allocations
+            .get(&index)
+            .expect("invalid allocation index");
+
+        let start = region.start() as u64;
+        let end = (region.start() + bytes.len()) as u64;
+
+        queue.write_buffer(self.buffer.slice(start..end), bytes);
+    }
+
     /// Removes the allocation starting at the given offset.
     pub fn remove(&mut self, index: u64) {
         if let Some(region) = self.allocations.remove(&index) {

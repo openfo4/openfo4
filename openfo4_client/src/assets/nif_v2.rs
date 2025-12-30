@@ -189,9 +189,6 @@ impl Node {
 #[derive(Clone, Debug)]
 pub struct Skin {
     pub bones: Vec<String>,
-    pub mesh: Mesh,
-    pub weights: Vec<Vec4>,
-    pub indices: Vec<[u8; 4]>,
 }
 
 #[derive(Clone, Debug)]
@@ -392,7 +389,7 @@ impl Asset for NifScene {
                         scale: Vec3::splat(node.scale),
                     };
 
-                    let renderable = if key.flags.contains(LoadNifFlags::RENDER_OBJECTS) {
+                    let mut renderable = if key.flags.contains(LoadNifFlags::RENDER_OBJECTS) {
                         let mesh = meshes.entry(block).or_insert_with(|| {
                             let mesh = build_mesh(node);
                             ctx.entities.create_mesh(mesh)
@@ -526,12 +523,11 @@ impl Asset for NifScene {
 
                                     mesh.set_positions(positions);
 
-                                    Some(Skin {
-                                        bones,
-                                        mesh,
-                                        weights,
-                                        indices,
-                                    })
+                                    if let Some(renderable) = &mut renderable {
+                                        renderable.mesh = ctx.entities.create_mesh(mesh);
+                                    }
+
+                                    Some(Skin { bones })
                                 }
                                 _ => todo!(),
                             },
@@ -633,6 +629,11 @@ fn build_mesh(shape: &BSTriShape) -> Mesh {
         mesh.set_tangents(tangents.clone());
     } else {
         mesh.compute_tangents();
+    }
+
+    if let Some(skin) = &shape.mesh.skinning {
+        mesh.set_skinning_joint_indices(skin.bone_indices.clone());
+        mesh.set_skinning_joint_weights(skin.bone_weights.iter().map(|v| v.as_vec4()).collect());
     }
 
     mesh

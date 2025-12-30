@@ -106,13 +106,13 @@ pub fn equip_item(
                     bone_indices.push(bone.index);
                 }
 
+                let entity = world.spawn((Transform::default(), object.clone()));
+                // Add the skinned component as child so that it gets despawned with the actor.
+                world.add_children(actor_root, entity);
+
                 skins.push(SkinInstance {
-                    mesh: skin.mesh.clone(),
-                    mesh_bone_weights: skin.weights.clone(),
-                    mesh_bone_indices: skin.indices.clone(),
+                    entity,
                     bones: bone_indices,
-                    entity: None,
-                    material: object.material.clone(),
                 });
             }
             None => {

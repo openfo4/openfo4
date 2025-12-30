@@ -15,6 +15,8 @@ pub struct Mesh {
     tangents: Vec<Vec4>,
     tangents_set: bool,
     colors: Vec<Vec4>,
+    skinning_joint_indices: Vec<[u8; 4]>,
+    skinning_join_weights: Vec<Vec4>,
 }
 
 impl Mesh {
@@ -27,6 +29,8 @@ impl Mesh {
             tangents: vec![],
             tangents_set: false,
             colors: Vec::new(),
+            skinning_joint_indices: Vec::new(),
+            skinning_join_weights: Vec::new(),
         }
     }
 
@@ -75,8 +79,28 @@ impl Mesh {
         &self.uvs
     }
 
-    pub fn indicies(&self) -> Option<Indices> {
-        self.indices.clone()
+    pub fn skinning_joint_weights(&self) -> &[Vec4] {
+        &self.skinning_join_weights
+    }
+
+    pub fn set_skinning_joint_weights(&mut self, v: Vec<Vec4>) {
+        self.skinning_join_weights = v;
+    }
+
+    pub fn skinning_joint_indices(&self) -> &[[u8; 4]] {
+        &self.skinning_joint_indices
+    }
+
+    pub fn set_skinning_joint_indices(&mut self, v: Vec<[u8; 4]>) {
+        self.skinning_joint_indices = v;
+    }
+
+    pub fn is_skinned(&self) -> bool {
+        !self.positions.is_empty() && !self.skinning_join_weights.is_empty()
+    }
+
+    pub fn indicies(&self) -> Option<&Indices> {
+        self.indices.as_ref()
     }
 
     pub fn compute_tangents(&mut self) {

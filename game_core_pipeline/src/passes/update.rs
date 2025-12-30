@@ -114,9 +114,12 @@ impl Node for UpdatePass {
                     };
 
                     if let Some(scene) = state.scenes.get_mut(&object.scene.id()) {
-                        let key = state
-                            .mesh
-                            .create_instance(object.transform, mesh, &material);
+                        let key = state.mesh.create_instance(
+                            ctx.queue,
+                            object.transform,
+                            mesh,
+                            &material,
+                        );
                         scene.objects.insert(id, ObjectState { id: key });
                     }
                 }
@@ -199,6 +202,18 @@ impl Node for UpdatePass {
                     }
 
                     scene.ambient_lights.remove(&id);
+                }
+                Event::UpdateBoneTransforms(id, transforms) => {
+                    let state = &mut *state;
+                    for scene in state.scenes.values_mut() {
+                        if let Some(object) = scene.objects.get(&id) {
+                            state.mesh.set_skinned_bones_transforms(
+                                ctx.queue,
+                                object.id,
+                                &transforms,
+                            );
+                        }
+                    }
                 }
             }
         }

@@ -9,7 +9,6 @@ pub mod hardcoded;
 pub mod item;
 pub mod level;
 pub mod npc;
-pub mod skinning;
 pub mod spawner;
 pub mod terrain;
 
@@ -269,8 +268,6 @@ impl GameState {
         systems::hierarchy::compute_global_transform(&mut self.world);
         self.physics.step(&mut self.world);
 
-        skinning::mesh_skinning(&mut self.world, &self.shared);
-
         systems::hierarchy::compute_global_transform(&mut self.world);
 
         systems::camera::update_camera_transform(&mut self.world);
@@ -340,7 +337,7 @@ impl GameState {
                     let mesh = openfo4_physics::components::ColliderShape::TriMesh(
                         openfo4_physics::components::TriMesh::new_convex(
                             s.positions().to_vec(),
-                            s.indicies().unwrap().into_u32(),
+                            s.indicies().unwrap().clone().into_u32(),
                         ),
                     );
 

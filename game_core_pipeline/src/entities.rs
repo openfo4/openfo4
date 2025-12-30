@@ -147,6 +147,13 @@ impl Entities {
     pub fn set_sky_material(&self, material: SkyMaterial) {
         self.sky.lock().sky_colors = Some(material);
     }
+
+    pub fn update_bone_transforms(&self, object: &ObjectHandle, transforms: Vec<Transform>) {
+        self.inner
+            .events
+            .send(Event::UpdateBoneTransforms(object.id, transforms))
+            .ok();
+    }
 }
 
 #[derive(Debug)]
@@ -474,4 +481,5 @@ pub(crate) enum Event {
     DestroyCamera(CameraId),
     CreateLight(LightId, Light),
     DestroyLight(SceneId, LightId),
+    UpdateBoneTransforms(ObjectId, Vec<Transform>),
 }

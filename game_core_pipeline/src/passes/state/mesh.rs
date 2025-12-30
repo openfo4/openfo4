@@ -47,7 +47,7 @@ impl MeshState {
     pub fn create_mesh(&mut self, queue: &CommandQueue<'_>, mesh: &Mesh) -> MeshKey {
         let _span = trace_span!("MeshState::create_mesh").entered();
 
-        let indices = mesh.indicies().unwrap().into_u32();
+        let indices = mesh.indicies().unwrap().clone().into_u32();
         let vertices = VertexDataAdapter::new(
             bytemuck::must_cast_slice(mesh.positions()),
             size_of::<f32>() * 3,

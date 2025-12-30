@@ -1,4 +1,5 @@
 pub mod physics_debug;
+mod skinning;
 
 use std::sync::Arc;
 
@@ -194,6 +195,8 @@ impl RenderState {
             self.prev_transforms.remove(&entity);
             self.objects.remove(&entity);
         }
+
+        skinning::mesh_skinning(world, &self.objects, &self.shared);
     }
 }
 
