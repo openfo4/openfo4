@@ -67,28 +67,28 @@ impl Level {
         let events = Arc::new(SegQueue::new());
         let state = Arc::new(LoaderState::default());
 
-        // pool.spawn({
-        //     let asset_loader = asset_loader.clone();
-        //     let loader = loader.clone();
-        //     let pool = pool.clone();
-        //     let events = events.clone();
-        //     let shared = shared.clone();
-        //     let file_loader = file_loader.clone();
-        //     let state = state.clone();
+        pool.spawn({
+            let asset_loader = asset_loader.clone();
+            let loader = loader.clone();
+            let pool = pool.clone();
+            let events = events.clone();
+            let shared = shared.clone();
+            let file_loader = file_loader.clone();
+            let state = state.clone();
 
-        //     async move {
-        //         load_persistent(
-        //             &asset_loader,
-        //             &loader,
-        //             &events,
-        //             &pool,
-        //             &file_loader,
-        //             &shared,
-        //             &state,
-        //         )
-        //         .await;
-        //     }
-        // });
+            async move {
+                load_persistent(
+                    &asset_loader,
+                    &loader,
+                    &events,
+                    &pool,
+                    &file_loader,
+                    &shared,
+                    &state,
+                )
+                .await;
+            }
+        });
 
         pool.spawn({
             let events = events.clone();
