@@ -233,8 +233,6 @@ impl GameState {
 
         futures_lite::future::block_on(self.interval.wait(Instant::now()));
 
-        self.event_bus.clear();
-
         self.level.update(
             &mut self.world,
             &mut self.events,

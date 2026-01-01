@@ -199,5 +199,8 @@ impl game_window::App for App {
         self.state.sync(self.game.world(), &self.game.event_bus);
         self.ui.update();
         self.state.render();
+
+        // FIXME: Don't leak this into main.
+        self.game.event_bus.clear();
     }
 }
