@@ -30,6 +30,14 @@ impl CellId {
         }
         cells
     }
+
+    pub fn distance_max(self, other: Self) -> u32 {
+        let x_min = self.0.x.min(other.0.x);
+        let x_max = self.0.x.max(other.0.x);
+        let y_min = self.0.y.min(other.0.y);
+        let y_max = self.0.y.max(other.0.y);
+        i32::max(x_max - x_min, y_max - y_min) as u32
+    }
 }
 
 impl From<NiTransform> for CellId {

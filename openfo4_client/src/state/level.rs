@@ -31,6 +31,7 @@ use crate::loader::FileLoader;
 use crate::shared::SharedState;
 use crate::state::level::partial::PartialEntityFlags;
 use crate::state::level::record::SpawnEntity;
+use crate::state::terrain::TerrainManager;
 
 use super::esp::EspLoader;
 
@@ -49,6 +50,7 @@ pub struct Level {
     cells_loaded: HashSet<(FormId, CellId)>,
     // Worldspace, Cell
     cells_to_unload_next_tick: HashSet<(FormId, CellId)>,
+    terrain_manager: TerrainManager,
 }
 
 impl Level {
@@ -59,32 +61,34 @@ impl Level {
         file_loader: Arc<FileLoader>,
         shared: Arc<SharedState>,
     ) -> Self {
+        let terrain_manager = TerrainManager::new(pool.clone(), shared.entities.clone());
+
         let (tx, rx) = async_channel::unbounded::<Request>();
         let events = Arc::new(SegQueue::new());
         let state = Arc::new(LoaderState::default());
 
-        pool.spawn({
-            let asset_loader = asset_loader.clone();
-            let loader = loader.clone();
-            let pool = pool.clone();
-            let events = events.clone();
-            let shared = shared.clone();
-            let file_loader = file_loader.clone();
-            let state = state.clone();
+        // pool.spawn({
+        //     let asset_loader = asset_loader.clone();
+        //     let loader = loader.clone();
+        //     let pool = pool.clone();
+        //     let events = events.clone();
+        //     let shared = shared.clone();
+        //     let file_loader = file_loader.clone();
+        //     let state = state.clone();
 
-            async move {
-                load_persistent(
-                    &asset_loader,
-                    &loader,
-                    &events,
-                    &pool,
-                    &file_loader,
-                    &shared,
-                    &state,
-                )
-                .await;
-            }
-        });
+        //     async move {
+        //         load_persistent(
+        //             &asset_loader,
+        //             &loader,
+        //             &events,
+        //             &pool,
+        //             &file_loader,
+        //             &shared,
+        //             &state,
+        //         )
+        //         .await;
+        //     }
+        // });
 
         pool.spawn({
             let events = events.clone();
@@ -111,6 +115,7 @@ impl Level {
             tx,
             cells_loaded: HashSet::new(),
             cells_to_unload_next_tick: HashSet::new(),
+            terrain_manager,
         }
     }
 
@@ -174,7 +179,7 @@ impl Level {
                 continue;
             }
 
-            entity.instantiate(world, event_bus, object_ref_set);
+            entity.instantiate(world, event_bus, object_ref_set, &mut self.terrain_manager);
         }
 
         for cell in prev_cells_loaded {
@@ -185,6 +190,8 @@ impl Level {
             // entities can be notified that they are about to be unloaded.
             self.cells_to_unload_next_tick.insert(cell);
         }
+
+        self.terrain_manager.update(world, event_bus);
     }
 
     #[instrument(name = "Level::unload_cells", skip_all)]
@@ -219,7 +226,6 @@ impl Level {
         }
 
         for entity in entities {
-            dbg!(&entity);
             world.despawn_recursive(entity);
         }
 
@@ -454,7 +460,7 @@ async fn load_cell(
             };
 
             if let Some(mut entity) = SpawnEntity::load(&ctx, &record, flags).await {
-                entity.persistent = record.flags.contains(RecordHeaderFlags::PERSISTENT);
+                entity.persistent |= record.flags.contains(RecordHeaderFlags::PERSISTENT);
                 entity.worldspace = Some(WorldSpace {
                     form: worldspace,
                     is_interior,

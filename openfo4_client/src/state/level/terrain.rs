@@ -1,24 +1,21 @@
 use std::io::Read;
+use std::sync::Arc;
 
-use game_core_pipeline::material::StandardMaterial;
-use game_render::backend::TextureFormat;
 use game_render::mesh::{Indices, Mesh};
-use game_render::texture::Image;
 use glam::{UVec2, Vec2, Vec3};
 use openfo4_esp::records::{Land, LandLandTexture, LandTextureAlphaLayerPoint, Quadrant};
 use openfo4_esp::{FormId, RecordData, RecordKind};
 use openfo4_nif::bgsm::Bgsm;
 use openfo4_physics::components::{Collider, ColliderShape, CollisionLayer, RigidBody, TriMesh};
 
-use crate::cell::CELL_SIZE;
+use crate::cell::{CELL_SIZE, CellId};
 use crate::components::NiTransform;
 use crate::loader::FileLoader;
-use crate::render::RenderObject;
 use crate::state::asset::load_image_buffer;
 use crate::state::esp::EspLoader;
 use crate::state::level::LoadContext;
 use crate::state::level::record::SpawnEntity;
-use crate::state::terrain::{TerrainLayer, combine_texture_layers};
+use crate::state::terrain::{TerrainLayer, TerrainRegion};
 
 const LAND_POINTS: UVec2 = UVec2::splat(33);
 
@@ -104,8 +101,6 @@ pub async fn load_land(ctx: &LoadContext<'_>, land: &Land) -> SpawnEntity {
     }
 
     for alpha_layer in &land.alpha_layer.0 {
-        continue;
-
         if alpha_layer.texture.land_texture == FormId(0) {
             continue;
         }
@@ -122,40 +117,9 @@ pub async fn load_land(ctx: &LoadContext<'_>, land: &Land) -> SpawnEntity {
         }
     }
 
-    let size = UVec2::splat(4096);
     layers.sort_by(|a, b| a.layer.cmp(&b.layer));
 
-    let terrain = combine_texture_layers(&layers, size);
-
-    let material = StandardMaterial {
-        base_color_texture: Some(ctx.shared.entities.create_image(Image::new(
-            size,
-            TextureFormat::Rgba8UnormSrgb,
-            terrain.diffuse_texture.into_vec(),
-        ))),
-        normal_texture: Some(ctx.shared.entities.create_image(Image::new(
-            size,
-            TextureFormat::Rgba8Unorm,
-            terrain.normal_texture.into_vec(),
-        ))),
-        // Normal maps are still in DirectX format.
-        flip_normal_y: true,
-        two_component_normal_encoding: true,
-        specular_glossiness_texture: Some(ctx.shared.entities.create_image(Image::new(
-            size,
-            TextureFormat::Rgba8UnormSrgb,
-            terrain.smooth_spec_texture.into_vec(),
-        ))),
-        // The glossiness is reconstructed from 1.0 - roughness.
-        // We want a glossiness factor of 1.0 since we have premultiplied
-        // all glossiness factors into the glossiness texture.
-        roughness: 0.0,
-        specular_strength: 1.0,
-        ..Default::default()
-    };
-
     let mesh = ctx.shared.entities.create_mesh(mesh);
-    let material = ctx.shared.entities.create_material(material);
 
     let collider = Collider {
         friction: 1.0,
@@ -168,7 +132,14 @@ pub async fn load_land(ctx: &LoadContext<'_>, land: &Land) -> SpawnEntity {
         transform: NiTransform::from_translation(ctx.grid_offset().extend(0.0) + LAND_OFFSET),
         collider: Some(collider),
         rigid_body: Some(RigidBody::FIXED),
-        object: Some(RenderObject { mesh, material }),
+        terrain: Some(TerrainRegion {
+            cell: CellId::from(ctx.grid_offset()),
+            mesh,
+            layers: Arc::new(layers),
+            res: 0,
+            entity: None,
+        }),
+        persistent: true,
         ..Default::default()
     }
 }

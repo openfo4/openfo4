@@ -1,7 +1,10 @@
 use std::any::{Any, TypeId};
 use std::collections::HashMap;
+use std::hash::Hash;
 use std::iter::FusedIterator;
 use std::marker::PhantomData;
+
+use hecs::Entity;
 
 #[derive(Debug, Default)]
 pub struct EventBus {
@@ -94,3 +97,54 @@ where
 }
 
 impl<'a, T> FusedIterator for EventReader<'a, T> where T: Event {}
+
+pub struct ComponentChanged<T> {
+    entity: Entity,
+    _marker: PhantomData<fn() -> T>,
+}
+
+impl<T> ComponentChanged<T> {
+    pub fn new(entity: Entity) -> Self {
+        Self {
+            entity,
+            _marker: PhantomData,
+        }
+    }
+
+    pub fn get(&self) -> Entity {
+        self.entity
+    }
+}
+
+impl<T> Clone for ComponentChanged<T> {
+    fn clone(&self) -> Self {
+        Self {
+            entity: self.entity,
+            _marker: PhantomData,
+        }
+    }
+}
+
+impl<T> Copy for ComponentChanged<T> {}
+
+impl<T> std::fmt::Debug for ComponentChanged<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ComponentChanged")
+            .field("entity", &self.entity)
+            .finish_non_exhaustive()
+    }
+}
+
+impl<T> PartialEq for ComponentChanged<T> {
+    fn eq(&self, other: &Self) -> bool {
+        self.entity == other.entity
+    }
+}
+
+impl<T> Eq for ComponentChanged<T> {}
+
+impl<T> Hash for ComponentChanged<T> {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.entity.hash(state);
+    }
+}

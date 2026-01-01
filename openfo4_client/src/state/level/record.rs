@@ -22,6 +22,7 @@ use crate::state::level::items::resolve_item;
 use crate::state::level::partial::PartialEntityFlags;
 use crate::state::level::terrain::load_land;
 use crate::state::npc::{Actor, ActorInstanceProps};
+use crate::state::terrain::{TerrainManager, TerrainRegion};
 use crate::systems::door::{Door, PortalDoor};
 use crate::systems::inventory::{Inventory, ItemStack};
 use crate::systems::lights::{LightFlicker, LightFlickerMode};
@@ -42,6 +43,7 @@ pub struct SpawnEntity {
     pub door: Option<Door>,
     pub inventory: Option<Inventory>,
     pub placed_item: Option<PlacedItem>,
+    pub terrain: Option<TerrainRegion>,
 }
 
 impl SpawnEntity {
@@ -50,6 +52,7 @@ impl SpawnEntity {
         world: &mut World,
         events: &mut EventBus,
         object_ref_set: &mut ObjectReferenceSet,
+        terrain_manager: &mut TerrainManager,
     ) -> Entity {
         // Destructure pattern so we get warned if we forget
         // to add new items here.
@@ -68,6 +71,7 @@ impl SpawnEntity {
             door,
             inventory,
             placed_item,
+            terrain,
         } = self;
 
         // If the object reference already exists we will overwrite it.
@@ -148,6 +152,11 @@ impl SpawnEntity {
 
         if let Some(form) = form {
             object_ref_set.insert(form, entity);
+        }
+
+        if let Some(mut terrain) = terrain {
+            terrain.entity = Some(entity);
+            terrain_manager.insert(terrain);
         }
 
         entity

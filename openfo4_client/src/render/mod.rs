@@ -16,8 +16,9 @@ use game_render::camera::RenderTarget;
 use game_tasks::TaskPool;
 use game_tracing::trace_span;
 use glam::UVec2;
-use hashbrown::HashMap;
+use hashbrown::{HashMap, HashSet};
 use hecs::{Entity, World};
+use openfo4_core::events::{ComponentChanged, EventBus};
 
 use crate::components::{Camera as CameraComp, Player, WorldSpace};
 use crate::shared::SharedState;
@@ -68,7 +69,7 @@ impl RenderState {
         self.renderer.render(&self.task_pool);
     }
 
-    pub fn sync(&mut self, world: &World) {
+    pub fn sync(&mut self, world: &World, events: &EventBus) {
         let _span = trace_span!("RenderState::sync").entered();
 
         let Some((_, (&player_worldspace, _))) =
@@ -165,6 +166,11 @@ impl RenderState {
             self.lights.remove(&entity);
         }
 
+        let objects_changed: HashSet<_> = events
+            .read::<ComponentChanged<RenderObject>>()
+            .map(|v| v.get())
+            .collect();
+
         let mut objects_to_remove = self.objects.clone();
         for (entity, (transform, object, worldspace)) in
             &mut world.query::<(&GlobalTransform, &RenderObject, &WorldSpace)>()
@@ -176,7 +182,7 @@ impl RenderState {
             objects_to_remove.remove(&entity);
 
             if let Some(prev_transform) = self.prev_transforms.get(&entity) {
-                if prev_transform == transform {
+                if prev_transform == transform && !objects_changed.contains(&entity) {
                     continue;
                 }
             }

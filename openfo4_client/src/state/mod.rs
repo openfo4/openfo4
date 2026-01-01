@@ -229,6 +229,8 @@ impl GameState {
 
         futures_lite::future::block_on(self.interval.wait(Instant::now()));
 
+        self.event_bus.clear();
+
         self.level.update(
             &mut self.world,
             &mut self.events,
@@ -295,8 +297,6 @@ impl GameState {
         if self.physics_debug {
             self.physics.render_debug(gizmos);
         }
-
-        self.event_bus.clear();
     }
 
     pub fn world(&self) -> &World {

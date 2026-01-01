@@ -1,12 +1,145 @@
 use std::ops::Deref;
+use std::sync::Arc;
 
+use crossbeam::queue::SegQueue;
+use game_common::components::Transform;
+use game_core_pipeline::entities::{Entities, MeshHandle};
+use game_core_pipeline::material::StandardMaterial;
+use game_render::backend::TextureFormat;
+use game_render::texture::Image;
+use game_tasks::TaskPool;
 use game_tracing::trace_span;
 use glam::{FloatExt, UVec2, Vec2, Vec3A, Vec3Swizzles, Vec4};
+use hashbrown::HashMap;
+use hecs::{Entity, World};
 use image::{ImageBuffer, Pixel, Rgba};
+use openfo4_core::events::{ComponentChanged, EventBus};
 
-use crate::cell::CELL_SIZE;
+use crate::cell::{CELL_SIZE, CellId};
+use crate::components::{NiTransform, Player, WorldSpace};
+use crate::render::RenderObject;
 
 const UV_SCALE: Vec2 = Vec2::splat(8.0);
+
+pub struct TerrainManager {
+    pool: Arc<TaskPool>,
+    regions: HashMap<CellId, TerrainRegion>,
+    entities: Entities,
+    ready_queue: Arc<SegQueue<(CellId, RenderObject)>>,
+}
+
+impl TerrainManager {
+    pub fn new(pool: Arc<TaskPool>, entities: Entities) -> Self {
+        Self {
+            pool,
+            entities,
+            regions: HashMap::new(),
+            ready_queue: Arc::default(),
+        }
+    }
+
+    pub fn update(&mut self, world: &mut World, events: &mut EventBus) {
+        let _span = trace_span!("TerrainManager::update").entered();
+
+        let Some((_, (transform, worldspace, _))) = world
+            .query_mut::<(&Transform, &WorldSpace, &Player)>()
+            .into_iter()
+            .next()
+        else {
+            return;
+        };
+
+        let player_cell = CellId::from(NiTransform::from(*transform));
+
+        for (cell, region) in &mut self.regions {
+            // FIXME: Need some finetuning on this.
+            let res = match cell.distance_max(player_cell) {
+                // ~200MB
+                0 | 1 => 4096,
+                // ~12MB
+                2 => 1024,
+                // ~3MB
+                3 => 512,
+                // ~750KB
+                4 => 256,
+                // ~200KB
+                5 => 128,
+                // ~50KB
+                _ => 64,
+            };
+
+            if region.res != res {
+                region.res = res;
+
+                let mesh = region.mesh.clone();
+                let layers = Arc::clone(&region.layers);
+                let entities = self.entities.clone();
+                let cell = *cell;
+                let ready_queue = Arc::clone(&self.ready_queue);
+
+                self.pool.spawn(async move {
+                    let size = UVec2::splat(res);
+                    let terrain = combine_texture_layers(&layers, size);
+
+                    let diffuse = entities.create_image(Image::new(
+                        size,
+                        TextureFormat::Rgba8UnormSrgb,
+                        terrain.diffuse_texture.into_vec(),
+                    ));
+                    let normal = entities.create_image(Image::new(
+                        size,
+                        TextureFormat::Rgba8Unorm,
+                        terrain.normal_texture.into_vec(),
+                    ));
+                    let smooth_spec = entities.create_image(Image::new(
+                        size,
+                        TextureFormat::Rgba8UnormSrgb,
+                        terrain.smooth_spec_texture.into_vec(),
+                    ));
+
+                    let material = entities.create_material(StandardMaterial {
+                        base_color_texture: Some(diffuse),
+                        normal_texture: Some(normal),
+                        // Normal maps are still in DirectX format.
+                        flip_normal_y: true,
+                        two_component_normal_encoding: true,
+                        specular_glossiness_texture: Some(smooth_spec),
+                        // The glossiness is reconstructed from 1.0 - roughness.
+                        // We want a glossiness factor of 1.0 since we have premultiplied
+                        // all glossiness factors into the glossiness texture.
+                        roughness: 0.0,
+                        specular_strength: 1.0,
+                        ..Default::default()
+                    });
+
+                    ready_queue.push((cell, RenderObject { mesh, material }));
+                });
+            }
+        }
+
+        while let Some((cell, object)) = self.ready_queue.pop() {
+            let region = self.regions.get_mut(&cell).unwrap();
+
+            let entity = region.entity.expect("terrain entity not set");
+
+            world.insert_one(entity, object).unwrap();
+            events.send(ComponentChanged::<RenderObject>::new(entity));
+        }
+    }
+
+    pub fn insert(&mut self, region: TerrainRegion) {
+        self.regions.insert(region.cell, region);
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct TerrainRegion {
+    pub cell: CellId,
+    pub mesh: MeshHandle,
+    pub layers: Arc<Vec<TerrainLayer>>,
+    pub res: u32,
+    pub entity: Option<Entity>,
+}
 
 #[derive(Clone, Debug)]
 pub struct TerrainLayer {
@@ -30,7 +163,7 @@ pub struct Terrain {
     pub smooth_spec_texture: ImageBuffer<Rgba<u8>, Vec<u8>>,
 }
 
-pub fn combine_texture_layers(layers: &[TerrainLayer], size: UVec2) -> Terrain {
+fn combine_texture_layers(layers: &[TerrainLayer], size: UVec2) -> Terrain {
     let _span = trace_span!("combine_texture_layers").entered();
 
     let mut diffuse_texture = ImageBuffer::<Rgba<u8>, Vec<u8>>::new(size.x, size.y);
