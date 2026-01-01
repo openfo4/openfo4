@@ -1,17 +1,17 @@
-use std::io::Read;
 use std::sync::Arc;
 
 use game_render::mesh::{Indices, Mesh};
 use glam::{UVec2, Vec2, Vec3};
+use image::{ImageBuffer, Rgba};
+use openfo4_asset::AssetLoader;
 use openfo4_esp::records::{Land, LandLandTexture, LandTextureAlphaLayerPoint, Quadrant};
 use openfo4_esp::{FormId, RecordData, RecordKind};
 use openfo4_nif::bgsm::Bgsm;
 use openfo4_physics::components::{Collider, ColliderShape, CollisionLayer, RigidBody, TriMesh};
 
+use crate::assets::data_file::DataFile;
 use crate::cell::{CELL_SIZE, CellId};
 use crate::components::NiTransform;
-use crate::loader::FileLoader;
-use crate::state::asset::load_image_buffer;
 use crate::state::esp::EspLoader;
 use crate::state::level::LoadContext;
 use crate::state::level::record::SpawnEntity;
@@ -93,8 +93,7 @@ pub async fn load_land(ctx: &LoadContext<'_>, land: &Land) -> SpawnEntity {
             continue;
         }
 
-        if let Some(layer) =
-            load_terrain_layer(base_layer, None, ctx.esp_loader, ctx.file_loader).await
+        if let Some(layer) = load_terrain_layer(base_layer, None, ctx.esp_loader, ctx.loader).await
         {
             layers.push(layer);
         }
@@ -109,7 +108,7 @@ pub async fn load_land(ctx: &LoadContext<'_>, land: &Land) -> SpawnEntity {
             &alpha_layer.texture,
             Some(&alpha_layer.alpha_layer_data.0),
             ctx.esp_loader,
-            ctx.file_loader,
+            ctx.loader,
         )
         .await
         {
@@ -148,7 +147,7 @@ async fn load_terrain_layer(
     texture: &LandLandTexture,
     alpha_layer: Option<&[LandTextureAlphaLayerPoint]>,
     esp_loader: &EspLoader,
-    file_loader: &FileLoader,
+    loader: &AssetLoader,
 ) -> Option<TerrainLayer> {
     let land_texture = esp_loader
         .lookup(Some(RecordKind::LandTexture), texture.land_texture)
@@ -177,123 +176,70 @@ async fn load_terrain_layer(
         Quadrant::TopRight => CELL_SIZE / 2,
     };
 
-    let diffuse_texture = match &texture_set.material {
-        Some(material) => {
-            let mut reader = file_loader
-                .open(&format!("materials/{}", material.as_str().unwrap()))
+    let bgsm = match &texture_set.material {
+        Some(bgsm) => {
+            let bgsm = loader
+                .load::<DataFile<Bgsm>, _>(&format!("materials/{}", bgsm.as_str().unwrap()))
                 .await
                 .unwrap();
 
-            let mut buf = Vec::new();
-            reader.read_to_end(&mut buf).unwrap();
-
-            let bgsm = Bgsm::decode(&buf).unwrap();
-
-            Some(
-                load_image_buffer(file_loader, bgsm.diffuse_texture)
-                    .await
-                    .unwrap(),
-            )
+            Some(bgsm)
         }
+        None => None,
+    };
+
+    let diffuse_path = match &bgsm {
+        Some(bgsm) => Some(format!("textures/{}", bgsm.diffuse_texture)),
         None => match &texture_set.diffuse_texture {
-            Some(path) => Some(
-                load_image_buffer(file_loader, path.as_str().unwrap().to_owned())
-                    .await
-                    .unwrap(),
-            ),
+            Some(path) => Some(format!("textures/{}", path.as_str().unwrap())),
             None => None,
         },
     };
-
-    let normal_texture = match &texture_set.material {
-        Some(material) => {
-            let mut reader = file_loader
-                .open(&format!("materials/{}", material.as_str().unwrap()))
-                .await
-                .unwrap();
-
-            let mut buf = Vec::new();
-            reader.read_to_end(&mut buf).unwrap();
-
-            let bgsm = Bgsm::decode(&buf).unwrap();
-
-            Some(
-                load_image_buffer(file_loader, bgsm.normal_texture)
-                    .await
-                    .unwrap(),
-            )
-        }
+    let normal_path = match &bgsm {
+        Some(bgsm) => Some(format!("textures/{}", bgsm.normal_texture)),
         None => match &texture_set.normal_texture {
-            Some(path) => Some(
-                load_image_buffer(file_loader, path.as_str().unwrap().to_owned())
-                    .await
-                    .unwrap(),
-            ),
+            Some(path) => Some(format!("textures/{}", path.as_str().unwrap())),
             None => None,
         },
     };
-
-    let smooth_spec_texture = match &texture_set.material {
-        Some(material) => {
-            let mut reader = file_loader
-                .open(&format!("materials/{}", material.as_str().unwrap()))
-                .await
-                .unwrap();
-
-            let mut buf = Vec::new();
-            reader.read_to_end(&mut buf).unwrap();
-
-            let bgsm = Bgsm::decode(&buf).unwrap();
-
-            Some(
-                load_image_buffer(file_loader, bgsm.smooth_spec_texture)
-                    .await
-                    .unwrap(),
-            )
-        }
+    let smooth_spec_path = match &bgsm {
+        Some(bgsm) => Some(format!("textures/{}", bgsm.smooth_spec_texture)),
         None => match &texture_set.smooth_spec_texture {
-            Some(path) => Some(
-                load_image_buffer(file_loader, path.as_str().unwrap().to_owned())
-                    .await
-                    .unwrap(),
-            ),
+            Some(path) => Some(format!("textures/{}", path.as_str().unwrap())),
             None => None,
         },
     };
 
-    let smoothness = match &texture_set.material {
-        Some(material) => {
-            let mut reader = file_loader
-                .open(&format!("materials/{}", material.as_str().unwrap()))
+    let diffuse_texture = match &diffuse_path {
+        Some(path) => Some(
+            loader
+                .load::<DataFile<ImageBuffer<Rgba<u8>, Vec<u8>>>, _>(path)
                 .await
-                .unwrap();
-
-            let mut buf = Vec::new();
-            reader.read_to_end(&mut buf).unwrap();
-
-            let bgsm = Bgsm::decode(&buf).unwrap();
-
-            bgsm.smoothness
-        }
-        None => 1.0,
+                .unwrap(),
+        ),
+        None => None,
+    };
+    let normal_texture = match &normal_path {
+        Some(path) => Some(
+            loader
+                .load::<DataFile<ImageBuffer<Rgba<u8>, Vec<u8>>>, _>(path)
+                .await
+                .unwrap(),
+        ),
+        None => None,
+    };
+    let smooth_spec_texture = match &smooth_spec_path {
+        Some(path) => Some(
+            loader
+                .load::<DataFile<ImageBuffer<Rgba<u8>, Vec<u8>>>, _>(path)
+                .await
+                .unwrap(),
+        ),
+        None => None,
     };
 
-    let specular_strength = match &texture_set.material {
-        Some(material) => {
-            let mut reader = file_loader
-                .open(&format!("materials/{}", material.as_str().unwrap()))
-                .await
-                .unwrap();
-
-            let mut buf = Vec::new();
-            reader.read_to_end(&mut buf).unwrap();
-
-            let bgsm = Bgsm::decode(&buf).unwrap();
-
-            bgsm.specular_strength
-        }
-        None => 1.0,
-    };
+    let smoothness = bgsm.as_ref().map(|v| v.smoothness).unwrap_or(1.0);
+    let specular_strength = bgsm.as_ref().map(|v| v.specular_strength).unwrap_or(1.0);
 
     let alpha = if let Some(alpha_layer) = alpha_layer {
         let mut alpha = [[0.0; 17]; 17];

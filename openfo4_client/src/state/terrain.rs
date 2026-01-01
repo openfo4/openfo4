@@ -13,8 +13,10 @@ use glam::{FloatExt, UVec2, Vec2, Vec3A, Vec3Swizzles, Vec4};
 use hashbrown::HashMap;
 use hecs::{Entity, World};
 use image::{ImageBuffer, Pixel, Rgba};
+use openfo4_asset::Handle;
 use openfo4_core::events::{ComponentChanged, EventBus};
 
+use crate::assets::data_file::DataFile;
 use crate::cell::{CELL_SIZE, CellId};
 use crate::components::{NiTransform, Player, WorldSpace};
 use crate::render::RenderObject;
@@ -149,9 +151,9 @@ pub struct TerrainLayer {
     pub size: UVec2,
     pub layer: i16,
     pub alpha: [[f32; 17]; 17],
-    pub diffuse_texture: Option<ImageBuffer<Rgba<u8>, Vec<u8>>>,
-    pub normal_texture: Option<ImageBuffer<Rgba<u8>, Vec<u8>>>,
-    pub smooth_spec_texture: Option<ImageBuffer<Rgba<u8>, Vec<u8>>>,
+    pub diffuse_texture: Option<Handle<DataFile<ImageBuffer<Rgba<u8>, Vec<u8>>>>>,
+    pub normal_texture: Option<Handle<DataFile<ImageBuffer<Rgba<u8>, Vec<u8>>>>>,
+    pub smooth_spec_texture: Option<Handle<DataFile<ImageBuffer<Rgba<u8>, Vec<u8>>>>>,
     pub smoothness: f32,
     pub specular_strength: f32,
 }

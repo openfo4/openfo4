@@ -2,7 +2,6 @@ pub mod actions;
 pub mod anim_starter;
 pub mod animation;
 pub mod animation_test;
-pub mod asset;
 pub mod equipment;
 pub mod esp;
 pub mod hardcoded;
@@ -151,6 +150,11 @@ impl GameState {
         asset_loader.register::<DataFile<openfo4_dds::Image>>(DataFileContext {
             loader: file_loader.clone(),
         });
+        asset_loader.register::<DataFile<image::ImageBuffer<image::Rgba<u8>, Vec<u8>>>>(
+            DataFileContext {
+                loader: file_loader.clone(),
+            },
+        );
         asset_loader.register::<FileAnimationClip>(());
 
         let actions = futures_lite::future::block_on(actions::Actions::load(&loader));
