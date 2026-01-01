@@ -174,7 +174,7 @@ pub fn draw_cell_boundaries(world: &World, gizmos: &Gizmos) {
 }
 
 pub fn draw_skeletons(world: &World, gizmos: &Gizmos) {
-    for (_, (transform, bone, children)) in world
+    for (_, (transform, _, children)) in world
         .query::<(&GlobalTransform, &BoneMarker, Option<&Children>)>()
         .iter()
     {
@@ -183,7 +183,9 @@ pub fn draw_skeletons(world: &World, gizmos: &Gizmos) {
         };
 
         for children in &children.0 {
-            let child_transform = world.get::<&GlobalTransform>(*children).unwrap();
+            let Ok(child_transform) = world.get::<&GlobalTransform>(*children) else {
+                continue;
+            };
 
             gizmos.line(
                 transform.0.translation,
