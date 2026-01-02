@@ -523,6 +523,14 @@ impl InventorySystem {
                 continue;
             }
 
+            // This indicates that something was already attached to the item.
+            // This can happen if the item is rapidly equipped and unequipped,
+            // causing the scene to be loaded many times, but we must not
+            // attach more than one once.
+            if !item.equipment_keys.is_empty() {
+                continue;
+            }
+
             drop(inventory);
             let keys = models.attach_scene(world, entity);
 
@@ -531,7 +539,6 @@ impl InventorySystem {
             };
 
             let item = inventory.get_mut(key).unwrap();
-            debug_assert!(item.equipment_keys.is_empty());
             item.equipment_keys = keys;
         }
     }
