@@ -18,7 +18,9 @@ use thiserror::Error;
 
 use crate::connect_points::{BSConnectPointChildren, BSConnectPointParents};
 use crate::controller::{
-    BSLightingShaderPropertyFloatController, NiFloatData, NiFloatInterpolator,
+    BSLightingShaderPropertyColorController, BSLightingShaderPropertyFloatController,
+    NiControllerManager, NiControllerSequence, NiFloatData, NiFloatInterpolator,
+    NiMultiTargetTransformController, NiTextKeyExtraData,
 };
 use crate::material::{BSEffectShaderProperty, BSSkyShaderProperty, NiAlphaProperty};
 
@@ -199,6 +201,25 @@ impl Nif {
                     Block::NiFloatInterpolator(NiFloatInterpolator::decode(&mut reader)?)
                 }
                 BlockType::NiFloatData => Block::NiFloatData(NiFloatData::decode(&mut reader)?),
+                BlockType::NiControllerManager => {
+                    Block::NiControllerManager(NiControllerManager::decode(&mut reader)?)
+                }
+                BlockType::NiMultiTargetTransformController => {
+                    Block::NiMultiTargetTransformController(
+                        NiMultiTargetTransformController::decode(&mut reader)?,
+                    )
+                }
+                BlockType::NiControllerSequence => {
+                    Block::NiControllerSequence(NiControllerSequence::decode(&mut reader)?)
+                }
+                BlockType::NiTextKeyExtraData => {
+                    Block::NiTextKeyExtraData(NiTextKeyExtraData::decode(&mut reader)?)
+                }
+                BlockType::BSLightingShaderPropertyColorController => {
+                    Block::BSLightingShaderPropertyColorController(
+                        BSLightingShaderPropertyColorController::decode(&mut reader)?,
+                    )
+                }
                 _ => Block::Skipped,
             };
 
@@ -243,6 +264,8 @@ pub enum Error {
     InvalidBlendMode(u8),
     #[error("invalid alpha test function: {0}")]
     InvalidAlphaTestFunction(u8),
+    #[error("unknown enum value {0}: {1}")]
+    UnknownEnumValue(&'static str, u64),
 }
 
 pub trait Decode: Sized {
@@ -333,6 +356,11 @@ impl Reader<'_> {
             self.buf.copy_to_slice(dst);
             Ok(())
         }
+    }
+
+    fn get_string(&mut self) -> Result<&str, Error> {
+        let index = self.get_u32()?;
+        self.string(index)
     }
 
     fn get_u8(&mut self) -> Result<u8, Error> {
@@ -493,8 +521,13 @@ pub enum Block {
     NiPointLight(NiPointLight),
     BSFadeNode(BSFadeNode),
     BSLightingShaderPropertyFloatController(BSLightingShaderPropertyFloatController),
+    BSLightingShaderPropertyColorController(BSLightingShaderPropertyColorController),
     NiFloatInterpolator(NiFloatInterpolator),
     NiFloatData(NiFloatData),
+    NiControllerManager(NiControllerManager),
+    NiMultiTargetTransformController(NiMultiTargetTransformController),
+    NiControllerSequence(NiControllerSequence),
+    NiTextKeyExtraData(NiTextKeyExtraData),
 }
 
 #[derive(Clone, Debug)]
