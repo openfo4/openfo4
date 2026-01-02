@@ -44,7 +44,7 @@ pub fn mesh_skinning(world: &World, objects: &HashMap<Entity, ObjectHandle>, sha
             }
         }
 
-        for skin in equipment.items_mut().map(|v| &v.skins).flatten() {
+        for skin in equipment.items().map(|v| v.skins()).flatten() {
             let Some(handle) = objects.get(&skin.entity) else {
                 continue;
             };

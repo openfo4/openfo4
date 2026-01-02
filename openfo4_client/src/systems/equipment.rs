@@ -41,16 +41,23 @@ impl Equipment {
         self.items.get_mut(key.0)
     }
 
-    pub fn items_mut(&mut self) -> impl Iterator<Item = &mut EquippedItem> {
-        self.items.iter_mut().map(|(_, v)| v)
+    pub fn items(&self) -> impl Iterator<Item = &EquippedItem> {
+        self.items.iter().map(|(_, v)| v)
     }
 }
 
 #[derive(Clone, Debug)]
 pub struct EquippedItem {
-    pub entities: Vec<Entity>,
-    pub attachments: HashMap<String, AttachmentPoint>,
-    pub skins: Vec<SkinInstance>,
+    /// All attached entities, including skinned entities.
+    entities: Vec<Entity>,
+    attachments: HashMap<String, AttachmentPoint>,
+    skins: Vec<SkinInstance>,
+}
+
+impl EquippedItem {
+    pub fn skins(&self) -> &[SkinInstance] {
+        &self.skins
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -109,6 +116,8 @@ pub fn equip_item(
                 let entity = world.spawn((Transform::default(), object.clone()));
                 // Add the skinned component as child so that it gets despawned with the actor.
                 world.add_children(actor_root, entity);
+
+                entities.push(entity);
 
                 skins.push(SkinInstance {
                     entity,
@@ -267,6 +276,6 @@ pub fn unequip_item(actor_root: Entity, mut keys: Vec<EquipmentKey>, world: &mut
     // Note that this will include all recursive children, so
     // `despawn_recursive` is not needed here.
     for entity in removed_entities {
-        world.despawn(entity);
+        world.despawn(entity).unwrap();
     }
 }
