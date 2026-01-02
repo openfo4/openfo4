@@ -4,6 +4,7 @@ pub mod park;
 
 mod loom;
 mod task;
+mod task_queue;
 mod waker;
 
 use std::future::Future;
@@ -19,6 +20,8 @@ use task::RawTaskPtr;
 
 pub use task::Task;
 use waker::waker_create;
+
+pub use task_queue::TaskQueue;
 
 #[derive(Debug)]
 pub struct TaskPool {

@@ -16,6 +16,8 @@ parking_lot = "0.12.3"
 futures-core = "0.3.31"
 futures-lite = "2.6.0"
 
+futures = "0.3.31"
+
 [target.'cfg(loom)'.dependencies]
 loom = "0.7.2"
 
