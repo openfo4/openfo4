@@ -1483,6 +1483,10 @@ impl Device {
     /// - The memory range bound to the [`Buffer`] must not be bound to any other resource for the
     /// entire lifetime of the [`Buffer`] object.
     /// - The same memory range must not be bound to any other resource.
+    /// - The [`DeviceMemorySlice`] must satisfy the requirements returned by
+    /// [`buffer_memory_requirements`] of the same [`Buffer`] object.
+    ///
+    /// [`buffer_memory_requirements`]: Self::buffer_memory_requirements
     pub unsafe fn bind_buffer_memory(
         &self,
         buffer: &mut Buffer,
@@ -1493,16 +1497,18 @@ impl Device {
         assert!(self.device.same(&buffer.device));
         assert!(self.device.same(&memory.memory.device));
 
-        let reqs = self.buffer_memory_requirements(buffer);
+        if cfg!(debug_assertions) {
+            let reqs = self.buffer_memory_requirements(buffer);
 
-        // `memoryOffset` must be less than the size of `memory`.
-        assert!(memory.offset <= memory.memory.size.get());
-        // - `memoryOffset` must be an integer multiple of the `alignment`.
-        assert!(memory.offset % reqs.align.get() == 0);
-        // - `size` must be less than or equal to the size of `memory` minus `memoryOffset`.
-        assert!(memory.size <= memory.memory.size.get() - memory.offset);
-        // - `memory` must have been allocated using one of the memory types.
-        assert!(reqs.memory_types.contains(&memory.memory.memory_type));
+            // `memoryOffset` must be less than the size of `memory`.
+            assert!(memory.offset <= memory.memory.size.get());
+            // - `memoryOffset` must be an integer multiple of the `alignment`.
+            assert!(memory.offset % reqs.align.get() == 0);
+            // - `size` must be less than or equal to the size of `memory` minus `memoryOffset`.
+            assert!(memory.size <= memory.memory.size.get() - memory.offset);
+            // - `memory` must have been allocated using one of the memory types.
+            assert!(reqs.memory_types.contains(&memory.memory.memory_type));
+        }
 
         // https://registry.khronos.org/vulkan/specs/latest/man/html/VkBindBufferMemoryInfo.html
         let info = vk::BindBufferMemoryInfo::default()
@@ -1526,6 +1532,10 @@ impl Device {
     /// - The memory range described by [`DeviceMemorySlice`] must not have been bound to any other
     /// live object yet.
     /// - [`Texture`] must not have been bound yet.
+    /// - The [`DeviceMemorySlice`] must satisfy the requirements returned by
+    /// [`image_memory_requirements`] of the same [`Texture`] object.
+    ///
+    /// [`image_memory_requirements`]: Self::image_memory_requirements
     pub unsafe fn bind_texture_memory(
         &self,
         texture: &mut Texture,
@@ -1536,14 +1546,16 @@ impl Device {
         assert!(self.device.same(&texture.device));
         assert!(self.device.same(&memory.memory.device));
 
-        let reqs = self.image_memory_requirements(&texture);
+        if cfg!(debug_assertions) {
+            let reqs = self.image_memory_requirements(&texture);
 
-        // `memoryOffset` must be less than the size of `memory`.
-        assert!(memory.offset <= memory.memory.size.get());
-        // `memory` must have been allocated using one of the memory types.
-        assert!(reqs.memory_types.contains(&memory.memory.memory_type));
-        // `memoryOffset` must be an integer multiple of `alignment`.
-        assert!(memory.offset % reqs.align.get() == 0);
+            // `memoryOffset` must be less than the size of `memory`.
+            assert!(memory.offset <= memory.memory.size.get());
+            // `memory` must have been allocated using one of the memory types.
+            assert!(reqs.memory_types.contains(&memory.memory.memory_type));
+            // `memoryOffset` must be an integer multiple of `alignment`.
+            assert!(memory.offset % reqs.align.get() == 0);
+        }
 
         let info = vk::BindImageMemoryInfo::default()
             // - `image` must not have been bound to a memory object.
