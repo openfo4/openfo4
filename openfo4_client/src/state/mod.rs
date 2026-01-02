@@ -60,6 +60,7 @@ use crate::systems::animation_sync::{bounce_animation_events, update_animation_p
 use crate::systems::camera::CameraMode;
 use crate::systems::controller::apply_player_movements;
 use crate::systems::door::{handle_automatic_doors, handle_door_activations};
+use crate::systems::inventory::InventorySystem;
 use crate::systems::time::{init_time, update_time};
 use crate::systems::weapon::{
     handle_weapon_draw_events, handle_weapon_fire_events, handle_weapon_hit_damage,
@@ -91,6 +92,7 @@ pub struct GameState {
     esp_loader: Arc<EspLoader>,
     object_ref_set: ObjectReferenceSet,
     weather: WeatherSystem,
+    inventory: InventorySystem,
 }
 
 impl GameState {
@@ -175,6 +177,7 @@ impl GameState {
 
         Self {
             weather: WeatherSystem::new(loader.clone(), pool.clone(), &asset_loader, &shared),
+            inventory: InventorySystem::new(pool.clone(), asset_loader.clone(), loader.clone()),
             pool,
             world,
             shared,
@@ -277,13 +280,9 @@ impl GameState {
         systems::camera::update_camera_transform(&mut self.world);
 
         systems::lights::update_flickering_lights(&mut self.world, time.delta());
-        systems::inventory::handle_inventory_events(
-            &mut self.world,
-            &self.asset_loader,
-            &self.esp_loader,
-            &mut self.event_bus,
-            &self.pool,
-        );
+
+        self.inventory
+            .handle_inventory_events(&mut self.world, &mut self.event_bus);
         update_actor_animation_graphs(&mut self.world, &self.asset_loader, &self.pool);
 
         handle_weapon_reload_requests(&mut self.world, &self.actions, &self.event_bus);

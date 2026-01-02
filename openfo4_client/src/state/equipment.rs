@@ -1,6 +1,7 @@
 use std::collections::VecDeque;
 use std::time::Duration;
 
+use game_tracing::trace_span;
 use hashbrown::{HashMap, HashSet};
 use hecs::{Entity, World};
 use openfo4_animation::skeleton::SkeletonInstance;
@@ -43,6 +44,8 @@ pub struct EquipmentItemModels {
 
 impl EquipmentItemModels {
     pub fn attach_scene(&self, world: &mut World, root: Entity) -> Vec<EquipmentKey> {
+        let _span = trace_span!("EquipmentItemModels::attach_scene").entered();
+
         // FIXME: We currently remove these components, then put them
         // back at the end to satisfy the borrowing impl of `equip_item`,
         // but this is not good because it may reshuffle the entity archetype data.
