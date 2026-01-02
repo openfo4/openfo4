@@ -1,3 +1,4 @@
+use std::hint::unreachable_unchecked;
 use std::iter::FusedIterator;
 
 pub trait Index: Copy + Eq {
@@ -95,6 +96,28 @@ where
         }
     }
 
+    unsafe fn get_unchecked_by_index(&self, index: usize) -> &V {
+        // SAFETY: The caller guarantees the index is in bounds.
+        let slot = unsafe { self.inner.get_unchecked(index) };
+
+        match slot {
+            Some((_, v)) => v,
+            // SAFETY: The caller guarantees that the key exists.
+            None => unsafe { unreachable_unchecked() },
+        }
+    }
+
+    unsafe fn get_unchecked_mut_by_index(&mut self, index: usize) -> &mut V {
+        // SAFETY: The caller guarantees the index is in bounds.
+        let slot = unsafe { self.inner.get_unchecked_mut(index) };
+
+        match slot {
+            Some((_, v)) => v,
+            // SAFETY: The caller guarantees that the key exists.
+            None => unsafe { unreachable_unchecked() },
+        }
+    }
+
     pub fn remove(&mut self, key: K) -> Option<V> {
         let slot = self.inner.get_mut(key.index())?;
         let (_, value) = slot.take_if(|(k, _)| *k == key)?;
@@ -143,6 +166,24 @@ where
         self.inner.clear();
         self.len = 0;
     }
+
+    pub fn entry(&mut self, key: K) -> Entry<'_, K, V> {
+        let index = key.index();
+
+        // Note that the `Index` trait is not unsafe and we can't rely on `key.index()`
+        // to always return the same index.
+        // For this reason we store the fix index value and use that for all future indexing
+        // operations.
+        if self.contains_key(key) && self.inner.get(index).is_some_and(|v| v.is_some()) {
+            Entry::Occupied(OccupiedEntry {
+                map: self,
+                key,
+                index,
+            })
+        } else {
+            Entry::Vacant(VacantEntry { map: self, key })
+        }
+    }
 }
 
 impl<K, V> Default for VecMap<K, V> {
@@ -184,6 +225,110 @@ impl<K, V> IntoIterator for VecMap<K, V> {
             iter: self.inner.into_iter(),
             len: self.len,
         }
+    }
+}
+
+#[derive(Debug)]
+pub enum Entry<'a, K, V> {
+    Occupied(OccupiedEntry<'a, K, V>),
+    Vacant(VacantEntry<'a, K, V>),
+}
+
+impl<'a, K, V> Entry<'a, K, V>
+where
+    K: Index,
+{
+    pub fn or_insert(self, default: V) -> &'a mut V {
+        self.or_insert_with(|| default)
+    }
+
+    pub fn or_insert_with<F: FnOnce() -> V>(self, default: F) -> &'a mut V {
+        match self {
+            Self::Occupied(entry) => entry.into_mut(),
+            Self::Vacant(entry) => entry.insert(default()),
+        }
+    }
+
+    pub fn or_default(self) -> &'a mut V
+    where
+        V: Default,
+    {
+        self.or_insert_with(Default::default)
+    }
+}
+
+#[derive(Debug)]
+pub struct OccupiedEntry<'a, K, V> {
+    map: &'a mut VecMap<K, V>,
+    key: K,
+    index: usize,
+}
+
+impl<'a, K, V> OccupiedEntry<'a, K, V>
+where
+    K: Index,
+{
+    /// Returns the key in the entry.
+    pub fn key(&self) -> K {
+        self.key
+    }
+
+    /// Returns a reference to the value in the entry.
+    pub fn get(&self) -> &V {
+        // SAFETY: We hold a unique reference to the map. The key
+        // cannot be removed from the map until we are dropped.
+        unsafe { self.map.get_unchecked_by_index(self.index) }
+    }
+
+    /// Returns a mutable reference to the value in the entry.
+    pub fn get_mut(&mut self) -> &mut V {
+        // SAFETY: We hold a unique reference to the map. The key
+        // cannot be removed from the map until we are dropped.
+        unsafe { self.map.get_unchecked_mut_by_index(self.index) }
+    }
+
+    pub fn into_mut(self) -> &'a mut V {
+        // SAFETY: We hold a unique reference to the map. The key
+        // cannot be removed from the map until we are dropped.
+        unsafe { self.map.get_unchecked_mut_by_index(self.index) }
+    }
+
+    /// Sets the value of the entry, returning the current value.
+    pub fn insert(&mut self, value: V) -> V {
+        self.map.insert(self.key, value).unwrap()
+    }
+
+    /// Remove the entry from the map and returns the current value.
+    pub fn remove(self) -> V {
+        self.map.remove(self.key).unwrap()
+    }
+
+    /// Remove the entry from the map and returns the current key and value.
+    pub fn remove_entry(self) -> (K, V) {
+        let value = self.map.remove(self.key).unwrap();
+        (self.key, value)
+    }
+}
+
+#[derive(Debug)]
+pub struct VacantEntry<'a, K, V> {
+    map: &'a mut VecMap<K, V>,
+    key: K,
+}
+
+impl<'a, K, V> VacantEntry<'a, K, V>
+where
+    K: Index,
+{
+    /// Returns the key in the entry.
+    pub fn key(&self) -> K {
+        self.key
+    }
+
+    /// Sets the value of entry.
+    pub fn insert(self, value: V) -> &'a mut V {
+        self.map.insert(self.key, value);
+        self.map.get_mut(self.key).unwrap()
     }
 }
 
