@@ -15,7 +15,7 @@ use slab::Slab;
 use crate::components::PlacedItem;
 use crate::state::equipment::{load_equipment_item, load_equipment_item_models};
 use crate::state::esp::EspLoader;
-use crate::systems::equipment::{Equipment, EquipmentKey, unequip_item};
+use crate::systems::equipment::{EquipmentKey, unequip_item};
 use crate::systems::{PickupItemEvent, TransferItemEvent};
 
 /// Unique identifier for an item inside a container.
@@ -98,6 +98,9 @@ pub struct ItemStack {
     pub combined_keywords: HashSet<FormId>,
     pub data: ItemData,
     pub equipment_keys: Vec<EquipmentKey>,
+    pub equipment_slots: HashSet<u32>,
+    pub visibility_slots: HashSet<u32>,
+    pub visible: bool,
 }
 
 impl ItemStack {
@@ -248,8 +251,13 @@ pub fn handle_inventory_events(
             name: item.name,
             hidden: event.hidden,
             equipment_keys: Vec::new(),
+            equipment_slots: item.equipment_slots,
+            visibility_slots: item.visibility_slots,
+            visible: true,
         });
     }
+
+    let mut unequip_conflicting_events = Vec::new();
 
     for event in events.read::<EquipItemEvent>() {
         let Ok(mut inventory) = world.get::<&mut Inventory>(event.actor) else {
@@ -299,7 +307,56 @@ pub fn handle_inventory_events(
         };
 
         item.equipment_keys.extend(keys);
+
+        let Some((key, item)) = inventory.items().find(|(_, v)| v.item == event.item) else {
+            continue;
+        };
+
+        let mut hide_slots = Vec::new();
+        for (other_key, other_item) in inventory.items() {
+            if key == other_key {
+                continue;
+            }
+
+            // Unequip all other items that occupy the same equipment slot.
+            if other_item
+                .equipment_slots
+                .intersection(&item.equipment_slots)
+                .count()
+                != 0
+            {
+                unequip_conflicting_events.push(UnequipItemEvent {
+                    actor: event.actor,
+                    item: other_key,
+                });
+            }
+
+            if other_item.equipped
+                && other_item.visible
+                && other_item
+                    .visibility_slots
+                    .intersection(&item.visibility_slots)
+                    .count()
+                    != 0
+            {
+                hide_slots.push(other_key);
+            }
+        }
+
+        let mut unequip_keys = Vec::new();
+        for key in hide_slots {
+            let slot = inventory.get_mut(key).unwrap();
+
+            slot.visible = false;
+            let keys = core::mem::take(&mut slot.equipment_keys);
+            unequip_keys.extend(keys);
+        }
+
+        drop(inventory);
+        unequip_item(event.actor, unequip_keys, world);
     }
+
+    let mut rescan_visiblity = HashSet::new();
 
     for event in events.read::<UnequipItemEvent>() {
         let Ok(mut inventory) = world.get::<&mut Inventory>(event.actor) else {
@@ -322,8 +379,77 @@ pub fn handle_inventory_events(
         item.equipped = false;
         let keys = core::mem::take(&mut item.equipment_keys);
 
+        // Reset visibility state.
+        item.visible = true;
+
+        if !item.visibility_slots.is_empty() {
+            rescan_visiblity.insert(event.actor);
+        }
+
         drop(inventory);
         unequip_item(event.actor, keys, world);
+    }
+
+    for actor in rescan_visiblity {
+        let Ok(mut inventory) = world.get::<&mut Inventory>(actor) else {
+            continue;
+        };
+
+        let mut newly_visible = HashSet::new();
+
+        for (key, item) in inventory.items() {
+            if !item.equipped || item.visible {
+                continue;
+            }
+
+            let mut can_be_visible = true;
+
+            for (other_key, other) in inventory.items() {
+                if key == other_key || !other.equipped {
+                    continue;
+                }
+
+                if item
+                    .visibility_slots
+                    .intersection(&other.visibility_slots)
+                    .count()
+                    == 0
+                {
+                    continue;
+                }
+
+                // If another item is already visible keep it as is.
+                if other.visible || newly_visible.contains(&other_key) {
+                    can_be_visible = false;
+                    break;
+                }
+            }
+
+            if can_be_visible {
+                newly_visible.insert(key);
+            }
+        }
+
+        for key in newly_visible {
+            let item = inventory.get_mut(key).unwrap();
+            item.visible = true;
+
+            let equipment = futures_lite::future::block_on(load_equipment_item_models(
+                loader,
+                esp_loader,
+                item.item,
+                &item.attachments,
+                false,
+            ));
+
+            drop(inventory);
+            let keys = equipment.attach_scene(world, actor);
+
+            inventory = world.get::<&mut Inventory>(actor).unwrap();
+
+            let item = inventory.get_mut(key).unwrap();
+            item.equipment_keys.extend(keys);
+        }
     }
 
     // Transfering items must come after all unequip events have been processed.

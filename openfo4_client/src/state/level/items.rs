@@ -41,6 +41,9 @@ pub async fn resolve_item(esp_loader: &EspLoader, form: FormId, count: u64) -> V
                     combined_keywords: keywords,
                     data: ItemData::None,
                     equipment_keys: Vec::new(),
+                    equipment_slots: HashSet::new(),
+                    visibility_slots: HashSet::new(),
+                    visible: true,
                 });
             }
             RecordData::Weapon(_) | RecordData::Armor(_) => {
@@ -59,6 +62,9 @@ pub async fn resolve_item(esp_loader: &EspLoader, form: FormId, count: u64) -> V
                     combined_keywords: item.combined_keywords,
                     data: item.data,
                     equipment_keys: Vec::new(),
+                    equipment_slots: item.equipment_slots,
+                    visibility_slots: item.visibility_slots,
+                    visible: true,
                 });
             }
             RecordData::Ammo(data) => {
@@ -76,6 +82,9 @@ pub async fn resolve_item(esp_loader: &EspLoader, form: FormId, count: u64) -> V
                     combined_keywords: keywords,
                     data: ItemData::None,
                     equipment_keys: Vec::new(),
+                    equipment_slots: HashSet::new(),
+                    visibility_slots: HashSet::new(),
+                    visible: true,
                 });
             }
             RecordData::Ingestible(data) => {
@@ -93,6 +102,9 @@ pub async fn resolve_item(esp_loader: &EspLoader, form: FormId, count: u64) -> V
                     combined_keywords: keywords,
                     data: ItemData::None,
                     equipment_keys: Vec::new(),
+                    equipment_slots: HashSet::new(),
+                    visibility_slots: HashSet::new(),
+                    visible: true,
                 });
             }
             RecordData::Key(data) => {
@@ -110,6 +122,9 @@ pub async fn resolve_item(esp_loader: &EspLoader, form: FormId, count: u64) -> V
                     combined_keywords: keywords,
                     data: ItemData::None,
                     equipment_keys: Vec::new(),
+                    equipment_slots: HashSet::new(),
+                    visibility_slots: HashSet::new(),
+                    visible: true,
                 });
             }
             RecordData::Book(data) => {
@@ -127,6 +142,9 @@ pub async fn resolve_item(esp_loader: &EspLoader, form: FormId, count: u64) -> V
                     combined_keywords: keywords,
                     data: ItemData::None,
                     equipment_keys: Vec::new(),
+                    equipment_slots: HashSet::new(),
+                    visibility_slots: HashSet::new(),
+                    visible: true,
                 });
             }
             RecordData::Component(data) => {
@@ -142,6 +160,9 @@ pub async fn resolve_item(esp_loader: &EspLoader, form: FormId, count: u64) -> V
                     combined_keywords: HashSet::new(),
                     data: ItemData::None,
                     equipment_keys: Vec::new(),
+                    equipment_slots: HashSet::new(),
+                    visibility_slots: HashSet::new(),
+                    visible: true,
                 });
             }
             RecordData::Note(data) => {
@@ -157,6 +178,9 @@ pub async fn resolve_item(esp_loader: &EspLoader, form: FormId, count: u64) -> V
                     combined_keywords: HashSet::new(),
                     data: ItemData::None,
                     equipment_keys: Vec::new(),
+                    equipment_slots: HashSet::new(),
+                    visibility_slots: HashSet::new(),
+                    visible: true,
                 });
             }
             x => todo!("{:?}", x),
