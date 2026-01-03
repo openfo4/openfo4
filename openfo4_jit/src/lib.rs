@@ -575,6 +575,22 @@ impl<'a> FunctionBuilder<'a> {
         dst
     }
 
+    /// Floating point comparison.
+    ///
+    /// Performs the floating point comparison of `lhs $op rhs`. If the comparison evaluates to
+    /// `true` a non-zero integer value is returned, otherwise a zero integer value is returned.
+    ///
+    /// Returns a value of type [`I8`].
+    ///
+    /// [`I8`]: Type::I8
+    pub fn fcmp(&mut self, lhs: Value, rhs: Value, op: FloatCompareOp) -> Value {
+        let dst = self.produce_value();
+
+        self.instructions
+            .push(Instruction::FCmp { lhs, rhs, dst, op });
+        dst
+    }
+
     pub fn load(&mut self, ty: Type, addr: Value, offset: u32) -> Value {
         let dst = self.produce_value();
         self.instructions.push(Instruction::Load {
@@ -785,6 +801,12 @@ enum Instruction {
         dst: Value,
         op: IntCompareOp,
     },
+    FCmp {
+        lhs: Value,
+        rhs: Value,
+        dst: Value,
+        op: FloatCompareOp,
+    },
     INeg(Unop),
     FNeg(Unop),
     FAbs(Unop),
@@ -875,6 +897,16 @@ pub enum IntCompareOp {
     UnsignedLessThanOrEqual,
     UnsignedGreaterThan,
     UnsignedGreaterThanOrEqual,
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub enum FloatCompareOp {
+    Equal,
+    NotEqual,
+    LessThan,
+    LessThanOrEqual,
+    GreaterThan,
+    GreaterThanOrEqual,
 }
 
 /// A compiled function ready to be called.

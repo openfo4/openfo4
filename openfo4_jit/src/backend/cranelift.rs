@@ -4,7 +4,7 @@ use std::mem::ManuallyDrop;
 use std::sync::{Arc, Mutex};
 
 use cranelift_codegen::control::ControlPlane;
-use cranelift_codegen::ir::condcodes::IntCC;
+use cranelift_codegen::ir::condcodes::{FloatCC, IntCC};
 use cranelift_codegen::ir::{
     self, ArgumentExtension, ArgumentPurpose, BlockArg, InstBuilder, MemFlags, StackSlotData,
     StackSlotKind,
@@ -17,7 +17,7 @@ use cranelift_module::{Linkage, Module};
 use slab::Slab;
 
 use crate::backend::{FunctionDefinitionDesc, StackSlotDesc};
-use crate::{Instruction, IntCompareOp, Signature, Type, Value};
+use crate::{FloatCompareOp, Instruction, IntCompareOp, Signature, Type, Value};
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct FunctionId(usize);
@@ -510,6 +510,22 @@ impl CraneliftModule {
                         };
 
                         let res = builder.ins().icmp(cond, lhs, rhs);
+                        values[dst.0] = Some(res);
+                    }
+                    Instruction::FCmp { lhs, rhs, dst, op } => {
+                        let lhs = values[lhs.0].unwrap();
+                        let rhs = values[rhs.0].unwrap();
+
+                        let cond = match op {
+                            FloatCompareOp::Equal => FloatCC::Equal,
+                            FloatCompareOp::NotEqual => FloatCC::NotEqual,
+                            FloatCompareOp::LessThan => FloatCC::LessThan,
+                            FloatCompareOp::LessThanOrEqual => FloatCC::LessThanOrEqual,
+                            FloatCompareOp::GreaterThan => FloatCC::GreaterThan,
+                            FloatCompareOp::GreaterThanOrEqual => FloatCC::GreaterThanOrEqual,
+                        };
+
+                        let res = builder.ins().fcmp(cond, lhs, rhs);
                         values[dst.0] = Some(res);
                     }
                     Instruction::Load {

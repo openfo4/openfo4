@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 
 use openfo4_jit::{
-    Block, Compiler, FunctionBuilder, FunctionId, IntCompareOp, Signature, StackSlot,
-    Type as JitType, Value as JitValue, Variable as JitVariable,
+    Block, Compiler, FloatCompareOp, FunctionBuilder, FunctionId, IntCompareOp, Signature,
+    StackSlot, Type as JitType, Value as JitValue, Variable as JitVariable,
 };
 use openfo4_pex::{Function, Instruction, Value};
 
@@ -333,18 +333,33 @@ fn translate_function_body(
             | Instruction::CmpLe(op)
             | Instruction::CmpGt(op)
             | Instruction::CmpGe(op) => {
-                let cmp_op = match instruction {
-                    Instruction::CmpEq(_) => IntCompareOp::Equal,
-                    Instruction::CmpLt(_) => IntCompareOp::SignedLessThan,
-                    Instruction::CmpLe(_) => IntCompareOp::SignedLessThanOrEqual,
-                    Instruction::CmpGt(_) => IntCompareOp::SignedGreaterThan,
-                    Instruction::CmpGe(_) => IntCompareOp::SignedGreaterThanOrEqual,
-                    _ => unreachable!(),
-                };
-
                 let lhs = translator.load(&op.lhs);
                 let rhs = translator.load(&op.rhs);
-                let res = translator.builder.icmp(lhs, rhs, cmp_op);
+
+                let res = if translator.get_type(&op.lhs) == Type::Float {
+                    let cmp_op = match instruction {
+                        Instruction::CmpEq(_) => FloatCompareOp::Equal,
+                        Instruction::CmpLt(_) => FloatCompareOp::LessThan,
+                        Instruction::CmpLe(_) => FloatCompareOp::LessThanOrEqual,
+                        Instruction::CmpGt(_) => FloatCompareOp::GreaterThan,
+                        Instruction::CmpGe(_) => FloatCompareOp::GreaterThanOrEqual,
+                        _ => unreachable!(),
+                    };
+
+                    translator.builder.fcmp(lhs, rhs, cmp_op)
+                } else {
+                    let cmp_op = match instruction {
+                        Instruction::CmpEq(_) => IntCompareOp::Equal,
+                        Instruction::CmpLt(_) => IntCompareOp::SignedLessThan,
+                        Instruction::CmpLe(_) => IntCompareOp::SignedLessThanOrEqual,
+                        Instruction::CmpGt(_) => IntCompareOp::SignedGreaterThan,
+                        Instruction::CmpGe(_) => IntCompareOp::SignedGreaterThanOrEqual,
+                        _ => unreachable!(),
+                    };
+
+                    translator.builder.icmp(lhs, rhs, cmp_op)
+                };
+
                 let res = translator.builder.uextend(res, JitType::I32);
                 translator.store(&op.dst, res);
             }
