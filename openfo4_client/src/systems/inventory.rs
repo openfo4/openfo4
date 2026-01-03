@@ -17,6 +17,8 @@ use crate::state::equipment::{
     EquipmentItemModels, load_equipment_item, load_equipment_item_models,
 };
 use crate::state::esp::EspLoader;
+use crate::state::hardcoded::KEYWORD_FEMALE;
+use crate::state::npc::ActorKeywords;
 use crate::systems::equipment::{EquipmentKey, unequip_item};
 use crate::systems::{PickupItemEvent, TransferItemEvent};
 
@@ -274,6 +276,10 @@ impl InventorySystem {
         let mut unequip_conflicting_events = Vec::new();
 
         for event in events.read::<EquipItemEvent>() {
+            let female = world
+                .get::<&ActorKeywords>(event.actor)
+                .is_ok_and(|kw| kw.contains(KEYWORD_FEMALE));
+
             let Ok(mut inventory) = world.get::<&mut Inventory>(event.actor) else {
                 continue;
             };
@@ -309,7 +315,7 @@ impl InventorySystem {
             let actor = event.actor;
             self.tasks.push(self.pool.spawn(async move {
                 let model =
-                    load_equipment_item_models(&loader, &esp_loader, form, &attachments, false)
+                    load_equipment_item_models(&loader, &esp_loader, form, &attachments, female)
                         .await;
 
                 (actor, key, model)
@@ -398,6 +404,10 @@ impl InventorySystem {
         }
 
         for actor in rescan_visiblity {
+            let female = world
+                .get::<&ActorKeywords>(actor)
+                .is_ok_and(|kw| kw.contains(KEYWORD_FEMALE));
+
             let Ok(mut inventory) = world.get::<&mut Inventory>(actor) else {
                 continue;
             };
@@ -446,9 +456,14 @@ impl InventorySystem {
                 let form = item.item;
                 let attachments = item.attachments.clone();
                 self.tasks.push(self.pool.spawn(async move {
-                    let model =
-                        load_equipment_item_models(&loader, &esp_loader, form, &attachments, false)
-                            .await;
+                    let model = load_equipment_item_models(
+                        &loader,
+                        &esp_loader,
+                        form,
+                        &attachments,
+                        female,
+                    )
+                    .await;
 
                     (actor, key, model)
                 }));

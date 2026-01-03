@@ -31,6 +31,12 @@ const PLAYER_LEVEL: u16 = 1000;
 #[derive(Clone, Debug)]
 pub struct ActorKeywords(pub HashSet<FormId>);
 
+impl ActorKeywords {
+    pub fn contains(&self, keyword: FormId) -> bool {
+        self.0.contains(&keyword)
+    }
+}
+
 /// A body part of an actor.
 #[derive(Copy, Clone, Debug)]
 pub struct BodyPartBone {
