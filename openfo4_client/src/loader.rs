@@ -1,9 +1,10 @@
-use std::io::{self, BufReader, Cursor, Read, Seek};
+use std::io::{self, Cursor, Read, Seek};
 use std::path::{Path, PathBuf};
 
+use game_tracing::trace_span;
+use hashbrown::{HashMap, HashSet};
 use openfo4_ba2::Archive;
 use openfo4_io::fs::File;
-use parking_lot::RwLock;
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -19,6 +20,7 @@ pub enum Error {
 #[derive(Debug)]
 pub struct FileLoader {
     sources: Vec<Source>,
+    files: HashMap<String, usize>,
 }
 
 impl FileLoader {
@@ -27,7 +29,10 @@ impl FileLoader {
         I: IntoIterator<Item = T>,
         T: AsRef<Path>,
     {
+        let _span = trace_span!("FileLoader::new").entered();
+
         let mut sources = Vec::new();
+        let mut files = HashMap::new();
 
         for location in locations {
             let meta = match std::fs::metadata(&location) {
@@ -45,18 +50,34 @@ impl FileLoader {
 
             tracing::info!("using data source {}", location.as_ref().to_string_lossy());
 
+            let source_index = sources.len();
+
             let source = if meta.is_dir() {
+                for file in scan_directory_files(&location.as_ref()) {
+                    files.insert(file, source_index);
+                }
+
                 Source::Directory(location.as_ref().to_owned())
             } else {
                 let file = File::open(location).unwrap();
                 let archive = futures_lite::future::block_on(Archive::new(file)).unwrap();
+
+                for file in archive.file_names() {
+                    files.insert(file.to_owned(), source_index);
+                }
+
                 Source::Archive(archive)
             };
 
             sources.push(source);
         }
 
-        Self { sources }
+        // Drop excess capacity, these will stay unchanged for the
+        // entire process lifetime.
+        sources.shrink_to_fit();
+        files.shrink_to_fit();
+
+        Self { sources, files }
     }
 
     pub async fn open(&self, path: &str) -> Result<Reader, Error> {
@@ -64,26 +85,45 @@ impl FileLoader {
 
         tracing::debug!("loading {}", path);
 
-        for source in self.sources.iter().rev() {
-            match source {
-                Source::Directory(root) => {
-                    let path = root.join(path);
-                    let file = std::fs::File::open(path).map_err(Error::Io)?;
-                    return Ok(Reader::File(file));
-                }
-                Source::Archive(archive) => {
-                    if !archive.contains(&path) {
-                        continue;
-                    }
+        let Some(index) = self.files.get(&path) else {
+            return Err(Error::NotFound(path.to_owned()));
+        };
 
-                    let buf = archive.read(&path).await.map_err(Error::Ba2)?;
-                    return Ok(Reader::Archive(Cursor::new(buf)));
-                }
+        match &self.sources[*index] {
+            Source::Directory(root) => {
+                let path = root.join(path);
+                let file = std::fs::File::open(path).map_err(Error::Io)?;
+                Ok(Reader::File(file))
+            }
+            Source::Archive(archive) => {
+                let buf = archive.read(&path).await.map_err(Error::Ba2)?;
+                Ok(Reader::Archive(Cursor::new(buf)))
             }
         }
-
-        Err(Error::NotFound(path))
     }
+}
+
+fn scan_directory_files(path: &Path) -> HashSet<String> {
+    let mut files = HashSet::new();
+
+    let mut queue = vec![path.to_owned()];
+    while let Some(path) = queue.pop() {
+        let dir = std::fs::read_dir(&path).unwrap();
+        for entry in dir {
+            let entry = entry.unwrap();
+
+            let name = path.join(entry.file_name());
+
+            let meta = entry.metadata().unwrap();
+            if meta.is_dir() {
+                queue.push(name);
+            } else if meta.is_file() {
+                files.insert(name.to_str().unwrap().to_owned());
+            }
+        }
+    }
+
+    files
 }
 
 #[derive(Debug)]
