@@ -395,7 +395,7 @@ where
 
 #[derive(Clone, Debug)]
 pub struct QuestFragments {
-    pub script: Script,
+    pub script: Option<Script>,
     pub fragments: Vec<QuestFragment>,
     pub aliases: Vec<QuestAlias>,
 }
@@ -414,7 +414,13 @@ impl DecodeScriptSection for QuestFragments {
         u8::decode(&mut buf)?; // Unknwon?
         let fragment_count = u16::decode(&mut buf)?;
 
-        let script = Script::decode_section(&mut buf, version, object_format)?;
+        let script = if fragment_count != 0 {
+            Some(Script::decode_section(&mut buf, version, object_format)?)
+        } else {
+            // Only one 0x0000 present if no fragments?
+            u16::decode(&mut buf)?;
+            None
+        };
 
         let fragments = (0..fragment_count)
             .map(|_| QuestFragment::decode(&mut buf))
