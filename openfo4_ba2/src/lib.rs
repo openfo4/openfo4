@@ -93,13 +93,23 @@ where
         };
 
         for chunk in chunks {
+            let size = if chunk.compressed_len == 0 {
+                chunk.decompressed_len
+            } else {
+                chunk.compressed_len
+            };
+
             buf.clear();
-            buf.resize(chunk.compressed_len as usize, 0);
+            buf.resize(size as usize, 0);
 
             self.reader.read_exact_at(&mut buf, chunk.offset).await?;
 
-            let mut decoder = ZlibDecoder::new(&buf[..]);
-            decoder.read_to_end(&mut bytes)?;
+            if chunk.compressed_len == 0 {
+                bytes.extend(&buf);
+            } else {
+                let mut decoder = ZlibDecoder::new(&buf[..]);
+                decoder.read_to_end(&mut bytes)?;
+            }
         }
 
         Ok(bytes)
