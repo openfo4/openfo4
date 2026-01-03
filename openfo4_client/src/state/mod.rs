@@ -97,9 +97,6 @@ pub struct GameState {
 
 impl GameState {
     pub fn new(shared: Arc<SharedState>, pool: Arc<TaskPool>) -> Self {
-        let mut file =
-            EspFile::new(BufReader::new(File::open("../../Fallout4.esm").unwrap())).unwrap();
-
         let sources = [
             "../../archive/raw/Fallout4 - Animations.ba2",
             "../../archive/raw/Fallout4 - Interface.ba2",
@@ -124,7 +121,7 @@ impl GameState {
 
         let mut loader = EspLoader::new();
         let file_loader = Arc::new(FileLoader::new(sources));
-        loader.push(file);
+        loader.push("../../Fallout4.esm");
         let loader = Arc::new(loader);
 
         let mut asset_loader = AssetLoader::new();

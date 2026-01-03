@@ -7,11 +7,12 @@ use fields::FieldMap;
 use flate2::read::ZlibDecoder;
 use glam::Vec3;
 use hashbrown::HashMap;
+use openfo4_io::fs::{AsyncReadAt, Cursor};
+use parking_lot::RwLock;
 use thiserror::Error;
 
 use std::fmt::Debug;
-use std::io::{self, ErrorKind, SeekFrom};
-use std::io::{Read, Seek};
+use std::io::{self, ErrorKind, Read};
 use std::mem::MaybeUninit;
 
 use bytes::Buf;
@@ -101,20 +102,22 @@ pub struct EspFile<R> {
     //
     // It is unrealisitc for a file be larger than 4GiB, but in case that happens we
     // will simply not cache the records anymore, however the lookup still works correctly.
-    index: HashMap<FormId, u32>,
+    index: RwLock<HashMap<FormId, u32>>,
 }
 
 impl<R> EspFile<R>
 where
-    R: Read + Seek,
+    R: AsyncReadAt,
 {
-    pub fn new(reader: R) -> Result<Self, Error> {
-        let mut file = Self {
+    pub async fn new(reader: R) -> Result<Self, Error> {
+        let file = Self {
             reader,
-            index: HashMap::new(),
+            index: RwLock::new(HashMap::new()),
         };
 
-        let header = file.read_record_header()?;
+        let mut reader = Reader::new(&file.reader, &file.index);
+
+        let header = reader.read_record_header().await?;
         if header.typ != Text::TES4 {
             return Err(Error::BadMagic);
         }
@@ -122,9 +125,49 @@ where
         Ok(file)
     }
 
-    fn read_record_header(&mut self) -> Result<RecordHeader, Error> {
+    pub async fn lookup(&self, kind: Option<RecordKind>, id: FormId) -> Result<Record, Error> {
+        let mut reader = Reader::new(&self.reader, &self.index);
+        reader.lookup(kind, id).await
+    }
+
+    /// Returns an `Iterator` over all [`Record`]s in this `EspFile` with the given `kind`, if any.
+    pub fn lookup_all(&self, kind: Option<RecordKind>) -> LookupIter<'_, &R> {
+        let reader = Reader::new(&self.reader, &self.index);
+
+        LookupIter {
+            reader,
+            kind,
+            is_init: false,
+            position: 0,
+        }
+    }
+
+    pub async fn children(&self, kind: RecordChildren, id: FormId) -> Result<Vec<Record>, Error> {
+        let mut reader = Reader::new(&self.reader, &self.index);
+        reader.children(kind, id).await
+    }
+}
+
+#[derive(Debug)]
+struct Reader<'a, R> {
+    cursor: Cursor<R>,
+    index: &'a RwLock<HashMap<FormId, u32>>,
+}
+
+impl<'a, R> Reader<'a, R>
+where
+    R: AsyncReadAt,
+{
+    fn new(reader: R, index: &'a RwLock<HashMap<FormId, u32>>) -> Self {
+        Self {
+            cursor: Cursor::new(reader),
+            index,
+        }
+    }
+
+    async fn read_record_header(&mut self) -> Result<RecordHeader, Error> {
         let mut buf = [0; RecordHeader::SIZE];
-        match self.reader.read_exact(&mut buf) {
+        match self.cursor.read_exact(&mut buf).await {
             Ok(()) => (),
             Err(err) if err.kind() == ErrorKind::UnexpectedEof => return Err(Error::EndOfFile),
             Err(err) => return Err(Error::Io(err)),
@@ -133,49 +176,33 @@ where
         RecordHeader::decode(&buf[..])
     }
 
-    /// Returns an `Iterator` over all [`Record`]s in this `EspFile` with the given `kind`, if any.
-    pub fn lookup_all(&mut self, kind: Option<RecordKind>) -> LookupIter<'_, R> {
-        LookupIter {
-            file: self,
-            kind,
-            is_init: false,
-            position: 0,
-        }
-    }
-
     /// Look up a [`Record`] by its [`FormId`].
     ///
     /// A [`RecordKind`] can be provided optionally and may increase seeking performance.
-    pub fn lookup(&mut self, kind: Option<RecordKind>, id: FormId) -> Result<Record, Error> {
-        let position = self.index.get(&id).copied().unwrap_or_default();
-        self.reader.seek(SeekFrom::Start(position.into()))?;
+    async fn lookup(&mut self, kind: Option<RecordKind>, id: FormId) -> Result<Record, Error> {
+        let position = self.index.read().get(&id).copied().unwrap_or_default();
+        self.cursor.set_position(position.into());
 
         self.lookup_next_from_position(kind, Some(id), &mut position.into())
+            .await
     }
 
     /// Search for the next [`Record`] matching the given criteria starting from the given
     /// position. The `position` value is updated as the cursor is advanced.
     ///
     /// When this function returns an [`Error`] the value of `position` is not specified.
-    fn lookup_next_from_position(
+    async fn lookup_next_from_position(
         &mut self,
         kind: Option<RecordKind>,
         id: Option<FormId>,
         position: &mut u64,
     ) -> Result<Record, Error> {
-        let mut do_seek = true;
-
         loop {
             let header_position = *position;
 
-            // Seeking is quite expensive so we only do it when we actually
-            // are skipping data.
-            if do_seek {
-                self.reader.seek(SeekFrom::Start(header_position))?;
-                do_seek = false;
-            }
+            self.cursor.set_position(header_position);
 
-            let header = self.read_record_header()?;
+            let header = self.read_record_header().await?;
             *position += RecordHeader::SIZE as u64;
 
             if header.typ == Text::GRUP {
@@ -196,7 +223,6 @@ where
                             .all(|kind| kind.label() != header.label())
                     {
                         *position += u64::from(header.size);
-                        do_seek = true;
                     }
                 }
 
@@ -204,10 +230,13 @@ where
             }
 
             if RecordKind::from_label(header.typ).is_some_and(|v| v.is_cachable())
-                && self.index.len() < MAX_INDEX_CAP
+                && let Ok(header_position) = u32::try_from(header_position)
             {
-                if let Ok(header_position) = u32::try_from(header_position) {
-                    self.index.insert(header.form_id, header_position);
+                let index = self.index.read();
+                if !index.contains_key(&header.form_id) && index.len() < MAX_INDEX_CAP {
+                    drop(index);
+                    let mut index = self.index.write();
+                    index.insert(header.form_id, header_position);
                 }
             }
 
@@ -215,11 +244,10 @@ where
                 || kind.is_some_and(|kind| header.typ != kind.label())
             {
                 *position += u64::from(header.size);
-                do_seek = true;
                 continue;
             }
 
-            let data = self.read_record_data(header)?;
+            let data = self.read_record_data(header).await?;
             *position += u64::from(header.size);
 
             return Ok(Record {
@@ -230,15 +258,22 @@ where
         }
     }
 
-    pub fn children(&mut self, kind: RecordChildren, id: FormId) -> Result<Vec<Record>, Error> {
+    async fn children(&mut self, kind: RecordChildren, id: FormId) -> Result<Vec<Record>, Error> {
         // Lookup will scan exactly to the end of the record.
         // The next record will be a GRUP with the children if
         // the record has children.
-        let mut start_pos = self.index.get(&id).copied().unwrap_or_default().into();
-        self.lookup_next_from_position(Some(kind.parent_kind()), Some(id), &mut start_pos)?;
-        self.reader.seek(SeekFrom::Start(start_pos))?;
+        let mut start_pos = self
+            .index
+            .read()
+            .get(&id)
+            .copied()
+            .unwrap_or_default()
+            .into();
+        self.lookup_next_from_position(Some(kind.parent_kind()), Some(id), &mut start_pos)
+            .await?;
+        self.cursor.set_position(start_pos.into());
 
-        let header = self.read_record_header()?;
+        let header = self.read_record_header().await?;
         if header.typ != Text::GRUP {
             return Ok(Vec::new());
         }
@@ -250,21 +285,21 @@ where
 
                     let mut bytes_remaining = header.into_group().size;
                     while bytes_remaining > 0 {
-                        let header = self.read_record_header()?;
+                        let header = self.read_record_header().await?;
                         bytes_remaining = bytes_remaining.saturating_sub(RecordHeader::SIZE as u32);
 
                         // Skip over the children of the cell.
                         if header.typ == Text::GRUP {
                             let header = header.into_group();
                             if header.group_type == 8 || header.group_type == 9 {
-                                self.reader.seek(SeekFrom::Current(header.size.into()))?;
+                                self.cursor.advance(header.size.into());
                                 bytes_remaining = bytes_remaining.saturating_sub(header.size);
                             }
 
                             continue;
                         }
 
-                        let data = self.read_record_data(header)?;
+                        let data = self.read_record_data(header).await?;
                         cells.push(Record {
                             id: header.form_id,
                             flags: header.flags,
@@ -277,7 +312,7 @@ where
                     return Ok(cells);
                 }
                 RecordChildren::PersistentEntities | RecordChildren::TemporaryEntities => {
-                    let header = match self.read_record_header() {
+                    let header = match self.read_record_header().await {
                         Ok(header) => header,
                         Err(Error::EndOfFile) => return Ok(Vec::new()),
                         Err(err) => return Err(err),
@@ -298,25 +333,25 @@ where
 
                     let header = header.into_group();
                     if header.group_type != group_type {
-                        self.reader.seek(SeekFrom::Current(header.size.into()))?;
+                        self.cursor.advance(header.size.into());
                         continue;
                     }
 
-                    return self.read_records(header);
+                    return self.read_records(header).await;
                 }
             }
         }
     }
 
-    fn read_records(&mut self, header: GroupHeader) -> Result<Vec<Record>, Error> {
+    async fn read_records(&mut self, header: GroupHeader) -> Result<Vec<Record>, Error> {
         let mut bytes_remaining = header.size;
 
         let mut records = Vec::new();
 
         while bytes_remaining > 0 {
-            let header = self.read_record_header()?;
+            let header = self.read_record_header().await?;
 
-            let data = self.read_record_data(header)?;
+            let data = self.read_record_data(header).await?;
             records.push(Record {
                 id: header.form_id,
                 flags: header.flags,
@@ -330,11 +365,11 @@ where
         Ok(records)
     }
 
-    fn read_record_data(&mut self, header: RecordHeader) -> Result<RecordData, Error> {
+    async fn read_record_data(&mut self, header: RecordHeader) -> Result<RecordData, Error> {
         debug_assert_ne!(header.typ, Text::GRUP);
 
         let mut buf = vec![0; header.size as usize];
-        self.reader.read_exact(&mut buf)?;
+        self.cursor.read_exact(&mut buf).await?;
 
         if header.flags.contains(RecordHeaderFlags::DATA_COMPRESSED) {
             let mut input = &buf[..];
@@ -502,8 +537,11 @@ where
 }
 
 #[derive(Debug)]
-pub struct LookupIter<'a, R> {
-    file: &'a mut EspFile<R>,
+pub struct LookupIter<'a, R>
+where
+    R: AsyncReadAt,
+{
+    reader: Reader<'a, R>,
     /// Filter for the searched records.
     kind: Option<RecordKind>,
     is_init: bool,
@@ -512,7 +550,7 @@ pub struct LookupIter<'a, R> {
 
 impl<'a, R> Iterator for LookupIter<'a, R>
 where
-    R: Read + Seek,
+    R: AsyncReadAt,
 {
     type Item = Result<Record, Error>;
 
@@ -523,15 +561,15 @@ where
             // Seek to the start of the file.
             // We always need to do a deep scan of the entire file if we
             // want to be sure that we have found all records of a given type.
-            if let Err(err) = self.file.reader.seek(SeekFrom::Start(0)) {
-                return Some(Err(Error::Io(err)));
-            }
+            self.reader.cursor.set_position(0);
         }
 
-        match self
-            .file
-            .lookup_next_from_position(self.kind, None, &mut self.position)
-        {
+        // FIXME: Don't block here, implement Stream instead of Iterator.
+        match futures_lite::future::block_on(self.reader.lookup_next_from_position(
+            self.kind,
+            None,
+            &mut self.position,
+        )) {
             Ok(value) => Some(Ok(value)),
             Err(Error::EndOfFile) => None,
             Err(err) => Some(Err(err)),

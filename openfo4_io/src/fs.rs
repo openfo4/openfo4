@@ -176,6 +176,13 @@ where
         self.position = position;
     }
 
+    /// Advances the cursor by `count` bytes.
+    ///
+    /// This is equivalent to `set_position(position() + count)`.
+    pub fn advance(&mut self, count: u64) {
+        self.set_position(self.position() + count);
+    }
+
     fn fill_from_buffer(&mut self, buf: &mut [u8]) -> usize {
         let bytes_copied = usize::min(self.buffer.len(), buf.len());
         buf[..bytes_copied].copy_from_slice(&self.buffer[..bytes_copied]);
