@@ -2,7 +2,6 @@ mod codegen;
 mod validation;
 
 use std::collections::HashMap;
-use std::str::SplitTerminator;
 use std::sync::Arc;
 
 use openfo4_jit::{CompiledFunction, Signature};
