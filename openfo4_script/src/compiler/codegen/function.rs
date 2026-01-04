@@ -711,10 +711,15 @@ impl<'a> FunctionTranslator<'a> {
             Value::Int(value) => self.builder.iconst(JitType::I32, *value),
             Value::Float(value) => self.builder.fconst(JitType::F32, *value),
             Value::String(value) => {
-                // TODO: We can deduplicate strings here, even across functions calls.
-                self.builder.iconst(JitType::Pointer, 0);
-                let ptr = create_string_constant(self.constants, &value);
-                self.builder.iconst(JitType::Pointer, ptr.addr() as i64)
+                // Empty strings must be represented as a zero pointer.
+                if value.is_empty() {
+                    self.builder.iconst(JitType::Pointer, 0)
+                } else {
+                    // TODO: We can deduplicate strings here, even across functions calls.
+                    self.builder.iconst(JitType::Pointer, 0);
+                    let ptr = create_string_constant(self.constants, &value);
+                    self.builder.iconst(JitType::Pointer, ptr.addr() as i64)
+                }
             }
             Value::Ident(name) => self.load_var(name),
         }
@@ -878,10 +883,13 @@ fn perform_cast(
         (Type::Int, Type::Bool) => src,
         // Under IEEE 754 floats with value 0.0 have the exact bit pattern of 0.
         (Type::Float, Type::Bool) => translator.builder.bitcast(src, JitType::I32),
-        (Type::String, Type::Bool) => src,
-        (Type::Class(_), Type::Bool) => src,
-        (Type::Struct(_), Type::Bool) => src,
-        (Type::Array(_), Type::Bool) => src,
+        (Type::String | Type::Class(_) | Type::Struct(_) | Type::Array(_), Type::Bool) => {
+            // We need to reduce from isize to i32.
+            // We do a popcnt before ireduce so that we get a non-zero value, even
+            // if all LSB are zero.
+            let popcnt = translator.builder.popcnt(src);
+            translator.builder.ireduce(popcnt, JitType::I32)
+        }
         // Bools and ints 0..1 have the same integer representation.
         (Type::Bool, Type::Int) => src,
         (Type::Bool, Type::Float) => translator.builder.convert_uint_to_float(src, JitType::F32),

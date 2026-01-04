@@ -629,6 +629,11 @@ impl CraneliftModule {
                         let res = builder.ins().bitcast(ty, MemFlags::new(), src);
                         values[dst.0] = Some(res);
                     }
+                    Instruction::Popcnt(op) => {
+                        let src = values[op.src.0].unwrap();
+                        let res = builder.ins().popcnt(src);
+                        values[op.dst.0] = Some(res);
+                    }
                     Instruction::DefVar { ty, var, value } => {
                         let res = builder.declare_var(map_type(*ty));
                         let value = values[value.0].unwrap();

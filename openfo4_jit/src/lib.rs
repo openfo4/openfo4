@@ -800,6 +800,13 @@ impl<'a> FunctionBuilder<'a> {
         dst
     }
 
+    #[track_caller]
+    pub fn popcnt(&mut self, value: Value) -> Value {
+        self.assert_block_not_filled();
+
+        self.unop(value, Instruction::Popcnt)
+    }
+
     pub fn def_var(&mut self, ty: Type, value: Value) -> Variable {
         let var = Variable(self.next_variable);
         self.next_variable += 1;
@@ -989,6 +996,7 @@ enum Instruction {
         dst: Value,
         ty: Type,
     },
+    Popcnt(Unop),
 }
 
 #[derive(Copy, Clone, Debug)]
