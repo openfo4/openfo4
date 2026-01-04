@@ -661,14 +661,31 @@ fn translate_function_body(
     // Sometimes the final return instruction is missing and we must insert it.
     // This is only possible for functions that return "none" and the fact we
     // return "none" in this case is checked by the validation pass.
+    // Other functions that don't return also can also sometimes refer to this
+    // section due to weird pex codegen, however in that case this section
+    // is statically unreachable.
+    let return_ty = (!function.return_ty.is_empty() && function.return_ty.to_lowercase() != "none")
+        .then(|| data.resolve_ty_jit(&function.return_ty));
+
     if !translator.builder.is_current_block_full() {
-        translator.builder.return_(&[result_ok]);
+        if let Some(return_ty) = return_ty {
+            let rval = translator.builder.uninit(return_ty);
+            translator.builder.return_(&[rval, result_ok]);
+        } else {
+            translator.builder.return_(&[result_ok]);
+        }
     }
 
     if let Some(block) = blocks.get(&function.instructions.len()) {
         if !translator.builder.is_block_full(*block) {
             translator.builder.switch_to_block(*block);
-            translator.builder.return_(&[result_ok]);
+
+            if let Some(return_ty) = return_ty {
+                let rval = translator.builder.uninit(return_ty);
+                translator.builder.return_(&[rval, result_ok]);
+            } else {
+                translator.builder.return_(&[result_ok]);
+            }
         }
     }
 
@@ -860,7 +877,7 @@ fn perform_cast(
         // Bool conversions
         (Type::Int, Type::Bool) => src,
         // Under IEEE 754 floats with value 0.0 have the exact bit pattern of 0.
-        (Type::Float, Type::Bool) => translator.builder.bitcast(src, JitType::F32),
+        (Type::Float, Type::Bool) => translator.builder.bitcast(src, JitType::I32),
         (Type::String, Type::Bool) => src,
         (Type::Class(_), Type::Bool) => src,
         (Type::Struct(_), Type::Bool) => src,
