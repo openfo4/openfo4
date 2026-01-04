@@ -117,20 +117,20 @@ pub fn function_properties(
                     unreachable!();
                 };
 
-                if offset < 0 {
-                    preemption_points.push(index);
-                    stages.push(variables.clone());
-                }
+                // if offset < 0 {
+                //     preemption_points.push(index);
+                //     stages.push(variables.clone());
+                // }
             }
             Instruction::BranchIfFalse(op) | Instruction::BranchIfTrue(op) => {
                 let Value::Int(offset) = op.offset else {
                     unreachable!();
                 };
 
-                if offset < 0 {
-                    preemption_points.push(index);
-                    stages.push(variables.clone());
-                }
+                // if offset < 0 {
+                //     preemption_points.push(index);
+                //     stages.push(variables.clone());
+                // }
             }
             // Preemption should always happen before we call another function.
             // This is more efficient because the callee may be called from
