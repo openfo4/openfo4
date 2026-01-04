@@ -5,6 +5,7 @@ mod layout;
 mod trampoline;
 mod types;
 
+use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
@@ -26,10 +27,11 @@ pub const MAX_INSTRUCTIONS_BEFORE_PREEMPT: usize = 1024;
 #[error("codegen error")]
 pub struct Error;
 
-#[derive(Clone, Debug)]
 pub struct CodegenPass {
     data: CodegenData,
     next_type_id: usize,
+    // FIXME: Don't refcell this.
+    compiler: RefCell<Compiler>,
 }
 
 impl CodegenPass {
@@ -37,6 +39,7 @@ impl CodegenPass {
         Self {
             data: CodegenData::new(),
             next_type_id: 0,
+            compiler: RefCell::new(Compiler::new()),
         }
     }
 
@@ -237,7 +240,7 @@ impl CodegenPass {
     pub fn compile_fn(&mut self, class: &str, f: &str) -> Result<CompilationResult, Error> {
         self.compute_type_layouts();
 
-        let mut compiler = Compiler::new();
+        let mut compiler = self.compiler.borrow_mut();
 
         // The compile the function we must also compile all functions that
         // are called.

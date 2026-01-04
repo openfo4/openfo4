@@ -19,7 +19,6 @@ pub enum Error {
     Codegen(codegen::Error),
 }
 
-#[derive(Clone, Debug)]
 pub struct Context {
     validation: ValidationPass,
     codegen: CodegenPass,

@@ -85,7 +85,6 @@ pub(crate) struct EngineShared {
 #[derive(Clone, Debug)]
 pub struct ClassId(pub String);
 
-#[derive(Debug)]
 pub struct Registry {
     ctx: Context,
     native_functions: Vec<(String, String, NativeFunction)>,
