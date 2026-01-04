@@ -343,6 +343,11 @@ fn translate_function_body(
                 let res = translator.builder.fneg(src);
                 translator.store(&op.dst, res);
             }
+            Instruction::Not(op) => {
+                let src = translator.load(&op.src);
+                let res = translator.builder.bnot(src);
+                translator.store(&op.dst, res);
+            }
             Instruction::Store(op) => {
                 let value = translator.load(&op.src);
                 translator.store(&op.dst, value);

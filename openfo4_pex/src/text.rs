@@ -228,6 +228,11 @@ pub(crate) fn for_function(f: &Function) -> String {
                 let dst = for_value(&op.dst);
                 writeln!(text, "{dst} = {array}[{index}]").unwrap();
             }
+            Instruction::Not(op) => {
+                let src = for_value(&op.src);
+                let dst = for_value(&op.dst);
+                writeln!(text, "{dst} = not {src}").unwrap();
+            }
             op => todo!("{:?}", op),
         }
     }
