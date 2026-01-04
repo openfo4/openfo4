@@ -718,10 +718,8 @@ fn perform_cast(translator: &mut FunctionTranslator<'_>, src: &Value, dst: &Valu
         (Type::Float, Type::Int) => translator.builder.convert_float_to_sint(src, JitType::I32),
         // Bool conversions
         (Type::Int, Type::Bool) => src,
-        (Type::Float, Type::Bool) => {
-            let zero = translator.builder.fconst(JitType::F32, 0.0);
-            todo!();
-        }
+        // Under IEEE 754 floats with value 0.0 have the exact bit pattern of 0.
+        (Type::Float, Type::Bool) => translator.builder.bitcast(src, JitType::F32),
         // The pointers are set to zero if they are semantically none/empty.
         // The pointers already represent valid boolean values as is.
         (Type::String, Type::Bool) => src,

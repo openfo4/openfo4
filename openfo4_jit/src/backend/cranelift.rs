@@ -618,6 +618,12 @@ impl CraneliftModule {
                         let res = builder.ins().sextend(map_type(*ty), src);
                         values[dst.0] = Some(res);
                     }
+                    Instruction::Bitcast { value, dst, ty } => {
+                        let src = values[value.0].unwrap();
+                        let ty = map_type(*ty);
+                        let res = builder.ins().bitcast(ty, MemFlags::trusted(), src);
+                        values[dst.0] = Some(res);
+                    }
                     Instruction::DefVar { ty, var, value } => {
                         let res = builder.declare_var(map_type(*ty));
                         let value = values[value.0].unwrap();

@@ -697,6 +697,20 @@ impl<'a> FunctionBuilder<'a> {
         dst
     }
 
+    /// Reinterpret the bits of a value as a different type.
+    ///
+    /// # Codegen Safety
+    ///
+    /// - Both types must have the same size.
+    /// - The new type must have an aligned less than or equal to the current type.
+    #[track_caller]
+    pub fn bitcast(&mut self, value: Value, ty: Type) -> Value {
+        let dst = self.produce_value();
+        self.instructions
+            .push(Instruction::Bitcast { value, dst, ty });
+        dst
+    }
+
     pub fn def_var(&mut self, ty: Type, value: Value) -> Variable {
         let var = Variable(self.next_variable);
         self.next_variable += 1;
@@ -869,6 +883,11 @@ enum Instruction {
     GetVar {
         var: Variable,
         dst: Value,
+    },
+    Bitcast {
+        value: Value,
+        dst: Value,
+        ty: Type,
     },
 }
 
