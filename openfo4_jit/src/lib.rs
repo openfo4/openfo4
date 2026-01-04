@@ -773,6 +773,17 @@ impl<'a> FunctionBuilder<'a> {
         dst
     }
 
+    /// Reduce the integer witdth of a value by discarding the most significant bits.
+    #[track_caller]
+    pub fn ireduce(&mut self, value: Value, ty: Type) -> Value {
+        self.assert_block_not_filled();
+
+        let dst = self.produce_value();
+        self.instructions
+            .push(Instruction::IReduce { value, dst, ty });
+        dst
+    }
+
     /// Reinterpret the bits of a value as a different type.
     ///
     /// # Codegen Safety
@@ -955,6 +966,11 @@ enum Instruction {
         dst: Value,
         ty: Type,
     },
+    IReduce {
+        value: Value,
+        dst: Value,
+        ty: Type,
+    },
     DefVar {
         ty: Type,
         var: Variable,
@@ -1077,3 +1093,6 @@ impl Debug for CompiledFunction {
             .finish_non_exhaustive()
     }
 }
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub struct DataId(usize);
