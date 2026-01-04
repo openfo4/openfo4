@@ -636,6 +636,12 @@ impl<'a> FunctionTranslator<'a> {
             return;
         }
 
+        // ::nonevar is a magic variable that always holds none.
+        // Writing to it discards the value.
+        if name.to_lowercase() == "::nonevar" {
+            return;
+        }
+
         if let Some(local) = self.locals.get(&name.to_lowercase()) {
             self.builder.set_var(local.variable, value);
             return;
