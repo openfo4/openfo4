@@ -259,6 +259,11 @@ fn translate_function_body(
             current_block = *block;
         }
 
+        // Sometimes there are dead instructions present after returns.
+        if translator.builder.is_current_block_full() {
+            continue;
+        }
+
         match instruction {
             Instruction::Nop => {}
             Instruction::IAdd(op) => {
@@ -551,6 +556,25 @@ fn translate_function_body(
                 let res = translator.builder.uextend(res, JitType::I32);
                 translator.store(&op.return_assignment, res);
             }
+            Instruction::StructGet(op) => {
+                let offset =
+                    struct_member_offset(&mut translator, &op.struct_value, &op.member_name);
+
+                let src = translator.load(&op.struct_value);
+                let ty = translator.get_ty_name(&op.return_assignment);
+                let ty = translator.data.resolve_ty_jit(&ty);
+
+                translator.builder.load(ty, src, offset);
+            }
+            Instruction::StructSet(op) => {
+                let offset =
+                    struct_member_offset(&mut translator, &op.struct_value, &op.member_name);
+
+                let st = translator.load(&op.struct_value);
+                let value = translator.load(&op.value);
+
+                translator.builder.store(value, st, offset);
+            }
             op => todo!("{:?}", op),
         }
     }
@@ -686,6 +710,31 @@ impl<'a> FunctionTranslator<'a> {
                 }
 
                 panic!("undefined variable {}", name);
+            }
+        }
+    }
+
+    pub fn get_ty_name(&self, value: &Value) -> String {
+        match value {
+            Value::Null => "none".to_owned(),
+            Value::Bool(_) => "bool".to_owned(),
+            Value::Int(_) => "int".to_owned(),
+            Value::Float(_) => "float".to_owned(),
+            Value::String(_) => "string".to_owned(),
+            Value::Ident(name) => {
+                if name == "self" {
+                    return self.self_ty.to_lowercase();
+                };
+
+                if let Some(local) = self.locals.get(&name.to_lowercase()) {
+                    return local.ty_name.to_lowercase();
+                }
+
+                if let Some(global) = self.fields.get(&name.to_lowercase()) {
+                    return global.ty_name.to_lowercase();
+                }
+
+                panic!();
             }
         }
     }
@@ -1083,4 +1132,26 @@ fn abort_function(translator: &mut FunctionTranslator<'_>) {
     rvals.push(result);
 
     translator.builder.return_(&rvals);
+}
+
+fn struct_member_offset(
+    translator: &mut FunctionTranslator<'_>,
+    struct_value: &Value,
+    member_name: &Value,
+) -> u32 {
+    let Value::Ident(member_name) = &member_name else {
+        unreachable!();
+    };
+
+    let struct_name = translator.get_ty_name(&struct_value);
+    let st = translator.data.structs.get(&struct_name).unwrap();
+
+    let layout = st.layout(translator.data);
+
+    let member_offset = layout
+        .field_offsets
+        .get(&member_name.to_lowercase())
+        .unwrap();
+
+    *member_offset as u32
 }

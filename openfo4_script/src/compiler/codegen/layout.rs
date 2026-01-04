@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use openfo4_jit::Type as JitType;
 
-use crate::compiler::codegen::{ClassDef, CodegenData};
+use crate::compiler::codegen::{ClassDef, CodegenData, StructDef};
 
 pub fn compute_class_layout(data: &CodegenData, class: &ClassDef) -> ClassLayout {
     let mut fields = HashMap::new();
@@ -44,5 +44,26 @@ pub struct ClassLayout {
 impl ClassLayout {
     pub fn offset(&self, field: &str) -> Option<usize> {
         self.field_offsets.get(&field.to_lowercase()).copied()
+    }
+}
+
+pub fn compute_struct_layout(data: &CodegenData, st: &StructDef) -> ClassLayout {
+    let mut fields = HashMap::new();
+
+    let mut offset = 0;
+    for member in &st.s.members {
+        let ty = data.resolve_ty_jit(&member.ty);
+
+        if offset % ty.align() != 0 {
+            offset += ty.align() - (offset % ty.align());
+        }
+
+        fields.insert(member.name.to_lowercase(), offset);
+        offset += ty.size();
+    }
+
+    ClassLayout {
+        field_offsets: fields,
+        size: offset,
     }
 }

@@ -15,7 +15,7 @@ use thiserror::Error;
 
 use crate::compiler::codegen::function::FunctionResult;
 use crate::compiler::codegen::function_props::{FunctionProps, function_properties};
-use crate::compiler::codegen::layout::ClassLayout;
+use crate::compiler::codegen::layout::{ClassLayout, compute_class_layout, compute_struct_layout};
 use crate::compiler::codegen::types::Types;
 use crate::compiler::{
     CompilationResult, FieldType, NativeFunction, ObjectField, ObjectProperty, TypeLayout,
@@ -76,7 +76,9 @@ impl CodegenPass {
 
             for st in &class.structs {
                 let name = format!("{}#{}", class.name, st.name);
-                self.data.structs.insert(name.to_lowercase(), st.clone());
+                self.data
+                    .structs
+                    .insert(name.to_lowercase(), StructDef { s: st.clone() });
             }
 
             let mut properties = HashMap::new();
@@ -355,7 +357,7 @@ impl CodegenPass {
 struct CodegenData {
     types: Types,
     classes: HashMap<String, ClassDef>,
-    structs: HashMap<String, Struct>,
+    structs: HashMap<String, StructDef>,
 }
 
 impl CodegenData {
@@ -383,6 +385,7 @@ impl CodegenData {
             "var" => Type::Var,
             name if self.structs.contains_key(name) => Type::Struct(
                 self.structs[name]
+                    .s
                     .members
                     .iter()
                     .map(|v| (v.name.clone(), v.ty.clone()))
@@ -453,6 +456,17 @@ struct FunctionDef {
     native: Option<NativeFunction>,
     trampoline_func_id: Option<FunctionId>,
     props: Option<FunctionProps>,
+}
+
+#[derive(Clone, Debug)]
+struct StructDef {
+    pub s: Struct,
+}
+
+impl StructDef {
+    fn layout(&self, data: &CodegenData) -> ClassLayout {
+        compute_struct_layout(data, self)
+    }
 }
 
 fn find_function_callees(
