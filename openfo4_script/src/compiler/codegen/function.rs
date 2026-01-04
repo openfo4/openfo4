@@ -156,8 +156,6 @@ fn translate_function_body(
         );
     }
 
-    dbg!(&locals);
-
     let mut translator = FunctionTranslator {
         function,
         data,
@@ -539,8 +537,12 @@ fn translate_function_body(
                 todo!();
             }
             Instruction::Return(value) => {
-                let rval = translator.load(value);
-                translator.builder.return_(&[rval, result_ok]);
+                if !function.return_ty.is_empty() && function.return_ty.to_lowercase() != "none" {
+                    let rval = translator.load(value);
+                    translator.builder.return_(&[rval, result_ok]);
+                } else {
+                    translator.builder.return_(&[result_ok]);
+                }
             }
             Instruction::Cast(op) => {
                 let res = perform_cast(&mut translator, &op.src, &op.dst, &mut current_block);
