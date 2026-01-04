@@ -210,12 +210,14 @@ impl<'a> FunctionBuilder<'a> {
         Value(id)
     }
 
+    #[track_caller]
     fn unop<F>(&mut self, src: Value, op: F) -> Value
     where
         F: FnOnce(Unop) -> Instruction,
     {
         debug_assert!(src.0 < self.next_value);
         debug_assert!(!self.current_block_full);
+        self.assert_block_not_filled();
 
         let dst = self.produce_value();
         self.instructions.push(op(Unop { src, dst }));
@@ -312,6 +314,8 @@ impl<'a> FunctionBuilder<'a> {
     /// Create an integer constant.
     #[track_caller]
     pub fn iconst<T: Into<i64>>(&mut self, ty: Type, value: T) -> Value {
+        self.assert_block_not_filled();
+
         let id = self.produce_value();
         self.instructions
             .push(Instruction::IConst(ty, value.into(), id));
@@ -319,14 +323,20 @@ impl<'a> FunctionBuilder<'a> {
     }
 
     /// Creates a uninitialized value.
+    #[track_caller]
     pub fn uninit(&mut self, ty: Type) -> Value {
+        self.assert_block_not_filled();
+
         match ty {
             Type::I8 | Type::I16 | Type::I32 | Type::I64 | Type::Pointer => self.iconst(ty, 0),
             Type::F32 | Type::F64 => self.fconst(ty, 0.0),
         }
     }
 
+    #[track_caller]
     pub fn fconst<T: Into<f64>>(&mut self, ty: Type, value: T) -> Value {
+        self.assert_block_not_filled();
+
         let id = self.produce_value();
         self.instructions
             .push(Instruction::FConst(ty, value.into(), id));
@@ -334,38 +344,46 @@ impl<'a> FunctionBuilder<'a> {
     }
 
     /// Integer addition
+    #[track_caller]
     pub fn iadd(&mut self, lhs: Value, rhs: Value) -> Value {
         self.binop(lhs, rhs, Instruction::IAdd)
     }
 
     /// Integer subtraction
+    #[track_caller]
     pub fn isub(&mut self, lhs: Value, rhs: Value) -> Value {
         self.binop(lhs, rhs, Instruction::ISub)
     }
 
     /// Integer multiplication
+    #[track_caller]
     pub fn imul(&mut self, lhs: Value, rhs: Value) -> Value {
         self.binop(lhs, rhs, Instruction::IMul)
     }
 
     /// Unsigned integer division.
+    #[track_caller]
     pub fn udiv(&mut self, lhs: Value, rhs: Value) -> Value {
         self.binop(lhs, rhs, Instruction::UDiv)
     }
 
     /// Signed integer division.
+    #[track_caller]
     pub fn sdiv(&mut self, lhs: Value, rhs: Value) -> Value {
         self.binop(lhs, rhs, Instruction::SDiv)
     }
 
+    #[track_caller]
     pub fn urem(&mut self, lhs: Value, rhs: Value) -> Value {
         self.binop(lhs, rhs, Instruction::URem)
     }
 
+    #[track_caller]
     pub fn srem(&mut self, lhs: Value, rhs: Value) -> Value {
         self.binop(lhs, rhs, Instruction::SRem)
     }
 
+    #[track_caller]
     pub fn ineg(&mut self, value: Value) -> Value {
         self.unop(value, Instruction::INeg)
     }
@@ -378,6 +396,7 @@ impl<'a> FunctionBuilder<'a> {
     ///
     /// - `lhs` must be a floating point value.
     /// - `rhs` must be a floating point value.
+    #[track_caller]
     pub fn fadd(&mut self, lhs: Value, rhs: Value) -> Value {
         self.binop(lhs, rhs, Instruction::FAdd)
     }
@@ -391,6 +410,7 @@ impl<'a> FunctionBuilder<'a> {
     ///
     /// - `lhs` must be a floating point value.
     /// - `rhs` must be a floating point value.
+    #[track_caller]
     pub fn fsub(&mut self, lhs: Value, rhs: Value) -> Value {
         self.binop(lhs, rhs, Instruction::FSub)
     }
@@ -404,6 +424,7 @@ impl<'a> FunctionBuilder<'a> {
     ///
     /// - `lhs` must be a floating point value.
     /// - `rhs` must be a floating point value.
+    #[track_caller]
     pub fn fmul(&mut self, lhs: Value, rhs: Value) -> Value {
         self.binop(lhs, rhs, Instruction::FMul)
     }
@@ -416,37 +437,46 @@ impl<'a> FunctionBuilder<'a> {
     ///
     /// - `lhs` must be a floating point value.
     /// - `rhs` must be a floating point value.
+    #[track_caller]
     pub fn fdiv(&mut self, lhs: Value, rhs: Value) -> Value {
         self.binop(lhs, rhs, Instruction::FDiv)
     }
 
+    #[track_caller]
     pub fn fmin(&mut self, lhs: Value, rhs: Value) -> Value {
         self.binop(lhs, rhs, Instruction::FMin)
     }
 
+    #[track_caller]
     pub fn fmax(&mut self, lhs: Value, rhs: Value) -> Value {
         self.binop(lhs, rhs, Instruction::FMax)
     }
 
+    #[track_caller]
     pub fn fneg(&mut self, value: Value) -> Value {
         self.unop(value, Instruction::FNeg)
     }
 
     /// Absolute floating point value
+    #[track_caller]
     pub fn fabs(&mut self, value: Value) -> Value {
         self.unop(value, Instruction::FAbs)
     }
 
+    #[track_caller]
     pub fn floor(&mut self, value: Value) -> Value {
         self.unop(value, Instruction::Floor)
     }
 
+    #[track_caller]
     pub fn ceil(&mut self, value: Value) -> Value {
         self.unop(value, Instruction::Ceil)
     }
 
     #[track_caller]
     pub fn call(&mut self, func: FunctionId, args: &[Value]) -> Vec<Value> {
+        self.assert_block_not_filled();
+
         let Some(state) = self.compiler.functions.get(func.0) else {
             panic!("cannot call: function {:?} not declared", func);
         };
@@ -460,7 +490,10 @@ impl<'a> FunctionBuilder<'a> {
         returns
     }
 
+    #[track_caller]
     pub fn return_(&mut self, rvals: &[Value]) {
+        self.assert_block_not_filled();
+
         self.instructions.push(Instruction::Return(rvals.to_vec()));
         self.current_block_full = true;
         self.blocks_filled[self.current_block.unwrap().0] = true;
@@ -469,8 +502,10 @@ impl<'a> FunctionBuilder<'a> {
     /// Unconditional jump.
     ///
     /// Unconditionally jumps to the specified [`Block`] while passing the specified [`Value`]s.
+    #[track_caller]
     pub fn jump(&mut self, block: Block, block_args: &[Value]) {
         debug_assert!(block.0 < self.next_block);
+        self.assert_block_not_filled();
 
         self.instructions
             .push(Instruction::Jump(block, block_args.to_vec()));
@@ -481,6 +516,7 @@ impl<'a> FunctionBuilder<'a> {
     /// Conditional branch.
     ///
     /// Jumps to `true_block` when `condition != 0` and to `false_block` when `condition == 0`.
+    #[track_caller]
     pub fn brif(
         &mut self,
         condition: Value,
@@ -491,6 +527,7 @@ impl<'a> FunctionBuilder<'a> {
     ) {
         debug_assert!(true_block.0 < self.next_block);
         debug_assert!(false_block.0 < self.next_block);
+        self.assert_block_not_filled();
 
         self.instructions.push(Instruction::Brif {
             condition,
@@ -525,7 +562,10 @@ impl<'a> FunctionBuilder<'a> {
         self.create_stack_slot(size, align)
     }
 
+    #[track_caller]
     pub fn stack_load(&mut self, slot: StackSlot, ty: Type, offset: u32) -> Value {
+        self.assert_block_not_filled();
+
         let dst = self.produce_value();
         self.instructions.push(Instruction::StackLoad {
             ty,
@@ -536,8 +576,10 @@ impl<'a> FunctionBuilder<'a> {
         dst
     }
 
+    #[track_caller]
     pub fn stack_store(&mut self, slot: StackSlot, value: Value, offset: u32) {
         debug_assert!(value.0 < self.next_value);
+        self.assert_block_not_filled();
 
         self.instructions.push(Instruction::StackStore {
             slot,
@@ -546,8 +588,10 @@ impl<'a> FunctionBuilder<'a> {
         });
     }
 
+    #[track_caller]
     pub fn stack_addr(&mut self, slot: StackSlot, ty: Type, offset: u32) -> Value {
         debug_assert!(self.stack_slots.contains(slot.0));
+        self.assert_block_not_filled();
 
         let dst = self.produce_value();
         self.instructions.push(Instruction::StackAddr {
@@ -567,7 +611,10 @@ impl<'a> FunctionBuilder<'a> {
     /// Returns a value of type [`I8`].
     ///
     /// [`I8`]: Type::I8
+    #[track_caller]
     pub fn icmp(&mut self, lhs: Value, rhs: Value, op: IntCompareOp) -> Value {
+        self.assert_block_not_filled();
+
         let dst = self.produce_value();
 
         self.instructions
@@ -583,7 +630,10 @@ impl<'a> FunctionBuilder<'a> {
     /// Returns a value of type [`I8`].
     ///
     /// [`I8`]: Type::I8
+    #[track_caller]
     pub fn fcmp(&mut self, lhs: Value, rhs: Value, op: FloatCompareOp) -> Value {
+        self.assert_block_not_filled();
+
         let dst = self.produce_value();
 
         self.instructions
@@ -591,7 +641,10 @@ impl<'a> FunctionBuilder<'a> {
         dst
     }
 
+    #[track_caller]
     pub fn load(&mut self, ty: Type, addr: Value, offset: u32) -> Value {
+        self.assert_block_not_filled();
+
         let dst = self.produce_value();
         self.instructions.push(Instruction::Load {
             ty,
@@ -602,7 +655,10 @@ impl<'a> FunctionBuilder<'a> {
         dst
     }
 
+    #[track_caller]
     pub fn store(&mut self, value: Value, addr: Value, offset: u32) {
+        self.assert_block_not_filled();
+
         self.instructions.push(Instruction::Store {
             value,
             addr,
@@ -618,7 +674,10 @@ impl<'a> FunctionBuilder<'a> {
     ///
     /// - `value` must be a floating point value.
     /// - `ty` must be an integer type.
+    #[track_caller]
     pub fn convert_float_to_uint(&mut self, value: Value, ty: Type) -> Value {
+        self.assert_block_not_filled();
+
         let dst = self.produce_value();
 
         self.instructions.push(Instruction::FToU { value, ty, dst });
@@ -633,7 +692,10 @@ impl<'a> FunctionBuilder<'a> {
     ///
     /// - `value` must be a floating point value.
     /// - `ty` must be an integer type.
+    #[track_caller]
     pub fn convert_float_to_sint(&mut self, value: Value, ty: Type) -> Value {
+        self.assert_block_not_filled();
+
         let dst = self.produce_value();
 
         self.instructions.push(Instruction::FToS { value, ty, dst });
@@ -646,7 +708,10 @@ impl<'a> FunctionBuilder<'a> {
     ///
     /// - `value` must be an integer value.
     /// - `ty` must be a floating point type.
+    #[track_caller]
     pub fn convert_uint_to_float(&mut self, value: Value, ty: Type) -> Value {
+        self.assert_block_not_filled();
+
         let dst = self.produce_value();
 
         self.instructions.push(Instruction::UToF { value, ty, dst });
@@ -659,7 +724,10 @@ impl<'a> FunctionBuilder<'a> {
     ///
     /// - `value` must be an integer value.
     /// - `ty` must be a floating point type.
+    #[track_caller]
     pub fn convert_sint_to_float(&mut self, value: Value, ty: Type) -> Value {
+        self.assert_block_not_filled();
+
         let dst = self.produce_value();
 
         self.instructions.push(Instruction::SToF { value, ty, dst });
@@ -667,22 +735,27 @@ impl<'a> FunctionBuilder<'a> {
     }
 
     /// Bitwise and.
+    #[track_caller]
     pub fn band(&mut self, lhs: Value, rhs: Value) -> Value {
         self.binop(lhs, rhs, Instruction::BAnd)
     }
 
+    #[track_caller]
     pub fn bor(&mut self, lhs: Value, rhs: Value) -> Value {
         self.binop(lhs, rhs, Instruction::BOr)
     }
 
+    #[track_caller]
     pub fn bxor(&mut self, lhs: Value, rhs: Value) -> Value {
         self.binop(lhs, rhs, Instruction::BXor)
     }
 
+    #[track_caller]
     pub fn bnot(&mut self, value: Value) -> Value {
         self.unop(value, Instruction::BNot)
     }
 
+    #[track_caller]
     pub fn uextend(&mut self, value: Value, ty: Type) -> Value {
         let dst = self.produce_value();
         self.instructions
@@ -690,7 +763,10 @@ impl<'a> FunctionBuilder<'a> {
         dst
     }
 
+    #[track_caller]
     pub fn sextend(&mut self, value: Value, ty: Type) -> Value {
+        self.assert_block_not_filled();
+
         let dst = self.produce_value();
         self.instructions
             .push(Instruction::SExtend { value, dst, ty });
@@ -705,6 +781,8 @@ impl<'a> FunctionBuilder<'a> {
     /// - The new type must have an aligned less than or equal to the current type.
     #[track_caller]
     pub fn bitcast(&mut self, value: Value, ty: Type) -> Value {
+        self.assert_block_not_filled();
+
         let dst = self.produce_value();
         self.instructions
             .push(Instruction::Bitcast { value, dst, ty });
@@ -746,6 +824,12 @@ impl<'a> FunctionBuilder<'a> {
                 stack_slots: self.stack_slots,
             },
         );
+    }
+
+    #[track_caller]
+    #[inline]
+    fn assert_block_not_filled(&self) {
+        debug_assert!(!self.current_block_full);
     }
 }
 
