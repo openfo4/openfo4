@@ -12,7 +12,7 @@ use crate::compiler::codegen::function_props::{
 };
 use crate::compiler::codegen::trampoline::generate_guest_to_host_trampoline;
 use crate::compiler::codegen::{ClassDef, CodegenData, FunctionDef, Type};
-use crate::runtime::RESULT_OK;
+use crate::runtime::{Func, RESULT_ERROR, RESULT_OK};
 
 #[derive(Clone, Debug)]
 pub struct FunctionResult {
@@ -159,6 +159,7 @@ fn translate_function_body(
     dbg!(&locals);
 
     let mut translator = FunctionTranslator {
+        function,
         data,
         builder,
         locals,
@@ -537,7 +538,7 @@ fn translate_function_body(
                 translator.builder.return_(&[rval, result_ok]);
             }
             Instruction::Cast(op) => {
-                let res = perform_cast(&mut translator, &op.src, &op.dst);
+                let res = perform_cast(&mut translator, &op.src, &op.dst, &mut current_block);
                 translator.store(&op.dst, res);
             }
             Instruction::Is(op) => {
@@ -572,6 +573,7 @@ fn translate_function_body(
 }
 
 pub struct FunctionTranslator<'a> {
+    function: &'a Function,
     data: &'a CodegenData,
     pub builder: FunctionBuilder<'a>,
     locals: HashMap<String, Local>,
@@ -702,10 +704,16 @@ struct Local {
     variable: JitVariable,
 }
 
-fn perform_cast(translator: &mut FunctionTranslator<'_>, src: &Value, dst: &Value) -> JitValue {
-    let src_ty = translator.get_type(&src);
-    let dst_ty = translator.get_type(&dst);
-    let src = translator.load(&src);
+/// Performs a runtime cast of `src` to `dst`.
+fn perform_cast(
+    translator: &mut FunctionTranslator<'_>,
+    src_val: &Value,
+    dst_val: &Value,
+    block: &mut Block,
+) -> JitValue {
+    let src_ty = translator.get_type(&src_val);
+    let dst_ty = translator.get_type(&dst_val);
+    let src = translator.load(&src_val);
 
     // Identity casts are allowed.
     if src_ty == dst_ty {
@@ -720,8 +728,6 @@ fn perform_cast(translator: &mut FunctionTranslator<'_>, src: &Value, dst: &Valu
         (Type::Int, Type::Bool) => src,
         // Under IEEE 754 floats with value 0.0 have the exact bit pattern of 0.
         (Type::Float, Type::Bool) => translator.builder.bitcast(src, JitType::F32),
-        // The pointers are set to zero if they are semantically none/empty.
-        // The pointers already represent valid boolean values as is.
         (Type::String, Type::Bool) => src,
         (Type::Class(_), Type::Bool) => src,
         (Type::Struct(_), Type::Bool) => src,
@@ -749,7 +755,20 @@ fn perform_cast(translator: &mut FunctionTranslator<'_>, src: &Value, dst: &Valu
             let mut class_name = dst_class.to_lowercase();
             loop {
                 if class_name == src_class.to_lowercase() {
-                    todo!();
+                    let is_ok = perform_typecheck(translator, src_val, &class_name, block);
+
+                    let continue_block = translator.builder.create_block(&[]);
+                    let abort_block = translator.builder.create_block(&[]);
+
+                    translator
+                        .builder
+                        .brif(is_ok, continue_block, &[], abort_block, &[]);
+
+                    translator.builder.switch_to_block(abort_block);
+                    abort_function(translator);
+
+                    translator.builder.switch_to_block(continue_block);
+                    return src;
                 }
 
                 let class = translator.data.classes.get(&class_name).unwrap();
@@ -766,6 +785,7 @@ fn perform_cast(translator: &mut FunctionTranslator<'_>, src: &Value, dst: &Valu
     }
 }
 
+/// Performs a runtime typecheck whether `src` is `dst_class` or a subtype of `dst_class`.
 fn perform_typecheck(
     translator: &mut FunctionTranslator<'_>,
     src: &Value,
@@ -1044,4 +1064,23 @@ fn resumse_stack(
         translator.builder.brif(is_eq, block, &[], next_block, &[]);
         translator.builder.switch_to_block(next_block);
     }
+}
+
+/// Generate function abort.
+fn abort_function(translator: &mut FunctionTranslator<'_>) {
+    let mut rvals = vec![];
+
+    if !translator.function.return_ty.is_empty()
+        && translator.function.return_ty.to_lowercase() != "none"
+    {
+        let ty = translator
+            .data
+            .resolve_ty_jit(&translator.function.return_ty);
+        rvals.push(translator.builder.uninit(ty));
+    }
+
+    let result = translator.builder.iconst(JitType::I32, RESULT_ERROR);
+    rvals.push(result);
+
+    translator.builder.return_(&rvals);
 }
