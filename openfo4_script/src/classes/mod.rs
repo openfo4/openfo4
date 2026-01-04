@@ -1,22 +1,25 @@
-use std::collections::HashMap;
-use std::time::Duration;
-
-use crate::Engine;
-use crate::runtime::ObjectRef;
-
 mod actor;
 mod form;
 mod game;
 mod global_variable;
+mod keyword;
 mod math;
 mod message;
 mod object_reference;
 mod script_object;
+mod sound;
+mod spell;
 mod utility;
+
+use std::collections::HashMap;
+use std::time::Duration;
+
+use crate::engine::Engine;
+use crate::runtime::{ObjectAddr, ObjectRef};
 
 pub type Int = i32;
 pub type Float = f32;
-pub type Object = isize;
+pub type Object = ObjectAddr;
 pub type Bool = bool;
 
 // Don't reformat long lines in here. This function is essentially a big table
@@ -39,8 +42,11 @@ pub fn register_builtins(engine: &mut Engine) {
     engine.register_native_function("ObjectReference", "GetValue", object_reference::get_value);
     engine.register_native_function("ObjectReference", "SetValue", object_reference::set_value);
     engine.register_native_function("ObjectReference", "GetBaseValue", object_reference::get_base_value);
+    engine.register_native_function("ObjectReference", "GetItemCount", object_reference::get_item_count);
+    engine.register_native_function("ObjectReference", "GetLinkedRef", object_reference::get_linked_ref);
     engine.register_native_function("ObjectReference", "SetActorOwner", object_reference::set_actor_owner);
     engine.register_native_function("ObjectReference", "GetBaseObject", object_reference::get_base_object);
+    engine.register_native_function("ObjectReference", "IsOwnedBy", object_reference::is_owned_by);
     engine.register_native_function("ObjectReference", "RemoveItem", object_reference::remove_item);
 
     engine.register_native_function("Game", "GetAggressionAV", game::get_agression_av);
@@ -165,12 +171,28 @@ pub fn register_builtins(engine: &mut Engine) {
     // engine.register_native_function("Actor", "IsGhost", actor::is_ghost);
     // engine.register_native_function("Actor", "IsGuard", actor::is_guard);
 
+    engine.register_native_function("Utility", "Wait", utility::wait);
+
+    engine.register_native_function("Sound", "SetInstanceVolume", sound::set_instance_volume);
+    engine.register_native_function("Sound", "StopInstance", sound::stop_instance);
+    engine.register_native_function("Sound", "Play", sound::play);
+    engine.register_native_function("Sound", "PlayAndWait", sound::play_and_wait);
+
+    engine.register_native_function("Spell", "Cast", spell::cast);
+    engine.register_native_function("Spell", "IsHostile", spell::is_hostile);
+    engine.register_native_function("Spell", "RemoteCast", spell::remote_cast);
+
+    engine.register_native_function("GlobalVariable", "GetValue", global_variable::get_value);
+    engine.register_native_function("GlobalVariable", "SetValue", global_variable::set_value);
+
+    engine.register_native_function("Keyword", "SendStoryEvent", keyword::send_story_event);
+    engine.register_native_function("Keyword", "SendStoryEventAndWait", keyword::send_story_event_and_wait);
 }
 
-#[derive(Debug)]
 pub struct State {
     pub player: ObjectRef,
     pub actor_values: CoreActorValues,
+    pub provider: Box<dyn StateProvider>,
 }
 
 #[derive(Debug)]
@@ -198,4 +220,17 @@ pub struct ObjectData {
 enum Timer {
     RealTime(Duration),
     GameTime(Duration),
+}
+
+pub trait StateProvider: Send + Sync + 'static {
+    fn get_global(&self, global: ObjectAddr) -> Option<f32>;
+    fn set_global(&self, global: ObjectAddr, value: f32);
+
+    fn get_actor_value(&self, object: ObjectAddr, actor_value: ObjectAddr) -> Option<f32>;
+    fn set_actor_value(&self, object: ObjectAddr, actor_value: ObjectAddr, value: f32);
+
+    fn get_owner(&self, object: ObjectAddr) -> ObjectAddr;
+    fn set_owner(&self, object: ObjectAddr, owner: ObjectAddr);
+
+    fn linked_ref(&self, object: ObjectAddr, keyword: ObjectAddr) -> Option<ObjectAddr>;
 }

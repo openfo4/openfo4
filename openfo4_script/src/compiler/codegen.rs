@@ -16,7 +16,9 @@ use crate::compiler::codegen::function::FunctionResult;
 use crate::compiler::codegen::function_props::{FunctionProps, function_properties};
 use crate::compiler::codegen::layout::ClassLayout;
 use crate::compiler::codegen::types::Types;
-use crate::compiler::{CompilationResult, FieldType, NativeFunction, ObjectField, TypeLayout};
+use crate::compiler::{
+    CompilationResult, FieldType, NativeFunction, ObjectField, ObjectProperty, TypeLayout,
+};
 
 pub const MAX_INSTRUCTIONS_BEFORE_PREEMPT: usize = 1024;
 
@@ -74,6 +76,15 @@ impl CodegenPass {
                 self.data.structs.insert(name.to_lowercase(), st.clone());
             }
 
+            let mut properties = HashMap::new();
+            for prop in &class.properties {
+                let Some(var) = &prop.variable else {
+                    continue;
+                };
+
+                properties.insert(prop.name.to_lowercase(), var.to_lowercase());
+            }
+
             self.data.classes.insert(
                 class.name.to_lowercase(),
                 ClassDef {
@@ -84,6 +95,7 @@ impl CodegenPass {
                     type_id: self.next_type_id,
                     layout: None,
                     header: None,
+                    properties,
                 },
             );
             self.next_type_id += 1;
@@ -158,6 +170,70 @@ impl CodegenPass {
         }
     }
 
+    pub fn compute_class_layouts(
+        &mut self,
+        class: &str,
+    ) -> Result<HashMap<String, TypeLayout>, Error> {
+        self.compute_type_layouts();
+
+        let mut class_layouts = HashMap::new();
+        for class in self.data.classes.values() {
+            let mut class_fields = Vec::new();
+            let mut properties = Vec::new();
+
+            let mut next_class = Some(&class.name);
+            while let Some(class_name) = next_class.take() {
+                let class = self.data.get_class(class_name).unwrap();
+                let layout = class.layout.as_ref().unwrap();
+
+                for (field_name, field_offset) in &layout.field_offsets {
+                    let field_ty = self.data.resolve_ty(&class.fields.get(field_name).unwrap());
+
+                    class_fields.push(ObjectField {
+                        class: class_name.to_lowercase(),
+                        name: field_name.to_lowercase(),
+                        offset: *field_offset,
+                        ty: match field_ty {
+                            Type::Bool => FieldType::Bool,
+                            Type::Int => FieldType::I32,
+                            Type::Float => FieldType::F32,
+                            _ => FieldType::Pointer,
+                        },
+                    });
+                }
+
+                for (name, var) in &class.properties {
+                    let field = class_fields
+                        .iter()
+                        .position(|v| {
+                            v.class.to_lowercase() == class.name.to_lowercase()
+                                && v.name.to_lowercase() == var.to_lowercase()
+                        })
+                        .unwrap();
+
+                    properties.push(ObjectProperty {
+                        class: class.name.clone(),
+                        name: name.clone(),
+                        var: field,
+                    });
+                }
+
+                next_class = class.parent.as_ref();
+            }
+
+            class_layouts.insert(
+                class.name.to_lowercase(),
+                TypeLayout {
+                    header: class.header.clone(),
+                    fields: class_fields,
+                    properties,
+                },
+            );
+        }
+
+        Ok(class_layouts)
+    }
+
     pub fn compile_fn(&mut self, class: &str, f: &str) -> Result<CompilationResult, Error> {
         self.compute_type_layouts();
 
@@ -225,42 +301,6 @@ impl CodegenPass {
             dependencies.insert((class, function), depends_on);
         }
 
-        let mut class_layouts = HashMap::new();
-        for class in self.data.classes.values() {
-            let mut class_fields = Vec::new();
-            let mut next_class = Some(&class.name);
-            while let Some(class_name) = next_class.take() {
-                let class = self.data.get_class(class_name).unwrap();
-                let layout = class.layout.as_ref().unwrap();
-
-                for (field_name, field_offset) in &layout.field_offsets {
-                    let field_ty = self.data.resolve_ty(&class.fields.get(field_name).unwrap());
-
-                    class_fields.push(ObjectField {
-                        class: class_name.to_lowercase(),
-                        name: field_name.to_lowercase(),
-                        offset: *field_offset,
-                        ty: match field_ty {
-                            Type::Bool => FieldType::Bool,
-                            Type::Int => FieldType::I32,
-                            Type::Float => FieldType::F32,
-                            _ => FieldType::Pointer,
-                        },
-                    });
-                }
-
-                next_class = class.parent.as_ref();
-            }
-
-            class_layouts.insert(
-                class.name.to_lowercase(),
-                TypeLayout {
-                    header: class.header.clone(),
-                    fields: class_fields,
-                },
-            );
-        }
-
         let def = self.data.get_function_mut(class, &f).unwrap();
 
         if def.trampoline_func_id.is_none() {
@@ -277,7 +317,6 @@ impl CodegenPass {
         Ok(CompilationResult {
             function: compiler.compile_function(def.trampoline_func_id.unwrap()),
             stack_size: props.stack_size,
-            layouts: class_layouts,
         })
     }
 
@@ -400,6 +439,7 @@ struct ClassDef {
     type_id: usize,
     layout: Option<ClassLayout>,
     header: Option<Arc<[usize]>>,
+    properties: HashMap<String, String>,
 }
 
 #[derive(Clone, Debug)]

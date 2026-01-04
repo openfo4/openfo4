@@ -44,6 +44,15 @@ impl Context {
         self.codegen.define_native_function(class, func, f);
     }
 
+    pub fn compute_class_layouts(
+        &mut self,
+        class: &str,
+    ) -> Result<HashMap<String, TypeLayout>, Error> {
+        self.codegen
+            .compute_class_layouts(class)
+            .map_err(Error::Codegen)
+    }
+
     pub fn compile(&mut self, class: &str, func: &str) -> Result<CompilationResult, Error> {
         self.validation.validate().map_err(Error::Validation)?;
         let res = self
@@ -65,13 +74,13 @@ pub struct NativeFunction {
 pub struct CompilationResult {
     pub function: CompiledFunction,
     pub stack_size: usize,
-    pub layouts: HashMap<String, TypeLayout>,
 }
 
 #[derive(Clone, Debug)]
 pub struct TypeLayout {
     pub header: Option<Arc<[usize]>>,
     pub fields: Vec<ObjectField>,
+    pub properties: Vec<ObjectProperty>,
 }
 
 impl TypeLayout {
@@ -97,6 +106,13 @@ pub struct ObjectField {
     pub name: String,
     pub offset: usize,
     pub ty: FieldType,
+}
+
+#[derive(Clone, Debug)]
+pub struct ObjectProperty {
+    pub class: String,
+    pub name: String,
+    pub var: usize,
 }
 
 #[derive(Clone, Debug)]

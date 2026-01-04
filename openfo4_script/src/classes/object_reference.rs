@@ -123,6 +123,47 @@ pub fn get_base_object(caller: Caller<'_, State>, self_ptr: Object) -> Result<Ob
     todo!()
 }
 
+/// `GetItemCount`
+///
+/// ```text
+/// int Function GetItemCount(Form akItem) native
+/// ```
+pub fn get_item_count(
+    caller: Caller<'_, State>,
+    self_ptr: Object,
+    item: Object,
+) -> Result<Int, Exception> {
+    todo!()
+}
+
+/// `GetLinkedRef`
+///
+/// ```text
+/// ObjectReference Function GetLinkedRef(Keyword apKeyword = None) native
+/// ```
+pub fn get_linked_ref(
+    caller: Caller<'_, State>,
+    self_ptr: Object,
+    keyword: Object,
+) -> Result<Object, Exception> {
+    let linked_ref = caller.data().provider.linked_ref(self_ptr, keyword);
+    Ok(linked_ref.unwrap_or(Object::NULL))
+}
+
+/// `IsOwnedBy`
+///
+/// ```text
+/// bool Function IsOwnedBy(Actor akOwner) native
+/// ```
+pub fn is_owned_by(
+    caller: Caller<'_, State>,
+    self_ptr: Object,
+    actor: Object,
+) -> Result<Bool, Exception> {
+    let owner = caller.data().provider.get_owner(self_ptr);
+    Ok(owner == actor)
+}
+
 /// `RemoveItem`
 ///
 /// ```text

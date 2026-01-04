@@ -1,13 +1,17 @@
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
+use bytemuck::{Pod, Zeroable};
+
 use crate::compiler::TypeLayout;
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Zeroable, Pod)]
 #[repr(transparent)]
 pub struct ObjectAddr(usize);
 
 impl ObjectAddr {
+    pub const NULL: Self = Self(0);
+
     pub const fn from_raw(addr: usize) -> Self {
         Self(addr)
     }
@@ -87,23 +91,52 @@ impl Object {
         Self { memory, layout }
     }
 
-    pub fn set(&mut self, name: &str, value: i64) {
-        let Some(field) = self
-            .layout
-            .fields
-            .iter()
-            .find(|f| f.name.to_lowercase() == name.to_lowercase())
-        else {
+    pub fn set<T>(&mut self, class: &str, name: &str, value: T)
+    where
+        T: IntoValue,
+    {
+        let Some(field) = self.layout.fields.iter().find(|f| {
+            f.class.to_lowercase() == class.to_lowercase()
+                && f.name.to_lowercase() == name.to_lowercase()
+        }) else {
             return;
         };
 
         let start = field.offset;
         let end = field.offset + field.ty.size();
 
-        self.memory[start..end].copy_from_slice(&value.to_ne_bytes()[0..field.ty.size()]);
+        self.memory[start..end].copy_from_slice(&value.as_bytes()[0..field.ty.size()]);
     }
 
     pub fn as_ptr(&mut self) -> *mut u8 {
         self.memory.as_mut_ptr()
+    }
+}
+
+pub trait IntoValue {
+    fn as_bytes(&self) -> &[u8];
+}
+
+impl IntoValue for bool {
+    fn as_bytes(&self) -> &[u8] {
+        bytemuck::bytes_of(self)
+    }
+}
+
+impl IntoValue for i32 {
+    fn as_bytes(&self) -> &[u8] {
+        bytemuck::bytes_of(self)
+    }
+}
+
+impl IntoValue for f32 {
+    fn as_bytes(&self) -> &[u8] {
+        bytemuck::bytes_of(self)
+    }
+}
+
+impl IntoValue for ObjectAddr {
+    fn as_bytes(&self) -> &[u8] {
+        bytemuck::bytes_of(self)
     }
 }

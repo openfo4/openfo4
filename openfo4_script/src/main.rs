@@ -1,8 +1,9 @@
 use std::path::PathBuf;
 
+use openfo4_script::classes;
 use openfo4_script::classes::{CoreActorValues, State};
+use openfo4_script::engine::{Engine, Registry};
 use openfo4_script::runtime::{Caller, Context, Object, ObjectPool, RawVal, Stack};
-use openfo4_script::{Engine, Registry, classes};
 
 fn main() {
     let mut registry = Registry::new();

@@ -1,13 +1,19 @@
 use crate::classes::{Float, Object, State};
-use crate::runtime::Caller;
+use crate::runtime::{Caller, Exception};
 
 /// `GetValue`
 ///
 /// ```text
 /// float Function GetValue() native
 /// ```
-pub fn get_value(caller: Caller<'_, State>, self_ptr: Object) -> Float {
-    todo!()
+pub fn get_value(caller: Caller<'_, State>, self_ptr: Object) -> Result<Float, Exception> {
+    let value = caller
+        .data()
+        .provider
+        .get_global(self_ptr)
+        .unwrap_or_default();
+
+    Ok(value)
 }
 
 /// `SetValue`
@@ -15,6 +21,11 @@ pub fn get_value(caller: Caller<'_, State>, self_ptr: Object) -> Float {
 /// ```text
 /// Function SetValue(float afNewValue) native
 /// ```
-pub fn set_value(caller: Caller<'_, State>, self_ptr: Object, value: Float) {
-    todo!()
+pub fn set_value(
+    caller: Caller<'_, State>,
+    self_ptr: Object,
+    value: Float,
+) -> Result<(), Exception> {
+    caller.data().provider.set_global(self_ptr, value);
+    Ok(())
 }

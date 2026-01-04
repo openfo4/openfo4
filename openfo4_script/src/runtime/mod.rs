@@ -13,7 +13,7 @@ pub use object::{Object, ObjectAddr, ObjectPool, ObjectRef};
 pub use stack::Stack;
 
 use crate::compiler::CompilationResult;
-use crate::{Engine, EngineShared};
+use crate::engine::{Engine, EngineShared};
 
 pub(crate) const RESULT_OK: i32 = 0;
 pub(crate) const RESULT_ERROR: i32 = 1;
@@ -51,6 +51,10 @@ impl<T> Context<T> {
     pub fn data_mut(&mut self) -> &mut T {
         &mut self.data
     }
+
+    pub fn into_data(mut self) -> T {
+        self.data
+    }
 }
 
 // The stack pointer must be at offset 0.
@@ -77,9 +81,9 @@ pub union RawVal {
 
 #[derive(Clone, Debug)]
 pub struct Func {
-    pub ptr: NativeFnPtr,
-    pub signature: Signature,
-    pub stack_size: usize,
+    pub(crate) ptr: NativeFnPtr,
+    pub(crate) signature: Signature,
+    pub(crate) stack_size: usize,
 }
 
 impl Func {
