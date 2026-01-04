@@ -1,4 +1,5 @@
 mod builtin;
+mod constant;
 mod function;
 mod function_props;
 mod layout;
@@ -13,6 +14,7 @@ use openfo4_jit::{Compiler, FunctionId, Signature, Type as JitType};
 use openfo4_pex::{Function, Instruction, Module, Struct, Value};
 use thiserror::Error;
 
+use crate::compiler::codegen::constant::ConstantData;
 use crate::compiler::codegen::function::FunctionResult;
 use crate::compiler::codegen::function_props::{FunctionProps, function_properties};
 use crate::compiler::codegen::layout::{ClassLayout, compute_class_layout, compute_struct_layout};
@@ -69,6 +71,7 @@ impl CodegenPass {
                             native: None,
                             trampoline_func_id: None,
                             props: None,
+                            constants: Arc::default(),
                         },
                     );
                 }
@@ -279,6 +282,11 @@ impl CodegenPass {
                 // Compile the function.
                 let res = self.compile_function_internal(&class, &function, &mut compiler);
 
+                // TODO: FIXME: Don't leak this here.
+                // Constants must be kept alive until all function instances are dropped.
+                // NOTE THAT THIS MUST INCLUDE ALL CALLED FUNCTIONS RECURSIVELY.
+                core::mem::forget(res.constants);
+
                 self.data
                     .get_function_mut(&class, &function)
                     .unwrap()
@@ -456,6 +464,7 @@ struct FunctionDef {
     native: Option<NativeFunction>,
     trampoline_func_id: Option<FunctionId>,
     props: Option<FunctionProps>,
+    constants: Arc<Vec<ConstantData>>,
 }
 
 #[derive(Clone, Debug)]

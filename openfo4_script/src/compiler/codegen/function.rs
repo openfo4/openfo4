@@ -7,6 +7,7 @@ use openfo4_jit::{
 use openfo4_pex::{Function, Instruction, Value};
 
 use crate::compiler::codegen::builtin::call_builtin;
+use crate::compiler::codegen::constant::{ConstantData, create_string_constant};
 use crate::compiler::codegen::function_props::{
     FunctionProps, Stage, StageVariable, function_properties,
 };
@@ -14,10 +15,11 @@ use crate::compiler::codegen::trampoline::generate_guest_to_host_trampoline;
 use crate::compiler::codegen::{ClassDef, CodegenData, FunctionDef, Type};
 use crate::runtime::{Func, RESULT_ERROR, RESULT_OK};
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct FunctionResult {
     pub id: FunctionId,
     pub signature: Signature,
+    pub constants: Vec<ConstantData>,
 }
 
 pub fn translate_function(
@@ -30,6 +32,8 @@ pub fn translate_function(
     let props = function_properties(data, class, &function.function);
 
     debug_assert!(function.func_id.is_none());
+
+    let mut constants = Vec::new();
 
     let func_id = if function.function.is_native {
         let Some(native) = &function.native else {
@@ -46,7 +50,14 @@ pub fn translate_function(
         let func_id = compiler.declare_function(signature.clone());
 
         let builder = compiler.define_function(func_id);
-        translate_function_body(data, class, &function.function, &props, builder);
+        translate_function_body(
+            data,
+            class,
+            &function.function,
+            &props,
+            builder,
+            &mut constants,
+        );
 
         func_id
     };
@@ -54,6 +65,7 @@ pub fn translate_function(
     FunctionResult {
         id: func_id,
         signature,
+        constants,
     }
 }
 
@@ -91,6 +103,7 @@ fn translate_function_body(
     function: &Function,
     props: &FunctionProps,
     mut builder: FunctionBuilder<'_>,
+    constants: &mut Vec<ConstantData>,
 ) {
     let entry_block = builder.create_entry_block();
     builder.switch_to_block(entry_block);
@@ -164,6 +177,7 @@ fn translate_function_body(
         fields,
         self_ptr,
         self_ty: class.name.to_lowercase(),
+        constants,
     };
 
     let start_block = translator.builder.create_block(&[]);
@@ -606,6 +620,7 @@ pub struct FunctionTranslator<'a> {
     fields: HashMap<String, Field>,
     self_ptr: Option<JitValue>,
     self_ty: String,
+    constants: &'a mut Vec<ConstantData>,
 }
 
 impl<'a> FunctionTranslator<'a> {
@@ -615,8 +630,12 @@ impl<'a> FunctionTranslator<'a> {
             Value::Bool(value) => self.builder.iconst(JitType::I32, u8::from(*value)),
             Value::Int(value) => self.builder.iconst(JitType::I32, *value),
             Value::Float(value) => self.builder.fconst(JitType::F32, *value),
-            // TODO
-            Value::String(value) => self.builder.iconst(JitType::Pointer, 0),
+            Value::String(value) => {
+                // TODO: We can deduplicate strings here, even across functions calls.
+                self.builder.iconst(JitType::Pointer, 0);
+                let ptr = create_string_constant(self.constants, &value);
+                self.builder.iconst(JitType::Pointer, ptr.addr() as i64)
+            }
             Value::Ident(name) => self.load_var(name),
         }
     }
