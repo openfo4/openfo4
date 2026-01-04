@@ -161,6 +161,73 @@ pub(crate) fn for_function(f: &Function) -> String {
                 )
                 .unwrap();
             }
+            Instruction::Cast(op) => {
+                let src = for_value(&op.src);
+                let dst = for_value(&op.dst);
+                writeln!(text, "{} = cast {}", dst, src).unwrap();
+            }
+            Instruction::Is(op) => {
+                let object = for_value(&op.object);
+                let class = for_value(&op.class);
+                let dst = for_value(&op.return_assignment);
+                writeln!(text, "{dst} = is {object} {class}").unwrap();
+            }
+            Instruction::ArrayLength(op) => {
+                let src = for_value(&op.src);
+                let dst = for_value(&op.dst);
+                writeln!(text, "{dst} = array_length {src}").unwrap();
+            }
+            Instruction::ArrayFind(op) => {
+                let array_value = for_value(&op.array_value);
+                let return_index = for_value(&op.return_index);
+                let start_index = for_value(&op.start_index);
+                let value = for_value(&op.value);
+                writeln!(
+                    text,
+                    "{return_index} = array_find {array_value}[{start_index}..] {value}"
+                )
+                .unwrap();
+            }
+            Instruction::ArrayRemove(op) => {
+                let array_value = for_value(&op.array_value);
+                let index = for_value(&op.index);
+                let count = for_value(&op.count);
+                writeln!(text, "array_remove {array_value}[{index}..+{count}]").unwrap();
+            }
+            Instruction::PropertyGet(op) => {
+                let property = for_value(&op.property);
+                let value = for_value(&op.value);
+                let return_assignment = for_value(&op.return_assignment);
+                writeln!(
+                    text,
+                    "{return_assignment} = property_get {property} {value}"
+                )
+                .unwrap();
+            }
+            Instruction::PropertySet(op) => {
+                let property = for_value(&op.property);
+                let object = for_value(&op.object);
+                let value = for_value(&op.value);
+                writeln!(text, "property_set {property} {object} {value}").unwrap();
+            }
+            Instruction::StructGet(op) => {
+                let struct_value = for_value(&op.struct_value);
+                let member_name = for_value(&op.member_name);
+                let dst = for_value(&op.return_assignment);
+                writeln!(text, "{dst} = struct_get {struct_value} {member_name}").unwrap();
+            }
+            Instruction::StructSet(op) => {
+                let struct_value = for_value(&op.struct_value);
+                let member_name = for_value(&op.member_name);
+                let value = for_value(&op.value);
+                writeln!(text, "struct_set {struct_value} {member_name} {value}").unwrap();
+            }
+            Instruction::ArrayGet(op) => {
+                let array = for_value(&op.lhs);
+                let index = for_value(&op.rhs);
+                let dst = for_value(&op.dst);
+                writeln!(text, "{dst} = {array}[{index}]").unwrap();
+            }
             op => todo!("{:?}", op),
         }
     }

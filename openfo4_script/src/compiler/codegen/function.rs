@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::mem::offset_of;
 
 use openfo4_jit::{
     Block, Compiler, FloatCompareOp, FunctionBuilder, FunctionId, IntCompareOp, Signature,
@@ -13,7 +14,7 @@ use crate::compiler::codegen::function_props::{
 };
 use crate::compiler::codegen::trampoline::generate_guest_to_host_trampoline;
 use crate::compiler::codegen::{ClassDef, CodegenData, FunctionDef, Type};
-use crate::runtime::{Func, RESULT_ERROR, RESULT_OK};
+use crate::runtime::{ArrayObject, Func, RESULT_ERROR, RESULT_OK};
 
 #[derive(Debug)]
 pub struct FunctionResult {
@@ -591,6 +592,63 @@ fn translate_function_body(
 
                 translator.builder.store(value, st, offset);
             }
+            Instruction::ArrayLength(op) => {
+                let src = translator.load(&op.src);
+
+                let array_len = translator.builder.load(
+                    JitType::Pointer,
+                    src,
+                    offset_of!(ArrayObject, len) as u32,
+                );
+
+                // The array length is usize, but integers in payrus only i32.
+                let res = translator.builder.ireduce(array_len, JitType::I32);
+                translator.store(&op.dst, res);
+            }
+            Instruction::ArrayGet(op) => {
+                let src = translator.load(&op.lhs);
+                let index = translator.load(&op.rhs);
+
+                // Bounds check
+                let array_len = translator.builder.load(
+                    JitType::Pointer,
+                    src,
+                    offset_of!(ArrayObject, len) as u32,
+                );
+
+                // Papyrus integers are i32, but the array len is usize.
+                let index_wide = translator.builder.uextend(index, JitType::Pointer);
+
+                let is_ok =
+                    translator
+                        .builder
+                        .icmp(index_wide, array_len, IntCompareOp::UnsignedLessThan);
+
+                let continue_block = translator.builder.create_block(&[]);
+                let abort_block = translator.builder.create_block(&[]);
+                translator
+                    .builder
+                    .brif(is_ok, continue_block, &[], abort_block, &[]);
+
+                translator.builder.switch_to_block(abort_block);
+                abort_function(&mut translator);
+
+                translator.builder.switch_to_block(continue_block);
+
+                let array_ptr = translator.builder.load(
+                    JitType::Pointer,
+                    src,
+                    offset_of!(ArrayObject, ptr) as u32,
+                );
+
+                let ptr_size = translator
+                    .builder
+                    .iconst(JitType::Pointer, JitType::Pointer.size() as i64);
+                let offset = translator.builder.imul(index_wide, ptr_size);
+
+                let addr = translator.builder.iadd(array_ptr, offset);
+                translator.store(&op.dst, addr);
+            }
             op => todo!("{:?}", op),
         }
     }
@@ -626,7 +684,7 @@ pub struct FunctionTranslator<'a> {
 impl<'a> FunctionTranslator<'a> {
     pub fn load(&mut self, value: &Value) -> JitValue {
         match value {
-            Value::Null => self.builder.iconst(JitType::I32, 0),
+            Value::Null => self.builder.iconst(JitType::I64, 0),
             Value::Bool(value) => self.builder.iconst(JitType::I32, u8::from(*value)),
             Value::Int(value) => self.builder.iconst(JitType::I32, *value),
             Value::Float(value) => self.builder.fconst(JitType::F32, *value),

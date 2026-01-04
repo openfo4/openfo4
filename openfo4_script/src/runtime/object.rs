@@ -147,3 +147,10 @@ pub struct StringObject {
     pub ptr: *mut u8,
     pub len: usize,
 }
+
+#[derive(Copy, Clone, Debug)]
+#[repr(C)]
+pub struct ArrayObject {
+    pub ptr: *mut u8,
+    pub len: usize,
+}
