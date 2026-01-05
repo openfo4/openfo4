@@ -755,32 +755,10 @@ fn translate_function_body(
             Instruction::ArrayGet(op) => {
                 let src = translator.load(&op.lhs);
                 let index = translator.load(&op.rhs);
-
-                // Bounds check
-                let array_len = translator.builder.load(
-                    JitType::Pointer,
-                    src,
-                    offset_of!(ArrayObject, len) as u32,
-                );
-
-                // Papyrus integers are i32, but the array len is usize.
                 let index_wide = translator.builder.uextend(index, JitType::Pointer);
 
-                let is_ok =
-                    translator
-                        .builder
-                        .icmp(index_wide, array_len, IntCompareOp::UnsignedLessThan);
-
-                let continue_block = translator.builder.create_block(&[]);
-                let abort_block = translator.builder.create_block(&[]);
-                translator
-                    .builder
-                    .brif(is_ok, continue_block, &[], abort_block, &[]);
-
-                translator.builder.switch_to_block(abort_block);
-                abort_function(&mut translator);
-
-                translator.builder.switch_to_block(continue_block);
+                let count = translator.builder.iconst(JitType::I32, 1);
+                emit_array_bounds_check(&mut translator, &mut current_block, src, index, count);
 
                 let array_ptr = translator.builder.load(
                     JitType::Pointer,
@@ -797,7 +775,11 @@ fn translate_function_body(
                 translator.store(&op.dst, addr);
             }
             Instruction::ArrayCreate(op) => {
-                let layout = generate_type_layout(translator.data, &translator.get_type(&op.dst));
+                let Type::Array(elem_ty) = translator.get_type(&op.dst) else {
+                    unreachable!();
+                };
+
+                let layout = generate_type_layout(translator.data, &elem_ty);
                 let array_len = translator.load(&op.src);
                 let array_len = translator.builder.uextend(array_len, JitType::Pointer);
                 let array_ptr = call_malloc(&mut translator, ctx_ptr, layout, array_len);
@@ -818,6 +800,62 @@ fn translate_function_body(
                 );
 
                 translator.store(&op.dst, array_object_ptr);
+            }
+            Instruction::ArrayRemove(op) => {
+                let Type::Array(elem_ty) = translator.get_type(&op.array_value) else {
+                    unreachable!();
+                };
+
+                let array = translator.load(&op.array_value);
+                let index = translator.load(&op.index);
+                let count = translator.load(&op.count);
+                emit_array_bounds_check(&mut translator, &mut current_block, array, index, count);
+
+                let array_ptr = translator.builder.load(
+                    JitType::Pointer,
+                    array,
+                    offset_of!(ArrayObject, ptr) as u32,
+                );
+                let array_len = translator.builder.load(
+                    JitType::Pointer,
+                    array,
+                    offset_of!(ArrayObject, len) as u32,
+                );
+                let index_wide = translator.builder.uextend(index, JitType::Pointer);
+                let count_wide = translator.builder.uextend(count, JitType::Pointer);
+
+                // This cannot overflow after our bounds check.
+                let new_len = translator.builder.isub(array_len, count_wide);
+
+                // Allocate new array.
+                let layout = generate_type_layout(translator.data, &elem_ty);
+                let stride = layout.size();
+                let new_array_ptr = call_malloc(&mut translator, ctx_ptr, layout, new_len);
+
+                // Copy regions from old array.
+                // Copy 0..index.
+                let copy_leading_bytes = translator.builder.imul_imm(index_wide, stride as i64);
+                translator
+                    .builder
+                    .memcpy(array_ptr, new_array_ptr, copy_leading_bytes);
+                // Copy index+count..len.
+                let index_plus_count = translator.builder.iadd(index_wide, count_wide);
+                let copy_trailing_elems = translator.builder.isub(array_len, index_plus_count);
+                let copy_trailing_bytes = translator
+                    .builder
+                    .imul_imm(copy_trailing_elems, stride as i64);
+                let array_ptr_plus_index_count =
+                    translator.builder.iadd(array_ptr, index_plus_count);
+                let new_array_ptr_plus_index = translator.builder.iadd(array_ptr, index_wide);
+                translator.builder.memcpy(
+                    array_ptr_plus_index_count,
+                    new_array_ptr_plus_index,
+                    copy_trailing_bytes,
+                );
+
+                translator
+                    .builder
+                    .store(new_array_ptr, array, offset_of!(ArrayObject, ptr) as u32);
             }
             op => todo!("{:?}", op),
         }
@@ -1526,4 +1564,42 @@ fn call_malloc(
         .builder
         .call(translator.data.malloc, &[ctx_ptr, layout_ptr, array_len]);
     res[0]
+}
+
+fn emit_array_bounds_check(
+    translator: &mut FunctionTranslator<'_>,
+    block: &mut Block,
+    array: JitValue,
+    index: JitValue,
+    count: JitValue,
+) {
+    // Bounds check
+    let array_len =
+        translator
+            .builder
+            .load(JitType::Pointer, array, offset_of!(ArrayObject, len) as u32);
+
+    // Papyrus integers are i32, but the array len is usize.
+    let index_wide = translator.builder.uextend(index, JitType::Pointer);
+    let count_wide = translator.builder.uextend(count, JitType::Pointer);
+    let index_plus_count = translator.builder.iadd(index_wide, count_wide);
+
+    // index + count <= len
+    let is_ok = translator.builder.icmp(
+        index_plus_count,
+        array_len,
+        IntCompareOp::UnsignedGreaterThanOrEqual,
+    );
+
+    let continue_block = translator.builder.create_block(&[]);
+    let abort_block = translator.builder.create_block(&[]);
+    translator
+        .builder
+        .brif(is_ok, continue_block, &[], abort_block, &[]);
+
+    translator.builder.switch_to_block(abort_block);
+    abort_function(translator);
+
+    translator.builder.switch_to_block(continue_block);
+    *block = continue_block;
 }

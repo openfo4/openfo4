@@ -238,6 +238,18 @@ impl<'a> FunctionBuilder<'a> {
         dst
     }
 
+    fn binop_imm<F>(&mut self, lhs: Value, rhs: i64, op: F) -> Value
+    where
+        F: FnOnce(BinopImm) -> Instruction,
+    {
+        debug_assert!(lhs.0 < self.next_value);
+        debug_assert!(!self.current_block_full);
+
+        let dst = self.produce_value();
+        self.instructions.push(op(BinopImm { lhs, rhs, dst }));
+        dst
+    }
+
     pub fn create_entry_block(&mut self) -> Block {
         let state = &self.compiler.functions[self.id.0];
 
@@ -828,6 +840,22 @@ impl<'a> FunctionBuilder<'a> {
         dst
     }
 
+    /// Copies `size` bytes from `src..src+size` to `dst..dst+size`.
+    pub fn memcpy(&mut self, src: Value, dst: Value, size: Value) {
+        self.assert_block_not_filled();
+
+        self.instructions
+            .push(Instruction::Memcpy { src, dst, size });
+    }
+
+    pub fn iadd_imm(&mut self, lhs: Value, rhs: i64) -> Value {
+        self.binop_imm(lhs, rhs, Instruction::IAddImm)
+    }
+
+    pub fn imul_imm(&mut self, lhs: Value, rhs: i64) -> Value {
+        self.binop_imm(lhs, rhs, Instruction::IMulImm)
+    }
+
     /// Finalize the function definition.
     pub fn finalize(self) {
         let func_id = self.compiler.functions[self.id.0].id;
@@ -997,6 +1025,13 @@ enum Instruction {
         ty: Type,
     },
     Popcnt(Unop),
+    Memcpy {
+        src: Value,
+        dst: Value,
+        size: Value,
+    },
+    IAddImm(BinopImm),
+    IMulImm(BinopImm),
 }
 
 #[derive(Copy, Clone, Debug)]
@@ -1009,6 +1044,13 @@ struct Unop {
 struct Binop {
     lhs: Value,
     rhs: Value,
+    dst: Value,
+}
+
+#[derive(Copy, Clone, Debug)]
+struct BinopImm {
+    lhs: Value,
+    rhs: i64,
     dst: Value,
 }
 

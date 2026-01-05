@@ -650,6 +650,22 @@ impl CraneliftModule {
                         let value = values[value.0].unwrap();
                         builder.def_var(var, value);
                     }
+                    Instruction::Memcpy { src, dst, size } => {
+                        let src = values[src.0].unwrap();
+                        let dst = values[dst.0].unwrap();
+                        let size = values[size.0].unwrap();
+                        builder.call_memcpy(module.isa().frontend_config(), dst, src, size);
+                    }
+                    Instruction::IAddImm(op) => {
+                        let lhs = values[op.lhs.0].unwrap();
+                        let res = builder.ins().iadd_imm(lhs, op.rhs);
+                        values[op.dst.0] = Some(res);
+                    }
+                    Instruction::IMulImm(op) => {
+                        let lhs = values[op.lhs.0].unwrap();
+                        let res = builder.ins().imul_imm(lhs, op.rhs);
+                        values[op.dst.0] = Some(res);
+                    }
                 }
             }
 
