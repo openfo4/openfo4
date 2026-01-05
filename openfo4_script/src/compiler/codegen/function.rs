@@ -114,7 +114,12 @@ fn translate_function_body(
     let stack_base = builder.load(JitType::Pointer, ctx_ptr, 0);
 
     let self_ptr = builder.block_params(entry_block).get(1).copied();
-    let params_offset = if self_ptr.is_some() { 2 } else { 1 };
+    let params_offset = if !function.is_static {
+        debug_assert!(self_ptr.is_some());
+        2
+    } else {
+        1
+    };
 
     let mut locals = HashMap::with_capacity(function.locals.len());
 
