@@ -22,12 +22,14 @@ pub fn call_builtin(
         ("math", "floor") => {
             let src = args[0];
             let res = translator.builder.floor(src);
+            let res = translator.builder.convert_float_to_sint(res, JitType::I32);
             Some(vec![res])
         }
         // Math.Ceiling(float) -> float
         ("math", "ceiling") => {
             let src = args[0];
             let res = translator.builder.ceil(src);
+            let res = translator.builder.convert_float_to_sint(res, JitType::I32);
             Some(vec![res])
         }
         // Math.DegreesToRadians(float) -> float

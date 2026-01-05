@@ -24,7 +24,7 @@ pub fn atan(_caller: Caller<'_, State>, x: f32) -> Result<f32, Exception> {
     Ok(x.atan())
 }
 
-pub fn ceiling(_: Caller<'_, State>, _: f32) -> Result<f32, Exception> {
+pub fn ceiling(_: Caller<'_, State>, _: f32) -> Result<i32, Exception> {
     unreachable!();
 }
 
@@ -36,7 +36,7 @@ pub fn degrees_to_radians(_: Caller<'_, State>, _: f32) -> Result<f32, Exception
     unreachable!();
 }
 
-pub fn floor(_: Caller<'_, State>, _: f32) -> Result<f32, Exception> {
+pub fn floor(_: Caller<'_, State>, _: f32) -> Result<i32, Exception> {
     unreachable!();
 }
 
