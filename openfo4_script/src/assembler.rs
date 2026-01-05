@@ -19,7 +19,7 @@
 use std::str::Split;
 
 use openfo4_pex::{
-    Binop, Class, Function, Instruction, Module, State, Unop, Value, VariableDefinition,
+    Binop, CallStatic, Class, Function, Instruction, Module, State, Unop, Value, VariableDefinition,
 };
 
 pub fn assemble(input: &str) -> Module {
@@ -116,8 +116,8 @@ fn parse_function(mut input: &str) -> Function {
         is_native = true;
     }
 
-    let end_line = input.find("\n").unwrap();
-    input = &input[end_line + 1..];
+    let end_line = input.find("\n").unwrap_or(input.len());
+    input = input.get(end_line + 1..).unwrap_or("");
 
     let mut locals = Vec::new();
     let mut instructions = Vec::new();
@@ -191,6 +191,17 @@ fn parse_instruction(input: &str) -> Instruction {
                 "fdiv" => Instruction::ISub(parse_binop(words, dst)),
                 "cast" => Instruction::Cast(parse_unop(words, dst)),
                 "array_create" => Instruction::ArrayCreate(parse_unop(words, dst)),
+                "call_static" => {
+                    let class = parse_value(words.next().unwrap());
+                    let function = parse_value(words.next().unwrap());
+                    let args = words.map(|v| parse_value(v)).collect();
+                    Instruction::CallStatic(CallStatic {
+                        class,
+                        function,
+                        args,
+                        return_assignment: dst,
+                    })
+                }
                 op => panic!("unknown op: {}", op),
             }
         }

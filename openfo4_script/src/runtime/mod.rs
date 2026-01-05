@@ -55,6 +55,12 @@ impl<T> Context<T> {
     pub fn into_data(mut self) -> T {
         self.data
     }
+
+    pub fn x(&self) {
+        unsafe {
+            dbg!(&self.engine.state.borrow().pool);
+        }
+    }
 }
 
 // The stack pointer must be at offset 0.
@@ -239,6 +245,20 @@ where
 impl<'a, T> Caller<'a, T> {
     pub fn data(&self) -> &T {
         unsafe { &*self.ctx.data }.downcast_ref().unwrap()
+    }
+
+    pub unsafe fn array<U>(&self, addr: ObjectAddr) -> &[U] {
+        unsafe {
+            let object = &*addr.to_raw().cast::<ArrayObject>();
+            core::slice::from_raw_parts(object.ptr.cast::<U>(), object.len)
+        }
+    }
+
+    pub unsafe fn array_mut<U>(&mut self, addr: ObjectAddr) -> &mut [U] {
+        unsafe {
+            let object = &*addr.to_raw().cast::<ArrayObject>();
+            core::slice::from_raw_parts_mut(object.ptr.cast::<U>(), object.len)
+        }
     }
 }
 

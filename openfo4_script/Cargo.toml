@@ -16,3 +16,7 @@ slab = "0.4.11"
 
 [lints]
 workspace = true
+
+[[test]]
+name = "array_ops"
+path = "tests/array_ops.rs"
