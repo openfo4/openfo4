@@ -91,11 +91,20 @@ impl Func {
     ///
     /// - The function pointer must point to a [`NativeFnPtr`] function.
     pub(crate) unsafe fn new(res: &CompilationResult) -> Self {
+        // Should always match the ABI of `host_call_trampoline`.
+        debug_assert_eq!(
+            res.function.signature(),
+            &Signature {
+                params: vec![Type::Pointer, Type::Pointer, Type::Pointer],
+                returns: vec![]
+            }
+        );
+
         Self {
             // SAFETY: The caller guarantees that the function is a valid
             // function pointer of type `NativeFnPtr`.
             ptr: unsafe { transmute::<*const u8, NativeFnPtr>(res.function.as_ptr()) },
-            signature: res.function.signature().clone(),
+            signature: res.signature.clone(),
             stack_size: res.stack_size,
         }
     }
@@ -116,6 +125,8 @@ impl Func {
         let _lock = ctx.engine.state_lock.read();
         let state = unsafe { ctx.engine.state.borrow() };
 
+        dbg!(ctx.stack.as_ptr());
+
         let ctx = RawContext {
             stack: ctx.stack.as_ptr(),
             state: &*state,
@@ -134,8 +145,8 @@ impl Func {
         Params: NativeTuple,
         Returns: NativeTuple,
     {
-        dbg!(&self.signature.returns, &self.signature.params);
-        if &self.signature.params[1..] != Params::TYPES || &self.signature.returns != Returns::TYPES
+        if &self.signature.params[1..] != Params::TYPES
+            || &self.signature.returns[..self.signature.returns.len() - 1] != Returns::TYPES
         {
             let expected = Signature {
                 params: Params::TYPES.to_vec(),

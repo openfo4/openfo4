@@ -362,6 +362,7 @@ impl CodegenPass {
         Ok(CompilationResult {
             function: compiler.compile_function(def.trampoline_func_id.unwrap()),
             stack_size: props.stack_size,
+            signature: def.signature.clone().unwrap(),
         })
     }
 

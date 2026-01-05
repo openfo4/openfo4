@@ -20,6 +20,9 @@ impl ObjectAddr {
     }
 }
 
+unsafe impl Send for ObjectAddr {}
+unsafe impl Sync for ObjectAddr {}
+
 #[derive(Debug, Default)]
 pub struct ObjectPool {
     objects: Mutex<HashMap<ObjectAddr, Object>>,

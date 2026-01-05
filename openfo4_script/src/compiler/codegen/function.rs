@@ -797,7 +797,7 @@ fn translate_function_body(
                 translator.store(&op.dst, addr);
             }
             Instruction::ArrayCreate(op) => {
-                let layout = generate_type_layout(translator.data, &translator.get_type(&op.src));
+                let layout = generate_type_layout(translator.data, &translator.get_type(&op.dst));
                 let array_len = translator.load(&op.src);
                 let array_len = translator.builder.uextend(array_len, JitType::Pointer);
                 let array_ptr = call_malloc(&mut translator, ctx_ptr, layout, array_len);
