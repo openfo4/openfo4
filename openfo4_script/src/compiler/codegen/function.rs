@@ -558,8 +558,92 @@ fn translate_function_body(
                 }
             }
             Instruction::PropertyGet(op) => {
-                dbg!(&op);
-                todo!();
+                let Value::Ident(prop_name) = &op.property else {
+                    unreachable!();
+                };
+
+                let class_name = translator.get_ty_name(&op.value);
+
+                // If a getter exists we must call it, otherwise we can load directly
+                // from the variable.
+                let res = if let Some(id) = translator
+                    .data
+                    .get_property_getter_id(&class_name, &prop_name)
+                {
+                    let func = &data.functions[id.0];
+
+                    let stage = &props.stages[next_stage];
+                    next_stage += 1;
+
+                    perform_checked_call(
+                        &mut translator,
+                        function,
+                        func,
+                        &[ctx_ptr],
+                        &mut current_block,
+                        stage,
+                        ctx_ptr,
+                        stack_base,
+                    )
+                    .unwrap()
+                } else {
+                    let class = data.get_class(&class_name).unwrap();
+                    let layout = class.layout.as_ref().unwrap();
+
+                    let prop = class.properties.get(&prop_name.to_lowercase()).unwrap();
+                    let offset = layout.offset(&prop.variable).unwrap();
+
+                    let src = translator.load(&op.value);
+                    let ty = translator
+                        .data
+                        .resolve_ty_jit(&translator.get_ty_name(&op.return_assignment));
+
+                    translator.builder.load(ty, src, offset as u32)
+                };
+
+                translator.store(&op.return_assignment, res);
+            }
+            Instruction::PropertySet(op) => {
+                let Value::Ident(prop_name) = &op.property else {
+                    unreachable!();
+                };
+
+                let class_name = translator.get_ty_name(&op.value);
+
+                let value = translator.load(&op.value);
+
+                // If a setter exists we must call it, otherwise we can store directly
+                // to the variable.
+                if let Some(id) = translator
+                    .data
+                    .get_property_setter_id(&class_name, &prop_name)
+                {
+                    let func = &data.functions[id.0];
+
+                    let stage = &props.stages[next_stage];
+                    next_stage += 1;
+
+                    perform_checked_call(
+                        &mut translator,
+                        function,
+                        func,
+                        &[ctx_ptr, value],
+                        &mut current_block,
+                        stage,
+                        ctx_ptr,
+                        stack_base,
+                    );
+                } else {
+                    let class = data.get_class(&class_name).unwrap();
+                    let layout = class.layout.as_ref().unwrap();
+
+                    let prop = class.properties.get(&prop_name.to_lowercase()).unwrap();
+                    let offset = layout.offset(&prop.variable).unwrap();
+
+                    let object = translator.load(&op.object);
+
+                    translator.builder.store(value, object, offset as u32);
+                }
             }
             Instruction::Return(value) => {
                 if !function.return_ty.is_empty() && function.return_ty.to_lowercase() != "none" {

@@ -1,11 +1,9 @@
-use std::{collections::HashMap, num::NonZeroUsize};
+use std::collections::HashMap;
 
 use openfo4_jit::Type as JitType;
-use openfo4_pex::{Function, Instruction, Value};
+use openfo4_pex::{Instruction, Value};
 
-use crate::compiler::codegen::{
-    ClassDef, CodegenData, FunctionDef, MAX_INSTRUCTIONS_BEFORE_PREEMPT, Type,
-};
+use crate::compiler::codegen::{CodegenData, FunctionDef, MAX_INSTRUCTIONS_BEFORE_PREEMPT, Type};
 
 #[derive(Clone, Debug)]
 pub struct FunctionProps {
@@ -183,8 +181,52 @@ pub fn function_properties(data: &CodegenData, func: &FunctionDef) -> FunctionPr
                 preemption_points.push(index);
                 stages.push(variables.clone());
             }
-            Instruction::PropertyGet(op) => {}
-            Instruction::PropertySet(op) => {}
+            Instruction::PropertyGet(op) => {
+                let Value::Ident(object) = &op.value else {
+                    unreachable!();
+                };
+                let Value::Ident(prop_name) = &op.property else {
+                    unreachable!();
+                };
+
+                let class_name = find_var(&object);
+
+                let Some(func_id) = data.get_property_getter_id(&class_name, &prop_name) else {
+                    continue;
+                };
+
+                let func = &data.functions[func_id.0];
+                let props = func.props.as_ref().unwrap();
+
+                may_error |= props.may_error;
+                stack_size = stack_size.max(props.stack_size);
+
+                preemption_points.push(index);
+                stages.push(variables.clone());
+            }
+            Instruction::PropertySet(op) => {
+                let Value::Ident(object) = &op.object else {
+                    unreachable!();
+                };
+                let Value::Ident(prop_name) = &op.property else {
+                    unreachable!();
+                };
+
+                let class_name = find_var(&object);
+
+                let Some(func_id) = data.get_property_setter_id(&class_name, &prop_name) else {
+                    continue;
+                };
+
+                let func = &data.functions[func_id.0];
+                let props = func.props.as_ref().unwrap();
+
+                may_error |= props.may_error;
+                stack_size = stack_size.max(props.stack_size);
+
+                preemption_points.push(index);
+                stages.push(variables.clone());
+            }
             Instruction::Return(op) => {}
             Instruction::Cast(op) => {}
             Instruction::Is(op) => {}

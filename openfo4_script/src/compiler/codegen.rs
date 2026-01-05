@@ -294,7 +294,7 @@ impl CodegenPass {
                 continue;
             }
 
-            let callees = find_function_callees(&self.data, &class, &def.function);
+            let callees = find_function_callees(&self.data, &def);
 
             let mut depends_on = HashSet::new();
             for callee in callees {
@@ -475,6 +475,18 @@ impl CodegenData {
         let id = self.get_function_id(class, func)?;
         Some(&mut self.functions[id.0])
     }
+
+    fn get_property_getter_id(&self, class: &str, property: &str) -> Option<FunctionId> {
+        let class = self.classes.get(&class.to_lowercase())?;
+        let prop = class.properties.get(&property.to_lowercase())?;
+        prop.getter
+    }
+
+    fn get_property_setter_id(&self, class: &str, property: &str) -> Option<FunctionId> {
+        let class = self.classes.get(&class.to_lowercase())?;
+        let prop = class.properties.get(&property.to_lowercase())?;
+        prop.setter
+    }
 }
 
 #[derive(Clone, Debug, Default)]
@@ -523,24 +535,25 @@ impl StructDef {
     }
 }
 
-fn find_function_callees(data: &CodegenData, class: &str, function: &Function) -> Vec<FunctionId> {
+fn find_function_callees(data: &CodegenData, function: &FunctionDef) -> Vec<FunctionId> {
     let mut callees = Vec::new();
 
-    let current_class = data.classes.get(&class.to_lowercase()).unwrap();
+    let class = function.class.to_lowercase();
+    let current_class = data.classes.get(&class).unwrap();
 
     let find_var = |var_name: &str| -> String {
         match &*var_name.to_lowercase() {
-            "self" => return class.to_lowercase(),
+            "self" => return class.clone(),
             _ => (),
         }
 
-        for param in &function.params {
+        for param in &function.function.params {
             if param.name.to_lowercase() == var_name.to_lowercase() {
                 return param.ty.to_lowercase();
             }
         }
 
-        for local in &function.locals {
+        for local in &function.function.locals {
             if local.name.to_lowercase() == var_name.to_lowercase() {
                 return local.ty.to_lowercase();
             }
@@ -553,7 +566,7 @@ fn find_function_callees(data: &CodegenData, class: &str, function: &Function) -
         todo!()
     };
 
-    for instruction in &function.instructions {
+    for instruction in &function.function.instructions {
         match instruction {
             Instruction::CallMethod(op) => {
                 let Value::Ident(object) = &op.object else {
@@ -580,6 +593,36 @@ fn find_function_callees(data: &CodegenData, class: &str, function: &Function) -
                 let func = data.get_function_id(&class_name, &function_name).unwrap();
 
                 callees.push(func);
+            }
+            Instruction::PropertyGet(op) => {
+                let Value::Ident(object) = &op.value else {
+                    unreachable!()
+                };
+
+                let Value::Ident(prop_name) = &op.property else {
+                    unreachable!()
+                };
+
+                let class_name = find_var(&object);
+
+                if let Some(func) = data.get_property_getter_id(&class_name, &prop_name) {
+                    callees.push(func);
+                }
+            }
+            Instruction::PropertySet(op) => {
+                let Value::Ident(object) = &op.object else {
+                    unreachable!()
+                };
+
+                let Value::Ident(prop_name) = &op.property else {
+                    unreachable!()
+                };
+
+                let class_name = find_var(&object);
+
+                if let Some(func) = data.get_property_setter_id(&class_name, &prop_name) {
+                    callees.push(func);
+                }
             }
             _ => {}
         }
