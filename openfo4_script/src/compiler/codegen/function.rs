@@ -258,6 +258,50 @@ fn translate_function_body(
 
                 resume_points.insert(stage.index, *block);
             }
+            Instruction::PropertyGet(op) => {
+                let Value::Ident(prop_name) = &op.property else {
+                    unreachable!();
+                };
+
+                let class_name = translator.get_ty_name(&op.value);
+
+                if translator
+                    .data
+                    .get_property_getter_id(&class_name, &prop_name)
+                    .is_some()
+                {
+                    let stage = &props.stages[next_stage];
+                    next_stage += 1;
+
+                    let block = blocks
+                        .entry(index)
+                        .or_insert_with(|| translator.builder.create_block(&[]));
+
+                    resume_points.insert(stage.index, *block);
+                }
+            }
+            Instruction::PropertySet(op) => {
+                let Value::Ident(prop_name) = &op.property else {
+                    unreachable!();
+                };
+
+                let class_name = translator.get_ty_name(&op.object);
+
+                if translator
+                    .data
+                    .get_property_setter_id(&class_name, &prop_name)
+                    .is_some()
+                {
+                    let stage = &props.stages[next_stage];
+                    next_stage += 1;
+
+                    let block = blocks
+                        .entry(index)
+                        .or_insert_with(|| translator.builder.create_block(&[]));
+
+                    resume_points.insert(stage.index, *block);
+                }
+            }
             _ => {}
         }
     }
@@ -573,6 +617,8 @@ fn translate_function_body(
 
                 let class_name = translator.get_ty_name(&op.value);
 
+                let src = translator.load(&op.value);
+
                 // If a getter exists we must call it, otherwise we can load directly
                 // from the variable.
                 let res = if let Some(id) = translator
@@ -588,7 +634,7 @@ fn translate_function_body(
                         &mut translator,
                         function,
                         func,
-                        &[ctx_ptr],
+                        &[ctx_ptr, src],
                         &mut current_block,
                         stage,
                         ctx_ptr,
@@ -600,9 +646,8 @@ fn translate_function_body(
                     let layout = class.layout.as_ref().unwrap();
 
                     let prop = class.properties.get(&prop_name.to_lowercase()).unwrap();
-                    let offset = layout.offset(&prop.variable).unwrap();
+                    let offset = layout.offset(&prop.variable.as_ref().unwrap()).unwrap();
 
-                    let src = translator.load(&op.value);
                     let ty = translator
                         .data
                         .resolve_ty_jit(&translator.get_ty_name(&op.return_assignment));
@@ -617,8 +662,9 @@ fn translate_function_body(
                     unreachable!();
                 };
 
-                let class_name = translator.get_ty_name(&op.value);
+                let class_name = translator.get_ty_name(&op.object);
 
+                let object = translator.load(&op.object);
                 let value = translator.load(&op.value);
 
                 // If a setter exists we must call it, otherwise we can store directly
@@ -636,7 +682,7 @@ fn translate_function_body(
                         &mut translator,
                         function,
                         func,
-                        &[ctx_ptr, value],
+                        &[ctx_ptr, object, value],
                         &mut current_block,
                         stage,
                         ctx_ptr,
@@ -647,9 +693,7 @@ fn translate_function_body(
                     let layout = class.layout.as_ref().unwrap();
 
                     let prop = class.properties.get(&prop_name.to_lowercase()).unwrap();
-                    let offset = layout.offset(&prop.variable).unwrap();
-
-                    let object = translator.load(&op.object);
+                    let offset = layout.offset(&prop.variable.as_ref().unwrap()).unwrap();
 
                     translator.builder.store(value, object, offset as u32);
                 }

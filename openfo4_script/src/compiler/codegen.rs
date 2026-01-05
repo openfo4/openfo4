@@ -90,9 +90,7 @@ impl CodegenPass {
 
             let mut properties = HashMap::new();
             for prop in &class.properties {
-                let Some(var) = &prop.variable else {
-                    continue;
-                };
+                let variable = prop.variable.as_ref().map(|v| v.to_lowercase());
 
                 let getter = prop.getter.as_ref().map(|func| {
                     FunctionId(self.data.functions.insert(FunctionDef {
@@ -123,7 +121,7 @@ impl CodegenPass {
                 properties.insert(
                     prop.name.to_lowercase(),
                     ClassProperty {
-                        variable: var.to_lowercase(),
+                        variable,
                         getter,
                         setter,
                     },
@@ -247,13 +245,17 @@ impl CodegenPass {
                 }
 
                 for (name, prop) in &class.properties {
-                    let field = class_fields
-                        .iter()
-                        .position(|v| {
-                            v.class.to_lowercase() == class.name.to_lowercase()
-                                && v.name.to_lowercase() == prop.variable.to_lowercase()
-                        })
-                        .unwrap();
+                    let Some(field) = class_fields.iter().position(|v| {
+                        v.class.to_lowercase() == class.name.to_lowercase()
+                            && prop
+                                .variable
+                                .as_ref()
+                                .is_some_and(|pv| pv.to_lowercase() == v.name.to_lowercase())
+                    }) else {
+                        // Properties without a backing variable cannot be accessed
+                        // externally.
+                        continue;
+                    };
 
                     properties.push(ObjectProperty {
                         class: class.name.clone(),
@@ -524,7 +526,7 @@ struct FunctionDef {
 
 #[derive(Clone, Debug)]
 struct ClassProperty {
-    pub variable: String,
+    pub variable: Option<String>,
     pub getter: Option<FunctionId>,
     pub setter: Option<FunctionId>,
 }
