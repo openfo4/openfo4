@@ -1,5 +1,6 @@
 use std::collections::{HashMap, HashSet};
 
+use indexmap::IndexSet;
 use openfo4_pex::{Class, Function, Instruction, Module, Property, Value};
 use thiserror::Error;
 
@@ -45,6 +46,7 @@ pub enum Error {
 pub struct ValidationPass {
     classes: HashMap<String, Class>,
     structs: HashMap<String, Type>,
+    unvalidated_classes: IndexSet<String>,
 }
 
 impl ValidationPass {
@@ -64,6 +66,8 @@ impl ValidationPass {
                 self.structs
                     .insert(name.to_lowercase(), Type::Struct(members));
             }
+
+            self.unvalidated_classes.insert(class.name.to_lowercase());
         }
     }
 
@@ -892,8 +896,9 @@ impl ValidationPass {
         Ok(())
     }
 
-    pub fn validate(&self) -> Result<(), Error> {
-        for class in self.classes.values() {
+    pub fn validate(&mut self) -> Result<(), Error> {
+        while let Some(class_name) = self.unvalidated_classes.pop() {
+            let class = self.classes.get(&class_name).unwrap();
             self.validate_class(&class)?;
 
             for state in &class.states {
