@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::mem::offset_of;
+use std::sync::LazyLock;
 
 use openfo4_jit::{
     Block, Compiler, FloatCompareOp, FunctionBuilder, FunctionId, IntCompareOp, Signature,
@@ -7,11 +8,13 @@ use openfo4_jit::{
 };
 use openfo4_pex::{Function, Instruction, Value};
 
+use crate::compiler::TypeLayout;
 use crate::compiler::codegen::builtin::call_builtin;
 use crate::compiler::codegen::constant::{ConstantData, create_string_constant};
 use crate::compiler::codegen::function_props::{
     FunctionProps, Stage, StageVariable, function_properties,
 };
+use crate::compiler::codegen::layout::{ARRAY_LAYOUT, generate_type_layout};
 use crate::compiler::codegen::trampoline::generate_guest_to_host_trampoline;
 use crate::compiler::codegen::{ClassDef, CodegenData, FunctionDef, Type};
 use crate::runtime::{ArrayObject, Func, ObjectTag, RESULT_ERROR, RESULT_OK};
@@ -21,6 +24,7 @@ pub struct FunctionResult {
     pub id: FunctionId,
     pub signature: Signature,
     pub constants: Vec<ConstantData>,
+    pub layouts: Vec<Box<TypeLayout>>,
 }
 
 pub fn translate_function(
@@ -35,6 +39,7 @@ pub fn translate_function(
     debug_assert!(function.func_id.is_none());
 
     let mut constants = Vec::new();
+    let mut layouts = Vec::new();
 
     let func_id = if function.function.is_native {
         let Some(native) = &function.native else {
@@ -58,6 +63,7 @@ pub fn translate_function(
             &props,
             builder,
             &mut constants,
+            &mut layouts,
         );
 
         func_id
@@ -67,6 +73,7 @@ pub fn translate_function(
         id: func_id,
         signature,
         constants,
+        layouts,
     }
 }
 
@@ -105,6 +112,7 @@ fn translate_function_body(
     props: &FunctionProps,
     mut builder: FunctionBuilder<'_>,
     constants: &mut Vec<ConstantData>,
+    layouts: &mut Vec<Box<TypeLayout>>,
 ) {
     let entry_block = builder.create_entry_block();
     builder.switch_to_block(entry_block);
@@ -184,6 +192,7 @@ fn translate_function_body(
         self_ptr,
         self_ty: class.name.to_lowercase(),
         constants,
+        layouts,
     };
 
     let start_block = translator.builder.create_block(&[]);
@@ -743,6 +752,29 @@ fn translate_function_body(
                 let addr = translator.builder.iadd(array_ptr, offset);
                 translator.store(&op.dst, addr);
             }
+            Instruction::ArrayCreate(op) => {
+                let layout = generate_type_layout(translator.data, &translator.get_type(&op.src));
+                let array_len = translator.load(&op.src);
+                let array_len = translator.builder.uextend(array_len, JitType::Pointer);
+                let array_ptr = call_malloc(&mut translator, ctx_ptr, layout, array_len);
+
+                let one_usize = translator.builder.iconst(JitType::Pointer, 1);
+                let array_object_ptr =
+                    call_malloc(&mut translator, ctx_ptr, *ARRAY_LAYOUT.clone(), one_usize);
+
+                translator.builder.store(
+                    array_ptr,
+                    array_object_ptr,
+                    offset_of!(ArrayObject, ptr) as u32,
+                );
+                translator.builder.store(
+                    array_len,
+                    array_object_ptr,
+                    offset_of!(ArrayObject, len) as u32,
+                );
+
+                translator.store(&op.dst, array_object_ptr);
+            }
             op => todo!("{:?}", op),
         }
     }
@@ -790,6 +822,7 @@ pub struct FunctionTranslator<'a> {
     self_ptr: Option<JitValue>,
     self_ty: String,
     constants: &'a mut Vec<ConstantData>,
+    layouts: &'a mut Vec<Box<TypeLayout>>,
 }
 
 impl<'a> FunctionTranslator<'a> {
@@ -1424,4 +1457,24 @@ fn struct_member_offset(
         .unwrap();
 
     *member_offset as u32
+}
+
+fn call_malloc(
+    translator: &mut FunctionTranslator<'_>,
+    ctx_ptr: JitValue,
+    layout: TypeLayout,
+    array_len: JitValue,
+) -> JitValue {
+    let layout_boxed = Box::new(layout);
+    let layout_ptr = Box::as_ref(&layout_boxed) as *const TypeLayout;
+    translator.layouts.push(layout_boxed);
+
+    let layout_ptr = translator
+        .builder
+        .iconst(JitType::Pointer, layout_ptr as i64);
+
+    let res = translator
+        .builder
+        .call(translator.data.malloc, &[ctx_ptr, layout_ptr, array_len]);
+    res[0]
 }

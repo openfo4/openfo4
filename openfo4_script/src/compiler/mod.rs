@@ -96,6 +96,20 @@ impl TypeLayout {
 
         size
     }
+
+    pub fn align(&self) -> usize {
+        let mut align = if self.header.is_some() {
+            FieldType::Pointer.size()
+        } else {
+            1
+        };
+
+        for field in &self.fields {
+            align = align.max(field.ty.align());
+        }
+
+        align
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -129,6 +143,15 @@ impl FieldType {
             Self::I32 => 4,
             Self::F32 => 4,
             Self::String | Self::Pointer => 8,
+        }
+    }
+
+    pub fn align(&self) -> usize {
+        match self {
+            Self::Bool => 4,
+            Self::I32 => 4,
+            Self::F32 => 4,
+            Self::String | Self::Pointer => align_of::<usize>(),
         }
     }
 }

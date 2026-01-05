@@ -10,7 +10,7 @@ pub fn call_builtin(
     func: &str,
     args: &[JitValue],
 ) -> Option<Vec<JitValue>> {
-    match (class, func) {
+    match (&*class.to_lowercase(), &*func.to_lowercase()) {
         // Math Script
         // Math.abs(float) -> float
         ("math", "abs") => {

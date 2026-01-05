@@ -12,7 +12,7 @@ use thiserror::Error;
 pub use object::{ArrayObject, Object, ObjectAddr, ObjectPool, ObjectRef, ObjectTag, StringObject};
 pub use stack::Stack;
 
-use crate::compiler::CompilationResult;
+use crate::compiler::{CompilationResult, TypeLayout};
 use crate::engine::{Engine, EngineShared};
 
 pub(crate) const RESULT_OK: i32 = 0;
@@ -76,7 +76,7 @@ pub union RawVal {
     pub isize: isize,
     pub f32: f32,
     pub f64: f64,
-    pub ptr: *const u8,
+    pub ptr: *mut u8,
 }
 
 #[derive(Clone, Debug)]
@@ -235,6 +235,7 @@ impl<'a, T> Caller<'a, T> {
 pub struct HostState {
     data: Option<Box<dyn Any>>,
     call_table: CallTable,
+    pool: ObjectPool,
 }
 
 #[derive(Default)]
@@ -450,11 +451,11 @@ unsafe impl NativeType for ObjectAddr {
     const TYPE: Type = Type::Pointer;
 
     unsafe fn from_raw(val: &RawVal) -> Self {
-        Self::from_raw(unsafe { <isize as NativeType>::from_raw(val) } as usize)
+        Self::from_raw(unsafe { val.ptr })
     }
 
     fn to_raw(self) -> RawVal {
-        (self.to_raw() as isize).to_raw()
+        RawVal { ptr: self.to_raw() }
     }
 }
 
@@ -467,6 +468,18 @@ pub unsafe extern "C" fn call_host_trampoline(
     let state = unsafe { &*ctx.state };
     let func = &state.call_table.functions[index];
     func(ctx, args);
+}
+
+pub unsafe extern "C" fn host_malloc(
+    ctx: *mut RawContext,
+    layout: *const TypeLayout,
+    array_len: usize,
+) -> *mut u8 {
+    let layout = unsafe { &*layout };
+
+    // FIXME: Don't clone, we can keep the TypeLayout for many objects.
+    let object_ref = unsafe { (*(*ctx).state).pool.alloc(layout.clone(), array_len) };
+    object_ref.addr().to_raw() as *mut u8
 }
 
 pub unsafe trait NativeTuple {

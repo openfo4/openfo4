@@ -19,6 +19,7 @@ use crate::compiler::codegen::constant::ConstantData;
 use crate::compiler::codegen::function::FunctionResult;
 use crate::compiler::codegen::function_props::{FunctionProps, function_properties};
 use crate::compiler::codegen::layout::{ClassLayout, compute_struct_layout};
+use crate::compiler::codegen::trampoline::generate_malloc_func;
 use crate::compiler::codegen::types::Types;
 use crate::compiler::{
     CompilationResult, FieldType, NativeFunction, ObjectField, ObjectProperty, TypeLayout,
@@ -39,10 +40,12 @@ pub struct CodegenPass {
 
 impl CodegenPass {
     pub fn new() -> Self {
+        let mut compiler = Compiler::new();
+
         Self {
-            data: CodegenData::new(),
+            data: CodegenData::new(&mut compiler),
             next_type_id: 0,
-            compiler: RefCell::new(Compiler::new()),
+            compiler: RefCell::new(compiler),
         }
     }
 
@@ -319,6 +322,7 @@ impl CodegenPass {
                 // Constants must be kept alive until all function instances are dropped.
                 // NOTE THAT THIS MUST INCLUDE ALL CALLED FUNCTIONS RECURSIVELY.
                 core::mem::forget(res.constants);
+                core::mem::forget(res.layouts);
 
                 self.data.functions[func_id.0].func_id = Some(res.id);
                 self.data.functions[func_id.0].signature = Some(res.signature);
@@ -396,15 +400,19 @@ struct CodegenData {
     classes: HashMap<String, ClassDef>,
     structs: HashMap<String, StructDef>,
     functions: Slab<FunctionDef>,
+    malloc: FuncId,
 }
 
 impl CodegenData {
-    fn new() -> Self {
+    fn new(compiler: &mut Compiler) -> Self {
+        let malloc = generate_malloc_func(compiler);
+
         Self {
             types: Types::default(),
             classes: HashMap::new(),
             structs: HashMap::new(),
             functions: Slab::new(),
+            malloc,
         }
     }
 

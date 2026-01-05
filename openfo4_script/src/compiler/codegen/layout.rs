@@ -1,8 +1,11 @@
 use std::collections::HashMap;
+use std::sync::{LazyLock, OnceLock};
 
 use openfo4_jit::Type as JitType;
 
-use crate::compiler::codegen::{ClassDef, CodegenData, StructDef};
+use crate::classes;
+use crate::compiler::codegen::{ClassDef, CodegenData, StructDef, Type};
+use crate::compiler::{FieldType, ObjectField, TypeLayout};
 
 pub fn compute_class_layout(data: &CodegenData, class: &ClassDef) -> ClassLayout {
     let mut fields = HashMap::new();
@@ -65,5 +68,51 @@ pub fn compute_struct_layout(data: &CodegenData, st: &StructDef) -> ClassLayout 
     ClassLayout {
         field_offsets: fields,
         size: offset,
+    }
+}
+
+pub static ARRAY_LAYOUT: LazyLock<Box<TypeLayout>> = LazyLock::new(|| {
+    Box::new(TypeLayout {
+        header: None,
+        fields: vec![
+            ObjectField {
+                class: "".to_owned(),
+                name: "ptr".to_owned(),
+                offset: 0,
+                ty: FieldType::Pointer,
+            },
+            ObjectField {
+                class: "".to_owned(),
+                name: "len".to_owned(),
+                offset: size_of::<*mut u8>(),
+                ty: FieldType::Pointer,
+            },
+        ],
+        properties: Vec::new(),
+    })
+});
+
+pub fn generate_type_layout(data: &CodegenData, ty: &Type) -> TypeLayout {
+    let field_ty = match ty {
+        Type::None => FieldType::I32,
+        Type::Bool => FieldType::Bool,
+        Type::Int => FieldType::I32,
+        Type::Float => FieldType::F32,
+        Type::Class(_) => FieldType::Pointer,
+        Type::String => FieldType::Pointer,
+        Type::Struct(_) => FieldType::Pointer,
+        Type::Var => FieldType::Pointer,
+        Type::Array(_) => FieldType::Pointer,
+    };
+
+    TypeLayout {
+        header: None,
+        fields: vec![ObjectField {
+            class: "".to_owned(),
+            name: "".to_owned(),
+            offset: 0,
+            ty: field_ty,
+        }],
+        properties: Vec::new(),
     }
 }

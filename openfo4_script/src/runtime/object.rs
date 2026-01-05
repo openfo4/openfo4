@@ -1,54 +1,78 @@
+use std::alloc::Layout;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
-use bytemuck::{Pod, Zeroable};
-
 use crate::compiler::TypeLayout;
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Zeroable, Pod)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 #[repr(transparent)]
-pub struct ObjectAddr(usize);
+pub struct ObjectAddr(*mut u8);
 
 impl ObjectAddr {
-    pub const NULL: Self = Self(0);
+    pub const NULL: Self = Self(core::ptr::null_mut());
 
-    pub const fn from_raw(addr: usize) -> Self {
-        Self(addr)
+    pub const fn from_raw(ptr: *mut u8) -> Self {
+        Self(ptr)
     }
 
-    pub const fn to_raw(self) -> usize {
+    pub const fn to_raw(self) -> *mut u8 {
         self.0
     }
 }
 
 #[derive(Debug, Default)]
 pub struct ObjectPool {
-    objects: HashMap<ObjectAddr, Object>,
+    objects: Mutex<HashMap<ObjectAddr, Object>>,
     dropped_refs: Arc<Mutex<Vec<ObjectAddr>>>,
 }
 
 impl ObjectPool {
-    pub fn insert(&mut self, layout: TypeLayout) -> (&mut Object, ObjectRef) {
-        let mut object = Object::new(layout);
-        let addr = ObjectAddr(object.as_ptr().addr());
+    pub fn alloc(&self, layout: TypeLayout, array_len: usize) -> ObjectRef {
+        let size = layout.size();
+        let align = layout.align();
+        let stride = (size + align - 1) & !(align - 1);
 
-        self.objects.insert(addr, object);
+        let array_size = stride * array_len;
 
-        let obj_ref = ObjectRef(Arc::new(ObjectRefInner {
-            addr,
+        let alloc_layout = unsafe { Layout::from_size_align_unchecked(array_size, align) };
+        let ptr = unsafe { std::alloc::alloc_zeroed(alloc_layout) };
+        assert!(!ptr.is_null());
+
+        let mut objects = self.objects.lock().unwrap();
+
+        for i in 0..array_len {
+            let elem_ptr = unsafe { ptr.add(stride * i) };
+            let addr = ObjectAddr::from_raw(elem_ptr);
+
+            let object = unsafe { Object::new_at(layout.clone(), elem_ptr) };
+
+            objects.insert(addr, object);
+        }
+
+        ObjectRef(Arc::new(ObjectRefInner {
+            addr: ObjectAddr(ptr),
             drop: self.dropped_refs.clone(),
-        }));
-
-        (self.objects.get_mut(&addr).unwrap(), obj_ref)
+        }))
     }
 
-    pub fn get(&self, addr: ObjectAddr) -> Option<&Object> {
-        self.objects.get(&addr)
+    pub fn insert(&self, layout: TypeLayout) -> ObjectBuilder {
+        let object_ref = self.alloc(layout.clone(), 1);
+
+        let object = unsafe { Object::new_at(layout, object_ref.addr().0 as *mut u8) };
+
+        ObjectBuilder {
+            obj: object,
+            obj_ref: object_ref,
+        }
     }
 
-    pub fn get_mut(&mut self, addr: ObjectAddr) -> Option<&mut Object> {
-        self.objects.get_mut(&addr)
-    }
+    // pub fn get(&self, addr: ObjectAddr) -> Option<&Object> {
+    //     self.objects.get(&addr)
+    // }
+
+    // pub fn get_mut(&mut self, addr: ObjectAddr) -> Option<&mut Object> {
+    //     self.objects.get_mut(&addr)
+    // }
 }
 
 /// A reference handle to an [`Object`] in a pool.
@@ -75,23 +99,35 @@ impl Drop for ObjectRefInner {
 
 #[derive(Clone, Debug)]
 pub struct Object {
-    memory: Vec<u8>,
+    memory: *mut u8,
     layout: TypeLayout,
 }
 
 impl Object {
-    pub fn new(layout: TypeLayout) -> Self {
-        let mut memory = vec![0; layout.size()];
-
+    unsafe fn new_at(layout: TypeLayout, ptr: *mut u8) -> Self {
         if let Some(header) = &layout.header {
-            let ptr = header.as_ptr().expose_provenance();
-            memory[0..8].copy_from_slice(&ptr.to_ne_bytes());
+            let header_ptr: *const usize = header.as_ptr();
+
+            // SAFETY:
+            // - The caller guarantees that `ptr` is valid.
+            // - The caller must align this pointer to `align_of<*const T>`
+            //   if layout.header is `Some(..)`.
+            unsafe {
+                ptr.cast::<*const usize>().write(header_ptr);
+            }
         }
 
-        Self { memory, layout }
+        Self {
+            memory: ptr,
+            layout,
+        }
     }
 
-    pub fn set<T>(&mut self, class: &str, name: &str, value: T)
+    /// # Safety
+    ///
+    /// The caller must guarantee that no memory accesses to the field of the `Object` are
+    /// currently active.
+    pub unsafe fn set<T>(&mut self, class: &str, name: &str, value: T)
     where
         T: IntoValue,
     {
@@ -102,14 +138,41 @@ impl Object {
             return;
         };
 
-        let start = field.offset;
-        let end = field.offset + field.ty.size();
+        let bytes = value.as_bytes();
+        assert_eq!(bytes.len(), field.ty.size());
 
-        self.memory[start..end].copy_from_slice(&value.as_bytes()[0..field.ty.size()]);
+        unsafe {
+            let dst = self.memory.add(field.offset);
+            core::ptr::copy_nonoverlapping(bytes.as_ptr(), dst, bytes.len());
+        }
     }
 
     pub fn as_ptr(&mut self) -> *mut u8 {
-        self.memory.as_mut_ptr()
+        self.memory
+    }
+}
+
+#[derive(Debug)]
+pub struct ObjectBuilder {
+    obj: Object,
+    obj_ref: ObjectRef,
+}
+
+impl ObjectBuilder {
+    pub fn set<T>(&mut self, class: &str, name: &str, value: T)
+    where
+        T: IntoValue,
+    {
+        // SAFETY:
+        // We don't give access to the underlying `ObjectRef` until the `ObjectBuilder` is dropped.
+        // This means the caller does not have access to the pointer to pass anywhere else yet.
+        unsafe {
+            self.obj.set(class, name, value);
+        }
+    }
+
+    pub fn finalize(self) -> ObjectRef {
+        self.obj_ref
     }
 }
 
@@ -137,7 +200,8 @@ impl IntoValue for f32 {
 
 impl IntoValue for ObjectAddr {
     fn as_bytes(&self) -> &[u8] {
-        bytemuck::bytes_of(self)
+        let addr = unsafe { core::mem::transmute::<&*mut u8, &usize>(&self.0) };
+        bytemuck::bytes_of(addr)
     }
 }
 
