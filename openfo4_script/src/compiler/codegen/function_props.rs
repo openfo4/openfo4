@@ -3,7 +3,9 @@ use std::{collections::HashMap, num::NonZeroUsize};
 use openfo4_jit::Type as JitType;
 use openfo4_pex::{Function, Instruction, Value};
 
-use crate::compiler::codegen::{ClassDef, CodegenData, MAX_INSTRUCTIONS_BEFORE_PREEMPT, Type};
+use crate::compiler::codegen::{
+    ClassDef, CodegenData, FunctionDef, MAX_INSTRUCTIONS_BEFORE_PREEMPT, Type,
+};
 
 #[derive(Clone, Debug)]
 pub struct FunctionProps {
@@ -18,11 +20,10 @@ pub struct FunctionProps {
     pub stack_size: usize,
 }
 
-pub fn function_properties(
-    data: &CodegenData,
-    class: &ClassDef,
-    function: &Function,
-) -> FunctionProps {
+pub fn function_properties(data: &CodegenData, func: &FunctionDef) -> FunctionProps {
+    let class = data.classes.get(&func.class).unwrap();
+    let function = &func.function;
+
     let mut may_error = false;
 
     let mut variables = Vec::new();

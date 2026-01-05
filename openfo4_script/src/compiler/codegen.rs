@@ -71,6 +71,7 @@ impl CodegenPass {
                         trampoline_func_id: None,
                         props: None,
                         constants: Arc::default(),
+                        class: class.name.to_lowercase(),
                     }));
 
                     functions.insert(func.name.to_lowercase(), id);
@@ -90,7 +91,40 @@ impl CodegenPass {
                     continue;
                 };
 
-                properties.insert(prop.name.to_lowercase(), var.to_lowercase());
+                let getter = prop.getter.as_ref().map(|func| {
+                    FunctionId(self.data.functions.insert(FunctionDef {
+                        signature: None,
+                        func_id: None,
+                        function: func.clone(),
+                        native: None,
+                        trampoline_func_id: None,
+                        props: None,
+                        constants: Arc::default(),
+                        class: class.name.to_lowercase(),
+                    }))
+                });
+
+                let setter = prop.setter.as_ref().map(|func| {
+                    FunctionId(self.data.functions.insert(FunctionDef {
+                        signature: None,
+                        func_id: None,
+                        function: func.clone(),
+                        native: None,
+                        trampoline_func_id: None,
+                        props: None,
+                        constants: Arc::default(),
+                        class: class.name.to_lowercase(),
+                    }))
+                });
+
+                properties.insert(
+                    prop.name.to_lowercase(),
+                    ClassProperty {
+                        variable: var.to_lowercase(),
+                        getter,
+                        setter,
+                    },
+                );
             }
 
             self.data.classes.insert(
@@ -209,12 +243,12 @@ impl CodegenPass {
                     });
                 }
 
-                for (name, var) in &class.properties {
+                for (name, prop) in &class.properties {
                     let field = class_fields
                         .iter()
                         .position(|v| {
                             v.class.to_lowercase() == class.name.to_lowercase()
-                                && v.name.to_lowercase() == var.to_lowercase()
+                                && v.name.to_lowercase() == prop.variable.to_lowercase()
                         })
                         .unwrap();
 
@@ -246,61 +280,54 @@ impl CodegenPass {
 
         let mut compiler = self.compiler.borrow_mut();
 
+        let root_func_id = self.data.get_function_id(class, f).unwrap();
+
         // The compile the function we must also compile all functions that
         // are called.
-        let mut queue = vec![(class.to_lowercase(), f.to_lowercase())];
-        let mut dependencies = HashMap::<(String, String), HashSet<(String, String)>>::new();
-        while let Some((class, function)) = queue.pop() {
-            let def = self.data.get_function(&class, &function).unwrap();
+        let mut queue = vec![root_func_id];
+        let mut dependencies = HashMap::<FunctionId, HashSet<FunctionId>>::new();
+        while let Some(func_id) = queue.pop() {
+            let def = &self.data.functions[func_id.0];
 
             // Function is already compiled.
             if def.func_id.is_some() {
                 continue;
             }
 
-            let callees = find_function_callees(&self.data.classes, &class, &def.function);
+            let callees = find_function_callees(&self.data, &class, &def.function);
 
             let mut depends_on = HashSet::new();
-            for (callee_class, callee_func) in callees {
-                let def = self.data.get_function(&callee_class, &callee_func).unwrap();
-
+            for callee in callees {
+                let def = &self.data.functions[callee.0];
                 if !def.func_id.is_some() {
-                    depends_on.insert((callee_class.clone(), callee_func.clone()));
-                    queue.push((callee_class, callee_func));
+                    depends_on.insert(callee);
+                    queue.push(callee);
                 }
             }
 
             if depends_on.is_empty() {
                 {
-                    let current_class = self.data.classes.get(&class).unwrap();
-                    let func = self.data.get_function(&class, &function).unwrap();
-                    let props = function_properties(&self.data, current_class, &func.function);
-                    self.data.get_function_mut(&class, &function).unwrap().props = Some(props);
+                    let func = &self.data.functions[func_id.0];
+                    let props = function_properties(&self.data, func);
+                    self.data.functions[func_id.0].props = Some(props);
                 }
 
                 // Compile the function.
-                let res = self.compile_function_internal(&class, &function, &mut compiler);
+                let res = self.compile_function_internal(func_id, &mut compiler);
 
                 // TODO: FIXME: Don't leak this here.
                 // Constants must be kept alive until all function instances are dropped.
                 // NOTE THAT THIS MUST INCLUDE ALL CALLED FUNCTIONS RECURSIVELY.
                 core::mem::forget(res.constants);
 
-                self.data
-                    .get_function_mut(&class, &function)
-                    .unwrap()
-                    .func_id = Some(res.id);
-
-                self.data
-                    .get_function_mut(&class, &function)
-                    .unwrap()
-                    .signature = Some(res.signature);
+                self.data.functions[func_id.0].func_id = Some(res.id);
+                self.data.functions[func_id.0].signature = Some(res.signature);
 
                 // Mark all dependend callers as ready.
-                dependencies.retain(|(class_name, func_name), depends| {
-                    depends.remove(&(class.clone(), function.clone()));
+                dependencies.retain(|other_func_id, depends| {
+                    depends.remove(&func_id);
                     if depends.is_empty() {
-                        queue.push((class_name.clone(), func_name.clone()));
+                        queue.push(*other_func_id);
                         false
                     } else {
                         true
@@ -310,7 +337,7 @@ impl CodegenPass {
                 continue;
             }
 
-            dependencies.insert((class, function), depends_on);
+            dependencies.insert(func_id, depends_on);
         }
 
         let def = self.data.get_function_mut(class, &f).unwrap();
@@ -334,17 +361,20 @@ impl CodegenPass {
 
     fn compile_function_internal(
         &self,
-        class: &str,
-        function_name: &str,
+        func_id: FunctionId,
         compiler: &mut Compiler,
     ) -> FunctionResult {
-        tracing::debug!("comiling {}.{}", class, function_name);
+        let function = &self.data.functions[func_id.0];
+        let current_class = self.data.classes.get(&function.class).unwrap();
 
-        let current_class = self.data.classes.get(class).unwrap();
-        let function = self.data.get_function(class, function_name).unwrap();
+        tracing::debug!("compiling {}.{}", &function.class, &function.function.name);
 
-        println!("{}.{}", class, function_name);
-        println!("{}", function.function.text());
+        println!(
+            "{}.{}:\n{}",
+            function.class,
+            function.function.name,
+            function.function.text()
+        );
 
         let res = function::translate_function(&self.data, current_class, &function, compiler);
 
@@ -427,23 +457,22 @@ impl CodegenData {
         self.classes.get(&class.to_lowercase())
     }
 
-    fn get_function(&self, class: &str, func: &str) -> Option<&FunctionDef> {
+    fn get_function_id(&self, class: &str, func: &str) -> Option<FunctionId> {
         let class = get_parent_class_with_function(&self.classes, class, func)?;
-        let id = self
-            .classes
+        self.classes
             .get(&class)?
             .functions
-            .get(&func.to_lowercase())?;
+            .get(&func.to_lowercase())
+            .copied()
+    }
+
+    fn get_function(&self, class: &str, func: &str) -> Option<&FunctionDef> {
+        let id = self.get_function_id(class, func)?;
         Some(&self.functions[id.0])
     }
 
     fn get_function_mut(&mut self, class: &str, func: &str) -> Option<&mut FunctionDef> {
-        let class = get_parent_class_with_function(&self.classes, class, func)?;
-        let id = self
-            .classes
-            .get_mut(&class)?
-            .functions
-            .get_mut(&func.to_lowercase())?;
+        let id = self.get_function_id(class, func)?;
         Some(&mut self.functions[id.0])
     }
 }
@@ -458,11 +487,12 @@ struct ClassDef {
     type_id: usize,
     layout: Option<ClassLayout>,
     header: Option<Arc<[usize]>>,
-    properties: HashMap<String, String>,
+    properties: HashMap<String, ClassProperty>,
 }
 
 #[derive(Clone, Debug)]
 struct FunctionDef {
+    class: String,
     signature: Option<Signature>,
     func_id: Option<FuncId>,
     function: Function,
@@ -470,6 +500,13 @@ struct FunctionDef {
     trampoline_func_id: Option<FuncId>,
     props: Option<FunctionProps>,
     constants: Arc<Vec<ConstantData>>,
+}
+
+#[derive(Clone, Debug)]
+struct ClassProperty {
+    pub variable: String,
+    pub getter: Option<FunctionId>,
+    pub setter: Option<FunctionId>,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
@@ -486,14 +523,10 @@ impl StructDef {
     }
 }
 
-fn find_function_callees(
-    classes: &HashMap<String, ClassDef>,
-    class: &str,
-    function: &Function,
-) -> Vec<(String, String)> {
+fn find_function_callees(data: &CodegenData, class: &str, function: &Function) -> Vec<FunctionId> {
     let mut callees = Vec::new();
 
-    let current_class = classes.get(class).unwrap();
+    let current_class = data.classes.get(&class.to_lowercase()).unwrap();
 
     let find_var = |var_name: &str| -> String {
         match &*var_name.to_lowercase() {
@@ -517,8 +550,6 @@ fn find_function_callees(
             return ty.to_lowercase();
         }
 
-        dbg!(&var_name);
-
         todo!()
     };
 
@@ -535,7 +566,9 @@ fn find_function_callees(
                     _ => unreachable!(),
                 };
 
-                callees.push((class_name, function_name.to_lowercase()));
+                let func = data.get_function_id(&class_name, &function_name).unwrap();
+
+                callees.push(func);
             }
             Instruction::CallParent(op) => {}
             Instruction::CallStatic(op) => {
@@ -544,7 +577,9 @@ fn find_function_callees(
                     _ => unreachable!(),
                 };
 
-                callees.push((class_name.to_lowercase(), function_name.to_lowercase()));
+                let func = data.get_function_id(&class_name, &function_name).unwrap();
+
+                callees.push(func);
             }
             _ => {}
         }

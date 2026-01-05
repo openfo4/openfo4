@@ -30,7 +30,7 @@ pub fn translate_function(
     compiler: &mut Compiler,
 ) -> FunctionResult {
     let signature = translate_function_signature(data, &function.function);
-    let props = function_properties(data, class, &function.function);
+    let props = function_properties(data, function);
 
     debug_assert!(function.func_id.is_none());
 
