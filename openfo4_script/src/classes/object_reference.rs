@@ -30,6 +30,20 @@ pub fn add_item(
     todo!()
 }
 
+/// `DamageValue`
+///
+/// ```text
+/// Function DamageValue(ActorValue akAV, float afDamage) native
+/// ```
+pub fn damage_value(
+    caller: Caller<'_, State>,
+    self_ptr: Object,
+    actor_value: Object,
+    damage: Float,
+) -> Result<(), Exception> {
+    todo!()
+}
+
 /// `Delete`
 ///
 /// ```text
@@ -100,26 +114,25 @@ pub fn get_base_value(
     todo!()
 }
 
-/// `SetActorOwner`
-///
-/// ```text
-/// Function SetActorOwner(ActorBase akActorBase, bool abNoCrime = false) native
-/// ```
-pub fn set_actor_owner(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    actor_base: Object,
-    no_crime: bool,
-) -> Result<(), Exception> {
-    todo!()
-}
-
 /// `GetBaseObject`
 ///
 /// ```text
 /// Form Function GetBaseObject() native
 /// ```
 pub fn get_base_object(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Exception> {
+    todo!()
+}
+
+/// `GetDistance`
+///
+/// ```text
+/// float Function GetDistance(ObjectReference akOther) native
+/// ```
+pub fn get_distance(
+    caller: Caller<'_, State>,
+    self_ptr: Object,
+    other: Object,
+) -> Result<Float, Exception> {
     todo!()
 }
 
@@ -150,6 +163,19 @@ pub fn get_linked_ref(
     Ok(linked_ref.unwrap_or(Object::NULL))
 }
 
+/// `HasKeyword`
+///
+/// ```text
+/// bool Function HasKeyword(Keyword akKeyword) native
+/// ```
+pub fn has_keyword(
+    caller: Caller<'_, State>,
+    self_ptr: Object,
+    keyword: Object,
+) -> Result<Bool, Exception> {
+    todo!()
+}
+
 /// `IsOwnedBy`
 ///
 /// ```text
@@ -176,6 +202,34 @@ pub fn remove_item(
     count: Int,
     silent: Bool,
     other: Object,
+) -> Result<(), Exception> {
+    todo!()
+}
+
+/// `RestoreValue`
+///
+/// ```text
+/// Function RestoreActorValue(ActorValue akAV, float afAmount) native
+/// ```
+pub fn restore_value(
+    caller: Caller<'_, State>,
+    self_ptr: Object,
+    actor_value: Object,
+    amount: Float,
+) -> Result<(), Exception> {
+    todo!()
+}
+
+/// `SetActorOwner`
+///
+/// ```text
+/// Function SetActorOwner(ActorBase akActorBase, bool abNoCrime = false) native
+/// ```
+pub fn set_actor_owner(
+    caller: Caller<'_, State>,
+    self_ptr: Object,
+    actor_base: Object,
+    no_crime: bool,
 ) -> Result<(), Exception> {
     todo!()
 }

@@ -1,12 +1,17 @@
 use crate::classes::{Bool, Int, Object, State};
-use crate::runtime::Caller;
+use crate::runtime::{Caller, Exception};
 
 /// `AddPerk`
 ///
 /// ```text
 /// Function AddPerk(Perk akPerk, bool abNotify = false) native
 /// ```
-pub fn add_perk(caller: Caller<'_, State>, self_ptr: Object, perk: Object, notify: bool) {
+pub fn add_perk(
+    caller: Caller<'_, State>,
+    self_ptr: Object,
+    perk: Object,
+    notify: bool,
+) -> Result<(), Exception> {
     todo!()
 }
 
@@ -15,7 +20,12 @@ pub fn add_perk(caller: Caller<'_, State>, self_ptr: Object, perk: Object, notif
 /// ```text
 /// bool Function AddSpell(Spell akSpell, bool abVerbose = true) native
 /// ```
-pub fn add_spell(caller: Caller<'_, State>, self_ptr: Object, verbose: Bool) {
+pub fn add_spell(
+    caller: Caller<'_, State>,
+    self_ptr: Object,
+    spell: Object,
+    verbose: Bool,
+) -> Result<Bool, Exception> {
     todo!()
 }
 
@@ -24,7 +34,11 @@ pub fn add_spell(caller: Caller<'_, State>, self_ptr: Object, verbose: Bool) {
 /// ```text
 /// Function AllowBleedoutDialogue(bool abCanTalk) native
 /// ```
-pub fn allow_bleedout_dialogue(caller: Caller<'_, State>, self_ptr: Object, can_talk: Bool) {
+pub fn allow_bleedout_dialogue(
+    caller: Caller<'_, State>,
+    self_ptr: Object,
+    can_talk: Bool,
+) -> Result<(), Exception> {
     todo!()
 }
 
@@ -33,7 +47,11 @@ pub fn allow_bleedout_dialogue(caller: Caller<'_, State>, self_ptr: Object, can_
 /// ```text
 /// Function AllowPCDialogue(bool abTalk) native
 /// ```
-pub fn allow_pc_dialogue(caller: Caller<'_, State>, self_ptr: Object, talk: Bool) {
+pub fn allow_pc_dialogue(
+    caller: Caller<'_, State>,
+    self_ptr: Object,
+    talk: Bool,
+) -> Result<(), Exception> {
     todo!()
 }
 
@@ -42,7 +60,11 @@ pub fn allow_pc_dialogue(caller: Caller<'_, State>, self_ptr: Object, talk: Bool
 /// ```text
 /// Function AttachAshPile(Form akAshPileBase = None) native
 /// ```
-pub fn attach_ash_pile(caller: Caller<'_, State>, self_ptr: Object, ash_pile_form: Object) {
+pub fn attach_ash_pile(
+    caller: Caller<'_, State>,
+    self_ptr: Object,
+    ash_pile_form: Object,
+) -> Result<(), Exception> {
     todo!()
 }
 
@@ -51,7 +73,10 @@ pub fn attach_ash_pile(caller: Caller<'_, State>, self_ptr: Object, ash_pile_for
 /// ```text
 /// Function AttemptAnimationSetSwitch() native
 /// ```
-pub fn attempt_animation_set_switch(caller: Caller<'_, State>, self_ptr: Object) {
+pub fn attempt_animation_set_switch(
+    caller: Caller<'_, State>,
+    self_ptr: Object,
+) -> Result<(), Exception> {
     todo!()
 }
 
@@ -60,7 +85,7 @@ pub fn attempt_animation_set_switch(caller: Caller<'_, State>, self_ptr: Object)
 /// ```text
 /// bool Function CanFlyHere() native
 /// ```
-pub fn can_fly_here(caller: Caller<'_, State>, self_ptr: Object) -> Bool {
+pub fn can_fly_here(caller: Caller<'_, State>, self_ptr: Object) -> Result<Bool, Exception> {
     todo!()
 }
 
@@ -69,7 +94,11 @@ pub fn can_fly_here(caller: Caller<'_, State>, self_ptr: Object) -> Bool {
 /// ```text
 /// bool Function ChangeAnimArchetype(keyword apKeyword = none) native
 /// ```
-pub fn change_anim_archetype(caller: Caller<'_, State>, self_ptr: Object, keyword: Object) {
+pub fn change_anim_archetype(
+    caller: Caller<'_, State>,
+    self_ptr: Object,
+    keyword: Object,
+) -> Result<(), Exception> {
     todo!()
 }
 
@@ -78,7 +107,11 @@ pub fn change_anim_archetype(caller: Caller<'_, State>, self_ptr: Object, keywor
 /// ```text
 /// Function ChangeAnimFaceArchetype(keyword apKeyword = none) native
 /// ```
-pub fn change_anim_face_archetype(caller: Caller<'_, State>, self_ptr: Object, keyword: Object) {
+pub fn change_anim_face_archetype(
+    caller: Caller<'_, State>,
+    self_ptr: Object,
+    keyword: Object,
+) -> Result<(), Exception> {
     todo!()
 }
 
@@ -87,7 +120,11 @@ pub fn change_anim_face_archetype(caller: Caller<'_, State>, self_ptr: Object, k
 /// ```text
 /// bool Function ChangeAnimFlavor(keyword apKeyword = none) native
 /// ```
-pub fn change_anim_flavor(caller: Caller<'_, State>, self_ptr: Object, keyword: Object) -> Bool {
+pub fn change_anim_flavor(
+    caller: Caller<'_, State>,
+    self_ptr: Object,
+    keyword: Object,
+) -> Result<Bool, Exception> {
     todo!()
 }
 
@@ -102,7 +139,7 @@ pub fn change_head_part(
     head_part: Object,
     remove: Bool,
     remove_extra_parts: Bool,
-) {
+) -> Result<(), Exception> {
     todo!()
 }
 
@@ -111,7 +148,7 @@ pub fn change_head_part(
 /// ```text
 /// Function ClearArrested() native
 /// ```
-pub fn clear_arrested(caller: Caller<'_, State>, self_ptr: Object) {
+pub fn clear_arrested(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Exception> {
     todo!()
 }
 
@@ -120,7 +157,10 @@ pub fn clear_arrested(caller: Caller<'_, State>, self_ptr: Object) {
 /// ```text
 /// Function ClearExpressionOverride() native
 /// ```
-pub fn clear_expression_override(caller: Caller<'_, State>, self_ptr: Object) {
+pub fn clear_expression_override(
+    caller: Caller<'_, State>,
+    self_ptr: Object,
+) -> Result<(), Exception> {
     todo!()
 }
 
@@ -129,7 +169,7 @@ pub fn clear_expression_override(caller: Caller<'_, State>, self_ptr: Object) {
 /// ```text
 /// Function ClearExtraArrows() native
 /// ```
-pub fn clear_extra_arrows(caller: Caller<'_, State>, self_ptr: Object) {
+pub fn clear_extra_arrows(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Exception> {
     todo!()
 }
 
@@ -138,7 +178,7 @@ pub fn clear_extra_arrows(caller: Caller<'_, State>, self_ptr: Object) {
 /// ```text
 /// Function ClearLookAt() native
 /// ```
-pub fn clear_look_at(caller: Caller<'_, State>, self_ptr: Object) {
+pub fn clear_look_at(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Exception> {
     todo!()
 }
 
@@ -154,7 +194,7 @@ pub fn dismember(
     force_explode: Bool,
     force_dismember: Bool,
     force_bloody_mess: Bool,
-) {
+) -> Result<(), Exception> {
     todo!()
 }
 
@@ -163,7 +203,7 @@ pub fn dismember(
 /// ```text
 /// bool Function Dismount() native
 /// ```
-pub fn dismount(caller: Caller<'_, State>, self_ptr: Object) {
+pub fn dismount(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Exception> {
     todo!()
 }
 
@@ -172,7 +212,7 @@ pub fn dismount(caller: Caller<'_, State>, self_ptr: Object) {
 /// ```text
 /// Function DispelAllSpells() native
 /// ```
-pub fn dispel_all_spells(caller: Caller<'_, State>, self_ptr: Object) {
+pub fn dispel_all_spells(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Exception> {
     todo!()
 }
 
@@ -181,7 +221,11 @@ pub fn dispel_all_spells(caller: Caller<'_, State>, self_ptr: Object) {
 /// ```text
 /// bool Function DispelSpell(Spell akSpell) native
 /// ```
-pub fn dispel_spell(caller: Caller<'_, State>, self_ptr: Object, spell: Object) {
+pub fn dispel_spell(
+    caller: Caller<'_, State>,
+    self_ptr: Object,
+    spell: Object,
+) -> Result<Bool, Exception> {
     todo!()
 }
 
@@ -195,7 +239,7 @@ pub fn do_combat_spell_apply(
     self_ptr: Object,
     spell: Object,
     target: Object,
-) {
+) -> Result<(), Exception> {
     todo!()
 }
 
@@ -204,7 +248,7 @@ pub fn do_combat_spell_apply(
 /// ```text
 /// Function DogDropItems() native
 /// ```
-pub fn dog_drop_items(caller: Caller<'_, State>, self_ptr: Object) {
+pub fn dog_drop_items(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Exception> {
     todo!()
 }
 
@@ -213,7 +257,7 @@ pub fn dog_drop_items(caller: Caller<'_, State>, self_ptr: Object) {
 /// ```text
 /// Function DogPlaceInMouth(Form akItem) native
 /// ```
-pub fn dog_place_in_mouth(caller: Caller<'_, State>, self_ptr: Object) {
+pub fn dog_place_in_mouth(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Exception> {
     todo!()
 }
 
@@ -222,7 +266,7 @@ pub fn dog_place_in_mouth(caller: Caller<'_, State>, self_ptr: Object) {
 /// ```text
 /// Function DrawWeapon() native
 /// ```
-pub fn draw_weapon(caller: Caller<'_, State>, self_ptr: Object) {
+pub fn draw_weapon(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Exception> {
     todo!()
 }
 
@@ -231,7 +275,11 @@ pub fn draw_weapon(caller: Caller<'_, State>, self_ptr: Object) {
 /// ```text
 /// Function EnableAI(bool abEnable = true, bool abPauseVoice = false) native
 /// ```
-pub fn enable_ai(caller: Caller<'_, State>, enable: Bool, pause_voice: Bool) {
+pub fn enable_ai(
+    caller: Caller<'_, State>,
+    enable: Bool,
+    pause_voice: Bool,
+) -> Result<(), Exception> {
     todo!()
 }
 
@@ -240,7 +288,7 @@ pub fn enable_ai(caller: Caller<'_, State>, enable: Bool, pause_voice: Bool) {
 /// ```text
 /// Function EndDeferredKill() native
 /// ```
-pub fn end_deferred_kill(caller: Caller<'_, State>, self_ptr: Object) {
+pub fn end_deferred_kill(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Exception> {
     todo!()
 }
 
@@ -255,7 +303,7 @@ pub fn equip_item(
     form: Object,
     prevent_removal: Bool,
     silent: Bool,
-) {
+) -> Result<(), Exception> {
     todo!()
 }
 
@@ -264,7 +312,12 @@ pub fn equip_item(
 /// ```text
 /// Function EquipSpell(Spell akSpell, int aiSource) native
 /// ```
-pub fn equip_spell(caller: Caller<'_, State>, self_ptr: Object, spell: Object, source: Int) {
+pub fn equip_spell(
+    caller: Caller<'_, State>,
+    self_ptr: Object,
+    spell: Object,
+    source: Int,
+) -> Result<(), Exception> {
     todo!()
 }
 
@@ -273,7 +326,11 @@ pub fn equip_spell(caller: Caller<'_, State>, self_ptr: Object, spell: Object, s
 /// ```text
 /// Function EvaluatePackage(bool abResetAI=false) native
 /// ```
-pub fn evaluate_package(caller: Caller<'_, State>, self_ptr: Object) {
+pub fn evaluate_package(
+    caller: Caller<'_, State>,
+    self_ptr: Object,
+    reset_ai: Bool,
+) -> Result<(), Exception> {
     todo!()
 }
 
@@ -282,7 +339,10 @@ pub fn evaluate_package(caller: Caller<'_, State>, self_ptr: Object) {
 /// ```text
 /// Actor[] Function GetAllCombatTargets() native
 /// ```
-pub fn get_all_combat_targets(caller: Caller<'_, State>, self_ptr: Object) -> isize {
+pub fn get_all_combat_targets(
+    caller: Caller<'_, State>,
+    self_ptr: Object,
+) -> Result<isize, Exception> {
     todo!()
 }
 
@@ -291,7 +351,7 @@ pub fn get_all_combat_targets(caller: Caller<'_, State>, self_ptr: Object) -> is
 /// ```text
 /// int Function GetBribeAmount() native
 /// ```
-pub fn get_bribe_amount(caller: Caller<'_, State>, self_ptr: Object) {
+pub fn get_bribe_amount(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Exception> {
     todo!()
 }
 
@@ -300,7 +360,7 @@ pub fn get_bribe_amount(caller: Caller<'_, State>, self_ptr: Object) {
 /// ```text
 /// Faction Function GetCrimeFaction() native
 /// ```
-pub fn get_crime_faction(caller: Caller<'_, State>, self_ptr: Object) -> Object {
+pub fn get_crime_faction(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Exception> {
     todo!()
 }
 
@@ -309,7 +369,7 @@ pub fn get_crime_faction(caller: Caller<'_, State>, self_ptr: Object) -> Object 
 /// ```text
 /// int Function GetCombatState() native
 /// ```
-pub fn get_combat_state(caller: Caller<'_, State>, self_ptr: Object) -> Int {
+pub fn get_combat_state(caller: Caller<'_, State>, self_ptr: Object) -> Result<Int, Exception> {
     todo!()
 }
 
@@ -318,7 +378,7 @@ pub fn get_combat_state(caller: Caller<'_, State>, self_ptr: Object) -> Int {
 /// ```text
 /// Actor Function GetCombatTarget() native
 /// ```
-pub fn get_combat_target(caller: Caller<'_, State>, self_ptr: Object) -> Object {
+pub fn get_combat_target(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Exception> {
     todo!()
 }
 
@@ -327,7 +387,10 @@ pub fn get_combat_target(caller: Caller<'_, State>, self_ptr: Object) -> Object 
 /// ```text
 /// Package Function GetCurrentPackage() native
 /// ```
-pub fn get_current_package(caller: Caller<'_, State>, self_ptr: Object) -> Object {
+pub fn get_current_package(
+    caller: Caller<'_, State>,
+    self_ptr: Object,
+) -> Result<Object, Exception> {
     todo!()
 }
 
@@ -336,7 +399,10 @@ pub fn get_current_package(caller: Caller<'_, State>, self_ptr: Object) -> Objec
 /// ```text
 /// Actor Function GetDialogueTarget() native
 /// ```
-pub fn get_dialogue_target(caller: Caller<'_, State>, self_ptr: Object) -> Object {
+pub fn get_dialogue_target(
+    caller: Caller<'_, State>,
+    self_ptr: Object,
+) -> Result<Object, Exception> {
     todo!()
 }
 
@@ -349,7 +415,7 @@ pub fn get_equipped_item_type(
     caller: Caller<'_, State>,
     self_ptr: Object,
     equip_index: Int,
-) -> Int {
+) -> Result<Int, Exception> {
     todo!()
 }
 
@@ -358,7 +424,10 @@ pub fn get_equipped_item_type(
 /// ```text
 /// Armor Function GetEquippedShield() native
 /// ```
-pub fn get_equipped_shield(caller: Caller<'_, State>, self_ptr: Object) -> Object {
+pub fn get_equipped_shield(
+    caller: Caller<'_, State>,
+    self_ptr: Object,
+) -> Result<Object, Exception> {
     todo!()
 }
 
@@ -367,7 +436,11 @@ pub fn get_equipped_shield(caller: Caller<'_, State>, self_ptr: Object) -> Objec
 /// ```text
 /// Spell Function GetEquippedSpell(int aiSource) native
 /// ```
-pub fn get_equipped_spell(caller: Caller<'_, State>, self_ptr: Object, source: Int) -> Object {
+pub fn get_equipped_spell(
+    caller: Caller<'_, State>,
+    self_ptr: Object,
+    source: Int,
+) -> Result<Object, Exception> {
     todo!()
 }
 
@@ -376,7 +449,11 @@ pub fn get_equipped_spell(caller: Caller<'_, State>, self_ptr: Object, source: I
 /// ```text
 /// Weapon Function GetEquippedWeapon(int aiEquipIndex = 0) native
 /// ```
-pub fn get_equipped_weapon(caller: Caller<'_, State>, self_ptr: Object, equip_index: Int) -> Int {
+pub fn get_equipped_weapon(
+    caller: Caller<'_, State>,
+    self_ptr: Object,
+    equip_index: Int,
+) -> Result<Object, Exception> {
     todo!()
 }
 
@@ -385,7 +462,11 @@ pub fn get_equipped_weapon(caller: Caller<'_, State>, self_ptr: Object, equip_in
 /// ```text
 /// int Function GetFactionRank(Faction akFaction) native
 /// ```
-pub fn get_faction_rank(caller: Caller<'_, State>, self_ptr: Object, faction: Object) -> Int {
+pub fn get_faction_rank(
+    caller: Caller<'_, State>,
+    self_ptr: Object,
+    faction: Object,
+) -> Result<Int, Exception> {
     todo!()
 }
 
@@ -394,7 +475,11 @@ pub fn get_faction_rank(caller: Caller<'_, State>, self_ptr: Object, faction: Ob
 /// ```text
 /// int Function GetFactionReaction(Actor akOther) native
 /// ```
-pub fn get_faction_reaction(caller: Caller<'_, State>, self_ptr: Object, other: Object) -> Int {
+pub fn get_faction_reaction(
+    caller: Caller<'_, State>,
+    self_ptr: Object,
+    other: Object,
+) -> Result<Int, Exception> {
     todo!()
 }
 
@@ -403,7 +488,7 @@ pub fn get_faction_reaction(caller: Caller<'_, State>, self_ptr: Object, other: 
 /// ```text
 /// int Function GetFlyingState() native
 /// ```
-pub fn get_flying_state(caller: Caller<'_, State>, self_ptr: Object) -> Int {
+pub fn get_flying_state(caller: Caller<'_, State>, self_ptr: Object) -> Result<Int, Exception> {
     todo!()
 }
 
@@ -412,7 +497,10 @@ pub fn get_flying_state(caller: Caller<'_, State>, self_ptr: Object) -> Int {
 /// ```text
 /// ObjectReference Function GetForcedLandingMarker() native
 /// ```
-pub fn get_forced_landing_marker(caller: Caller<'_, State>, self_ptr: Object) -> Object {
+pub fn get_forced_landing_marker(
+    caller: Caller<'_, State>,
+    self_ptr: Object,
+) -> Result<Object, Exception> {
     todo!()
 }
 
@@ -421,7 +509,7 @@ pub fn get_forced_landing_marker(caller: Caller<'_, State>, self_ptr: Object) ->
 /// ```text
 /// int Function GetGoldAmount() native
 /// ```
-pub fn get_gold_amount(caller: Caller<'_, State>, self_ptr: Object) -> Int {
+pub fn get_gold_amount(caller: Caller<'_, State>, self_ptr: Object) -> Result<Int, Exception> {
     todo!()
 }
 
@@ -430,7 +518,10 @@ pub fn get_gold_amount(caller: Caller<'_, State>, self_ptr: Object) -> Int {
 /// ```text
 /// int Function GetHighestRelationshipRank() native
 /// ```
-pub fn get_highest_relationship_rank(caller: Caller<'_, State>, self_ptr: Object) -> Int {
+pub fn get_highest_relationship_rank(
+    caller: Caller<'_, State>,
+    self_ptr: Object,
+) -> Result<Int, Exception> {
     todo!()
 }
 
@@ -439,7 +530,7 @@ pub fn get_highest_relationship_rank(caller: Caller<'_, State>, self_ptr: Object
 /// ```text
 /// Actor Function GetKiller() native
 /// ```
-pub fn get_killer(caller: Caller<'_, State>, self_ptr: Object) -> Object {
+pub fn get_killer(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Exception> {
     todo!()
 }
 
@@ -448,7 +539,7 @@ pub fn get_killer(caller: Caller<'_, State>, self_ptr: Object) -> Object {
 /// ```text
 /// int Function GetLevel() native
 /// ```
-pub fn get_level(caller: Caller<'_, State>, self_ptr: Object) -> Int {
+pub fn get_level(caller: Caller<'_, State>, self_ptr: Object) -> Result<Int, Exception> {
     todo!()
 }
 
@@ -457,7 +548,10 @@ pub fn get_level(caller: Caller<'_, State>, self_ptr: Object) -> Int {
 /// ```text
 /// ActorBase Function GetLeveledActorBase() native
 /// ```
-pub fn get_leveled_actor_base(caller: Caller<'_, State>, self_ptr: Object) -> Object {
+pub fn get_leveled_actor_base(
+    caller: Caller<'_, State>,
+    self_ptr: Object,
+) -> Result<Object, Exception> {
     todo!()
 }
 
@@ -466,7 +560,7 @@ pub fn get_leveled_actor_base(caller: Caller<'_, State>, self_ptr: Object) -> Ob
 /// ```text
 /// float Function GetLightLevel() native
 /// ```
-pub fn get_light_level(caller: Caller<'_, State>, self_ptr: Object) -> Int {
+pub fn get_light_level(caller: Caller<'_, State>, self_ptr: Object) -> Result<Int, Exception> {
     todo!()
 }
 
@@ -475,7 +569,10 @@ pub fn get_light_level(caller: Caller<'_, State>, self_ptr: Object) -> Int {
 /// ```text
 /// int Function GetLowestRelationshipRank() native
 /// ```
-pub fn get_lowest_relationship_rank(caller: Caller<'_, State>, self_ptr: Object) -> Int {
+pub fn get_lowest_relationship_rank(
+    caller: Caller<'_, State>,
+    self_ptr: Object,
+) -> Result<Int, Exception> {
     todo!()
 }
 
@@ -484,7 +581,10 @@ pub fn get_lowest_relationship_rank(caller: Caller<'_, State>, self_ptr: Object)
 /// ```text
 /// bool Function GetNoBleedoutRecovery() native
 /// ```
-pub fn get_no_bleedout_recovery(caller: Caller<'_, State>, self_ptr: Object) -> Bool {
+pub fn get_no_bleedout_recovery(
+    caller: Caller<'_, State>,
+    self_ptr: Object,
+) -> Result<Bool, Exception> {
     todo!()
 }
 
@@ -493,7 +593,7 @@ pub fn get_no_bleedout_recovery(caller: Caller<'_, State>, self_ptr: Object) -> 
 /// ```text
 /// bool Function GetPlayerControls() native
 /// ```
-pub fn get_player_controls(caller: Caller<'_, State>, self_ptr: Object) -> Bool {
+pub fn get_player_controls(caller: Caller<'_, State>, self_ptr: Object) -> Result<Bool, Exception> {
     todo!()
 }
 
@@ -502,7 +602,7 @@ pub fn get_player_controls(caller: Caller<'_, State>, self_ptr: Object) -> Bool 
 /// ```text
 /// Race Function GetRace() native
 /// ```
-pub fn get_race(caller: Caller<'_, State>, self_ptr: Object) -> Object {
+pub fn get_race(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Exception> {
     todo!()
 }
 
@@ -511,7 +611,11 @@ pub fn get_race(caller: Caller<'_, State>, self_ptr: Object) -> Object {
 /// ```text
 /// int Function GetRelationshipRank(Actor akOther) native
 /// ```
-pub fn get_relationship_rank(caller: Caller<'_, State>, self_ptr: Object, other: Object) -> Int {
+pub fn get_relationship_rank(
+    caller: Caller<'_, State>,
+    self_ptr: Object,
+    other: Object,
+) -> Result<Int, Exception> {
     todo!()
 }
 
@@ -520,7 +624,7 @@ pub fn get_relationship_rank(caller: Caller<'_, State>, self_ptr: Object, other:
 /// ```text
 /// int Function GetSitState() native
 /// ```
-pub fn get_sit_state(caller: Caller<'_, State>, self_ptr: Object) -> Int {
+pub fn get_sit_state(caller: Caller<'_, State>, self_ptr: Object) -> Result<Int, Exception> {
     todo!()
 }
 
@@ -529,7 +633,7 @@ pub fn get_sit_state(caller: Caller<'_, State>, self_ptr: Object) -> Int {
 /// ```text
 /// int Function GetSleepState() native
 /// ```
-pub fn get_sleep_state(caller: Caller<'_, State>, self_ptr: Object) -> Int {
+pub fn get_sleep_state(caller: Caller<'_, State>, self_ptr: Object) -> Result<Int, Exception> {
     todo!()
 }
 
@@ -543,7 +647,7 @@ pub fn has_association(
     self_ptr: Object,
     assocation: Object,
     other: Object,
-) -> Bool {
+) -> Result<Bool, Exception> {
     todo!()
 }
 
@@ -552,7 +656,11 @@ pub fn has_association(
 /// ```text
 /// bool Function HasDetectionLOS(ObjectReference akOther) native
 /// ```
-pub fn has_detection_los(caller: Caller<'_, State>, self_ptr: Object, other: Object) -> Bool {
+pub fn has_detection_los(
+    caller: Caller<'_, State>,
+    self_ptr: Object,
+    other: Object,
+) -> Result<Bool, Exception> {
     todo!()
 }
 
@@ -561,7 +669,11 @@ pub fn has_detection_los(caller: Caller<'_, State>, self_ptr: Object, other: Obj
 /// ```text
 /// bool Function HasFamilyRelationship(Actor akOther = None) native
 /// ```
-pub fn has_family_relationship(caller: Caller<'_, State>, self_ptr: Object, other: Object) -> Bool {
+pub fn has_family_relationship(
+    caller: Caller<'_, State>,
+    self_ptr: Object,
+    other: Object,
+) -> Result<Bool, Exception> {
     todo!()
 }
 
@@ -570,7 +682,11 @@ pub fn has_family_relationship(caller: Caller<'_, State>, self_ptr: Object, othe
 /// ```text
 /// bool Function HasMagicEffect(MagicEffect akEffect) native
 /// ```
-pub fn has_magic_effect(caller: Caller<'_, State>, self_ptr: Object, other: Object) -> Bool {
+pub fn has_magic_effect(
+    caller: Caller<'_, State>,
+    self_ptr: Object,
+    other: Object,
+) -> Result<Bool, Exception> {
     todo!()
 }
 
@@ -583,7 +699,7 @@ pub fn has_magic_effect_with_keyword(
     caller: Caller<'_, State>,
     self_ptr: Object,
     keyword: Object,
-) -> Bool {
+) -> Result<Bool, Exception> {
     todo!()
 }
 
@@ -592,7 +708,11 @@ pub fn has_magic_effect_with_keyword(
 /// ```text
 /// bool Function HasParentRelationship(Actor akOther) native
 /// ```
-pub fn has_parent_relationship(caller: Caller<'_, State>, self_ptr: Object, other: Object) -> Bool {
+pub fn has_parent_relationship(
+    caller: Caller<'_, State>,
+    self_ptr: Object,
+    other: Object,
+) -> Result<Bool, Exception> {
     todo!()
 }
 
@@ -601,7 +721,11 @@ pub fn has_parent_relationship(caller: Caller<'_, State>, self_ptr: Object, othe
 /// ```text
 /// bool Function HasPerk(Perk akPerk) native
 /// ```
-pub fn has_perk(caller: Caller<'_, State>, self_ptr: Object, perk: Object) -> Bool {
+pub fn has_perk(
+    caller: Caller<'_, State>,
+    self_ptr: Object,
+    perk: Object,
+) -> Result<Bool, Exception> {
     todo!()
 }
 
@@ -610,7 +734,11 @@ pub fn has_perk(caller: Caller<'_, State>, self_ptr: Object, perk: Object) -> Bo
 /// ```text
 /// bool Function HasSpell(Form akForm) native
 /// ```
-pub fn has_spell(caller: Caller<'_, State>, self_ptr: Object, spell: Object) -> Bool {
+pub fn has_spell(
+    caller: Caller<'_, State>,
+    self_ptr: Object,
+    spell: Object,
+) -> Result<Bool, Exception> {
     todo!()
 }
 
@@ -619,7 +747,7 @@ pub fn has_spell(caller: Caller<'_, State>, self_ptr: Object, spell: Object) -> 
 /// ```text
 /// bool Function IsAIEnabled() native
 /// ```
-pub fn is_ai_enabled(caller: Caller<'_, State>, self_ptr: Object) -> Bool {
+pub fn is_ai_enabled(caller: Caller<'_, State>, self_ptr: Object) -> Result<Bool, Exception> {
     todo!()
 }
 
@@ -628,7 +756,7 @@ pub fn is_ai_enabled(caller: Caller<'_, State>, self_ptr: Object) -> Bool {
 /// ```text
 /// bool Function IsAlarmed() native
 /// ```
-pub fn is_alarmed(caller: Caller<'_, State>, self_ptr: Object) -> Bool {
+pub fn is_alarmed(caller: Caller<'_, State>, self_ptr: Object) -> Result<Bool, Exception> {
     todo!()
 }
 
@@ -637,7 +765,7 @@ pub fn is_alarmed(caller: Caller<'_, State>, self_ptr: Object) -> Bool {
 /// ```text
 /// bool Function IsAlerted() native
 /// ```
-pub fn is_alerted(caller: Caller<'_, State>, self_ptr: Object) -> Bool {
+pub fn is_alerted(caller: Caller<'_, State>, self_ptr: Object) -> Result<Bool, Exception> {
     todo!()
 }
 
@@ -646,7 +774,7 @@ pub fn is_alerted(caller: Caller<'_, State>, self_ptr: Object) -> Bool {
 /// ```text
 /// bool Function IsAllowedToFly() native
 /// ```
-pub fn is_allowed_to_fly(caller: Caller<'_, State>, self_ptr: Object) -> Bool {
+pub fn is_allowed_to_fly(caller: Caller<'_, State>, self_ptr: Object) -> Result<Bool, Exception> {
     todo!()
 }
 
@@ -655,7 +783,7 @@ pub fn is_allowed_to_fly(caller: Caller<'_, State>, self_ptr: Object) -> Bool {
 /// ```text
 /// bool Function IsArrested() native
 /// ```
-pub fn is_arrested(caller: Caller<'_, State>, self_ptr: Object) -> Bool {
+pub fn is_arrested(caller: Caller<'_, State>, self_ptr: Object) -> Result<Bool, Exception> {
     todo!()
 }
 
@@ -664,7 +792,7 @@ pub fn is_arrested(caller: Caller<'_, State>, self_ptr: Object) -> Bool {
 /// ```text
 /// bool Function IsArrestingTarget() native
 /// ```
-pub fn is_arresting_target(caller: Caller<'_, State>, self_ptr: Object) -> Bool {
+pub fn is_arresting_target(caller: Caller<'_, State>, self_ptr: Object) -> Result<Bool, Exception> {
     todo!()
 }
 
@@ -673,7 +801,7 @@ pub fn is_arresting_target(caller: Caller<'_, State>, self_ptr: Object) -> Bool 
 /// ```text
 /// bool Function IsBeingRidden() native
 /// ```
-pub fn is_being_ridden(caller: Caller<'_, State>, self_ptr: Object) -> Bool {
+pub fn is_being_ridden(caller: Caller<'_, State>, self_ptr: Object) -> Result<Bool, Exception> {
     todo!()
 }
 
@@ -682,7 +810,7 @@ pub fn is_being_ridden(caller: Caller<'_, State>, self_ptr: Object) -> Bool {
 /// ```text
 /// bool Function IsBeingRiddenBy(Actor akActor) native
 /// ```
-pub fn is_being_ridden_by(caller: Caller<'_, State>, self_ptr: Object) -> Bool {
+pub fn is_being_ridden_by(caller: Caller<'_, State>, self_ptr: Object) -> Result<Bool, Exception> {
     todo!()
 }
 
@@ -691,7 +819,7 @@ pub fn is_being_ridden_by(caller: Caller<'_, State>, self_ptr: Object) -> Bool {
 /// ```text
 /// bool Function IsBleedingOut() native
 /// ```
-pub fn is_bleeding_out(caller: Caller<'_, State>, self_ptr: Object) -> Bool {
+pub fn is_bleeding_out(caller: Caller<'_, State>, self_ptr: Object) -> Result<Bool, Exception> {
     todo!()
 }
 
@@ -700,7 +828,7 @@ pub fn is_bleeding_out(caller: Caller<'_, State>, self_ptr: Object) -> Bool {
 /// ```text
 /// bool Function IsBribed() native
 /// ```
-pub fn is_bribed(caller: Caller<'_, State>, self_ptr: Object) -> Bool {
+pub fn is_bribed(caller: Caller<'_, State>, self_ptr: Object) -> Result<Bool, Exception> {
     todo!()
 }
 
@@ -709,7 +837,7 @@ pub fn is_bribed(caller: Caller<'_, State>, self_ptr: Object) -> Bool {
 /// ```text
 /// bool Function IsChild() native
 /// ```
-pub fn is_child(caller: Caller<'_, State>, self_ptr: Object) -> Bool {
+pub fn is_child(caller: Caller<'_, State>, self_ptr: Object) -> Result<Bool, Exception> {
     todo!()
 }
 
@@ -718,7 +846,7 @@ pub fn is_child(caller: Caller<'_, State>, self_ptr: Object) -> Bool {
 /// ```text
 /// bool Function IsCommandedActor() native
 /// ```
-pub fn is_commanded_actor(caller: Caller<'_, State>, self_ptr: Object) -> Bool {
+pub fn is_commanded_actor(caller: Caller<'_, State>, self_ptr: Object) -> Result<Bool, Exception> {
     todo!()
 }
 
@@ -727,7 +855,7 @@ pub fn is_commanded_actor(caller: Caller<'_, State>, self_ptr: Object) -> Bool {
 /// ```text
 /// bool Function IsDead() native
 /// ```
-pub fn is_dead(caller: Caller<'_, State>, self_ptr: Object) -> Bool {
+pub fn is_dead(caller: Caller<'_, State>, self_ptr: Object) -> Result<Bool, Exception> {
     todo!()
 }
 
@@ -736,7 +864,7 @@ pub fn is_dead(caller: Caller<'_, State>, self_ptr: Object) -> Bool {
 /// ```text
 /// bool Function IsDetectedBy(Actor akOther) native
 /// ```
-pub fn is_detected_by(caller: Caller<'_, State>, other: Object) -> Bool {
+pub fn is_detected_by(caller: Caller<'_, State>, other: Object) -> Result<Bool, Exception> {
     todo!()
 }
 
@@ -745,7 +873,7 @@ pub fn is_detected_by(caller: Caller<'_, State>, other: Object) -> Bool {
 /// ```text
 /// bool Function IsDismembered(string asBodyPart = "") native
 /// ```
-pub fn is_dismembered(caller: Caller<'_, State>, body_part: isize) -> Bool {
+pub fn is_dismembered(caller: Caller<'_, State>, body_part: isize) -> Result<Bool, Exception> {
     todo!()
 }
 
@@ -754,7 +882,7 @@ pub fn is_dismembered(caller: Caller<'_, State>, body_part: isize) -> Bool {
 /// ```text
 /// bool Function IsDoingFavor() native
 /// ```
-pub fn is_doing_favor(caller: Caller<'_, State>, self_ptr: Object) -> Bool {
+pub fn is_doing_favor(caller: Caller<'_, State>, self_ptr: Object) -> Result<Bool, Exception> {
     todo!()
 }
 
@@ -763,7 +891,11 @@ pub fn is_doing_favor(caller: Caller<'_, State>, self_ptr: Object) -> Bool {
 /// ```text
 /// bool Function IsEquipped(Form akItem) native
 /// ```
-pub fn is_equipped(caller: Caller<'_, State>, self_ptr: Object, form: Object) -> Bool {
+pub fn is_equipped(
+    caller: Caller<'_, State>,
+    self_ptr: Object,
+    form: Object,
+) -> Result<Bool, Exception> {
     todo!()
 }
 
@@ -772,7 +904,7 @@ pub fn is_equipped(caller: Caller<'_, State>, self_ptr: Object, form: Object) ->
 /// ```text
 /// bool Function IsEssential() native
 /// ```
-pub fn is_essential(caller: Caller<'_, State>, self_ptr: Object) -> Bool {
+pub fn is_essential(caller: Caller<'_, State>, self_ptr: Object) -> Result<Bool, Exception> {
     todo!()
 }
 
@@ -781,7 +913,7 @@ pub fn is_essential(caller: Caller<'_, State>, self_ptr: Object) -> Bool {
 /// ```text
 /// bool Function IsFlying() native
 /// ```
-pub fn is_flying(caller: Caller<'_, State>, self_ptr: Object) -> Bool {
+pub fn is_flying(caller: Caller<'_, State>, self_ptr: Object) -> Result<Bool, Exception> {
     todo!()
 }
 
@@ -790,7 +922,7 @@ pub fn is_flying(caller: Caller<'_, State>, self_ptr: Object) -> Bool {
 /// ```text
 /// bool Function IsGhost() native
 /// ```
-pub fn is_ghost(caller: Caller<'_, State>, self_ptr: Object) -> Bool {
+pub fn is_ghost(caller: Caller<'_, State>, self_ptr: Object) -> Result<Bool, Exception> {
     todo!()
 }
 
@@ -799,6 +931,32 @@ pub fn is_ghost(caller: Caller<'_, State>, self_ptr: Object) -> Bool {
 /// ```text
 /// bool Function IsGuard() native
 /// ```
-pub fn is_guard(caller: Caller<'_, State>, self_ptr: Object) -> Bool {
+pub fn is_guard(caller: Caller<'_, State>, self_ptr: Object) -> Result<Bool, Exception> {
+    todo!()
+}
+
+/// `RemovePerk`
+///
+/// ```text
+/// Function RemovePerk(Perk akPerk) native
+/// ```
+pub fn remove_perk(
+    caller: Caller<'_, State>,
+    self_ptr: Object,
+    perk: Object,
+) -> Result<(), Exception> {
+    todo!()
+}
+
+/// `SetNoBleedoutRecovery`
+///
+/// ```text
+/// Function SetNoBleedoutRecovery(bool abAllowed) native
+/// ```
+pub fn set_no_bleedout_recovery(
+    caller: Caller<'_, State>,
+    self_ptr: Object,
+    allowed: bool,
+) -> Result<(), Exception> {
     todo!()
 }

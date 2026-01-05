@@ -1,4 +1,4 @@
-use crate::classes::{Int, State};
+use crate::classes::{Int, Object, State};
 use crate::runtime::{Caller, Exception, ObjectAddr};
 
 /// `GetAggressionAV`
@@ -138,4 +138,26 @@ pub fn get_suspicious_av(caller: Caller<'_, State>) -> Result<ObjectAddr, Except
 /// ```
 pub fn get_strength_av(caller: Caller<'_, State>) -> Result<ObjectAddr, Exception> {
     Ok(caller.data().actor_values.strength.addr())
+}
+
+/// `ShowFatigueWarningOnHUD`
+///
+/// ```text
+/// Function ShowFatigueWarningOnHUD() Native Global
+/// ```
+pub fn show_fatigue_warning_on_hud(caller: Caller<'_, State>) -> Result<(), Exception> {
+    todo!()
+}
+
+/// `ShowPerkVaultBoyOnHUD`
+///
+/// ```text
+/// Function ShowPerkVaultBoyOnHUD(string aVaultBoySwf, Sound aSoundDescriptor = None) Native Global
+/// ```
+pub fn show_perk_vault_boy_on_hud(
+    caller: Caller<'_, State>,
+    vault_boy_swf: isize,
+    sound: Object,
+) -> Result<(), Exception> {
+    todo!()
 }
