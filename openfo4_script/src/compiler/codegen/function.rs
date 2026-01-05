@@ -1350,6 +1350,11 @@ fn resumse_stack(
     resume_points: &HashMap<usize, Block>,
     start_block: Block,
 ) {
+    if resume_points.is_empty() {
+        translator.builder.jump(start_block, &[]);
+        return;
+    }
+
     let index = translator.builder.load(JitType::I64, stack_base, 0);
     let offset = JitType::I64.size();
 
