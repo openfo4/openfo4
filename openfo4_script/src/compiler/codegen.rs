@@ -10,14 +10,15 @@ use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
-use openfo4_jit::{Compiler, FunctionId, Signature, Type as JitType};
+use openfo4_jit::{Compiler, FunctionId as FuncId, Signature, Type as JitType};
 use openfo4_pex::{Function, Instruction, Module, Struct, Value};
+use slab::Slab;
 use thiserror::Error;
 
 use crate::compiler::codegen::constant::ConstantData;
 use crate::compiler::codegen::function::FunctionResult;
 use crate::compiler::codegen::function_props::{FunctionProps, function_properties};
-use crate::compiler::codegen::layout::{ClassLayout, compute_class_layout, compute_struct_layout};
+use crate::compiler::codegen::layout::{ClassLayout, compute_struct_layout};
 use crate::compiler::codegen::types::Types;
 use crate::compiler::{
     CompilationResult, FieldType, NativeFunction, ObjectField, ObjectProperty, TypeLayout,
@@ -62,18 +63,17 @@ impl CodegenPass {
             let mut functions = HashMap::new();
             for state in &class.states {
                 for func in &state.functions {
-                    functions.insert(
-                        func.name.to_lowercase(),
-                        FunctionDef {
-                            signature: None,
-                            func_id: None,
-                            function: func.clone(),
-                            native: None,
-                            trampoline_func_id: None,
-                            props: None,
-                            constants: Arc::default(),
-                        },
-                    );
+                    let id = FunctionId(self.data.functions.insert(FunctionDef {
+                        signature: None,
+                        func_id: None,
+                        function: func.clone(),
+                        native: None,
+                        trampoline_func_id: None,
+                        props: None,
+                        constants: Arc::default(),
+                    }));
+
+                    functions.insert(func.name.to_lowercase(), id);
                 }
             }
 
@@ -111,8 +111,7 @@ impl CodegenPass {
     }
 
     pub fn define_native_function(&mut self, class: &str, function: &str, func: NativeFunction) {
-        let def = self.data.classes.get_mut(&class.to_lowercase()).unwrap();
-        let func_def = def.functions.get_mut(&function.to_lowercase()).unwrap();
+        let func_def = self.data.get_function_mut(class, function).unwrap();
         func_def.native = Some(func);
     }
 
@@ -366,6 +365,7 @@ struct CodegenData {
     types: Types,
     classes: HashMap<String, ClassDef>,
     structs: HashMap<String, StructDef>,
+    functions: Slab<FunctionDef>,
 }
 
 impl CodegenData {
@@ -374,6 +374,7 @@ impl CodegenData {
             types: Types::default(),
             classes: HashMap::new(),
             structs: HashMap::new(),
+            functions: Slab::new(),
         }
     }
 
@@ -428,25 +429,29 @@ impl CodegenData {
 
     fn get_function(&self, class: &str, func: &str) -> Option<&FunctionDef> {
         let class = get_parent_class_with_function(&self.classes, class, func)?;
-        self.classes
+        let id = self
+            .classes
             .get(&class)?
             .functions
-            .get(&func.to_lowercase())
+            .get(&func.to_lowercase())?;
+        Some(&self.functions[id.0])
     }
 
     fn get_function_mut(&mut self, class: &str, func: &str) -> Option<&mut FunctionDef> {
         let class = get_parent_class_with_function(&self.classes, class, func)?;
-        self.classes
+        let id = self
+            .classes
             .get_mut(&class)?
             .functions
-            .get_mut(&func.to_lowercase())
+            .get_mut(&func.to_lowercase())?;
+        Some(&mut self.functions[id.0])
     }
 }
 
 #[derive(Clone, Debug, Default)]
 struct ClassDef {
     name: String,
-    functions: HashMap<String, FunctionDef>,
+    functions: HashMap<String, FunctionId>,
     parent: Option<String>,
     fields: HashMap<String, String>,
     /// Unique RTTI number stored in the header to identify objects of this class.
@@ -459,13 +464,16 @@ struct ClassDef {
 #[derive(Clone, Debug)]
 struct FunctionDef {
     signature: Option<Signature>,
-    func_id: Option<FunctionId>,
+    func_id: Option<FuncId>,
     function: Function,
     native: Option<NativeFunction>,
-    trampoline_func_id: Option<FunctionId>,
+    trampoline_func_id: Option<FuncId>,
     props: Option<FunctionProps>,
     constants: Arc<Vec<ConstantData>>,
 }
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub struct FunctionId(usize);
 
 #[derive(Clone, Debug)]
 struct StructDef {
