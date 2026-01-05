@@ -154,3 +154,12 @@ pub struct ArrayObject {
     pub ptr: *mut u8,
     pub len: usize,
 }
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+#[repr(usize)]
+pub enum ObjectTag {
+    Bool = 0,
+    Int = 1,
+    Float = 2,
+    Class = 3,
+}

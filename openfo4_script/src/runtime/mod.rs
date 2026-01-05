@@ -9,7 +9,7 @@ use std::sync::Arc;
 use openfo4_jit::{Signature, Type};
 use thiserror::Error;
 
-pub use object::{ArrayObject, Object, ObjectAddr, ObjectPool, ObjectRef, StringObject};
+pub use object::{ArrayObject, Object, ObjectAddr, ObjectPool, ObjectRef, ObjectTag, StringObject};
 pub use stack::Stack;
 
 use crate::compiler::CompilationResult;

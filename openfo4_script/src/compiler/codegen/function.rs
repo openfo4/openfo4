@@ -14,7 +14,7 @@ use crate::compiler::codegen::function_props::{
 };
 use crate::compiler::codegen::trampoline::generate_guest_to_host_trampoline;
 use crate::compiler::codegen::{ClassDef, CodegenData, FunctionDef, Type};
-use crate::runtime::{ArrayObject, Func, RESULT_ERROR, RESULT_OK};
+use crate::runtime::{ArrayObject, Func, ObjectTag, RESULT_ERROR, RESULT_OK};
 
 #[derive(Debug)]
 pub struct FunctionResult {
@@ -939,8 +939,71 @@ fn perform_cast(
 
             unreachable!("cannot cast unrelated classes")
         }
-        _ => todo!(),
+        (Type::Var, Type::Bool) => perform_var_downcast(translator, src, ObjectTag::Bool, block),
+        (Type::Var, Type::Int) => perform_var_downcast(translator, src, ObjectTag::Int, block),
+        (Type::Var, Type::Float) => perform_var_downcast(translator, src, ObjectTag::Float, block),
+        (Type::Var, Type::Class(class_name)) => {
+            // Perform var to class cast, then attempt to downcast the class value.
+            let res = perform_var_downcast(translator, src, ObjectTag::Class, block);
+            let is_ok = perform_class_typecheck(translator, res, &class_name.to_lowercase(), block);
+
+            let continue_block = translator.builder.create_block(&[]);
+            let abort_block = translator.builder.create_block(&[]);
+
+            translator
+                .builder
+                .brif(is_ok, continue_block, &[], abort_block, &[]);
+
+            translator.builder.switch_to_block(abort_block);
+            abort_function(translator);
+
+            translator.builder.switch_to_block(continue_block);
+            *block = continue_block;
+
+            res
+        }
+        (src_ty, dst_ty) => todo!("{:?} {:?}", src_ty, dst_ty),
     }
+}
+
+/// Performs a runtime cast from `var` to another type.
+fn perform_var_downcast(
+    translator: &mut FunctionTranslator<'_>,
+    src: JitValue,
+    dst: ObjectTag,
+    block: &mut Block,
+) -> JitValue {
+    let tag = translator.builder.load(JitType::Pointer, src, 0);
+
+    let continue_block = translator.builder.create_block(&[]);
+    let abort_block = translator.builder.create_block(&[]);
+
+    let wanted_tag = translator
+        .builder
+        .iconst(JitType::Pointer, dst as usize as i64);
+    let is_ok = translator
+        .builder
+        .icmp(tag, wanted_tag, IntCompareOp::Equal);
+    translator
+        .builder
+        .brif(is_ok, continue_block, &[], abort_block, &[]);
+
+    translator.builder.switch_to_block(abort_block);
+    abort_function(translator);
+
+    translator.builder.switch_to_block(continue_block);
+    *block = continue_block;
+
+    let ty = match dst {
+        ObjectTag::Bool => JitType::I32,
+        ObjectTag::Int => JitType::I32,
+        ObjectTag::Float => JitType::F32,
+        ObjectTag::Class => JitType::Pointer,
+    };
+
+    translator
+        .builder
+        .load(ty, src, size_of::<ObjectTag>() as u32)
 }
 
 /// Performs a runtime typecheck whether `src` is `dst_class` or a subtype of `dst_class`.
@@ -956,6 +1019,16 @@ fn perform_typecheck(
         return translator.builder.iconst(JitType::I32, 0);
     };
 
+    let src = translator.load(src);
+    perform_class_typecheck(translator, src, dst_class, block)
+}
+
+fn perform_class_typecheck(
+    translator: &mut FunctionTranslator<'_>,
+    src: JitValue,
+    dst_class: &str,
+    block: &mut Block,
+) -> JitValue {
     let dst_id = translator
         .data
         .classes
@@ -964,7 +1037,6 @@ fn perform_typecheck(
         .type_id;
     let dst_id = translator.builder.iconst(JitType::I64, dst_id as i64);
 
-    let src = translator.load(src);
     let type_info_ptr = translator.builder.load(JitType::Pointer, src, 0);
 
     // The first word of an object contains a constant pointer to the type
