@@ -138,6 +138,14 @@ impl Registry {
                     continue;
                 }
 
+                // We don't want to call back directly into host functions.
+                // We only want to call Event functions which have no return value,
+                // so calling an empty Event function is equivalent to not calling
+                // it at all. We don't have to compile it.
+                if f.is_native || f.instructions.is_empty() {
+                    continue;
+                }
+
                 let res = self.ctx.compile(&class.name, &f.name).unwrap();
 
                 let func = unsafe { Func::new(&res) };
