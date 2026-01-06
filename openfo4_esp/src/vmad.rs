@@ -8,6 +8,16 @@ pub struct VirtualMachineAdapter<T = ()> {
     pub fragments: Option<T>,
 }
 
+impl<T> VirtualMachineAdapter<T> {
+    /// Maps from `VirtualMachineAdapter<T>` to `VirtualMachineAdapter<()>`.
+    pub fn without_fragments(self) -> VirtualMachineAdapter<()> {
+        VirtualMachineAdapter {
+            scripts: self.scripts,
+            fragments: None,
+        }
+    }
+}
+
 impl<T> Decode for VirtualMachineAdapter<T>
 where
     T: DecodeScriptSection<Error = Error>,
@@ -414,10 +424,12 @@ impl DecodeScriptSection for QuestFragments {
         u8::decode(&mut buf)?; // Unknwon?
         let fragment_count = u16::decode(&mut buf)?;
 
-        let script = if fragment_count != 0 {
+        // The next field that follows is the script name.
+        // If the script name is empty the script is not present.
+        let script = if !buf.chunk().starts_with(&[0, 0]) {
             Some(Script::decode_section(&mut buf, version, object_format)?)
         } else {
-            // Only one 0x0000 present if no fragments?
+            // Advance over script name length.
             u16::decode(&mut buf)?;
             None
         };
