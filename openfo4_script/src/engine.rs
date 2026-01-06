@@ -2,12 +2,13 @@ use std::collections::HashMap;
 use std::mem::transmute;
 use std::sync::{Arc, RwLock};
 
-use game_common::cell::UnsafeRefCell;
 use openfo4_jit::Type;
 use openfo4_pex::{Class, Module};
 
 use crate::compiler::{CompilationResult, Context, NativeFunction, TypeLayout};
-use crate::runtime::{Func, HostState, IntoFunc, NativeFnPtr, RawVal, call_host_trampoline};
+use crate::runtime::{
+    Func, HostState, IntoFunc, NativeFnPtr, ObjectPool, RawVal, call_host_trampoline,
+};
 
 pub type NativeFuncPtr = unsafe extern "C" fn(*const HostState, usize, *mut RawVal);
 
@@ -41,11 +42,11 @@ impl Engine {
     where
         F: IntoFunc<T, Params, Returns>,
     {
-        let _lock = self.shared.state_lock.write();
-        let mut state = unsafe { self.shared.state.borrow_mut() };
+        let _lock = self.shared.call_table_lock.write();
+        let mut call_table = unsafe { self.shared.state.call_table.borrow_mut() };
 
         let ptr = call_host_trampoline as *const u8;
-        let index = f.into_func(&mut state);
+        let index = f.into_func(&mut call_table);
 
         let mut signature = F::signature();
         // Our VM context pointer.
@@ -74,12 +75,16 @@ impl Engine {
     pub fn get_class_layout(&self, class: &str) -> Option<&TypeLayout> {
         self.layouts.get(&class.to_lowercase())
     }
+
+    pub fn object_pool(&self) -> &ObjectPool {
+        &self.shared.state.pool
+    }
 }
 
 #[derive(Default)]
 pub(crate) struct EngineShared {
-    pub(crate) state_lock: RwLock<()>,
-    pub(crate) state: UnsafeRefCell<HostState>,
+    pub(crate) call_table_lock: RwLock<()>,
+    pub(crate) state: HostState,
 }
 
 #[derive(Clone, Debug)]

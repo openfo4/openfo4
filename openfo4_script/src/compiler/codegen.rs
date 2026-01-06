@@ -229,7 +229,8 @@ impl CodegenPass {
                 let layout = class.layout.as_ref().unwrap();
 
                 for (field_name, field_offset) in &layout.field_offsets {
-                    let field_ty = self.data.resolve_ty(&class.fields.get(field_name).unwrap());
+                    let field_ty_name = class.fields.get(field_name).unwrap();
+                    let field_ty = self.data.resolve_ty(&field_ty_name);
 
                     class_fields.push(ObjectField {
                         class: class_name.to_lowercase(),
@@ -241,6 +242,7 @@ impl CodegenPass {
                             Type::Float => FieldType::F32,
                             _ => FieldType::Pointer,
                         },
+                        ty_name: field_ty_name.to_lowercase(),
                     });
                 }
 

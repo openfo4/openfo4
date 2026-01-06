@@ -119,6 +119,7 @@ pub struct ObjectField {
     pub name: String,
     pub offset: usize,
     pub ty: FieldType,
+    pub ty_name: String,
 }
 
 #[derive(Clone, Debug)]

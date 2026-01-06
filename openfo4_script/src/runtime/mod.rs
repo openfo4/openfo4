@@ -1,11 +1,12 @@
 mod object;
 mod stack;
 
-use std::any::{Any, TypeId};
+use std::any::Any;
 use std::marker::PhantomData;
 use std::mem::{MaybeUninit, transmute};
 use std::sync::Arc;
 
+use game_common::cell::UnsafeRefCell;
 use openfo4_jit::{Signature, Type};
 use thiserror::Error;
 
@@ -52,14 +53,8 @@ impl<T> Context<T> {
         &mut self.data
     }
 
-    pub fn into_data(mut self) -> T {
+    pub fn into_data(self) -> T {
         self.data
-    }
-
-    pub fn x(&self) {
-        unsafe {
-            dbg!(&self.engine.state.borrow().pool);
-        }
     }
 }
 
@@ -120,22 +115,18 @@ impl Func {
         self.stack_size
     }
 
-    pub fn call(&self) {}
-
     pub unsafe fn call_unchecked<T>(&self, ctx: &mut Context<T>, values: *mut RawVal)
     where
         T: 'static,
     {
         assert!(ctx.stack.size() <= self.stack_size);
 
-        let _lock = ctx.engine.state_lock.read();
-        let state = unsafe { ctx.engine.state.borrow() };
-
-        dbg!(ctx.stack.as_ptr());
+        // We must lock the call table before we call the guest function.
+        let _lock = ctx.engine.call_table_lock.read();
 
         let ctx = RawContext {
             stack: ctx.stack.as_ptr(),
-            state: &*state,
+            state: &ctx.engine.state,
             data: &ctx.data as *const dyn Any,
         };
 
@@ -264,9 +255,8 @@ impl<'a, T> Caller<'a, T> {
 
 #[derive(Default)]
 pub struct HostState {
-    data: Option<Box<dyn Any>>,
-    call_table: CallTable,
-    pool: ObjectPool,
+    pub call_table: UnsafeRefCell<CallTable>,
+    pub pool: ObjectPool,
 }
 
 #[derive(Default)]
@@ -286,7 +276,7 @@ impl CallTable {
 }
 
 pub trait IntoFunc<T, Params, Returns> {
-    fn into_func(self, ctx: &mut HostState) -> usize;
+    fn into_func(self, call_table: &mut CallTable) -> usize;
 
     fn signature() -> Signature;
 }
@@ -307,7 +297,7 @@ macro_rules! impl_into_func {
                 $returns: NativeType,
             )*
         {
-            fn into_func(self, ctx: &mut HostState) -> usize {
+            fn into_func(self, call_table: &mut CallTable) -> usize {
                 let callback = move |ctx: *const RawContext, args: *mut RawVal| {
                     let ctx = unsafe { &*ctx };
 
@@ -354,7 +344,7 @@ macro_rules! impl_into_func {
                     };
                 };
 
-                ctx.call_table.insert(callback)
+                call_table.insert(callback)
             }
 
             fn signature() -> Signature {
@@ -495,9 +485,9 @@ pub unsafe extern "C" fn call_host_trampoline(
     index: usize,
     args: *mut RawVal,
 ) {
-    let ctx = unsafe { &*ctx };
-    let state = unsafe { &*ctx.state };
-    let func = &state.call_table.functions[index];
+    // SAFETY: We have locked the call table before any guest function is called.
+    let call_table = unsafe { (*(*ctx).state).call_table.borrow() };
+    let func = &call_table.functions[index];
     func(ctx, args);
 }
 

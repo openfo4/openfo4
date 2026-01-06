@@ -80,12 +80,14 @@ pub static ARRAY_LAYOUT: LazyLock<Box<TypeLayout>> = LazyLock::new(|| {
                 name: "ptr".to_owned(),
                 offset: 0,
                 ty: FieldType::Pointer,
+                ty_name: "".to_owned(),
             },
             ObjectField {
                 class: "".to_owned(),
                 name: "len".to_owned(),
                 offset: size_of::<*mut u8>(),
                 ty: FieldType::Pointer,
+                ty_name: "".to_owned(),
             },
         ],
         properties: Vec::new(),
@@ -112,6 +114,7 @@ pub fn generate_type_layout(data: &CodegenData, ty: &Type) -> TypeLayout {
             name: "".to_owned(),
             offset: 0,
             ty: field_ty,
+            ty_name: "".to_owned(),
         }],
         properties: Vec::new(),
     }
