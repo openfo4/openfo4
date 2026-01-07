@@ -101,6 +101,10 @@ impl FileLoader {
             }
         }
     }
+
+    pub fn files(&self) -> impl Iterator<Item = &str> {
+        self.files.keys().map(|v| v.as_str())
+    }
 }
 
 fn scan_directory_files(path: &Path) -> HashSet<String> {

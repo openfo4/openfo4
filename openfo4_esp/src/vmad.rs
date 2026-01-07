@@ -473,8 +473,6 @@ impl Decode for QuestFragment {
         let script_name = U16String::decode(&mut buf)?;
         let fragment_name = U16String::decode(&mut buf)?;
 
-        dbg!(&script_name, &fragment_name);
-
         Ok(Self {
             quest_stage,
             quest_stage_index,

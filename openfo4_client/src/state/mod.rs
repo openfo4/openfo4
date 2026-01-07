@@ -61,6 +61,8 @@ use crate::systems::camera::CameraMode;
 use crate::systems::controller::apply_player_movements;
 use crate::systems::door::{handle_automatic_doors, handle_door_activations};
 use crate::systems::inventory::InventorySystem;
+use crate::systems::quests::QuestManager;
+use crate::systems::scripting::Executor;
 use crate::systems::time::{init_time, update_time};
 use crate::systems::weapon::{
     handle_weapon_draw_events, handle_weapon_fire_events, handle_weapon_hit_damage,
@@ -93,6 +95,8 @@ pub struct GameState {
     object_ref_set: ObjectReferenceSet,
     weather: WeatherSystem,
     inventory: InventorySystem,
+    executor: Executor,
+    quests: QuestManager,
 }
 
 impl GameState {
@@ -172,6 +176,14 @@ impl GameState {
         let mut world = World::new();
         init_time(&mut world);
 
+        let mut executor = futures_lite::future::block_on(Executor::new(
+            loader.clone(),
+            file_loader.clone(),
+            pool.clone(),
+        ));
+
+        let quests = QuestManager::new(&loader, &mut executor);
+
         Self {
             weather: WeatherSystem::new(loader.clone(), pool.clone(), &asset_loader, &shared),
             inventory: InventorySystem::new(pool.clone(), asset_loader.clone(), loader.clone()),
@@ -191,6 +203,8 @@ impl GameState {
             interval: Interval::new(Duration::from_secs(1) / UPS),
             esp_loader: loader,
             object_ref_set: ObjectReferenceSet::default(),
+            executor,
+            quests,
         }
     }
 
@@ -260,6 +274,14 @@ impl GameState {
         // systems::hierarchy::compute_global_transform(&mut self.world);
 
         self.animation.update(&mut self.world);
+
+        self.quests
+            .update(&mut self.world, &mut self.event_bus, &mut self.executor);
+        self.executor.update(
+            &mut self.world,
+            &mut self.event_bus,
+            Duration::from_secs(1) / UPS,
+        );
 
         openfo4_animation::systems::drive_animations::<AnimationSet>(
             &mut self.world,

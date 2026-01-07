@@ -45,3 +45,12 @@ pub fn wait(caller: Caller<'_, State>, seconds: Float) -> Result<(), Exception> 
 
     Err(Exception::Suspend)
 }
+
+/// `WaitMenuMode`
+///
+/// ```text
+/// Function WaitMenuMode(float afSeconds) Native Global
+/// ```
+pub fn wait_menu_mode(caller: Caller<'_, State>, seconds: Float) -> Result<(), Exception> {
+    todo!()
+}

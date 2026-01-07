@@ -2,13 +2,17 @@ use std::path::Path;
 
 use async_lock::RwLock;
 use game_common::collections::lru::LruCache;
+use hashbrown::HashMap;
 use openfo4_esp::{Error, EspFile, FormId, Record, RecordChildren, RecordKind};
 use openfo4_io::fs::File;
+
+use crate::state::hardcoded::load_hardcoded_forms;
 
 #[derive(Debug)]
 pub struct EspLoader {
     files: Vec<EspFile<File>>,
     cache: RwLock<LruCache<FormId, Record>>,
+    hardcoded: HashMap<FormId, Record>,
 }
 
 impl EspLoader {
@@ -16,6 +20,7 @@ impl EspLoader {
         Self {
             files: Vec::new(),
             cache: RwLock::new(LruCache::new(65_536)),
+            hardcoded: load_hardcoded_forms(),
         }
     }
 
@@ -30,6 +35,10 @@ impl EspLoader {
 
     #[tracing::instrument(name = "EspLoader::lookup")]
     pub async fn lookup(&self, kind: Option<RecordKind>, id: FormId) -> Result<Record, Error> {
+        if let Some(record) = self.hardcoded.get(&id) {
+            return Ok(record.clone());
+        }
+
         {
             if let Some(record) = self.cache.write().await.get(&id) {
                 return Ok(record.clone());
@@ -51,6 +60,8 @@ impl EspLoader {
             // self.cache.write().await.insert(record.clone());
             return Ok(records);
         }
+
+        // TODO: We should also yield hardcoded forms here.
 
         todo!()
     }

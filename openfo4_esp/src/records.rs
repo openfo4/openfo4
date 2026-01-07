@@ -1420,7 +1420,7 @@ pub struct TACT {
     pub edid: ZString,
     // TODO
     #[record("VMAD")]
-    pub vmad: Option<()>,
+    pub vmad: Option<VirtualMachineAdapter>,
     #[record("OBND")]
     pub obnd: Bounds,
     #[record("FULL")]
@@ -1447,7 +1447,7 @@ pub struct Armor {
     #[record("EDID")]
     pub id: ZString,
     #[record("VMAD")]
-    pub virtual_machine_adapter: Option<()>,
+    pub virtual_machine_adapter: Option<VirtualMachineAdapter>,
     #[record("OBND")]
     pub object_bounds: Option<Bounds>,
     #[record("PTRN")]
@@ -1701,7 +1701,7 @@ pub struct Book {
     #[record("EDID")]
     pub id: ZString,
     #[record("VMAD")]
-    pub virtual_machine_adapter: Option<()>,
+    pub virtual_machine_adapter: Option<VirtualMachineAdapter>,
     #[record("OBND")]
     pub objet_bounds: Bounds,
     #[record("PTRN")]
@@ -2222,6 +2222,8 @@ pub struct StaticCollectionPartPlacement {
 pub struct MSTT {
     #[record("EDID")]
     pub edid: ZString,
+    #[record("VMAD")]
+    pub virtual_machine_adapter: Option<VirtualMachineAdapter>,
     #[record("OBND")]
     pub obnd: Bounds,
     // TODO
@@ -4943,6 +4945,8 @@ impl_decode_bitflags!(AnimationFlags: u8);
 pub struct Package {
     #[record("EDID")]
     pub id: Option<ZString>,
+    #[record("VMAD")]
+    pub virtual_machine_adapter: Option<VirtualMachineAdapter>,
 }
 
 #[derive(Clone, Debug, Record)]
@@ -5013,6 +5017,8 @@ pub struct FormList {
 pub struct Perk {
     #[record("EDID")]
     pub id: Option<ZString>,
+    #[record("VMAD")]
+    pub virtual_machine_adapter: Option<VirtualMachineAdapter>,
 }
 
 #[derive(Clone, Debug, Record)]

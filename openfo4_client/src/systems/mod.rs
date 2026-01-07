@@ -18,6 +18,8 @@ pub mod inventory;
 pub mod lights;
 pub mod ni_transform;
 pub mod projectile;
+pub mod quests;
+pub mod scripting;
 pub mod skeleton;
 pub mod time;
 pub mod weapon;

@@ -354,7 +354,7 @@ pub struct Variable {
     pub value: Value,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum Instruction {
     /// No operation
     Nop,
@@ -532,26 +532,26 @@ impl Instruction {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Unop {
     pub src: Value,
     pub dst: Value,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Binop {
     pub lhs: Value,
     pub rhs: Value,
     pub dst: Value,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct ConditionalBranch {
     pub condition: Value,
     pub offset: Value,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct CallMethod {
     pub function_name: Value,
     /// The receiver object on which the function is called.
@@ -581,7 +581,7 @@ impl CallMethod {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct CallParent {
     /// The name of the function to call.
     pub function: Value,
@@ -607,7 +607,7 @@ impl CallParent {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct CallStatic {
     pub class: Value,
     pub function: Value,
@@ -635,7 +635,7 @@ impl CallStatic {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct PropertyGet {
     /// The name of the property to load.
     pub property: Value,
@@ -660,7 +660,7 @@ impl PropertyGet {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct PropertySet {
     /// The name of the property.
     pub property: Value,
@@ -684,7 +684,7 @@ impl PropertySet {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct ArrayFind {
     /// The array object to be searched.
     pub array_value: Value,
@@ -714,7 +714,7 @@ impl ArrayFind {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Is {
     /// The variable where the bool will be written.
     pub return_assignment: Value,
@@ -738,7 +738,7 @@ impl Is {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct StructCreate {
     pub return_assignment: Value,
 }
@@ -751,7 +751,7 @@ impl StructCreate {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct StructGet {
     /// The struct value.
     pub struct_value: Value,
@@ -775,7 +775,7 @@ impl StructGet {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct StructSet {
     /// The struct value.
     pub struct_value: Value,
@@ -799,7 +799,7 @@ impl StructSet {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct ArrayFindStruct {
     /// The array object.
     pub array_value: Value,
@@ -833,7 +833,7 @@ impl ArrayFindStruct {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct ArrayAdd {
     pub array: Value,
     pub value: Value,
@@ -854,7 +854,7 @@ impl ArrayAdd {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct ArrayInsert {
     pub array: Value,
     pub value: Value,
@@ -875,7 +875,7 @@ impl ArrayInsert {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct ArrayPop {
     pub array: Value,
 }
@@ -888,7 +888,7 @@ impl ArrayPop {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct ArrayRemove {
     pub array_value: Value,
     pub index: Value,
@@ -909,7 +909,7 @@ impl ArrayRemove {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct ArrayClear {
     /// The array that will be cleared.
     pub array: Value,
@@ -923,7 +923,7 @@ impl ArrayClear {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum Value {
     Null,
     Bool(bool),

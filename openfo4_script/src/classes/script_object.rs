@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use crate::classes::{Bool, Float, Int, Object, State, Timer};
+use crate::classes::{Bool, Float, Int, Object, State, TimerId};
 use crate::runtime::{Caller, Exception};
 
 /// CallFunction
@@ -23,7 +23,12 @@ pub fn start_timer(
     interval: Float,
     timer_id: Int,
 ) -> Result<(), Exception> {
-    todo!()
+    caller.data().real_timers.lock().insert(
+        object,
+        TimerId(timer_id),
+        Duration::from_secs_f32(interval),
+    );
+    Ok(())
 }
 
 /// `StartTimerGameTime`
@@ -37,7 +42,12 @@ pub fn start_timer_game_time(
     interval: Float,
     timer_id: Int,
 ) -> Result<(), Exception> {
-    todo!()
+    caller.data().game_timers.lock().insert(
+        object,
+        TimerId(timer_id),
+        Duration::from_secs_f32(interval / 3600.0),
+    );
+    Ok(())
 }
 
 /// `CancelTimer`
@@ -50,7 +60,12 @@ pub fn cancel_timer(
     object: Object,
     timer_id: Int,
 ) -> Result<(), Exception> {
-    todo!()
+    caller
+        .data()
+        .real_timers
+        .lock()
+        .remove(object, TimerId(timer_id));
+    Ok(())
 }
 
 /// `CancelTimerGameTime`
@@ -59,11 +74,16 @@ pub fn cancel_timer(
 /// Function CancelTimerGameTime(int aiTimerID = 0) native
 /// ```
 pub fn cancel_timer_game_time(
-    Caller: Caller<'_, State>,
-    self_ptr: Object,
+    caller: Caller<'_, State>,
+    object: Object,
     timer_id: Int,
 ) -> Result<(), Exception> {
-    todo!()
+    caller
+        .data()
+        .game_timers
+        .lock()
+        .remove(object, TimerId(timer_id));
+    Ok(())
 }
 
 /// `RegisterForAnimationEvent`
@@ -233,5 +253,18 @@ pub fn unregister_for_remote_event(
     event_source: Object,
     script_event_name: isize,
 ) {
+    todo!()
+}
+
+/// `UnregisterForTutorialEvent`
+///
+/// ```text
+/// Function UnregisterForTutorialEvent(string asEventName) Native
+/// ```
+pub fn unregister_for_tutorial_event(
+    caller: Caller<'_, State>,
+    object: Object,
+    event_name: isize,
+) -> Result<(), Exception> {
     todo!()
 }

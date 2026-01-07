@@ -233,6 +233,11 @@ pub(crate) fn for_function(f: &Function) -> String {
                 let dst = for_value(&op.dst);
                 writeln!(text, "{dst} = not {src}").unwrap();
             }
+            Instruction::ArrayCreate(op) => {
+                let len = for_value(&op.src);
+                let dst = for_value(&op.dst);
+                writeln!(text, "{dst} = array_create {len}").unwrap();
+            }
             op => todo!("{:?}", op),
         }
     }

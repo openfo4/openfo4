@@ -960,3 +960,18 @@ pub fn set_no_bleedout_recovery(
 ) -> Result<(), Exception> {
     todo!()
 }
+
+/// `UnequipItem`
+///
+/// ```text
+/// Function UnequipItem(Form akItem, bool abPreventEquip = false, bool abSilent = false) native
+/// ```
+pub fn unequip_item(
+    caller: Caller<'_, State>,
+    self_ptr: Object,
+    item: Object,
+    prevent_equip: bool,
+    silent: bool,
+) -> Result<(), Exception> {
+    todo!()
+}

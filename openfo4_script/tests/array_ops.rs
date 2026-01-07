@@ -44,8 +44,8 @@ fn array_create() {
     let instance = engine.compile("MyClass");
     let func = instance.get_func("MyFunction").unwrap();
 
-    let stack = Stack::new(func.stack_size());
-    let mut ctx = Context::new(&engine, stack, ());
+    let mut stack = Stack::new(func.stack_size());
+    let mut ctx = Context::new(&engine, &mut stack, ());
 
     let func = func.typed::<(), ()>().unwrap();
     func.call(&mut ctx, ()).unwrap();

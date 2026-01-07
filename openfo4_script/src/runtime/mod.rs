@@ -30,14 +30,14 @@ pub enum Exception {
 pub type NativeFnPtr = unsafe extern "C" fn(*const RawContext, usize, *mut RawVal);
 
 /// Context passed to guest functions.
-pub struct Context<T> {
+pub struct Context<'a, T> {
     engine: Arc<EngineShared>,
-    stack: Stack,
+    stack: &'a mut Stack,
     data: T,
 }
 
-impl<T> Context<T> {
-    pub fn new(engine: &Engine, stack: Stack, data: T) -> Self {
+impl<'a, T> Context<'a, T> {
+    pub fn new(engine: &Engine, stack: &'a mut Stack, data: T) -> Self {
         Self {
             engine: engine.shared.clone(),
             stack,
@@ -115,7 +115,7 @@ impl Func {
         self.stack_size
     }
 
-    pub unsafe fn call_unchecked<T>(&self, ctx: &mut Context<T>, values: *mut RawVal)
+    pub unsafe fn call_unchecked<T>(&self, ctx: &mut Context<'_, T>, values: *mut RawVal)
     where
         T: 'static,
     {
@@ -179,7 +179,7 @@ where
     Params: NativeTuple,
     Returns: NativeTuple,
 {
-    pub fn call<T>(&self, ctx: &mut Context<T>, params: Params) -> Result<Returns, Exception>
+    pub fn call<T>(&self, ctx: &mut Context<'_, T>, params: Params) -> Result<Returns, Exception>
     where
         T: 'static,
     {

@@ -169,6 +169,12 @@ pub struct Instance {
 
 impl Instance {
     pub fn get_func(&self, name: &str) -> Option<&Func> {
+        debug_assert!(
+            EVENT_NAMES.contains(name),
+            "{:?} not registered as engine event name",
+            name
+        );
+
         let (_, func) = self.functions.get(&name.to_lowercase())?;
         Some(func)
     }

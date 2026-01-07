@@ -1,12 +1,17 @@
 mod active_magic_effect;
 mod actor;
+mod faction;
 mod form;
+mod form_list;
 mod game;
 mod global_variable;
 mod keyword;
+mod magic_effect;
 mod math;
 mod message;
 mod object_reference;
+mod potion;
+mod quest;
 mod ref_collection_alias;
 mod reference_alias;
 mod script_object;
@@ -14,8 +19,11 @@ mod sound;
 mod spell;
 mod utility;
 
-use std::collections::HashMap;
-use std::time::Duration;
+use std::collections::{BTreeMap, HashMap};
+use std::time::{Duration, Instant};
+
+use parking_lot::Mutex;
+use slab::Slab;
 
 use crate::engine::Engine;
 use crate::runtime::{ObjectAddr, ObjectRef};
@@ -83,8 +91,11 @@ pub fn register_builtins(engine: &mut Engine) {
     engine.register_native_function("Game", "ShowFatigueWarningOnHUD", game::show_fatigue_warning_on_hud);
     engine.register_native_function("Game", "ShowPerkVaultBoyOnHUD", game::show_perk_vault_boy_on_hud);
 
+    engine.register_native_function("Message", "ClearHelpMessages", message::clear_help_messages);
+    engine.register_native_function("Message", "ResetHelpMessage", message::reset_help_message);
     engine.register_native_function("Message", "Show", message::show);
     engine.register_native_function("Message", "ShowAsHelpMessage", message::show_as_help_message);
+    engine.register_native_function("Message", "UnshowAsHelpMessage", message::unshow_as_help_message);
 
     engine.register_native_function("ScriptObject", "CancelTimer", script_object::cancel_timer);
     engine.register_native_function("ScriptObject", "CancelTimerGameTime", script_object::cancel_timer_game_time);
@@ -102,6 +113,7 @@ pub fn register_builtins(engine: &mut Engine) {
     // engine.register_native_function("ScriptObject", "UnregisterForRemoteEvent", script_object::unregister_for_remote_event);
     engine.register_native_function("ScriptObject", "StartTimer", script_object::start_timer);
     engine.register_native_function("ScriptObject", "StartTimerGameTime", script_object::start_timer_game_time);
+    engine.register_native_function("ScriptObject", "UnregisterForTutorialEvent", script_object::unregister_for_tutorial_event);
 
     engine.register_native_function("Form", "GetFormID", form::get_form_id);
     engine.register_native_function("Form", "GetGoldValue", form::get_gold_value);
@@ -199,11 +211,13 @@ pub fn register_builtins(engine: &mut Engine) {
     engine.register_native_function("Actor", "IsGuard", actor::is_guard);
     engine.register_native_function("Actor", "RemovePerk", actor::remove_perk);
     engine.register_native_function("Actor", "SetNoBleedoutRecovery", actor::set_no_bleedout_recovery);
+    engine.register_native_function("Actor", "UnequipItem", actor::unequip_item);
 
     engine.register_native_function("Utility", "GetCurrentGameTime", utility::get_current_game_time);
     engine.register_native_function("Utility", "RandomFloat", utility::random_float);
     engine.register_native_function("Utility", "RandomInt", utility::random_int);
     engine.register_native_function("Utility", "Wait", utility::wait);
+    engine.register_native_function("Utility", "WaitMenuMode", utility::wait_menu_mode);
 
     engine.register_native_function("Sound", "SetInstanceVolume", sound::set_instance_volume);
     engine.register_native_function("Sound", "StopInstance", sound::stop_instance);
@@ -226,13 +240,58 @@ pub fn register_builtins(engine: &mut Engine) {
     engine.register_native_function("ReferenceAlias", "GetReference", reference_alias::get_reference_alias);
 
     engine.register_native_function("ActiveMagicEffect", "Dispel", active_magic_effect::dispel);
+
+    engine.register_native_function("MagicEffect", "GetAssociatedSkill", magic_effect::get_assocaited_skill);
+
+    engine.register_native_function("Potion", "IsHostile", potion::is_hostile);
+
+    engine.register_native_function("FormList", "AddForm", form_list::add_form);
+    engine.register_native_function("FormList", "Find", form_list::find);
+    engine.register_native_function("FormList", "GetAt", form_list::get_at);
+    engine.register_native_function("FormList", "GetSize", form_list::get_size);
+    engine.register_native_function("FormList", "HasForm", form_list::has_form);
+    engine.register_native_function("FormList", "RemoveAddedForm", form_list::remove_added_form);
+    engine.register_native_function("FormList", "Revert", form_list::revert);
+
+    engine.register_native_function("Faction", "CanPayCrimeGold", faction::can_pay_crime_gold);
+
+    engine.register_native_function("Quest", "CompleteAllObjectives", quest::complete_all_objectives);
+    engine.register_native_function("Quest", "CompleteQuest", quest::complete_quest);
+    engine.register_native_function("Quest", "FailAllObjectives", quest::fail_all_objectives);
+    engine.register_native_function("Quest", "GetAlias", quest::get_alias);
+    engine.register_native_function("Quest", "GetCurrentStageID", quest::get_current_stage_id);
+    engine.register_native_function("Quest", "HasObjective", quest::has_objective);
+    engine.register_native_function("Quest", "IsActive", quest::is_active);
+    engine.register_native_function("Quest", "IsCompleted", quest::is_completed);
+    engine.register_native_function("Quest", "IsObjectiveCompleted", quest::is_objective_completed);
+    engine.register_native_function("Quest", "IsObjectiveDisplayed", quest::is_objective_displayed);
+    engine.register_native_function("Quest", "IsObjectiveFailed", quest::is_objective_failed);
+    engine.register_native_function("Quest", "IsRunning", quest::is_running);
+    engine.register_native_function("Quest", "IsStageDone", quest::is_stage_done);
+    engine.register_native_function("Quest", "IsStarting", quest::is_starting);
+    engine.register_native_function("Quest", "IsStopping", quest::is_stopping);
+    engine.register_native_function("Quest", "IsStopped", quest::is_stopped);
+    engine.register_native_function("Quest", "Reset", quest::reset);
+    engine.register_native_function("Quest", "ResetSpeechChallenges", quest::reset_speech_challenges);
+    engine.register_native_function("Quest", "SetActive", quest::set_active);
+    engine.register_native_function("Quest", "SetCurrentStageID", quest::set_current_stage_id);
+    engine.register_native_function("Quest", "SetObjectiveCompleted", quest::set_objective_completed);
+    engine.register_native_function("Quest", "SetObjectiveDisplayed", quest::set_objective_displayed);
+    engine.register_native_function("Quest", "SetObjectiveFailed", quest::set_objective_failed);
+    engine.register_native_function("Quest", "Start", quest::start);
+    engine.register_native_function("Quest", "stop", quest::stop);
+    engine.register_native_function("Quest", "UpdateCurrentInstanceGlobal", quest::update_current_instance_global);
 }
 
 pub struct State {
     pub player: ObjectRef,
     pub actor_values: CoreActorValues,
-    pub provider: Box<dyn StateProvider>,
+    pub provider: Box<dyn StateProvider + 'static>,
+    pub real_timers: Mutex<TimerSet>,
+    pub game_timers: Mutex<TimerSet>,
 }
+
+impl State {}
 
 #[derive(Debug)]
 pub struct CoreActorValues {
@@ -256,7 +315,10 @@ pub struct ObjectData {
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
-enum Timer {
+pub struct TimerId(Int);
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub enum Timer {
     RealTime(Duration),
     GameTime(Duration),
 }
@@ -272,4 +334,84 @@ pub trait StateProvider: Send + Sync + 'static {
     fn set_owner(&self, object: ObjectAddr, owner: ObjectAddr);
 
     fn linked_ref(&self, object: ObjectAddr, keyword: ObjectAddr) -> Option<ObjectAddr>;
+
+    fn start_quest(&self, quest: ObjectAddr);
+    fn stop_quest(&self, quest: ObjectAddr);
+}
+
+#[derive(Clone, Debug)]
+pub struct TimerSet {
+    now: Instant,
+    entries: Slab<TimerEntry>,
+    next: BTreeMap<Instant, usize>,
+    objects: HashMap<Object, HashMap<TimerId, usize>>,
+}
+
+impl TimerSet {
+    pub fn insert(&mut self, object: Object, id: TimerId, duration: Duration) {
+        self.remove(object, id);
+
+        let mut at = self.now + duration;
+        // Find next slot that is not empty.
+        // FIXME: This pushes tasks slightly back, and is O(n),
+        // can we do it in O(log(n)) instead?
+        while self.next.contains_key(&at) {
+            at += Duration::from_nanos(1);
+        }
+
+        let index = self.entries.insert(TimerEntry { object, id, at });
+        self.next.insert(at, index);
+        self.objects.entry(object).or_default().insert(id, index);
+    }
+
+    pub fn remove(&mut self, object_id: Object, id: TimerId) {
+        let Some(object) = self.objects.get_mut(&object_id) else {
+            return;
+        };
+
+        let Some(index) = object.remove(&id) else {
+            return;
+        };
+
+        let entry = self.entries.remove(index);
+        self.next.remove(&entry.at);
+
+        if object.is_empty() {
+            self.objects.remove(&object_id);
+        }
+    }
+
+    pub fn tick(&mut self, time: Duration) -> impl Iterator<Item = TimerEntry> {
+        self.now += time;
+
+        let mut timers = Vec::new();
+        for (_, index) in self.next.extract_if(..self.now, |_, _| true) {
+            let entry = &self.entries[index];
+            timers.push(*entry);
+        }
+
+        for e in &timers {
+            self.remove(e.object, e.id);
+        }
+
+        timers.into_iter()
+    }
+}
+
+impl Default for TimerSet {
+    fn default() -> Self {
+        Self {
+            now: Instant::now(),
+            entries: Slab::new(),
+            next: BTreeMap::new(),
+            objects: HashMap::new(),
+        }
+    }
+}
+
+#[derive(Copy, Clone, Debug)]
+pub struct TimerEntry {
+    pub object: ObjectAddr,
+    pub id: TimerId,
+    pub at: Instant,
 }

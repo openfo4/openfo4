@@ -7,6 +7,24 @@ use crate::runtime::{Caller, Exception};
 
 static X: OnceLock<()> = OnceLock::new();
 
+/// `ClearHelpMessages`
+///
+/// ```text
+/// Function ClearHelpMessages() native global
+/// ```
+pub fn clear_help_messages(caller: Caller<'_, State>) -> Result<(), Exception> {
+    todo!()
+}
+
+/// `ResetHelpMessage`
+///
+/// ```text
+/// Function ResetHelpMessage(string asEvent) native global
+/// ```
+pub fn reset_help_message(caller: Caller<'_, State>, event: isize) -> Result<(), Exception> {
+    todo!()
+}
+
 pub fn show(
     caller: Caller<'_, State>,
     self_ptr: isize,
@@ -43,6 +61,18 @@ pub fn show_as_help_message(
     max_times: Int,
     context: isize,
     priority: Int,
+) -> Result<(), Exception> {
+    todo!()
+}
+
+/// `UnshowAsHelpMessage`
+///
+/// ```text
+/// Function UnshowAsHelpMessage() native
+/// ```
+pub fn unshow_as_help_message(
+    caller: Caller<'_, State>,
+    self_ptr: Object,
 ) -> Result<(), Exception> {
     todo!()
 }
