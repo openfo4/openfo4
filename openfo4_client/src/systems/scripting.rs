@@ -385,7 +385,11 @@ async fn instantiate_form(
                 while let Some(value) = values_queue.pop() {
                     match value {
                         Value::Object(value) => {
-                            depends.insert(value.form);
+                            if let Some(alias) = &value.alias {
+                                // TODO
+                            } else {
+                                depends.insert(value.form);
+                            }
                         }
                         Value::Struct(fields, _) => {
                             for field in fields {
@@ -658,10 +662,14 @@ fn build_script_object(
                 builder.set(&script.name, &var.name, *value);
             }
             Value::Object(value) => {
-                let instance_scripts = instances.get(&value.form).unwrap();
-                let instance = instance_scripts.get(&var.ty_name).unwrap();
+                if let Some(alias) = &value.alias {
+                    // TODO
+                } else {
+                    let instance_scripts = instances.get(&value.form).unwrap();
+                    let instance = instance_scripts.get(&var.ty_name).unwrap();
 
-                builder.set(&script.name, &var.name, instance.object.addr());
+                    builder.set(&script.name, &var.name, instance.object.addr());
+                }
             }
             Value::String(value) => {
                 let string = engine.object_pool().insert_string(&value);
@@ -713,10 +721,14 @@ fn build_struct(
                 builder.set("", &var.name, string.addr());
             }
             Value::Object(value) => {
-                let instance_scripts = instances.get(&value.form).unwrap();
-                let instance = instance_scripts.get(&var.ty_name).unwrap();
+                if let Some(alias) = &value.alias {
+                    // TODO
+                } else {
+                    let instance_scripts = instances.get(&value.form).unwrap();
+                    let instance = instance_scripts.get(&var.ty_name).unwrap();
 
-                builder.set("", &var.name, instance.object.addr());
+                    builder.set("", &var.name, instance.object.addr());
+                }
             }
             Value::Struct(fields, _) => {
                 let object = build_struct(engine, fields, instances);
@@ -786,10 +798,14 @@ fn build_array(
                 builder.set_at(index, "", "", string.addr());
             }
             Value::Object(value) => {
-                let instance_scripts = instances.get(&value.form).unwrap();
-                // FIXME: Which script to choose here?
-                let (_, instance) = instance_scripts.iter().next().unwrap();
-                builder.set_at(index, "", "", instance.object.addr());
+                if let Some(alias) = value.alias {
+                    // TODO
+                } else {
+                    let instance_scripts = instances.get(&value.form).unwrap();
+                    // FIXME: Which script to choose here?
+                    let (_, instance) = instance_scripts.iter().next().unwrap();
+                    builder.set_at(index, "", "", instance.object.addr());
+                }
             }
             Value::Struct(fields, _) => {
                 let object = build_struct(engine, fields, instances);
