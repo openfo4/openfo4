@@ -336,22 +336,6 @@ pub enum Timer {
     GameTime(Duration),
 }
 
-pub trait StateProvider: Send + Sync + 'static {
-    fn get_global(&self, global: ObjectAddr) -> Option<f32>;
-    fn set_global(&self, global: ObjectAddr, value: f32);
-
-    fn get_actor_value(&self, object: ObjectAddr, actor_value: ObjectAddr) -> Option<f32>;
-    fn set_actor_value(&self, object: ObjectAddr, actor_value: ObjectAddr, value: f32);
-
-    fn get_owner(&self, object: ObjectAddr) -> ObjectAddr;
-    fn set_owner(&self, object: ObjectAddr, owner: ObjectAddr);
-
-    fn linked_ref(&self, object: ObjectAddr, keyword: ObjectAddr) -> Option<ObjectAddr>;
-
-    fn start_quest(&self, quest: ObjectAddr);
-    fn stop_quest(&self, quest: ObjectAddr);
-}
-
 #[derive(Clone, Debug)]
 pub struct TimerSet {
     now: Instant,

@@ -1,31 +1,28 @@
 mod classes;
 
+use std::f32::consts::E;
 use std::io::Read;
 use std::sync::Arc;
 use std::time::Duration;
 
+use crossbeam::scope;
 use game_common::collections::arena::{Arena, Key};
 use game_tasks::TaskPool;
 use game_tracing::trace_span;
 use hashbrown::{HashMap, HashSet};
 use hecs::{Entity, World};
 use openfo4_core::events::EventBus;
-use openfo4_esp::vmad::{QuestFragments, Value};
-use openfo4_esp::{FormId, RecordData, RecordKind};
+use openfo4_esp::vmad::{Property, Script, Value};
+use openfo4_esp::{FormId, RecordData};
 use openfo4_pex::Module;
-use openfo4_script::compiler::TypeLayout;
+use openfo4_script::compiler::{FieldType, ObjectField, ObjectProperty, TypeLayout};
 use openfo4_script::engine::{Engine, Instance};
-use openfo4_script::runtime::{
-    Context, Exception, NativeTuple, Object, ObjectAddr, ObjectPool, ObjectRef, Stack,
-};
-use parking_lot::Mutex;
+use openfo4_script::runtime::{Context, Exception, NativeTuple, ObjectAddr, ObjectRef, Stack};
 
 use crate::loader::{FileLoader, fix_path};
 use crate::state::esp::EspLoader;
-use crate::systems::actor_value::ActorValueProperties;
-use crate::systems::quests::QuestManager;
 
-use classes::{CoreActorValues, State, StateProvider};
+use classes::{CoreActorValues, State};
 
 pub struct Executor {
     esp_loader: Arc<EspLoader>,
@@ -421,48 +418,14 @@ async fn instantiate_form(
                 let instance = engine.compile(&script.name);
                 let layout = engine.get_class_layout(&script.name).unwrap();
 
-                let mut object = engine.object_pool().insert(layout.clone());
-
-                for property in &script.properties {
-                    let var = layout
-                        .properties
-                        .iter()
-                        .find(|p| {
-                            p.class.to_lowercase() == script.name.to_lowercase()
-                                && p.name.to_lowercase() == property.name.to_lowercase()
-                        })
-                        .unwrap();
-
-                    let var = &layout.fields[var.var];
-
-                    match &property.value {
-                        Value::Bool(value) => {
-                            object.set(&script.name, &var.name, *value);
-                        }
-                        Value::Int(value) => {
-                            object.set(&script.name, &var.name, *value);
-                        }
-                        Value::Float(value) => {
-                            object.set(&script.name, &var.name, *value);
-                        }
-                        Value::Object(value) => {
-                            let instance_scripts = instances.get(&value.form).unwrap();
-                            let instance = instance_scripts.get(&var.ty_name).unwrap();
-
-                            object.set(&script.name, &var.name, instance.object.addr());
-                        }
-                        Value::String(value) => {}
-                        _ => {}
-                        _ => todo!(),
-                    }
-                }
+                let object = build_script_object(engine, script, instances);
 
                 scripts.insert(
                     script.name.to_lowercase(),
                     ScriptInstance {
                         instance,
                         layout: layout.clone(),
-                        object: object.finalize(),
+                        object,
                         stacks: HashMap::new(),
                     },
                 );
@@ -535,6 +498,8 @@ async fn instantiate_form(
             RecordData::Worldspace(_) => "WorldSpace",
             RecordData::PlacedObject(_) => "ObjectReference",
             RecordData::PlacedNpc(_) => "Actor",
+            RecordData::DialogueTopic(_) => "Topic",
+            RecordData::Scene(_) => "Scene",
             x => todo!("{:?}", x),
         };
 
@@ -611,57 +576,6 @@ impl Objects {
     }
 }
 
-impl StateProvider for Provider {
-    fn get_global(&self, global: ObjectAddr) -> Option<f32> {
-        todo!()
-    }
-
-    fn set_global(&self, global: ObjectAddr, value: f32) {}
-
-    fn get_actor_value(&self, object: ObjectAddr, actor_value: ObjectAddr) -> Option<f32> {
-        let entity = self.objects.objects.get(&object)?;
-        let actor_value = self.objects.actor_values.get(&actor_value)?;
-        // let props = self.world.get::<&ActorValueProperties>(*entity).ok()?;
-
-        // props.get(*actor_value)
-        todo!()
-    }
-
-    fn set_actor_value(&self, object: ObjectAddr, actor_value: ObjectAddr, value: f32) {
-        // let Some(entity) = self.objects.get(&object) else {
-        //     return;
-        // };
-
-        // let Some(actor_value) = self.actor_values.get(&actor_value) else {
-        //     return;
-        // };
-
-        // let Ok(mut props) = self.world.get::<&mut ActorValueProperties>(*entity) else {
-        //     return;
-        // };
-
-        // props.set(*actor_value, value);
-    }
-
-    fn get_owner(&self, object: ObjectAddr) -> ObjectAddr {
-        todo!()
-    }
-
-    fn set_owner(&self, object: ObjectAddr, owner: ObjectAddr) {}
-
-    fn linked_ref(&self, object: ObjectAddr, keyword: ObjectAddr) -> Option<ObjectAddr> {
-        None
-    }
-
-    fn start_quest(&self, quest: ObjectAddr) {
-        let Some(id) = self.objects.quests.get(&quest) else {
-            return;
-        };
-    }
-
-    fn stop_quest(&self, quest: ObjectAddr) {}
-}
-
 /// An invocation event.
 #[derive(Clone, Debug)]
 pub enum Invocation {
@@ -707,3 +621,234 @@ impl Invocation {
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct InvocationId(Key);
+
+// FIXME: There are a few things wrong with this current implementation that should be fixed.
+// 1. Get rid of the recursion to prevent potential stack overflows.
+// 2. Structs and arrays don't expose information of which script to choose, they are only defined
+//    in the script and we must extract the info from the compiler.
+fn build_script_object(
+    engine: &Engine,
+    script: &Script,
+    instances: &mut HashMap<FormId, HashMap<String, ScriptInstance>>,
+) -> ObjectRef {
+    let layout = engine.get_class_layout(&script.name).unwrap();
+
+    let mut builder = engine.object_pool().insert(layout.clone());
+
+    for property in &script.properties {
+        let var = layout
+            .properties
+            .iter()
+            .find(|p| {
+                p.class.to_lowercase() == script.name.to_lowercase()
+                    && p.name.to_lowercase() == property.name.to_lowercase()
+            })
+            .unwrap();
+
+        let var = &layout.fields[var.var];
+
+        match &property.value {
+            Value::Bool(value) => {
+                builder.set(&script.name, &var.name, *value);
+            }
+            Value::Int(value) => {
+                builder.set(&script.name, &var.name, *value);
+            }
+            Value::Float(value) => {
+                builder.set(&script.name, &var.name, *value);
+            }
+            Value::Object(value) => {
+                let instance_scripts = instances.get(&value.form).unwrap();
+                let instance = instance_scripts.get(&var.ty_name).unwrap();
+
+                builder.set(&script.name, &var.name, instance.object.addr());
+            }
+            Value::String(value) => {
+                let string = engine.object_pool().insert_string(&value);
+                builder.set(&script.name, &var.name, string.addr());
+            }
+            Value::Struct(fields, _) => {
+                let object = build_struct(engine, fields, instances);
+                builder.set(&script.name, &var.name, object.addr());
+            }
+            Value::Array(values, _) => {
+                let object = build_array(engine, values, instances);
+                builder.set(&script.name, &var.name, object.addr());
+            }
+        }
+    }
+
+    builder.finalize()
+}
+
+fn build_struct(
+    engine: &Engine,
+    fields: &[Property],
+    instances: &mut HashMap<FormId, HashMap<String, ScriptInstance>>,
+) -> ObjectRef {
+    let layout = build_struct_layout(fields);
+    let mut builder = engine.object_pool().insert(layout.clone());
+
+    for prop in fields {
+        let var = layout
+            .properties
+            .iter()
+            .find(|p| p.name.to_lowercase() == prop.name.to_lowercase())
+            .unwrap();
+
+        let var = &layout.fields[var.var];
+
+        match &prop.value {
+            Value::Bool(value) => {
+                builder.set("", &var.name, *value);
+            }
+            Value::Int(value) => {
+                builder.set("", &var.name, *value);
+            }
+            Value::Float(value) => {
+                builder.set("", &var.name, *value);
+            }
+            Value::String(value) => {
+                let string = engine.object_pool().insert_string(&value);
+                builder.set("", &var.name, string.addr());
+            }
+            Value::Object(value) => {
+                let instance_scripts = instances.get(&value.form).unwrap();
+                let instance = instance_scripts.get(&var.ty_name).unwrap();
+
+                builder.set("", &var.name, instance.object.addr());
+            }
+            Value::Struct(fields, _) => {
+                let object = build_struct(engine, fields, instances);
+                builder.set("", &var.name, object.addr());
+            }
+            Value::Array(values, _) => {
+                let object = build_array(engine, values, instances);
+                builder.set("", &var.name, object.addr());
+            }
+        }
+    }
+
+    builder.finalize()
+}
+
+fn build_array(
+    engine: &Engine,
+    values: &[Value],
+    instances: &mut HashMap<FormId, HashMap<String, ScriptInstance>>,
+) -> ObjectRef {
+    if values.is_empty() {
+        return engine.object_pool().insert(NULL_LAYOUT).finalize();
+    }
+
+    // All values must have the same layout.
+    for value in values {
+        assert_eq!(&values[0], value);
+    }
+
+    let ty = match &values[0] {
+        Value::Bool(_) => FieldType::Bool,
+        Value::Int(_) => FieldType::I32,
+        Value::Float(_) => FieldType::F32,
+        Value::String(_) => FieldType::Pointer,
+        Value::Array(_, _) => FieldType::Pointer,
+        Value::Struct(_, _) => FieldType::Pointer,
+        Value::Object(_) => FieldType::Pointer,
+    };
+
+    let elem_layout = TypeLayout {
+        header: None,
+        fields: vec![ObjectField {
+            class: "".to_owned(),
+            name: "".to_owned(),
+            offset: 0,
+            ty,
+            ty_name: "".to_owned(),
+        }],
+        properties: Vec::new(),
+    };
+
+    let mut builder = engine.object_pool().insert_array(elem_layout, values.len());
+
+    for (index, value) in values.iter().enumerate() {
+        match value {
+            Value::Bool(value) => {
+                builder.set_at(index, "", "", *value);
+            }
+            Value::Int(value) => {
+                builder.set_at(index, "", "", *value);
+            }
+            Value::Float(value) => {
+                builder.set_at(index, "", "", *value);
+            }
+            Value::String(value) => {
+                let string = engine.object_pool().insert_string(&value);
+                builder.set_at(index, "", "", string.addr());
+            }
+            Value::Object(value) => {
+                let instance_scripts = instances.get(&value.form).unwrap();
+                // FIXME: Which script to choose here?
+                let (_, instance) = instance_scripts.iter().next().unwrap();
+                builder.set_at(index, "", "", instance.object.addr());
+            }
+            Value::Struct(fields, _) => {
+                let object = build_struct(engine, fields, instances);
+                builder.set_at(index, "", "", object.addr());
+            }
+            Value::Array(values, _) => {
+                let object = build_array(engine, values, instances);
+                builder.set_at(index, "", "", object.addr());
+            }
+        }
+    }
+
+    builder.finalize()
+}
+
+// FIXME: Can we expose this from the compiler instead?
+fn build_struct_layout(props: &[Property]) -> TypeLayout {
+    let mut fields = Vec::new();
+    let mut properties = Vec::new();
+
+    let mut offset = 0;
+    for prop in props {
+        let ty = match prop.value {
+            Value::Bool(_) => FieldType::I32,
+            Value::Int(_) => FieldType::I32,
+            Value::Float(_) => FieldType::F32,
+            Value::Array(_, _) => FieldType::Pointer,
+            Value::String(_) => FieldType::Pointer,
+            Value::Struct(_, _) => FieldType::Pointer,
+            Value::Object(_) => FieldType::Pointer,
+        };
+
+        offset = (offset + ty.align() - 1) & !(ty.align() - 1);
+        debug_assert_eq!(offset % ty.align(), 0);
+        offset += ty.size();
+
+        properties.push(ObjectProperty {
+            class: "".to_owned(),
+            name: prop.name.to_lowercase(),
+            var: fields.len(),
+        });
+        fields.push(ObjectField {
+            class: "".to_owned(),
+            name: prop.name.to_lowercase(),
+            offset,
+            ty,
+            ty_name: "".to_owned(),
+        });
+    }
+
+    TypeLayout {
+        header: None,
+        fields,
+        properties,
+    }
+}
+
+const NULL_LAYOUT: TypeLayout = TypeLayout {
+    header: None,
+    fields: Vec::new(),
+    properties: Vec::new(),
+};
