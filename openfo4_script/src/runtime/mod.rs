@@ -64,7 +64,7 @@ impl<'a, T> Context<'a, T> {
 pub struct RawContext {
     pub stack: *mut u8,
     pub state: *const HostState,
-    pub data: *const dyn Any,
+    pub data: *mut dyn Any,
 }
 
 #[derive(Copy, Clone)]
@@ -127,7 +127,7 @@ impl Func {
         let ctx = RawContext {
             stack: ctx.stack.as_ptr(),
             state: &ctx.engine.state,
-            data: &ctx.data as *const dyn Any,
+            data: &mut ctx.data as *mut dyn Any,
         };
 
         unsafe {
@@ -225,6 +225,7 @@ where
     }
 }
 
+/// Context passed to host functions called from the guest.
 pub struct Caller<'a, T>
 where
     T: 'static,
@@ -236,6 +237,11 @@ where
 impl<'a, T> Caller<'a, T> {
     pub fn data(&self) -> &T {
         unsafe { &*self.ctx.data }.downcast_ref().unwrap()
+    }
+
+    pub fn data_mut(&mut self) -> &mut T {
+        let data_ref = unsafe { &mut *self.ctx.data };
+        data_ref.downcast_mut().unwrap()
     }
 
     pub unsafe fn array<U>(&self, addr: ObjectAddr) -> &[U] {

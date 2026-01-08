@@ -19,12 +19,12 @@ pub fn call_function(Caller: Caller<'_, State>) {
 /// Function StartTimer(float afInterval, int aiTimerID = 0) native
 /// ```
 pub fn start_timer(
-    caller: Caller<'_, State>,
+    mut caller: Caller<'_, State>,
     object: Object,
     interval: Float,
     timer_id: Int,
 ) -> Result<(), Exception> {
-    caller.data().real_timers.lock().insert(
+    caller.data_mut().real_timers.insert(
         object,
         TimerId(timer_id),
         Duration::from_secs_f32(interval),
@@ -38,12 +38,12 @@ pub fn start_timer(
 /// Function StartTimerGameTime(float afInterval, int aiTimerID = 0) native
 /// ```
 pub fn start_timer_game_time(
-    caller: Caller<'_, State>,
+    mut caller: Caller<'_, State>,
     object: Object,
     interval: Float,
     timer_id: Int,
 ) -> Result<(), Exception> {
-    caller.data().game_timers.lock().insert(
+    caller.data_mut().game_timers.insert(
         object,
         TimerId(timer_id),
         Duration::from_secs_f32(interval / 3600.0),
@@ -57,14 +57,13 @@ pub fn start_timer_game_time(
 /// Function CancelTimer(int aiTimerID = 0) native
 /// ```
 pub fn cancel_timer(
-    caller: Caller<'_, State>,
+    mut caller: Caller<'_, State>,
     object: Object,
     timer_id: Int,
 ) -> Result<(), Exception> {
     caller
-        .data()
+        .data_mut()
         .real_timers
-        .lock()
         .remove(object, TimerId(timer_id));
     Ok(())
 }
@@ -75,14 +74,13 @@ pub fn cancel_timer(
 /// Function CancelTimerGameTime(int aiTimerID = 0) native
 /// ```
 pub fn cancel_timer_game_time(
-    caller: Caller<'_, State>,
+    mut caller: Caller<'_, State>,
     object: Object,
     timer_id: Int,
 ) -> Result<(), Exception> {
     caller
-        .data()
+        .data_mut()
         .game_timers
-        .lock()
         .remove(object, TimerId(timer_id));
     Ok(())
 }

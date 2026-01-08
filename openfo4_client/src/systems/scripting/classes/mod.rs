@@ -286,8 +286,8 @@ pub struct State {
     pub player: ObjectRef,
     pub actor_values: CoreActorValues,
     pub provider: Box<dyn StateProvider + 'static>,
-    pub real_timers: Mutex<TimerSet>,
-    pub game_timers: Mutex<TimerSet>,
+    pub real_timers: TimerSet,
+    pub game_timers: TimerSet,
 }
 
 impl State {}
