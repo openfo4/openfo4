@@ -1,5 +1,7 @@
 use openfo4_script::runtime::{Caller, Exception};
 
+use crate::systems::quests::QuestState;
+
 use super::{Int, Object, State};
 
 /// `CompleteAllObjectives`
@@ -47,8 +49,13 @@ pub fn get_alias(
 /// ```text
 /// int Function GetCurrentStageID() native
 /// ```
-pub fn get_current_stage_id(caller: Caller<'_, State>, quest: Object) -> Result<Int, Exception> {
-    todo!()
+pub fn get_current_stage_id(
+    mut caller: Caller<'_, State>,
+    quest: Object,
+) -> Result<Int, Exception> {
+    let id = caller.data().objects.quest(quest).ok_or(Exception::Error)?;
+    let quest = caller.data_mut().quests().get(id).ok_or(Exception::Error)?;
+    Ok(quest.active_stage.unwrap_or_default().into())
 }
 
 /// `HasObjective`
@@ -126,8 +133,10 @@ pub fn is_objective_failed(
 /// ```text
 /// bool Function IsRunning() native
 /// ```
-pub fn is_running(caller: Caller<'_, State>, quest: Object) -> Result<bool, Exception> {
-    todo!()
+pub fn is_running(mut caller: Caller<'_, State>, quest: Object) -> Result<bool, Exception> {
+    let id = caller.data().objects.quest(quest).ok_or(Exception::Error)?;
+    let quest = caller.data_mut().quests().get(id).ok_or(Exception::Error)?;
+    Ok(quest.state == QuestState::Running)
 }
 
 /// `IsStageDone`
@@ -148,8 +157,10 @@ pub fn is_stage_done(
 /// ```text
 /// bool Function IsStarting() native
 /// ```
-pub fn is_starting(caller: Caller<'_, State>, quest: Object) -> Result<bool, Exception> {
-    todo!()
+pub fn is_starting(mut caller: Caller<'_, State>, quest: Object) -> Result<bool, Exception> {
+    let id = caller.data().objects.quest(quest).ok_or(Exception::Error)?;
+    let quest = caller.data_mut().quests().get(id).ok_or(Exception::Error)?;
+    Ok(quest.state == QuestState::Starting)
 }
 
 /// `IsStopping`
@@ -157,8 +168,10 @@ pub fn is_starting(caller: Caller<'_, State>, quest: Object) -> Result<bool, Exc
 /// ```text
 /// bool Function IsStopping() native
 /// ```
-pub fn is_stopping(caller: Caller<'_, State>, quest: Object) -> Result<bool, Exception> {
-    todo!()
+pub fn is_stopping(mut caller: Caller<'_, State>, quest: Object) -> Result<bool, Exception> {
+    let id = caller.data().objects.quest(quest).ok_or(Exception::Error)?;
+    let quest = caller.data_mut().quests().get(id).ok_or(Exception::Error)?;
+    Ok(quest.state == QuestState::Stopping)
 }
 
 /// `IsStopped`
@@ -166,8 +179,10 @@ pub fn is_stopping(caller: Caller<'_, State>, quest: Object) -> Result<bool, Exc
 /// ```text
 /// bool Function IsStopped() native
 /// ```
-pub fn is_stopped(caller: Caller<'_, State>, quest: Object) -> Result<bool, Exception> {
-    todo!()
+pub fn is_stopped(mut caller: Caller<'_, State>, quest: Object) -> Result<bool, Exception> {
+    let id = caller.data().objects.quest(quest).ok_or(Exception::Error)?;
+    let quest = caller.data_mut().quests().get(id).ok_or(Exception::Error)?;
+    Ok(quest.state == QuestState::Stopped)
 }
 
 /// `Reset`
@@ -203,11 +218,22 @@ pub fn set_active(caller: Caller<'_, State>, quest: Object, active: bool) -> Res
 /// bool Function SetCurrentStageID(int aiStageID) native
 /// ```
 pub fn set_current_stage_id(
-    caller: Caller<'_, State>,
+    mut caller: Caller<'_, State>,
     quest: Object,
     stage: Int,
 ) -> Result<bool, Exception> {
-    todo!()
+    let Ok(stage_id) = stage.try_into() else {
+        return Ok(false);
+    };
+
+    let id = caller.data().objects.quest(quest).ok_or(Exception::Error)?;
+    let quest = caller.data_mut().quests().get(id).ok_or(Exception::Error)?;
+    if !quest.stages.contains_key(&stage_id) {
+        return Ok(false);
+    }
+
+    caller.data_mut().quests().set_quest_stage(id, stage_id);
+    Ok(true)
 }
 
 /// `SetObjectiveCompleted`
@@ -258,8 +284,11 @@ pub fn set_objective_failed(
 /// ```text
 /// bool Function Start() native
 /// ```
-pub fn start(caller: Caller<'_, State>, quest: Object) -> Result<bool, Exception> {
-    todo!()
+pub fn start(mut caller: Caller<'_, State>, quest: Object) -> Result<bool, Exception> {
+    let id = caller.data().objects.quest(quest).ok_or(Exception::Error)?;
+    caller.data_mut().quests().start_quest(id);
+    // FIXME: Should we returns false if quest already running?
+    Ok(true)
 }
 
 /// `Stop`
@@ -267,8 +296,10 @@ pub fn start(caller: Caller<'_, State>, quest: Object) -> Result<bool, Exception
 /// ```text
 /// Function Stop() native
 /// ```
-pub fn stop(caller: Caller<'_, State>, quest: Object) -> Result<(), Exception> {
-    todo!()
+pub fn stop(mut caller: Caller<'_, State>, quest: Object) -> Result<(), Exception> {
+    let id = caller.data().objects.quest(quest).ok_or(Exception::Error)?;
+    caller.data_mut().quests().stop_quest(id);
+    Ok(())
 }
 
 /// `UpdateCurrentInstanceGlobal`

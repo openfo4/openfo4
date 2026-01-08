@@ -21,7 +21,7 @@ pub fn get_current_game_time(caller: Caller<'_, State>) -> Result<Float, Excepti
 /// float Function RandomFloat(float afMin = 0.0, float afMax = 1.0) native global
 /// ```
 pub fn random_float(caller: Caller<'_, State>, min: f32, max: f32) -> Result<f32, Exception> {
-    todo!()
+    Ok(rand::random_range(min..=max))
 }
 
 /// `RandomInt`
@@ -30,7 +30,7 @@ pub fn random_float(caller: Caller<'_, State>, min: f32, max: f32) -> Result<f32
 /// int Function RandomInt(int aiMin = 0, int aiMax = 100) native global
 /// ```
 pub fn random_int(caller: Caller<'_, State>, min: i32, max: i32) -> Result<i32, Exception> {
-    todo!()
+    Ok(rand::random_range(min..=max))
 }
 
 /// `Wait`

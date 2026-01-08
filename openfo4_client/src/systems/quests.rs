@@ -68,6 +68,10 @@ impl QuestManager {
         }
     }
 
+    pub fn get(&self, quest: FormId) -> Option<&Quest> {
+        self.quests.get(&quest)
+    }
+
     pub fn start_quest(&mut self, quest: FormId) {
         let Some(quest) = self.quests.get_mut(&quest) else {
             return;

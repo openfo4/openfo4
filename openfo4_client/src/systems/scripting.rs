@@ -85,6 +85,7 @@ impl Executor {
         let _span = trace_span!("Executor::update").entered();
 
         let state = self.state.as_mut().unwrap();
+        state.world = world;
 
         for invocation in self.invocations.values() {
             let form = match invocation {
@@ -110,9 +111,10 @@ impl Executor {
             invocation.call(&self.engine, scripts, &mut self.state);
         }
 
-        let state = self.state.as_ref().unwrap();
-        let mut real_timers = state.real_timers.lock();
-        let mut game_timers = state.game_timers.lock();
+        let state = self.state.as_mut().unwrap();
+        // FIXME: Not necessarly required, we can leave pointers dangling.
+        state.world = core::ptr::null_mut();
+        state.quests = core::ptr::null_mut();
 
         // for entry in real_timers.tick(delta) {
         //     self.invocations.insert(Invocation::Timer {
@@ -227,9 +229,11 @@ fn core_actor_values(engine: &mut Engine) -> State {
             confidence,
             suspicious,
         },
-        provider: Box::new(provider),
         real_timers: Default::default(),
         game_timers: Default::default(),
+        world: core::ptr::null_mut(),
+        quests: core::ptr::null_mut(),
+        objects: Default::default(),
     }
 }
 
@@ -592,13 +596,19 @@ struct Provider {
 
 impl Provider {}
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 struct Objects {
     globals: HashMap<ObjectAddr, FormId>,
     keywords: HashMap<ObjectAddr, FormId>,
     objects: HashMap<ObjectAddr, Entity>,
     actor_values: HashMap<ObjectAddr, FormId>,
     quests: HashMap<ObjectAddr, FormId>,
+}
+
+impl Objects {
+    pub fn quest(&self, addr: ObjectAddr) -> Option<FormId> {
+        self.quests.get(&addr).copied()
+    }
 }
 
 impl StateProvider for Provider {

@@ -22,10 +22,14 @@ mod utility;
 use std::collections::{BTreeMap, HashMap};
 use std::time::{Duration, Instant};
 
+use hecs::World;
 use openfo4_script::engine::Engine;
 use openfo4_script::runtime::{ObjectAddr, ObjectRef};
 use parking_lot::Mutex;
 use slab::Slab;
+
+use crate::systems::quests::QuestManager;
+use crate::systems::scripting::Objects;
 
 pub type Int = i32;
 pub type Float = f32;
@@ -285,12 +289,22 @@ pub fn register_builtins(engine: &mut Engine) {
 pub struct State {
     pub player: ObjectRef,
     pub actor_values: CoreActorValues,
-    pub provider: Box<dyn StateProvider + 'static>,
     pub real_timers: TimerSet,
     pub game_timers: TimerSet,
+    pub world: *mut World,
+    pub quests: *mut QuestManager,
+    pub objects: Objects,
 }
 
-impl State {}
+impl State {
+    fn world(&mut self) -> &mut World {
+        unsafe { &mut *self.world }
+    }
+
+    fn quests(&mut self) -> &mut QuestManager {
+        unsafe { &mut *self.quests }
+    }
+}
 
 #[derive(Debug)]
 pub struct CoreActorValues {

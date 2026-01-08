@@ -8,13 +8,14 @@ use super::{Float, Object, State};
 /// float Function GetValue() native
 /// ```
 pub fn get_value(caller: Caller<'_, State>, self_ptr: Object) -> Result<Float, Exception> {
-    let value = caller
-        .data()
-        .provider
-        .get_global(self_ptr)
-        .unwrap_or_default();
+    // let value = caller
+    //     .data()
+    //     .provider
+    //     .get_global(self_ptr)
+    //     .unwrap_or_default();
 
-    Ok(value)
+    // Ok(value)
+    todo!()
 }
 
 /// `SetValue`
@@ -27,6 +28,7 @@ pub fn set_value(
     self_ptr: Object,
     value: Float,
 ) -> Result<(), Exception> {
-    caller.data().provider.set_global(self_ptr, value);
-    Ok(())
+    // caller.data().provider.set_global(self_ptr, value);
+    // Ok(())
+    todo!()
 }

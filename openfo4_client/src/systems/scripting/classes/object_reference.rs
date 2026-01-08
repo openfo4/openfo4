@@ -160,8 +160,9 @@ pub fn get_linked_ref(
     self_ptr: Object,
     keyword: Object,
 ) -> Result<Object, Exception> {
-    let linked_ref = caller.data().provider.linked_ref(self_ptr, keyword);
-    Ok(linked_ref.unwrap_or(Object::NULL))
+    // let linked_ref = caller.data().provider.linked_ref(self_ptr, keyword);
+    // Ok(linked_ref.unwrap_or(Object::NULL))
+    todo!()
 }
 
 /// `HasKeyword`
@@ -187,8 +188,9 @@ pub fn is_owned_by(
     self_ptr: Object,
     actor: Object,
 ) -> Result<Bool, Exception> {
-    let owner = caller.data().provider.get_owner(self_ptr);
-    Ok(owner == actor)
+    // let owner = caller.data().provider.get_owner(self_ptr);
+    // Ok(owner == actor)
+    todo!()
 }
 
 /// `RemoveItem`
