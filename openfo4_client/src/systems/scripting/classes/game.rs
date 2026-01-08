@@ -2,6 +2,15 @@ use openfo4_script::runtime::{Caller, Exception, ObjectAddr};
 
 use super::{Int, Object, State};
 
+/// `AddAchievement`
+///
+/// ```text
+/// Function AddAchievement(int aiAchievementID) native global
+/// ```
+pub fn add_achievement(_caller: Caller<'_, State>, _id: Int) -> Result<(), Exception> {
+    Ok(())
+}
+
 /// `GetAggressionAV`
 ///
 /// ```text

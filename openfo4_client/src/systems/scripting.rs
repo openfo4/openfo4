@@ -1,11 +1,9 @@
 mod classes;
 
-use std::f32::consts::E;
 use std::io::Read;
 use std::sync::Arc;
 use std::time::Duration;
 
-use crossbeam::scope;
 use game_common::collections::arena::{Arena, Key};
 use game_tasks::TaskPool;
 use game_tracing::trace_span;
@@ -32,6 +30,7 @@ pub struct Executor {
     invocations: Arena<Invocation>,
     scripts: HashMap<FormId, HashMap<String, ScriptInstance>>,
     state: Option<State>,
+    compiled_classes: HashMap<String, Instance>,
 }
 
 impl Executor {
@@ -70,6 +69,7 @@ impl Executor {
             invocations: Arena::new(),
             scripts: HashMap::new(),
             state: Some(state),
+            compiled_classes: HashMap::new(),
         }
     }
 
@@ -100,6 +100,7 @@ impl Executor {
                     &mut self.scripts,
                     &self.esp_loader,
                     form,
+                    &mut self.compiled_classes,
                 ));
             }
 
@@ -332,6 +333,7 @@ async fn instantiate_form(
     instances: &mut HashMap<FormId, HashMap<String, ScriptInstance>>,
     esp_loader: &EspLoader,
     form: FormId,
+    compiled_classes: &mut HashMap<String, Instance>,
 ) {
     let mut queue = vec![form];
     let mut dependencies = HashMap::<FormId, HashSet<FormId>>::new();
@@ -419,7 +421,10 @@ async fn instantiate_form(
             }
 
             for script in &vmad.scripts {
-                let instance = engine.compile(&script.name);
+                let instance = compiled_classes
+                    .entry(script.name.clone())
+                    .or_insert_with(|| engine.compile(&script.name));
+
                 let layout = engine.get_class_layout(&script.name).unwrap();
 
                 let object = build_script_object(engine, script, instances);
@@ -427,7 +432,7 @@ async fn instantiate_form(
                 scripts.insert(
                     script.name.to_lowercase(),
                     ScriptInstance {
-                        instance,
+                        instance: instance.clone(),
                         layout: layout.clone(),
                         object,
                         stacks: HashMap::new(),
@@ -508,15 +513,17 @@ async fn instantiate_form(
         };
 
         dbg!(&name);
-        let instance = engine.compile(&name);
-        let layout = engine.get_class_layout(&name).unwrap();
+        let instance = compiled_classes
+            .entry(name.to_owned())
+            .or_insert_with(|| engine.compile(name));
+        let layout = engine.get_class_layout(name).unwrap();
 
         let object = engine.object_pool().insert(layout.clone());
 
         scripts.insert(
             name.to_lowercase(),
             ScriptInstance {
-                instance,
+                instance: instance.clone(),
                 layout: layout.clone(),
                 object: object.finalize(),
                 stacks: HashMap::new(),

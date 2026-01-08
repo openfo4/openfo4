@@ -76,6 +76,7 @@ pub fn register_builtins(engine: &mut Engine) {
     engine.register_native_function("ObjectReference", "RemoveItem", object_reference::remove_item);
     engine.register_native_function("ObjectReference", "RestoreValue", object_reference::restore_value);
 
+    engine.register_native_function("Game", "AddAchievement", game::add_achievement);
     engine.register_native_function("Game", "GetAggressionAV", game::get_agression_av);
     engine.register_native_function("Game", "GetAgilityAV", game::get_agility_av);
     engine.register_native_function("Game", "GetCharismaAV",  game::get_charisma_av);
@@ -102,6 +103,7 @@ pub fn register_builtins(engine: &mut Engine) {
 
     engine.register_native_function("ScriptObject", "CancelTimer", script_object::cancel_timer);
     engine.register_native_function("ScriptObject", "CancelTimerGameTime", script_object::cancel_timer_game_time);
+    engine.register_native_function("ScriptObject", "IsBoundGameObjectAvailable", script_object::is_bound_game_object_available);
     engine.register_native_function("ScriptObject", "RegisterForAnimationEvent", script_object::register_for_animation_event);
     engine.register_native_function("ScriptObject", "RegisterForCustomEvent", script_object::register_for_custom_event);
     engine.register_native_function("ScriptObject", "RegisterForDistanceGreaterThanEvent", script_object::register_for_distance_greater_than_event);
@@ -112,6 +114,7 @@ pub fn register_builtins(engine: &mut Engine) {
     engine.register_native_function("ScriptObject", "RegisterForPlayerTeleport", script_object::register_for_player_teleport);
     engine.register_native_function("ScriptObject", "RegisterForPlayerWait", script_object::register_for_player_wait);
     engine.register_native_function("ScriptObject", "RegisterForRemoteEvent", script_object::register_for_remote_event);
+    engine.register_native_function("ScriptObject", "RegisterForTrackedStatsEvent", script_object::register_for_tracked_stats_event);
     // engine.register_native_function("ScriptObject", "UnregisterForLOS", script_object::unregister_for_los);
     // engine.register_native_function("ScriptObject", "UnregisterForRemoteEvent", script_object::unregister_for_remote_event);
     engine.register_native_function("ScriptObject", "StartTimer", script_object::start_timer);
@@ -240,9 +243,15 @@ pub fn register_builtins(engine: &mut Engine) {
     engine.register_native_function("RefCollectionAlias", "GetAt", ref_collection_alias::get_at);
     engine.register_native_function("RefCollectionAlias", "GetCount", ref_collection_alias::get_count);
 
-    engine.register_native_function("ReferenceAlias", "GetReference", reference_alias::get_reference_alias);
+    engine.register_native_function("ReferenceAlias", "ApplyToRef", reference_alias::apply_to_ref);
+    engine.register_native_function("ReferenceAlias", "Clear", reference_alias::clear);
+    engine.register_native_function("ReferenceAlias", "ForceRefTo", reference_alias::force_ref_to);
+    engine.register_native_function("ReferenceAlias", "GetReference", reference_alias::get_reference);
 
     engine.register_native_function("ActiveMagicEffect", "Dispel", active_magic_effect::dispel);
+    engine.register_native_function("ActiveMagicEffect", "GetBaseObject", active_magic_effect::get_base_object);
+    engine.register_native_function("ActiveMagicEffect", "GetCasterActor", active_magic_effect::get_caster_actor);
+    engine.register_native_function("ActiveMagicEffect", "GetTargetActor", active_magic_effect::get_target_actor);
 
     engine.register_native_function("MagicEffect", "GetAssociatedSkill", magic_effect::get_assocaited_skill);
 

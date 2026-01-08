@@ -85,6 +85,18 @@ pub fn cancel_timer_game_time(
     Ok(())
 }
 
+/// `IsBoundGameObjectAvailable`
+///
+/// ```text
+/// bool Function IsBoundGameObjectAvailable() native
+/// ```
+pub fn is_bound_game_object_available(
+    caller: Caller<'_, State>,
+    object: Object,
+) -> Result<bool, Exception> {
+    todo!()
+}
+
 /// `RegisterForAnimationEvent`
 ///
 /// ```text
@@ -224,6 +236,20 @@ pub fn register_for_remote_event(
     source: Object,
     event_name: isize,
 ) -> Result<Bool, Exception> {
+    todo!()
+}
+
+/// `RegisterForTrackedStatsEvent`
+///
+/// ```text
+/// Function RegisterForTrackedStatsEvent(string asStat, int aiThreshold) native
+/// ```
+pub fn register_for_tracked_stats_event(
+    caller: Caller<'_, State>,
+    object: Object,
+    stat: isize,
+    threshold: Int,
+) -> Result<(), Exception> {
     todo!()
 }
 
