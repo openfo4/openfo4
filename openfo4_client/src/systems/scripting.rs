@@ -1,3 +1,5 @@
+mod classes;
+
 use std::io::Read;
 use std::sync::Arc;
 use std::time::Duration;
@@ -11,7 +13,6 @@ use openfo4_core::events::EventBus;
 use openfo4_esp::vmad::{QuestFragments, Value};
 use openfo4_esp::{FormId, RecordData, RecordKind};
 use openfo4_pex::Module;
-use openfo4_script::classes::{self, CoreActorValues, State, StateProvider};
 use openfo4_script::compiler::TypeLayout;
 use openfo4_script::engine::{Engine, Instance};
 use openfo4_script::runtime::{
@@ -23,6 +24,8 @@ use crate::loader::{FileLoader, fix_path};
 use crate::state::esp::EspLoader;
 use crate::systems::actor_value::ActorValueProperties;
 use crate::systems::quests::QuestManager;
+
+use classes::{CoreActorValues, State, StateProvider};
 
 pub struct Executor {
     esp_loader: Arc<EspLoader>,

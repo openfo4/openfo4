@@ -1,9 +1,8 @@
-use std::cell::OnceCell;
 use std::sync::OnceLock;
-use std::sync::atomic::AtomicBool;
 
-use crate::classes::{Float, Int, Object, State};
-use crate::runtime::{Caller, Exception};
+use openfo4_script::runtime::{Caller, Exception};
+
+use super::{Float, Int, Object, State};
 
 static X: OnceLock<()> = OnceLock::new();
 

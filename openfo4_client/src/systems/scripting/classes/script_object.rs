@@ -1,7 +1,8 @@
 use std::time::Duration;
 
-use crate::classes::{Bool, Float, Int, Object, State, TimerId};
-use crate::runtime::{Caller, Exception};
+use openfo4_script::runtime::{Caller, Exception};
+
+use super::{Bool, Float, Int, Object, State, TimerId};
 
 /// CallFunction
 ///

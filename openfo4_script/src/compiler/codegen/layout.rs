@@ -3,7 +3,6 @@ use std::sync::{LazyLock, OnceLock};
 
 use openfo4_jit::Type as JitType;
 
-use crate::classes;
 use crate::compiler::codegen::{ClassDef, CodegenData, StructDef, Type};
 use crate::compiler::{FieldType, ObjectField, TypeLayout};
 

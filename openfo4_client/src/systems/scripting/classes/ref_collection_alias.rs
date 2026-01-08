@@ -1,5 +1,6 @@
-use crate::classes::{Int, Object, State};
-use crate::runtime::{Caller, Exception};
+use openfo4_script::runtime::{Caller, Exception};
+
+use super::{Int, Object, State};
 
 /// `GetAt`
 ///

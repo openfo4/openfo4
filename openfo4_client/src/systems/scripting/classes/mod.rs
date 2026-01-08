@@ -22,11 +22,10 @@ mod utility;
 use std::collections::{BTreeMap, HashMap};
 use std::time::{Duration, Instant};
 
+use openfo4_script::engine::Engine;
+use openfo4_script::runtime::{ObjectAddr, ObjectRef};
 use parking_lot::Mutex;
 use slab::Slab;
-
-use crate::engine::Engine;
-use crate::runtime::{ObjectAddr, ObjectRef};
 
 pub type Int = i32;
 pub type Float = f32;

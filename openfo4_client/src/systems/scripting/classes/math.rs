@@ -5,8 +5,9 @@
 //! Note that some functions are stubbed out. The calls are replaced with compiler intrinsics,
 //! but we still need to declare the functions to satisfy the linker.
 
-use crate::classes::State;
-use crate::runtime::{Caller, Exception};
+use openfo4_script::runtime::{Caller, Exception};
+
+use super::State;
 
 pub fn abs(_: Caller<'_, State>, _: f32) -> Result<f32, Exception> {
     unreachable!();

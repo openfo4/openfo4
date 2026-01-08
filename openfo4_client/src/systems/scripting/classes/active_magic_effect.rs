@@ -1,5 +1,6 @@
-use crate::classes::{Object, State};
-use crate::runtime::{Caller, Exception};
+use openfo4_script::runtime::{Caller, Exception};
+
+use super::{Object, State};
 
 /// `Dispel`
 ///
