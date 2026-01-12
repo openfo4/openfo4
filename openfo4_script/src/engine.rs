@@ -65,8 +65,11 @@ impl Engine {
         );
     }
 
-    pub fn compile(&mut self, class: &str) -> Instance {
-        let (instance, layouts) = self.registry.compile(self.shared.clone(), class).unwrap();
+    pub fn compile(&mut self, class: &str, options: &Options) -> Instance {
+        let (instance, layouts) = self
+            .registry
+            .compile(self.shared.clone(), class, options)
+            .unwrap();
         self.layouts.extend(layouts);
 
         instance
@@ -79,6 +82,16 @@ impl Engine {
     pub fn object_pool(&self) -> &ObjectPool {
         &self.shared.state.pool
     }
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct Options {
+    /// Skip compilation of native functions.
+    pub skip_native: bool,
+    /// Skip compliation of empty functions.
+    pub skip_empty: bool,
+    /// Only compile functions with predefined event signatures.
+    pub only_events: bool,
 }
 
 #[derive(Default)]
@@ -127,6 +140,7 @@ impl Registry {
         &mut self,
         engine: Arc<EngineShared>,
         class: &str,
+        options: &Options,
     ) -> Result<(Instance, HashMap<String, TypeLayout>), Error> {
         let mut functions = HashMap::new();
 
@@ -138,11 +152,15 @@ impl Registry {
                     continue;
                 }
 
-                // We don't want to call back directly into host functions.
-                // We only want to call Event functions which have no return value,
-                // so calling an empty Event function is equivalent to not calling
-                // it at all. We don't have to compile it.
-                if f.is_native || f.instructions.is_empty() || !is_event(f) {
+                if options.skip_native && f.is_native {
+                    continue;
+                }
+
+                if options.skip_empty && f.instructions.is_empty() {
+                    continue;
+                }
+
+                if options.only_events && !is_event(f) {
                     continue;
                 }
 
@@ -156,7 +174,14 @@ impl Registry {
 
         let layouts = self.ctx.compute_class_layouts(&class.name).unwrap();
 
-        Ok((Instance { engine, functions }, layouts))
+        Ok((
+            Instance {
+                engine,
+                functions,
+                events_only: options.only_events,
+            },
+            layouts,
+        ))
     }
 }
 
@@ -165,15 +190,18 @@ impl Registry {
 pub struct Instance {
     engine: Arc<EngineShared>,
     functions: HashMap<String, (CompilationResult, Func)>,
+    events_only: bool,
 }
 
 impl Instance {
     pub fn get_func(&self, name: &str) -> Option<&Func> {
-        debug_assert!(
-            EVENT_NAMES.contains(name),
-            "{:?} not registered as engine event name",
-            name
-        );
+        if self.events_only {
+            debug_assert!(
+                EVENT_NAMES.contains(name),
+                "{:?} not registered as engine event name",
+                name
+            );
+        }
 
         let (_, func) = self.functions.get(&name.to_lowercase())?;
         Some(func)
@@ -185,10 +213,12 @@ impl std::fmt::Debug for Instance {
         let Self {
             engine: _,
             functions,
+            events_only,
         } = self;
 
         f.debug_struct("Instance")
             .field("functions", functions)
+            .field("events_only", events_only)
             .finish_non_exhaustive()
     }
 }
