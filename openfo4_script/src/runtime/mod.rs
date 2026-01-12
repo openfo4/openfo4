@@ -4,6 +4,7 @@ mod stack;
 use std::any::Any;
 use std::marker::PhantomData;
 use std::mem::{MaybeUninit, transmute};
+use std::panic::AssertUnwindSafe;
 use std::sync::Arc;
 
 use game_common::cell::UnsafeRefCell;
@@ -491,10 +492,12 @@ pub unsafe extern "C" fn call_host_trampoline(
     index: usize,
     args: *mut RawVal,
 ) {
-    // SAFETY: We have locked the call table before any guest function is called.
-    let call_table = unsafe { (*(*ctx).state).call_table.borrow() };
-    let func = &call_table.functions[index];
-    func(ctx, args);
+    abort_on_unwind(|| {
+        // SAFETY: We have locked the call table before any guest function is called.
+        let call_table = unsafe { (*(*ctx).state).call_table.borrow() };
+        let func = &call_table.functions[index];
+        func(ctx, args);
+    })
 }
 
 pub unsafe extern "C" fn host_malloc(
@@ -502,11 +505,27 @@ pub unsafe extern "C" fn host_malloc(
     layout: *const TypeLayout,
     array_len: usize,
 ) -> *mut u8 {
-    let layout = unsafe { &*layout };
+    abort_on_unwind(|| {
+        let layout = unsafe { &*layout };
 
-    // FIXME: Don't clone, we can keep the TypeLayout for many objects.
-    let object_ref = unsafe { (*(*ctx).state).pool.alloc(layout.clone(), array_len) };
-    object_ref.addr().to_raw() as *mut u8
+        // FIXME: Don't clone, we can keep the TypeLayout for many objects.
+        let object_ref = unsafe { (*(*ctx).state).pool.alloc(layout.clone(), array_len) };
+        object_ref.addr().to_raw() as *mut u8
+    })
+}
+
+fn abort_on_unwind<F, R>(f: F) -> R
+where
+    F: FnOnce() -> R,
+{
+    if cfg!(panic = "abort") {
+        f()
+    } else {
+        match std::panic::catch_unwind(AssertUnwindSafe(|| f())) {
+            Ok(v) => v,
+            Err(_) => std::process::abort(),
+        }
+    }
 }
 
 pub unsafe trait NativeTuple {
