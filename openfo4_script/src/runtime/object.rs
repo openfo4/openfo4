@@ -1,8 +1,8 @@
 use std::alloc::Layout;
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, LazyLock, Mutex};
 
-use crate::compiler::TypeLayout;
+use crate::compiler::{FieldType, ObjectField, TypeLayout};
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 #[repr(transparent)]
@@ -38,7 +38,15 @@ impl ObjectPool {
         let array_size = stride * array_len;
 
         let alloc_layout = unsafe { Layout::from_size_align_unchecked(array_size, align) };
-        let ptr = unsafe { std::alloc::alloc_zeroed(alloc_layout) };
+
+        // We must not allocate zero sized memory.
+        // Any well-aligned pointer is valid for a zero sized allocation.
+        let ptr = if alloc_layout.size() == 0 {
+            unsafe { core::ptr::null_mut::<u8>().add(alloc_layout.align()) }
+        } else {
+            unsafe { std::alloc::alloc_zeroed(alloc_layout) }
+        };
+
         assert!(!ptr.is_null());
 
         let mut objects = self.objects.lock().unwrap();
@@ -69,6 +77,46 @@ impl ObjectPool {
         }
     }
 
+    pub fn insert_string(&self, s: &str) -> ObjectRef {
+        let bytes_ref = self.alloc(BYTE_LAYOUT.clone(), s.len());
+
+        unsafe {
+            core::ptr::copy_nonoverlapping(s.as_ptr(), bytes_ref.as_ptr(), s.len());
+        }
+
+        let mut string_object = self.insert(ARRAY_LAYOUT.clone());
+        string_object.set("", "ptr", bytes_ref.addr());
+        string_object.set("", "len", s.len());
+
+        string_object.finalize()
+    }
+
+    pub fn insert_array(&self, elem_layout: TypeLayout, array_len: usize) -> ObjectArrayBuilder {
+        let array_ref = self.alloc(elem_layout.clone(), array_len);
+
+        let mut objects = Vec::new();
+
+        let size = elem_layout.size();
+        let align = elem_layout.align();
+        let stride = (size + align - 1) & !(align - 1);
+
+        for i in 0..array_len {
+            let elem_ptr = unsafe { array_ref.as_ptr().add(stride * i) };
+
+            let object = unsafe { Object::new_at(elem_layout.clone(), elem_ptr) };
+            objects.push(object);
+        }
+
+        let mut array_object = self.insert(ARRAY_LAYOUT.clone());
+        array_object.set("", "ptr", array_ref.addr());
+        array_object.set("", "len", array_len);
+
+        ObjectArrayBuilder {
+            objects,
+            object_ref: array_object.finalize(),
+        }
+    }
+
     // pub fn get(&self, addr: ObjectAddr) -> Option<&Object> {
     //     self.objects.get(&addr)
     // }
@@ -85,6 +133,10 @@ pub struct ObjectRef(Arc<ObjectRefInner>);
 impl ObjectRef {
     pub fn addr(&self) -> ObjectAddr {
         self.0.addr
+    }
+
+    fn as_ptr(&self) -> *mut u8 {
+        self.0.addr.0
     }
 }
 
@@ -138,7 +190,7 @@ impl Object {
             f.class.to_lowercase() == class.to_lowercase()
                 && f.name.to_lowercase() == name.to_lowercase()
         }) else {
-            return;
+            panic!("no field {:?}.{:?}", class, name);
         };
 
         let bytes = value.as_bytes();
@@ -179,6 +231,29 @@ impl ObjectBuilder {
     }
 }
 
+#[derive(Debug)]
+pub struct ObjectArrayBuilder {
+    objects: Vec<Object>,
+    object_ref: ObjectRef,
+}
+
+impl ObjectArrayBuilder {
+    pub fn set_at<T>(&mut self, index: usize, class: &str, name: &str, value: T)
+    where
+        T: IntoValue,
+    {
+        let object = &mut self.objects[index];
+
+        unsafe {
+            object.set(class, name, value);
+        }
+    }
+
+    pub fn finalize(self) -> ObjectRef {
+        self.object_ref
+    }
+}
+
 pub trait IntoValue {
     fn as_bytes(&self) -> &[u8];
 }
@@ -196,6 +271,12 @@ impl IntoValue for i32 {
 }
 
 impl IntoValue for f32 {
+    fn as_bytes(&self) -> &[u8] {
+        bytemuck::bytes_of(self)
+    }
+}
+
+impl IntoValue for usize {
     fn as_bytes(&self) -> &[u8] {
         bytemuck::bytes_of(self)
     }
@@ -230,3 +311,36 @@ pub enum ObjectTag {
     Float = 2,
     Class = 3,
 }
+
+pub(crate) static ARRAY_LAYOUT: LazyLock<TypeLayout> = LazyLock::new(|| TypeLayout {
+    header: None,
+    fields: vec![
+        ObjectField {
+            class: "".to_owned(),
+            name: "ptr".to_owned(),
+            offset: 0,
+            ty: FieldType::Pointer,
+            ty_name: "".to_owned(),
+        },
+        ObjectField {
+            class: "".to_owned(),
+            name: "len".to_owned(),
+            offset: size_of::<*mut u8>(),
+            ty: FieldType::Isize,
+            ty_name: "".to_owned(),
+        },
+    ],
+    properties: Vec::new(),
+});
+
+pub(crate) const BYTE_LAYOUT: LazyLock<TypeLayout> = LazyLock::new(|| TypeLayout {
+    header: None,
+    fields: vec![ObjectField {
+        class: "".to_owned(),
+        name: "".to_owned(),
+        offset: 0,
+        ty: FieldType::I8,
+        ty_name: "".to_owned(),
+    }],
+    properties: Vec::new(),
+});

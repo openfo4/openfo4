@@ -1,4 +1,4 @@
-mod object;
+pub mod object;
 mod stack;
 
 use std::any::Any;
