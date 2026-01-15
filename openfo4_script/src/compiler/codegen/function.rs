@@ -14,9 +14,10 @@ use crate::compiler::codegen::constant::{ConstantData, create_string_constant};
 use crate::compiler::codegen::function_props::{
     FunctionProps, Stage, StageVariable, function_properties,
 };
-use crate::compiler::codegen::layout::{ARRAY_LAYOUT, generate_type_layout};
+use crate::compiler::codegen::layout::generate_type_layout;
 use crate::compiler::codegen::trampoline::generate_guest_to_host_trampoline;
 use crate::compiler::codegen::{ClassDef, CodegenData, FunctionDef, Type};
+use crate::runtime::object::ARRAY_LAYOUT;
 use crate::runtime::{ArrayObject, Func, ObjectTag, RESULT_ERROR, RESULT_OK};
 
 #[derive(Debug)]
@@ -786,7 +787,7 @@ fn translate_function_body(
 
                 let one_usize = translator.builder.iconst(JitType::Pointer, 1);
                 let array_object_ptr =
-                    call_malloc(&mut translator, ctx_ptr, *ARRAY_LAYOUT.clone(), one_usize);
+                    call_malloc(&mut translator, ctx_ptr, ARRAY_LAYOUT.clone(), one_usize);
 
                 translator.builder.store(
                     array_ptr,
@@ -856,6 +857,93 @@ fn translate_function_body(
                 translator
                     .builder
                     .store(new_array_ptr, array, offset_of!(ArrayObject, ptr) as u32);
+            }
+            Instruction::ArrayFind(op) => {
+                let Type::Array(elem_ty) = translator.get_type(&op.array_value) else {
+                    unreachable!();
+                };
+
+                let array = translator.load(&op.array_value);
+                let start_index = translator.load(&op.start_index);
+                let searched_value = translator.load(&op.value);
+
+                let array_ptr = translator.builder.load(
+                    JitType::Pointer,
+                    array,
+                    offset_of!(ArrayObject, ptr) as u32,
+                );
+                let array_len = translator.builder.load(
+                    JitType::Pointer,
+                    array,
+                    offset_of!(ArrayObject, len) as u32,
+                );
+
+                let loop_block = translator.builder.create_block(&[JitType::Pointer]);
+                let loop_body_block = translator.builder.create_block(&[JitType::Pointer]);
+                let final_block = translator.builder.create_block(&[JitType::Pointer]);
+
+                let start_index_wide = translator.builder.uextend(start_index, JitType::Pointer);
+                translator.builder.jump(loop_block, &[start_index_wide]);
+
+                // Loop block
+                {
+                    translator.builder.switch_to_block(loop_block);
+                    let index = translator.builder.block_params(loop_block)[0];
+
+                    let negative_one = translator.builder.iconst(JitType::Pointer, -1);
+
+                    let terminate_loop = translator.builder.icmp(
+                        index,
+                        array_len,
+                        IntCompareOp::UnsignedGreaterThanOrEqual,
+                    );
+                    translator.builder.brif(
+                        terminate_loop,
+                        final_block,
+                        &[negative_one],
+                        loop_body_block,
+                        &[index],
+                    );
+                }
+
+                // Loop body block
+                {
+                    translator.builder.switch_to_block(loop_body_block);
+                    let index = translator.builder.block_params(loop_body_block)[0];
+
+                    let is_eq = match *elem_ty {
+                        Type::Int => {
+                            let stride = JitType::I32.size();
+                            let offset = translator.builder.imul_imm(index, stride as i64);
+                            let addr = translator.builder.iadd(array_ptr, offset);
+                            let value = translator.builder.load(JitType::I32, addr, 0);
+
+                            translator
+                                .builder
+                                .icmp(value, searched_value, IntCompareOp::Equal)
+                        }
+                        _ => unreachable!(),
+                    };
+
+                    let next_index = translator.builder.iadd_imm(index, 1);
+                    translator.builder.brif(
+                        is_eq,
+                        final_block,
+                        &[index],
+                        loop_block,
+                        &[next_index],
+                    );
+                }
+
+                // Final block
+                {
+                    translator.builder.switch_to_block(final_block);
+                    let index = translator.builder.block_params(final_block)[0];
+                    let truncated_index = translator.builder.ireduce(index, JitType::I32);
+
+                    translator.store(&op.return_index, truncated_index);
+                    current_block = final_block;
+                }
             }
             op => todo!("{:?}", op),
         }

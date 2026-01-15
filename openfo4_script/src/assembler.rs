@@ -19,7 +19,8 @@
 use std::str::Split;
 
 use openfo4_pex::{
-    Binop, CallStatic, Class, Function, Instruction, Module, State, Unop, Value, VariableDefinition,
+    ArrayFind, Binop, CallStatic, Class, Function, Instruction, Module, State, Unop, Value,
+    VariableDefinition,
 };
 
 pub fn assemble(input: &str) -> Module {
@@ -191,6 +192,18 @@ fn parse_instruction(input: &str) -> Instruction {
                 "fdiv" => Instruction::ISub(parse_binop(words, dst)),
                 "cast" => Instruction::Cast(parse_unop(words, dst)),
                 "array_create" => Instruction::ArrayCreate(parse_unop(words, dst)),
+                "array_find" => {
+                    let array_value = parse_value(words.next().unwrap());
+                    let value = parse_value(words.next().unwrap());
+                    let start_index = parse_value(words.next().unwrap());
+
+                    Instruction::ArrayFind(ArrayFind {
+                        array_value,
+                        value,
+                        start_index,
+                        return_index: dst,
+                    })
+                }
                 "call_static" => {
                     let class = parse_value(words.next().unwrap());
                     let function = parse_value(words.next().unwrap());

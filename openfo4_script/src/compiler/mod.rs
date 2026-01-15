@@ -132,9 +132,11 @@ pub struct ObjectProperty {
 #[derive(Clone, Debug)]
 pub enum FieldType {
     Bool,
+    I8,
     I32,
     F32,
     String,
+    Isize,
     Pointer,
 }
 
@@ -142,8 +144,10 @@ impl FieldType {
     pub fn size(&self) -> usize {
         match self {
             Self::Bool => 4,
+            Self::I8 => 1,
             Self::I32 => 4,
             Self::F32 => 4,
+            Self::Isize => 8,
             Self::String | Self::Pointer => 8,
         }
     }
@@ -151,8 +155,10 @@ impl FieldType {
     pub fn align(&self) -> usize {
         match self {
             Self::Bool => 4,
+            Self::I8 => 1,
             Self::I32 => 4,
             Self::F32 => 4,
+            Self::Isize => 8,
             Self::String | Self::Pointer => align_of::<usize>(),
         }
     }
