@@ -17,15 +17,12 @@ fn array_create() {
         Ok(())
     }
 
-    let test = assemble(
+    let module = assemble(
         r#"
         class test:
 
         function test_valid_array(arr: int[]) static native:
-        "#,
-    );
-    let module = assemble(
-        r#"
+
         class MyClass:
 
         function MyFunction() static:
@@ -37,7 +34,6 @@ fn array_create() {
     );
 
     engine.register(&module);
-    engine.register(&test);
     engine.register_native_function("test", "test_valid_array", test_valid_array);
 
     let instance = engine.compile("MyClass", &Options::default());
@@ -67,15 +63,12 @@ fn array_find_int() {
         Ok(())
     }
 
-    let test = assemble(
+    let module = assemble(
         r#"
         class test:
 
         function assert_valid_result(arr: int[], index: int) static native:
-        "#,
-    );
-    let module = assemble(
-        r#"
+
         class MyClass:
     
         function MyFunction(arr: int[]) static:
@@ -87,7 +80,6 @@ fn array_find_int() {
     );
 
     engine.register(&module);
-    engine.register(&test);
     engine.register_native_function("test", "assert_valid_result", assert_valid_result);
 
     let mut builder = engine.object_pool().insert_array(int_layout(), 100);
