@@ -10,8 +10,10 @@ mod systems;
 mod ui;
 
 use std::num::NonZeroUsize;
+use std::path::PathBuf;
 use std::sync::Arc;
 
+use clap::Parser;
 use game_core::time::Time;
 use game_crash_handler::main;
 use game_egui::EguiContext;
@@ -38,8 +40,21 @@ use state::GameState;
 
 use crate::render::physics_debug::{draw_doors, draw_hitscan_markers, draw_light_markers};
 
+#[derive(Clone, Debug, Parser)]
+#[command(version, about, long_about = None)]
+struct Args {
+    /// Path to a data directory. This argument can be repeated. The data directories will be
+    /// loaded in the exact order specified.
+    #[arg(long)]
+    data: Option<Vec<PathBuf>>,
+}
+
 #[main]
 fn main() {
+    let args = Args::parse();
+
+    let data_dirs = args.data.unwrap_or_else(|| vec![PathBuf::from(".")]);
+
     game_core::logger::init();
 
     let num_threads = std::thread::available_parallelism().unwrap_or(NonZeroUsize::MIN);
@@ -58,7 +73,7 @@ fn main() {
     let egui_ctx = EguiContext::new(ui_renderer);
 
     let ui = UiState::new(&mut renderer);
-    let mut game = GameState::new(shared.clone(), pool);
+    let mut game = GameState::new(shared.clone(), pool, &data_dirs);
     game.init_camera();
     game.toggle_sun_light();
     let state = RenderState::new(

@@ -53,6 +53,7 @@ futures-lite = "2.6.0"
 bitflags = "2.9.4"
 rand = "0.9.2"
 nohash-hasher = "0.2.0"
+clap = { version = "4.5.54", features = ["derive"] }
 
 [lints]
 workspace = true

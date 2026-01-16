@@ -11,9 +11,12 @@ pub mod npc;
 pub mod spawner;
 pub mod terrain;
 
+mod data;
+
 use std::f32::consts::PI;
 use std::fs::File;
 use std::io::BufReader;
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -100,32 +103,37 @@ pub struct GameState {
 }
 
 impl GameState {
-    pub fn new(shared: Arc<SharedState>, pool: Arc<TaskPool>) -> Self {
-        let sources = [
-            "../../archive/raw/Fallout4 - Animations.ba2",
-            "../../archive/raw/Fallout4 - Interface.ba2",
-            "../../archive/raw/Fallout4 - Materials.ba2",
-            "../../archive/raw/Fallout4 - Meshes.ba2",
-            "../../archive/raw/Fallout4 - MeshesExtra.ba2",
-            "../../archive/raw/Fallout4 - Misc.ba2",
-            "../../archive/raw/Fallout4 - Nvflex.ba2",
-            "../../archive/raw/Fallout4 - Shaders.ba2",
-            "../../archive/raw/Fallout4 - Sounds.ba2",
-            "../../archive/raw/Fallout4 - Startup.ba2",
-            "../../archive/raw/Fallout4 - Textures1.ba2",
-            "../../archive/raw/Fallout4 - Textures2.ba2",
-            "../../archive/raw/Fallout4 - Textures3.ba2",
-            "../../archive/raw/Fallout4 - Textures4.ba2",
-            "../../archive/raw/Fallout4 - Textures5.ba2",
-            "../../archive/raw/Fallout4 - Textures6.ba2",
-            "../../archive/raw/Fallout4 - Textures7.ba2",
-            "../../archive/raw/Fallout4 - Textures8.ba2",
-            "../../archive/raw/Fallout4 - Textures9.ba2",
-        ];
-
+    pub fn new(shared: Arc<SharedState>, pool: Arc<TaskPool>, data_dirs: &[PathBuf]) -> Self {
         let mut loader = EspLoader::new();
+        let mut sources = Vec::new();
+
+        for path in data_dirs {
+            let contents = match data::scan_data_directory(path) {
+                Ok(contents) => contents,
+                Err(err) => {
+                    tracing::error!(
+                        "failed to load from data directory {}: {}; skipping",
+                        path.to_string_lossy(),
+                        err
+                    );
+                    continue;
+                }
+            };
+
+            for path in contents.plugins {
+                loader.push(path);
+            }
+
+            for path in contents.archives {
+                sources.push(path);
+            }
+
+            for path in contents.directories {
+                sources.push(path);
+            }
+        }
+
         let file_loader = Arc::new(FileLoader::new(sources));
-        loader.push("../../Fallout4.esm");
         let loader = Arc::new(loader);
 
         let mut asset_loader = AssetLoader::new();
