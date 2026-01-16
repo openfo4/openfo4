@@ -1,7 +1,8 @@
 use std::collections::HashMap;
 use std::str::FromStr;
 
-use openfo4_esp::{FormId, RecordData, RecordKind};
+use openfo4_core::record::RecordId;
+use openfo4_esp::{RecordData, RecordKind};
 
 use crate::state::esp::EspLoader;
 
@@ -365,13 +366,13 @@ impl FromStr for Action {
             "ActionWeaponHotkey" => Ok(Self::WeaponHotkey),
             "ActionFireEmpty" => Ok(Self::FireEmpty),
             "ActionTrick" => Ok(Self::Trick),
-            _ => todo!(),
+            x => todo!("{:?}", x),
         }
     }
 }
 
 #[derive(Clone, Debug, Default)]
-pub struct Actions(pub HashMap<Action, FormId>);
+pub struct Actions(pub HashMap<Action, RecordId>);
 
 impl Actions {
     pub async fn load(loader: &EspLoader) -> Self {
@@ -380,7 +381,7 @@ impl Actions {
         let mut actions = HashMap::new();
 
         for record in records {
-            let RecordData::Action(data) = record.data else {
+            let RecordData::Action(data) = record.local.data else {
                 continue;
             };
 

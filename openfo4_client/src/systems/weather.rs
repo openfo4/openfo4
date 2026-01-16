@@ -9,6 +9,7 @@ use glam::Vec4;
 use hashbrown::HashMap;
 use hecs::{Entity, World};
 use openfo4_asset::AssetLoader;
+use openfo4_core::record::RecordId;
 use openfo4_core::transform::ConvertCoordinateSystem;
 use openfo4_esp::records::{ClimateTime, Rgba};
 use openfo4_esp::{FormId, RecordData, RecordKind};
@@ -18,11 +19,11 @@ use crate::assets::data_file::DataFile;
 use crate::components::{Player, WorldSpace};
 use crate::shared::SharedState;
 use crate::state::esp::EspLoader;
-use crate::state::hardcoded::PATH_SKY_ATMOSPHERE;
+use crate::state::hardcoded::{HARDCODED_MODULE_ID, PATH_SKY_ATMOSPHERE};
 use crate::systems::time::GameTime;
 
 pub struct WeatherSystem {
-    climates: HashMap<FormId, WorldspaceClimate>,
+    climates: HashMap<RecordId, WorldspaceClimate>,
     ambient_light: Option<Entity>,
     sun_light: Option<Entity>,
     entities: Entities,
@@ -38,7 +39,7 @@ impl WeatherSystem {
         let climate = futures_lite::future::block_on(load_worldspace_weather_props(
             &esp_loader,
             WorldSpace {
-                form: FormId(0x3c),
+                record: RecordId::new(HARDCODED_MODULE_ID, FormId(0x3c)),
                 is_interior: false,
             },
         ));
@@ -53,7 +54,7 @@ impl WeatherSystem {
         });
 
         let mut climates = HashMap::new();
-        climates.insert(FormId(0x3c), climate);
+        climates.insert(RecordId::new(HARDCODED_MODULE_ID, FormId(0x3c)), climate);
 
         Self {
             climates,
@@ -76,7 +77,7 @@ impl WeatherSystem {
             return;
         };
 
-        let Some(climate) = self.climates.get(&worldspace.form) else {
+        let Some(climate) = self.climates.get(&worldspace.record) else {
             return;
         };
         let weather = climate.weathers.first().unwrap();
@@ -214,25 +215,26 @@ async fn load_worldspace_weather_props(
     esp_loader: &EspLoader,
     worldspace: WorldSpace,
 ) -> WorldspaceClimate {
-    let RecordData::Worldspace(worldspace) = esp_loader
-        .lookup(Some(RecordKind::Worldspace), worldspace.form)
+    let worldspace_record = esp_loader
+        .lookup(Some(RecordKind::Worldspace), worldspace.record)
         .await
-        .unwrap()
-        .data
-    else {
+        .unwrap();
+    let RecordData::Worldspace(worldspace) = &worldspace_record.local.data else {
         todo!();
     };
 
     let Some(climate) = &worldspace.climate else {
         todo!();
     };
+    let climate = esp_loader
+        .resolve_form(*climate, worldspace_record.id)
+        .unwrap();
 
-    let RecordData::Climate(climate) = esp_loader
-        .lookup(Some(RecordKind::Climate), *climate)
+    let climate_record = esp_loader
+        .lookup(Some(RecordKind::Climate), climate)
         .await
-        .unwrap()
-        .data
-    else {
+        .unwrap();
+    let RecordData::Climate(climate) = climate_record.local.data else {
         todo!();
     };
 
@@ -243,10 +245,15 @@ async fn load_worldspace_weather_props(
             "TODO: Weather globals are not implemented"
         );
 
+        let weather_id = esp_loader
+            .resolve_form(weather.weather, climate_record.id)
+            .unwrap();
+
         let RecordData::Weather(weather) = esp_loader
-            .lookup(Some(RecordKind::Weather), weather.weather)
+            .lookup(Some(RecordKind::Weather), weather_id)
             .await
             .unwrap()
+            .local
             .data
         else {
             todo!();

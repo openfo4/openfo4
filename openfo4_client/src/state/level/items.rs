@@ -1,5 +1,6 @@
 use hashbrown::HashSet;
-use openfo4_esp::{FormId, RecordData};
+use openfo4_core::record::RecordId;
+use openfo4_esp::RecordData;
 
 use crate::state::equipment::load_equipment_item;
 use crate::state::esp::EspLoader;
@@ -9,13 +10,17 @@ use crate::systems::inventory::{ItemData, ItemKind, ItemStack};
 // FIXME: Unhardcode this guy.
 const PLAYER_LEVEL: u16 = 1000;
 
-pub async fn resolve_item(esp_loader: &EspLoader, form: FormId, count: u64) -> Vec<ItemStack> {
+pub async fn resolve_item(
+    esp_loader: &EspLoader,
+    record_id: RecordId,
+    count: u64,
+) -> Vec<ItemStack> {
     let mut items = Vec::new();
 
-    let mut queue = vec![(form, count)];
-    while let Some((form, count)) = queue.pop() {
-        let record = esp_loader.lookup(None, form).await.unwrap();
-        match record.data {
+    let mut queue = vec![(record_id, count)];
+    while let Some((parent_rid, count)) = queue.pop() {
+        let record = esp_loader.lookup(None, record_id).await.unwrap();
+        match record.local.data {
             RecordData::LeveledItem(data) => {
                 let Some(index) = select_from_leveled_list(data.flags, &data.entries, PLAYER_LEVEL)
                 else {
@@ -24,13 +29,19 @@ pub async fn resolve_item(esp_loader: &EspLoader, form: FormId, count: u64) -> V
 
                 let form = data.entries[index].reference;
                 let count = u64::from(data.entries[index].count);
-                queue.push((form, count));
+                let rid = esp_loader.resolve_form(form, parent_rid).unwrap();
+                queue.push((rid, count));
             }
             RecordData::MiscObject(data) => {
-                let keywords: HashSet<FormId> = data.keywords.iter().flatten().copied().collect();
+                let keywords: HashSet<RecordId> = data
+                    .keywords
+                    .iter()
+                    .flatten()
+                    .map(|form| esp_loader.resolve_form(*form, parent_rid).unwrap())
+                    .collect();
 
                 items.push(ItemStack {
-                    item: form,
+                    item: parent_rid,
                     name: data.id.as_str().unwrap().to_owned(),
                     hidden: false,
                     kind: ItemKind::Misc,
@@ -48,10 +59,10 @@ pub async fn resolve_item(esp_loader: &EspLoader, form: FormId, count: u64) -> V
             }
             RecordData::Weapon(_) | RecordData::Armor(_) => {
                 // FIXME: Merge this function into this file.
-                let item = load_equipment_item(esp_loader, form, &[]).await;
+                let item = load_equipment_item(esp_loader, parent_rid, &[]).await;
 
                 items.push(ItemStack {
-                    item: form,
+                    item: parent_rid,
                     name: item.name,
                     hidden: false,
                     kind: item.kind,
@@ -68,10 +79,15 @@ pub async fn resolve_item(esp_loader: &EspLoader, form: FormId, count: u64) -> V
                 });
             }
             RecordData::Ammo(data) => {
-                let keywords: HashSet<FormId> = data.keywords.iter().flatten().copied().collect();
+                let keywords: HashSet<RecordId> = data
+                    .keywords
+                    .iter()
+                    .flatten()
+                    .map(|form| esp_loader.resolve_form(*form, parent_rid).unwrap())
+                    .collect();
 
                 items.push(ItemStack {
-                    item: form,
+                    item: parent_rid,
                     name: data.id.as_str().unwrap().to_string(),
                     hidden: false,
                     kind: ItemKind::Ammo,
@@ -88,10 +104,15 @@ pub async fn resolve_item(esp_loader: &EspLoader, form: FormId, count: u64) -> V
                 });
             }
             RecordData::Ingestible(data) => {
-                let keywords: HashSet<FormId> = data.keywords.iter().flatten().copied().collect();
+                let keywords: HashSet<RecordId> = data
+                    .keywords
+                    .iter()
+                    .flatten()
+                    .map(|form| esp_loader.resolve_form(*form, parent_rid).unwrap())
+                    .collect();
 
                 items.push(ItemStack {
-                    item: form,
+                    item: parent_rid,
                     name: data.id.as_str().unwrap().to_string(),
                     hidden: false,
                     kind: ItemKind::Aid,
@@ -108,10 +129,15 @@ pub async fn resolve_item(esp_loader: &EspLoader, form: FormId, count: u64) -> V
                 });
             }
             RecordData::Key(data) => {
-                let keywords: HashSet<FormId> = data.keywords.iter().flatten().copied().collect();
+                let keywords: HashSet<RecordId> = data
+                    .keywords
+                    .iter()
+                    .flatten()
+                    .map(|form| esp_loader.resolve_form(*form, parent_rid).unwrap())
+                    .collect();
 
                 items.push(ItemStack {
-                    item: form,
+                    item: parent_rid,
                     name: data.id.as_str().unwrap().to_string(),
                     hidden: false,
                     kind: ItemKind::Misc,
@@ -128,10 +154,15 @@ pub async fn resolve_item(esp_loader: &EspLoader, form: FormId, count: u64) -> V
                 });
             }
             RecordData::Book(data) => {
-                let keywords: HashSet<FormId> = data.keywords.iter().flatten().copied().collect();
+                let keywords: HashSet<RecordId> = data
+                    .keywords
+                    .iter()
+                    .flatten()
+                    .map(|form| esp_loader.resolve_form(*form, parent_rid).unwrap())
+                    .collect();
 
                 items.push(ItemStack {
-                    item: form,
+                    item: parent_rid,
                     name: data.id.as_str().unwrap().to_string(),
                     hidden: false,
                     kind: ItemKind::Misc,
@@ -149,7 +180,7 @@ pub async fn resolve_item(esp_loader: &EspLoader, form: FormId, count: u64) -> V
             }
             RecordData::Component(data) => {
                 items.push(ItemStack {
-                    item: form,
+                    item: parent_rid,
                     name: data.id.as_str().unwrap().to_string(),
                     hidden: false,
                     kind: ItemKind::Junk,
@@ -167,7 +198,7 @@ pub async fn resolve_item(esp_loader: &EspLoader, form: FormId, count: u64) -> V
             }
             RecordData::Note(data) => {
                 items.push(ItemStack {
-                    item: form,
+                    item: parent_rid,
                     name: data.id.as_str().unwrap().to_string(),
                     hidden: false,
                     kind: ItemKind::Misc,

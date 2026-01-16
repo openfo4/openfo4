@@ -8,14 +8,11 @@ pub mod hardcoded;
 pub mod item;
 pub mod level;
 pub mod npc;
-pub mod spawner;
 pub mod terrain;
 
 mod data;
 
 use std::f32::consts::PI;
-use std::fs::File;
-use std::io::BufReader;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -36,7 +33,8 @@ use level::Level;
 use openfo4_asset::AssetLoader;
 use openfo4_core::events::EventBus;
 use openfo4_core::object_ref_set::ObjectReferenceSet;
-use openfo4_esp::{EspFile, FormId};
+use openfo4_core::record::RecordId;
+use openfo4_esp::FormId;
 use openfo4_hkx::HkxFile;
 use openfo4_nif::Nif;
 use openfo4_nif::bgsm::Bgsm;
@@ -58,6 +56,8 @@ use crate::shared::SharedState;
 use crate::state::actions::{Action, Actions};
 use crate::state::anim_starter::{AnimationEventQueue, AnimationSystem};
 use crate::state::animation::update_actor_animation_graphs;
+use crate::state::esp::EspLoaderBuilder;
+use crate::state::hardcoded::HARDCODED_MODULE_ID;
 use crate::systems::activation::update_player_looking_at_target;
 use crate::systems::animation_sync::{bounce_animation_events, update_animation_parameters};
 use crate::systems::camera::CameraMode;
@@ -104,7 +104,7 @@ pub struct GameState {
 
 impl GameState {
     pub fn new(shared: Arc<SharedState>, pool: Arc<TaskPool>, data_dirs: &[PathBuf]) -> Self {
-        let mut loader = EspLoader::new();
+        let mut loader = EspLoaderBuilder::new();
         let mut sources = Vec::new();
 
         for path in data_dirs {
@@ -134,7 +134,7 @@ impl GameState {
         }
 
         let file_loader = Arc::new(FileLoader::new(sources));
-        let loader = Arc::new(loader);
+        let loader = Arc::new(loader.finalize());
 
         let mut asset_loader = AssetLoader::new();
         asset_loader.register::<crate::assets::nif_v2::NifScene>(NifLoaderContext::new(
@@ -244,7 +244,7 @@ impl GameState {
             Transform::from_translation(Vec3::new(10.0, 100.0, 10.0))
                 .looking_at(Vec3::ZERO, Vec3::Y),
             WorldSpace {
-                form: FormId(0x3c),
+                record: RecordId::new(HARDCODED_MODULE_ID, FormId(0x3c)),
                 is_interior: false,
             },
         ));

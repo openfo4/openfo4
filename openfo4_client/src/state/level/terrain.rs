@@ -4,6 +4,7 @@ use game_render::mesh::{Indices, Mesh};
 use glam::{UVec2, Vec2, Vec3};
 use image::{ImageBuffer, Rgba};
 use openfo4_asset::AssetLoader;
+use openfo4_core::record::RecordId;
 use openfo4_esp::records::{Land, LandLandTexture, LandTextureAlphaLayerPoint, Quadrant};
 use openfo4_esp::{FormId, RecordData, RecordKind};
 use openfo4_nif::bgsm::Bgsm;
@@ -25,7 +26,7 @@ const LAND_POINTS: UVec2 = UVec2::splat(33);
 /// it causes some numerical instabilities that cause terrains to get incorrectly assigned to cells.
 const LAND_OFFSET: Vec3 = Vec3::new(2048.0, 2048.0, 0.0);
 
-pub async fn load_land(ctx: &LoadContext<'_>, land: &Land) -> SpawnEntity {
+pub async fn load_land(ctx: &LoadContext<'_>, land_id: RecordId, land: &Land) -> SpawnEntity {
     let positions: Vec<Vec3> = land
         .vertex_height
         .as_ref()
@@ -93,7 +94,8 @@ pub async fn load_land(ctx: &LoadContext<'_>, land: &Land) -> SpawnEntity {
             continue;
         }
 
-        if let Some(layer) = load_terrain_layer(base_layer, None, ctx.esp_loader, ctx.loader).await
+        if let Some(layer) =
+            load_terrain_layer(land_id, base_layer, None, ctx.esp_loader, ctx.loader).await
         {
             layers.push(layer);
         }
@@ -105,6 +107,7 @@ pub async fn load_land(ctx: &LoadContext<'_>, land: &Land) -> SpawnEntity {
         }
 
         if let Some(layer) = load_terrain_layer(
+            land_id,
             &alpha_layer.texture,
             Some(&alpha_layer.alpha_layer_data.0),
             ctx.esp_loader,
@@ -144,27 +147,35 @@ pub async fn load_land(ctx: &LoadContext<'_>, land: &Land) -> SpawnEntity {
 }
 
 async fn load_terrain_layer(
+    land_id: RecordId,
     texture: &LandLandTexture,
     alpha_layer: Option<&[LandTextureAlphaLayerPoint]>,
     esp_loader: &EspLoader,
     loader: &AssetLoader,
 ) -> Option<TerrainLayer> {
     let land_texture = esp_loader
-        .lookup(Some(RecordKind::LandTexture), texture.land_texture)
+        .resolve_form(texture.land_texture, land_id)
+        .unwrap();
+    let land_texture_record = esp_loader
+        .lookup(Some(RecordKind::LandTexture), land_texture)
         .await
         .unwrap();
 
-    let land_texture = match land_texture.data {
+    let land_texture = match land_texture_record.local.data {
         RecordData::LandTexture(data) => data,
         _ => todo!(),
     };
 
     let texture_set = esp_loader
-        .lookup(Some(RecordKind::TextureSet), land_texture.texture_set)
+        .resolve_form(land_texture.texture_set, land_texture_record.id)
+        .unwrap();
+
+    let texture_set = esp_loader
+        .lookup(Some(RecordKind::TextureSet), texture_set)
         .await
         .unwrap();
 
-    let texture_set = match texture_set.data {
+    let texture_set = match texture_set.local.data {
         RecordData::TextureSet(set) => set,
         _ => todo!(),
     };

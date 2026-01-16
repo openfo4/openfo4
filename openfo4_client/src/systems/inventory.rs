@@ -9,7 +9,7 @@ use hecs::{Entity, World};
 use openfo4_asset::AssetLoader;
 use openfo4_core::WorldExt;
 use openfo4_core::events::EventBus;
-use openfo4_esp::FormId;
+use openfo4_core::record::RecordId;
 use slab::Slab;
 
 use crate::components::PlacedItem;
@@ -29,7 +29,7 @@ pub struct InventoryKey(usize);
 #[derive(Clone, Debug, Default)]
 pub struct Inventory {
     items: Slab<ItemStack>,
-    by_id: HashMap<FormId, Vec<usize>>,
+    by_id: HashMap<RecordId, Vec<usize>>,
 }
 
 impl Inventory {
@@ -70,9 +70,12 @@ impl Inventory {
         self.items.get_mut(id.0)
     }
 
-    pub fn get_by_form(&self, form: FormId) -> impl Iterator<Item = (InventoryKey, &ItemStack)> {
+    pub fn get_by_form(
+        &self,
+        record: RecordId,
+    ) -> impl Iterator<Item = (InventoryKey, &ItemStack)> {
         self.by_id
-            .get(&form)
+            .get(&record)
             .into_iter()
             .map(|v| v.into_iter())
             .flatten()
@@ -90,16 +93,16 @@ impl Inventory {
 
 #[derive(Clone, Debug)]
 pub struct ItemStack {
-    pub item: FormId,
+    pub item: RecordId,
     pub name: String,
     /// Whether the item should not be seen by the player in UIs.
     pub hidden: bool,
     pub kind: ItemKind,
     pub count: u64,
-    pub attachments: Vec<FormId>,
+    pub attachments: Vec<RecordId>,
     pub equipped: bool,
-    pub base_keywords: HashSet<FormId>,
-    pub combined_keywords: HashSet<FormId>,
+    pub base_keywords: HashSet<RecordId>,
+    pub combined_keywords: HashSet<RecordId>,
     pub data: ItemData,
     pub equipment_keys: Vec<EquipmentKey>,
     pub equipment_slots: HashSet<u32>,
@@ -150,10 +153,10 @@ pub struct WeaponItemData {
     /// Damage of the weapon projectile for each damage type.
     ///
     /// The damage defined on the `AMMO` record is already included in this.
-    pub damage: HashMap<FormId, u32>,
+    pub damage: HashMap<RecordId, u32>,
     pub aim_props: AimProps,
     /// Ammo consumed by this weapon.
-    pub ammo: Option<FormId>,
+    pub ammo: Option<RecordId>,
 }
 
 /// Defines properties for the aiming of guns.
@@ -188,14 +191,14 @@ impl ItemStack {
 
 #[derive(Clone, Debug)]
 pub struct Attachment {
-    pub form: FormId,
+    pub form: RecordId,
 }
 
 #[derive(Clone, Debug)]
 pub struct AddItemEvent {
     pub actor: Entity,
-    pub item: FormId,
-    pub attachments: Vec<FormId>,
+    pub item: RecordId,
+    pub attachments: Vec<RecordId>,
     pub hidden: bool,
     pub count: u64,
 }
@@ -204,7 +207,7 @@ pub struct AddItemEvent {
 pub struct EquipItemEvent {
     pub actor: Entity,
     // FIXME: Change to `InventoryKey`.
-    pub item: FormId,
+    pub item: RecordId,
 }
 
 #[derive(Clone, Debug)]

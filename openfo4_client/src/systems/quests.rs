@@ -2,15 +2,17 @@ use hashbrown::HashMap;
 use hecs::World;
 use indexmap::IndexMap;
 use openfo4_core::events::EventBus;
+use openfo4_core::record::RecordId;
 use openfo4_esp::records::QuestStageFlags;
 use openfo4_esp::{FormId, RecordData, RecordKind};
 
 use crate::state::esp::EspLoader;
+use crate::state::hardcoded::HARDCODED_MODULE_ID;
 use crate::systems::scripting::{Executor, Invocation};
 
 #[derive(Clone, Debug)]
 pub struct QuestManager {
-    quests: HashMap<FormId, Quest>,
+    quests: HashMap<RecordId, Quest>,
 }
 
 impl QuestManager {
@@ -18,9 +20,12 @@ impl QuestManager {
         let quests =
             futures_lite::future::block_on(esp_loader.lookup_all(Some(RecordKind::Quest))).unwrap();
 
-        let quest = quests.iter().find(|v| v.id == FormId(0x89c)).unwrap();
+        let quest = quests
+            .iter()
+            .find(|v| v.id == RecordId::new(HARDCODED_MODULE_ID, FormId(0x89c)))
+            .unwrap();
 
-        let RecordData::Quest(data) = &quest.data else {
+        let RecordData::Quest(data) = &quest.local.data else {
             todo!();
         };
 
@@ -53,12 +58,12 @@ impl QuestManager {
     pub fn update(&mut self, world: &mut World, events: &mut EventBus, executor: &mut Executor) {
         for (id, quest) in &mut self.quests {
             if !quest.is_init {
-                executor.invoke(Invocation::QuestInit { quest: *id });
-                executor.invoke(Invocation::QuestSetStage {
-                    quest: *id,
-                    stage: 0,
-                    item: 0,
-                });
+                // executor.invoke(Invocation::QuestInit { quest: *id });
+                // executor.invoke(Invocation::QuestSetStage {
+                //     quest: *id,
+                //     stage: 0,
+                //     item: 0,
+                // });
                 // executor.invoke(Invocation::QuestSetStage {
                 //     quest: (),
                 //     stage: (),
@@ -68,11 +73,11 @@ impl QuestManager {
         }
     }
 
-    pub fn get(&self, quest: FormId) -> Option<&Quest> {
+    pub fn get(&self, quest: RecordId) -> Option<&Quest> {
         self.quests.get(&quest)
     }
 
-    pub fn start_quest(&mut self, quest: FormId) {
+    pub fn start_quest(&mut self, quest: RecordId) {
         let Some(quest) = self.quests.get_mut(&quest) else {
             return;
         };
@@ -85,7 +90,7 @@ impl QuestManager {
         quest.is_init = false;
     }
 
-    pub fn stop_quest(&mut self, quest: FormId) {
+    pub fn stop_quest(&mut self, quest: RecordId) {
         let Some(quest) = self.quests.get_mut(&quest) else {
             return;
         };
@@ -94,7 +99,7 @@ impl QuestManager {
         quest.is_init = false;
     }
 
-    pub fn set_quest_stage(&mut self, quest: FormId, id: StageId) {
+    pub fn set_quest_stage(&mut self, quest: RecordId, id: StageId) {
         let Some(quest) = self.quests.get_mut(&quest) else {
             return;
         };

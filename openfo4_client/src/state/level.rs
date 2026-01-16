@@ -19,6 +19,7 @@ use openfo4_asset::AssetLoader;
 use openfo4_core::WorldExt;
 use openfo4_core::events::EventBus;
 use openfo4_core::object_ref_set::ObjectReferenceSet;
+use openfo4_core::record::RecordId;
 use openfo4_esp::records::Cell;
 use openfo4_esp::{FormId, RecordChildren, RecordData, RecordHeaderFlags, RecordKind};
 use parking_lot::RwLock;
@@ -47,9 +48,9 @@ pub struct Level {
     events: Arc<SegQueue<SpawnEntity>>,
     tx: async_channel::Sender<Request>,
     // Worldspace, Cell
-    cells_loaded: HashSet<(FormId, CellId)>,
+    cells_loaded: HashSet<(RecordId, CellId)>,
     // Worldspace, Cell
-    cells_to_unload_next_tick: HashSet<(FormId, CellId)>,
+    cells_to_unload_next_tick: HashSet<(RecordId, CellId)>,
     terrain_manager: TerrainManager,
 }
 
@@ -146,20 +147,20 @@ impl Level {
                 // loaded in the previous tick and we have not already started
                 // loading it this tick.
                 // This should happen at most once in the current tick.
-                if !prev_cells_loaded.contains(&(worldspace.form, cell))
-                    && !self.cells_loaded.contains(&(worldspace.form, cell))
+                if !prev_cells_loaded.contains(&(worldspace.record, cell))
+                    && !self.cells_loaded.contains(&(worldspace.record, cell))
                 {
                     tracing::debug!("loading cell {:?}", cell);
                     self.tx
                         .try_send(Request {
-                            worldspace: worldspace.form,
+                            worldspace: worldspace.record,
                             cell,
                         })
                         .unwrap();
                 }
 
-                self.cells_loaded.insert((worldspace.form, cell));
-                prev_cells_loaded.remove(&(worldspace.form, cell));
+                self.cells_loaded.insert((worldspace.record, cell));
+                prev_cells_loaded.remove(&(worldspace.record, cell));
             }
         }
 
@@ -175,7 +176,7 @@ impl Level {
             // was already unloaded again.
             // In this case we must not spawn the new entity to prevent
             // duplicating entities when the cell gets loaded again.
-            if !self.cells_loaded.contains(&(worldspace.form, cell)) && !entity.persistent {
+            if !self.cells_loaded.contains(&(worldspace.record, cell)) && !entity.persistent {
                 continue;
             }
 
@@ -217,7 +218,7 @@ impl Level {
 
             if !self
                 .cells_to_unload_next_tick
-                .contains(&(worldspace.form, cell))
+                .contains(&(worldspace.record, cell))
             {
                 continue;
             }
@@ -235,14 +236,14 @@ impl Level {
 
 #[derive(Copy, Clone, Debug)]
 struct Request {
-    worldspace: FormId,
+    worldspace: RecordId,
     cell: CellId,
 }
 
 #[derive(Debug, Default)]
 struct LoaderState {
-    worldspaces: RwLock<HashMap<FormId, WorldspaceState>>,
-    interiors: RwLock<HashSet<FormId>>,
+    worldspaces: RwLock<HashMap<RecordId, WorldspaceState>>,
+    interiors: RwLock<HashSet<RecordId>>,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -252,7 +253,7 @@ struct WorldspaceState {
 
 #[derive(Clone, Debug, Default)]
 struct CellState {
-    persistent: Vec<FormId>,
+    persistent: Vec<RecordId>,
 }
 
 async fn load_cells_task(
@@ -276,7 +277,7 @@ async fn load_cells_task(
 
             cells
                 .iter()
-                .find_map(|record| match &record.data {
+                .find_map(|record| match &record.local.data {
                     RecordData::Cell(Cell {
                         grid: Some(grid), ..
                     }) if req.cell.0.x == grid.x && req.cell.0.y == grid.y => Some(record.id),
@@ -326,7 +327,7 @@ async fn load_persistent(
             .await
             .unwrap()
         {
-            if !cell.flags.contains(RecordHeaderFlags::PERSISTENT) {
+            if !cell.local.flags.contains(RecordHeaderFlags::PERSISTENT) {
                 continue;
             }
 
@@ -380,14 +381,14 @@ async fn load_cell(
     pool: &TaskPool,
     file_loader: &Arc<FileLoader>,
     shared: &Arc<SharedState>,
-    cell_form: FormId,
-    worldspace: FormId,
+    cell_form: RecordId,
+    worldspace: RecordId,
     persistent_only: bool,
     state: &Arc<LoaderState>,
     is_interior: bool,
 ) {
     let cell = match loader.lookup(Some(RecordKind::Cell), cell_form).await {
-        Ok(record) => match record.data {
+        Ok(record) => match record.local.data {
             RecordData::Cell(cell) => cell,
             _ => {
                 tracing::error!("bad record type expected cell");
@@ -460,9 +461,9 @@ async fn load_cell(
             };
 
             if let Some(mut entity) = SpawnEntity::load(&ctx, &record, flags).await {
-                entity.persistent |= record.flags.contains(RecordHeaderFlags::PERSISTENT);
+                entity.persistent |= record.local.flags.contains(RecordHeaderFlags::PERSISTENT);
                 entity.worldspace = Some(WorldSpace {
-                    form: worldspace,
+                    record: worldspace,
                     is_interior,
                 });
                 entity.form = Some(record.id);

@@ -8,8 +8,9 @@ use openfo4_core::WorldExt;
 use openfo4_core::events::EventBus;
 use openfo4_core::hierarchy::Children;
 use openfo4_core::object_ref_set::ObjectReferenceSet;
+use openfo4_core::record::RecordId;
 use openfo4_esp::records::{DoorFlags, LightDataFlags};
-use openfo4_esp::{FormId, Record, RecordData, RecordHeaderFlags};
+use openfo4_esp::{RecordData, RecordHeaderFlags};
 use openfo4_physics::components::{Collider, RigidBody};
 
 use crate::assets::nif_v2::{Instantiate, LoadNifFlags, NIF_TO_METERS, NifKey, NifScene};
@@ -17,6 +18,7 @@ use crate::components::{
     ActorMarker, NiTransform, Persistent, PlacedItem, Root, RootParent, WorldSpace,
 };
 use crate::render::RenderObject;
+use crate::state::esp::GlobalRecord;
 use crate::state::level::LoadContext;
 use crate::state::level::items::resolve_item;
 use crate::state::level::partial::PartialEntityFlags;
@@ -39,7 +41,7 @@ pub struct SpawnEntity {
     pub actor: Option<Actor>,
     pub persistent: bool,
     pub worldspace: Option<WorldSpace>,
-    pub form: Option<FormId>,
+    pub form: Option<RecordId>,
     pub door: Option<Door>,
     pub inventory: Option<Inventory>,
     pub placed_item: Option<PlacedItem>,
@@ -164,7 +166,7 @@ impl SpawnEntity {
 
     pub(super) async fn load(
         ctx: &LoadContext<'_>,
-        record: &Record,
+        record: &GlobalRecord,
         flags: PartialEntityFlags,
     ) -> Option<Self> {
         let position;
@@ -174,7 +176,7 @@ impl SpawnEntity {
         let mut light_mod = LightModification::default();
         let mut door = None;
 
-        match &record.data {
+        match &record.local.data {
             RecordData::PlacedObject(object) => {
                 position = object.position;
                 base_object = object.base_object;
@@ -190,8 +192,13 @@ impl SpawnEntity {
                 }
 
                 if let Some(door_teleport) = object.door_teleport {
+                    let target = ctx
+                        .esp_loader
+                        .resolve_form(door_teleport.destination, record.id)
+                        .unwrap();
+
                     door = Some(Door::Portal(PortalDoor {
-                        target: door_teleport.destination,
+                        target,
                         target_position: NiTransform::from_ni_transform(Transform {
                             translation: Vec3::from_array(door_teleport.position),
                             rotation: Quat::from_euler(
@@ -211,7 +218,7 @@ impl SpawnEntity {
                 scale = 1.0;
             }
             RecordData::Land(land) => {
-                let entity = load_land(ctx, &land).await;
+                let entity = load_land(ctx, record.id, &land).await;
                 return Some(entity);
             }
             _ => return None,
@@ -233,6 +240,7 @@ impl SpawnEntity {
             scale: Vec3::splat(scale),
         };
 
+        let base_object = ctx.esp_loader.resolve_form(base_object, record.id).unwrap();
         let base = match ctx.esp_loader.lookup(None, base_object).await {
             Ok(base) => base,
             Err(err) => {
@@ -241,7 +249,7 @@ impl SpawnEntity {
             }
         };
 
-        if base.flags.contains(RecordHeaderFlags::IS_MARKER) {
+        if base.local.flags.contains(RecordHeaderFlags::IS_MARKER) {
             return None;
         }
 
@@ -253,7 +261,7 @@ impl SpawnEntity {
 
         let item = load_item(ctx, &base).await;
 
-        match base.data {
+        match base.local.data {
             RecordData::STAT(data) => {
                 model = data.modl.model;
             }
@@ -279,7 +287,9 @@ impl SpawnEntity {
                 let mut inv = Inventory::default();
 
                 for item in &data.items {
-                    let items = resolve_item(ctx.esp_loader, item.item, item.count.into()).await;
+                    let item_id = ctx.esp_loader.resolve_form(item.item, base.id).unwrap();
+
+                    let items = resolve_item(ctx.esp_loader, item_id, item.count.into()).await;
                     for item in items {
                         inv.insert(item);
                     }
@@ -290,7 +300,7 @@ impl SpawnEntity {
             RecordData::Npc(_) => {
                 if flags.contains(PartialEntityFlags::ACTOR) {
                     let props = ActorInstanceProps {
-                        dead: record.flags.contains(RecordHeaderFlags::STARTS_DEAD),
+                        dead: record.local.flags.contains(RecordHeaderFlags::STARTS_DEAD),
                     };
 
                     actor =
@@ -413,8 +423,8 @@ struct LightModification {
     fade: f32,
 }
 
-async fn load_item(ctx: &LoadContext<'_>, record: &Record) -> Option<ItemStack> {
-    let is_item = match record.data {
+async fn load_item(ctx: &LoadContext<'_>, record: &GlobalRecord) -> Option<ItemStack> {
+    let is_item = match record.local.data {
         RecordData::Ammo(_) => true,
         RecordData::Armor(_) => true,
         RecordData::Book(_) => true,

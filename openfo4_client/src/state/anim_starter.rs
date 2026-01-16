@@ -3,13 +3,14 @@ use std::collections::VecDeque;
 use hashbrown::HashMap;
 use hecs::World;
 use openfo4_animation::driver::AnimationDriver;
-use openfo4_esp::{FormId, RecordData, RecordKind};
+use openfo4_core::record::RecordId;
+use openfo4_esp::{RecordData, RecordKind};
 
 use crate::{loader::fix_path, state::esp::EspLoader};
 
 #[derive(Clone, Debug)]
 struct Reaction {
-    id: FormId,
+    id: RecordId,
     /// Only trigger the reaction when the animation graph is active.
     behavior_graph: String,
     /// The event that is sent to the animation graph when this reaction is triggered.
@@ -18,7 +19,7 @@ struct Reaction {
 
 #[derive(Clone, Debug)]
 pub struct AnimationSystem {
-    reactions: HashMap<FormId, Vec<Reaction>>,
+    reactions: HashMap<RecordId, Vec<Reaction>>,
 }
 
 impl AnimationSystem {
@@ -26,10 +27,10 @@ impl AnimationSystem {
         let animations =
             futures_lite::future::block_on(esp.lookup_all(Some(RecordKind::Animation))).unwrap();
 
-        let mut reactions: HashMap<FormId, Vec<Reaction>> = HashMap::new();
+        let mut reactions: HashMap<RecordId, Vec<Reaction>> = HashMap::new();
 
         for record in &animations {
-            let RecordData::Animation(anim) = &record.data else {
+            let RecordData::Animation(anim) = &record.local.data else {
                 continue;
             };
 
@@ -48,14 +49,13 @@ impl AnimationSystem {
                 .as_ref()
                 .map(|e| e.as_str().unwrap().to_owned());
 
-            reactions
-                .entry(anim.relations.parent)
-                .or_default()
-                .push(Reaction {
-                    id: record.id,
-                    behavior_graph: fix_path(behavior_graph),
-                    event,
-                });
+            let parent = esp.resolve_form(anim.relations.parent, record.id).unwrap();
+
+            reactions.entry(parent).or_default().push(Reaction {
+                id: record.id,
+                behavior_graph: fix_path(behavior_graph),
+                event,
+            });
         }
 
         Self { reactions }
@@ -94,4 +94,4 @@ impl AnimationSystem {
 pub struct ActiveBehaviorGraphs(pub Vec<String>);
 
 #[derive(Clone, Debug, Default)]
-pub struct AnimationEventQueue(pub VecDeque<FormId>);
+pub struct AnimationEventQueue(pub VecDeque<RecordId>);

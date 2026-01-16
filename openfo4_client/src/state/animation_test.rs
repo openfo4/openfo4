@@ -13,6 +13,7 @@ use openfo4_asset::{AssetLoader, Handle};
 use openfo4_core::WorldExt;
 use openfo4_core::events::EventBus;
 use openfo4_core::hierarchy::Children;
+use openfo4_core::record::RecordId;
 use openfo4_esp::FormId;
 use openfo4_esp::records::Race;
 use openfo4_hkx::behavior::VariableType;
@@ -28,6 +29,7 @@ use crate::loader::fix_path;
 use crate::state::anim_starter::AnimationEventQueue;
 use crate::state::animation::{self, SkeletonConfig, load_anim};
 use crate::state::esp::EspLoader;
+use crate::state::hardcoded::HARDCODED_MODULE_ID;
 use crate::state::level::Streamer;
 use crate::state::npc::{ActorInstanceProps, BodyPartBone, spawn_actor};
 use crate::systems::PlayerControlState;
@@ -99,7 +101,7 @@ pub fn animation_test(
             let actor = futures_lite::future::block_on(spawn_actor(
                 asset_loader,
                 esp_loader,
-                FormId(0x7),
+                RecordId::new(HARDCODED_MODULE_ID, FormId(0x7)),
                 &ActorInstanceProps { dead: false },
             ))
             .unwrap();
@@ -143,28 +145,28 @@ pub fn animation_test(
 
             events.send(AddItemEvent {
                 actor: root,
-                item: FormId(0x9983b),
+                item: RecordId::new(HARDCODED_MODULE_ID, FormId(0x9983b)),
                 // OMODs
                 attachments: vec![
-                    FormId(0x12eced),
-                    FormId(0x9983d),
-                    FormId(0x99836),
-                    FormId(0x1877fa),
-                    FormId(0x4f21d),
+                    RecordId::new(HARDCODED_MODULE_ID, FormId(0x12eced)),
+                    RecordId::new(HARDCODED_MODULE_ID, FormId(0x9983d)),
+                    RecordId::new(HARDCODED_MODULE_ID, FormId(0x99836)),
+                    RecordId::new(HARDCODED_MODULE_ID, FormId(0x1877fa)),
+                    RecordId::new(HARDCODED_MODULE_ID, FormId(0x4f21d)),
                 ],
                 hidden: false,
                 count: 1,
             });
             events.send(AddItemEvent {
                 actor: root,
-                item: FormId(0x000C1897),
+                item: RecordId::new(HARDCODED_MODULE_ID, FormId(0x000C1897)),
                 attachments: Vec::new(),
                 hidden: false,
                 count: 100,
             });
             events.send(EquipItemEvent {
                 actor: root,
-                item: FormId(0x9983b),
+                item: RecordId::new(HARDCODED_MODULE_ID, FormId(0x9983b)),
             });
 
             world.insert_one(root, inventory).unwrap();
@@ -173,7 +175,7 @@ pub fn animation_test(
                 .insert_one(
                     root,
                     WorldSpace {
-                        form: FormId(0x3c),
+                        record: RecordId::new(HARDCODED_MODULE_ID, FormId(0x3c)),
                         is_interior: false,
                     },
                 )

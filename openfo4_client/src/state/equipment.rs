@@ -7,6 +7,7 @@ use hecs::{Entity, World};
 use openfo4_animation::skeleton::SkeletonInstance;
 use openfo4_asset::{AssetLoader, Handle};
 use openfo4_core::hierarchy::Children;
+use openfo4_core::record::RecordId;
 use openfo4_esp::records::{
     BipedObjectFlags, ObjectModificationFunctionType, ObjectModificationPropertyProperty,
     ObjectModificationValueType,
@@ -23,11 +24,11 @@ use crate::systems::inventory::{AimProps, ItemData, ItemKind, WeaponItemData};
 #[derive(Clone, Debug)]
 pub struct EquipmentItem {
     pub name: String,
-    pub resistances: HashMap<FormId, u32>,
+    pub resistances: HashMap<RecordId, u32>,
     /// Keywords attached to the base item.
-    pub base_keywords: HashSet<FormId>,
+    pub base_keywords: HashSet<RecordId>,
     /// Keywords after applying attachments.
-    pub combined_keywords: HashSet<FormId>,
+    pub combined_keywords: HashSet<RecordId>,
     pub weight: f32,
     pub value: f32,
     pub kind: ItemKind,
@@ -99,13 +100,13 @@ impl EquipmentItemModels {
 
 #[derive(Clone, Debug, Default)]
 struct EquipmentProperties {
-    resistances: HashMap<FormId, u32>,
-    keywords: HashSet<FormId>,
+    resistances: HashMap<RecordId, u32>,
+    keywords: HashSet<RecordId>,
     weight: f32,
     value: f32,
-    weapon_ammo: Option<FormId>,
+    weapon_ammo: Option<RecordId>,
     weapon_capacity: u32,
-    weapon_damage: HashMap<FormId, u32>,
+    weapon_damage: HashMap<RecordId, u32>,
     weapon_ammo_damage: u32,
     weapon_cone_of_fire_min_angle: f32,
     weapon_cone_of_fire_max_angle: f32,
@@ -116,8 +117,8 @@ struct EquipmentProperties {
 
 pub async fn load_equipment_item(
     esp_loader: &EspLoader,
-    form: FormId,
-    attachments: &[FormId],
+    record: RecordId,
+    attachments: &[RecordId],
 ) -> EquipmentItem {
     let mut base_props = EquipmentProperties::default();
     let name;
@@ -125,7 +126,7 @@ pub async fn load_equipment_item(
     let mut equipment_slots = HashSet::new();
     let mut visibility_slots = HashSet::new();
 
-    let kind = match esp_loader.lookup(None, form).await.unwrap().data {
+    let kind = match esp_loader.lookup(None, record).await.unwrap().local.data {
         RecordData::Armor(armor) => {
             name = armor.id.as_str().unwrap().to_owned();
 
@@ -133,23 +134,30 @@ pub async fn load_equipment_item(
             base_props.value = armor.data.value as f32;
 
             for resistance in armor.resistances.iter().flatten() {
-                *base_props
-                    .resistances
-                    .entry(resistance.damage_type)
-                    .or_default() += resistance.value;
+                let damage_type = esp_loader
+                    .resolve_form(resistance.damage_type, record)
+                    .unwrap();
+
+                *base_props.resistances.entry(damage_type).or_default() += resistance.value;
             }
 
             if let Some(keywords) = armor.keywords {
-                base_props.keywords.extend(keywords);
+                for keyword in &*keywords {
+                    let keyword = esp_loader.resolve_form(*keyword, record).unwrap();
+                    base_props.keywords.insert(keyword);
+                }
             }
 
             extract_biped_object_flags(armor.biped_body_template, &mut equipment_slots);
 
             for model in &*armor.models {
+                let armor_addon = esp_loader.resolve_form(model.armor_addon, record).unwrap();
+
                 let RecordData::ArmorAddon(addon) = esp_loader
-                    .lookup(None, model.armor_addon)
+                    .lookup(None, armor_addon)
                     .await
                     .unwrap()
+                    .local
                     .data
                 else {
                     todo!();
@@ -167,7 +175,10 @@ pub async fn load_equipment_item(
             base_props.value = weapon.data.value as f32;
 
             if let Some(keywords) = weapon.keywords {
-                base_props.keywords.extend(keywords);
+                for keyword in &*keywords {
+                    let keyword = esp_loader.resolve_form(*keyword, record).unwrap();
+                    base_props.keywords.insert(keyword);
+                }
             }
 
             base_props.weapon_capacity = u32::from(weapon.data.capacity);
@@ -183,19 +194,21 @@ pub async fn load_equipment_item(
             // FIXME: What happens when this field contains physical damage?
             if let Some(damage_types) = weapon.damage_types {
                 for damage_type in &*damage_types {
-                    base_props
-                        .weapon_damage
-                        .insert(damage_type.typ, damage_type.amount);
+                    let ty = esp_loader.resolve_form(damage_type.typ, record).unwrap();
+
+                    base_props.weapon_damage.insert(ty, damage_type.amount);
                 }
             }
 
             if !weapon.data.ammo.is_null() {
-                base_props.weapon_ammo = Some(weapon.data.ammo);
+                let ammo = esp_loader.resolve_form(weapon.data.ammo, record).unwrap();
+                base_props.weapon_ammo = Some(ammo);
 
                 match esp_loader
-                    .lookup(Some(RecordKind::Ammo), weapon.data.ammo)
+                    .lookup(Some(RecordKind::Ammo), ammo)
                     .await
                     .unwrap()
+                    .local
                     .data
                 {
                     RecordData::Ammo(ammo) => {
@@ -209,10 +222,13 @@ pub async fn load_equipment_item(
             }
 
             if let Some(form) = weapon.aim_model {
+                let aim_model = esp_loader.resolve_form(form, record).unwrap();
+
                 match esp_loader
-                    .lookup(Some(RecordKind::AimModel), form)
+                    .lookup(Some(RecordKind::AimModel), aim_model)
                     .await
                     .unwrap()
+                    .local
                     .data
                 {
                     RecordData::AimModel(model) => {
@@ -242,9 +258,13 @@ pub async fn load_equipment_item(
 
     let mut combined_props = base_props.clone();
 
-    for attachment in attachments {
-        let RecordData::ObjectModification(attachment) =
-            esp_loader.lookup(None, *attachment).await.unwrap().data
+    for attachment_id in attachments {
+        let RecordData::ObjectModification(attachment) = esp_loader
+            .lookup(None, *attachment_id)
+            .await
+            .unwrap()
+            .local
+            .data
         else {
             unreachable!()
         };
@@ -274,6 +294,7 @@ pub async fn load_equipment_item(
             let class = match property.property {
                 ObjectModificationPropertyProperty::Keywords => {
                     let keyword = params.to_formid::<0>().unwrap();
+                    let keyword = esp_loader.resolve_form(keyword, *attachment_id).unwrap();
 
                     match property.function_type {
                         ObjectModificationFunctionType::Add => {
@@ -312,6 +333,7 @@ pub async fn load_equipment_item(
                 }
                 ObjectModificationPropertyProperty::DamageTypeValue => {
                     let dmg_type = params.to_formid::<0>().unwrap();
+                    let dmg_type = esp_loader.resolve_form(dmg_type, *attachment_id).unwrap();
                     let value = params.to_u32::<1>().unwrap();
 
                     let resistance = combined_props.resistances.entry(dmg_type).or_default();
@@ -440,21 +462,26 @@ pub async fn load_equipment_item(
 pub async fn load_equipment_item_models(
     loader: &AssetLoader,
     esp_loader: &EspLoader,
-    form: FormId,
-    attachments: &[FormId],
+    record: RecordId,
+    attachments: &[RecordId],
     female: bool,
 ) -> EquipmentItemModels {
     let mut models = Vec::new();
     let mut attachment_point_parents = HashMap::new();
 
-    match esp_loader.lookup(None, form).await.unwrap().data {
+    let record = esp_loader.lookup(None, record).await.unwrap();
+    match record.local.data {
         RecordData::Armor(armor) => {
             for model in &*armor.models {
+                let armor_addon = esp_loader
+                    .resolve_form(model.armor_addon, record.id)
+                    .unwrap();
+
                 let addon = esp_loader
-                    .lookup(Some(RecordKind::ArmorAddon), model.armor_addon)
+                    .lookup(Some(RecordKind::ArmorAddon), armor_addon)
                     .await
                     .unwrap();
-                let addon = match addon.data {
+                let addon = match addon.local.data {
                     RecordData::ArmorAddon(data) => data,
                     _ => unreachable!(),
                 };
@@ -508,8 +535,12 @@ pub async fn load_equipment_item_models(
 
     let mut attachment_parents = HashMap::new();
     for attachment in attachments {
-        let RecordData::ObjectModification(attachment) =
-            esp_loader.lookup(None, *attachment).await.unwrap().data
+        let RecordData::ObjectModification(attachment) = esp_loader
+            .lookup(None, *attachment)
+            .await
+            .unwrap()
+            .local
+            .data
         else {
             unreachable!()
         };

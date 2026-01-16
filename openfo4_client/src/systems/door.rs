@@ -4,7 +4,7 @@ use hecs::World;
 use openfo4_core::WorldExt;
 use openfo4_core::events::EventBus;
 use openfo4_core::object_ref_set::ObjectReferenceSet;
-use openfo4_esp::FormId;
+use openfo4_core::record::RecordId;
 
 use crate::components::{ActorMarker, NiTransform, WorldSpace};
 use crate::systems::ActivationEvent;
@@ -23,7 +23,7 @@ pub enum Door {
 #[derive(Copy, Clone, Debug)]
 pub struct PortalDoor {
     /// The other door.
-    pub target: FormId,
+    pub target: RecordId,
     pub target_position: NiTransform,
 }
 

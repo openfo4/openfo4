@@ -3,6 +3,7 @@ use std::ops::{Mul, MulAssign};
 use game_common::components::Transform;
 use glam::{Quat, Vec3};
 use hecs::Entity;
+use openfo4_core::record::RecordId;
 use openfo4_core::transform::ConvertCoordinateSystem;
 use openfo4_esp::FormId;
 
@@ -89,7 +90,7 @@ pub struct Persistent;
 /// Indicates the worldspace that the entity is contained in.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct WorldSpace {
-    pub form: FormId,
+    pub record: RecordId,
     pub is_interior: bool,
 }
 

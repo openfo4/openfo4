@@ -1,6 +1,7 @@
 use glam::Quat;
 use hashbrown::HashMap;
 use hecs::Entity;
+use openfo4_core::record::RecordId;
 use openfo4_esp::FormId;
 
 use crate::systems::inventory::InventoryKey;
@@ -59,7 +60,7 @@ pub struct ProjectileHitEvent {
     /// The actor that has shot the projectile.
     pub shooter: Option<Entity>,
     /// The damage applied by the projectile.
-    pub damage: HashMap<FormId, u32>,
+    pub damage: HashMap<RecordId, u32>,
 }
 
 #[derive(Copy, Clone, Debug)]
@@ -82,14 +83,14 @@ pub struct WeaponDrawRequest {
 pub struct WeaponDrawnEvent {
     pub actor: Entity,
     // TODO: Replace with InventorySlotId or similar.
-    pub item: FormId,
+    pub item: RecordId,
 }
 
 #[derive(Clone, Debug)]
 pub struct WeaponSheathEvent {
     pub actor: Entity,
     // TODO: Replace with InventorySlotId or similar.
-    pub item: FormId,
+    pub item: RecordId,
 }
 
 #[derive(Copy, Clone, Debug)]
