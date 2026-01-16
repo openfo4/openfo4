@@ -5098,6 +5098,7 @@ pub struct BodyPartNodeData {
     pub gore_effects_local_rotate_y: f32,
     pub cut_tesselation: f32,
     pub severable_impact_data_set: FormId,
+    pub explodable_impact_data_set: FormId,
     pub explodable_limb_replacement_scale: f32,
     pub flags: u8,
     pub part_type: u8,
