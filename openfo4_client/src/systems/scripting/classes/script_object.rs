@@ -253,6 +253,20 @@ pub fn register_for_tracked_stats_event(
     todo!()
 }
 
+/// `UnregisterForDistanceEvents`
+///
+/// ```text
+/// Function UnregisterForDistanceEvents(ScriptObject akObj1, ScriptObject akObj2) native
+/// ```
+pub fn unregister_for_distance_events(
+    caller: Caller<'_, State>,
+    object: Object,
+    object1: Object,
+    object2: Object,
+) -> Result<(), Exception> {
+    todo!()
+}
+
 /// `UnregisterForLOS`
 ///
 /// ```text
@@ -263,7 +277,7 @@ pub fn unregister_for_los(
     object: Object,
     viewer: Object,
     target: Object,
-) {
+) -> Result<(), Exception> {
     todo!()
 }
 
@@ -277,7 +291,7 @@ pub fn unregister_for_remote_event(
     object: Object,
     event_source: Object,
     script_event_name: isize,
-) {
+) -> Result<(), Exception> {
     todo!()
 }
 
@@ -290,6 +304,19 @@ pub fn unregister_for_tutorial_event(
     caller: Caller<'_, State>,
     object: Object,
     event_name: isize,
+) -> Result<(), Exception> {
+    todo!()
+}
+
+/// `UnregisterForTrackedStatsEvent`
+///
+/// ```text
+/// Function UnregisterForTrackedStatsEvent(string asStat) native
+/// ```
+pub fn unregister_for_tracked_stats_event(
+    caller: Caller<'_, State>,
+    object: Object,
+    stat: isize,
 ) -> Result<(), Exception> {
     todo!()
 }

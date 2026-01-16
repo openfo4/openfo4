@@ -14,13 +14,19 @@ use openfo4_esp::vmad::{Property, Script, Value};
 use openfo4_esp::{FormId, RecordData};
 use openfo4_pex::Module;
 use openfo4_script::compiler::{FieldType, ObjectField, ObjectProperty, TypeLayout};
-use openfo4_script::engine::{Engine, Instance};
+use openfo4_script::engine::{Engine, Instance, Options};
 use openfo4_script::runtime::{Context, Exception, NativeTuple, ObjectAddr, ObjectRef, Stack};
 
 use crate::loader::{FileLoader, fix_path};
 use crate::state::esp::EspLoader;
 
 use classes::{CoreActorValues, State};
+
+const OPTIONS: Options = Options {
+    skip_native: true,
+    skip_empty: true,
+    only_events: true,
+};
 
 pub struct Executor {
     esp_loader: Arc<EspLoader>,
@@ -176,7 +182,7 @@ fn call_func<Params>(
 
 fn core_actor_values(engine: &mut Engine) -> State {
     // engine.compile("Actor");
-    engine.compile("ActorValue");
+    engine.compile("ActorValue", &OPTIONS);
 
     let dummy_layout = TypeLayout {
         header: None,
@@ -423,7 +429,7 @@ async fn instantiate_form(
             for script in &vmad.scripts {
                 let instance = compiled_classes
                     .entry(script.name.clone())
-                    .or_insert_with(|| engine.compile(&script.name));
+                    .or_insert_with(|| engine.compile(&script.name, &OPTIONS));
 
                 let layout = engine.get_class_layout(&script.name).unwrap();
 
@@ -515,7 +521,7 @@ async fn instantiate_form(
         dbg!(&name);
         let instance = compiled_classes
             .entry(name.to_owned())
-            .or_insert_with(|| engine.compile(name));
+            .or_insert_with(|| engine.compile(name, &OPTIONS));
         let layout = engine.get_class_layout(name).unwrap();
 
         let object = engine.object_pool().insert(layout.clone());

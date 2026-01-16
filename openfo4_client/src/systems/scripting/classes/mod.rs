@@ -59,6 +59,11 @@ pub fn register_builtins(engine: &mut Engine) {
 
     engine.register_native_function("ObjectReference", "Activate", object_reference::activate);
     engine.register_native_function("ObjectReference", "AddItem", object_reference::add_item);
+    engine.register_native_function("ObjectReference", "AddKeyword", object_reference::add_keyword);
+    engine.register_native_function("ObjectReference", "AddTextReplacementData", object_reference::add_text_replacement_data);
+    engine.register_native_function("ObjectReference", "AddToMap", object_reference::add_to_map);
+    // engine.register_native_function("ObjectReference", "ApplyConveyerBelt", object_reference::apply_conveyer_belt);
+    // engine.register_native_function("ObjectReference", "ApplyFanMotor", object_reference::apply_fan_motor);
     engine.register_native_function("ObjectReference", "DamageValue", object_reference::damage_value);
     engine.register_native_function("ObjectReference", "Delete", object_reference::delete);
     engine.register_native_function("ObjectReference", "DeleteWhenAble", object_reference::delete_when_able);
@@ -115,11 +120,13 @@ pub fn register_builtins(engine: &mut Engine) {
     engine.register_native_function("ScriptObject", "RegisterForPlayerWait", script_object::register_for_player_wait);
     engine.register_native_function("ScriptObject", "RegisterForRemoteEvent", script_object::register_for_remote_event);
     engine.register_native_function("ScriptObject", "RegisterForTrackedStatsEvent", script_object::register_for_tracked_stats_event);
-    // engine.register_native_function("ScriptObject", "UnregisterForLOS", script_object::unregister_for_los);
-    // engine.register_native_function("ScriptObject", "UnregisterForRemoteEvent", script_object::unregister_for_remote_event);
     engine.register_native_function("ScriptObject", "StartTimer", script_object::start_timer);
     engine.register_native_function("ScriptObject", "StartTimerGameTime", script_object::start_timer_game_time);
+    engine.register_native_function("ScriptObject", "UnregisterForDistanceEvents", script_object::unregister_for_distance_events);
+    engine.register_native_function("ScriptObject", "UnregisterForLOS", script_object::unregister_for_los);
+    engine.register_native_function("ScriptObject", "UnregisterForRemoteEvent", script_object::unregister_for_remote_event);
     engine.register_native_function("ScriptObject", "UnregisterForTutorialEvent", script_object::unregister_for_tutorial_event);
+    engine.register_native_function("ScriptObject", "UnregisterForTrackedStatsEvent", script_object::unregister_for_tracked_stats_event);
 
     engine.register_native_function("Form", "GetFormID", form::get_form_id);
     engine.register_native_function("Form", "GetGoldValue", form::get_gold_value);

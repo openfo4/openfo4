@@ -31,6 +31,82 @@ pub fn add_item(
     todo!()
 }
 
+/// `AddKeyword`
+///
+/// ```text
+/// Function AddKeyword(Keyword apKeyword) native
+/// ```
+pub fn add_keyword(
+    caller: Caller<'_, State>,
+    object: Object,
+    keyword: Object,
+) -> Result<(), Exception> {
+    todo!()
+}
+
+/// `AddTextReplacementData`
+///
+/// ```text
+/// Function AddTextReplacementData(string asTokenLabel, Form akForm) native
+/// ```
+pub fn add_text_replacement_data(
+    caller: Caller<'_, State>,
+    object: Object,
+    token_label: isize,
+    form: Object,
+) -> Result<(), Exception> {
+    todo!()
+}
+
+/// `AddToMap`
+///
+/// ```text
+/// Function AddToMap(bool abAllowFastTravel = False) native
+/// ```
+pub fn add_to_map(
+    caller: Caller<'_, State>,
+    object: Object,
+    allow_fast_travel: bool,
+) -> Result<(), Exception> {
+    todo!()
+}
+
+/// `ApplyConveyorBelt`
+///
+/// ```text
+/// Function ApplyConveyorBelt( string aTarget, float aLinVelX, float aLinVelY, float aLinVelZ, bool abOn = true, bool abReverse = false ) native
+/// ```
+pub fn apply_conveyer_belt(
+    caller: Caller<'_, State>,
+    object: Object,
+    target: isize,
+    linvel_x: f32,
+    linvel_y: f32,
+    linvel_z: f32,
+    on: bool,
+    reverse: bool,
+) -> Result<(), Exception> {
+    todo!()
+}
+
+/// `ApplyFanMotor`
+///
+/// ```text
+/// Function ApplyFanMotor( string aTarget, float aAxisX, float aAxisY, float aAxisZ, float aForce, bool abOn = true ) native
+/// ```
+pub fn apply_fan_motor(
+    caller: Caller<'_, State>,
+    object: Object,
+    target: isize,
+    axis_x: f32,
+    axis_y: f32,
+    axis_z: f32,
+    force: bool,
+    on: bool,
+) -> Result<(), Exception> {
+    todo!()
+}
+
 /// `DamageValue`
 ///
 /// ```text
