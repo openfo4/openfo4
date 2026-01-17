@@ -1,3 +1,5 @@
+mod mcm;
+
 mod active_magic_effect;
 mod actor;
 mod faction;
@@ -300,6 +302,8 @@ pub fn register_builtins(engine: &mut Engine) {
     engine.register_native_function("Quest", "Start", quest::start);
     engine.register_native_function("Quest", "stop", quest::stop);
     engine.register_native_function("Quest", "UpdateCurrentInstanceGlobal", quest::update_current_instance_global);
+
+    mcm::register(engine);
 }
 
 pub struct State {
