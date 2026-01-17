@@ -2,7 +2,7 @@ use std::io::{self, Cursor, Read, Seek};
 use std::path::{Path, PathBuf};
 
 use game_tracing::trace_span;
-use hashbrown::{HashMap, HashSet};
+use hashbrown::HashMap;
 use openfo4_ba2::Archive;
 use openfo4_io::fs::File;
 use thiserror::Error;
@@ -53,11 +53,13 @@ impl FileLoader {
             let source_index = sources.len();
 
             let source = if meta.is_dir() {
-                for file in scan_directory_files(&location.as_ref()) {
-                    files.insert(file, source_index);
+                let source = DirectorySource::new(&location).unwrap();
+
+                for file in source.files.keys() {
+                    files.insert(file.clone(), source_index);
                 }
 
-                Source::Directory(location.as_ref().to_owned())
+                Source::Directory(source)
             } else {
                 let file = File::open(location).unwrap();
                 let archive = futures_lite::future::block_on(Archive::new(file)).unwrap();
@@ -90,8 +92,8 @@ impl FileLoader {
         };
 
         match &self.sources[*index] {
-            Source::Directory(root) => {
-                let path = root.join(path);
+            Source::Directory(source) => {
+                let path = source.files.get(&path).unwrap();
                 let file = std::fs::File::open(path).map_err(Error::Io)?;
                 Ok(Reader::File(file))
             }
@@ -107,33 +109,10 @@ impl FileLoader {
     }
 }
 
-fn scan_directory_files(path: &Path) -> HashSet<String> {
-    let mut files = HashSet::new();
-
-    let mut queue = vec![path.to_owned()];
-    while let Some(path) = queue.pop() {
-        let dir = std::fs::read_dir(&path).unwrap();
-        for entry in dir {
-            let entry = entry.unwrap();
-
-            let name = path.join(entry.file_name());
-
-            let meta = entry.metadata().unwrap();
-            if meta.is_dir() {
-                queue.push(name);
-            } else if meta.is_file() {
-                files.insert(name.to_str().unwrap().to_owned());
-            }
-        }
-    }
-
-    files
-}
-
 #[derive(Debug)]
 enum Source {
     /// A filesystem root directory.
-    Directory(PathBuf),
+    Directory(DirectorySource),
     Archive(Archive<File>),
 }
 
@@ -165,6 +144,49 @@ impl Seek for Reader {
             Self::File(f) => f.seek(pos),
             Self::Archive(v) => v.seek(pos),
         }
+    }
+}
+
+#[derive(Debug)]
+struct DirectorySource {
+    files: HashMap<String, PathBuf>,
+}
+
+impl DirectorySource {
+    fn new<P>(root_dir: P) -> Result<Self, io::Error>
+    where
+        P: AsRef<Path>,
+    {
+        let mut files = HashMap::new();
+
+        let mut directories = vec![root_dir.as_ref().to_owned()];
+        while let Some(path) = directories.pop() {
+            let dir = std::fs::read_dir(&path)?;
+            for entry in dir {
+                let entry = entry?;
+                let meta = entry.metadata()?;
+                let file_path = entry.path();
+
+                if meta.is_symlink() {
+                    continue;
+                }
+
+                if meta.is_dir() {
+                    directories.push(file_path);
+                    continue;
+                }
+
+                if meta.is_file() {
+                    // We recursively visit all subentries of the root directory,
+                    // so all paths should start with the root directory.
+                    let name = file_path.strip_prefix(&root_dir).unwrap();
+
+                    files.insert(name.to_str().unwrap().to_lowercase(), file_path);
+                }
+            }
+        }
+
+        Ok(Self { files })
     }
 }
 
