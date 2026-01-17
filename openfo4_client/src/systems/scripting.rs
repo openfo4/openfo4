@@ -4,6 +4,7 @@ use std::io::Read;
 use std::sync::Arc;
 use std::time::Duration;
 
+use async_lock::Mutex;
 use game_common::collections::arena::{Arena, Key};
 use game_tasks::TaskPool;
 use game_tracing::trace_span;
@@ -17,6 +18,7 @@ use openfo4_pex::Module;
 use openfo4_script::compiler::{FieldType, ObjectField, ObjectProperty, TypeLayout};
 use openfo4_script::engine::{Engine, Instance, Options};
 use openfo4_script::runtime::{Context, Exception, NativeTuple, ObjectAddr, ObjectRef, Stack};
+use slab::Slab;
 
 use crate::loader::{FileLoader, fix_path};
 use crate::state::esp::EspLoader;
@@ -30,14 +32,9 @@ const OPTIONS: Options = Options {
 };
 
 pub struct Executor {
-    esp_loader: Arc<EspLoader>,
-    file_loader: Arc<FileLoader>,
-    engine: Engine,
-    objects: HashMap<RecordId, ObjectRef>,
+    loader: Arc<ScriptLoader>,
     invocations: Arena<Invocation>,
-    scripts: HashMap<RecordId, HashMap<String, ScriptInstance>>,
     state: Option<State>,
-    compiled_classes: HashMap<String, Instance>,
 }
 
 impl Executor {
@@ -66,18 +63,25 @@ impl Executor {
 
         let state = core_actor_values(&mut engine);
 
-        // test_build_script(&mut engine, &esp_loader, state).await;
+        let engine = Arc::new(Mutex::new(engine));
+
+        let loader = Arc::new(ScriptLoader {
+            engine,
+            classes: Mutex::default(),
+            instances: Mutex::default(),
+            base_records: Mutex::default(),
+            esp_loader,
+        });
 
         Self {
-            esp_loader,
-            engine,
-            file_loader,
-            objects: HashMap::new(),
+            loader,
             invocations: Arena::new(),
-            scripts: HashMap::new(),
             state: Some(state),
-            compiled_classes: HashMap::new(),
         }
+    }
+
+    pub fn loader(&self) -> &Arc<ScriptLoader> {
+        &self.loader
     }
 
     pub fn invoke(&mut self, invocation: Invocation) -> InvocationId {
@@ -88,32 +92,25 @@ impl Executor {
     pub fn update(&mut self, world: &mut World, events: &mut EventBus, delta: Duration) {
         let _span = trace_span!("Executor::update").entered();
 
+        let engine = self.loader.engine.lock_blocking();
+        let mut instances = self.loader.instances.lock_blocking();
+
         let state = self.state.as_mut().unwrap();
         state.world = world;
 
         for invocation in self.invocations.values() {
-            let record = match invocation {
-                Invocation::QuestInit { quest } => *quest,
+            let object = match invocation {
+                Invocation::QuestInit { quest } => quest,
                 Invocation::QuestSetStage {
                     quest,
                     stage: _,
                     item: _,
-                } => *quest,
+                } => quest,
             };
 
-            if !self.scripts.contains_key(&record) {
-                futures_lite::future::block_on(instantiate_form(
-                    &mut self.engine,
-                    &mut self.scripts,
-                    &self.esp_loader,
-                    record,
-                    &mut self.compiled_classes,
-                ));
-            }
+            let scripts = instances.get_mut(object.0.id.0).unwrap();
 
-            let scripts = self.scripts.get_mut(&record).unwrap();
-
-            invocation.call(&self.engine, scripts, &mut self.state);
+            invocation.call(&engine, scripts, &mut self.state);
         }
 
         let state = self.state.as_mut().unwrap();
@@ -335,19 +332,105 @@ async fn test_build_script(engine: &mut Engine, esp_loader: &EspLoader, mut stat
     todo!();
 }
 
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+struct ScriptObjectId(usize);
+
+#[derive(Clone, Debug)]
+pub struct ScriptObject(Arc<ScriptObjectInner>);
+
+#[derive(Debug)]
+struct ScriptObjectInner {
+    base: RecordId,
+    id: ScriptObjectId,
+    // TODO: Cleanup when this is dropped.
+}
+
+#[derive(Debug)]
+pub struct ScriptLoader {
+    engine: Arc<Mutex<Engine>>,
+    instances: Mutex<Slab<HashMap<String, ScriptInstance>>>,
+    base_records: Mutex<HashMap<RecordId, ScriptObjectId>>,
+    /// Cache of compiled classes.
+    classes: Mutex<HashMap<String, Instance>>,
+    esp_loader: Arc<EspLoader>,
+}
+
+impl ScriptLoader {
+    /// Loads the script object attached to a record.
+    ///
+    /// Returns `None` if no script is attached to the record.
+    pub async fn load(&self, record: RecordId) -> Option<ScriptObject> {
+        let mut engine = self.engine.lock().await;
+        let mut instances = self.instances.lock().await;
+        let mut base_records = self.base_records.lock().await;
+        let mut classes = self.classes.lock().await;
+
+        let id = instantiate_form(
+            &mut engine,
+            &mut instances,
+            &mut base_records,
+            &self.esp_loader,
+            record,
+            &mut classes,
+        )
+        .await?;
+
+        Some(ScriptObject(Arc::new(ScriptObjectInner {
+            base: record,
+            id,
+        })))
+    }
+
+    /// Returns a deep clone of the [`ScriptObject`].
+    ///
+    /// Only the top level properties are cloned.
+    pub fn clone_object(&self, object: &ScriptObject) -> ScriptObject {
+        let engine = futures_lite::future::block_on(self.engine.lock());
+        let mut instances = futures_lite::future::block_on(self.instances.lock());
+        let instance = instances.get(object.0.id.0).unwrap();
+
+        let scripts = instance
+            .iter()
+            .map(|(key, val)| {
+                (
+                    key.to_owned(),
+                    ScriptInstance {
+                        instance: val.instance.clone(),
+                        layout: val.layout.clone(),
+                        stacks: val.stacks.clone(),
+                        object: unsafe {
+                            engine.object_pool().clone_object(&val.object).finalize()
+                        },
+                    },
+                )
+            })
+            .collect();
+
+        let id = ScriptObjectId(instances.insert(scripts));
+
+        ScriptObject(Arc::new(ScriptObjectInner {
+            base: object.0.base,
+            id,
+        }))
+    }
+}
+
 async fn instantiate_form(
     engine: &mut Engine,
-    instances: &mut HashMap<RecordId, HashMap<String, ScriptInstance>>,
+    instances: &mut Slab<HashMap<String, ScriptInstance>>,
+    base_instances: &mut HashMap<RecordId, ScriptObjectId>,
     esp_loader: &EspLoader,
     record: RecordId,
     compiled_classes: &mut HashMap<String, Instance>,
-) {
+) -> Option<ScriptObjectId> {
     let mut queue = vec![record];
     let mut dependencies = HashMap::<RecordId, HashSet<RecordId>>::new();
     let mut dependents = HashMap::<RecordId, HashSet<RecordId>>::new();
 
+    let mut root_id = None;
+
     while let Some(record) = queue.pop() {
-        if instances.contains_key(&record) {
+        if base_instances.contains_key(&record) {
             continue;
         }
 
@@ -414,11 +497,11 @@ async fn instantiate_form(
                 }
             }
 
-            depends.retain(|f| !instances.contains_key(f));
+            depends.retain(|f| !base_instances.contains_key(f));
 
             if !depends.is_empty() {
                 for depens_on_form in depends {
-                    if !instances.contains_key(&depens_on_form) {
+                    if !base_instances.contains_key(&depens_on_form) {
                         queue.push(depens_on_form);
                         dependencies
                             .entry(record.id)
@@ -441,7 +524,14 @@ async fn instantiate_form(
 
                 let layout = engine.get_class_layout(&script.name).unwrap();
 
-                let object = build_script_object(esp_loader, record.id, engine, script, instances);
+                let object = build_script_object(
+                    esp_loader,
+                    record.id,
+                    engine,
+                    script,
+                    instances,
+                    base_instances,
+                );
 
                 scripts.insert(
                     script.name.to_lowercase(),
@@ -544,7 +634,11 @@ async fn instantiate_form(
             },
         );
 
-        instances.insert(record.id, scripts);
+        let id = ScriptObjectId(instances.insert(scripts));
+        base_instances.insert(record.id, id);
+
+        // The root object will always be built last.
+        root_id = Some(id);
 
         if let Some(forms) = dependents.get_mut(&record.id) {
             for f in &*forms {
@@ -557,6 +651,8 @@ async fn instantiate_form(
             }
         }
     }
+
+    root_id
 }
 
 enum NativeObject {
@@ -605,10 +701,10 @@ impl Objects {
 #[derive(Clone, Debug)]
 pub enum Invocation {
     QuestInit {
-        quest: RecordId,
+        quest: ScriptObject,
     },
     QuestSetStage {
-        quest: RecordId,
+        quest: ScriptObject,
         stage: u16,
         item: u16,
     },
@@ -656,7 +752,8 @@ fn build_script_object(
     record: RecordId,
     engine: &Engine,
     script: &Script,
-    instances: &mut HashMap<RecordId, HashMap<String, ScriptInstance>>,
+    instances: &mut Slab<HashMap<String, ScriptInstance>>,
+    base_instances: &mut HashMap<RecordId, ScriptObjectId>,
 ) -> ObjectRef {
     let layout = engine.get_class_layout(&script.name).unwrap();
 
@@ -690,7 +787,8 @@ fn build_script_object(
                 } else {
                     let form = esp_loader.resolve_form(value.form, record).unwrap();
 
-                    let instance_scripts = instances.get(&form).unwrap();
+                    let instance_scripts =
+                        instances.get(base_instances.get(&form).unwrap().0).unwrap();
                     let instance = instance_scripts.get(&var.ty_name).unwrap();
 
                     builder.set(&script.name, &var.name, instance.object.addr());
@@ -701,11 +799,25 @@ fn build_script_object(
                 builder.set(&script.name, &var.name, string.addr());
             }
             Value::Struct(fields, _) => {
-                let object = build_struct(esp_loader, record, engine, fields, instances);
+                let object = build_struct(
+                    esp_loader,
+                    record,
+                    engine,
+                    fields,
+                    instances,
+                    base_instances,
+                );
                 builder.set(&script.name, &var.name, object.addr());
             }
             Value::Array(values, _) => {
-                let object = build_array(esp_loader, record, engine, values, instances);
+                let object = build_array(
+                    esp_loader,
+                    record,
+                    engine,
+                    values,
+                    instances,
+                    base_instances,
+                );
                 builder.set(&script.name, &var.name, object.addr());
             }
         }
@@ -719,7 +831,8 @@ fn build_struct(
     record: RecordId,
     engine: &Engine,
     fields: &[Property],
-    instances: &mut HashMap<RecordId, HashMap<String, ScriptInstance>>,
+    instances: &mut Slab<HashMap<String, ScriptInstance>>,
+    base_instances: &mut HashMap<RecordId, ScriptObjectId>,
 ) -> ObjectRef {
     let layout = build_struct_layout(fields);
     let mut builder = engine.object_pool().insert(layout.clone());
@@ -752,18 +865,33 @@ fn build_struct(
                     // TODO
                 } else {
                     let form = esp_loader.resolve_form(value.form, record).unwrap();
-                    let instance_scripts = instances.get(&form).unwrap();
+                    let instance_scripts =
+                        instances.get(base_instances.get(&form).unwrap().0).unwrap();
                     let instance = instance_scripts.get(&var.ty_name).unwrap();
 
                     builder.set("", &var.name, instance.object.addr());
                 }
             }
             Value::Struct(fields, _) => {
-                let object = build_struct(esp_loader, record, engine, fields, instances);
+                let object = build_struct(
+                    esp_loader,
+                    record,
+                    engine,
+                    fields,
+                    instances,
+                    base_instances,
+                );
                 builder.set("", &var.name, object.addr());
             }
             Value::Array(values, _) => {
-                let object = build_array(esp_loader, record, engine, values, instances);
+                let object = build_array(
+                    esp_loader,
+                    record,
+                    engine,
+                    values,
+                    instances,
+                    base_instances,
+                );
                 builder.set("", &var.name, object.addr());
             }
         }
@@ -777,7 +905,8 @@ fn build_array(
     record: RecordId,
     engine: &Engine,
     values: &[Value],
-    instances: &mut HashMap<RecordId, HashMap<String, ScriptInstance>>,
+    instances: &mut Slab<HashMap<String, ScriptInstance>>,
+    base_instances: &mut HashMap<RecordId, ScriptObjectId>,
 ) -> ObjectRef {
     if values.is_empty() {
         return engine.object_pool().insert(NULL_LAYOUT).finalize();
@@ -832,18 +961,33 @@ fn build_array(
                     // TODO
                 } else {
                     let form = esp_loader.resolve_form(value.form, record).unwrap();
-                    let instance_scripts = instances.get(&form).unwrap();
+                    let instance_scripts =
+                        instances.get(base_instances.get(&form).unwrap().0).unwrap();
                     // FIXME: Which script to choose here?
                     let (_, instance) = instance_scripts.iter().next().unwrap();
                     builder.set_at(index, "", "", instance.object.addr());
                 }
             }
             Value::Struct(fields, _) => {
-                let object = build_struct(esp_loader, record, engine, fields, instances);
+                let object = build_struct(
+                    esp_loader,
+                    record,
+                    engine,
+                    fields,
+                    instances,
+                    base_instances,
+                );
                 builder.set_at(index, "", "", object.addr());
             }
             Value::Array(values, _) => {
-                let object = build_array(esp_loader, record, engine, values, instances);
+                let object = build_array(
+                    esp_loader,
+                    record,
+                    engine,
+                    values,
+                    instances,
+                    base_instances,
+                );
                 builder.set_at(index, "", "", object.addr());
             }
         }

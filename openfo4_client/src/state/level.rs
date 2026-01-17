@@ -33,6 +33,7 @@ use crate::shared::SharedState;
 use crate::state::level::partial::PartialEntityFlags;
 use crate::state::level::record::SpawnEntity;
 use crate::state::terrain::TerrainManager;
+use crate::systems::scripting::{Executor, ScriptLoader};
 
 use super::esp::EspLoader;
 
@@ -61,6 +62,7 @@ impl Level {
         pool: Arc<TaskPool>,
         file_loader: Arc<FileLoader>,
         shared: Arc<SharedState>,
+        executor: &mut Executor,
     ) -> Self {
         let terrain_manager = TerrainManager::new(pool.clone(), shared.entities.clone());
 
@@ -76,6 +78,7 @@ impl Level {
             let shared = shared.clone();
             let file_loader = file_loader.clone();
             let state = state.clone();
+            let script_loader = executor.loader().clone();
 
             async move {
                 load_persistent(
@@ -86,6 +89,7 @@ impl Level {
                     &file_loader,
                     &shared,
                     &state,
+                    &script_loader,
                 )
                 .await;
             }
@@ -94,6 +98,7 @@ impl Level {
         pool.spawn({
             let events = events.clone();
             let pool = pool.clone();
+            let script_loader = executor.loader().clone();
 
             async move {
                 load_cells_task(
@@ -105,6 +110,7 @@ impl Level {
                     &pool,
                     &shared,
                     &state,
+                    &script_loader,
                 )
                 .await;
             }
@@ -265,6 +271,7 @@ async fn load_cells_task(
     pool: &Arc<TaskPool>,
     shared: &Arc<SharedState>,
     state: &Arc<LoaderState>,
+    script_loader: &Arc<ScriptLoader>,
 ) {
     while let Ok(req) = rx.recv().await {
         let is_interior = state.interiors.read().contains(&req.worldspace);
@@ -300,6 +307,7 @@ async fn load_cells_task(
             false,
             state,
             is_interior,
+            script_loader,
         )
         .await;
     }
@@ -314,6 +322,7 @@ async fn load_persistent(
     file_loader: &Arc<FileLoader>,
     shared: &Arc<SharedState>,
     state: &Arc<LoaderState>,
+    script_loader: &Arc<ScriptLoader>,
 ) {
     let mut worldspace_cells = HashSet::new();
 
@@ -345,6 +354,7 @@ async fn load_persistent(
                 true,
                 state,
                 false,
+                script_loader,
             )
             .await;
         }
@@ -369,6 +379,7 @@ async fn load_persistent(
             true,
             state,
             true,
+            script_loader,
         )
         .await;
     }
@@ -386,6 +397,7 @@ async fn load_cell(
     persistent_only: bool,
     state: &Arc<LoaderState>,
     is_interior: bool,
+    script_loader: &Arc<ScriptLoader>,
 ) {
     let cell = match loader.lookup(Some(RecordKind::Cell), cell_form).await {
         Ok(record) => match record.local.data {
@@ -444,6 +456,7 @@ async fn load_cell(
         let events = events.clone();
         let asset_loader = asset_loader.clone();
         let state = state.clone();
+        let script_loader = script_loader.clone();
 
         pool.spawn(async move {
             let ctx = LoadContext {
@@ -451,6 +464,7 @@ async fn load_cell(
                 loader: &asset_loader,
                 esp_loader: &loader,
                 file_loader: &file_loader,
+                script_loader: &script_loader,
                 shared: &shared,
             };
 
@@ -498,6 +512,7 @@ struct LoadContext<'a> {
     loader: &'a AssetLoader,
     esp_loader: &'a EspLoader,
     file_loader: &'a FileLoader,
+    script_loader: &'a ScriptLoader,
     shared: &'a SharedState,
 }
 

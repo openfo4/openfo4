@@ -16,10 +16,11 @@ use openfo4_esp::{FormId, RecordData, RecordKind};
 
 use crate::assets::nif_v2::{LoadNifFlags, NifKey, NifScene};
 use crate::components::WorldSpace;
-use crate::state::esp::EspLoader;
+use crate::state::esp::{EspLoader, GlobalRecord};
 use crate::state::hardcoded::DAMAGE_TYPE_PHYSICAL;
 use crate::systems::equipment::{Equipment, EquipmentKey, equip_item};
 use crate::systems::inventory::{AimProps, ItemData, ItemKind, WeaponItemData};
+use crate::systems::scripting::{ScriptLoader, ScriptObject};
 
 #[derive(Clone, Debug)]
 pub struct EquipmentItem {
@@ -35,6 +36,7 @@ pub struct EquipmentItem {
     pub data: ItemData,
     pub equipment_slots: HashSet<u32>,
     pub visibility_slots: HashSet<u32>,
+    pub script: Option<ScriptObject>,
 }
 
 #[derive(Clone, Debug)]
@@ -117,6 +119,7 @@ struct EquipmentProperties {
 
 pub async fn load_equipment_item(
     esp_loader: &EspLoader,
+    script_loader: &ScriptLoader,
     record: RecordId,
     attachments: &[RecordId],
 ) -> EquipmentItem {
@@ -445,6 +448,8 @@ pub async fn load_equipment_item(
         ItemKind::Ammo | ItemKind::Misc | ItemKind::Aid | ItemKind::Junk => ItemData::None,
     };
 
+    let script = load_item_script(record, script_loader).await;
+
     EquipmentItem {
         resistances: combined_props.resistances,
         base_keywords: base_props.keywords,
@@ -456,6 +461,7 @@ pub async fn load_equipment_item(
         name,
         equipment_slots,
         visibility_slots,
+        script,
     }
 }
 
@@ -643,4 +649,9 @@ fn extract_biped_object_flags(slots: BipedObjectFlags, dst: &mut HashSet<u32>) {
             dst.insert(bit);
         }
     }
+}
+
+async fn load_item_script(record: RecordId, loader: &ScriptLoader) -> Option<ScriptObject> {
+    let base_object = loader.load(record).await?;
+    Some(loader.clone_object(&base_object))
 }

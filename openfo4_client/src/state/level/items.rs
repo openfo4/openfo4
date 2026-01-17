@@ -6,12 +6,14 @@ use crate::state::equipment::load_equipment_item;
 use crate::state::esp::EspLoader;
 use crate::state::level::leveled_list::select_from_leveled_list;
 use crate::systems::inventory::{ItemData, ItemKind, ItemStack};
+use crate::systems::scripting::{ScriptLoader, ScriptObject};
 
 // FIXME: Unhardcode this guy.
 const PLAYER_LEVEL: u16 = 1000;
 
 pub async fn resolve_item(
     esp_loader: &EspLoader,
+    script_loader: &ScriptLoader,
     record_id: RecordId,
     count: u64,
 ) -> Vec<ItemStack> {
@@ -40,6 +42,8 @@ pub async fn resolve_item(
                     .map(|form| esp_loader.resolve_form(*form, parent_rid).unwrap())
                     .collect();
 
+                let script = load_item_script(record.id, script_loader).await;
+
                 items.push(ItemStack {
                     item: parent_rid,
                     name: data.id.as_str().unwrap().to_owned(),
@@ -55,11 +59,14 @@ pub async fn resolve_item(
                     equipment_slots: HashSet::new(),
                     visibility_slots: HashSet::new(),
                     visible: true,
+                    script,
                 });
             }
             RecordData::Weapon(_) | RecordData::Armor(_) => {
                 // FIXME: Merge this function into this file.
-                let item = load_equipment_item(esp_loader, parent_rid, &[]).await;
+                let item = load_equipment_item(esp_loader, script_loader, parent_rid, &[]).await;
+
+                let script = load_item_script(record.id, script_loader).await;
 
                 items.push(ItemStack {
                     item: parent_rid,
@@ -76,6 +83,7 @@ pub async fn resolve_item(
                     equipment_slots: item.equipment_slots,
                     visibility_slots: item.visibility_slots,
                     visible: true,
+                    script,
                 });
             }
             RecordData::Ammo(data) => {
@@ -85,6 +93,8 @@ pub async fn resolve_item(
                     .flatten()
                     .map(|form| esp_loader.resolve_form(*form, parent_rid).unwrap())
                     .collect();
+
+                let script = load_item_script(record.id, script_loader).await;
 
                 items.push(ItemStack {
                     item: parent_rid,
@@ -101,6 +111,7 @@ pub async fn resolve_item(
                     equipment_slots: HashSet::new(),
                     visibility_slots: HashSet::new(),
                     visible: true,
+                    script,
                 });
             }
             RecordData::Ingestible(data) => {
@@ -110,6 +121,8 @@ pub async fn resolve_item(
                     .flatten()
                     .map(|form| esp_loader.resolve_form(*form, parent_rid).unwrap())
                     .collect();
+
+                let script = load_item_script(record.id, script_loader).await;
 
                 items.push(ItemStack {
                     item: parent_rid,
@@ -126,6 +139,7 @@ pub async fn resolve_item(
                     equipment_slots: HashSet::new(),
                     visibility_slots: HashSet::new(),
                     visible: true,
+                    script,
                 });
             }
             RecordData::Key(data) => {
@@ -136,30 +150,7 @@ pub async fn resolve_item(
                     .map(|form| esp_loader.resolve_form(*form, parent_rid).unwrap())
                     .collect();
 
-                items.push(ItemStack {
-                    item: parent_rid,
-                    name: data.id.as_str().unwrap().to_string(),
-                    hidden: false,
-                    kind: ItemKind::Misc,
-                    count,
-                    attachments: Vec::new(),
-                    equipped: false,
-                    base_keywords: keywords.clone(),
-                    combined_keywords: keywords,
-                    data: ItemData::None,
-                    equipment_keys: Vec::new(),
-                    equipment_slots: HashSet::new(),
-                    visibility_slots: HashSet::new(),
-                    visible: true,
-                });
-            }
-            RecordData::Book(data) => {
-                let keywords: HashSet<RecordId> = data
-                    .keywords
-                    .iter()
-                    .flatten()
-                    .map(|form| esp_loader.resolve_form(*form, parent_rid).unwrap())
-                    .collect();
+                let script = load_item_script(record.id, script_loader).await;
 
                 items.push(ItemStack {
                     item: parent_rid,
@@ -176,9 +167,40 @@ pub async fn resolve_item(
                     equipment_slots: HashSet::new(),
                     visibility_slots: HashSet::new(),
                     visible: true,
+                    script,
+                });
+            }
+            RecordData::Book(data) => {
+                let keywords: HashSet<RecordId> = data
+                    .keywords
+                    .iter()
+                    .flatten()
+                    .map(|form| esp_loader.resolve_form(*form, parent_rid).unwrap())
+                    .collect();
+
+                let script = load_item_script(record.id, script_loader).await;
+
+                items.push(ItemStack {
+                    item: parent_rid,
+                    name: data.id.as_str().unwrap().to_string(),
+                    hidden: false,
+                    kind: ItemKind::Misc,
+                    count,
+                    attachments: Vec::new(),
+                    equipped: false,
+                    base_keywords: keywords.clone(),
+                    combined_keywords: keywords,
+                    data: ItemData::None,
+                    equipment_keys: Vec::new(),
+                    equipment_slots: HashSet::new(),
+                    visibility_slots: HashSet::new(),
+                    visible: true,
+                    script,
                 });
             }
             RecordData::Component(data) => {
+                let script = load_item_script(record.id, script_loader).await;
+
                 items.push(ItemStack {
                     item: parent_rid,
                     name: data.id.as_str().unwrap().to_string(),
@@ -194,9 +216,12 @@ pub async fn resolve_item(
                     equipment_slots: HashSet::new(),
                     visibility_slots: HashSet::new(),
                     visible: true,
+                    script,
                 });
             }
             RecordData::Note(data) => {
+                let script = load_item_script(record.id, script_loader).await;
+
                 items.push(ItemStack {
                     item: parent_rid,
                     name: data.id.as_str().unwrap().to_string(),
@@ -212,6 +237,7 @@ pub async fn resolve_item(
                     equipment_slots: HashSet::new(),
                     visibility_slots: HashSet::new(),
                     visible: true,
+                    script,
                 });
             }
             x => todo!("{:?}", x),
@@ -219,4 +245,9 @@ pub async fn resolve_item(
     }
 
     items
+}
+
+async fn load_item_script(record: RecordId, loader: &ScriptLoader) -> Option<ScriptObject> {
+    let base_object = loader.load(record).await?;
+    Some(loader.clone_object(&base_object))
 }

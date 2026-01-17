@@ -289,7 +289,13 @@ impl SpawnEntity {
                 for item in &data.items {
                     let item_id = ctx.esp_loader.resolve_form(item.item, base.id).unwrap();
 
-                    let items = resolve_item(ctx.esp_loader, item_id, item.count.into()).await;
+                    let items = resolve_item(
+                        ctx.esp_loader,
+                        ctx.script_loader,
+                        item_id,
+                        item.count.into(),
+                    )
+                    .await;
                     for item in items {
                         inv.insert(item);
                     }
@@ -437,7 +443,11 @@ async fn load_item(ctx: &LoadContext<'_>, record: &GlobalRecord) -> Option<ItemS
     };
 
     if is_item {
-        Some(resolve_item(ctx.esp_loader, record.id, 1).await.remove(0))
+        Some(
+            resolve_item(ctx.esp_loader, ctx.script_loader, record.id, 1)
+                .await
+                .remove(0),
+        )
     } else {
         None
     }

@@ -13,7 +13,7 @@ use openfo4_asset::{AssetLoader, Handle};
 use openfo4_core::WorldExt;
 use openfo4_core::events::EventBus;
 use openfo4_core::hierarchy::Children;
-use openfo4_core::record::RecordId;
+use openfo4_core::record::{ModuleId, RecordId};
 use openfo4_esp::FormId;
 use openfo4_esp::records::Race;
 use openfo4_hkx::behavior::VariableType;

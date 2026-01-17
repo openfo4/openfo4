@@ -20,6 +20,7 @@ use crate::state::esp::EspLoader;
 use crate::state::hardcoded::KEYWORD_FEMALE;
 use crate::state::npc::ActorKeywords;
 use crate::systems::equipment::{EquipmentKey, unequip_item};
+use crate::systems::scripting::{Executor, ScriptObject};
 use crate::systems::{PickupItemEvent, TransferItemEvent};
 
 /// Unique identifier for an item inside a container.
@@ -108,6 +109,7 @@ pub struct ItemStack {
     pub equipment_slots: HashSet<u32>,
     pub visibility_slots: HashSet<u32>,
     pub visible: bool,
+    pub script: Option<ScriptObject>,
 }
 
 impl ItemStack {
@@ -118,6 +120,8 @@ impl ItemStack {
             && self.attachments == other.attachments
             && self.base_keywords == other.base_keywords
             && self.combined_keywords == other.combined_keywords
+            && self.script.is_none()
+            && other.script.is_none()
     }
 
     fn merge(&mut self, other: &Self) -> bool {
@@ -234,7 +238,12 @@ impl InventorySystem {
         }
     }
 
-    pub fn handle_inventory_events(&mut self, world: &mut World, events: &mut EventBus) {
+    pub fn handle_inventory_events(
+        &mut self,
+        world: &mut World,
+        events: &mut EventBus,
+        executor: &mut Executor,
+    ) {
         let _span = trace_span!("handle_inventory_events").entered();
 
         // Before we transfer anything we must first unequip it.
@@ -254,6 +263,7 @@ impl InventorySystem {
 
             let item = futures_lite::future::block_on(load_equipment_item(
                 &self.esp_loader,
+                executor.loader(),
                 event.item,
                 &event.attachments,
             ));
@@ -273,6 +283,7 @@ impl InventorySystem {
                 equipment_slots: item.equipment_slots,
                 visibility_slots: item.visibility_slots,
                 visible: true,
+                script: item.script,
             });
         }
 

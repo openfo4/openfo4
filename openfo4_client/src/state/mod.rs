@@ -173,22 +173,23 @@ impl GameState {
 
         let animation = AnimationSystem::new(&loader);
 
+        let mut executor = futures_lite::future::block_on(Executor::new(
+            loader.clone(),
+            file_loader.clone(),
+            pool.clone(),
+        ));
+
         let level = Level::new(
             loader.clone(),
             asset_loader.clone(),
             pool.clone(),
             file_loader.clone(),
             shared.clone(),
+            &mut executor,
         );
 
         let mut world = World::new();
         init_time(&mut world);
-
-        let mut executor = futures_lite::future::block_on(Executor::new(
-            loader.clone(),
-            file_loader.clone(),
-            pool.clone(),
-        ));
 
         let quests = QuestManager::new(&loader, &mut executor);
 
@@ -308,8 +309,11 @@ impl GameState {
 
         systems::lights::update_flickering_lights(&mut self.world, time.delta());
 
-        self.inventory
-            .handle_inventory_events(&mut self.world, &mut self.event_bus);
+        self.inventory.handle_inventory_events(
+            &mut self.world,
+            &mut self.event_bus,
+            &mut self.executor,
+        );
         update_actor_animation_graphs(&mut self.world, &self.asset_loader, &self.pool);
 
         handle_weapon_reload_requests(&mut self.world, &self.actions, &self.event_bus);
