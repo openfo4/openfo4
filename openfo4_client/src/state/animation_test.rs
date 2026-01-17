@@ -290,7 +290,7 @@ pub async fn load_character(
             .ok_or(Error::NoHkxProject)?;
     };
 
-    let nif_skeleton = nif_skeleton.0.path.as_str().unwrap();
+    let nif_skeleton = nif_skeleton.0.path.as_ref().unwrap().as_str().unwrap();
     let hkx_project = hkx_project
         .0
         .model

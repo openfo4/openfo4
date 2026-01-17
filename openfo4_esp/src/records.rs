@@ -570,7 +570,7 @@ pub struct Race {
     pub full_name: Option<LString>,
     /// The description of the record.
     #[record("DESC")]
-    pub description: Option<LString>,
+    pub description: Option<ZString>,
     #[record("SPCT")]
     _effects_len: Option<u32>,
     #[record("SPLO")]
@@ -880,9 +880,9 @@ pub enum RaceDataSize {
 #[derive(Clone, Debug, Record)]
 pub struct RaceSkeletalModel {
     #[record("ANAM")]
-    pub path: ZString,
+    pub path: Option<ZString>,
     #[record("MODT")]
-    pub info: ModelInfo,
+    pub info: Option<ModelInfo>,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, BinaryStruct)]
@@ -1214,7 +1214,7 @@ pub struct MagicEffect {
     #[record("SNDD")]
     pub sounds: Option<()>,
     #[record("DNAM")]
-    pub magic_item_description: Option<LString>,
+    pub magic_item_description: Option<ZString>,
     #[record("CTDA")]
     pub conditions: SubRecordArray<Condition>,
 }
@@ -1341,7 +1341,7 @@ pub struct SPEL {
     #[record("ETYP")]
     pub etyp: FormId,
     #[record("DESC")]
-    pub desc: LString,
+    pub desc: Option<ZString>,
     #[record("SPIT")]
     pub spit: SpellItem,
     // TODO
@@ -1493,7 +1493,7 @@ pub struct Armor {
     #[record("KWDA")]
     pub keywords: Option<Array<FormId>>,
     #[record("DESC")]
-    pub description: Option<LString>,
+    pub description: Option<ZString>,
     #[record("INRD")]
     pub instance_naming: Option<FormId>,
     #[record("INDX")]
@@ -3167,7 +3167,7 @@ pub struct Ingestible {
     #[record("ENIT")]
     pub effect_data: EffectData,
     #[record("DNAM")]
-    pub addiction_name: Option<LString>,
+    pub addiction_name: Option<ZString>,
     //effects
 }
 
@@ -5485,7 +5485,7 @@ pub struct ObjectModification {
     #[record("FULL")]
     pub full_name: Option<LString>,
     #[record("DESC")]
-    pub description: Option<LString>,
+    pub description: Option<ZString>,
     #[record("MODL")]
     pub model: Model,
     #[record("DATA")]
