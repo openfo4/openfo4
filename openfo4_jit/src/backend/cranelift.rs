@@ -746,6 +746,9 @@ struct HostFunctionDefinition {
     ptr: *const u8,
 }
 
+unsafe impl Send for HostFunctionDefinition {}
+unsafe impl Sync for HostFunctionDefinition {}
+
 #[derive(Clone, Debug)]
 struct GuestFunctionDefinition {
     instructions: Vec<Instruction>,
@@ -789,6 +792,11 @@ impl CompiledFunction {
 impl Drop for CompiledFunction {
     fn drop(&mut self) {}
 }
+
+// SAFETY: We carry a function pointer which is always read-only
+// and can be called from any thread.
+unsafe impl Send for CompiledFunction {}
+unsafe impl Sync for CompiledFunction {}
 
 #[derive(Clone, Debug, Default)]
 struct NativeFunctions(Arc<Mutex<HashMap<String, *const u8>>>);

@@ -46,3 +46,7 @@ impl Drop for ConstantData {
         }
     }
 }
+
+// SAFETY: ConstantData represents an opaque block bytes that is read-only.
+unsafe impl Send for ConstantData {}
+unsafe impl Sync for ConstantData {}

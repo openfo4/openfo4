@@ -268,7 +268,7 @@ pub struct HostState {
 
 #[derive(Default)]
 pub struct CallTable {
-    functions: Vec<Box<dyn Fn(*const RawContext, *mut RawVal)>>,
+    functions: Vec<Box<dyn Fn(*const RawContext, *mut RawVal) + Send + Sync>>,
 }
 
 impl CallTable {

@@ -117,6 +117,36 @@ impl ObjectPool {
         }
     }
 
+    /// Clones an object.
+    ///
+    /// # Safety
+    ///
+    /// No thread must currently access the given object referenced by the [`ObjectRef`].
+    pub unsafe fn clone_object(&self, object: &ObjectRef) -> ObjectBuilder {
+        let layout = {
+            let objects = self.objects.lock().unwrap();
+
+            let object = objects.get(&object.addr()).unwrap();
+            object.layout.clone()
+        };
+
+        let mut builder = self.insert(layout);
+
+        let mut objects = self.objects.lock().unwrap();
+        let object = objects.get_mut(&object.addr()).unwrap();
+
+        unsafe {
+            let src = object.as_ptr().cast_const();
+            let dst = builder.obj.as_ptr();
+            let count = object.size();
+            debug_assert_eq!(object.size(), builder.obj.size());
+
+            core::ptr::copy_nonoverlapping(src, dst, count);
+        }
+
+        builder
+    }
+
     // pub fn get(&self, addr: ObjectAddr) -> Option<&Object> {
     //     self.objects.get(&addr)
     // }
@@ -205,7 +235,14 @@ impl Object {
     pub fn as_ptr(&mut self) -> *mut u8 {
         self.memory
     }
+
+    pub fn size(&mut self) -> usize {
+        self.layout.size()
+    }
 }
+
+unsafe impl Send for Object {}
+unsafe impl Sync for Object {}
 
 #[derive(Debug)]
 pub struct ObjectBuilder {

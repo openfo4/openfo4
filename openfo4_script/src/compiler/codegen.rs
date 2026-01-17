@@ -146,7 +146,10 @@ impl CodegenPass {
     }
 
     pub fn define_native_function(&mut self, class: &str, function: &str, func: NativeFunction) {
-        let func_def = self.data.get_function_mut(class, function).unwrap();
+        let Some(func_def) = self.data.get_function_mut(class, function) else {
+            panic!("unknown native function: {class}.{function}");
+        };
+
         func_def.native = Some(func);
     }
 

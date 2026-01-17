@@ -68,6 +68,11 @@ pub struct NativeFunction {
     pub signature: Signature,
 }
 
+// SAFETY: We carry a function pointer which is always read-only
+// and can be called from any thread.
+unsafe impl Send for NativeFunction {}
+unsafe impl Sync for NativeFunction {}
+
 #[derive(Clone, Debug)]
 pub struct CompilationResult {
     pub function: CompiledFunction,
