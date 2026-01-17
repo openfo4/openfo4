@@ -191,8 +191,15 @@ impl EspLoader {
 
         let index = self.plugins[id.module.0.get() as usize];
         let file = &self.files[index as usize];
+        let Some(index) = file.dependencies.iter().position(|v| *v == id.module) else {
+            return Err(Error::EndOfFile);
+        };
 
-        let record = file.file.lookup(kind, id.form).await?;
+        // The plugin index refering to the file itself is the index
+        // after all dependencies.
+        let form = FormId::new(index as u8, id.form.form());
+
+        let record = file.file.lookup(kind, form).await?;
         self.cache.write().await.insert(
             id,
             GlobalRecord {
