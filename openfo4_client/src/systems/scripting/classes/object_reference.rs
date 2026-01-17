@@ -299,6 +299,38 @@ pub fn restore_value(
     todo!()
 }
 
+/// `Say`
+///
+/// ```text
+/// Function Say(Topic akTopicToSay, Actor akActorToSpeakAs = None, bool abSpeakInPlayersHead = false, ObjectReference akTarget = None) native
+/// ```
+pub fn say(
+    caller: Caller<'_, State>,
+    object: Object,
+    topic: Object,
+    actor: Object,
+    speak_in_players_head: bool,
+    target: Object,
+) -> Result<(), Exception> {
+    todo!()
+}
+
+/// `SayCustom`
+///
+/// ```text
+/// Function SayCustom(Keyword akKeywordToSay, Actor akActorToSpeakAs = None, bool abSpeakInPlayersHead = false, ObjectReference akTarget = None) native
+/// ```
+pub fn say_custom(
+    caller: Caller<'_, State>,
+    object: Object,
+    keyword: Object,
+    actor: Object,
+    spean_in_players_head: bool,
+    target: Object,
+) -> Result<(), Exception> {
+    todo!()
+}
+
 /// `SetActorOwner`
 ///
 /// ```text

@@ -1,3 +1,4 @@
+mod f4se;
 mod mcm;
 
 mod active_magic_effect;
@@ -82,6 +83,8 @@ pub fn register_builtins(engine: &mut Engine) {
     engine.register_native_function("ObjectReference", "IsOwnedBy", object_reference::is_owned_by);
     engine.register_native_function("ObjectReference", "RemoveItem", object_reference::remove_item);
     engine.register_native_function("ObjectReference", "RestoreValue", object_reference::restore_value);
+    engine.register_native_function("ObjectReference", "Say", object_reference::say);
+    engine.register_native_function("ObjectReference", "SayCustom", object_reference::say_custom);
 
     engine.register_native_function("Game", "AddAchievement", game::add_achievement);
     engine.register_native_function("Game", "GetAggressionAV", game::get_agression_av);
@@ -122,8 +125,10 @@ pub fn register_builtins(engine: &mut Engine) {
     engine.register_native_function("ScriptObject", "RegisterForPlayerWait", script_object::register_for_player_wait);
     engine.register_native_function("ScriptObject", "RegisterForRemoteEvent", script_object::register_for_remote_event);
     engine.register_native_function("ScriptObject", "RegisterForTrackedStatsEvent", script_object::register_for_tracked_stats_event);
+    engine.register_native_function("ScriptObject", "SendCustomEvent", script_object::send_custom_event);
     engine.register_native_function("ScriptObject", "StartTimer", script_object::start_timer);
     engine.register_native_function("ScriptObject", "StartTimerGameTime", script_object::start_timer_game_time);
+    engine.register_native_function("ScriptObject", "UnregisterForAnimationEvent", script_object::unregister_for_animation_event);
     engine.register_native_function("ScriptObject", "UnregisterForDistanceEvents", script_object::unregister_for_distance_events);
     engine.register_native_function("ScriptObject", "UnregisterForLOS", script_object::unregister_for_los);
     engine.register_native_function("ScriptObject", "UnregisterForRemoteEvent", script_object::unregister_for_remote_event);
@@ -224,6 +229,25 @@ pub fn register_builtins(engine: &mut Engine) {
     engine.register_native_function("Actor", "IsFlying", actor::is_flying);
     engine.register_native_function("Actor", "IsGhost", actor::is_ghost);
     engine.register_native_function("Actor", "IsGuard", actor::is_guard);
+    engine.register_native_function("Actor", "IsHostileToActor", actor::is_hostile_to_actor);
+    engine.register_native_function("Actor", "IsInCombat", actor::is_in_combat);
+    engine.register_native_function("Actor", "IsInFaction", actor::is_in_faction);
+    engine.register_native_function("Actor", "IsInIronSights", actor::is_in_iron_sights);
+    engine.register_native_function("Actor", "IsInKillMove", actor::is_in_kill_move);
+    engine.register_native_function("Actor", "IsInScene", actor::is_in_scene);
+    engine.register_native_function("Actor", "IsIntimidated", actor::is_intimidated);
+    engine.register_native_function("Actor", "IsOnMount", actor::is_on_mount);
+    engine.register_native_function("Actor", "IsOverEncumbered", actor::is_over_encumbered);
+    engine.register_native_function("Actor", "IsPlayersLastRiddenHorse", actor::is_players_last_ridden_horse);
+    engine.register_native_function("Actor", "IsPlayerTeammate", actor::is_player_teammate);
+    engine.register_native_function("Actor", "IsRunning", actor::is_running);
+    engine.register_native_function("Actor", "IsSeatOccupied", actor::is_seat_occupied);
+    engine.register_native_function("Actor", "IsSneaking", actor::is_sneaking);
+    engine.register_native_function("Actor", "IsSprinting", actor::is_sprinting);
+    engine.register_native_function("Actor", "IsTalking", actor::is_talking);
+    engine.register_native_function("Actor", "IsTrespassing", actor::is_trespassing);
+    engine.register_native_function("Actor", "IsUnconscious", actor::is_unconscious);
+    engine.register_native_function("Actor", "IsWeaponDrawn", actor::is_weapon_drawn);
     engine.register_native_function("Actor", "RemovePerk", actor::remove_perk);
     engine.register_native_function("Actor", "SetNoBleedoutRecovery", actor::set_no_bleedout_recovery);
     engine.register_native_function("Actor", "UnequipItem", actor::unequip_item);
@@ -303,6 +327,7 @@ pub fn register_builtins(engine: &mut Engine) {
     engine.register_native_function("Quest", "stop", quest::stop);
     engine.register_native_function("Quest", "UpdateCurrentInstanceGlobal", quest::update_current_instance_global);
 
+    f4se::register(engine);
     mcm::register(engine);
 }
 

@@ -253,6 +253,33 @@ pub fn register_for_tracked_stats_event(
     todo!()
 }
 
+/// `SendCustomEvent`
+///
+/// ```text
+/// Function SendCustomEvent(CustomEventName asEvent, Var[] akArgs = None) native
+/// ```
+pub fn send_custom_event(
+    caller: Caller<'_, State>,
+    event_name: isize,
+    args: isize,
+) -> Result<(), Exception> {
+    todo!()
+}
+
+/// `UnregisterForAnimationEvent`
+///
+/// ```text
+/// Function UnregisterForAnimationEvent(ObjectReference akSender, string asEventName) native
+/// ```
+pub fn unregister_for_animation_event(
+    caller: Caller<'_, State>,
+    object1: Object,
+    sender: Object,
+    event_name: isize,
+) -> Result<(), Exception> {
+    todo!()
+}
+
 /// `UnregisterForDistanceEvents`
 ///
 /// ```text

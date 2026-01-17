@@ -936,6 +936,192 @@ pub fn is_guard(caller: Caller<'_, State>, self_ptr: Object) -> Result<Bool, Exc
     todo!()
 }
 
+/// `IsHostileToActor`
+///
+/// ```text
+/// bool Function IsHostileToActor(Actor akActor) native
+/// ```
+pub fn is_hostile_to_actor(
+    caller: Caller<'_, State>,
+    self_ptr: Object,
+    actor: Object,
+) -> Result<bool, Exception> {
+    todo!()
+}
+
+/// `IsInCombat`
+///
+/// ```text
+/// bool Function IsInCombat() native
+/// ```
+pub fn is_in_combat(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Exception> {
+    todo!()
+}
+
+/// `IsInFaction`
+///
+/// ```text
+/// bool Function IsInFaction(Faction akFaction) native
+/// ```
+pub fn is_in_faction(
+    caller: Caller<'_, State>,
+    self_ptr: Object,
+    faction: Object,
+) -> Result<bool, Exception> {
+    todo!()
+}
+
+/// `IsInIronSights`
+///
+/// ```text
+/// bool Function IsInIronSights() native
+/// ```
+pub fn is_in_iron_sights(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Exception> {
+    todo!()
+}
+
+/// `IsInKillMove`
+///
+/// ```text
+/// bool Function IsInKillMove() native
+/// ```
+pub fn is_in_kill_move(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Exception> {
+    todo!()
+}
+
+/// `IsInScene`
+///
+/// ```text
+/// bool Function IsInScene() native
+/// ```
+pub fn is_in_scene(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Exception> {
+    todo!()
+}
+
+/// `IsIntimidated`
+///
+/// ```text
+/// bool Function IsIntimidated() native
+/// ```
+pub fn is_intimidated(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Exception> {
+    todo!()
+}
+
+/// `IsOnMount`
+///
+/// ```text
+/// bool Function IsOnMount() native
+/// ```
+pub fn is_on_mount(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Exception> {
+    todo!()
+}
+
+/// `IsOverEncumbered`
+///
+/// ```text
+/// bool Function IsOverEncumbered() native
+/// ```
+pub fn is_over_encumbered(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Exception> {
+    todo!()
+}
+
+/// `IsPlayersLastRiddenHorse`
+///
+/// ```text
+/// bool Function IsPlayersLastRiddenHorse() native
+/// ```
+pub fn is_players_last_ridden_horse(
+    caller: Caller<'_, State>,
+    self_ptr: Object,
+) -> Result<bool, Exception> {
+    todo!()
+}
+
+/// `IsPlayerTeammate`
+///
+/// ```text
+/// bool Function IsPlayerTeammate() native
+/// ```
+pub fn is_player_teammate(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Exception> {
+    todo!()
+}
+
+/// `IsRunning`
+///
+/// ```text
+/// bool Function IsRunning() native
+/// ```
+pub fn is_running(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Exception> {
+    todo!()
+}
+
+/// `IsSeatOccupied`
+///
+/// ```text
+/// bool Function IsSeatOccupied(keyword apKeyword) native
+/// ```
+pub fn is_seat_occupied(
+    caller: Caller<'_, State>,
+    self_ptr: Object,
+    keyword: Object,
+) -> Result<bool, Exception> {
+    todo!()
+}
+
+/// `IsSneaking`
+///
+/// ```text
+/// bool Function IsSneaking() native
+/// ```
+pub fn is_sneaking(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Exception> {
+    todo!()
+}
+
+/// `IsSprinting`
+///
+/// ```text
+/// bool Function IsSprinting() native
+/// ```
+pub fn is_sprinting(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Exception> {
+    todo!()
+}
+
+/// `IsTalking`
+///
+/// ```text
+/// bool Function IsTalking() native
+/// ```
+pub fn is_talking(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Exception> {
+    todo!()
+}
+
+/// `IsTrespassing`
+///
+/// ```text
+/// bool Function IsTrespassing() native
+/// ```
+pub fn is_trespassing(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Exception> {
+    todo!()
+}
+
+/// `IsUnconscious`
+///
+/// ```text
+/// bool Function IsUnconscious() native
+/// ```
+pub fn is_unconscious(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Exception> {
+    todo!()
+}
+
+/// `IsWeaponDrawn`
+///
+/// ```text
+/// bool Function IsWeaponDrawn() native
+/// ```
+pub fn is_weapon_drawn(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Exception> {
+    todo!()
+}
+
 /// `RemovePerk`
 ///
 /// ```text
