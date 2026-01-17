@@ -241,7 +241,13 @@ impl EspLoader {
             };
 
             let form = FormId::new(index as u8, id.form.form());
-            let local_records = file.file.children(kind, form).await?;
+            let local_records = match file.file.children(kind, form).await {
+                Ok(v) => v,
+                // EOF means the file does not contain the record to query
+                // children of.
+                Err(Error::EndOfFile) => continue,
+                Err(err) => return Err(err),
+            };
 
             records.reserve(local_records.len());
 
