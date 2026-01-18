@@ -379,7 +379,15 @@ impl CodegenPass {
         let function = &self.data.functions[func_id.0];
         let current_class = self.data.classes.get(&function.class).unwrap();
 
-        tracing::debug!("compiling {}.{}", &function.class, &function.function.name);
+        if function.function.is_native {
+            tracing::debug!(
+                "compiling {}.{} (native)",
+                &function.class,
+                &function.function.name
+            );
+        } else {
+            tracing::debug!("compiling {}.{}", &function.class, &function.function.name);
+        }
 
         println!(
             "{}.{}:\n{}",
@@ -575,8 +583,17 @@ fn find_function_callees(data: &CodegenData, function: &FunctionDef) -> Vec<Func
             }
         }
 
-        if let Some(ty) = current_class.fields.get(&var_name.to_lowercase()) {
-            return ty.to_lowercase();
+        let mut class = data.get_class(&class).unwrap();
+        loop {
+            if let Some(ty) = class.fields.get(&var_name.to_lowercase()) {
+                return ty.to_lowercase();
+            }
+
+            if let Some(parent) = &class.parent {
+                class = data.get_class(&parent).unwrap();
+            } else {
+                break;
+            }
         }
 
         todo!()

@@ -384,8 +384,10 @@ impl ValidationPass {
                 // into anything.
                 (Type::Var, _) => return true,
                 (_, Type::Var) => return true,
-                _ => {
-                    todo!();
+                // Creating a null pointer.
+                (Type::None, Type::Class(_) | Type::Array(_) | Type::String) => return true,
+                (src, dst) => {
+                    todo!("{:?} {:?}", src, dst);
                 }
             }
         }

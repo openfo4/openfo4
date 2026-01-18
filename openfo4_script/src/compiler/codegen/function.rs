@@ -194,6 +194,7 @@ fn translate_function_body(
         self_ty: class.name.to_lowercase(),
         constants,
         layouts,
+        class_name: &class.name,
     };
 
     let start_block = translator.builder.create_block(&[]);
@@ -499,33 +500,12 @@ fn translate_function_body(
                     .brif(condition, then_block, &[], else_block, &[]);
             }
             Instruction::CallMethod(op) => {
-                let Value::Ident(object) = &op.object else {
-                    unreachable!();
-                };
-
                 let function_name = match &op.function_name {
                     Value::Ident(v) => v,
                     _ => unreachable!(),
                 };
 
-                let find_var = |var_name: &str| -> String {
-                    match &*var_name.to_lowercase() {
-                        "self" => return class.name.clone(),
-                        _ => (),
-                    }
-
-                    if let Some(local) = translator.locals.get(&var_name.to_lowercase()) {
-                        return local.ty_name.clone();
-                    }
-
-                    if let Some(ty) = class.fields.get(&var_name.to_lowercase()) {
-                        return ty.to_lowercase();
-                    }
-
-                    todo!()
-                };
-
-                let class_name = find_var(&object);
+                let class_name = translator.get_ty_name(&op.object);
 
                 let func = data.get_function(&class_name, &function_name).unwrap();
 
@@ -922,7 +902,8 @@ fn translate_function_body(
                                 .builder
                                 .icmp(value, searched_value, IntCompareOp::Equal)
                         }
-                        _ => unreachable!(),
+
+                        ty => todo!("{:?}", ty),
                     };
 
                     let next_index = translator.builder.iadd_imm(index, 1);
@@ -993,6 +974,7 @@ pub struct FunctionTranslator<'a> {
     self_ty: String,
     constants: &'a mut Vec<ConstantData>,
     layouts: &'a mut Vec<Box<TypeLayout>>,
+    class_name: &'a str,
 }
 
 impl<'a> FunctionTranslator<'a> {
@@ -1033,14 +1015,21 @@ impl<'a> FunctionTranslator<'a> {
             return self.builder.get_var(local.variable);
         }
 
-        if let Some(field) = self.fields.get(&name.to_lowercase()) {
-            let class = self.data.get_class(&self.self_ty).unwrap();
-            let layout = class.layout.as_ref().unwrap();
+        let mut class = self.data.get_class(self.class_name).unwrap();
+        loop {
+            if let Some(field_ty) = class.fields.get(&name.to_lowercase()) {
+                let ty = self.data.resolve_ty_jit(&field_ty);
+                let layout = class.layout.as_ref().unwrap();
 
-            let offset = layout.offset(&name).unwrap();
-            return self
-                .builder
-                .load(field.ty, self.self_ptr.unwrap(), offset as u32);
+                let offset = layout.offset(&name).unwrap();
+                return self.builder.load(ty, self.self_ptr.unwrap(), offset as u32);
+            }
+
+            if let Some(parent) = &class.parent {
+                class = self.data.get_class(&parent).unwrap();
+            } else {
+                break;
+            }
         }
 
         panic!("undefined variable {}", name);
@@ -1071,45 +1060,29 @@ impl<'a> FunctionTranslator<'a> {
             return;
         }
 
-        if let Some(_) = self.fields.get(&name.to_lowercase()) {
-            let class = self.data.get_class(&self.self_ty).unwrap();
-            let layout = class.layout.as_ref().unwrap();
+        let mut class = self.data.get_class(self.class_name).unwrap();
+        loop {
+            if let Some(_) = class.fields.get(&name.to_lowercase()) {
+                let layout = class.layout.as_ref().unwrap();
 
-            let offset = layout.offset(&name).unwrap();
-            self.builder
-                .store(value, self.self_ptr.unwrap(), offset as u32);
+                let offset = layout.offset(&name).unwrap();
+                self.builder
+                    .store(value, self.self_ptr.unwrap(), offset as u32);
+                return;
+            }
 
-            return;
+            if let Some(parent) = &class.parent {
+                class = self.data.get_class(&parent).unwrap();
+            } else {
+                break;
+            }
         }
 
         panic!("undefiend variable {}", name);
     }
 
     pub fn get_type(&self, value: &Value) -> Type {
-        match value {
-            Value::Null => Type::None,
-            Value::Bool(_) => Type::Bool,
-            Value::Int(_) => Type::Int,
-            Value::Float(_) => Type::Float,
-            Value::String(_) => Type::String,
-            Value::Ident(name) => {
-                let name = name.to_lowercase();
-
-                if name == "self" {
-                    return self.data.resolve_ty(&self.self_ty);
-                };
-
-                if let Some(local) = self.locals.get(&name.to_lowercase()) {
-                    return self.data.resolve_ty(&local.ty_name);
-                }
-
-                if let Some(global) = self.fields.get(&name.to_lowercase()) {
-                    return self.data.resolve_ty(&global.ty_name);
-                }
-
-                panic!("undefined variable {}", name);
-            }
-        }
+        self.data.resolve_ty(&self.get_ty_name(value))
     }
 
     pub fn get_ty_name(&self, value: &Value) -> String {
@@ -1128,11 +1101,20 @@ impl<'a> FunctionTranslator<'a> {
                     return local.ty_name.to_lowercase();
                 }
 
-                if let Some(global) = self.fields.get(&name.to_lowercase()) {
-                    return global.ty_name.to_lowercase();
+                let mut class = self.data.get_class(&self.class_name).unwrap();
+                loop {
+                    if let Some(ty) = class.fields.get(&name.to_lowercase()) {
+                        return ty.to_lowercase();
+                    }
+
+                    if let Some(parent) = &class.parent {
+                        class = self.data.get_class(&parent).unwrap();
+                    } else {
+                        break;
+                    }
                 }
 
-                panic!();
+                panic!("undefiend variable {}", name);
             }
         }
     }

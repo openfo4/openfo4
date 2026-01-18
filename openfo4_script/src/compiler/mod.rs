@@ -116,6 +116,12 @@ impl TypeLayout {
 
         align
     }
+
+    pub fn size_padded(&self) -> usize {
+        let size = self.size();
+        let align = self.align();
+        (size + align - 1) & !(align - 1)
+    }
 }
 
 #[derive(Clone, Debug)]

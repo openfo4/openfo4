@@ -66,8 +66,17 @@ pub fn function_properties(data: &CodegenData, func: &FunctionDef) -> FunctionPr
             return ty.clone();
         }
 
-        if let Some(ty) = class.fields.get(&var_name.to_lowercase()) {
-            return ty.to_lowercase();
+        let mut class = data.get_class(&class.name).unwrap();
+        loop {
+            if let Some(ty) = class.fields.get(&var_name.to_lowercase()) {
+                return ty.to_lowercase();
+            }
+
+            if let Some(parent) = &class.parent {
+                class = data.get_class(&parent).unwrap();
+            } else {
+                break;
+            }
         }
 
         todo!()
