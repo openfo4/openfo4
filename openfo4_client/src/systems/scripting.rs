@@ -92,8 +92,8 @@ impl Executor {
     pub fn update(&mut self, world: &mut World, events: &mut EventBus, delta: Duration) {
         let _span = trace_span!("Executor::update").entered();
 
-        let engine = self.loader.engine.lock_blocking();
-        let mut instances = self.loader.instances.lock_blocking();
+        let engine = futures_lite::future::block_on(self.loader.engine.lock());
+        let mut instances = futures_lite::future::block_on(self.loader.instances.lock());
 
         let state = self.state.as_mut().unwrap();
         state.world = world;
@@ -360,6 +360,8 @@ impl ScriptLoader {
     ///
     /// Returns `None` if no script is attached to the record.
     pub async fn load(&self, record: RecordId) -> Option<ScriptObject> {
+        tracing::debug!("loading script for {:?}", record);
+
         let mut engine = self.engine.lock().await;
         let mut instances = self.instances.lock().await;
         let mut base_records = self.base_records.lock().await;
@@ -384,9 +386,9 @@ impl ScriptLoader {
     /// Returns a deep clone of the [`ScriptObject`].
     ///
     /// Only the top level properties are cloned.
-    pub fn clone_object(&self, object: &ScriptObject) -> ScriptObject {
-        let engine = futures_lite::future::block_on(self.engine.lock());
-        let mut instances = futures_lite::future::block_on(self.instances.lock());
+    pub async fn clone_object(&self, object: &ScriptObject) -> ScriptObject {
+        let engine = self.engine.lock().await;
+        let mut instances = self.instances.lock().await;
         let instance = instances.get(object.0.id.0).unwrap();
 
         let scripts = instance
@@ -545,6 +547,8 @@ async fn instantiate_form(
             }
         }
 
+        tracing::debug!("instantiate script for {:?}", record);
+
         let name = match &record.local.data {
             RecordData::Action(_) => "Action",
             RecordData::Activator(_) => "Activator",
@@ -573,6 +577,7 @@ async fn instantiate_form(
             RecordData::HeadPart(_) => "HeadPart",
             RecordData::Animation(_) => "Idle",
             RecordData::IdleMarker(_) => "IdleMarker",
+            RecordData::ImageSpaceAdapter(_) => "ImageSpaceModifier",
             RecordData::ImpactDataSet(_) => "ImpactDataSet",
             RecordData::Ingestible(_) => "Potion",
             RecordData::InstanceNamingRules(_) => "InstanceNamingRules",
@@ -588,6 +593,7 @@ async fn instantiate_form(
             RecordData::MiscObject(_) => "MiscObject",
             RecordData::MSTT(_) => "MovableStatic",
             RecordData::MusicType(_) => "MusicType",
+            RecordData::Note(_) => "Holotape",
             RecordData::Npc(_) => "ActorBase",
             RecordData::ObjectModification(_) => "ObjectMod",
             RecordData::Outfit(_) => "Outfit",
@@ -763,23 +769,24 @@ fn build_script_object(
         let var = layout
             .properties
             .iter()
-            .find(|p| {
-                p.class.to_lowercase() == script.name.to_lowercase()
-                    && p.name.to_lowercase() == property.name.to_lowercase()
-            })
+            // We can also set property on parent classes.
+            .find(|p| p.name.to_lowercase() == property.name.to_lowercase())
             .unwrap();
 
         let var = &layout.fields[var.var];
 
+        let class_name = &var.class;
+        let var_name = &var.name;
+
         match &property.value {
             Value::Bool(value) => {
-                builder.set(&script.name, &var.name, *value);
+                builder.set(class_name, var_name, *value);
             }
             Value::Int(value) => {
-                builder.set(&script.name, &var.name, *value);
+                builder.set(class_name, var_name, *value);
             }
             Value::Float(value) => {
-                builder.set(&script.name, &var.name, *value);
+                builder.set(class_name, var_name, *value);
             }
             Value::Object(value) => {
                 if let Some(alias) = &value.alias {
@@ -791,12 +798,12 @@ fn build_script_object(
                         instances.get(base_instances.get(&form).unwrap().0).unwrap();
                     let instance = instance_scripts.get(&var.ty_name).unwrap();
 
-                    builder.set(&script.name, &var.name, instance.object.addr());
+                    builder.set(class_name, var_name, instance.object.addr());
                 }
             }
             Value::String(value) => {
                 let string = engine.object_pool().insert_string(&value);
-                builder.set(&script.name, &var.name, string.addr());
+                builder.set(class_name, var_name, string.addr());
             }
             Value::Struct(fields, _) => {
                 let object = build_struct(
@@ -807,7 +814,7 @@ fn build_script_object(
                     instances,
                     base_instances,
                 );
-                builder.set(&script.name, &var.name, object.addr());
+                builder.set(class_name, var_name, object.addr());
             }
             Value::Array(values, _) => {
                 let object = build_array(
@@ -818,7 +825,7 @@ fn build_script_object(
                     instances,
                     base_instances,
                 );
-                builder.set(&script.name, &var.name, object.addr());
+                builder.set(class_name, var_name, object.addr());
             }
         }
     }
@@ -913,9 +920,9 @@ fn build_array(
     }
 
     // All values must have the same layout.
-    for value in values {
-        assert_eq!(&values[0], value);
-    }
+    // for value in values {
+    //     assert_eq!(&values[0], value);
+    // }
 
     let ty = match &values[0] {
         Value::Bool(_) => FieldType::Bool,
