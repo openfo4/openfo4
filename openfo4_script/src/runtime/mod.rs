@@ -393,6 +393,10 @@ impl_into_func!(A0, A1, A2, A3, A4, A5, A6, A7, A8 =>);
 impl_into_func!(A0, A1, A2, A3, A4, A5, A6, A7, A8 => R0);
 impl_into_func!(A0, A1, A2, A3, A4, A5, A6, A7, A8, A9 =>);
 impl_into_func!(A0, A1, A2, A3, A4, A5, A6, A7, A8, A9 => R0);
+impl_into_func!(A0, A1, A2, A3, A4, A5, A6, A7, A8, A9, A10 =>);
+impl_into_func!(A0, A1, A2, A3, A4, A5, A6, A7, A8, A9, A10 => R0);
+impl_into_func!(A0, A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11 =>);
+impl_into_func!(A0, A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11 => R0);
 
 pub unsafe trait NativeType: Copy {
     const TYPE: Type;

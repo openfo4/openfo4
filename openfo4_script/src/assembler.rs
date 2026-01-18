@@ -19,8 +19,8 @@
 use std::fmt::Debug;
 
 use openfo4_pex::{
-    ArrayFind, Binop, CallStatic, Class, Function, Instruction, Module, State, Unop, Value,
-    VariableDefinition,
+    ArrayFind, Binop, CallStatic, Class, Function, Instruction, Module, Property, State, Unop,
+    Value, Variable, VariableDefinition,
 };
 
 pub fn assemble(input: &str) -> Module {
@@ -53,6 +53,8 @@ fn parse_class(cursor: &mut Cursor<'_>) -> Class {
     cursor.consume(Token::Eol);
 
     let mut functions = Vec::new();
+    let mut globals = Vec::new();
+    let mut properties = Vec::new();
 
     loop {
         match cursor.peek() {
@@ -60,7 +62,40 @@ fn parse_class(cursor: &mut Cursor<'_>) -> Class {
                 let function = parse_function(cursor);
                 functions.push(function);
             }
+            Some(Token::Ident("global")) => {
+                cursor.pop();
+                let name = cursor.consume_ident().to_owned();
+                cursor.consume(Token::Colon);
+                let ty = cursor.consume_ident().to_owned();
+                cursor.consume(Token::Eq);
+                let value = parse_value(cursor);
+
+                globals.push(Variable {
+                    definition: VariableDefinition { name, ty },
+                    is_const: false,
+                    value,
+                });
+            }
+            Some(Token::Ident("property")) => {
+                cursor.pop();
+                let name = cursor.consume_ident().to_owned();
+                cursor.consume(Token::Colon);
+                let ty = cursor.consume_ident().to_owned();
+                cursor.consume(Token::Arrow);
+                let var = cursor.consume_ident().to_owned();
+
+                properties.push(Property {
+                    name,
+                    ty,
+                    variable: Some(var),
+                    getter: None,
+                    setter: None,
+                });
+            }
             Some(Token::Ident("class")) | None => break,
+            Some(Token::Eol) => {
+                cursor.pop();
+            }
             _ => todo!(),
         }
     }
@@ -74,8 +109,8 @@ fn parse_class(cursor: &mut Cursor<'_>) -> Class {
             functions,
         }],
         default_state: "".to_owned(),
-        variables: Vec::new(),
-        properties: Vec::new(),
+        variables: globals,
+        properties,
     }
 }
 
@@ -227,6 +262,7 @@ fn parse_instruction(cursor: &mut Cursor<'_>) -> Instruction {
 fn parse_value(cursor: &mut Cursor<'_>) -> Value {
     match cursor.pop() {
         Some(Token::StrLit(s)) => Value::String(s.to_string()),
+        Some(Token::Ident("null")) => Value::Null,
         Some(Token::Ident(s)) => Value::Ident(s.to_string()),
         Some(Token::BoolLit(v)) => Value::Bool(*v),
         Some(Token::IntLit(v)) => Value::Int(*v),
@@ -478,5 +514,31 @@ mod tests {
         assert_eq!(res.classes[0].name, "A");
         assert_eq!(res.classes[1].name, "B");
         assert_eq!(res.classes[2].name, "C");
+    }
+
+    #[test]
+    fn test_class_properties() {
+        let input = r#"
+        class test:
+        global a: int = 0
+        global b: float = 0f
+
+        property a: int -> a
+        property x: float -> b
+        "#;
+
+        let res = assemble(input);
+        assert_eq!(res.classes[0].variables[0].definition.name, "a");
+        assert_eq!(res.classes[0].variables[0].definition.ty, "int");
+        assert_eq!(res.classes[0].variables[0].value, Value::Int(0));
+        assert_eq!(res.classes[0].variables[1].definition.name, "b");
+        assert_eq!(res.classes[0].variables[1].definition.ty, "float");
+        assert_eq!(res.classes[0].variables[1].value, Value::Float(0.0));
+        assert_eq!(res.classes[0].properties[0].name, "a");
+        assert_eq!(res.classes[0].properties[0].ty, "int");
+        assert_eq!(res.classes[0].properties[0].variable, Some("a".to_owned()));
+        assert_eq!(res.classes[0].properties[1].name, "x");
+        assert_eq!(res.classes[0].properties[1].ty, "float");
+        assert_eq!(res.classes[0].properties[1].variable, Some("b".to_owned()));
     }
 }

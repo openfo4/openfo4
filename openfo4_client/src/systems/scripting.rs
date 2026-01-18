@@ -12,11 +12,12 @@ use hashbrown::{HashMap, HashSet};
 use hecs::{Entity, World};
 use openfo4_core::events::EventBus;
 use openfo4_core::record::RecordId;
-use openfo4_esp::RecordData;
 use openfo4_esp::vmad::{Property, Script, Value};
+use openfo4_esp::{FormId, RecordData};
 use openfo4_pex::Module;
 use openfo4_script::compiler::{FieldType, ObjectField, ObjectProperty, TypeLayout};
 use openfo4_script::engine::{Engine, Instance, Options};
+use openfo4_script::runtime::object::{IntoValue, ObjectArrayBuilder, ObjectBuilder};
 use openfo4_script::runtime::{Context, Exception, NativeTuple, ObjectAddr, ObjectRef, Stack};
 use slab::Slab;
 
@@ -359,6 +360,7 @@ impl ScriptLoader {
     /// Loads the script object attached to a record.
     ///
     /// Returns `None` if no script is attached to the record.
+    #[tracing::instrument(name = "ScriptLoader::load", skip_all)]
     pub async fn load(&self, record: RecordId) -> Option<ScriptObject> {
         tracing::debug!("loading script for {:?}", record);
 
@@ -422,21 +424,21 @@ async fn instantiate_form(
     instances: &mut Slab<HashMap<String, ScriptInstance>>,
     base_instances: &mut HashMap<RecordId, ScriptObjectId>,
     esp_loader: &EspLoader,
-    record: RecordId,
+    root: RecordId,
     compiled_classes: &mut HashMap<String, Instance>,
 ) -> Option<ScriptObjectId> {
-    let mut queue = vec![record];
-    let mut dependencies = HashMap::<RecordId, HashSet<RecordId>>::new();
-    let mut dependents = HashMap::<RecordId, HashSet<RecordId>>::new();
+    if let Some(id) = base_instances.get(&root) {
+        return Some(*id);
+    }
 
     let mut root_id = None;
 
+    let mut records = HashMap::new();
+    let mut queue = vec![root];
     while let Some(record) = queue.pop() {
         if base_instances.contains_key(&record) {
             continue;
         }
-
-        dbg!(&record);
 
         let record = esp_loader.lookup(None, record).await.unwrap();
 
@@ -469,196 +471,217 @@ async fn instantiate_form(
             _ => None,
         };
 
+        // Find all other forms that the scripts reference.
+        // Note that scripts may reference the same form multiple times, which
+        // is why we use a HashSet instead of a Vec or directly pushing to queue.
+        let mut depends = HashSet::new();
+        for script in vmad.iter().flat_map(|v| &v.scripts) {
+            let mut values_queue: Vec<_> = script.properties.iter().map(|v| &v.value).collect();
+
+            while let Some(value) = values_queue.pop() {
+                match value {
+                    Value::Object(value) => {
+                        if let Some(alias) = &value.alias {
+                            // TODO
+                        } else {
+                            let id = esp_loader.resolve_form(value.form, record.id).unwrap();
+
+                            if base_instances.contains_key(&id) || records.contains_key(&id) {
+                                continue;
+                            }
+
+                            depends.insert(id);
+                        }
+                    }
+                    Value::Struct(fields, _) => {
+                        for field in fields {
+                            values_queue.push(&field.value);
+                        }
+                    }
+                    Value::Array(values, _) => {
+                        values_queue.extend(values);
+                    }
+                    _ => {}
+                }
+            }
+        }
+
+        for id in depends {
+            debug_assert!(!base_instances.contains_key(&id));
+            debug_assert!(!records.contains_key(&id));
+            queue.push(id);
+        }
+
         let mut scripts = HashMap::new();
 
-        if let Some(vmad) = vmad {
-            let mut depends = HashSet::new();
-            for script in &vmad.scripts {
-                let mut values_queue: Vec<_> = script.properties.iter().map(|v| &v.value).collect();
+        // Can't attach scripts to objects with no base class.
+        let base_class_name = record_script_name(&record.local.data).unwrap();
+        let instance = compiled_classes
+            .entry(base_class_name.to_owned())
+            .or_insert_with(|| engine.compile(base_class_name, &OPTIONS));
+        let layout = engine.get_class_layout(base_class_name).unwrap();
+        let builder = engine.object_pool().insert(layout.clone());
 
-                while let Some(value) = values_queue.pop() {
-                    match value {
-                        Value::Object(value) => {
-                            if let Some(alias) = &value.alias {
-                                // TODO
-                            } else {
-                                let form = esp_loader.resolve_form(value.form, record.id).unwrap();
-                                depends.insert(form);
-                            }
-                        }
-                        Value::Struct(fields, _) => {
-                            for field in fields {
-                                values_queue.push(&field.value);
-                            }
-                        }
-                        Value::Array(values, _) => {
-                            values_queue.extend(values);
-                        }
-                        _ => {}
-                    }
-                }
-            }
+        scripts.insert(
+            base_class_name.to_owned(),
+            PartialObject {
+                instance: instance.clone(),
+                builder,
+                script: None,
+            },
+        );
 
-            depends.retain(|f| !base_instances.contains_key(f));
+        for script in vmad.into_iter().flat_map(|v| v.scripts) {
+            let instance = compiled_classes
+                .entry(script.name.clone())
+                .or_insert_with(|| engine.compile(&script.name, &OPTIONS));
+            let layout = engine.get_class_layout(&script.name).unwrap();
+            let builder = engine.object_pool().insert(layout.clone());
 
-            if !depends.is_empty() {
-                for depens_on_form in depends {
-                    if !base_instances.contains_key(&depens_on_form) {
-                        queue.push(depens_on_form);
-                        dependencies
-                            .entry(record.id)
-                            .or_default()
-                            .insert(depens_on_form);
-                        dependents
-                            .entry(depens_on_form)
-                            .or_default()
-                            .insert(record.id);
-                    }
-                }
+            scripts.insert(
+                script.name.clone(),
+                PartialObject {
+                    instance: instance.clone(),
+                    builder,
+                    script: Some(script),
+                },
+            );
+        }
 
-                continue;
-            }
+        records.insert(record.id, scripts);
+    }
 
-            for script in &vmad.scripts {
-                let instance = compiled_classes
-                    .entry(script.name.clone())
-                    .or_insert_with(|| engine.compile(&script.name, &OPTIONS));
+    let mut partial_object_addrs = HashMap::new();
+    for (id, scripts) in &records {
+        let mut addrs = HashMap::new();
+        for (name, script) in scripts {
+            addrs.insert(name.clone(), script.builder.addr());
+        }
+        partial_object_addrs.insert(*id, addrs);
+    }
 
-                let layout = engine.get_class_layout(&script.name).unwrap();
+    for (record, scripts) in records {
+        let mut final_instances = HashMap::new();
 
-                let object = build_script_object(
-                    esp_loader,
-                    record.id,
+        for (name, mut object) in scripts {
+            if let Some(script) = &object.script {
+                tracing::debug!("instantiating script {} (record {:?})", name, record);
+
+                build_script_object(
+                    |form| esp_loader.resolve_form(form, record).unwrap(),
                     engine,
                     script,
                     instances,
                     base_instances,
-                );
-
-                scripts.insert(
-                    script.name.to_lowercase(),
-                    ScriptInstance {
-                        instance: instance.clone(),
-                        layout: layout.clone(),
-                        object,
-                        stacks: HashMap::new(),
-                    },
+                    &partial_object_addrs,
+                    &mut object.builder,
                 );
             }
+
+            let layout = engine.get_class_layout(&name).unwrap();
+            final_instances.insert(
+                name.clone(),
+                ScriptInstance {
+                    instance: object.instance,
+                    layout: layout.clone(),
+                    object: object.builder.finalize(),
+                    stacks: HashMap::new(),
+                },
+            );
         }
 
-        tracing::debug!("instantiate script for {:?}", record);
+        debug_assert!(!base_instances.contains_key(&record));
+        let id = ScriptObjectId(instances.insert(final_instances));
+        base_instances.insert(record, id);
 
-        let name = match &record.local.data {
-            RecordData::Action(_) => "Action",
-            RecordData::Activator(_) => "Activator",
-            RecordData::ActorValueInfo(_) => "ActorValue",
-            RecordData::Ammo(_) => "Ammo",
-            RecordData::Armor(_) => "Armor",
-            RecordData::AssocationType(_) => "AssociationType",
-            RecordData::Book(_) => "Book",
-            RecordData::CameraShot(_) => "CameraShot",
-            RecordData::Cell(_) => "Cell",
-            RecordData::Class(_) => "Class",
-            RecordData::CombatStyle(_) => "CombatStyle",
-            RecordData::Component(_) => "Component",
-            RecordData::ConstructibleObject(_) => "ConstructibleObject",
-            RecordData::Container(_) => "Container",
-            RecordData::Door(_) => "Door",
-            RecordData::EffectShader(_) => "EffectShader",
-            RecordData::EncounterZone(_) => "EncounterZone",
-            RecordData::Explosion(_) => "Explosion",
-            RecordData::FACT(_) => "Faction",
-            RecordData::FLOR(_) => "Flora",
-            RecordData::FormList(_) => "FormList",
-            RecordData::Furniture(_) => "Furniture",
-            RecordData::GLOB(_) => "GlobalVariable",
-            RecordData::Hazard(_) => "Hazard",
-            RecordData::HeadPart(_) => "HeadPart",
-            RecordData::Animation(_) => "Idle",
-            RecordData::IdleMarker(_) => "IdleMarker",
-            RecordData::ImageSpaceAdapter(_) => "ImageSpaceModifier",
-            RecordData::ImpactDataSet(_) => "ImpactDataSet",
-            RecordData::Ingestible(_) => "Potion",
-            RecordData::InstanceNamingRules(_) => "InstanceNamingRules",
-            RecordData::Key(_) => "Key",
-            RecordData::Keyword(_) => "Keyword",
-            RecordData::LeveledItem(_) => "LeveledItem",
-            RecordData::LeveledActor(_) => "LeveledActor",
-            RecordData::Light(_) => "Light",
-            RecordData::Location(_) => "Location",
-            RecordData::LocationReferenceType(_) => "LocationRefType",
-            RecordData::MagicEffect(_) => "MagicEffect",
-            RecordData::Message(_) => "Message",
-            RecordData::MiscObject(_) => "MiscObject",
-            RecordData::MSTT(_) => "MovableStatic",
-            RecordData::MusicType(_) => "MusicType",
-            RecordData::Note(_) => "Holotape",
-            RecordData::Npc(_) => "ActorBase",
-            RecordData::ObjectModification(_) => "ObjectMod",
-            RecordData::Outfit(_) => "Outfit",
-            RecordData::Package(_) => "Package",
-            RecordData::Perk(_) => "Perk",
-            RecordData::Projectile(_) => "Projectile",
-            RecordData::Quest(_) => "Quest",
-            RecordData::Race(_) => "Race",
-            RecordData::ShaderParticleGeometry(_) => "ShaderParticleGeometry",
-            RecordData::SoundDescriptor(_) => "Sound",
-            RecordData::SoundCategory(_) => "SoundCategory",
-            RecordData::SPEL(_) => "Spell",
-            RecordData::STAT(_) => "Static",
-            RecordData::TACT(_) => "TalkingActivator",
-            RecordData::Terminal(_) => "Terminal",
-            RecordData::TextureSet(_) => "TextureSet",
-            RecordData::VisualEffect(_) => "VisualEffect",
-            RecordData::VoiceType(_) => "VoiceType",
-            RecordData::Weapon(_) => "Weapon",
-            RecordData::Weather(_) => "Weather",
-            RecordData::Worldspace(_) => "WorldSpace",
-            RecordData::PlacedObject(_) => "ObjectReference",
-            RecordData::PlacedNpc(_) => "Actor",
-            RecordData::DialogueTopic(_) => "Topic",
-            RecordData::Scene(_) => "Scene",
-            x => todo!("{:?}", x),
-        };
-
-        dbg!(&name);
-        let instance = compiled_classes
-            .entry(name.to_owned())
-            .or_insert_with(|| engine.compile(name, &OPTIONS));
-        let layout = engine.get_class_layout(name).unwrap();
-
-        let object = engine.object_pool().insert(layout.clone());
-
-        scripts.insert(
-            name.to_lowercase(),
-            ScriptInstance {
-                instance: instance.clone(),
-                layout: layout.clone(),
-                object: object.finalize(),
-                stacks: HashMap::new(),
-            },
-        );
-
-        let id = ScriptObjectId(instances.insert(scripts));
-        base_instances.insert(record.id, id);
-
-        // The root object will always be built last.
-        root_id = Some(id);
-
-        if let Some(forms) = dependents.get_mut(&record.id) {
-            for f in &*forms {
-                let deps = dependencies.get_mut(f).unwrap();
-                deps.remove(&record.id);
-                if deps.is_empty() {
-                    dependencies.remove(f);
-                    queue.push(*f);
-                }
-            }
+        if record == root {
+            root_id = Some(id);
         }
     }
 
     root_id
+}
+
+#[derive(Debug)]
+struct PartialObject {
+    instance: Instance,
+    builder: ObjectBuilder,
+    script: Option<Script>,
+}
+
+fn record_script_name(data: &RecordData) -> Option<&'static str> {
+    match data {
+        RecordData::Action(_) => Some("Action"),
+        RecordData::Activator(_) => Some("Activator"),
+        RecordData::ActorValueInfo(_) => Some("ActorValue"),
+        RecordData::Ammo(_) => Some("Ammo"),
+        RecordData::Armor(_) => Some("Armor"),
+        RecordData::AssocationType(_) => Some("AssociationType"),
+        RecordData::Book(_) => Some("Book"),
+        RecordData::CameraShot(_) => Some("CameraShot"),
+        RecordData::Cell(_) => Some("Cell"),
+        RecordData::Class(_) => Some("Class"),
+        RecordData::CombatStyle(_) => Some("CombatStyle"),
+        RecordData::Component(_) => Some("Component"),
+        RecordData::ConstructibleObject(_) => Some("ConstructibleObject"),
+        RecordData::Container(_) => Some("Container"),
+        RecordData::Door(_) => Some("Door"),
+        RecordData::EffectShader(_) => Some("EffectShader"),
+        RecordData::EncounterZone(_) => Some("EncounterZone"),
+        RecordData::Explosion(_) => Some("Explosion"),
+        RecordData::FACT(_) => Some("Faction"),
+        RecordData::FLOR(_) => Some("Flora"),
+        RecordData::FormList(_) => Some("FormList"),
+        RecordData::Furniture(_) => Some("Furniture"),
+        RecordData::GLOB(_) => Some("GlobalVariable"),
+        RecordData::Hazard(_) => Some("Hazard"),
+        RecordData::HeadPart(_) => Some("HeadPart"),
+        RecordData::Animation(_) => Some("Idle"),
+        RecordData::IdleMarker(_) => Some("IdleMarker"),
+        RecordData::ImageSpaceAdapter(_) => Some("ImageSpaceModifier"),
+        RecordData::ImpactDataSet(_) => Some("ImpactDataSet"),
+        RecordData::Ingestible(_) => Some("Potion"),
+        RecordData::InstanceNamingRules(_) => Some("InstanceNamingRules"),
+        RecordData::Key(_) => Some("Key"),
+        RecordData::Keyword(_) => Some("Keyword"),
+        RecordData::LeveledItem(_) => Some("LeveledItem"),
+        RecordData::LeveledActor(_) => Some("LeveledActor"),
+        RecordData::Light(_) => Some("Light"),
+        RecordData::Location(_) => Some("Location"),
+        RecordData::LocationReferenceType(_) => Some("LocationRefType"),
+        RecordData::MagicEffect(_) => Some("MagicEffect"),
+        RecordData::Message(_) => Some("Message"),
+        RecordData::MiscObject(_) => Some("MiscObject"),
+        RecordData::MSTT(_) => Some("MovableStatic"),
+        RecordData::MusicType(_) => Some("MusicType"),
+        RecordData::Note(_) => Some("Holotape"),
+        RecordData::Npc(_) => Some("ActorBase"),
+        RecordData::ObjectModification(_) => Some("ObjectMod"),
+        RecordData::Outfit(_) => Some("Outfit"),
+        RecordData::Package(_) => Some("Package"),
+        RecordData::Perk(_) => Some("Perk"),
+        RecordData::Projectile(_) => Some("Projectile"),
+        RecordData::Quest(_) => Some("Quest"),
+        RecordData::Race(_) => Some("Race"),
+        RecordData::ShaderParticleGeometry(_) => Some("ShaderParticleGeometry"),
+        RecordData::SoundDescriptor(_) => Some("Sound"),
+        RecordData::SoundCategory(_) => Some("SoundCategory"),
+        RecordData::SPEL(_) => Some("Spell"),
+        RecordData::STAT(_) => Some("Static"),
+        RecordData::TACT(_) => Some("TalkingActivator"),
+        RecordData::Terminal(_) => Some("Terminal"),
+        RecordData::TextureSet(_) => Some("TextureSet"),
+        RecordData::VisualEffect(_) => Some("VisualEffect"),
+        RecordData::VoiceType(_) => Some("VoiceType"),
+        RecordData::Weapon(_) => Some("Weapon"),
+        RecordData::Weather(_) => Some("Weather"),
+        RecordData::Worldspace(_) => Some("WorldSpace"),
+        RecordData::PlacedObject(_) => Some("ObjectReference"),
+        RecordData::PlacedNpc(_) => Some("Actor"),
+        RecordData::DialogueTopic(_) => Some("Topic"),
+        RecordData::Scene(_) => Some("Scene"),
+        x => todo!("{:?}", x),
+    }
 }
 
 enum NativeObject {
@@ -749,258 +772,205 @@ impl Invocation {
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct InvocationId(Key);
 
-// FIXME: There are a few things wrong with this current implementation that should be fixed.
-// 1. Get rid of the recursion to prevent potential stack overflows.
-// 2. Structs and arrays don't expose information of which script to choose, they are only defined
-//    in the script and we must extract the info from the compiler.
+// FIXME: Use script layout reflection to determine we're actually setting values of the correct type.
 fn build_script_object(
-    esp_loader: &EspLoader,
-    record: RecordId,
+    resolve_form: impl Fn(FormId) -> RecordId,
     engine: &Engine,
     script: &Script,
-    instances: &mut Slab<HashMap<String, ScriptInstance>>,
-    base_instances: &mut HashMap<RecordId, ScriptObjectId>,
+    instances: &Slab<HashMap<String, ScriptInstance>>,
+    base_instances: &HashMap<RecordId, ScriptObjectId>,
+    partial_addrs: &HashMap<RecordId, HashMap<String, ObjectAddr>>,
+    builder: &mut ObjectBuilder,
 ) -> ObjectRef {
     let layout = engine.get_class_layout(&script.name).unwrap();
 
-    let mut builder = engine.object_pool().insert(layout.clone());
+    #[derive(Copy, Clone, Debug)]
+    struct Entry<'a> {
+        builder_index: usize,
+        inner: EntryInner<'a>,
+        pop_builder: bool,
+    }
 
-    for property in &script.properties {
-        let var = layout
-            .properties
-            .iter()
-            // We can also set property on parent classes.
-            .find(|p| p.name.to_lowercase() == property.name.to_lowercase())
-            .unwrap();
+    #[derive(Copy, Clone, Debug)]
+    enum EntryInner<'a> {
+        Property(&'a Property),
+        /// Value, array index
+        Value(&'a Value, usize),
+    }
 
-        let var = &layout.fields[var.var];
+    enum Builder<'a> {
+        ObjectRef(&'a mut ObjectBuilder),
+        Object(ObjectBuilder),
+        Array(ObjectArrayBuilder),
+    }
 
-        let class_name = &var.class;
-        let var_name = &var.name;
+    impl<'a> Builder<'a> {
+        fn set<T>(&mut self, class: &str, name: &str, index: usize, value: T)
+        where
+            T: IntoValue,
+        {
+            match self {
+                Self::ObjectRef(builder) => builder.set(class, name, value),
+                Self::Object(builder) => builder.set(class, name, value),
+                Self::Array(builder) => builder.set_at(index, class, name, value),
+            }
+        }
 
-        match &property.value {
-            Value::Bool(value) => {
-                builder.set(class_name, var_name, *value);
-            }
-            Value::Int(value) => {
-                builder.set(class_name, var_name, *value);
-            }
-            Value::Float(value) => {
-                builder.set(class_name, var_name, *value);
-            }
-            Value::Object(value) => {
-                if let Some(alias) = &value.alias {
-                    // TODO
-                } else {
-                    let form = esp_loader.resolve_form(value.form, record).unwrap();
-
-                    let instance_scripts =
-                        instances.get(base_instances.get(&form).unwrap().0).unwrap();
-                    let instance = instance_scripts.get(&var.ty_name).unwrap();
-
-                    builder.set(class_name, var_name, instance.object.addr());
-                }
-            }
-            Value::String(value) => {
-                let string = engine.object_pool().insert_string(&value);
-                builder.set(class_name, var_name, string.addr());
-            }
-            Value::Struct(fields, _) => {
-                let object = build_struct(
-                    esp_loader,
-                    record,
-                    engine,
-                    fields,
-                    instances,
-                    base_instances,
-                );
-                builder.set(class_name, var_name, object.addr());
-            }
-            Value::Array(values, _) => {
-                let object = build_array(
-                    esp_loader,
-                    record,
-                    engine,
-                    values,
-                    instances,
-                    base_instances,
-                );
-                builder.set(class_name, var_name, object.addr());
+        fn finalize(self) -> ObjectRef {
+            match self {
+                Self::ObjectRef(builder) => unsafe { builder.finalize_copy() },
+                Self::Object(builder) => builder.finalize(),
+                Self::Array(builder) => builder.finalize(),
             }
         }
     }
 
-    builder.finalize()
-}
+    let mut builders: Vec<Builder<'_>> = vec![Builder::ObjectRef(builder)];
+    let mut stack: Vec<Entry<'_>> = Vec::new();
+    // Push root class properties
+    for prop in &script.properties {
+        stack.push(Entry {
+            builder_index: 0,
+            inner: EntryInner::Property(prop),
+            pop_builder: false,
+        });
+    }
 
-fn build_struct(
-    esp_loader: &EspLoader,
-    record: RecordId,
-    engine: &Engine,
-    fields: &[Property],
-    instances: &mut Slab<HashMap<String, ScriptInstance>>,
-    base_instances: &mut HashMap<RecordId, ScriptObjectId>,
-) -> ObjectRef {
-    let layout = build_struct_layout(fields);
-    let mut builder = engine.object_pool().insert(layout.clone());
+    while let Some(entry) = stack.pop() {
+        let builder = &mut builders[entry.builder_index];
 
-    for prop in fields {
-        let var = layout
-            .properties
-            .iter()
-            .find(|p| p.name.to_lowercase() == prop.name.to_lowercase())
-            .unwrap();
+        let (class_name, var_name, array_index) = match &entry.inner {
+            EntryInner::Property(property) => {
+                // Index 0 is the root script. Only the root can be a class.
+                // For classes we must resolve the property to a variable name,
+                // for structs we can diretly use the property name.
+                if entry.builder_index == 0 {
+                    let var = layout
+                        .properties
+                        .iter()
+                        // We can also set property on parent classes.
+                        // FIXME: Ensure that child properties are preferred when present on both child and
+                        // parent classes.
+                        .find(|p| p.name.to_lowercase() == property.name.to_lowercase())
+                        .unwrap();
 
-        let var = &layout.fields[var.var];
-
-        match &prop.value {
-            Value::Bool(value) => {
-                builder.set("", &var.name, *value);
-            }
-            Value::Int(value) => {
-                builder.set("", &var.name, *value);
-            }
-            Value::Float(value) => {
-                builder.set("", &var.name, *value);
-            }
-            Value::String(value) => {
-                let string = engine.object_pool().insert_string(&value);
-                builder.set("", &var.name, string.addr());
-            }
-            Value::Object(value) => {
-                if let Some(alias) = &value.alias {
-                    // TODO
+                    (script.name.as_str(), var.name.as_str(), 0)
                 } else {
-                    let form = esp_loader.resolve_form(value.form, record).unwrap();
-                    let instance_scripts =
-                        instances.get(base_instances.get(&form).unwrap().0).unwrap();
-                    let instance = instance_scripts.get(&var.ty_name).unwrap();
-
-                    builder.set("", &var.name, instance.object.addr());
+                    ("", property.name.as_str(), 0)
                 }
             }
-            Value::Struct(fields, _) => {
-                let object = build_struct(
-                    esp_loader,
-                    record,
-                    engine,
-                    fields,
-                    instances,
-                    base_instances,
-                );
-                builder.set("", &var.name, object.addr());
-            }
-            Value::Array(values, _) => {
-                let object = build_array(
-                    esp_loader,
-                    record,
-                    engine,
-                    values,
-                    instances,
-                    base_instances,
-                );
-                builder.set("", &var.name, object.addr());
-            }
-        }
-    }
+            EntryInner::Value(_, array_index) => ("", "", *array_index),
+        };
 
-    builder.finalize()
-}
+        let value = match &entry.inner {
+            EntryInner::Property(prop) => &prop.value,
+            EntryInner::Value(value, _) => value,
+        };
 
-fn build_array(
-    esp_loader: &EspLoader,
-    record: RecordId,
-    engine: &Engine,
-    values: &[Value],
-    instances: &mut Slab<HashMap<String, ScriptInstance>>,
-    base_instances: &mut HashMap<RecordId, ScriptObjectId>,
-) -> ObjectRef {
-    if values.is_empty() {
-        return engine.object_pool().insert(NULL_LAYOUT).finalize();
-    }
-
-    // All values must have the same layout.
-    // for value in values {
-    //     assert_eq!(&values[0], value);
-    // }
-
-    let ty = match &values[0] {
-        Value::Bool(_) => FieldType::Bool,
-        Value::Int(_) => FieldType::I32,
-        Value::Float(_) => FieldType::F32,
-        Value::String(_) => FieldType::Pointer,
-        Value::Array(_, _) => FieldType::Pointer,
-        Value::Struct(_, _) => FieldType::Pointer,
-        Value::Object(_) => FieldType::Pointer,
-    };
-
-    let elem_layout = TypeLayout {
-        header: None,
-        fields: vec![ObjectField {
-            class: "".to_owned(),
-            name: "".to_owned(),
-            offset: 0,
-            ty,
-            ty_name: "".to_owned(),
-        }],
-        properties: Vec::new(),
-    };
-
-    let mut builder = engine.object_pool().insert_array(elem_layout, values.len());
-
-    for (index, value) in values.iter().enumerate() {
         match value {
             Value::Bool(value) => {
-                builder.set_at(index, "", "", *value);
+                builder.set(class_name, var_name, array_index, *value);
             }
             Value::Int(value) => {
-                builder.set_at(index, "", "", *value);
+                builder.set(class_name, var_name, array_index, *value);
             }
             Value::Float(value) => {
-                builder.set_at(index, "", "", *value);
+                builder.set(class_name, var_name, array_index, *value);
             }
             Value::String(value) => {
-                let string = engine.object_pool().insert_string(&value);
-                builder.set_at(index, "", "", string.addr());
+                let object = engine.object_pool().insert_string(&value);
+                builder.set(class_name, var_name, array_index, object.addr());
             }
             Value::Object(value) => {
                 if let Some(alias) = value.alias {
                     // TODO
                 } else {
-                    let form = esp_loader.resolve_form(value.form, record).unwrap();
-                    let instance_scripts =
-                        instances.get(base_instances.get(&form).unwrap().0).unwrap();
-                    // FIXME: Which script to choose here?
-                    let (_, instance) = instance_scripts.iter().next().unwrap();
-                    builder.set_at(index, "", "", instance.object.addr());
+                    let id = resolve_form(value.form);
+
+                    let addr = if let Some(instance) = base_instances.get(&id) {
+                        let scripts = &instances[instance.0];
+                        // FIXME: Which script to choose here?
+                        // We need to inspect the actual class layout to get this.
+                        let script = scripts.values().next().unwrap();
+
+                        script.object.addr()
+                    } else {
+                        let scripts = partial_addrs.get(&id).unwrap();
+                        // FIXME: Which script to choose here?
+                        // We need to inspect the actual class layout to get this.
+                        let addr = *scripts.values().next().unwrap();
+
+                        addr
+                    };
+
+                    builder.set(class_name, var_name, array_index, addr);
                 }
             }
             Value::Struct(fields, _) => {
-                let object = build_struct(
-                    esp_loader,
-                    record,
-                    engine,
-                    fields,
-                    instances,
-                    base_instances,
-                );
-                builder.set_at(index, "", "", object.addr());
+                if entry.pop_builder {
+                    let object = builders.pop().unwrap().finalize();
+
+                    // Reborrow after pop
+                    let builder = &mut builders[entry.builder_index];
+                    builder.set(class_name, var_name, array_index, object.addr());
+                } else {
+                    // First time we see this struct.
+                    let layout = build_struct_layout(&fields);
+                    let object = engine.object_pool().insert(layout);
+
+                    let builder_index = builders.len();
+                    builders.push(Builder::Object(object));
+
+                    stack.push(Entry {
+                        builder_index: entry.builder_index,
+                        inner: entry.inner,
+                        pop_builder: true,
+                    });
+
+                    for field in fields {
+                        stack.push(Entry {
+                            builder_index,
+                            inner: EntryInner::Property(field),
+                            pop_builder: false,
+                        });
+                    }
+                }
             }
             Value::Array(values, _) => {
-                let object = build_array(
-                    esp_loader,
-                    record,
-                    engine,
-                    values,
-                    instances,
-                    base_instances,
-                );
-                builder.set_at(index, "", "", object.addr());
+                if entry.pop_builder {
+                    let object = builders.pop().unwrap().finalize();
+
+                    // Reborrow after pop
+                    let builder = &mut builders[entry.builder_index];
+                    builder.set(class_name, var_name, array_index, object.addr());
+                } else {
+                    // First time we see this array.
+                    let elem_layout = build_array_layout(values);
+                    let object = engine.object_pool().insert_array(elem_layout, values.len());
+
+                    let builder_index = builders.len();
+                    builders.push(Builder::Array(object));
+
+                    stack.push(Entry {
+                        builder_index: entry.builder_index,
+                        inner: entry.inner,
+                        pop_builder: true,
+                    });
+
+                    for (array_index, value) in values.iter().enumerate() {
+                        stack.push(Entry {
+                            builder_index,
+                            inner: EntryInner::Value(value, array_index),
+                            pop_builder: false,
+                        });
+                    }
+                }
             }
         }
     }
 
-    builder.finalize()
+    debug_assert_eq!(builders.len(), 1);
+    builders.pop().unwrap().finalize()
 }
 
 // FIXME: Can we expose this from the compiler instead?
@@ -1045,8 +1015,196 @@ fn build_struct_layout(props: &[Property]) -> TypeLayout {
     }
 }
 
-const NULL_LAYOUT: TypeLayout = TypeLayout {
-    header: None,
-    fields: Vec::new(),
-    properties: Vec::new(),
-};
+fn build_array_layout(values: &[Value]) -> TypeLayout {
+    let ty = match &values[0] {
+        Value::Bool(_) => FieldType::Bool,
+        Value::Int(_) => FieldType::I32,
+        Value::Float(_) => FieldType::F32,
+        Value::String(_) => FieldType::Pointer,
+        Value::Array(_, _) => FieldType::Pointer,
+        Value::Struct(_, _) => FieldType::Pointer,
+        Value::Object(_) => FieldType::Pointer,
+    };
+
+    TypeLayout {
+        header: None,
+        fields: vec![ObjectField {
+            class: "".to_owned(),
+            name: "".to_owned(),
+            offset: 0,
+            ty,
+            ty_name: "".to_owned(),
+        }],
+        properties: Vec::new(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use hashbrown::HashMap;
+    use openfo4_esp::vmad::{Property, Script, Value};
+    use openfo4_script::assembler::assemble;
+    use openfo4_script::engine::{Engine, Options};
+    use openfo4_script::runtime::{ObjectAddr, ObjectRef};
+    use slab::Slab;
+
+    use super::build_script_object;
+
+    fn build_direct(engine: &Engine, script: &Script) -> ObjectRef {
+        let layout = engine.get_class_layout(&script.name).unwrap();
+        let mut builder = engine.object_pool().insert(layout.clone());
+
+        let instances = Slab::new();
+        let base_instances = HashMap::new();
+        let partial_addrs = HashMap::new();
+
+        build_script_object(
+            |_| unreachable!(),
+            &engine,
+            &script,
+            &instances,
+            &base_instances,
+            &partial_addrs,
+            &mut builder,
+        )
+    }
+
+    fn assert_array_contents_eq(
+        engine: &Engine,
+        object: &ObjectRef,
+        class: &str,
+        name: &str,
+        len: usize,
+        data: &[u8],
+    ) {
+        let object = engine.object_pool().get(&object);
+
+        unsafe {
+            let ptr = object.get(class, name).unwrap();
+            let ptr = ObjectAddr::from_raw(ptr.as_ptr().cast::<*mut u8>().read());
+
+            let array = engine.object_pool().get(ptr);
+            // FIXME: This relies on undocumented ABI. We should expose the array ABI
+            // information from the Engine.
+            let a_ptr = array.get("", "ptr").unwrap();
+            let a_len = array.get("", "len").unwrap();
+            let a_len = usize::from_ne_bytes(a_len.try_into().unwrap());
+
+            assert_eq!(a_len, len);
+
+            let mut mem = Vec::new();
+
+            let mut next_ptr = a_ptr.as_ptr().cast::<*mut u8>().read();
+            for _ in 0..a_len {
+                let addr = ObjectAddr::from_raw(next_ptr);
+                let elem = engine.object_pool().get(addr);
+                mem.extend_from_slice(elem.memory());
+
+                next_ptr = next_ptr.add(elem.layout().size_padded());
+            }
+
+            assert_eq!(mem, data);
+        }
+    }
+
+    #[test]
+    fn build_script_object_basic() {
+        let mut engine = Engine::new();
+
+        let module = assemble(
+            r#"
+            class test:
+            global a: int = 0
+            global b: int = 0
+            property a: int -> a
+            property b: int -> b
+            "#,
+        );
+
+        engine.register(&module);
+        engine.compile("test", &Options::default());
+
+        let script = Script {
+            name: "test".to_owned(),
+            flags: 0,
+            properties: vec![
+                Property {
+                    name: "a".to_owned(),
+                    value: Value::Int(1),
+                },
+                Property {
+                    name: "b".to_owned(),
+                    value: Value::Int(2),
+                },
+            ],
+        };
+
+        let object = build_direct(&engine, &script);
+        let object = engine.object_pool().get(&object);
+
+        unsafe {
+            assert_eq!(object.get("test", "a").unwrap(), 1u32.to_ne_bytes());
+            assert_eq!(object.get("test", "b").unwrap(), 2u32.to_ne_bytes());
+        }
+    }
+
+    #[test]
+    fn build_script_object_array() {
+        let mut engine = Engine::new();
+
+        let module = assemble(
+            r#"
+            class test:
+            global a: int[] = null
+            global b: float[] = null
+            property a: int[] -> a
+            property b: float[] -> b
+            "#,
+        );
+
+        engine.register(&module);
+        engine.compile("test", &Options::default());
+
+        let script = Script {
+            name: "test".to_owned(),
+            flags: 0,
+            properties: vec![
+                Property {
+                    name: "a".to_owned(),
+                    value: Value::Array(vec![Value::Int(0), Value::Int(1), Value::Int(2)], 0),
+                },
+                Property {
+                    name: "b".to_owned(),
+                    value: Value::Array(
+                        vec![
+                            Value::Float(0.0),
+                            Value::Float(1.0),
+                            Value::Float(2.0),
+                            Value::Float(3.0),
+                        ],
+                        0,
+                    ),
+                },
+            ],
+        };
+
+        let object = build_direct(&engine, &script);
+
+        assert_array_contents_eq(
+            &engine,
+            &object,
+            "test",
+            "a",
+            3,
+            bytemuck::cast_slice(&[0_i32, 1_i32, 2_i32]),
+        );
+        assert_array_contents_eq(
+            &engine,
+            &object,
+            "test",
+            "b",
+            4,
+            bytemuck::cast_slice(&[0.0_f32, 1.0_f32, 2.0_f32, 3.0_f32]),
+        );
+    }
+}

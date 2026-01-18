@@ -20,6 +20,12 @@ impl ObjectAddr {
     }
 }
 
+impl AsRef<ObjectAddr> for ObjectAddr {
+    fn as_ref(&self) -> &ObjectAddr {
+        self
+    }
+}
+
 unsafe impl Send for ObjectAddr {}
 unsafe impl Sync for ObjectAddr {}
 
@@ -130,7 +136,7 @@ impl ObjectPool {
             object.layout.clone()
         };
 
-        let mut builder = self.insert(layout);
+        let builder = self.insert(layout);
 
         let mut objects = self.objects.lock().unwrap();
         let object = objects.get_mut(&object.addr()).unwrap();
@@ -154,6 +160,15 @@ impl ObjectPool {
     // pub fn get_mut(&mut self, addr: ObjectAddr) -> Option<&mut Object> {
     //     self.objects.get_mut(&addr)
     // }
+
+    pub fn get<T>(&self, object: T) -> Object
+    where
+        T: AsRef<ObjectAddr>,
+    {
+        let addr = *object.as_ref();
+
+        self.objects.lock().unwrap().get(&addr).unwrap().clone()
+    }
 }
 
 /// A reference handle to an [`Object`] in a pool.
@@ -167,6 +182,12 @@ impl ObjectRef {
 
     fn as_ptr(&self) -> *mut u8 {
         self.0.addr.0
+    }
+}
+
+impl AsRef<ObjectAddr> for ObjectRef {
+    fn as_ref(&self) -> &ObjectAddr {
+        &self.0.addr
     }
 }
 
@@ -208,6 +229,17 @@ impl Object {
         }
     }
 
+    pub unsafe fn get(&self, class: &str, name: &str) -> Option<&[u8]> {
+        let field = self.layout.fields.iter().find(|f| {
+            f.class.to_lowercase() == class.to_lowercase()
+                && f.name.to_lowercase() == name.to_lowercase()
+        })?;
+
+        let ptr = unsafe { self.memory.add(field.offset) };
+        let len = field.ty.size();
+        Some(unsafe { core::slice::from_raw_parts(ptr, len) })
+    }
+
     /// # Safety
     ///
     /// The caller must guarantee that no memory accesses to the field of the `Object` are
@@ -232,12 +264,23 @@ impl Object {
         }
     }
 
-    pub fn as_ptr(&mut self) -> *mut u8 {
+    /// View the entire memory of this `Object`.
+    pub unsafe fn memory(&self) -> &[u8] {
+        let ptr = self.as_ptr();
+        let len = self.size();
+        unsafe { core::slice::from_raw_parts(ptr, len) }
+    }
+
+    pub fn as_ptr(&self) -> *mut u8 {
         self.memory
     }
 
-    pub fn size(&mut self) -> usize {
+    pub fn size(&self) -> usize {
         self.layout.size()
+    }
+
+    pub fn layout(&self) -> &TypeLayout {
+        &self.layout
     }
 }
 
@@ -263,8 +306,19 @@ impl ObjectBuilder {
         }
     }
 
+    pub unsafe fn finalize_copy(&self) -> ObjectRef {
+        self.obj_ref.clone()
+    }
+
     pub fn finalize(self) -> ObjectRef {
         self.obj_ref
+    }
+
+    /// Returns the address of the object being built.
+    ///
+    /// Useful for building recursive objects.
+    pub fn addr(&self) -> ObjectAddr {
+        self.obj_ref.addr()
     }
 }
 
