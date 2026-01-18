@@ -1,98 +1,168 @@
-use std::time::Duration;
-
+use openfo4_script::engine::Engine;
 use openfo4_script::runtime::{Caller, Exception};
 
-use super::{Bool, Float, Int, Object, State, TimerId};
+use crate::systems::scripting::classes::{Object, State};
 
-/// CallFunction
+#[rustfmt::skip]
+pub fn register(engine: &mut Engine) {
+    engine.register_native_function("ScriptObject", "AddInventoryEventFilter", add_inventory_event_filter);
+    engine.register_native_function("ScriptObject", "CallFunction", call_function);
+    engine.register_native_function("ScriptObject", "CallFunctionNoWait", call_function_no_wait);
+    engine.register_native_function("ScriptObject", "CancelTimer", cancel_timer);
+    engine.register_native_function("ScriptObject", "CancelTimerGameTime", cancel_timer_game_time);
+    engine.register_native_function("ScriptObject", "GetPropertyValue", get_property_value);
+    engine.register_native_function("ScriptObject", "CastAs", cast_as);
+    engine.register_native_function("ScriptObject", "IsBoundGameObjectAvailable", is_bound_game_object_available);
+    engine.register_native_function("ScriptObject", "RegisterForAnimationEvent", register_for_animation_event);
+    engine.register_native_function("ScriptObject", "RegisterForCustomEvent", register_for_custom_event);
+    engine.register_native_function("ScriptObject", "RegisterForDetectionLOSGain", register_for_detection_los_gain);
+    engine.register_native_function("ScriptObject", "RegisterForDetectionLOSLost", register_for_detection_los_lost);
+    engine.register_native_function("ScriptObject", "RegisterForDirectLOSGain", register_for_direct_los_gain);
+    engine.register_native_function("ScriptObject", "RegisterForDirectLOSLost", register_for_direct_los_lost);
+    engine.register_native_function("ScriptObject", "RegisterForDistanceLessThanEvent", register_for_distance_less_than_event);
+    engine.register_native_function("ScriptObject", "RegisterForDistanceGreaterThanEvent", register_for_distance_greater_than_event);
+    engine.register_native_function("ScriptObject", "RegisterForMagicEffectApplyEvent", register_for_magic_effect_apply_event);
+    engine.register_native_function("ScriptObject", "RegisterForMenuOpenCloseEvent", register_for_menu_open_close_event);
+    engine.register_native_function("ScriptObject", "RegisterForPlayerSleep", register_for_player_sleep);
+    engine.register_native_function("ScriptObject", "RegisterForPlayerTeleport", register_for_player_teleport);
+    engine.register_native_function("ScriptObject", "RegisterForPlayerWait", register_for_player_wait);
+    engine.register_native_function("ScriptObject", "RegisterForRadiationDamageEvent", register_for_radiation_damage_event);
+    engine.register_native_function("ScriptObject", "RegisterForRemoteEvent", register_for_remote_event);
+    engine.register_native_function("ScriptObject", "RegisterForTrackedStatsEvent", register_for_tracked_stats_event);
+    engine.register_native_function("ScriptObject", "RegisterForLooksMenuEvent", register_for_looks_menu_event);
+    engine.register_native_function("ScriptObject", "RegisterForTutorialEvent", register_for_tutorial_event);
+    engine.register_native_function("ScriptObject", "RemoveAllInventoryEventFilters", remove_all_inventory_event_filters);
+    engine.register_native_function("ScriptObject", "RemoveInventoryEventFilter", remove_inventory_event_filter);
+    engine.register_native_function("ScriptObject", "SendCustomEvent", send_custom_event);
+    engine.register_native_function("ScriptObject", "SetPropertyValue", set_property_value);
+    engine.register_native_function("ScriptObject", "SetPropertyValueNoWait", set_property_value_no_wait);
+    engine.register_native_function("ScriptObject", "StartTimer", start_timer);
+    engine.register_native_function("ScriptObject", "StartTimerGameTime", start_timer_game_time);
+    engine.register_native_function("ScriptObject", "UnregisterForAllEvents", unregister_for_all_events);
+    engine.register_native_function("ScriptObject", "UnregisterForAllCustomEvents", unregister_for_all_custom_events);
+    engine.register_native_function("ScriptObject", "UnregisterForAllHitEvents", unregister_for_all_hit_events);
+    engine.register_native_function("ScriptObject", "UnregisterForAllMagicEffectApplyEvents", unregister_for_all_magic_effect_apply_events);
+    engine.register_native_function("ScriptObject", "UnregisterForAllMenuOpenCloseEvents", unregister_for_all_menu_open_close_events);
+    engine.register_native_function("ScriptObject", "UnregisterForAllRadiationDamageEvents", unregister_for_all_radiation_damage_events);
+    engine.register_native_function("ScriptObject", "UnregisterForAllRemoteEvents", unregister_for_all_remote_events);
+    engine.register_native_function("ScriptObject", "UnregisterForAllTrackedStatsEvents", unregister_for_all_tracked_stats_events);
+    engine.register_native_function("ScriptObject", "UnregisterForAnimationEvent", unregister_for_animation_event);
+    engine.register_native_function("ScriptObject", "UnregisterForCustomEvent", unregister_for_custom_event);
+    engine.register_native_function("ScriptObject", "UnregisterForDistanceEvents", unregister_for_distance_events);
+    engine.register_native_function("ScriptObject", "UnregisterForLOS", unregister_for_los);
+    engine.register_native_function("ScriptObject", "UnregisterForMagicEffectApplyEvent", unregister_for_magic_effect_apply_event);
+    engine.register_native_function("ScriptObject", "UnregisterForMenuOpenCloseEvent", unregister_for_menu_open_close_event);
+    engine.register_native_function("ScriptObject", "UnregisterForPlayerSleep", unregister_for_player_sleep);
+    engine.register_native_function("ScriptObject", "UnregisterForPlayerTeleport", unregister_for_player_teleport);
+    engine.register_native_function("ScriptObject", "UnregisterForPlayerWait", unregister_for_player_wait);
+    engine.register_native_function("ScriptObject", "UnregisterForRadiationDamageEvent", unregister_for_radiation_damage_event);
+    engine.register_native_function("ScriptObject", "UnregisterForRemoteEvent", unregister_for_remote_event);
+    engine.register_native_function("ScriptObject", "UnregisterForTrackedStatsEvent", unregister_for_tracked_stats_event);
+    engine.register_native_function("ScriptObject", "UnregisterForLooksMenuEvent", unregister_for_looks_menu_event);
+    engine.register_native_function("ScriptObject", "UnregisterForTutorialEvent", unregister_for_tutorial_event);
+}
+
+/// `AddInventoryEventFilter`
 ///
 /// ```text
-/// Var Function CallFunction(string asFuncName, Var[] aParams) native
+/// Function(Form akFilter) native
 /// ```
-pub fn call_function(Caller: Caller<'_, State>) {
+fn add_inventory_event_filter(
+    caller: Caller<'_, State>,
+    self_ptr: Object,
+    ak_filter: Object,
+) -> Result<(), Exception> {
     todo!()
 }
 
-/// `StartTimer`
+/// `CallFunction`
 ///
 /// ```text
-/// Function StartTimer(float afInterval, int aiTimerID = 0) native
+/// Var Function(string asFuncName, Var[] aParams) native
 /// ```
-pub fn start_timer(
-    mut caller: Caller<'_, State>,
-    object: Object,
-    interval: Float,
-    timer_id: Int,
-) -> Result<(), Exception> {
-    caller.data_mut().real_timers.insert(
-        object,
-        TimerId(timer_id),
-        Duration::from_secs_f32(interval),
-    );
-    Ok(())
+fn call_function(
+    caller: Caller<'_, State>,
+    self_ptr: Object,
+    as_func_name: isize,
+    a_params: isize,
+) -> Result<Object, Exception> {
+    todo!()
 }
 
-/// `StartTimerGameTime`
+/// `CallFunctionNoWait`
 ///
 /// ```text
-/// Function StartTimerGameTime(float afInterval, int aiTimerID = 0) native
+/// Function(string asFuncName, Var[] aParams) native
 /// ```
-pub fn start_timer_game_time(
-    mut caller: Caller<'_, State>,
-    object: Object,
-    interval: Float,
-    timer_id: Int,
+fn call_function_no_wait(
+    caller: Caller<'_, State>,
+    self_ptr: Object,
+    as_func_name: isize,
+    a_params: isize,
 ) -> Result<(), Exception> {
-    caller.data_mut().game_timers.insert(
-        object,
-        TimerId(timer_id),
-        Duration::from_secs_f32(interval / 3600.0),
-    );
-    Ok(())
+    todo!()
 }
 
 /// `CancelTimer`
 ///
 /// ```text
-/// Function CancelTimer(int aiTimerID = 0) native
+/// Function(int aiTimerID) native
 /// ```
-pub fn cancel_timer(
-    mut caller: Caller<'_, State>,
-    object: Object,
-    timer_id: Int,
+fn cancel_timer(
+    caller: Caller<'_, State>,
+    self_ptr: Object,
+    ai_timer_id: i32,
 ) -> Result<(), Exception> {
-    caller
-        .data_mut()
-        .real_timers
-        .remove(object, TimerId(timer_id));
-    Ok(())
+    todo!()
 }
 
 /// `CancelTimerGameTime`
 ///
 /// ```text
-/// Function CancelTimerGameTime(int aiTimerID = 0) native
+/// Function(int aiTimerID) native
 /// ```
-pub fn cancel_timer_game_time(
-    mut caller: Caller<'_, State>,
-    object: Object,
-    timer_id: Int,
+fn cancel_timer_game_time(
+    caller: Caller<'_, State>,
+    self_ptr: Object,
+    ai_timer_id: i32,
 ) -> Result<(), Exception> {
-    caller
-        .data_mut()
-        .game_timers
-        .remove(object, TimerId(timer_id));
-    Ok(())
+    todo!()
+}
+
+/// `GetPropertyValue`
+///
+/// ```text
+/// Var Function(string asPropertyName) native
+/// ```
+fn get_property_value(
+    caller: Caller<'_, State>,
+    self_ptr: Object,
+    as_property_name: isize,
+) -> Result<Object, Exception> {
+    todo!()
+}
+
+/// `CastAs`
+///
+/// ```text
+/// ScriptObject Function(string asScriptName) native
+/// ```
+fn cast_as(
+    caller: Caller<'_, State>,
+    self_ptr: Object,
+    as_script_name: isize,
+) -> Result<Object, Exception> {
+    todo!()
 }
 
 /// `IsBoundGameObjectAvailable`
 ///
 /// ```text
-/// bool Function IsBoundGameObjectAvailable() native
+/// bool Function() native
 /// ```
-pub fn is_bound_game_object_available(
+fn is_bound_game_object_available(
     caller: Caller<'_, State>,
-    object: Object,
+    self_ptr: Object,
 ) -> Result<bool, Exception> {
     todo!()
 }
@@ -100,27 +170,102 @@ pub fn is_bound_game_object_available(
 /// `RegisterForAnimationEvent`
 ///
 /// ```text
-/// bool Function RegisterForAnimationEvent(ObjectReference akSender, string asEventName) native
+/// bool Function(ObjectReference akSender, string asEventName) native
 /// ```
-pub fn register_for_animation_event(
+fn register_for_animation_event(
     caller: Caller<'_, State>,
-    object: Object,
-    sender: Object,
-    event_name: isize,
-) -> Result<Bool, Exception> {
+    self_ptr: Object,
+    ak_sender: Object,
+    as_event_name: isize,
+) -> Result<bool, Exception> {
     todo!()
 }
 
 /// `RegisterForCustomEvent`
 ///
 /// ```text
-/// Function RegisterForCustomEvent(ScriptObject akSender, CustomEventName asEventName) native
+/// Function(ScriptObject akSender, CustomEventName asEventName) native
 /// ```
-pub fn register_for_custom_event(
+fn register_for_custom_event(
     caller: Caller<'_, State>,
-    object: Object,
-    sender: Object,
-    event_name: isize,
+    self_ptr: Object,
+    ak_sender: Object,
+    as_event_name: Object,
+) -> Result<(), Exception> {
+    todo!()
+}
+
+/// `RegisterForDetectionLOSGain`
+///
+/// ```text
+/// Function(Actor akViewer, ObjectReference akTarget) native
+/// ```
+fn register_for_detection_los_gain(
+    caller: Caller<'_, State>,
+    self_ptr: Object,
+    ak_viewer: Object,
+    ak_target: Object,
+) -> Result<(), Exception> {
+    todo!()
+}
+
+/// `RegisterForDetectionLOSLost`
+///
+/// ```text
+/// Function(Actor akViewer, ObjectReference akTarget) native
+/// ```
+fn register_for_detection_los_lost(
+    caller: Caller<'_, State>,
+    self_ptr: Object,
+    ak_viewer: Object,
+    ak_target: Object,
+) -> Result<(), Exception> {
+    todo!()
+}
+
+/// `RegisterForDirectLOSGain`
+///
+/// ```text
+/// Function(ObjectReference akViewer, ObjectReference akTarget, string asViewerNode, string asTargetNode) native
+/// ```
+fn register_for_direct_los_gain(
+    caller: Caller<'_, State>,
+    self_ptr: Object,
+    ak_viewer: Object,
+    ak_target: Object,
+    as_viewer_node: isize,
+    as_target_node: isize,
+) -> Result<(), Exception> {
+    todo!()
+}
+
+/// `RegisterForDirectLOSLost`
+///
+/// ```text
+/// Function(ObjectReference akViewer, ObjectReference akTarget, string asViewerNode, string asTargetNode) native
+/// ```
+fn register_for_direct_los_lost(
+    caller: Caller<'_, State>,
+    self_ptr: Object,
+    ak_viewer: Object,
+    ak_target: Object,
+    as_viewer_node: isize,
+    as_target_node: isize,
+) -> Result<(), Exception> {
+    todo!()
+}
+
+/// `RegisterForDistanceLessThanEvent`
+///
+/// ```text
+/// Function(ScriptObject akObj1, ScriptObject akObj2, float afDistance) native
+/// ```
+fn register_for_distance_less_than_event(
+    caller: Caller<'_, State>,
+    self_ptr: Object,
+    ak_obj1: Object,
+    ak_obj2: Object,
+    af_distance: f32,
 ) -> Result<(), Exception> {
     todo!()
 }
@@ -128,50 +273,30 @@ pub fn register_for_custom_event(
 /// `RegisterForDistanceGreaterThanEvent`
 ///
 /// ```text
-/// Function RegisterForDistanceGreaterThanEvent(ScriptObject akObj1, ScriptObject akObj2, float afDistance) native
+/// Function(ScriptObject akObj1, ScriptObject akObj2, float afDistance) native
 /// ```
-pub fn register_for_distance_greater_than_event(
+fn register_for_distance_greater_than_event(
     caller: Caller<'_, State>,
     self_ptr: Object,
-    object1: Object,
-    object2: Object,
-    distance: Float,
+    ak_obj1: Object,
+    ak_obj2: Object,
+    af_distance: f32,
 ) -> Result<(), Exception> {
     todo!()
 }
 
-/// `RegisterForDistanceLessThanEvent`
-
-/// ```text
-/// Function RegisterForDistanceLessThanEvent(ScriptObject akObj1, ScriptObject akObj2, float afDistance) native
-/// ```
-pub fn register_for_distance_less_than_event(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    object1: Object,
-    object2: Object,
-    distance: Float,
-) -> Result<(), Exception> {
-    todo!()
-}
-
-/// `RegisterForHitEvent`
+/// `RegisterForMagicEffectApplyEvent`
 ///
 /// ```text
-/// Function RegisterForHitEvent(ScriptObject akTarget, ScriptObject akAggressorFilter = None, Form akSourceFilter = None, Form akProjectileFilter = None, int aiPowerFilter = -1, int aiSneakFilter = -1, int aiBashFilter = -1, int aiBlockFilter = -1, bool abMatch = true) native
+/// Function(ScriptObject akTarget, ScriptObject akCasterFilter, Form akEffectFilter, bool abMatch) native
 /// ```
-pub fn register_for_hit_event(
+fn register_for_magic_effect_apply_event(
     caller: Caller<'_, State>,
-    object: Object,
-    target: Object,
-    agressor_filter: Object,
-    source_filter: Object,
-    projectile_filter: Object,
-    power_filter: Int,
-    sneak_filter: Int,
-    bash_filter: Int,
-    block_filter: Int,
-    whitelist_filter: bool,
+    self_ptr: Object,
+    ak_target: Object,
+    ak_caster_filter: Object,
+    ak_effect_filter: Object,
+    ab_match: bool,
 ) -> Result<(), Exception> {
     todo!()
 }
@@ -179,12 +304,12 @@ pub fn register_for_hit_event(
 /// `RegisterForMenuOpenCloseEvent`
 ///
 /// ```text
-/// Function RegisterForMenuOpenCloseEvent(string asMenuName) native
+/// Function(string asMenuName) native
 /// ```
-pub fn register_for_menu_open_close_event(
+fn register_for_menu_open_close_event(
     caller: Caller<'_, State>,
-    object: Object,
-    menu_name: isize,
+    self_ptr: Object,
+    as_menu_name: isize,
 ) -> Result<(), Exception> {
     todo!()
 }
@@ -192,23 +317,20 @@ pub fn register_for_menu_open_close_event(
 /// `RegisterForPlayerSleep`
 ///
 /// ```text
-/// Function RegisterForPlayerSleep() native
+/// Function() native
 /// ```
-pub fn register_for_player_sleep(
-    caller: Caller<'_, State>,
-    object: Object,
-) -> Result<(), Exception> {
+fn register_for_player_sleep(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Exception> {
     todo!()
 }
 
 /// `RegisterForPlayerTeleport`
 ///
 /// ```text
-/// Function RegisterForPlayerTeleport() native
+/// Function() native
 /// ```
-pub fn register_for_player_teleport(
+fn register_for_player_teleport(
     caller: Caller<'_, State>,
-    object: Object,
+    self_ptr: Object,
 ) -> Result<(), Exception> {
     todo!()
 }
@@ -216,11 +338,21 @@ pub fn register_for_player_teleport(
 /// `RegisterForPlayerWait`
 ///
 /// ```text
-/// Function RegisterForPlayerWait() native
+/// Function() native
 /// ```
-pub fn register_for_player_wait(
+fn register_for_player_wait(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Exception> {
+    todo!()
+}
+
+/// `RegisterForRadiationDamageEvent`
+///
+/// ```text
+/// Function(ScriptObject akTarget) native
+/// ```
+fn register_for_radiation_damage_event(
     caller: Caller<'_, State>,
-    object: Object,
+    self_ptr: Object,
+    ak_target: Object,
 ) -> Result<(), Exception> {
     todo!()
 }
@@ -228,27 +360,77 @@ pub fn register_for_player_wait(
 /// `RegisterForRemoteEvent`
 ///
 /// ```text
-/// bool RegisterForRemoteEvent(ScriptObject akEventSource, ScriptEventName asEventName) native
+/// bool Function(ScriptObject akEventSource, ScriptEventName asEventName) native
 /// ```
-pub fn register_for_remote_event(
+fn register_for_remote_event(
     caller: Caller<'_, State>,
-    object: Object,
-    source: Object,
-    event_name: isize,
-) -> Result<Bool, Exception> {
+    self_ptr: Object,
+    ak_event_source: Object,
+    as_event_name: Object,
+) -> Result<bool, Exception> {
     todo!()
 }
 
 /// `RegisterForTrackedStatsEvent`
 ///
 /// ```text
-/// Function RegisterForTrackedStatsEvent(string asStat, int aiThreshold) native
+/// Function(string asStat, int aiThreshold) native
 /// ```
-pub fn register_for_tracked_stats_event(
+fn register_for_tracked_stats_event(
     caller: Caller<'_, State>,
-    object: Object,
-    stat: isize,
-    threshold: Int,
+    self_ptr: Object,
+    as_stat: isize,
+    ai_threshold: i32,
+) -> Result<(), Exception> {
+    todo!()
+}
+
+/// `RegisterForLooksMenuEvent`
+///
+/// ```text
+/// Function() native
+/// ```
+fn register_for_looks_menu_event(
+    caller: Caller<'_, State>,
+    self_ptr: Object,
+) -> Result<(), Exception> {
+    todo!()
+}
+
+/// `RegisterForTutorialEvent`
+///
+/// ```text
+/// Function(String asEventName) native
+/// ```
+fn register_for_tutorial_event(
+    caller: Caller<'_, State>,
+    self_ptr: Object,
+    as_event_name: isize,
+) -> Result<(), Exception> {
+    todo!()
+}
+
+/// `RemoveAllInventoryEventFilters`
+///
+/// ```text
+/// Function() native
+/// ```
+fn remove_all_inventory_event_filters(
+    caller: Caller<'_, State>,
+    self_ptr: Object,
+) -> Result<(), Exception> {
+    todo!()
+}
+
+/// `RemoveInventoryEventFilter`
+///
+/// ```text
+/// Function(Form akFilter) native
+/// ```
+fn remove_inventory_event_filter(
+    caller: Caller<'_, State>,
+    self_ptr: Object,
+    ak_filter: Object,
 ) -> Result<(), Exception> {
     todo!()
 }
@@ -256,12 +438,164 @@ pub fn register_for_tracked_stats_event(
 /// `SendCustomEvent`
 ///
 /// ```text
-/// Function SendCustomEvent(CustomEventName asEvent, Var[] akArgs = None) native
+/// Function(CustomEventName asEvent, Var[] akArgs) native
 /// ```
-pub fn send_custom_event(
+fn send_custom_event(
     caller: Caller<'_, State>,
-    event_name: isize,
-    args: isize,
+    self_ptr: Object,
+    as_event: Object,
+    ak_args: isize,
+) -> Result<(), Exception> {
+    todo!()
+}
+
+/// `SetPropertyValue`
+///
+/// ```text
+/// Function(string asPropertyName, Var aValue) native
+/// ```
+fn set_property_value(
+    caller: Caller<'_, State>,
+    self_ptr: Object,
+    as_property_name: isize,
+    a_value: Object,
+) -> Result<(), Exception> {
+    todo!()
+}
+
+/// `SetPropertyValueNoWait`
+///
+/// ```text
+/// Function(string asPropertyName, Var aValue) native
+/// ```
+fn set_property_value_no_wait(
+    caller: Caller<'_, State>,
+    self_ptr: Object,
+    as_property_name: isize,
+    a_value: Object,
+) -> Result<(), Exception> {
+    todo!()
+}
+
+/// `StartTimer`
+///
+/// ```text
+/// Function(float afInterval, int aiTimerID) native
+/// ```
+fn start_timer(
+    caller: Caller<'_, State>,
+    self_ptr: Object,
+    af_interval: f32,
+    ai_timer_id: i32,
+) -> Result<(), Exception> {
+    todo!()
+}
+
+/// `StartTimerGameTime`
+///
+/// ```text
+/// Function(float afInterval, int aiTimerID) native
+/// ```
+fn start_timer_game_time(
+    caller: Caller<'_, State>,
+    self_ptr: Object,
+    af_interval: f32,
+    ai_timer_id: i32,
+) -> Result<(), Exception> {
+    todo!()
+}
+
+/// `UnregisterForAllEvents`
+///
+/// ```text
+/// Function() native
+/// ```
+fn unregister_for_all_events(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Exception> {
+    todo!()
+}
+
+/// `UnregisterForAllCustomEvents`
+///
+/// ```text
+/// Function() native
+/// ```
+fn unregister_for_all_custom_events(
+    caller: Caller<'_, State>,
+    self_ptr: Object,
+) -> Result<(), Exception> {
+    todo!()
+}
+
+/// `UnregisterForAllHitEvents`
+///
+/// ```text
+/// Function(ScriptObject akTarget) native
+/// ```
+fn unregister_for_all_hit_events(
+    caller: Caller<'_, State>,
+    self_ptr: Object,
+    ak_target: Object,
+) -> Result<(), Exception> {
+    todo!()
+}
+
+/// `UnregisterForAllMagicEffectApplyEvents`
+///
+/// ```text
+/// Function(ScriptObject akTarget) native
+/// ```
+fn unregister_for_all_magic_effect_apply_events(
+    caller: Caller<'_, State>,
+    self_ptr: Object,
+    ak_target: Object,
+) -> Result<(), Exception> {
+    todo!()
+}
+
+/// `UnregisterForAllMenuOpenCloseEvents`
+///
+/// ```text
+/// Function() native
+/// ```
+fn unregister_for_all_menu_open_close_events(
+    caller: Caller<'_, State>,
+    self_ptr: Object,
+) -> Result<(), Exception> {
+    todo!()
+}
+
+/// `UnregisterForAllRadiationDamageEvents`
+///
+/// ```text
+/// Function() native
+/// ```
+fn unregister_for_all_radiation_damage_events(
+    caller: Caller<'_, State>,
+    self_ptr: Object,
+) -> Result<(), Exception> {
+    todo!()
+}
+
+/// `UnregisterForAllRemoteEvents`
+///
+/// ```text
+/// Function() native
+/// ```
+fn unregister_for_all_remote_events(
+    caller: Caller<'_, State>,
+    self_ptr: Object,
+) -> Result<(), Exception> {
+    todo!()
+}
+
+/// `UnregisterForAllTrackedStatsEvents`
+///
+/// ```text
+/// Function() native
+/// ```
+fn unregister_for_all_tracked_stats_events(
+    caller: Caller<'_, State>,
+    self_ptr: Object,
 ) -> Result<(), Exception> {
     todo!()
 }
@@ -269,13 +603,27 @@ pub fn send_custom_event(
 /// `UnregisterForAnimationEvent`
 ///
 /// ```text
-/// Function UnregisterForAnimationEvent(ObjectReference akSender, string asEventName) native
+/// Function(ObjectReference akSender, string asEventName) native
 /// ```
-pub fn unregister_for_animation_event(
+fn unregister_for_animation_event(
     caller: Caller<'_, State>,
-    object1: Object,
-    sender: Object,
-    event_name: isize,
+    self_ptr: Object,
+    ak_sender: Object,
+    as_event_name: isize,
+) -> Result<(), Exception> {
+    todo!()
+}
+
+/// `UnregisterForCustomEvent`
+///
+/// ```text
+/// Function(ScriptObject akSender, CustomEventName asEventName) native
+/// ```
+fn unregister_for_custom_event(
+    caller: Caller<'_, State>,
+    self_ptr: Object,
+    ak_sender: Object,
+    as_event_name: Object,
 ) -> Result<(), Exception> {
     todo!()
 }
@@ -283,13 +631,13 @@ pub fn unregister_for_animation_event(
 /// `UnregisterForDistanceEvents`
 ///
 /// ```text
-/// Function UnregisterForDistanceEvents(ScriptObject akObj1, ScriptObject akObj2) native
+/// Function(ScriptObject akObj1, ScriptObject akObj2) native
 /// ```
-pub fn unregister_for_distance_events(
+fn unregister_for_distance_events(
     caller: Caller<'_, State>,
-    object: Object,
-    object1: Object,
-    object2: Object,
+    self_ptr: Object,
+    ak_obj1: Object,
+    ak_obj2: Object,
 ) -> Result<(), Exception> {
     todo!()
 }
@@ -297,13 +645,91 @@ pub fn unregister_for_distance_events(
 /// `UnregisterForLOS`
 ///
 /// ```text
-/// Function UnregisterForLOS(ObjectReference akViewer, ObjectReference akTarget) native
+/// Function(ObjectReference akViewer, ObjectReference akTarget) native
 /// ```
-pub fn unregister_for_los(
+fn unregister_for_los(
     caller: Caller<'_, State>,
-    object: Object,
-    viewer: Object,
-    target: Object,
+    self_ptr: Object,
+    ak_viewer: Object,
+    ak_target: Object,
+) -> Result<(), Exception> {
+    todo!()
+}
+
+/// `UnregisterForMagicEffectApplyEvent`
+///
+/// ```text
+/// Function(ScriptObject akTarget, ScriptObject akCasterFilter, Form akEffectFilter, bool abMatch) native
+/// ```
+fn unregister_for_magic_effect_apply_event(
+    caller: Caller<'_, State>,
+    self_ptr: Object,
+    ak_target: Object,
+    ak_caster_filter: Object,
+    ak_effect_filter: Object,
+    ab_match: bool,
+) -> Result<(), Exception> {
+    todo!()
+}
+
+/// `UnregisterForMenuOpenCloseEvent`
+///
+/// ```text
+/// Function(string asMenuName) native
+/// ```
+fn unregister_for_menu_open_close_event(
+    caller: Caller<'_, State>,
+    self_ptr: Object,
+    as_menu_name: isize,
+) -> Result<(), Exception> {
+    todo!()
+}
+
+/// `UnregisterForPlayerSleep`
+///
+/// ```text
+/// Function() native
+/// ```
+fn unregister_for_player_sleep(
+    caller: Caller<'_, State>,
+    self_ptr: Object,
+) -> Result<(), Exception> {
+    todo!()
+}
+
+/// `UnregisterForPlayerTeleport`
+///
+/// ```text
+/// Function() native
+/// ```
+fn unregister_for_player_teleport(
+    caller: Caller<'_, State>,
+    self_ptr: Object,
+) -> Result<(), Exception> {
+    todo!()
+}
+
+/// `UnregisterForPlayerWait`
+///
+/// ```text
+/// Function() native
+/// ```
+fn unregister_for_player_wait(
+    caller: Caller<'_, State>,
+    self_ptr: Object,
+) -> Result<(), Exception> {
+    todo!()
+}
+
+/// `UnregisterForRadiationDamageEvent`
+///
+/// ```text
+/// Function(ScriptObject akTarget) native
+/// ```
+fn unregister_for_radiation_damage_event(
+    caller: Caller<'_, State>,
+    self_ptr: Object,
+    ak_target: Object,
 ) -> Result<(), Exception> {
     todo!()
 }
@@ -311,26 +737,13 @@ pub fn unregister_for_los(
 /// `UnregisterForRemoteEvent`
 ///
 /// ```text
-/// Function UnregisterForRemoteEvent(ScriptObject akEventSource, string asEventName) native
+/// Function(ScriptObject akEventSource, ScriptEventName asEventName) native
 /// ```
-pub fn unregister_for_remote_event(
+fn unregister_for_remote_event(
     caller: Caller<'_, State>,
-    object: Object,
-    event_source: Object,
-    script_event_name: isize,
-) -> Result<(), Exception> {
-    todo!()
-}
-
-/// `UnregisterForTutorialEvent`
-///
-/// ```text
-/// Function UnregisterForTutorialEvent(string asEventName) Native
-/// ```
-pub fn unregister_for_tutorial_event(
-    caller: Caller<'_, State>,
-    object: Object,
-    event_name: isize,
+    self_ptr: Object,
+    ak_event_source: Object,
+    as_event_name: Object,
 ) -> Result<(), Exception> {
     todo!()
 }
@@ -338,12 +751,37 @@ pub fn unregister_for_tutorial_event(
 /// `UnregisterForTrackedStatsEvent`
 ///
 /// ```text
-/// Function UnregisterForTrackedStatsEvent(string asStat) native
+/// Function(string asStat) native
 /// ```
-pub fn unregister_for_tracked_stats_event(
+fn unregister_for_tracked_stats_event(
     caller: Caller<'_, State>,
-    object: Object,
-    stat: isize,
+    self_ptr: Object,
+    as_stat: isize,
+) -> Result<(), Exception> {
+    todo!()
+}
+
+/// `UnregisterForLooksMenuEvent`
+///
+/// ```text
+/// Function() native
+/// ```
+fn unregister_for_looks_menu_event(
+    caller: Caller<'_, State>,
+    self_ptr: Object,
+) -> Result<(), Exception> {
+    todo!()
+}
+
+/// `UnregisterForTutorialEvent`
+///
+/// ```text
+/// Function(String asEventName) native
+/// ```
+fn unregister_for_tutorial_event(
+    caller: Caller<'_, State>,
+    self_ptr: Object,
+    as_event_name: isize,
 ) -> Result<(), Exception> {
     todo!()
 }
