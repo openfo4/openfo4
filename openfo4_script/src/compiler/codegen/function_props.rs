@@ -165,7 +165,6 @@ pub fn function_properties(data: &CodegenData, func: &FunctionDef) -> FunctionPr
                 stages.push(variables.clone());
             }
             Instruction::CallParent(op) => {
-                todo!();
                 let Value::Ident(func_name) = &op.function else {
                     unreachable!();
                 };

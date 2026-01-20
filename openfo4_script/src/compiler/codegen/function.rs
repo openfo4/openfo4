@@ -537,7 +537,50 @@ fn translate_function_body(
                     translator.store(&op.return_assignment, res);
                 }
             }
-            Instruction::CallParent(op) => {}
+            Instruction::CallParent(op) => {
+                let Value::Ident(function_name) = &op.function else {
+                    unreachable!();
+                };
+
+                let class_name = translator.get_ty_name(&Value::Ident("self".to_owned()));
+                let class = translator
+                    .data
+                    .classes
+                    .get(&class_name.to_lowercase())
+                    .unwrap();
+                let parent = class.parent.as_ref().unwrap();
+
+                let func = data
+                    .get_function(&parent.to_lowercase(), &function_name)
+                    .unwrap();
+
+                let mut args = op
+                    .args
+                    .iter()
+                    .map(|v| translator.load(v))
+                    .collect::<Vec<_>>();
+
+                // In our ABI the first argument is the object pointer.
+                args.insert(0, translator.self_ptr.unwrap());
+
+                args.insert(0, ctx_ptr);
+
+                let stage = &props.stages[next_stage];
+                next_stage += 1;
+
+                if let Some(res) = perform_checked_call(
+                    &mut translator,
+                    function,
+                    func,
+                    &args,
+                    &mut current_block,
+                    stage,
+                    ctx_ptr,
+                    stack_base,
+                ) {
+                    translator.store(&op.return_assignment, res);
+                }
+            }
             Instruction::CallStatic(op) => {
                 let (class_name, function_name) = match (&op.class, &op.function) {
                     (Value::Ident(class), Value::Ident(func)) => (class, func),
