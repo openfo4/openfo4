@@ -848,6 +848,18 @@ impl<'a> FunctionBuilder<'a> {
             .push(Instruction::Memcpy { src, dst, size });
     }
 
+    pub fn memcmp(&mut self, lhs: Value, rhs: Value, size: Value) -> Value {
+        let dst = self.produce_value();
+
+        self.instructions.push(Instruction::Memcmp {
+            lhs,
+            rhs,
+            size,
+            dst,
+        });
+        dst
+    }
+
     pub fn iadd_imm(&mut self, lhs: Value, rhs: i64) -> Value {
         self.binop_imm(lhs, rhs, Instruction::IAddImm)
     }
@@ -1027,6 +1039,12 @@ enum Instruction {
     Popcnt(Unop),
     Memcpy {
         src: Value,
+        dst: Value,
+        size: Value,
+    },
+    Memcmp {
+        lhs: Value,
+        rhs: Value,
         dst: Value,
         size: Value,
     },

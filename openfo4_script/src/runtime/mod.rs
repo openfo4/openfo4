@@ -258,6 +258,18 @@ impl<'a, T> Caller<'a, T> {
             core::slice::from_raw_parts_mut(object.ptr.cast::<U>(), object.len)
         }
     }
+
+    pub unsafe fn copy_array_of_structs<U>(&self, addr: ObjectAddr) -> Vec<U> {
+        let addrs = unsafe { self.array::<ObjectAddr>(addr) };
+
+        let mut objects = Vec::with_capacity(addrs.len());
+        for addr in addrs {
+            let object = unsafe { addr.to_raw().cast::<U>().read() };
+            objects.push(object);
+        }
+
+        objects
+    }
 }
 
 #[derive(Default)]

@@ -1,10 +1,9 @@
 use std::collections::HashMap;
 use std::mem::offset_of;
-use std::sync::LazyLock;
 
 use openfo4_jit::{
     Block, Compiler, FloatCompareOp, FunctionBuilder, FunctionId, IntCompareOp, Signature,
-    StackSlot, Type as JitType, Value as JitValue, Variable as JitVariable,
+    Type as JitType, Value as JitValue, Variable as JitVariable,
 };
 use openfo4_pex::{Function, Instruction, Value};
 
@@ -18,7 +17,7 @@ use crate::compiler::codegen::layout::generate_type_layout;
 use crate::compiler::codegen::trampoline::generate_guest_to_host_trampoline;
 use crate::compiler::codegen::{ClassDef, CodegenData, FunctionDef, Type};
 use crate::runtime::object::ARRAY_LAYOUT;
-use crate::runtime::{ArrayObject, Func, ObjectTag, RESULT_ERROR, RESULT_OK};
+use crate::runtime::{ArrayObject, ObjectTag, RESULT_ERROR, RESULT_OK};
 
 #[derive(Debug)]
 pub struct FunctionResult {
@@ -859,7 +858,7 @@ fn translate_function_body(
                 );
 
                 let loop_block = translator.builder.create_block(&[JitType::Pointer]);
-                let loop_body_block = translator.builder.create_block(&[JitType::Pointer]);
+                let mut loop_body_block = translator.builder.create_block(&[JitType::Pointer]);
                 let final_block = translator.builder.create_block(&[JitType::Pointer]);
 
                 let start_index_wide = translator.builder.uextend(start_index, JitType::Pointer);
@@ -891,20 +890,27 @@ fn translate_function_body(
                     translator.builder.switch_to_block(loop_body_block);
                     let index = translator.builder.block_params(loop_body_block)[0];
 
-                    let is_eq = match *elem_ty {
-                        Type::Int => {
-                            let stride = JitType::I32.size();
-                            let offset = translator.builder.imul_imm(index, stride as i64);
-                            let addr = translator.builder.iadd(array_ptr, offset);
-                            let value = translator.builder.load(JitType::I32, addr, 0);
-
-                            translator
-                                .builder
-                                .icmp(value, searched_value, IntCompareOp::Equal)
-                        }
-
-                        ty => todo!("{:?}", ty),
+                    let ty = match *elem_ty {
+                        Type::None | Type::Bool | Type::Int => JitType::I32,
+                        Type::Float => JitType::F32,
+                        Type::Class(_)
+                        | Type::Array(_)
+                        | Type::Struct(_)
+                        | Type::String
+                        | Type::Var => JitType::Pointer,
                     };
+
+                    let offset = translator.builder.imul_imm(index, ty.size() as i64);
+                    let addr = translator.builder.iadd(array_ptr, offset);
+                    let value = translator.builder.load(ty, addr, 0);
+
+                    let is_eq = check_equality(
+                        &mut translator,
+                        &elem_ty,
+                        value,
+                        searched_value,
+                        &mut loop_body_block,
+                    );
 
                     let next_index = translator.builder.iadd_imm(index, 1);
                     translator.builder.brif(
@@ -926,6 +932,131 @@ fn translate_function_body(
                     current_block = final_block;
                 }
             }
+            Instruction::ArrayFindStruct(op) => {
+                let Type::Array(elem_ty) = translator.get_type(&op.array_value) else {
+                    unreachable!();
+                };
+                let Value::String(member_name) = &op.member_name else {
+                    unreachable!();
+                };
+
+                let array = translator.load(&op.array_value);
+                let start_index = translator.load(&op.start_index);
+                let seached_value = translator.load(&op.value);
+
+                let array_ptr = translator.builder.load(
+                    JitType::Pointer,
+                    array,
+                    offset_of!(ArrayObject, ptr) as u32,
+                );
+                let array_len = translator.builder.load(
+                    JitType::Pointer,
+                    array,
+                    offset_of!(ArrayObject, len) as u32,
+                );
+
+                let loop_block = translator.builder.create_block(&[JitType::Pointer]);
+                let mut loop_body_block = translator.builder.create_block(&[JitType::Pointer]);
+                let final_block = translator.builder.create_block(&[JitType::Pointer]);
+
+                let start_index_wide = translator.builder.uextend(start_index, JitType::Pointer);
+                translator.builder.jump(loop_block, &[start_index_wide]);
+
+                // Loop block
+                {
+                    translator.builder.switch_to_block(loop_block);
+                    let index = translator.builder.block_params(loop_block)[0];
+
+                    let negative_one = translator.builder.iconst(JitType::Pointer, -1);
+                    let terminate_loop = translator.builder.icmp(
+                        index,
+                        array_len,
+                        IntCompareOp::UnsignedGreaterThanOrEqual,
+                    );
+
+                    translator.builder.brif(
+                        terminate_loop,
+                        final_block,
+                        &[negative_one],
+                        loop_body_block,
+                        &[index],
+                    );
+                }
+
+                // Loop body block
+                {
+                    translator.builder.switch_to_block(loop_body_block);
+                    let index = translator.builder.block_params(loop_body_block)[0];
+
+                    let (field_offset, field_ty) = match &*elem_ty {
+                        Type::Struct(name) => {
+                            let struct_def = translator.data.structs.get(name).unwrap();
+                            let layout = struct_def.layout(translator.data);
+
+                            let member = struct_def
+                                .s
+                                .members
+                                .iter()
+                                .find(|v| v.name.to_lowercase() == member_name.to_lowercase())
+                                .unwrap();
+
+                            let offset = *layout
+                                .field_offsets
+                                .get(&member_name.to_lowercase())
+                                .unwrap();
+                            let ty = translator.data.resolve_ty(&member.ty);
+                            (offset, ty)
+                        }
+                        _ => unreachable!(),
+                    };
+
+                    let ty = match field_ty {
+                        Type::None | Type::Bool | Type::Int => JitType::I32,
+                        Type::Float => JitType::F32,
+                        Type::Class(_)
+                        | Type::Array(_)
+                        | Type::Struct(_)
+                        | Type::String
+                        | Type::Var => JitType::Pointer,
+                    };
+
+                    let offset = translator
+                        .builder
+                        .imul_imm(index, JitType::Pointer.size() as i64);
+                    let addr = translator.builder.iadd(array_ptr, offset);
+                    let struct_ptr = translator.builder.load(JitType::Pointer, addr, 0);
+                    let value = translator.builder.load(ty, struct_ptr, field_offset as u32);
+
+                    let is_eq = check_equality(
+                        &mut translator,
+                        &field_ty,
+                        value,
+                        seached_value,
+                        &mut loop_body_block,
+                    );
+
+                    let next_index = translator.builder.iadd_imm(index, 1);
+                    translator.builder.brif(
+                        is_eq,
+                        final_block,
+                        &[index],
+                        loop_block,
+                        &[next_index],
+                    );
+                }
+
+                // Final block
+                {
+                    translator.builder.switch_to_block(final_block);
+                    let index = translator.builder.block_params(final_block)[0];
+                    let truncated_index = translator.builder.ireduce(index, JitType::I32);
+
+                    translator.store(&op.return_index, truncated_index);
+                    current_block = final_block;
+                }
+            }
+            Instruction::StringConcat(op) => {}
+            Instruction::ArraySet(op) => {}
             op => todo!("{:?}", op),
         }
     }
@@ -1672,4 +1803,79 @@ fn emit_array_bounds_check(
 
     translator.builder.switch_to_block(continue_block);
     *block = continue_block;
+}
+
+/// Returns a truthy value if lhs == rhs.
+fn check_equality(
+    translator: &mut FunctionTranslator<'_>,
+    ty: &Type,
+    lhs: JitValue,
+    rhs: JitValue,
+    block: &mut Block,
+) -> JitValue {
+    match ty {
+        // None types are trivially equal to itself.
+        Type::None => translator.builder.iconst(JitType::I8, 1),
+        Type::Bool => translator.builder.icmp(lhs, rhs, IntCompareOp::Equal),
+        Type::Int => translator.builder.icmp(lhs, rhs, IntCompareOp::Equal),
+        Type::Float => translator.builder.fcmp(lhs, rhs, FloatCompareOp::Equal),
+        Type::String => {
+            // if lhs.len != rhs.len the strings are not equal.
+            // if lhs.ptr == rhs.ptr && lhs.len == rhs.len both strings are equal.
+            // Otherwise we need to memcmp the strings.
+
+            let false_u8 = translator.builder.iconst(JitType::I8, 0);
+            let true_u8 = translator.builder.iconst(JitType::I8, 1);
+            let zero_i32 = translator.builder.iconst(JitType::I32, 0);
+
+            let lhs_ptr =
+                translator
+                    .builder
+                    .load(JitType::Pointer, lhs, offset_of!(ArrayObject, ptr) as u32);
+            let lhs_len =
+                translator
+                    .builder
+                    .load(JitType::Pointer, lhs, offset_of!(ArrayObject, len) as u32);
+            let rhs_ptr =
+                translator
+                    .builder
+                    .load(JitType::Pointer, rhs, offset_of!(ArrayObject, ptr) as u32);
+            let rhs_len =
+                translator
+                    .builder
+                    .load(JitType::Pointer, rhs, offset_of!(ArrayObject, len) as u32);
+
+            let final_block = translator.builder.create_block(&[JitType::I8]);
+            let cmp_ptr_block = translator.builder.create_block(&[]);
+            let memcmp_block = translator.builder.create_block(&[]);
+
+            let len_eq = translator
+                .builder
+                .icmp(lhs_len, rhs_len, IntCompareOp::Equal);
+            translator
+                .builder
+                .brif(len_eq, cmp_ptr_block, &[], final_block, &[false_u8]);
+
+            translator.builder.switch_to_block(cmp_ptr_block);
+            let ptr_eq = translator
+                .builder
+                .icmp(lhs_ptr, rhs_len, IntCompareOp::Equal);
+            translator
+                .builder
+                .brif(ptr_eq, final_block, &[true_u8], memcmp_block, &[]);
+
+            translator.builder.switch_to_block(memcmp_block);
+            // memcmp returns 0 if both sides are equal.
+            let is_not_eq = translator.builder.memcmp(lhs_ptr, rhs_ptr, lhs_len);
+            let is_eq = translator
+                .builder
+                .icmp(is_not_eq, zero_i32, IntCompareOp::Equal);
+            translator.builder.jump(final_block, &[is_eq]);
+
+            translator.builder.switch_to_block(final_block);
+            *block = final_block;
+            translator.builder.block_params(final_block)[0]
+        }
+        ty => todo!("{:?}", ty),
+    }
 }

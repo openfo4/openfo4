@@ -6,7 +6,7 @@ use std::sync::{Arc, Mutex};
 use cranelift_codegen::control::ControlPlane;
 use cranelift_codegen::ir::condcodes::{FloatCC, IntCC};
 use cranelift_codegen::ir::{
-    self, ArgumentExtension, ArgumentPurpose, BlockArg, InstBuilder, MemFlags, StackSlotData,
+    self, ArgumentExtension, ArgumentPurpose, BlockArg, Inst, InstBuilder, MemFlags, StackSlotData,
     StackSlotKind,
 };
 use cranelift_codegen::settings::Configurable;
@@ -655,6 +655,19 @@ impl CraneliftModule {
                         let dst = values[dst.0].unwrap();
                         let size = values[size.0].unwrap();
                         builder.call_memcpy(module.isa().frontend_config(), dst, src, size);
+                    }
+                    Instruction::Memcmp {
+                        lhs,
+                        rhs,
+                        dst,
+                        size,
+                    } => {
+                        let lhs = values[lhs.0].unwrap();
+                        let rhs = values[rhs.0].unwrap();
+                        let size = values[size.0].unwrap();
+                        let res =
+                            builder.call_memcmp(module.isa().frontend_config(), lhs, rhs, size);
+                        values[dst.0] = Some(res);
                     }
                     Instruction::IAddImm(op) => {
                         let lhs = values[op.lhs.0].unwrap();

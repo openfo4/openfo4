@@ -19,8 +19,8 @@
 use std::fmt::Debug;
 
 use openfo4_pex::{
-    ArrayFind, Binop, CallStatic, Class, Function, Instruction, Module, Property, State, Unop,
-    Value, Variable, VariableDefinition,
+    ArrayFind, ArrayFindStruct, Binop, CallStatic, Class, Function, Instruction, Module, Property,
+    State, Struct, StructMember, Unop, Value, Variable, VariableDefinition,
 };
 
 pub fn assemble(input: &str) -> Module {
@@ -55,12 +55,32 @@ fn parse_class(cursor: &mut Cursor<'_>) -> Class {
     let mut functions = Vec::new();
     let mut globals = Vec::new();
     let mut properties = Vec::new();
+    let mut structs = Vec::new();
 
     loop {
         match cursor.peek() {
             Some(Token::Ident("function")) => {
                 let function = parse_function(cursor);
                 functions.push(function);
+            }
+            Some(Token::Ident("struct")) => {
+                cursor.pop();
+                let name = cursor.consume_ident().to_owned();
+                cursor.consume(Token::Colon);
+                cursor.consume(Token::Eol);
+
+                let mut members = Vec::new();
+                while cursor.peek() == Some(&Token::Ident("field")) {
+                    cursor.pop();
+                    let name = cursor.consume_ident().to_owned();
+                    cursor.consume(Token::Colon);
+                    let ty = cursor.consume_ident().to_owned();
+                    cursor.consume(Token::Eol);
+
+                    members.push(StructMember { name, ty });
+                }
+
+                structs.push(Struct { name, members });
             }
             Some(Token::Ident("global")) => {
                 cursor.pop();
@@ -103,7 +123,7 @@ fn parse_class(cursor: &mut Cursor<'_>) -> Class {
     Class {
         name,
         parent: "".to_owned(),
-        structs: Vec::new(),
+        structs,
         states: vec![State {
             name: "".to_owned(),
             functions,
@@ -244,6 +264,20 @@ fn parse_instruction(cursor: &mut Cursor<'_>) -> Instruction {
                     start_index,
                 })
             }
+            "array_find_struct" => {
+                let array_value = parse_value(cursor);
+                let member_name = parse_value(cursor);
+                let value = parse_value(cursor);
+                let start_index = parse_value(cursor);
+
+                Instruction::ArrayFindStruct(ArrayFindStruct {
+                    array_value,
+                    member_name,
+                    value,
+                    return_index: dst,
+                    start_index,
+                })
+            }
             v => todo!("{:?}", v),
         }
     } else {
@@ -261,8 +295,8 @@ fn parse_instruction(cursor: &mut Cursor<'_>) -> Instruction {
 
 fn parse_value(cursor: &mut Cursor<'_>) -> Value {
     match cursor.pop() {
-        Some(Token::StrLit(s)) => Value::String(s.to_string()),
         Some(Token::Ident("null")) => Value::Null,
+        Some(Token::StrLit(s)) => Value::String(s.to_string()),
         Some(Token::Ident(s)) => Value::Ident(s.to_string()),
         Some(Token::BoolLit(v)) => Value::Bool(*v),
         Some(Token::IntLit(v)) => Value::Int(*v),
@@ -540,5 +574,22 @@ mod tests {
         assert_eq!(res.classes[0].properties[1].name, "x");
         assert_eq!(res.classes[0].properties[1].ty, "float");
         assert_eq!(res.classes[0].properties[1].variable, Some("b".to_owned()));
+    }
+
+    #[test]
+    fn test_struct() {
+        let input = r#"
+        class test:
+        struct a:
+            field x: int
+            field y: float
+        "#;
+
+        let res = assemble(input);
+        assert_eq!(res.classes[0].structs[0].name, "a");
+        assert_eq!(res.classes[0].structs[0].members[0].name, "x");
+        assert_eq!(res.classes[0].structs[0].members[0].ty, "int");
+        assert_eq!(res.classes[0].structs[0].members[1].name, "y");
+        assert_eq!(res.classes[0].structs[0].members[1].ty, "float");
     }
 }

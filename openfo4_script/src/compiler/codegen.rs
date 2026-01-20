@@ -11,7 +11,7 @@ use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 use openfo4_jit::{Compiler, FunctionId as FuncId, Signature, Type as JitType};
-use openfo4_pex::{Function, Instruction, Module, Struct, Value};
+use openfo4_pex::{Class, Function, Instruction, Module, Struct, Value};
 use slab::Slab;
 use thiserror::Error;
 
@@ -139,6 +139,7 @@ impl CodegenPass {
                     layout: None,
                     header: None,
                     properties,
+                    class: Some(class.clone()),
                 },
             );
             self.next_type_id += 1;
@@ -277,6 +278,50 @@ impl CodegenPass {
                 TypeLayout {
                     header: class.header.clone(),
                     fields: class_fields,
+                    properties,
+                },
+            );
+        }
+
+        for (name, st) in &self.data.structs {
+            let layout = st.layout(&self.data);
+
+            let mut fields = Vec::new();
+            let mut properties = Vec::new();
+            for (field_name, field_offset) in &layout.field_offsets {
+                let member =
+                    st.s.members
+                        .iter()
+                        .find(|f| f.name.to_lowercase() == field_name.to_lowercase())
+                        .unwrap();
+                let field_ty = self.data.resolve_ty(&member.ty);
+
+                let var = fields.len();
+                fields.push(ObjectField {
+                    class: "".to_owned(),
+                    name: field_name.to_lowercase(),
+                    offset: *field_offset,
+                    ty: match field_ty {
+                        Type::Bool => FieldType::Bool,
+                        Type::Int => FieldType::I32,
+                        Type::Float => FieldType::F32,
+                        _ => FieldType::Pointer,
+                    },
+                    ty_name: member.ty.to_lowercase(),
+                });
+
+                properties.push(ObjectProperty {
+                    class: "".to_owned(),
+                    name: field_name.clone(),
+                    var,
+                });
+            }
+
+            class_layouts.insert(
+                name.to_lowercase(),
+                TypeLayout {
+                    header: None,
+                    fields,
                     properties,
                 },
             );
@@ -446,14 +491,7 @@ impl CodegenData {
             "float" => Type::Float,
             "string" => Type::String,
             "var" => Type::Var,
-            name if self.structs.contains_key(name) => Type::Struct(
-                self.structs[name]
-                    .s
-                    .members
-                    .iter()
-                    .map(|v| (v.name.clone(), v.ty.clone()))
-                    .collect(),
-            ),
+            name if self.structs.contains_key(name) => Type::Struct(name.to_owned()),
             name if self.classes.contains_key(name) => Type::Class(name.to_owned()),
             _ => unreachable!(),
         };
@@ -524,6 +562,7 @@ struct ClassDef {
     layout: Option<ClassLayout>,
     header: Option<Arc<[usize]>>,
     properties: HashMap<String, ClassProperty>,
+    class: Option<Class>,
 }
 
 #[derive(Clone, Debug)]
@@ -697,5 +736,5 @@ enum Type {
     Var,
     Array(Box<Type>),
     Class(String),
-    Struct(Vec<(String, String)>),
+    Struct(String),
 }
