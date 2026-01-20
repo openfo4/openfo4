@@ -6,8 +6,8 @@ use std::sync::{Arc, Mutex};
 use cranelift_codegen::control::ControlPlane;
 use cranelift_codegen::ir::condcodes::{FloatCC, IntCC};
 use cranelift_codegen::ir::{
-    self, ArgumentExtension, ArgumentPurpose, BlockArg, Inst, InstBuilder, MemFlags, StackSlotData,
-    StackSlotKind,
+    self, ArgumentExtension, ArgumentPurpose, BlockArg, InstBuilder, InstBuilderBase, MemFlags,
+    StackSlotData, StackSlotKind,
 };
 use cranelift_codegen::settings::Configurable;
 use cranelift_codegen::{Context, settings};
@@ -258,6 +258,11 @@ impl CraneliftModule {
                         let rhs = values[op.rhs.0].unwrap();
 
                         let res = builder.ins().isub(lhs, rhs);
+                        values[op.dst.0] = Some(res);
+                    }
+                    Instruction::ISubImm(op) => {
+                        let lhs = values[op.lhs.0].unwrap();
+                        let res = builder.ins().iadd_imm(lhs, -op.rhs);
                         values[op.dst.0] = Some(res);
                     }
                     Instruction::IMul(op) => {
@@ -677,6 +682,59 @@ impl CraneliftModule {
                     Instruction::IMulImm(op) => {
                         let lhs = values[op.lhs.0].unwrap();
                         let res = builder.ins().imul_imm(lhs, op.rhs);
+                        values[op.dst.0] = Some(res);
+                    }
+                    Instruction::SMin(op) => {
+                        let lhs = values[op.lhs.0].unwrap();
+                        let rhs = values[op.rhs.0].unwrap();
+                        let res = builder.ins().smin(lhs, rhs);
+                        values[op.dst.0] = Some(res);
+                    }
+                    Instruction::SMax(op) => {
+                        let lhs = values[op.lhs.0].unwrap();
+                        let rhs = values[op.rhs.0].unwrap();
+                        let res = builder.ins().smax(lhs, rhs);
+                        values[op.dst.0] = Some(res);
+                    }
+                    Instruction::UMin(op) => {
+                        let lhs = values[op.lhs.0].unwrap();
+                        let rhs = values[op.rhs.0].unwrap();
+                        let res = builder.ins().umin(lhs, rhs);
+                        values[op.dst.0] = Some(res);
+                    }
+                    Instruction::UMax(op) => {
+                        let lhs = values[op.lhs.0].unwrap();
+                        let rhs = values[op.rhs.0].unwrap();
+                        let res = builder.ins().umax(lhs, rhs);
+                        values[op.dst.0] = Some(res);
+                    }
+                    // Cranelift has no immediate min/max.
+                    Instruction::SMinImm(op) => {
+                        let lhs = values[op.lhs.0].unwrap();
+                        let ty = builder.ins().data_flow_graph().value_type(lhs);
+                        let rhs = builder.ins().iconst(ty, op.rhs);
+                        let res = builder.ins().smin(lhs, rhs);
+                        values[op.dst.0] = Some(res);
+                    }
+                    Instruction::SMaxImm(op) => {
+                        let lhs = values[op.lhs.0].unwrap();
+                        let ty = builder.ins().data_flow_graph().value_type(lhs);
+                        let rhs = builder.ins().iconst(ty, op.rhs);
+                        let res = builder.ins().smax(lhs, rhs);
+                        values[op.dst.0] = Some(res);
+                    }
+                    Instruction::UMinImm(op) => {
+                        let lhs = values[op.lhs.0].unwrap();
+                        let ty = builder.ins().data_flow_graph().value_type(lhs);
+                        let rhs = builder.ins().iconst(ty, op.rhs);
+                        let res = builder.ins().umin(lhs, rhs);
+                        values[op.dst.0] = Some(res);
+                    }
+                    Instruction::UMaxImm(op) => {
+                        let lhs = values[op.lhs.0].unwrap();
+                        let ty = builder.ins().data_flow_graph().value_type(lhs);
+                        let rhs = builder.ins().iconst(ty, op.rhs);
+                        let res = builder.ins().umax(lhs, rhs);
                         values[op.dst.0] = Some(res);
                     }
                 }

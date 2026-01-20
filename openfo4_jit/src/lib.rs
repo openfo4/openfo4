@@ -367,6 +367,17 @@ impl<'a> FunctionBuilder<'a> {
         self.binop(lhs, rhs, Instruction::ISub)
     }
 
+    /// Integer subtraction with immediate.
+    ///
+    /// Computes and returns `lhs - rhs`.
+    #[track_caller]
+    pub fn isub_imm<T>(&mut self, lhs: Value, rhs: T) -> Value
+    where
+        T: Into<i64>,
+    {
+        self.binop_imm(lhs, rhs.into(), Instruction::ISubImm)
+    }
+
     /// Integer multiplication
     #[track_caller]
     pub fn imul(&mut self, lhs: Value, rhs: Value) -> Value {
@@ -398,6 +409,82 @@ impl<'a> FunctionBuilder<'a> {
     #[track_caller]
     pub fn ineg(&mut self, value: Value) -> Value {
         self.unop(value, Instruction::INeg)
+    }
+
+    /// Signed integer minumum.
+    ///
+    /// Computes and returns `min(lhs, rhs)`.
+    #[track_caller]
+    pub fn smin(&mut self, lhs: Value, rhs: Value) -> Value {
+        self.binop(lhs, rhs, Instruction::SMin)
+    }
+
+    /// Signed integer minumum with immediate.
+    ///
+    /// Computes and returns `min(lhs, rhs)`.
+    #[track_caller]
+    pub fn smin_imm<T>(&mut self, lhs: Value, rhs: T) -> Value
+    where
+        T: Into<i64>,
+    {
+        self.binop_imm(lhs, rhs.into(), Instruction::SMinImm)
+    }
+
+    /// Signed integer maximum.
+    ///
+    /// Computes and returns `max(lhs, rhs)`.
+    #[track_caller]
+    pub fn smax(&mut self, lhs: Value, rhs: Value) -> Value {
+        self.binop(lhs, rhs, Instruction::SMax)
+    }
+
+    /// Signed integer maximum with immediate.
+    ///
+    /// Computes and returns `max(lhs, rhs)`.
+    #[track_caller]
+    pub fn smax_imm<T>(&mut self, lhs: Value, rhs: T) -> Value
+    where
+        T: Into<i64>,
+    {
+        self.binop_imm(lhs, rhs.into(), Instruction::SMaxImm)
+    }
+
+    /// Unsigned integer minumum.
+    ///
+    /// Computes and returns `min(lhs, rhs)`.
+    #[track_caller]
+    pub fn umin(&mut self, lhs: Value, rhs: Value) -> Value {
+        self.binop(lhs, rhs, Instruction::UMin)
+    }
+
+    /// Unsigned integer minimum with immediate.
+    ///
+    /// Computes and returns `min(lhs, rhs)`.
+    #[track_caller]
+    pub fn umin_imm<T>(&mut self, lhs: Value, rhs: T) -> Value
+    where
+        T: Into<i64>,
+    {
+        self.binop_imm(lhs, rhs.into(), Instruction::UMinImm)
+    }
+
+    /// Unsigned integer maximum.
+    ///
+    /// Computes and returns `max(lhs, rhs)`.
+    #[track_caller]
+    pub fn umax(&mut self, lhs: Value, rhs: Value) -> Value {
+        self.binop(lhs, rhs, Instruction::UMax)
+    }
+
+    /// Unsigned integer maximum with immediate.
+    ///
+    /// Computes and returns `max(lhs, rhs)`.
+    #[track_caller]
+    pub fn umax_imm<T>(&mut self, lhs: Value, rhs: T) -> Value
+    where
+        T: Into<i64>,
+    {
+        self.binop_imm(lhs, rhs.into(), Instruction::UMaxImm)
     }
 
     /// Floating point addition.
@@ -1050,6 +1137,15 @@ enum Instruction {
     },
     IAddImm(BinopImm),
     IMulImm(BinopImm),
+    SMin(Binop),
+    SMax(Binop),
+    UMin(Binop),
+    UMax(Binop),
+    SMinImm(BinopImm),
+    SMaxImm(BinopImm),
+    UMinImm(BinopImm),
+    UMaxImm(BinopImm),
+    ISubImm(BinopImm),
 }
 
 #[derive(Copy, Clone, Debug)]

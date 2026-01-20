@@ -837,7 +837,9 @@ fn translate_function_body(
                     .builder
                     .store(new_array_ptr, array, offset_of!(ArrayObject, ptr) as u32);
             }
-            Instruction::ArrayFind(op) => {
+            Instruction::ArrayFind(op) | Instruction::ArrayRFind(op) => {
+                let scan_backwards = matches!(instruction, Instruction::ArrayRFind(_));
+
                 let Type::Array(elem_ty) = translator.get_type(&op.array_value) else {
                     unreachable!();
                 };
@@ -861,7 +863,31 @@ fn translate_function_body(
                 let mut loop_body_block = translator.builder.create_block(&[JitType::Pointer]);
                 let final_block = translator.builder.create_block(&[JitType::Pointer]);
 
-                let start_index_wide = translator.builder.uextend(start_index, JitType::Pointer);
+                let mut start_index_wide =
+                    translator.builder.uextend(start_index, JitType::Pointer);
+
+                // If using RFind a start index of -1 indicates the end of the array.
+                if scan_backwards {
+                    // start_index = max(start_index, (start_index == -1) * (array_len - 1))
+                    let negative_one = translator.builder.iconst(JitType::I32, -1);
+                    let start_at_end =
+                        translator
+                            .builder
+                            .icmp(start_index, negative_one, IntCompareOp::Equal);
+
+                    let start_at_end_wide =
+                        translator.builder.uextend(start_at_end, JitType::Pointer);
+                    let array_len_minus_one = translator.builder.isub_imm(array_len, 1);
+                    let array_len_mul_start_at_end = translator
+                        .builder
+                        .imul(start_at_end_wide, array_len_minus_one);
+                    // If the array is empty, array_len - 1 will become usize::MAX and
+                    // the index check will fail correctly.
+                    start_index_wide = translator
+                        .builder
+                        .umax(start_at_end_wide, array_len_mul_start_at_end);
+                }
+
                 translator.builder.jump(loop_block, &[start_index_wide]);
 
                 // Loop block
@@ -871,11 +897,20 @@ fn translate_function_body(
 
                     let negative_one = translator.builder.iconst(JitType::Pointer, -1);
 
-                    let terminate_loop = translator.builder.icmp(
+                    let zero_isize = translator.builder.iconst(JitType::Pointer, 0);
+                    // index < 0
+                    let lower_oob =
+                        translator
+                            .builder
+                            .icmp(index, zero_isize, IntCompareOp::SignedLessThan);
+                    // index >= array_len
+                    let upper_oob = translator.builder.icmp(
                         index,
                         array_len,
                         IntCompareOp::UnsignedGreaterThanOrEqual,
                     );
+                    let terminate_loop = translator.builder.bor(lower_oob, upper_oob);
+
                     translator.builder.brif(
                         terminate_loop,
                         final_block,
@@ -912,7 +947,12 @@ fn translate_function_body(
                         &mut loop_body_block,
                     );
 
-                    let next_index = translator.builder.iadd_imm(index, 1);
+                    let next_index = if scan_backwards {
+                        translator.builder.isub_imm(index, 1)
+                    } else {
+                        translator.builder.iadd_imm(index, 1)
+                    };
+
                     translator.builder.brif(
                         is_eq,
                         final_block,
