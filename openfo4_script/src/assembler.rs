@@ -19,8 +19,8 @@
 use std::fmt::Debug;
 
 use openfo4_pex::{
-    ArrayFind, ArrayFindStruct, Binop, CallStatic, Class, Function, Instruction, Module, Property,
-    State, Struct, StructMember, Unop, Value, Variable, VariableDefinition,
+    ArrayFind, ArrayFindStruct, ArrayGet, Binop, CallStatic, Class, Function, Instruction, Module,
+    Property, State, Struct, StructMember, Unop, Value, Variable, VariableDefinition,
 };
 
 pub fn assemble(input: &str) -> Module {
@@ -253,6 +253,16 @@ fn parse_instruction(cursor: &mut Cursor<'_>) -> Instruction {
                 })
             }
             "array_create" => Instruction::ArrayCreate(parse_unop(cursor, dst)),
+            "array_get" => {
+                let array = parse_value(cursor);
+                let index = parse_value(cursor);
+
+                Instruction::ArrayGet(ArrayGet {
+                    array,
+                    index,
+                    return_assignment: dst,
+                })
+            }
             "array_find" => {
                 let array_value = parse_value(cursor);
                 let value = parse_value(cursor);

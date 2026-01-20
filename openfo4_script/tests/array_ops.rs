@@ -101,6 +101,51 @@ fn array_find_int() {
 }
 
 #[test]
+fn array_get() {
+    let mut engine = Engine::new();
+
+    fn assert_valid_result(_caller: Caller<'_, ()>, value: i32) -> Result<(), Exception> {
+        assert_eq!(value, 9);
+        Ok(())
+    }
+
+    let module = assemble(
+        r#"
+        class test:
+
+        function assert_valid_result(index: int) static native:
+
+        class MyClass:
+
+        function MyFunction(arr: int[]) static:
+        local res: int
+        local nonevar: none
+        res = array_get arr 3
+        nonevar = call_static test assert_valid_result res
+        "#,
+    );
+
+    engine.register(&module);
+    engine.register_native_function("test", "assert_valid_result", assert_valid_result);
+
+    let mut builder = engine.object_pool().insert_array(int_layout(), 10);
+    for i in 0..10 {
+        builder.set_at::<i32>(i, "", "", (i * i) as i32);
+    }
+
+    let array_ptr = builder.finalize();
+
+    let instance = engine.compile("MyClass", &Options::default());
+    let func = instance.get_func("MyFunction").unwrap();
+
+    let mut stack = Stack::new(func.stack_size());
+    let mut ctx = Context::new(&engine, &mut stack, ());
+
+    let func = func.typed::<ObjectAddr, ()>().unwrap();
+    func.call(&mut ctx, array_ptr.addr()).unwrap();
+}
+
+#[test]
 fn array_find_struct() {
     let mut engine = Engine::new();
 

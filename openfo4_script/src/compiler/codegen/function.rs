@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::mem::offset_of;
 
+use game_common::components::Transform;
 use openfo4_jit::{
     Block, Compiler, FloatCompareOp, FunctionBuilder, FunctionId, IntCompareOp, Signature,
     Type as JitType, Value as JitValue, Variable as JitVariable,
@@ -733,26 +734,54 @@ fn translate_function_body(
                 translator.store(&op.dst, res);
             }
             Instruction::ArrayGet(op) => {
-                let src = translator.load(&op.lhs);
-                let index = translator.load(&op.rhs);
-                let index_wide = translator.builder.uextend(index, JitType::Pointer);
+                let array = translator.load(&op.array);
+                let index = translator.load(&op.index);
 
                 let count = translator.builder.iconst(JitType::I32, 1);
-                emit_array_bounds_check(&mut translator, &mut current_block, src, index, count);
+                emit_array_bounds_check(&mut translator, &mut current_block, array, index, count);
 
                 let array_ptr = translator.builder.load(
                     JitType::Pointer,
-                    src,
+                    array,
                     offset_of!(ArrayObject, ptr) as u32,
                 );
 
-                let ptr_size = translator
-                    .builder
-                    .iconst(JitType::Pointer, JitType::Pointer.size() as i64);
-                let offset = translator.builder.imul(index_wide, ptr_size);
+                let elem_ty = translator
+                    .data
+                    .resolve_ty_jit(&translator.get_ty_name(&op.return_assignment));
+                let stride = elem_ty.size();
 
+                let index_wide = translator.builder.uextend(index, JitType::Pointer);
+                let offset = translator.builder.imul_imm(index_wide, stride as i64);
                 let addr = translator.builder.iadd(array_ptr, offset);
-                translator.store(&op.dst, addr);
+
+                let value = translator.builder.load(elem_ty, addr, 0);
+                translator.store(&op.return_assignment, value);
+            }
+            Instruction::ArraySet(op) => {
+                let index = translator.load(&op.index);
+                let value = translator.load(&op.value);
+                let array = translator.load(&op.array);
+
+                let count = translator.builder.iconst(JitType::I32, 1);
+                emit_array_bounds_check(&mut translator, &mut current_block, array, index, count);
+
+                let array_ptr = translator.builder.load(
+                    JitType::Pointer,
+                    array,
+                    offset_of!(ArrayObject, ptr) as u32,
+                );
+
+                let elem_ty = translator
+                    .data
+                    .resolve_ty_jit(&translator.get_ty_name(&op.value));
+                let stride = elem_ty.size();
+
+                let index_wide = translator.builder.uextend(index, JitType::Pointer);
+                let offset = translator.builder.imul_imm(index_wide, stride as i64);
+                let addr = translator.builder.iadd(array_ptr, offset);
+
+                translator.builder.store(value, addr, 0);
             }
             Instruction::ArrayCreate(op) => {
                 let Type::Array(elem_ty) = translator.get_type(&op.dst) else {
@@ -1096,7 +1125,6 @@ fn translate_function_body(
                 }
             }
             Instruction::StringConcat(op) => {}
-            Instruction::ArraySet(op) => {}
             op => todo!("{:?}", op),
         }
     }
@@ -1829,7 +1857,7 @@ fn emit_array_bounds_check(
     let is_ok = translator.builder.icmp(
         index_plus_count,
         array_len,
-        IntCompareOp::UnsignedGreaterThanOrEqual,
+        IntCompareOp::UnsignedLessThanOrEqual,
     );
 
     let continue_block = translator.builder.create_block(&[]);

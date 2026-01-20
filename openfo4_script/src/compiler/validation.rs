@@ -720,9 +720,9 @@ impl ValidationPass {
                     assert!(matches!(dst, Type::Int));
                 }
                 Instruction::ArrayGet(op) => {
-                    let array = variable_type(&op.lhs)?;
-                    let index = variable_type(&op.rhs)?;
-                    let dst = variable_type(&op.dst)?;
+                    let array = variable_type(&op.array)?;
+                    let index = variable_type(&op.index)?;
+                    let dst = variable_type(&op.return_assignment)?;
 
                     let Type::Array(element) = array else {
                         todo!();
@@ -732,9 +732,9 @@ impl ValidationPass {
                     assert!(matches!(index, Type::Int));
                 }
                 Instruction::ArraySet(op) => {
-                    let index = variable_type(&op.lhs)?;
-                    let value = variable_type(&op.rhs)?;
-                    let array = variable_type(&op.dst)?;
+                    let index = variable_type(&op.index)?;
+                    let value = variable_type(&op.value)?;
+                    let array = variable_type(&op.array)?;
 
                     let Type::Array(element) = array else {
                         todo!();

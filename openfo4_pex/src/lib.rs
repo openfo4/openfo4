@@ -8,6 +8,8 @@ const MAGIC_BE: [u8; 4] = [0xfa, 0x57, 0xc0, 0xde];
 
 const MAJOR_VERSION: u8 = 3;
 
+use std::default;
+
 use bytes::Buf;
 
 use crate::raw::{DebugInfo, FunctionFlags, Header, Opcode, UserFlag};
@@ -398,8 +400,8 @@ pub enum Instruction {
     PropertySet(PropertySet),
     ArrayCreate(Unop),
     ArrayLength(Unop),
-    ArrayGet(Binop),
-    ArraySet(Binop),
+    ArrayGet(ArrayGet),
+    ArraySet(ArraySet),
     ArrayFind(ArrayFind),
     ArrayRFind(ArrayFind),
     Is(Is),
@@ -503,8 +505,8 @@ impl Instruction {
             }
             Opcode::ArrayCreate => read_unop().map(Self::ArrayCreate),
             Opcode::ArrayLength => read_unop().map(Self::ArrayLength),
-            Opcode::ArrayGet => read_binop().map(Self::ArrayGet),
-            Opcode::ArraySet => read_binop().map(Self::ArraySet),
+            Opcode::ArrayGet => ArrayGet::from_raw(instruction, strings).map(Self::ArrayGet),
+            Opcode::ArraySet => ArraySet::from_raw(instruction, strings).map(Self::ArraySet),
             Opcode::ArrayFind => ArrayFind::from_raw(instruction, strings).map(Self::ArrayFind),
             Opcode::ArrayRFind => ArrayFind::from_raw(instruction, strings).map(Self::ArrayRFind),
             Opcode::Is => Is::from_raw(instruction, strings).map(Self::Is),
@@ -679,6 +681,48 @@ impl PropertySet {
         Ok(Self {
             property,
             object,
+            value,
+        })
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct ArrayGet {
+    pub array: Value,
+    pub index: Value,
+    pub return_assignment: Value,
+}
+
+impl ArrayGet {
+    fn from_raw(instruction: &raw::Instruction, strings: &[String]) -> Result<Self, Error> {
+        let return_assignment = Value::convert(&instruction.args[0], strings)?;
+        let array = Value::convert(&instruction.args[1], strings)?;
+        let index = Value::convert(&instruction.args[2], strings)?;
+
+        Ok(Self {
+            array,
+            index,
+            return_assignment,
+        })
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct ArraySet {
+    pub array: Value,
+    pub index: Value,
+    pub value: Value,
+}
+
+impl ArraySet {
+    fn from_raw(instruction: &raw::Instruction, strings: &[String]) -> Result<Self, Error> {
+        let array = Value::convert(&instruction.args[0], strings)?;
+        let index = Value::convert(&instruction.args[1], strings)?;
+        let value = Value::convert(&instruction.args[2], strings)?;
+
+        Ok(Self {
+            array,
+            index,
             value,
         })
     }

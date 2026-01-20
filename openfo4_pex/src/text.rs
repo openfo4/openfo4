@@ -223,10 +223,16 @@ pub(crate) fn for_function(f: &Function) -> String {
                 writeln!(text, "struct_set {struct_value} {member_name} {value}").unwrap();
             }
             Instruction::ArrayGet(op) => {
-                let array = for_value(&op.lhs);
-                let index = for_value(&op.rhs);
-                let dst = for_value(&op.dst);
+                let array = for_value(&op.array);
+                let index = for_value(&op.index);
+                let dst = for_value(&op.return_assignment);
                 writeln!(text, "{dst} = {array}[{index}]").unwrap();
+            }
+            Instruction::ArraySet(op) => {
+                let array = for_value(&op.array);
+                let index = for_value(&op.index);
+                let value = for_value(&op.value);
+                writeln!(text, "array_set {array} {index} {value}").unwrap();
             }
             Instruction::Not(op) => {
                 let src = for_value(&op.src);
@@ -237,6 +243,24 @@ pub(crate) fn for_function(f: &Function) -> String {
                 let len = for_value(&op.src);
                 let dst = for_value(&op.dst);
                 writeln!(text, "{dst} = array_create {len}").unwrap();
+            }
+            Instruction::ArrayFindStruct(op) => {
+                let array_value = for_value(&op.array_value);
+                let return_index = for_value(&op.return_index);
+                let start_index = for_value(&op.start_index);
+                let value = for_value(&op.value);
+                let member_name = for_value(&op.member_name);
+                writeln!(
+                    text,
+                    "{return_index} = array_find_struct {array_value} {member_name} {value} {start_index}"
+                )
+                .unwrap();
+            }
+            Instruction::StringConcat(op) => {
+                let lhs = for_value(&op.lhs);
+                let rhs = for_value(&op.rhs);
+                let dst = for_value(&op.dst);
+                writeln!(text, "{dst} = string_concat {lhs} {rhs}").unwrap();
             }
             op => todo!("{:?}", op),
         }
