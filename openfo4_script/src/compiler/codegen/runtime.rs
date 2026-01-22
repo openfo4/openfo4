@@ -10,6 +10,10 @@ pub struct RuntimeFunctions {
     pub stack_frame_alloc: FuncId,
     /// (ctx: *mut RawContext, size: usize)
     pub stack_frame_free: FuncId,
+    /// (ctx: *mut RawContext, value: i32) -> *mut u8
+    pub i32_to_string: FuncId,
+    /// (ctx: *mut RawContext, value: f32) -> *mut u8
+    pub f32_to_string: FuncId,
 }
 
 impl RuntimeFunctions {
@@ -38,11 +42,29 @@ impl RuntimeFunctions {
             },
             host_functions::free_stack_frame as *const u8,
         );
+        let i32_to_string = declare_and_define(
+            compiler,
+            Signature {
+                params: vec![Type::Pointer, Type::I32],
+                returns: vec![Type::Pointer],
+            },
+            host_functions::i32_to_string as *const u8,
+        );
+        let f32_to_string = declare_and_define(
+            compiler,
+            Signature {
+                params: vec![Type::Pointer, Type::F32],
+                returns: vec![Type::Pointer],
+            },
+            host_functions::f32_to_string as *const u8,
+        );
 
         Self {
             alloc_zeroed,
             stack_frame_alloc,
             stack_frame_free,
+            i32_to_string,
+            f32_to_string,
         }
     }
 }

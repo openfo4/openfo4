@@ -1,7 +1,7 @@
 use std::panic::AssertUnwindSafe;
 
 use crate::compiler::TypeLayout;
-use crate::runtime::{RawContext, RawVal};
+use crate::runtime::{ObjectAddr, RawContext, RawVal};
 
 pub unsafe extern "C" fn call_host_trampoline(
     ctx: *const RawContext,
@@ -45,6 +45,24 @@ pub unsafe extern "C" fn free_stack_frame(ctx: *mut RawContext, size: usize) {
             (*ctx.stack).free(size);
         }
     });
+}
+
+pub unsafe extern "C" fn i32_to_string(ctx: *mut RawContext, value: i32) -> ObjectAddr {
+    abort_on_unwind(|| {
+        let ctx = unsafe { &mut *ctx };
+
+        let s = value.to_string();
+        unsafe { (*ctx.state).pool.insert_string(&s).addr() }
+    })
+}
+
+pub unsafe extern "C" fn f32_to_string(ctx: *mut RawContext, value: f32) -> ObjectAddr {
+    abort_on_unwind(|| {
+        let ctx = unsafe { &mut *ctx };
+
+        let s = value.to_string();
+        unsafe { (*ctx.state).pool.insert_string(&s).addr() }
+    })
 }
 
 fn abort_on_unwind<F, R>(f: F) -> R

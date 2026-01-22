@@ -1697,6 +1697,19 @@ fn perform_cast(
 
             create_var(translator, ctx_ptr, src, tag)
         }
+        // String formatting conversions
+        (Type::Int, Type::String) => {
+            let ptr = translator
+                .builder
+                .call(translator.data.runtime_funcs.i32_to_string, &[ctx_ptr, src])[0];
+            ptr
+        }
+        (Type::Float, Type::String) => {
+            let ptr = translator
+                .builder
+                .call(translator.data.runtime_funcs.f32_to_string, &[ctx_ptr, src])[0];
+            ptr
+        }
         (src_ty, dst_ty) => todo!("{:?} {:?}", src_ty, dst_ty),
     }
 }
