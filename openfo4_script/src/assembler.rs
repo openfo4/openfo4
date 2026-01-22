@@ -19,9 +19,9 @@
 use std::fmt::Debug;
 
 use openfo4_pex::{
-    ArrayFind, ArrayFindStruct, ArrayGet, Binop, CallStatic, Class, ConditionalBranch, Function,
-    Instruction, Module, Property, State, Struct, StructMember, Unop, Value, Variable,
-    VariableDefinition,
+    ArrayAdd, ArrayFind, ArrayFindStruct, ArrayGet, ArrayInsert, Binop, CallStatic, Class,
+    ConditionalBranch, Function, Instruction, Module, Property, State, Struct, StructMember, Unop,
+    Value, Variable, VariableDefinition,
 };
 
 pub fn assemble(input: &str) -> Module {
@@ -259,6 +259,7 @@ fn parse_instruction(cursor: &mut Cursor<'_>) -> Instruction {
                 })
             }
             "array_create" => Instruction::ArrayCreate(parse_unop(cursor, dst)),
+            "array_length" => Instruction::ArrayLength(parse_unop(cursor, dst)),
             "array_get" => {
                 let array = parse_value(cursor);
                 let index = parse_value(cursor);
@@ -317,6 +318,28 @@ fn parse_instruction(cursor: &mut Cursor<'_>) -> Instruction {
             "return" => {
                 let args = parse_value(cursor);
                 Instruction::Return(args)
+            }
+            "array_add" => {
+                let array = parse_value(cursor);
+                let value = parse_value(cursor);
+                let count = parse_value(cursor);
+
+                Instruction::ArrayAdd(ArrayAdd {
+                    array,
+                    count,
+                    value,
+                })
+            }
+            "array_insert" => {
+                let array = parse_value(cursor);
+                let value = parse_value(cursor);
+                let index = parse_value(cursor);
+
+                Instruction::ArrayInsert(ArrayInsert {
+                    array,
+                    value,
+                    index,
+                })
             }
             x => todo!("{:?}", x),
         }

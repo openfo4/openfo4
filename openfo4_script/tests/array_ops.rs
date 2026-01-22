@@ -1,3 +1,5 @@
+use std::arch::x86_64::_SIDD_NEGATIVE_POLARITY;
+
 use openfo4_script::assembler::assemble;
 use openfo4_script::compiler::{FieldType, ObjectField, TypeLayout};
 use openfo4_script::engine::{Engine, Options};
@@ -70,7 +72,7 @@ fn array_find_int() {
         function assert_valid_result(arr: int[], index: int) static native:
 
         class MyClass:
-    
+
         function MyFunction(arr: int[]) static:
         local res: int
         local nonevar: none
@@ -139,6 +141,94 @@ fn array_get() {
     let func = instance.get_func("MyFunction").unwrap();
 
     let mut stack = Stack::new(func.stack_size());
+    let mut ctx = Context::new(&engine, &mut stack, ());
+
+    let func = func.typed::<ObjectAddr, ()>().unwrap();
+    func.call(&mut ctx, array_ptr.addr()).unwrap();
+}
+
+#[test]
+fn array_add() {
+    let mut engine = Engine::new();
+
+    fn assert_valid_result(caller: Caller<'_, ()>, addr: ObjectAddr) -> Result<(), Exception> {
+        let arr = unsafe { caller.array::<i32>(addr) };
+        assert_eq!(arr, [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 5, 5, 5]);
+        Ok(())
+    }
+
+    let module = assemble(
+        r#"
+        class test:
+        function assert_valid_result(arr: int[]) static native:
+
+        class MyClass:
+
+        function MyFunction(arr: int[]) static:
+        local nonevar: none
+        array_add arr 5 3
+        nonevar = call_static test assert_valid_result arr
+        "#,
+    );
+
+    engine.register(&module);
+    engine.register_native_function("test", "assert_valid_result", assert_valid_result);
+
+    let mut builder = engine.object_pool().insert_array(int_layout(), 10);
+    for i in 0..10 {
+        builder.set_at::<i32>(i, "", "", i as i32);
+    }
+
+    let array_ptr = builder.finalize();
+
+    let instance = engine.compile("MyClass", &Options::default());
+    let func = instance.get_func("MyFunction").unwrap();
+
+    let mut stack = Stack::for_func(func);
+    let mut ctx = Context::new(&engine, &mut stack, ());
+
+    let func = func.typed::<ObjectAddr, ()>().unwrap();
+    func.call(&mut ctx, array_ptr.addr()).unwrap();
+}
+
+#[test]
+fn array_insert() {
+    let mut engine = Engine::new();
+
+    fn assert_valid_result(caller: Caller<'_, ()>, addr: ObjectAddr) -> Result<(), Exception> {
+        let arr = unsafe { caller.array::<i32>(addr) };
+        assert_eq!(arr, [0, 1, 2, 42, 3, 4, 5, 6, 7, 8, 9]);
+        Ok(())
+    }
+
+    let module = assemble(
+        r#"
+        class test:
+        function assert_valid_result(arr: int[]) static native:
+
+        class MyClass:
+
+        function MyFunction(arr: int[]) static:
+        local nonevar: none
+        array_insert arr 42 3
+        nonevar = call_static test assert_valid_result arr
+        "#,
+    );
+
+    engine.register(&module);
+    engine.register_native_function("test", "assert_valid_result", assert_valid_result);
+
+    let mut builder = engine.object_pool().insert_array(int_layout(), 10);
+    for i in 0..10 {
+        builder.set_at::<i32>(i, "", "", i as i32);
+    }
+
+    let array_ptr = builder.finalize();
+
+    let instance = engine.compile("MyClass", &Options::default());
+    let func = instance.get_func("MyFunction").unwrap();
+
+    let mut stack = Stack::for_func(func);
     let mut ctx = Context::new(&engine, &mut stack, ());
 
     let func = func.typed::<ObjectAddr, ()>().unwrap();

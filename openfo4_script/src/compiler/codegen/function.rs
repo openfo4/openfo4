@@ -885,6 +885,179 @@ fn translate_function_body(
 
                 translator.store(&op.dst, array_object_ptr);
             }
+            Instruction::ArrayAdd(op) => {
+                let Type::Array(elem_ty) = translator.get_type(&op.array) else {
+                    unreachable!();
+                };
+
+                let array = translator.load(&op.array);
+                let value = translator.load(&op.value);
+                let count = translator.load(&op.count);
+
+                // Clamp count at 0, we cannot add a negative amount of elems.
+                let zero_i32 = translator.builder.iconst(JitType::I32, 0);
+                let count_greater_zero = translator.builder.icmp(
+                    count,
+                    zero_i32,
+                    IntCompareOp::SignedGreaterThanOrEqual,
+                );
+                let count_greater_zero =
+                    translator.builder.uextend(count_greater_zero, JitType::I32);
+                //  count = count * (count >= 0)
+                let count = translator.builder.imul(count, count_greater_zero);
+
+                let array_ptr = translator.builder.load(
+                    JitType::Pointer,
+                    array,
+                    offset_of!(ArrayObject, ptr) as u32,
+                );
+                let array_len = translator.builder.load(
+                    JitType::Pointer,
+                    array,
+                    offset_of!(ArrayObject, len) as u32,
+                );
+
+                let count_wide = translator.builder.uextend(count, JitType::Pointer);
+                let new_len = translator.builder.iadd(array_len, count_wide);
+
+                let layout = generate_type_layout(translator.data, &elem_ty);
+                let stride = layout.size();
+                let new_array_ptr = call_malloc(&mut translator, ctx_ptr, layout, new_len);
+
+                // Update array ptr and len.
+                translator
+                    .builder
+                    .store(new_array_ptr, array, offset_of!(ArrayObject, ptr) as u32);
+                translator
+                    .builder
+                    .store(new_len, array, offset_of!(ArrayObject, len) as u32);
+
+                // Copy existing region
+                let copy_leading_bytes = translator.builder.imul_imm(array_len, stride as i64);
+                translator
+                    .builder
+                    .memcpy(array_ptr, new_array_ptr, copy_leading_bytes);
+
+                // Append value count times at the end.
+
+                let loop_block = translator.builder.create_block(&[JitType::Pointer]);
+                let loop_body_block = translator.builder.create_block(&[JitType::Pointer]);
+                let final_block = translator.builder.create_block(&[]);
+
+                let start_index = array_len;
+                let end_index = translator.builder.iadd(array_len, count_wide);
+
+                translator.builder.jump(loop_block, &[start_index]);
+
+                // Loop block
+                {
+                    translator.builder.switch_to_block(loop_block);
+
+                    // Continue if count > 0
+                    let index = translator.builder.block_params(loop_block)[0];
+                    let should_continue =
+                        translator
+                            .builder
+                            .icmp(index, end_index, IntCompareOp::UnsignedLessThan);
+
+                    translator.builder.brif(
+                        should_continue,
+                        loop_body_block,
+                        &[index],
+                        final_block,
+                        &[],
+                    );
+                }
+
+                // Loop body block
+                {
+                    translator.builder.switch_to_block(loop_body_block);
+
+                    let index = translator.builder.block_params(loop_body_block)[0];
+                    let offset = translator.builder.imul_imm(index, stride as i64);
+                    let addr = translator.builder.iadd(new_array_ptr, offset);
+
+                    translator.builder.store(value, addr, 0);
+
+                    let next_index = translator.builder.iadd_imm(index, 1);
+                    translator.builder.jump(loop_block, &[next_index]);
+                }
+
+                translator.builder.switch_to_block(final_block);
+                current_block = final_block;
+            }
+            Instruction::ArrayInsert(op) => {
+                let Type::Array(elem_ty) = translator.get_type(&op.array) else {
+                    unreachable!();
+                };
+
+                let array = translator.load(&op.array);
+                let value = translator.load(&op.value);
+                let index = translator.load(&op.index);
+
+                // We allow inserting at the last position of the array, e.g.
+                // we can insert into an empty array at index 0.
+                let zero = translator.builder.iconst(JitType::I32, 0);
+                emit_array_bounds_check(&mut translator, &mut current_block, array, index, zero);
+
+                let array_ptr = translator.builder.load(
+                    JitType::Pointer,
+                    array,
+                    offset_of!(ArrayObject, ptr) as u32,
+                );
+                let array_len = translator.builder.load(
+                    JitType::Pointer,
+                    array,
+                    offset_of!(ArrayObject, len) as u32,
+                );
+
+                let new_len = translator.builder.iadd_imm(array_len, 1);
+                let index_wide = translator.builder.uextend(index, JitType::Pointer);
+
+                // Allocate new array.
+                let layout = generate_type_layout(data, &elem_ty);
+                let stride = layout.size();
+                let new_array_ptr = call_malloc(&mut translator, ctx_ptr, layout, new_len);
+
+                // Update array ptr and len.
+                translator
+                    .builder
+                    .store(new_array_ptr, array, offset_of!(ArrayObject, ptr) as u32);
+                translator
+                    .builder
+                    .store(new_len, array, offset_of!(ArrayObject, len) as u32);
+
+                // Copy left region (all elements 0..index).
+                let copy_leading_elems = index_wide;
+                let copy_leading_bytes = translator
+                    .builder
+                    .imul_imm(copy_leading_elems, stride as i64);
+
+                translator
+                    .builder
+                    .memcpy(array_ptr, new_array_ptr, copy_leading_bytes);
+
+                // Copy right region (all elements index..end to index+1..end).
+                let copy_trailing_elems = translator.builder.isub(array_len, index_wide);
+                let copy_trailing_bytes = translator
+                    .builder
+                    .imul_imm(copy_trailing_elems, stride as i64);
+                let trailing_src_offset = translator.builder.imul_imm(index_wide, stride as i64);
+                let trailing_dst_offset = translator
+                    .builder
+                    .iadd_imm(trailing_src_offset, stride as i64);
+                let trailing_src_ptr = translator.builder.iadd(array_ptr, trailing_src_offset);
+                let trailing_dst_ptr = translator.builder.iadd(new_array_ptr, trailing_dst_offset);
+
+                translator
+                    .builder
+                    .memcpy(trailing_src_ptr, trailing_dst_ptr, copy_trailing_bytes);
+
+                // Insert new element at index.
+                let offset = translator.builder.imul_imm(index_wide, stride as i64);
+                let addr = translator.builder.iadd(new_array_ptr, offset);
+                translator.builder.store(value, addr, 0);
+            }
             Instruction::ArrayRemove(op) => {
                 let Type::Array(elem_ty) = translator.get_type(&op.array_value) else {
                     unreachable!();
@@ -1979,12 +2152,22 @@ fn emit_array_bounds_check(
     let count_wide = translator.builder.uextend(count, JitType::Pointer);
     let index_plus_count = translator.builder.iadd(index_wide, count_wide);
 
+    // Negative indices are always out of bounds.
+    let zero = translator.builder.iconst(JitType::Pointer, 0);
+    let is_not_negative = translator.builder.icmp(
+        index_plus_count,
+        zero,
+        IntCompareOp::SignedGreaterThanOrEqual,
+    );
+
     // index + count <= len
-    let is_ok = translator.builder.icmp(
+    let is_within_len = translator.builder.icmp(
         index_plus_count,
         array_len,
         IntCompareOp::UnsignedLessThanOrEqual,
     );
+
+    let is_ok = translator.builder.band(is_not_negative, is_within_len);
 
     let continue_block = translator.builder.create_block(&[]);
     let abort_block = translator.builder.create_block(&[]);
