@@ -19,8 +19,9 @@
 use std::fmt::Debug;
 
 use openfo4_pex::{
-    ArrayFind, ArrayFindStruct, ArrayGet, Binop, CallStatic, Class, Function, Instruction, Module,
-    Property, State, Struct, StructMember, Unop, Value, Variable, VariableDefinition,
+    ArrayFind, ArrayFindStruct, ArrayGet, Binop, CallStatic, Class, ConditionalBranch, Function,
+    Instruction, Module, Property, State, Struct, StructMember, Unop, Value, Variable,
+    VariableDefinition,
 };
 
 pub fn assemble(input: &str) -> Module {
@@ -236,6 +237,11 @@ fn parse_instruction(cursor: &mut Cursor<'_>) -> Instruction {
             "fsub" => Instruction::FSub(parse_binop(cursor, dst)),
             "fmul" => Instruction::FMul(parse_binop(cursor, dst)),
             "fdiv" => Instruction::FDiv(parse_binop(cursor, dst)),
+            "cmpeq" => Instruction::CmpEq(parse_binop(cursor, dst)),
+            "cmplt" => Instruction::CmpLt(parse_binop(cursor, dst)),
+            "cmple" => Instruction::CmpLe(parse_binop(cursor, dst)),
+            "cmpgt" => Instruction::CmpGt(parse_binop(cursor, dst)),
+            "cmpge" => Instruction::CmpGe(parse_binop(cursor, dst)),
             "cast" => Instruction::Cast(parse_unop(cursor, dst)),
             "call_static" => {
                 let class = parse_value(cursor);
@@ -294,11 +300,25 @@ fn parse_instruction(cursor: &mut Cursor<'_>) -> Instruction {
         let opcode = dst;
         match &*opcode {
             "nop" => Instruction::Nop,
+            "branch" => {
+                let offset = parse_value(cursor);
+                Instruction::Branch(offset)
+            }
+            "branch_if_true" => {
+                let condition = parse_value(cursor);
+                let offset = parse_value(cursor);
+                Instruction::BranchIfTrue(ConditionalBranch { condition, offset })
+            }
+            "branch_if_false" => {
+                let condition = parse_value(cursor);
+                let offset = parse_value(cursor);
+                Instruction::BranchIfFalse(ConditionalBranch { condition, offset })
+            }
             "return" => {
                 let args = parse_value(cursor);
                 Instruction::Return(args)
             }
-            _ => todo!(),
+            x => todo!("{:?}", x),
         }
     }
 }

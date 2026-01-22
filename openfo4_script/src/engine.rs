@@ -6,9 +6,8 @@ use openfo4_jit::Type;
 use openfo4_pex::{Class, Module};
 
 use crate::compiler::{CompilationResult, Context, NativeFunction, TypeLayout};
-use crate::runtime::{
-    Func, HostState, IntoFunc, NativeFnPtr, ObjectPool, RawVal, call_host_trampoline,
-};
+use crate::runtime::host_functions::call_host_trampoline;
+use crate::runtime::{Func, HostState, IntoFunc, NativeFnPtr, ObjectPool, RawVal};
 
 pub type NativeFuncPtr = unsafe extern "C" fn(*const HostState, usize, *mut RawVal);
 

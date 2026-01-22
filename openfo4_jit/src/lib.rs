@@ -38,7 +38,6 @@ impl Compiler {
     /// [`define_native_function`]: Self::define_native_function
     pub fn declare_function(&mut self, signature: Signature) -> FuncId {
         let id = self.inner.declare_function(&signature).unwrap();
-        dbg!(&signature, id);
 
         FuncId(self.functions.insert(FuncState { signature, id }))
     }

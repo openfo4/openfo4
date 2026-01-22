@@ -1,3 +1,4 @@
+pub mod host_functions;
 pub mod object;
 mod stack;
 
@@ -63,9 +64,10 @@ impl<'a, T> Context<'a, T> {
 #[derive(Clone, Debug)]
 #[repr(C)]
 pub struct RawContext {
-    pub stack: *mut u8,
+    pub stack_ptr: *mut u8,
     pub state: *const HostState,
     pub data: *mut dyn Any,
+    pub stack: *mut Stack,
 }
 
 #[derive(Copy, Clone)]
@@ -120,15 +122,16 @@ impl Func {
     where
         T: 'static,
     {
-        assert!(ctx.stack.size() <= self.stack_size);
+        assert!(ctx.stack.size() >= self.stack_size);
 
         // We must lock the call table before we call the guest function.
         let _lock = ctx.engine.call_table_lock.read();
 
         let ctx = RawContext {
-            stack: ctx.stack.as_ptr(),
+            stack_ptr: ctx.stack.as_ptr(),
             state: &ctx.engine.state,
             data: &mut ctx.data as *mut dyn Any,
+            stack: ctx.stack,
         };
 
         unsafe {
@@ -500,47 +503,6 @@ unsafe impl NativeType for ObjectAddr {
 
     fn to_raw(self) -> RawVal {
         RawVal { ptr: self.to_raw() }
-    }
-}
-
-pub unsafe extern "C" fn call_host_trampoline(
-    ctx: *const RawContext,
-    index: usize,
-    args: *mut RawVal,
-) {
-    abort_on_unwind(|| {
-        // SAFETY: We have locked the call table before any guest function is called.
-        let call_table = unsafe { (*(*ctx).state).call_table.borrow() };
-        let func = &call_table.functions[index];
-        func(ctx, args);
-    })
-}
-
-pub unsafe extern "C" fn host_malloc(
-    ctx: *mut RawContext,
-    layout: *const TypeLayout,
-    array_len: usize,
-) -> *mut u8 {
-    abort_on_unwind(|| {
-        let layout = unsafe { &*layout };
-
-        // FIXME: Don't clone, we can keep the TypeLayout for many objects.
-        let object_ref = unsafe { (*(*ctx).state).pool.alloc(layout.clone(), array_len) };
-        object_ref.addr().to_raw() as *mut u8
-    })
-}
-
-fn abort_on_unwind<F, R>(f: F) -> R
-where
-    F: FnOnce() -> R,
-{
-    if cfg!(panic = "abort") {
-        f()
-    } else {
-        match std::panic::catch_unwind(AssertUnwindSafe(|| f())) {
-            Ok(v) => v,
-            Err(_) => std::process::abort(),
-        }
     }
 }
 

@@ -3,7 +3,8 @@
 use openfo4_jit::{Compiler, FuncId, Signature, Type};
 
 use crate::compiler::NativeFunction;
-use crate::runtime::{RawVal, host_malloc};
+use crate::runtime::RawVal;
+use crate::runtime::host_functions::alloc_zeroed;
 
 pub fn generate_host_to_guest_trampoline(
     compiler: &mut Compiler,
@@ -96,15 +97,4 @@ pub fn generate_guest_to_host_trampoline(
     builder.finalize();
 
     func_id
-}
-
-pub fn generate_malloc_func(compiler: &mut Compiler) -> FuncId {
-    // (*mut RawContext, *const TypeLayout, array_len: usize) -> *mut u8
-    let id = compiler.declare_function(Signature {
-        params: vec![Type::Pointer, Type::Pointer, Type::Pointer],
-        returns: vec![Type::Pointer],
-    });
-
-    compiler.define_native_function(id, host_malloc as *const u8);
-    id
 }

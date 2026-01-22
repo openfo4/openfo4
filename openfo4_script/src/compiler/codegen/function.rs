@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 use std::mem::offset_of;
 
-use game_common::components::Transform;
 use openfo4_jit::{
     Block, Compiler, FloatCompareOp, FuncId, FunctionBuilder, IntCompareOp, Signature,
     Type as JitType, Value as JitValue, Variable as JitVariable,
@@ -12,7 +11,7 @@ use crate::compiler::TypeLayout;
 use crate::compiler::codegen::builtin::call_builtin;
 use crate::compiler::codegen::constant::{ConstantData, create_string_constant};
 use crate::compiler::codegen::function_props::{
-    FunctionProps, Stage, StageVariable, function_properties,
+    FunctionProps, StackFrame, Stage, StageVariable, function_properties,
 };
 use crate::compiler::codegen::layout::generate_type_layout;
 use crate::compiler::codegen::trampoline::generate_guest_to_host_trampoline;
@@ -147,8 +146,6 @@ fn translate_function_body(
     builder.switch_to_block(entry_block);
 
     let ctx_ptr = builder.block_params(entry_block)[0];
-
-    let stack_base = builder.load(JitType::Pointer, ctx_ptr, 0);
 
     let self_ptr = builder.block_params(entry_block).get(1).copied();
     let params_offset = if !function.is_static {
@@ -338,10 +335,10 @@ fn translate_function_body(
 
     resumse_stack(
         &mut translator,
-        stack_base,
         &props.stages,
         &resume_points,
         start_block,
+        ctx_ptr,
     );
     translator.builder.switch_to_block(start_block);
 
@@ -560,7 +557,6 @@ fn translate_function_body(
                     &mut current_block,
                     stage,
                     ctx_ptr,
-                    stack_base,
                 ) {
                     translator.store(&op.return_assignment, res);
                 }
@@ -604,7 +600,6 @@ fn translate_function_body(
                     &mut current_block,
                     stage,
                     ctx_ptr,
-                    stack_base,
                 ) {
                     translator.store(&op.return_assignment, res);
                 }
@@ -646,7 +641,6 @@ fn translate_function_body(
                                 &mut current_block,
                                 stage,
                                 ctx_ptr,
-                                stack_base,
                             ) {
                                 translator.store(&op.return_assignment, res);
                                 vec![res]
@@ -690,7 +684,6 @@ fn translate_function_body(
                         &mut current_block,
                         stage,
                         ctx_ptr,
-                        stack_base,
                     )
                     .unwrap()
                 } else {
@@ -738,7 +731,6 @@ fn translate_function_body(
                         &mut current_block,
                         stage,
                         ctx_ptr,
-                        stack_base,
                     );
                 } else {
                     let class = data.get_class(&class_name).unwrap();
@@ -1639,7 +1631,6 @@ fn perform_checked_call(
     block: &mut Block,
     stage: &Stage,
     ctx_ptr: JitValue,
-    stack_base: JitValue,
 ) -> Option<JitValue> {
     let func_id = callee.func_id.unwrap();
 
@@ -1649,12 +1640,9 @@ fn perform_checked_call(
     translator.builder.jump(call_block, &[]);
     translator.builder.switch_to_block(call_block);
 
-    // Set the stack base pointer for the callee.
-    // Note that we don't need to reset this value after the call because we use our
-    // initially loaded local value for all future uses.
-    let local_stack_size = translator.builder.iconst(JitType::I64, stage.size() as i64);
-    let new_stack_base = translator.builder.iadd(stack_base, local_stack_size);
-    translator.builder.store(new_stack_base, ctx_ptr, 0);
+    // Allocate stack space for the callee.
+    let stack_frame = &callee.props.as_ref().unwrap().stack_frame;
+    push_stack_frame(translator, ctx_ptr, stack_frame);
 
     let res = translator.builder.call(func_id, args);
 
@@ -1682,11 +1670,23 @@ fn perform_checked_call(
 
         rvals.push(*result);
 
+        // push_stack_frame might move our current stack pointer, so we need
+        // to reload it, but the current stack pointer points to the end of the stack
+        // for the callee. We must go backwards to find our stack frame.
+        let stack_base = translator.builder.load(JitType::Pointer, ctx_ptr, 0);
+        let stack_base = translator
+            .builder
+            .isub_imm(stack_base, stack_frame.size as i64);
+
         translator.builder.switch_to_block(suspend_block);
         suspend_stack(translator, stack_base, stage);
         translator.builder.return_(&rvals);
 
         translator.builder.switch_to_block(continue_block);
+
+        // Restore stack pointer.
+        pop_stack_frame(translator, ctx_ptr, stack_frame);
+
         *block = continue_block;
     }
 
@@ -1723,11 +1723,13 @@ struct ResumeStage<'a> {
 
 fn resumse_stack(
     translator: &mut FunctionTranslator<'_>,
-    stack_base: JitValue,
     stages: &[Stage],
     resume_points: &HashMap<usize, Block>,
     start_block: Block,
+    ctx_ptr: JitValue,
 ) {
+    let stack_base = translator.builder.load(JitType::Pointer, ctx_ptr, 0);
+
     if resume_points.is_empty() {
         translator.builder.jump(start_block, &[]);
         return;
@@ -1900,9 +1902,10 @@ fn call_malloc(
         .builder
         .iconst(JitType::Pointer, layout_ptr as i64);
 
-    let res = translator
-        .builder
-        .call(translator.data.malloc, &[ctx_ptr, layout_ptr, array_len]);
+    let res = translator.builder.call(
+        translator.data.runtime_funcs.alloc_zeroed,
+        &[ctx_ptr, layout_ptr, array_len],
+    );
     res[0]
 }
 
@@ -2017,4 +2020,33 @@ fn check_equality(
         }
         ty => todo!("{:?}", ty),
     }
+}
+
+fn push_stack_frame(
+    translator: &mut FunctionTranslator<'_>,
+    ctx_ptr: JitValue,
+    frame: &StackFrame,
+) -> JitValue {
+    let size = translator
+        .builder
+        .iconst(JitType::Pointer, frame.size as i64);
+
+    let stack_ptr = translator.builder.call(
+        translator.data.runtime_funcs.stack_frame_alloc,
+        &[ctx_ptr, size],
+    )[0];
+
+    translator.builder.store(stack_ptr, ctx_ptr, 0);
+    stack_ptr
+}
+
+fn pop_stack_frame(translator: &mut FunctionTranslator<'_>, ctx_ptr: JitValue, frame: &StackFrame) {
+    let size = translator
+        .builder
+        .iconst(JitType::Pointer, frame.size as i64);
+
+    translator.builder.call(
+        translator.data.runtime_funcs.stack_frame_free,
+        &[ctx_ptr, size],
+    );
 }

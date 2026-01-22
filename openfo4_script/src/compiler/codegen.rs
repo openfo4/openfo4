@@ -3,6 +3,7 @@ mod constant;
 mod function;
 mod function_props;
 mod layout;
+mod runtime;
 mod trampoline;
 mod types;
 
@@ -17,7 +18,7 @@ use thiserror::Error;
 use crate::compiler::codegen::constant::ConstantData;
 use crate::compiler::codegen::function_props::{FunctionProps, function_properties};
 use crate::compiler::codegen::layout::{ClassLayout, compute_struct_layout};
-use crate::compiler::codegen::trampoline::generate_malloc_func;
+use crate::compiler::codegen::runtime::RuntimeFunctions;
 use crate::compiler::codegen::types::Types;
 use crate::compiler::{
     CompilationResult, FieldType, NativeFunction, ObjectField, ObjectProperty, TypeLayout,
@@ -338,7 +339,7 @@ impl CodegenPass {
             let def = &self.data.functions[func_id.0];
 
             // Function was already compiled.
-            if def.func_id.is_some() {
+            if def.func_id.is_some() || funcs_to_compile.contains(&func_id) {
                 continue;
             }
 
@@ -392,7 +393,7 @@ impl CodegenPass {
 
         Ok(CompilationResult {
             function: compiled,
-            stack_size: props.stack_size,
+            stack_size: props.local_stack_size,
             signature: func.signature.clone().unwrap(),
         })
     }
@@ -404,19 +405,17 @@ struct CodegenData {
     classes: HashMap<String, ClassDef>,
     structs: HashMap<String, StructDef>,
     functions: Slab<FunctionDef>,
-    malloc: FuncId,
+    runtime_funcs: RuntimeFunctions,
 }
 
 impl CodegenData {
     fn new(compiler: &mut Compiler) -> Self {
-        let malloc = generate_malloc_func(compiler);
-
         Self {
             types: Types::default(),
             classes: HashMap::new(),
             structs: HashMap::new(),
             functions: Slab::new(),
-            malloc,
+            runtime_funcs: RuntimeFunctions::new(compiler),
         }
     }
 

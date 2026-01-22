@@ -21,3 +21,7 @@ workspace = true
 [[test]]
 name = "array_ops"
 path = "tests/array_ops.rs"
+
+[[test]]
+name = "recursion"
+path = "tests/recursion.rs"

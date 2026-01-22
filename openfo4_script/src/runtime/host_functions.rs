@@ -1,0 +1,62 @@
+use std::panic::AssertUnwindSafe;
+
+use crate::compiler::TypeLayout;
+use crate::runtime::{RawContext, RawVal};
+
+pub unsafe extern "C" fn call_host_trampoline(
+    ctx: *const RawContext,
+    index: usize,
+    args: *mut RawVal,
+) {
+    abort_on_unwind(|| {
+        // SAFETY: We have locked the call table before any guest function is called.
+        let call_table = unsafe { (*(*ctx).state).call_table.borrow() };
+        let func = &call_table.functions[index];
+        func(ctx, args);
+    })
+}
+
+pub unsafe extern "C" fn alloc_zeroed(
+    ctx: *mut RawContext,
+    layout: *const TypeLayout,
+    array_len: usize,
+) -> *mut u8 {
+    abort_on_unwind(|| {
+        let layout = unsafe { &*layout };
+
+        // FIXME: Don't clone, we can keep the TypeLayout for many objects.
+        let object_ref = unsafe { (*(*ctx).state).pool.alloc(layout.clone(), array_len) };
+        object_ref.addr().to_raw() as *mut u8
+    })
+}
+
+pub unsafe extern "C" fn alloc_stack_frame(ctx: *mut RawContext, size: usize) -> *mut u8 {
+    abort_on_unwind(|| {
+        let ctx = unsafe { &mut *ctx };
+        let ptr = unsafe { (*ctx.stack).alloc(size) };
+        ptr
+    })
+}
+
+pub unsafe extern "C" fn free_stack_frame(ctx: *mut RawContext, size: usize) {
+    abort_on_unwind(|| {
+        let ctx = unsafe { &mut *ctx };
+        unsafe {
+            (*ctx.stack).free(size);
+        }
+    });
+}
+
+fn abort_on_unwind<F, R>(f: F) -> R
+where
+    F: FnOnce() -> R,
+{
+    if cfg!(panic = "abort") {
+        f()
+    } else {
+        match std::panic::catch_unwind(AssertUnwindSafe(|| f())) {
+            Ok(v) => v,
+            Err(_) => std::process::abort(),
+        }
+    }
+}

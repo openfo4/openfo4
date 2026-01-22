@@ -15,7 +15,8 @@ pub struct FunctionProps {
     pub preemption_points: Vec<usize>,
     pub stages: Vec<Stage>,
     /// Stack size that this function requires.
-    pub stack_size: usize,
+    pub local_stack_size: usize,
+    pub stack_frame: StackFrame,
 }
 
 pub fn function_properties(data: &CodegenData, func: &FunctionDef) -> FunctionProps {
@@ -84,7 +85,6 @@ pub fn function_properties(data: &CodegenData, func: &FunctionDef) -> FunctionPr
 
     let mut preemption_points = Vec::new();
     let mut instructions_no_preempt = 0;
-    let mut stack_size = 0;
     let mut stages = Vec::new();
 
     for (index, instruction) in function.instructions.iter().enumerate() {
@@ -155,12 +155,6 @@ pub fn function_properties(data: &CodegenData, func: &FunctionDef) -> FunctionPr
 
                 let class_name = find_var(object);
 
-                let func = data.get_function(&class_name, func_name).unwrap();
-                let props = func.props.as_ref().unwrap();
-
-                may_error |= props.may_error;
-                stack_size = stack_size.max(props.stack_size);
-
                 preemption_points.push(index);
                 stages.push(variables.clone());
             }
@@ -180,12 +174,6 @@ pub fn function_properties(data: &CodegenData, func: &FunctionDef) -> FunctionPr
                     unreachable!();
                 };
 
-                let func = data.get_function(class_name, func_name).unwrap();
-                let props = func.props.as_ref().unwrap();
-
-                may_error |= props.may_error;
-                stack_size = stack_size.max(props.stack_size);
-
                 preemption_points.push(index);
                 stages.push(variables.clone());
             }
@@ -203,12 +191,6 @@ pub fn function_properties(data: &CodegenData, func: &FunctionDef) -> FunctionPr
                     continue;
                 };
 
-                let func = &data.functions[func_id.0];
-                let props = func.props.as_ref().unwrap();
-
-                may_error |= props.may_error;
-                stack_size = stack_size.max(props.stack_size);
-
                 preemption_points.push(index);
                 stages.push(variables.clone());
             }
@@ -225,12 +207,6 @@ pub fn function_properties(data: &CodegenData, func: &FunctionDef) -> FunctionPr
                 let Some(func_id) = data.get_property_setter_id(&class_name, &prop_name) else {
                     continue;
                 };
-
-                let func = &data.functions[func_id.0];
-                let props = func.props.as_ref().unwrap();
-
-                may_error |= props.may_error;
-                stack_size = stack_size.max(props.stack_size);
 
                 preemption_points.push(index);
                 stages.push(variables.clone());
@@ -278,15 +254,23 @@ pub fn function_properties(data: &CodegenData, func: &FunctionDef) -> FunctionPr
         local_stack_size = local_stack_size.max(stage.size());
     }
 
-    stack_size += local_stack_size;
-
     FunctionProps {
         may_suspend,
         may_error,
-        stages,
+        stages: stages.clone(),
         preemption_points,
-        stack_size,
+        local_stack_size,
+        stack_frame: StackFrame {
+            stages,
+            size: local_stack_size,
+        },
     }
+}
+
+#[derive(Clone, Debug)]
+pub struct StackFrame {
+    pub stages: Vec<Stage>,
+    pub size: usize,
 }
 
 #[derive(Clone, Debug)]
