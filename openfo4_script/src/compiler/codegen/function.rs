@@ -16,7 +16,7 @@ use crate::compiler::codegen::function_props::{
 use crate::compiler::codegen::layout::generate_type_layout;
 use crate::compiler::codegen::trampoline::generate_guest_to_host_trampoline;
 use crate::compiler::codegen::{ClassDef, CodegenData, Error, FunctionDef, Type};
-use crate::runtime::object::ARRAY_LAYOUT;
+use crate::runtime::object::{ARRAY_LAYOUT, VAR_LAYOUT, VarObject};
 use crate::runtime::{ArrayObject, ObjectTag, RESULT_ERROR, RESULT_OK};
 
 #[derive(Debug)]
@@ -757,7 +757,13 @@ fn translate_function_body(
                 }
             }
             Instruction::Cast(op) => {
-                let res = perform_cast(&mut translator, &op.src, &op.dst, &mut current_block);
+                let res = perform_cast(
+                    &mut translator,
+                    ctx_ptr,
+                    &op.src,
+                    &op.dst,
+                    &mut current_block,
+                );
                 translator.store(&op.dst, res);
             }
             Instruction::Is(op) => {
@@ -1404,6 +1410,7 @@ struct Local {
 /// Performs a runtime cast of `src` to `dst`.
 fn perform_cast(
     translator: &mut FunctionTranslator<'_>,
+    ctx_ptr: JitValue,
     src_val: &Value,
     dst_val: &Value,
     block: &mut Block,
@@ -1504,6 +1511,19 @@ fn perform_cast(
 
             res
         }
+        (src_ty, Type::Var) => {
+            let tag = match src_ty {
+                Type::None => ObjectTag::None,
+                Type::Int => ObjectTag::Int,
+                Type::Bool => ObjectTag::Bool,
+                Type::Float => ObjectTag::Float,
+                Type::Class(_) => ObjectTag::Class,
+                Type::Var => unreachable!(),
+                _ => todo!(),
+            };
+
+            create_var(translator, ctx_ptr, src, tag)
+        }
         (src_ty, dst_ty) => todo!("{:?} {:?}", src_ty, dst_ty),
     }
 }
@@ -1537,6 +1557,7 @@ fn perform_var_downcast(
     *block = continue_block;
 
     let ty = match dst {
+        ObjectTag::None => JitType::I32,
         ObjectTag::Bool => JitType::I32,
         ObjectTag::Int => JitType::I32,
         ObjectTag::Float => JitType::F32,
@@ -1546,6 +1567,31 @@ fn perform_var_downcast(
     translator
         .builder
         .load(ty, src, size_of::<ObjectTag>() as u32)
+}
+
+/// Creates a new `Var`.
+fn create_var(
+    translator: &mut FunctionTranslator<'_>,
+    ctx_ptr: JitValue,
+    value: JitValue,
+    tag: ObjectTag,
+) -> JitValue {
+    // Allocate var object
+    let one = translator.builder.iconst(JitType::Pointer, 1);
+    let ptr = call_malloc(translator, ctx_ptr, VAR_LAYOUT.clone(), one);
+
+    // Store tag
+    let tag = translator.builder.iconst(JitType::Pointer, tag as i64);
+    translator
+        .builder
+        .store(tag, ptr, offset_of!(VarObject, tag) as u32);
+
+    // Store data
+    translator
+        .builder
+        .store(value, ptr, offset_of!(VarObject, data) as u32);
+
+    ptr
 }
 
 /// Performs a runtime typecheck whether `src` is `dst_class` or a subtype of `dst_class`.

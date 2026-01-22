@@ -370,7 +370,7 @@ impl CodegenPass {
 
         for func_id in &funcs_to_compile {
             let func = &self.data.functions[func_id.0];
-            let class = &self.data.classes.get(&class.to_lowercase()).unwrap();
+            let class = &self.data.classes.get(&func.class.to_lowercase()).unwrap();
             let res = function::translate_function(&self.data, class, func, &mut self.compiler);
 
             // TODO: FIXME: Don't leak this here.

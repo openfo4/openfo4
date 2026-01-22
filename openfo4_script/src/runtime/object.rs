@@ -394,13 +394,30 @@ pub struct ArrayObject {
     pub len: usize,
 }
 
+#[derive(Copy, Clone)]
+#[repr(C)]
+pub struct VarObject {
+    pub tag: ObjectTag,
+    pub data: VarObjectData,
+}
+
+#[derive(Copy, Clone)]
+#[repr(C)]
+pub union VarObjectData {
+    pub bool: bool,
+    pub int: i32,
+    pub float: f32,
+    pub class: ObjectAddr,
+}
+
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 #[repr(usize)]
 pub enum ObjectTag {
-    Bool = 0,
-    Int = 1,
-    Float = 2,
-    Class = 3,
+    None = 0,
+    Bool = 1,
+    Int = 2,
+    Float = 3,
+    Class = 4,
 }
 
 pub(crate) static ARRAY_LAYOUT: LazyLock<TypeLayout> = LazyLock::new(|| TypeLayout {
@@ -433,5 +450,26 @@ pub(crate) const BYTE_LAYOUT: LazyLock<TypeLayout> = LazyLock::new(|| TypeLayout
         ty: FieldType::I8,
         ty_name: "".to_owned(),
     }],
+    properties: Vec::new(),
+});
+
+pub(crate) const VAR_LAYOUT: LazyLock<TypeLayout> = LazyLock::new(|| TypeLayout {
+    header: None,
+    fields: vec![
+        ObjectField {
+            class: "".to_owned(),
+            name: "tag".to_owned(),
+            offset: 0,
+            ty: FieldType::Isize,
+            ty_name: "".to_owned(),
+        },
+        ObjectField {
+            class: "".to_owned(),
+            name: "data".to_owned(),
+            offset: 0,
+            ty: FieldType::Pointer,
+            ty_name: "".to_owned(),
+        },
+    ],
     properties: Vec::new(),
 });
