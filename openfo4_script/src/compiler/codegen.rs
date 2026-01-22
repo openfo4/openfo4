@@ -28,7 +28,14 @@ pub const MAX_INSTRUCTIONS_BEFORE_PREEMPT: usize = 1024;
 
 #[derive(Clone, Debug, Error)]
 #[error("codegen error")]
-pub struct Error;
+pub enum Error {
+    #[error("undefined native function: {0}")]
+    UndefNativeFunc(String),
+    #[error(
+        "native function signature missmatch: host definition: {host:?}, script definition: {script:?}"
+    )]
+    NativeFuncSignatureMissmatch { script: Signature, host: Signature },
+}
 
 pub struct CodegenPass {
     data: CodegenData,
@@ -349,13 +356,10 @@ impl CodegenPass {
             queue.extend(callees);
         }
 
-        dbg!(&funcs_to_compile);
-
         for func_id in &funcs_to_compile {
             let func = &self.data.functions[func_id.0];
             let class = &self.data.classes.get(&class.to_lowercase()).unwrap();
-            let id = function::declare_function(&self.data, class, func, &mut self.compiler);
-            dbg!(&id);
+            let id = function::declare_function(&self.data, class, func, &mut self.compiler)?;
 
             let props = function_properties(&self.data, func);
 

@@ -15,7 +15,7 @@ use crate::compiler::codegen::function_props::{
 };
 use crate::compiler::codegen::layout::generate_type_layout;
 use crate::compiler::codegen::trampoline::generate_guest_to_host_trampoline;
-use crate::compiler::codegen::{ClassDef, CodegenData, FunctionDef, Type};
+use crate::compiler::codegen::{ClassDef, CodegenData, Error, FunctionDef, Type};
 use crate::runtime::object::ARRAY_LAYOUT;
 use crate::runtime::{ArrayObject, ObjectTag, RESULT_ERROR, RESULT_OK};
 
@@ -32,20 +32,26 @@ pub fn declare_function(
     class: &ClassDef,
     function: &FunctionDef,
     compiler: &mut Compiler,
-) -> FuncId {
+) -> Result<FuncId, Error> {
     let signature = translate_function_signature(data, &function.function);
 
     if function.function.is_native {
-        let Some(native) = &function.native else {
-            panic!("native function {} is not defined", function.function.name);
-        };
+        let native = function.native.as_ref().ok_or_else(|| {
+            Error::UndefNativeFunc(format!("{}.{}", class.name, function.function.name))
+        })?;
 
-        dbg!(&function.function.name);
-        assert_eq!(signature, native.signature);
+        if signature != native.signature {
+            return Err(Error::NativeFuncSignatureMissmatch {
+                script: signature,
+                host: native.signature.clone(),
+            });
+        }
 
-        generate_guest_to_host_trampoline(compiler, &signature, native)
+        let id = generate_guest_to_host_trampoline(compiler, &signature, native);
+        Ok(id)
     } else {
-        compiler.declare_function(signature)
+        let id = compiler.declare_function(signature);
+        Ok(id)
     }
 }
 
