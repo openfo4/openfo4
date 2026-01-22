@@ -36,10 +36,11 @@ impl Compiler {
     ///
     /// [`define_function`]: Self::define_function
     /// [`define_native_function`]: Self::define_native_function
-    pub fn declare_function(&mut self, signature: Signature) -> FunctionId {
+    pub fn declare_function(&mut self, signature: Signature) -> FuncId {
         let id = self.inner.declare_function(&signature).unwrap();
+        dbg!(&signature, id);
 
-        FunctionId(self.functions.insert(FuncState { signature, id }))
+        FuncId(self.functions.insert(FuncState { signature, id }))
     }
 
     /// Defines a native function.
@@ -55,13 +56,13 @@ impl Compiler {
     /// - The function must match the [`Signature`] that was passed in [`declare_function`].
     ///
     /// [`declare_function`]: Self::declare_function
-    pub fn define_native_function(&mut self, id: FunctionId, ptr: *const u8) {
+    pub fn define_native_function(&mut self, id: FuncId, ptr: *const u8) {
         let id = self.functions[id.0].id;
         self.inner.define_native_function(id, ptr);
     }
 
     /// Defines a function.
-    pub fn define_function(&mut self, id: FunctionId) -> FunctionBuilder<'_> {
+    pub fn define_function(&mut self, id: FuncId) -> FunctionBuilder<'_> {
         assert!(
             self.functions.contains(id.0),
             "cannot define function before it was declared"
@@ -83,7 +84,7 @@ impl Compiler {
     }
 
     /// Compiles a function and all its dependencies.
-    pub fn compile_function(&mut self, id: FunctionId) -> CompiledFunction {
+    pub fn compile_function(&mut self, id: FuncId) -> CompiledFunction {
         let func = &self.functions[id.0];
 
         CompiledFunction {
@@ -180,14 +181,14 @@ impl Type {
 
 /// An opaque identifier for a function.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
-pub struct FunctionId(usize);
+pub struct FuncId(usize);
 
 /// An opaque identifier for an SSA value in a function definition.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Value(usize);
 
 pub struct FunctionBuilder<'a> {
-    id: FunctionId,
+    id: FuncId,
     compiler: &'a mut Compiler,
     instructions: Vec<Instruction>,
     next_value: usize,
@@ -573,7 +574,7 @@ impl<'a> FunctionBuilder<'a> {
     }
 
     #[track_caller]
-    pub fn call(&mut self, func: FunctionId, args: &[Value]) -> Vec<Value> {
+    pub fn call(&mut self, func: FuncId, args: &[Value]) -> Vec<Value> {
         self.assert_block_not_filled();
 
         let Some(state) = self.compiler.functions.get(func.0) else {
@@ -1011,7 +1012,7 @@ enum Instruction {
     FDiv(Binop),
     FMin(Binop),
     FMax(Binop),
-    Call(FunctionId, Vec<Value>, Vec<Value>),
+    Call(FuncId, Vec<Value>, Vec<Value>),
     Return(Vec<Value>),
     Jump(Block, Vec<Value>),
     Brif {

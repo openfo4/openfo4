@@ -1,15 +1,15 @@
 //! Trampline for host to guest transitions
 
-use openfo4_jit::{Compiler, FunctionId, Signature, Type};
+use openfo4_jit::{Compiler, FuncId, Signature, Type};
 
 use crate::compiler::NativeFunction;
 use crate::runtime::{RawVal, host_malloc};
 
 pub fn generate_host_to_guest_trampoline(
     compiler: &mut Compiler,
-    target: FunctionId,
+    target: FuncId,
     target_signature: &Signature,
-) -> FunctionId {
+) -> FuncId {
     // fn(*const Context, usize, *mut RawVal)
     let func_id = compiler.declare_function(Signature {
         params: vec![Type::Pointer, Type::Pointer, Type::Pointer],
@@ -51,7 +51,7 @@ pub fn generate_guest_to_host_trampoline(
     compiler: &mut Compiler,
     target_signature: &Signature,
     native: &NativeFunction,
-) -> FunctionId {
+) -> FuncId {
     // fn(*const Context, usize, *mut RawVal)
     let trampoline_func_id = compiler.declare_function(Signature {
         params: vec![Type::Pointer, Type::Pointer, Type::Pointer],
@@ -98,7 +98,7 @@ pub fn generate_guest_to_host_trampoline(
     func_id
 }
 
-pub fn generate_malloc_func(compiler: &mut Compiler) -> FunctionId {
+pub fn generate_malloc_func(compiler: &mut Compiler) -> FuncId {
     // (*mut RawContext, *const TypeLayout, array_len: usize) -> *mut u8
     let id = compiler.declare_function(Signature {
         params: vec![Type::Pointer, Type::Pointer, Type::Pointer],

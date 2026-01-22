@@ -6,17 +6,15 @@ mod layout;
 mod trampoline;
 mod types;
 
-use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
-use openfo4_jit::{Compiler, FunctionId as FuncId, Signature, Type as JitType};
+use openfo4_jit::{Compiler, FuncId, Signature, Type as JitType};
 use openfo4_pex::{Class, Function, Instruction, Module, Struct, Value};
 use slab::Slab;
 use thiserror::Error;
 
 use crate::compiler::codegen::constant::ConstantData;
-use crate::compiler::codegen::function::FunctionResult;
 use crate::compiler::codegen::function_props::{FunctionProps, function_properties};
 use crate::compiler::codegen::layout::{ClassLayout, compute_struct_layout};
 use crate::compiler::codegen::trampoline::generate_malloc_func;
@@ -34,8 +32,7 @@ pub struct Error;
 pub struct CodegenPass {
     data: CodegenData,
     next_type_id: usize,
-    // FIXME: Don't refcell this.
-    compiler: RefCell<Compiler>,
+    compiler: Compiler,
 }
 
 impl CodegenPass {
@@ -45,7 +42,7 @@ impl CodegenPass {
         Self {
             data: CodegenData::new(&mut compiler),
             next_type_id: 0,
-            compiler: RefCell::new(compiler),
+            compiler,
         }
     }
 
@@ -333,125 +330,71 @@ impl CodegenPass {
     pub fn compile_fn(&mut self, class: &str, f: &str) -> Result<CompilationResult, Error> {
         self.compute_type_layouts();
 
-        let mut compiler = self.compiler.borrow_mut();
-
         let root_func_id = self.data.get_function_id(class, f).unwrap();
 
-        // The compile the function we must also compile all functions that
-        // are called.
+        let mut funcs_to_compile = HashSet::<FunctionId>::new();
         let mut queue = vec![root_func_id];
-        let mut dependencies = HashMap::<FunctionId, HashSet<FunctionId>>::new();
         while let Some(func_id) = queue.pop() {
             let def = &self.data.functions[func_id.0];
 
-            // Function is already compiled.
+            // Function was already compiled.
             if def.func_id.is_some() {
                 continue;
             }
 
+            funcs_to_compile.insert(func_id);
+
             let callees = find_function_callees(&self.data, &def);
-
-            let mut depends_on = HashSet::new();
-            for callee in callees {
-                let def = &self.data.functions[callee.0];
-                if !def.func_id.is_some() {
-                    depends_on.insert(callee);
-                    queue.push(callee);
-                }
-            }
-
-            if depends_on.is_empty() {
-                {
-                    let func = &self.data.functions[func_id.0];
-                    let props = function_properties(&self.data, func);
-                    self.data.functions[func_id.0].props = Some(props);
-                }
-
-                // Compile the function.
-                let res = self.compile_function_internal(func_id, &mut compiler);
-
-                // TODO: FIXME: Don't leak this here.
-                // Constants must be kept alive until all function instances are dropped.
-                // NOTE THAT THIS MUST INCLUDE ALL CALLED FUNCTIONS RECURSIVELY.
-                core::mem::forget(res.constants);
-                core::mem::forget(res.layouts);
-
-                self.data.functions[func_id.0].func_id = Some(res.id);
-                self.data.functions[func_id.0].signature = Some(res.signature);
-
-                // Mark all dependend callers as ready.
-                dependencies.retain(|other_func_id, depends| {
-                    depends.remove(&func_id);
-                    if depends.is_empty() {
-                        queue.push(*other_func_id);
-                        false
-                    } else {
-                        true
-                    }
-                });
-
-                continue;
-            }
-
-            dependencies.insert(func_id, depends_on);
+            queue.extend(callees);
         }
 
-        let def = self.data.get_function_mut(class, &f).unwrap();
+        dbg!(&funcs_to_compile);
 
-        if def.trampoline_func_id.is_none() {
-            let trampoline = trampoline::generate_host_to_guest_trampoline(
-                &mut compiler,
-                def.func_id.unwrap(),
-                &def.signature.as_ref().unwrap(),
-            );
-            def.trampoline_func_id = Some(trampoline);
+        for func_id in &funcs_to_compile {
+            let func = &self.data.functions[func_id.0];
+            let class = &self.data.classes.get(&class.to_lowercase()).unwrap();
+            let id = function::declare_function(&self.data, class, func, &mut self.compiler);
+            dbg!(&id);
+
+            let props = function_properties(&self.data, func);
+
+            let func = &mut self.data.functions[func_id.0];
+            func.func_id = Some(id);
+            func.props = Some(props);
         }
 
-        let props = def.props.as_ref().unwrap();
+        for func_id in &funcs_to_compile {
+            let func = &self.data.functions[func_id.0];
+            let class = &self.data.classes.get(&class.to_lowercase()).unwrap();
+            let res = function::translate_function(&self.data, class, func, &mut self.compiler);
+
+            // TODO: FIXME: Don't leak this here.
+            // Constants must be kept alive until all function instances are dropped.
+            // NOTE THAT THIS MUST INCLUDE ALL CALLED FUNCTIONS RECURSIVELY.
+            core::mem::forget(res.constants);
+            core::mem::forget(res.layouts);
+
+            let func = &mut self.data.functions[func_id.0];
+            func.signature = Some(res.signature.clone());
+        }
+
+        let func = &mut self.data.functions[root_func_id.0];
+        let trampoline = trampoline::generate_host_to_guest_trampoline(
+            &mut self.compiler,
+            func.func_id.unwrap(),
+            func.signature.as_ref().unwrap(),
+        );
+        func.trampoline_func_id = Some(trampoline);
+
+        let props = func.props.as_ref().unwrap();
+
+        let compiled = self.compiler.compile_function(trampoline);
 
         Ok(CompilationResult {
-            function: compiler.compile_function(def.trampoline_func_id.unwrap()),
+            function: compiled,
             stack_size: props.stack_size,
-            signature: def.signature.clone().unwrap(),
+            signature: func.signature.clone().unwrap(),
         })
-    }
-
-    fn compile_function_internal(
-        &self,
-        func_id: FunctionId,
-        compiler: &mut Compiler,
-    ) -> FunctionResult {
-        let function = &self.data.functions[func_id.0];
-        let current_class = self.data.classes.get(&function.class).unwrap();
-
-        if function.function.is_native {
-            tracing::debug!(
-                "compiling {}.{} (native)",
-                &function.class,
-                &function.function.name
-            );
-        } else {
-            tracing::debug!("compiling {}.{}", &function.class, &function.function.name);
-        }
-
-        println!(
-            "{}.{}:\n{}",
-            function.class,
-            function.function.name,
-            function.function.text()
-        );
-
-        let res = function::translate_function(&self.data, current_class, &function, compiler);
-
-        if function.function.is_native {
-            return res;
-        }
-
-        let compiled = compiler.compile_function(res.id);
-
-        println!("{}", compiled.text().unwrap());
-
-        res
     }
 }
 

@@ -3,7 +3,7 @@ use std::mem::offset_of;
 
 use game_common::components::Transform;
 use openfo4_jit::{
-    Block, Compiler, FloatCompareOp, FunctionBuilder, FunctionId, IntCompareOp, Signature,
+    Block, Compiler, FloatCompareOp, FuncId, FunctionBuilder, IntCompareOp, Signature,
     Type as JitType, Value as JitValue, Variable as JitVariable,
 };
 use openfo4_pex::{Function, Instruction, Value};
@@ -22,10 +22,32 @@ use crate::runtime::{ArrayObject, ObjectTag, RESULT_ERROR, RESULT_OK};
 
 #[derive(Debug)]
 pub struct FunctionResult {
-    pub id: FunctionId,
+    pub id: FuncId,
     pub signature: Signature,
     pub constants: Vec<ConstantData>,
     pub layouts: Vec<Box<TypeLayout>>,
+}
+
+pub fn declare_function(
+    data: &CodegenData,
+    class: &ClassDef,
+    function: &FunctionDef,
+    compiler: &mut Compiler,
+) -> FuncId {
+    let signature = translate_function_signature(data, &function.function);
+
+    if function.function.is_native {
+        let Some(native) = &function.native else {
+            panic!("native function {} is not defined", function.function.name);
+        };
+
+        dbg!(&function.function.name);
+        assert_eq!(signature, native.signature);
+
+        generate_guest_to_host_trampoline(compiler, &signature, native)
+    } else {
+        compiler.declare_function(signature)
+    }
 }
 
 pub fn translate_function(
@@ -37,12 +59,18 @@ pub fn translate_function(
     let signature = translate_function_signature(data, &function.function);
     let props = function_properties(data, function);
 
-    debug_assert!(function.func_id.is_none());
-
     let mut constants = Vec::new();
     let mut layouts = Vec::new();
 
+    let func_id = function.func_id.unwrap();
+
     let func_id = if function.function.is_native {
+        tracing::debug!(
+            "compiling {}.{} (native)",
+            function.class,
+            function.function.name
+        );
+
         let Some(native) = &function.native else {
             panic!("native function {} is not defined", function.function.name);
         };
@@ -54,7 +82,7 @@ pub fn translate_function(
 
         func_id
     } else {
-        let func_id = compiler.declare_function(signature.clone());
+        tracing::debug!("compiling {}.{}", function.class, function.function.name);
 
         let builder = compiler.define_function(func_id);
         translate_function_body(
