@@ -484,13 +484,21 @@ impl CodegenData {
         Some(&mut self.functions[id.0])
     }
 
+    fn get_class_property(&self, class: &str, property: &str) -> Option<&ClassProperty> {
+        let class = get_parent_class_with_property(&self.classes, class, property)?;
+        let class = self.classes.get(&class.to_lowercase())?;
+        class.properties.get(&property.to_lowercase())
+    }
+
     fn get_property_getter_id(&self, class: &str, property: &str) -> Option<FunctionId> {
+        let class = get_parent_class_with_property(&self.classes, class, property)?;
         let class = self.classes.get(&class.to_lowercase())?;
         let prop = class.properties.get(&property.to_lowercase())?;
         prop.getter
     }
 
     fn get_property_setter_id(&self, class: &str, property: &str) -> Option<FunctionId> {
+        let class = get_parent_class_with_property(&self.classes, class, property)?;
         let class = self.classes.get(&class.to_lowercase())?;
         let prop = class.properties.get(&property.to_lowercase())?;
         prop.setter
@@ -661,6 +669,28 @@ fn get_parent_class_with_function<'a>(
         let class = classes.get(&class_name)?;
 
         if class.functions.get(&func_name.to_lowercase()).is_some() {
+            return Some(class_name);
+        }
+
+        let Some(parent) = &class.parent else {
+            return None;
+        };
+
+        class_name = parent.to_lowercase();
+    }
+}
+
+fn get_parent_class_with_property<'a>(
+    classes: &'a HashMap<String, ClassDef>,
+    class_name: &str,
+    prop_name: &str,
+) -> Option<String> {
+    let mut class_name = class_name.to_lowercase();
+
+    loop {
+        let class = classes.get(&class_name)?;
+
+        if class.properties.get(&prop_name.to_lowercase()).is_some() {
             return Some(class_name);
         }
 

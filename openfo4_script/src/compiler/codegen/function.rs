@@ -15,7 +15,9 @@ use crate::compiler::codegen::function_props::{
 };
 use crate::compiler::codegen::layout::generate_type_layout;
 use crate::compiler::codegen::trampoline::generate_guest_to_host_trampoline;
-use crate::compiler::codegen::{ClassDef, CodegenData, Error, FunctionDef, Type};
+use crate::compiler::codegen::{
+    ClassDef, CodegenData, Error, FunctionDef, Type, get_parent_class_with_property,
+};
 use crate::runtime::object::{ARRAY_LAYOUT, VAR_LAYOUT, VarObject};
 use crate::runtime::{ArrayObject, ObjectTag, RESULT_ERROR, RESULT_OK};
 
@@ -693,6 +695,10 @@ fn translate_function_body(
                     )
                     .unwrap()
                 } else {
+                    let class_name =
+                        get_parent_class_with_property(&data.classes, &class_name, &prop_name)
+                            .unwrap();
+
                     let class = data.get_class(&class_name).unwrap();
                     let layout = class.layout.as_ref().unwrap();
 
@@ -739,6 +745,10 @@ fn translate_function_body(
                         ctx_ptr,
                     );
                 } else {
+                    let class_name =
+                        get_parent_class_with_property(&data.classes, &class_name, &prop_name)
+                            .unwrap();
+
                     let class = data.get_class(&class_name).unwrap();
                     let layout = class.layout.as_ref().unwrap();
 
