@@ -609,7 +609,16 @@ fn find_function_callees(data: &CodegenData, function: &FunctionDef) -> Vec<Func
 
                 callees.push(func);
             }
-            Instruction::CallParent(op) => {}
+            Instruction::CallParent(op) => {
+                let parent = current_class.parent.as_ref().unwrap();
+
+                let Value::Ident(func_name) = &op.function else {
+                    unreachable!();
+                };
+
+                let func = data.get_function_id(parent, func_name).unwrap();
+                callees.push(func);
+            }
             Instruction::CallStatic(op) => {
                 let (class_name, function_name) = match (&op.class, &op.function) {
                     (Value::Ident(a), Value::Ident(b)) => (a, b),
