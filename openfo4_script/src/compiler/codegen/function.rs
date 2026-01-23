@@ -443,7 +443,24 @@ fn translate_function_body(
                 translator.store(&op.dst, res);
             }
             Instruction::Not(op) => {
-                let src = translator.load(&op.src);
+                // This instruction can operate on any bool-castable types,
+                // in which case it will be casted to a bool before the not
+                // operation is executed.
+                // The resulting type is always bool.
+                let src = if translator.get_type(&op.src) == Type::Bool {
+                    translator.load(&op.src)
+                } else {
+                    perform_cast(
+                        &mut translator,
+                        ctx_ptr,
+                        &op.src,
+                        // Use `dst` as a "temporary" boolean variable.
+                        // (Needed to provide a type for `perform_cast`)
+                        &op.dst,
+                        &mut current_block,
+                    )
+                };
+
                 let res = translator.builder.bnot(src);
                 translator.store(&op.dst, res);
             }
