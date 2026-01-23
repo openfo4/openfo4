@@ -1169,6 +1169,17 @@ fn translate_function_body(
                     .builder
                     .store(new_array_ptr, array, offset_of!(ArrayObject, ptr) as u32);
             }
+            Instruction::ArrayClear(op) => {
+                let array = translator.load(&op.array);
+
+                let zero = translator.builder.iconst(JitType::Pointer, 0);
+                translator
+                    .builder
+                    .store(zero, array, offset_of!(ArrayObject, ptr) as u32);
+                translator
+                    .builder
+                    .store(zero, array, offset_of!(ArrayObject, len) as u32);
+            }
             Instruction::ArrayFind(op) | Instruction::ArrayRFind(op) => {
                 let scan_backwards = matches!(instruction, Instruction::ArrayRFind(_));
 

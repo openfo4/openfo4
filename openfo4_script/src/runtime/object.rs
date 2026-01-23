@@ -418,6 +418,7 @@ pub enum ObjectTag {
     Int = 2,
     Float = 3,
     Class = 4,
+    String = 5,
 }
 
 pub(crate) static ARRAY_LAYOUT: LazyLock<TypeLayout> = LazyLock::new(|| TypeLayout {
