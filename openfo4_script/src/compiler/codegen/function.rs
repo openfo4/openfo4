@@ -13,7 +13,9 @@ use crate::compiler::codegen::constant::{ConstantData, create_string_constant};
 use crate::compiler::codegen::function_props::{
     FunctionProps, StackFrame, Stage, StageVariable, function_properties,
 };
-use crate::compiler::codegen::layout::generate_type_layout;
+use crate::compiler::codegen::layout::{
+    compute_struct_layout, compute_struct_type_layout, generate_type_layout,
+};
 use crate::compiler::codegen::trampoline::generate_guest_to_host_trampoline;
 use crate::compiler::codegen::{
     ClassDef, CodegenData, Error, FunctionDef, Type, get_parent_class_with_property,
@@ -785,6 +787,28 @@ fn translate_function_body(
                     perform_typecheck(&mut translator, &op.object, &class, &mut current_block);
                 let res = translator.builder.uextend(res, JitType::I32);
                 translator.store(&op.return_assignment, res);
+            }
+            Instruction::StructCreate(op) => {
+                let ty = translator.get_type(&op.return_assignment);
+                let Type::Struct(name) = &ty else {
+                    unreachable!();
+                };
+                let st = translator.data.structs.get(&name.to_lowercase()).unwrap();
+
+                let layout = compute_struct_type_layout(translator.data, st);
+                let one = translator.builder.iconst(JitType::Pointer, 1);
+                let ptr = call_malloc(&mut translator, ctx_ptr, layout, one);
+
+                // Default-initialize all struct fields.
+                let layout = st.layout(translator.data);
+                for member in &st.s.members {
+                    let offset = layout.offset(&member.name).unwrap();
+                    let ty = translator.data.resolve_ty(&member.ty);
+                    let value = create_default_value(&mut translator, &ty);
+                    translator.builder.store(value, ptr, offset as u32);
+                }
+
+                translator.store(&op.return_assignment, ptr);
             }
             Instruction::StructGet(op) => {
                 let offset =
@@ -1702,7 +1726,7 @@ fn perform_cast(
                 Type::Float => ObjectTag::Float,
                 Type::Class(_) => ObjectTag::Class,
                 Type::Var => unreachable!(),
-                _ => todo!(),
+                x => todo!("{:?}", x),
             };
 
             create_var(translator, ctx_ptr, src, tag)
@@ -1720,6 +1744,8 @@ fn perform_cast(
                 .call(translator.data.runtime_funcs.f32_to_string, &[ctx_ptr, src])[0];
             ptr
         }
+        // A null pointer.
+        (Type::None, Type::Class(_)) => translator.builder.iconst(JitType::Pointer, 0),
         (src_ty, dst_ty) => todo!("{:?} {:?}", src_ty, dst_ty),
     }
 }
@@ -2276,6 +2302,7 @@ fn check_equality(
             *block = final_block;
             translator.builder.block_params(final_block)[0]
         }
+        Type::Class(_) => translator.builder.icmp(lhs, rhs, IntCompareOp::Equal),
         ty => todo!("{:?}", ty),
     }
 }
@@ -2307,4 +2334,14 @@ fn pop_stack_frame(translator: &mut FunctionTranslator<'_>, ctx_ptr: JitValue, f
         translator.data.runtime_funcs.stack_frame_free,
         &[ctx_ptr, size],
     );
+}
+
+fn create_default_value(translator: &mut FunctionTranslator<'_>, ty: &Type) -> JitValue {
+    match ty {
+        Type::None | Type::Int | Type::Bool => translator.builder.iconst(JitType::I32, 0),
+        Type::Float => translator.builder.fconst(JitType::F32, 0.0),
+        Type::String | Type::Struct(_) | Type::Class(_) | Type::Array(_) | Type::Var => {
+            translator.builder.iconst(JitType::Pointer, 0)
+        }
+    }
 }

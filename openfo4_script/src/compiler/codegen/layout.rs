@@ -70,6 +70,40 @@ pub fn compute_struct_layout(data: &CodegenData, st: &StructDef) -> ClassLayout 
     }
 }
 
+pub fn compute_struct_type_layout(data: &CodegenData, st: &StructDef) -> TypeLayout {
+    let layout = compute_struct_layout(data, st);
+
+    let mut fields = Vec::new();
+    for (field_name, field_offset) in &layout.field_offsets {
+        let field_ty_name =
+            st.s.members
+                .iter()
+                .find(|v| v.name.to_lowercase() == field_name.to_lowercase())
+                .map(|v| &v.ty)
+                .unwrap();
+        let field_ty = data.resolve_ty(&field_ty_name);
+
+        fields.push(ObjectField {
+            class: st.s.name.to_lowercase(),
+            name: field_name.to_lowercase(),
+            offset: *field_offset,
+            ty: match field_ty {
+                Type::Bool => FieldType::Bool,
+                Type::Int => FieldType::I32,
+                Type::Float => FieldType::F32,
+                _ => FieldType::Pointer,
+            },
+            ty_name: field_ty_name.to_lowercase(),
+        });
+    }
+
+    TypeLayout {
+        header: None,
+        fields,
+        properties: Vec::new(),
+    }
+}
+
 pub fn generate_type_layout(data: &CodegenData, ty: &Type) -> TypeLayout {
     let field_ty = match ty {
         Type::None => FieldType::I32,
