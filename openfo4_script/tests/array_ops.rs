@@ -1,5 +1,3 @@
-use std::arch::x86_64::_SIDD_NEGATIVE_POLARITY;
-
 use openfo4_script::assembler::assemble;
 use openfo4_script::compiler::{FieldType, ObjectField, TypeLayout};
 use openfo4_script::engine::{Engine, Options};

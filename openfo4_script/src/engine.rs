@@ -97,6 +97,13 @@ pub struct Options {
     pub skip_empty: bool,
     /// Only compile functions with predefined event signatures.
     pub only_events: bool,
+    /// Use stub functions for all undefined native functions.
+    ///
+    /// Exists purely for compile testing and may result in crashes when calling into functions
+    /// which call stub functions.
+    ///
+    /// Default: `false`
+    pub use_native_stubs: bool,
 }
 
 #[derive(Default)]
@@ -169,7 +176,7 @@ impl Registry {
                     continue;
                 }
 
-                let res = self.ctx.compile(&class.name, &f.name).unwrap();
+                let res = self.ctx.compile(&class.name, &f.name, options).unwrap();
 
                 let func = unsafe { Func::new(&res) };
 

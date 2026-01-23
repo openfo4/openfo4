@@ -10,6 +10,7 @@ use thiserror::Error;
 
 use crate::compiler::codegen::CodegenPass;
 use crate::compiler::validation::ValidationPass;
+use crate::engine::Options;
 
 #[derive(Clone, Debug, Error)]
 pub enum Error {
@@ -51,11 +52,16 @@ impl Context {
             .map_err(Error::Codegen)
     }
 
-    pub fn compile(&mut self, class: &str, func: &str) -> Result<CompilationResult, Error> {
+    pub fn compile(
+        &mut self,
+        class: &str,
+        func: &str,
+        options: &Options,
+    ) -> Result<CompilationResult, Error> {
         self.validation.validate().map_err(Error::Validation)?;
         let res = self
             .codegen
-            .compile_fn(class, func)
+            .compile_fn(class, func, options)
             .map_err(Error::Codegen)?;
         Ok(res)
     }

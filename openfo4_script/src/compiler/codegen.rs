@@ -23,6 +23,7 @@ use crate::compiler::codegen::types::Types;
 use crate::compiler::{
     CompilationResult, FieldType, NativeFunction, ObjectField, ObjectProperty, TypeLayout,
 };
+use crate::engine::Options;
 
 pub const MAX_INSTRUCTIONS_BEFORE_PREEMPT: usize = 1024;
 
@@ -32,9 +33,13 @@ pub enum Error {
     #[error("undefined native function: {0}")]
     UndefNativeFunc(String),
     #[error(
-        "native function signature missmatch: host definition: {host:?}, script definition: {script:?}"
+        "native function signature missmatch for {name}: host definition: {host:?}, script definition: {script:?}"
     )]
-    NativeFuncSignatureMissmatch { script: Signature, host: Signature },
+    NativeFuncSignatureMissmatch {
+        name: String,
+        script: Signature,
+        host: Signature,
+    },
 }
 
 pub struct CodegenPass {
@@ -335,7 +340,12 @@ impl CodegenPass {
         Ok(class_layouts)
     }
 
-    pub fn compile_fn(&mut self, class: &str, f: &str) -> Result<CompilationResult, Error> {
+    pub fn compile_fn(
+        &mut self,
+        class: &str,
+        f: &str,
+        options: &Options,
+    ) -> Result<CompilationResult, Error> {
         self.compute_type_layouts();
 
         let root_func_id = self.data.get_function_id(class, f).unwrap();
@@ -359,7 +369,13 @@ impl CodegenPass {
         for func_id in &funcs_to_compile {
             let func = &self.data.functions[func_id.0];
             let class = &self.data.classes.get(&class.to_lowercase()).unwrap();
-            let id = function::declare_function(&self.data, class, func, &mut self.compiler)?;
+            let id = function::declare_function(
+                &self.data,
+                class,
+                func,
+                &mut self.compiler,
+                options.use_native_stubs,
+            )?;
 
             let props = function_properties(&self.data, func);
 

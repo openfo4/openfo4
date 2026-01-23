@@ -7,19 +7,17 @@ use openfo4_jit::{
 };
 use openfo4_pex::{Function, Instruction, Value};
 
-use crate::compiler::TypeLayout;
 use crate::compiler::codegen::builtin::call_builtin;
 use crate::compiler::codegen::constant::{ConstantData, create_string_constant};
 use crate::compiler::codegen::function_props::{
     FunctionProps, StackFrame, Stage, StageVariable, function_properties,
 };
-use crate::compiler::codegen::layout::{
-    compute_struct_layout, compute_struct_type_layout, generate_type_layout,
-};
+use crate::compiler::codegen::layout::{compute_struct_type_layout, generate_type_layout};
 use crate::compiler::codegen::trampoline::generate_guest_to_host_trampoline;
 use crate::compiler::codegen::{
     ClassDef, CodegenData, Error, FunctionDef, Type, get_parent_class_with_property,
 };
+use crate::compiler::{NativeFunction, TypeLayout};
 use crate::runtime::object::{ARRAY_LAYOUT, VAR_LAYOUT, VarObject};
 use crate::runtime::{ArrayObject, ObjectTag, RESULT_ERROR, RESULT_OK};
 
@@ -36,22 +34,43 @@ pub fn declare_function(
     class: &ClassDef,
     function: &FunctionDef,
     compiler: &mut Compiler,
+    use_native_stubs: bool,
 ) -> Result<FuncId, Error> {
     let signature = translate_function_signature(data, &function.function);
 
     if function.function.is_native {
-        let native = function.native.as_ref().ok_or_else(|| {
-            Error::UndefNativeFunc(format!("{}.{}", class.name, function.function.name))
-        })?;
+        tracing::debug!(
+            "compiling {}.{} (native)",
+            function.class,
+            function.function.name
+        );
 
-        if signature != native.signature {
-            return Err(Error::NativeFuncSignatureMissmatch {
-                script: signature,
-                host: native.signature.clone(),
-            });
-        }
+        let native = match function.native.as_ref() {
+            Some(native) => {
+                if signature != native.signature {
+                    return Err(Error::NativeFuncSignatureMissmatch {
+                        name: format!("{}.{}", class.name, function.function.name),
+                        script: signature,
+                        host: native.signature.clone(),
+                    });
+                }
 
-        let id = generate_guest_to_host_trampoline(compiler, &signature, native);
+                native.clone()
+            }
+            None if use_native_stubs => NativeFunction {
+                signature: signature.clone(),
+                index: 0,
+                ptr: core::ptr::null(),
+            },
+            None => {
+                return Err(Error::UndefNativeFunc(format!(
+                    "{}.{}",
+                    class.name, function.function.name
+                )));
+            }
+        };
+
+        let id = generate_guest_to_host_trampoline(compiler, &signature, &native);
         Ok(id)
     } else {
         let id = compiler.declare_function(signature);
@@ -74,21 +93,6 @@ pub fn translate_function(
     let func_id = function.func_id.unwrap();
 
     let func_id = if function.function.is_native {
-        tracing::debug!(
-            "compiling {}.{} (native)",
-            function.class,
-            function.function.name
-        );
-
-        let Some(native) = &function.native else {
-            panic!("native function {} is not defined", function.function.name);
-        };
-
-        dbg!(&function.function.name);
-        assert_eq!(signature, native.signature);
-
-        let func_id = generate_guest_to_host_trampoline(compiler, &signature, native);
-
         func_id
     } else {
         tracing::debug!("compiling {}.{}", function.class, function.function.name);
@@ -1724,6 +1728,7 @@ fn perform_cast(
                 Type::Int => ObjectTag::Int,
                 Type::Bool => ObjectTag::Bool,
                 Type::Float => ObjectTag::Float,
+                Type::String => ObjectTag::String,
                 Type::Class(_) => ObjectTag::Class,
                 Type::Var => unreachable!(),
                 x => todo!("{:?}", x),
@@ -1784,6 +1789,7 @@ fn perform_var_downcast(
         ObjectTag::Int => JitType::I32,
         ObjectTag::Float => JitType::F32,
         ObjectTag::Class => JitType::Pointer,
+        ObjectTag::String => JitType::Pointer,
     };
 
     translator
