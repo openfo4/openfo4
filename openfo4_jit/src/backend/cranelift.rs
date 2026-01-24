@@ -1,26 +1,29 @@
-use std::collections::HashMap;
-use std::hash::Hash;
-use std::mem::ManuallyDrop;
-use std::sync::{Arc, Mutex};
+mod libcall;
+mod memory;
+mod relocs;
+
+use std::alloc::Layout;
+use std::sync::Arc;
 
 use cranelift_codegen::control::ControlPlane;
 use cranelift_codegen::ir::condcodes::{FloatCC, IntCC};
 use cranelift_codegen::ir::{
-    self, ArgumentExtension, ArgumentPurpose, BlockArg, InstBuilder, InstBuilderBase, MemFlags,
-    StackSlotData, StackSlotKind,
+    self, ArgumentExtension, ArgumentPurpose, BlockArg, ExtFuncData, ExternalName, Function,
+    InstBuilder, InstBuilderBase, MemFlags, StackSlotData, StackSlotKind, UserExternalName,
+    UserExternalNameRef, UserFuncName,
 };
+use cranelift_codegen::isa::OwnedTargetIsa;
 use cranelift_codegen::settings::Configurable;
-use cranelift_codegen::{Context, settings};
-use cranelift_frontend::FunctionBuilderContext;
-use cranelift_jit::{JITBuilder, JITModule};
-use cranelift_module::{Linkage, Module};
+use cranelift_codegen::{CompiledCode, Context, settings};
+use cranelift_frontend::{FunctionBuilder, FunctionBuilderContext};
+use game_tracing::trace_span;
+use hashbrown::{HashMap, HashSet};
 use slab::Slab;
 
+use crate::backend::cranelift::memory::{Allocation, MemoryAllocator};
+use crate::backend::cranelift::relocs::perform_relocations;
 use crate::backend::{FunctionDefinitionDesc, StackSlotDesc};
-use crate::{FloatCompareOp, Instruction, IntCompareOp, Signature, Type, Value};
-
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
-pub struct FunctionId(usize);
+use crate::{FloatCompareOp, FuncId, Instruction, IntCompareOp, Signature, Type, Value};
 
 #[derive(Clone, Debug)]
 pub enum Error {}
@@ -28,33 +31,53 @@ pub enum Error {}
 pub struct CraneliftModule {
     functions: Slab<FuncState>,
     compiled_functions: HashMap<usize, CompiledFunction>,
+    allocator: MemoryAllocator,
+    isa: OwnedTargetIsa,
+    ctx: Context,
+    func_ctx: FunctionBuilderContext,
 }
 
 impl CraneliftModule {
     pub fn new() -> Self {
+        let mut flags = settings::builder();
+        flags.set("use_colocated_libcalls", "false").unwrap();
+        flags.set("is_pic", "false").unwrap();
+        flags.set("opt_level", "speed_and_size").unwrap();
+        flags.set("regalloc_algorithm", "backtracking").unwrap();
+        // TODO: Add option to disable verifier. Verification is quite expensive.
+        flags.set("enable_verifier", "true").unwrap();
+
+        let builder = cranelift_native::builder().unwrap();
+        let isa = builder.finish(settings::Flags::new(flags)).unwrap();
+
         Self {
             functions: Slab::new(),
             compiled_functions: HashMap::new(),
+            allocator: MemoryAllocator::new(),
+            ctx: Context::new(),
+            isa,
+            func_ctx: FunctionBuilderContext::new(),
         }
     }
 
-    pub fn declare_function(&mut self, signature: &Signature) -> Result<FunctionId, Error> {
+    pub fn declare_function(&mut self, signature: &Signature) -> Result<FuncId, Error> {
         let id = self.functions.insert(FuncState {
             signature: signature.clone(),
             definition: None,
+            compiled: None,
         });
 
-        Ok(FunctionId(id))
+        Ok(FuncId(id))
     }
 
-    pub fn define_native_function(&mut self, id: FunctionId, ptr: *const u8) {
+    pub fn define_native_function(&mut self, id: FuncId, ptr: *const u8) {
         let state = self.functions.get_mut(id.0).unwrap();
         assert!(state.definition.is_none(), "cannot redefine function");
 
         state.definition = Some(FunctionDefinition::Host(HostFunctionDefinition { ptr }));
     }
 
-    pub fn define_function(&mut self, id: FunctionId, definition: FunctionDefinitionDesc) {
+    pub fn define_function(&mut self, id: FuncId, definition: FunctionDefinitionDesc) {
         let state = self.functions.get_mut(id.0).unwrap();
         assert!(state.definition.is_none(), "cannot redefine function");
 
@@ -68,58 +91,29 @@ impl CraneliftModule {
         }));
     }
 
-    pub fn compile_function(&mut self, id: FunctionId, debug: bool) -> CompiledFunction {
+    pub fn compile_function(&mut self, id: FuncId, debug: bool) -> CompiledFunction {
+        let _span = trace_span!("CraneliftModule::compile_function").entered();
+
         if let Some(func) = self.compiled_functions.get(&id.0) {
             return func.clone();
         }
 
-        let mut settings = settings::builder();
-        settings.set("opt_level", "speed_and_size").unwrap();
-        settings.set("regalloc_algorithm", "backtracking").unwrap();
+        let ptr_type = self.isa.pointer_type();
+        let map_type = |ty: Type| -> ir::Type {
+            match ty {
+                Type::I8 => ir::types::I8,
+                Type::I16 => ir::types::I16,
+                Type::I32 => ir::types::I32,
+                Type::I64 => ir::types::I64,
+                Type::F32 => ir::types::F32,
+                Type::F64 => ir::types::F64,
+                Type::Pointer => ptr_type,
+            }
+        };
 
-        let mut builder = JITBuilder::with_flags(
-            &[
-                ("opt_level", "speed_and_size"),
-                ("regalloc_algorithm", "backtracking"),
-            ],
-            cranelift_module::default_libcall_names(),
-        )
-        .unwrap();
-
-        let native_functions = NativeFunctions::default();
-
-        {
-            let native_functions = native_functions.clone();
-            builder.symbol_lookup_fn(Box::new(move |name| {
-                dbg!(&name);
-                dbg!(&native_functions.get(name));
-                native_functions.get(name)
-            }));
-        }
-
-        let mut module = JITModule::new(builder);
-        let mut ctx = Context::new();
-        let mut func_ctx = FunctionBuilderContext::new();
-
-        let mut function_ids = HashMap::new();
-        let mut function_sigs = HashMap::new();
-        let mut function_debug = HashMap::new();
-
-        // Declare all functions.
-        for (func_id, func) in &self.functions {
-            let name = format!("anonymous_function_{}", func_id);
-
+        let convert_signature = |sig: &Signature| -> ir::Signature {
             let map_param = |ty: &Type| -> ir::AbiParam {
-                let ty = match ty {
-                    Type::I8 => ir::types::I8,
-                    Type::I16 => ir::types::I16,
-                    Type::I32 => ir::types::I32,
-                    Type::I64 => ir::types::I64,
-                    Type::F32 => ir::types::F32,
-                    Type::F64 => ir::types::F64,
-                    Type::Pointer => module.isa().pointer_type(),
-                };
-
+                let ty = map_type(*ty);
                 ir::AbiParam {
                     value_type: ty,
                     purpose: ArgumentPurpose::Normal,
@@ -127,68 +121,53 @@ impl CraneliftModule {
                 }
             };
 
-            let params = func.signature.params.iter().map(map_param).collect();
-            let returns = func.signature.returns.iter().map(map_param).collect();
+            let params = sig.params.iter().map(map_param).collect();
+            let returns = sig.returns.iter().map(map_param).collect();
 
-            let call_conv = module.isa().default_call_conv();
+            let call_conv = self.isa.default_call_conv();
 
-            let sig = ir::Signature {
+            ir::Signature {
                 params,
                 returns,
                 call_conv,
-            };
+            }
+        };
 
-            // FIXME: We currently use indirect calls for native functions. As such
-            // they don't have to be registered here.
-            // See comment on `Instruction::Call` for why we use indirect calls.
-            if matches!(func.definition, Some(FunctionDefinition::Guest(_))) {
-                let id = module
-                    .declare_function(&name, Linkage::Export, &sig)
-                    .unwrap();
+        let mut funcs_to_compile = vec![id];
 
-                function_ids.insert(func_id, id);
+        let mut compiled_funcs = HashSet::new();
+
+        while let Some(id) = funcs_to_compile.pop() {
+            let func = &self.functions[id.0];
+            if func.compiled.is_some() {
+                continue;
             }
 
-            function_sigs.insert(func_id, sig);
-        }
-
-        // Define functions
-        for (func_id, func) in &self.functions {
-            let name = format!("anonymous_function_{}", func_id);
+            // Note that FuncRefs are only valid for a single function,
+            // so we must recreate them for each function.
+            let mut callees = HashMap::new();
+            let mut refs_to_funcs = HashMap::new();
 
             let func_def = match func.definition.as_ref().unwrap() {
-                FunctionDefinition::Host(def) => {
-                    native_functions.insert(name, def.ptr);
-                    continue;
-                }
+                FunctionDefinition::Host(_) => continue,
                 FunctionDefinition::Guest(def) => def,
             };
 
-            module.clear_context(&mut ctx);
+            self.ctx.clear();
 
-            let sig = function_sigs.get(&func_id).unwrap().clone();
-            ctx.func.signature = sig;
+            let signature = convert_signature(&func.signature);
 
-            let mut builder =
-                cranelift_frontend::FunctionBuilder::new(&mut ctx.func, &mut func_ctx);
+            let mut func = Function::with_name_signature(
+                UserFuncName::User(UserExternalName::new(0, id.0.try_into().unwrap())),
+                signature,
+            );
+
+            let mut builder = FunctionBuilder::new(&mut func, &mut self.func_ctx);
 
             let mut values = vec![const { None }; func_def.num_values];
             let mut blocks = vec![const { None }; func_def.num_blocks];
             let mut stack_slots = vec![const { None }; func_def.stack_slots.len()];
             let mut variables = vec![const { None }; func_def.num_variables];
-
-            let ptr_type = module.isa().pointer_type();
-            let map_type = |ty: Type| -> ir::Type {
-                match ty {
-                    Type::I8 => ir::types::I8,
-                    Type::I16 => ir::types::I16,
-                    Type::I32 => ir::types::I32,
-                    Type::I64 => ir::types::I64,
-                    Type::F32 => ir::types::F32,
-                    Type::F64 => ir::types::F64,
-                    Type::Pointer => ptr_type,
-                }
-            };
 
             // Create stack slots
             for (id, slot) in &func_def.stack_slots {
@@ -198,6 +177,7 @@ impl CraneliftModule {
                     // `slot.align` already must be a power of two.
                     // FIXME: we can do better than ilog2.
                     align_shift: slot.align.ilog2() as u8,
+                    key: None,
                 });
 
                 stack_slots[id] = Some(res);
@@ -372,7 +352,7 @@ impl CraneliftModule {
                         let res = builder.ins().ceil(src);
                         values[op.dst.0] = Some(res);
                     }
-                    Instruction::Call(func, params, returns) => {
+                    Instruction::Call(func_id, params, returns) => {
                         let args = params
                             .iter()
                             .map(|v| values[v.0].unwrap())
@@ -386,22 +366,46 @@ impl CraneliftModule {
                         // when calling host functions.
                         // This is not possible for guest functions because they may
                         // not be compiled and may not have an address yet.
+                        let func = &self.functions[func_id.0];
+                        let signature = convert_signature(&func.signature);
+                        let sig_ref = builder.import_signature(signature.clone());
 
-                        let inst = match &self.functions.get(func.0).unwrap().definition {
+                        let inst = match &func.definition {
                             Some(FunctionDefinition::Host(def)) => {
-                                let sig = function_sigs.get(&func.0).unwrap();
-                                let sig_ref = builder.import_signature(sig.clone());
-
                                 let addr = u64::try_from(def.ptr.addr()).unwrap() as i64;
                                 let callee = builder.ins().iconst(ptr_type, addr);
 
                                 builder.ins().call_indirect(sig_ref, callee, &args)
                             }
                             Some(FunctionDefinition::Guest(_)) => {
-                                let func = *function_ids.get(&func.0).unwrap();
-                                let func_ref = module.declare_func_in_func(func, &mut builder.func);
+                                if let Some(compiled) = &func.compiled {
+                                    let addr =
+                                        u64::try_from(compiled.allocation.as_exec_ptr().addr())
+                                            .unwrap()
+                                            as i64;
 
-                                builder.ins().call(func_ref, &args)
+                                    let callee = builder.ins().iconst(ptr_type, addr);
+                                    builder.ins().call_indirect(sig_ref, callee, &args)
+                                } else {
+                                    funcs_to_compile.push(*func_id);
+
+                                    let func_ref = *callees.entry(*func_id).or_insert_with(|| {
+                                        let name = builder.func.declare_imported_user_function(
+                                            UserExternalName::new(0, func_id.0.try_into().unwrap()),
+                                        );
+
+                                        refs_to_funcs.insert(name, *func_id);
+
+                                        builder.import_function(ExtFuncData {
+                                            name: ExternalName::User(name),
+                                            signature: sig_ref,
+                                            colocated: false,
+                                            patchable: false,
+                                        })
+                                    });
+
+                                    builder.ins().call(func_ref, &args)
+                                }
                             }
                             None => unreachable!(),
                         };
@@ -659,7 +663,7 @@ impl CraneliftModule {
                         let src = values[src.0].unwrap();
                         let dst = values[dst.0].unwrap();
                         let size = values[size.0].unwrap();
-                        builder.call_memcpy(module.isa().frontend_config(), dst, src, size);
+                        builder.call_memcpy(self.isa.frontend_config(), dst, src, size);
                     }
                     Instruction::Memcmp {
                         lhs,
@@ -670,8 +674,7 @@ impl CraneliftModule {
                         let lhs = values[lhs.0].unwrap();
                         let rhs = values[rhs.0].unwrap();
                         let size = values[size.0].unwrap();
-                        let res =
-                            builder.call_memcmp(module.isa().frontend_config(), lhs, rhs, size);
+                        let res = builder.call_memcmp(self.isa.frontend_config(), lhs, rhs, size);
                         values[dst.0] = Some(res);
                     }
                     Instruction::IAddImm(op) => {
@@ -742,68 +745,69 @@ impl CraneliftModule {
 
             builder.seal_all_blocks();
 
-            let clif = debug.then(|| builder.func.display().to_string());
+            let clif = debug
+                .then(|| builder.func.display().to_string())
+                .unwrap_or_default();
 
             builder.finalize();
 
-            let id = *function_ids.get(&func_id).unwrap();
-            module
-                .define_function(id, &mut ctx)
-                .inspect_err(|err| {
-                    println!("{}", clif.as_ref().unwrap());
-                    println!("{}", err);
-                })
+            self.ctx.clear();
+            self.ctx.func = func;
+            self.ctx.want_disasm = debug;
+
+            self.ctx
+                .compile(&*self.isa, &mut ControlPlane::default())
                 .unwrap();
+            let code = self.ctx.take_compiled_code().unwrap();
 
             if debug {
-                ctx.set_disasm(true);
-                let compiled_code = ctx
-                    .compile(module.isa(), &mut ControlPlane::default())
+                let disasm = code.vcode.as_ref().unwrap();
+
+                let text = format!("CLIF:\n{}------------\nASM:\n{}------------", clif, disasm);
+                println!("{}", text);
+            }
+
+            let layout =
+                Layout::from_size_align(code.buffer.data().len(), code.buffer.alignment as usize)
                     .unwrap();
 
-                let disasm = compiled_code.vcode.as_ref().unwrap();
+            let allocation = self.allocator.alloc(layout);
 
-                let text = format!(
-                    "CLIF:\n{}------------\nASM:\n{}------------",
-                    clif.unwrap(),
-                    disasm
-                );
-                function_debug.insert(func_id, text);
-            }
+            let func = &mut self.functions[id.0];
+            func.compiled = Some(CompilationResult {
+                code,
+                allocation: Arc::new(allocation),
+                callees: refs_to_funcs,
+            });
+
+            compiled_funcs.insert(id);
         }
 
-        module.finalize_definitions().unwrap();
-
-        let module = Arc::new(SharedJITModule(ManuallyDrop::new(module)));
-
-        for (func_id, func) in &self.functions {
-            if !matches!(func.definition, Some(FunctionDefinition::Guest(_))) {
-                continue;
-            }
-
-            let func = function_ids.get(&func_id).unwrap();
-
-            let fn_ptr = module.0.get_finalized_function(*func);
-            let text = function_debug.remove(&func_id);
-
-            self.compiled_functions.insert(
-                func_id,
-                CompiledFunction {
-                    _module: module.clone(),
-                    fn_ptr,
-                    text,
-                },
-            );
+        for id in compiled_funcs {
+            perform_relocations(id, &mut self.functions);
         }
 
-        debug_assert!(self.compiled_functions.contains_key(&id.0));
-        self.compiled_functions.get(&id.0).unwrap().clone()
+        wasmtime_internal_jit_icache_coherence::pipeline_flush_mt().unwrap();
+
+        let compiled = self.functions[id.0].compiled.as_ref().unwrap();
+        CompiledFunction {
+            _allocation: compiled.allocation.clone(),
+            fn_ptr: compiled.allocation.as_exec_ptr(),
+            text: None,
+        }
     }
+}
+
+struct CompilationResult {
+    code: CompiledCode,
+    allocation: Arc<Allocation>,
+    callees: HashMap<UserExternalNameRef, FuncId>,
 }
 
 struct FuncState {
     signature: Signature,
     definition: Option<FunctionDefinition>,
+    compiled: Option<CompilationResult>,
 }
 
 #[derive(Clone, Debug)]
@@ -830,22 +834,10 @@ struct GuestFunctionDefinition {
     stack_slots: Slab<StackSlotDesc>,
 }
 
-struct SharedJITModule(ManuallyDrop<JITModule>);
-
-impl Drop for SharedJITModule {
-    fn drop(&mut self) {
-        unsafe {
-            let module = ManuallyDrop::take(&mut self.0);
-            module.free_memory();
-        }
-    }
-}
-
 #[derive(Clone)]
 pub struct CompiledFunction {
-    /// This module contains the executable machine code and must not be dropped until all
-    /// function calls terminate.
-    _module: Arc<SharedJITModule>,
+    /// The allocation must not be droped until all function calls terminate.
+    _allocation: Arc<Allocation>,
     fn_ptr: *const u8,
     text: Option<String>,
 }
@@ -868,21 +860,3 @@ impl Drop for CompiledFunction {
 // and can be called from any thread.
 unsafe impl Send for CompiledFunction {}
 unsafe impl Sync for CompiledFunction {}
-
-#[derive(Clone, Debug, Default)]
-struct NativeFunctions(Arc<Mutex<HashMap<String, *const u8>>>);
-
-impl NativeFunctions {
-    fn insert(&self, name: String, ptr: *const u8) {
-        self.0.lock().unwrap().insert(name, ptr);
-    }
-
-    fn get(&self, name: &str) -> Option<*const u8> {
-        self.0.lock().unwrap().get(name).copied()
-    }
-}
-
-// SAFETY: We store function pointers which have no additional safety
-// requirements unless we call them.
-unsafe impl Send for NativeFunctions {}
-unsafe impl Sync for NativeFunctions {}

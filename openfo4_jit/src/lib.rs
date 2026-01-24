@@ -1,5 +1,6 @@
 use std::fmt::{self, Debug, Formatter};
 
+use game_common::collections::vec_map::{Index, VecMap};
 use slab::Slab;
 
 use crate::backend::cranelift::{self, CraneliftModule};
@@ -10,7 +11,7 @@ mod backend;
 /// Main driver for the JIT compiler.
 pub struct Compiler {
     inner: CraneliftModule,
-    functions: Slab<FuncState>,
+    functions: VecMap<FuncId, FuncState>,
     isa: Isa,
 }
 
@@ -19,7 +20,7 @@ impl Compiler {
     pub fn new() -> Self {
         Self {
             inner: CraneliftModule::new(),
-            functions: Slab::new(),
+            functions: VecMap::new(),
             isa: Isa::new(),
         }
     }
@@ -38,8 +39,8 @@ impl Compiler {
     /// [`define_native_function`]: Self::define_native_function
     pub fn declare_function(&mut self, signature: Signature) -> FuncId {
         let id = self.inner.declare_function(&signature).unwrap();
-
-        FuncId(self.functions.insert(FuncState { signature, id }))
+        self.functions.insert(id, FuncState { signature });
+        id
     }
 
     /// Defines a native function.
@@ -56,14 +57,13 @@ impl Compiler {
     ///
     /// [`declare_function`]: Self::declare_function
     pub fn define_native_function(&mut self, id: FuncId, ptr: *const u8) {
-        let id = self.functions[id.0].id;
         self.inner.define_native_function(id, ptr);
     }
 
     /// Defines a function.
     pub fn define_function(&mut self, id: FuncId) -> FunctionBuilder<'_> {
         assert!(
-            self.functions.contains(id.0),
+            self.functions.contains_key(id),
             "cannot define function before it was declared"
         );
 
@@ -84,10 +84,10 @@ impl Compiler {
 
     /// Compiles a function and all its dependencies.
     pub fn compile_function(&mut self, id: FuncId) -> CompiledFunction {
-        let func = &self.functions[id.0];
+        let func = self.functions.get(id).unwrap();
 
         CompiledFunction {
-            inner: self.inner.compile_function(func.id, true),
+            inner: self.inner.compile_function(id, true),
             signature: func.signature.clone(),
         }
     }
@@ -119,7 +119,6 @@ impl Isa {
 #[derive(Clone, Debug)]
 struct FuncState {
     signature: Signature,
-    id: cranelift::FunctionId,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -181,6 +180,12 @@ impl Type {
 /// An opaque identifier for a function.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct FuncId(usize);
+
+impl Index for FuncId {
+    fn index(&self) -> usize {
+        self.0
+    }
+}
 
 /// An opaque identifier for an SSA value in a function definition.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
@@ -251,7 +256,7 @@ impl<'a> FunctionBuilder<'a> {
     }
 
     pub fn create_entry_block(&mut self) -> Block {
-        let state = &self.compiler.functions[self.id.0];
+        let state = &self.compiler.functions.get(self.id).unwrap();
 
         let block = self.next_block;
         self.next_block += 1;
@@ -576,7 +581,7 @@ impl<'a> FunctionBuilder<'a> {
     pub fn call(&mut self, func: FuncId, args: &[Value]) -> Vec<Value> {
         self.assert_block_not_filled();
 
-        let Some(state) = self.compiler.functions.get(func.0) else {
+        let Some(state) = self.compiler.functions.get(func) else {
             panic!("cannot call: function {:?} not declared", func);
         };
 
@@ -957,9 +962,8 @@ impl<'a> FunctionBuilder<'a> {
 
     /// Finalize the function definition.
     pub fn finalize(self) {
-        let func_id = self.compiler.functions[self.id.0].id;
         self.compiler.inner.define_function(
-            func_id,
+            self.id,
             FunctionDefinitionDesc {
                 instructions: self.instructions,
                 num_values: self.next_value,
