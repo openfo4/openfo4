@@ -1,4 +1,5 @@
 use std::collections::{HashMap, HashSet};
+use std::fmt::Debug;
 use std::mem::transmute;
 use std::sync::{Arc, LazyLock, RwLock};
 
@@ -10,7 +11,7 @@ use crate::compiler::{CompilationResult, Context, NativeFunction, TypeLayout};
 use crate::runtime::host_functions::call_host_trampoline;
 use crate::runtime::{Func, HostState, IntoFunc, NativeFnPtr, ObjectPool, RawVal};
 
-pub type NativeFuncPtr = unsafe extern "C" fn(*const HostState, usize, *mut RawVal);
+pub(crate) type NativeFuncPtr = unsafe extern "C" fn(*const HostState, usize, *mut RawVal);
 
 #[derive(Clone, Debug)]
 pub enum Error {
@@ -20,22 +21,32 @@ pub enum Error {
 }
 
 pub struct Engine {
-    registry: Registry,
+    /// Compilation context.
+    ctx: Context,
     pub(crate) shared: Arc<EngineShared>,
     layouts: HashMap<Lowercase<String>, TypeLayout>,
+    instances: HashMap<Lowercase<String>, Arc<InstanceShared>>,
+    classes: HashMap<Lowercase<String>, Class>,
 }
 
 impl Engine {
     pub fn new() -> Self {
         Self {
-            registry: Registry::new(),
+            ctx: Context::new(),
             shared: Arc::new(EngineShared::default()),
             layouts: HashMap::new(),
+            instances: HashMap::new(),
+            classes: HashMap::new(),
         }
     }
 
     pub fn register(&mut self, module: &Module) {
-        self.registry.register(module).unwrap();
+        self.ctx.register_module(module).unwrap();
+
+        for class in &module.classes {
+            self.classes
+                .insert(Lowercase::new(class.name.as_str()), class.clone());
+        }
     }
 
     pub fn register_native_function<F, T, Params, Returns>(&mut self, class: &str, func: &str, f: F)
@@ -54,7 +65,7 @@ impl Engine {
         // VM error
         signature.returns.push(Type::I32);
 
-        self.registry.define_native_function(
+        self.ctx.define_native_function(
             class,
             func,
             NativeFunction {
@@ -66,13 +77,55 @@ impl Engine {
     }
 
     pub fn compile(&mut self, class: &str, options: &Options) -> Instance {
-        let (instance, layouts) = self
-            .registry
-            .compile(self.shared.clone(), class, options)
-            .unwrap();
+        let class_name = Lowercase::new(class);
+
+        if let Some(shared) = self.instances.get(&class_name) {
+            return Instance {
+                shared: shared.clone(),
+            };
+        }
+
+        let class = self.classes.get(&class_name).unwrap();
+
+        let mut funcs = HashMap::new();
+        for s in &class.states {
+            for f in &s.functions {
+                let func_name = Lowercase::new(f.name.as_str());
+
+                if funcs.contains_key(&func_name) {
+                    continue;
+                }
+
+                if options.skip_native && f.is_native {
+                    continue;
+                }
+
+                if options.skip_empty && f.instructions.is_empty() {
+                    continue;
+                }
+
+                if options.only_events && !is_event(f) {
+                    continue;
+                }
+
+                let res = self.ctx.compile(&class.name, &f.name, options).unwrap();
+
+                let func = unsafe { Func::new(&res) };
+
+                funcs.insert(func_name, (res, func));
+            }
+        }
+
+        let layouts = self.ctx.compute_class_layouts(&class.name).unwrap();
         self.layouts.extend(layouts);
 
-        instance
+        let shared = Arc::new(InstanceShared {
+            funcs,
+            events_only: options.only_events,
+        });
+
+        self.instances.insert(class_name, shared.clone());
+        Instance { shared }
     }
 
     pub fn get_class_layout(&self, class: &str) -> Option<&TypeLayout> {
@@ -84,7 +137,7 @@ impl Engine {
     }
 }
 
-impl std::fmt::Debug for Engine {
+impl Debug for Engine {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Engine").finish_non_exhaustive()
     }
@@ -113,102 +166,24 @@ pub(crate) struct EngineShared {
     pub(crate) state: HostState,
 }
 
+impl Debug for EngineShared {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("EngineShared").finish_non_exhaustive()
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct ClassId(pub String);
 
-pub struct Registry {
-    ctx: Context,
-    native_functions: Vec<(String, String, NativeFunction)>,
-    classes: HashMap<String, Class>,
-}
-
-impl Registry {
-    pub fn new() -> Self {
-        Self {
-            classes: HashMap::new(),
-            native_functions: Vec::new(),
-            ctx: Context::new(),
-        }
-    }
-
-    pub fn register(&mut self, module: &Module) -> Result<(), Error> {
-        self.ctx.register_module(module).unwrap();
-
-        for class in &module.classes {
-            self.classes
-                .insert(class.name.to_lowercase(), class.clone());
-        }
-
-        Ok(())
-    }
-
-    pub fn define_native_function(&mut self, class: &str, func: &str, f: NativeFunction) {
-        // self.native_functions
-        //     .push((class.to_lowercase(), func.to_lowercase(), f));
-
-        self.ctx.define_native_function(class, func, f);
-    }
-
-    fn compile(
-        &mut self,
-        engine: Arc<EngineShared>,
-        class: &str,
-        options: &Options,
-    ) -> Result<(Instance, HashMap<Lowercase<String>, TypeLayout>), Error> {
-        let mut functions = HashMap::new();
-
-        let class = self.classes.get(&class.to_lowercase()).unwrap();
-
-        for s in &class.states {
-            for f in &s.functions {
-                if functions.contains_key(&f.name.to_lowercase()) {
-                    continue;
-                }
-
-                if options.skip_native && f.is_native {
-                    continue;
-                }
-
-                if options.skip_empty && f.instructions.is_empty() {
-                    continue;
-                }
-
-                if options.only_events && !is_event(f) {
-                    continue;
-                }
-
-                let res = self.ctx.compile(&class.name, &f.name, options).unwrap();
-
-                let func = unsafe { Func::new(&res) };
-
-                functions.insert(f.name.to_lowercase(), (res, func));
-            }
-        }
-
-        let layouts = self.ctx.compute_class_layouts(&class.name).unwrap();
-
-        Ok((
-            Instance {
-                engine,
-                functions,
-                events_only: options.only_events,
-            },
-            layouts,
-        ))
-    }
-}
-
 /// An compiled instance of a script.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Instance {
-    engine: Arc<EngineShared>,
-    functions: HashMap<String, (CompilationResult, Func)>,
-    events_only: bool,
+    shared: Arc<InstanceShared>,
 }
 
 impl Instance {
     pub fn get_func(&self, name: &str) -> Option<&Func> {
-        if self.events_only {
+        if self.shared.events_only {
             debug_assert!(
                 EVENT_NAMES.contains(name),
                 "{:?} not registered as engine event name",
@@ -216,24 +191,15 @@ impl Instance {
             );
         }
 
-        let (_, func) = self.functions.get(&name.to_lowercase())?;
+        let (_, func) = self.shared.funcs.get(&Lowercase::new(name))?;
         Some(func)
     }
 }
 
-impl std::fmt::Debug for Instance {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let Self {
-            engine: _,
-            functions,
-            events_only,
-        } = self;
-
-        f.debug_struct("Instance")
-            .field("functions", functions)
-            .field("events_only", events_only)
-            .finish_non_exhaustive()
-    }
+#[derive(Debug)]
+struct InstanceShared {
+    funcs: HashMap<Lowercase<String>, (CompilationResult, Func)>,
+    events_only: bool,
 }
 
 #[derive(Clone, Debug)]
