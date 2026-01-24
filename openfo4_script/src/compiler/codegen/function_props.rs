@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use game_common::string::Lowercase;
 use openfo4_jit::Type as JitType;
 use openfo4_pex::{Instruction, Value};
 
@@ -28,53 +29,57 @@ pub fn function_properties(data: &CodegenData, func: &FunctionDef) -> FunctionPr
     let mut variables = Vec::new();
 
     for param in &function.params {
+        let ty = Lowercase::new(&*param.ty);
+
         variables.push(StageVariable {
-            name: param.name.to_lowercase(),
-            ty: data.resolve_ty(&param.ty),
-            ty_jit: data.resolve_ty_jit(&param.ty),
+            name: Lowercase::new(param.name.as_str()),
+            ty: data.resolve_ty(ty.as_str()),
+            ty_jit: data.resolve_ty_jit(ty.as_str()),
         });
     }
 
     for local in &function.locals {
+        let ty = Lowercase::new(&*local.ty);
+
         variables.push(StageVariable {
-            name: local.name.to_lowercase(),
-            ty: data.resolve_ty(&local.ty),
-            ty_jit: data.resolve_ty_jit(&local.ty),
+            name: Lowercase::new(local.name.as_str()),
+            ty: data.resolve_ty(ty.as_str()),
+            ty_jit: data.resolve_ty_jit(ty.as_str()),
         });
     }
 
     let mut locals = HashMap::new();
     for param in &function.params {
-        locals.insert(param.name.to_lowercase(), param.ty.to_lowercase());
+        locals.insert(Lowercase::new(&*param.name), Lowercase::new(&*param.ty));
     }
     for local in &function.locals {
-        locals.insert(local.name.to_lowercase(), local.ty.to_lowercase());
+        locals.insert(Lowercase::new(&*local.name), Lowercase::new(&*local.ty));
     }
 
     let mut globals = HashMap::new();
     for global in &class.fields {
-        globals.insert(global.0.to_lowercase(), global.1.to_lowercase());
+        globals.insert(global.0, global.1);
     }
 
-    let find_var = |var_name: &str| -> String {
-        match &*var_name.to_lowercase() {
+    let find_var = |var_name: &Lowercase<str>| -> Lowercase<String> {
+        match var_name.as_inner() {
             "self" => return class.name.clone(),
-            "::state" => return "string".to_owned(),
-            _ => (),
+            "::state" => return Lowercase::new("string"),
+            _ => {}
         }
 
-        if let Some(ty) = locals.get(&var_name.to_lowercase()) {
+        if let Some(ty) = locals.get(var_name) {
             return ty.clone();
         }
 
-        let mut class = data.get_class(&class.name).unwrap();
+        let mut class = data.get_class(class.name.as_str()).unwrap();
         loop {
-            if let Some(ty) = class.fields.get(&var_name.to_lowercase()) {
-                return ty.to_lowercase();
+            if let Some(ty) = class.fields.get(var_name) {
+                return ty.clone();
             }
 
             if let Some(parent) = &class.parent {
-                class = data.get_class(&parent).unwrap();
+                class = data.get_class(parent.as_str()).unwrap();
             } else {
                 break;
             }
@@ -153,7 +158,8 @@ pub fn function_properties(data: &CodegenData, func: &FunctionDef) -> FunctionPr
                     unreachable!();
                 };
 
-                let class_name = find_var(object);
+                let object = Lowercase::new(object.as_str());
+                let class_name = find_var(object.as_str());
 
                 preemption_points.push(index);
                 stages.push(variables.clone());
@@ -185,9 +191,13 @@ pub fn function_properties(data: &CodegenData, func: &FunctionDef) -> FunctionPr
                     unreachable!();
                 };
 
-                let class_name = find_var(&object);
+                let object = Lowercase::new(object.as_str());
+                let class_name = find_var(object.as_str());
+                let prop_name = Lowercase::new(prop_name.as_str());
 
-                let Some(func_id) = data.get_property_getter_id(&class_name, &prop_name) else {
+                let Some(func_id) =
+                    data.get_property_getter_id(class_name.as_str(), prop_name.as_str())
+                else {
                     continue;
                 };
 
@@ -202,9 +212,13 @@ pub fn function_properties(data: &CodegenData, func: &FunctionDef) -> FunctionPr
                     unreachable!();
                 };
 
-                let class_name = find_var(&object);
+                let object = Lowercase::new(object.as_str());
+                let class_name = find_var(object.as_str());
+                let prop_name = Lowercase::new(prop_name.as_str());
 
-                let Some(func_id) = data.get_property_setter_id(&class_name, &prop_name) else {
+                let Some(func_id) =
+                    data.get_property_setter_id(class_name.as_str(), prop_name.as_str())
+                else {
                     continue;
                 };
 
@@ -297,7 +311,7 @@ impl Stage {
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct StageVariable {
-    pub name: String,
+    pub name: Lowercase<String>,
     pub ty: Type,
     pub ty_jit: JitType,
 }

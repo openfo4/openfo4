@@ -6,6 +6,7 @@ use std::time::Duration;
 
 use async_lock::Mutex;
 use game_common::collections::arena::{Arena, Key};
+use game_common::string::Lowercase;
 use game_tasks::TaskPool;
 use game_tracing::trace_span;
 use hashbrown::{HashMap, HashSet};
@@ -852,10 +853,10 @@ fn build_script_object(
                         // We can also set property on parent classes.
                         // FIXME: Ensure that child properties are preferred when present on both child and
                         // parent classes.
-                        .find(|p| p.name.to_lowercase() == property.name.to_lowercase())
+                        .find(|p| p.name == Lowercase::new(property.name.as_str()))
                         .unwrap();
 
-                    (script.name.as_str(), var.name.as_str(), 0)
+                    (script.name.as_str(), var.name.as_str().as_inner(), 0)
                 } else {
                     ("", property.name.as_str(), 0)
                 }
@@ -996,16 +997,16 @@ fn build_struct_layout(props: &[Property]) -> TypeLayout {
         offset += ty.size();
 
         properties.push(ObjectProperty {
-            class: "".to_owned(),
-            name: prop.name.to_lowercase(),
+            class: Lowercase::new(""),
+            name: Lowercase::new(prop.name.as_str()),
             var: fields.len(),
         });
         fields.push(ObjectField {
-            class: "".to_owned(),
-            name: prop.name.to_lowercase(),
+            class: Lowercase::new(""),
+            name: Lowercase::new(prop.name.as_str()),
             offset,
             ty,
-            ty_name: "".to_owned(),
+            ty_name: Lowercase::new(""),
         });
     }
 
@@ -1030,15 +1031,15 @@ fn build_array_layout(values: &[Value]) -> TypeLayout {
     TypeLayout {
         header: None,
         fields: vec![ObjectField {
-            class: "".to_owned(),
-            name: "".to_owned(),
+            class: Lowercase::new(""),
+            name: Lowercase::new(""),
             offset: 0,
             ty,
-            ty_name: "".to_owned(),
+            ty_name: Lowercase::new(""),
         }],
         properties: vec![ObjectProperty {
-            class: "".to_owned(),
-            name: "".to_owned(),
+            class: Lowercase::new(""),
+            name: Lowercase::new(""),
             var: 0,
         }],
     }

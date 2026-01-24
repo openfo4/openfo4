@@ -1,16 +1,17 @@
 //! Compiler builtin functions
 
+use game_common::string::Lowercase;
 use openfo4_jit::{Type as JitType, Value as JitValue};
 
 use crate::compiler::codegen::function::FunctionTranslator;
 
 pub fn call_builtin(
     translator: &mut FunctionTranslator<'_>,
-    class: &str,
-    func: &str,
+    class: &Lowercase<str>,
+    func: &Lowercase<str>,
     args: &[JitValue],
 ) -> Option<Vec<JitValue>> {
-    match (&*class.to_lowercase(), &*func.to_lowercase()) {
+    match (class.as_inner(), func.as_inner()) {
         // Math Script
         // Math.abs(float) -> float
         ("math", "abs") => {

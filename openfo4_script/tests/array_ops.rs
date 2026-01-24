@@ -1,3 +1,4 @@
+use game_common::string::Lowercase;
 use openfo4_script::assembler::assemble;
 use openfo4_script::compiler::{FieldType, ObjectField, ObjectProperty, TypeLayout};
 use openfo4_script::engine::{Engine, Options};
@@ -363,15 +364,15 @@ fn int_layout() -> TypeLayout {
     TypeLayout {
         header: None,
         fields: vec![ObjectField {
-            class: "".to_owned(),
-            name: "".to_owned(),
+            class: Lowercase::new(""),
+            name: Lowercase::new(""),
             offset: 0,
             ty: FieldType::I32,
-            ty_name: "".to_owned(),
+            ty_name: Lowercase::new(""),
         }],
         properties: vec![ObjectProperty {
-            class: "".to_owned(),
-            name: "".to_owned(),
+            class: Lowercase::new(""),
+            name: Lowercase::new(""),
             var: 0,
         }],
     }
@@ -381,15 +382,15 @@ fn ptr_layout() -> TypeLayout {
     TypeLayout {
         header: None,
         fields: vec![ObjectField {
-            class: "".to_owned(),
-            name: "".to_owned(),
+            class: Lowercase::new(""),
+            name: Lowercase::new(""),
             offset: 0,
             ty: FieldType::Pointer,
-            ty_name: "".to_owned(),
+            ty_name: Lowercase::new(""),
         }],
         properties: vec![ObjectProperty {
-            class: "".to_owned(),
-            name: "".to_owned(),
+            class: Lowercase::new(""),
+            name: Lowercase::new(""),
             var: 0,
         }],
     }

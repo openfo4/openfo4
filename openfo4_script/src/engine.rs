@@ -2,6 +2,7 @@ use std::collections::{HashMap, HashSet};
 use std::mem::transmute;
 use std::sync::{Arc, LazyLock, RwLock};
 
+use game_common::string::Lowercase;
 use openfo4_jit::Type;
 use openfo4_pex::{Class, Module};
 
@@ -21,7 +22,7 @@ pub enum Error {
 pub struct Engine {
     registry: Registry,
     pub(crate) shared: Arc<EngineShared>,
-    layouts: HashMap<String, TypeLayout>,
+    layouts: HashMap<Lowercase<String>, TypeLayout>,
 }
 
 impl Engine {
@@ -75,7 +76,7 @@ impl Engine {
     }
 
     pub fn get_class_layout(&self, class: &str) -> Option<&TypeLayout> {
-        self.layouts.get(&class.to_lowercase())
+        self.layouts.get(&Lowercase::new(class))
     }
 
     pub fn object_pool(&self) -> &ObjectPool {
@@ -153,7 +154,7 @@ impl Registry {
         engine: Arc<EngineShared>,
         class: &str,
         options: &Options,
-    ) -> Result<(Instance, HashMap<String, TypeLayout>), Error> {
+    ) -> Result<(Instance, HashMap<Lowercase<String>, TypeLayout>), Error> {
         let mut functions = HashMap::new();
 
         let class = self.classes.get(&class.to_lowercase()).unwrap();

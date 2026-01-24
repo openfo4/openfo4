@@ -1,6 +1,6 @@
 use std::collections::HashMap;
-use std::sync::{LazyLock, OnceLock};
 
+use game_common::string::Lowercase;
 use openfo4_jit::Type as JitType;
 
 use crate::compiler::codegen::{ClassDef, CodegenData, StructDef, Type};
@@ -13,7 +13,7 @@ pub fn compute_class_layout(data: &CodegenData, class: &ClassDef) -> ClassLayout
     // If we have a parent class it already contains the
     // ClassInfo pointer.
     let mut offset = if let Some(parent) = &class.parent {
-        let parent = data.classes.get(&parent.to_lowercase()).unwrap();
+        let parent = data.classes.get(parent).unwrap();
         parent.layout.as_ref().unwrap().size
     } else {
         JitType::Pointer.size()
@@ -26,7 +26,7 @@ pub fn compute_class_layout(data: &CodegenData, class: &ClassDef) -> ClassLayout
             offset += ty.align() - (offset % ty.align());
         }
 
-        fields.insert(name.to_lowercase(), offset);
+        fields.insert(name.clone(), offset);
         offset += ty.size();
     }
 
@@ -38,14 +38,14 @@ pub fn compute_class_layout(data: &CodegenData, class: &ClassDef) -> ClassLayout
 
 #[derive(Clone, Debug)]
 pub struct ClassLayout {
-    pub field_offsets: HashMap<String, usize>,
+    pub field_offsets: HashMap<Lowercase<String>, usize>,
     /// Total size of the object.
     pub size: usize,
 }
 
 impl ClassLayout {
-    pub fn offset(&self, field: &str) -> Option<usize> {
-        self.field_offsets.get(&field.to_lowercase()).copied()
+    pub fn offset(&self, field: &Lowercase<str>) -> Option<usize> {
+        self.field_offsets.get(field).copied()
     }
 }
 
@@ -54,13 +54,13 @@ pub fn compute_struct_layout(data: &CodegenData, st: &StructDef) -> ClassLayout 
 
     let mut offset = 0;
     for member in &st.s.members {
-        let ty = data.resolve_ty_jit(&member.ty);
+        let ty = data.resolve_ty_jit(&Lowercase::new(member.ty.as_str()));
 
         if offset % ty.align() != 0 {
             offset += ty.align() - (offset % ty.align());
         }
 
-        fields.insert(member.name.to_lowercase(), offset);
+        fields.insert(Lowercase::new(member.name.as_str()), offset);
         offset += ty.size();
     }
 
@@ -79,14 +79,16 @@ pub fn compute_struct_type_layout(data: &CodegenData, st: &StructDef) -> TypeLay
         let field_ty_name =
             st.s.members
                 .iter()
-                .find(|v| v.name.to_lowercase() == field_name.to_lowercase())
+                .find(|v| &Lowercase::new(v.name.as_str()) == field_name)
                 .map(|v| &v.ty)
                 .unwrap();
+        let field_ty_name = Lowercase::new(field_ty_name.as_str());
+
         let field_ty = data.resolve_ty(&field_ty_name);
 
         fields.push(ObjectField {
-            class: st.s.name.to_lowercase(),
-            name: field_name.to_lowercase(),
+            class: Lowercase::new(st.s.name.as_str()),
+            name: field_name.clone(),
             offset: *field_offset,
             ty: match field_ty {
                 Type::Bool => FieldType::Bool,
@@ -94,12 +96,12 @@ pub fn compute_struct_type_layout(data: &CodegenData, st: &StructDef) -> TypeLay
                 Type::Float => FieldType::F32,
                 _ => FieldType::Pointer,
             },
-            ty_name: field_ty_name.to_lowercase(),
+            ty_name: field_ty_name,
         });
 
         properties.push(ObjectProperty {
-            class: st.s.name.to_lowercase(),
-            name: field_name.to_lowercase(),
+            class: Lowercase::new(st.s.name.as_str()),
+            name: field_name.clone(),
             var: 0,
         });
     }
@@ -127,15 +129,15 @@ pub fn generate_type_layout(data: &CodegenData, ty: &Type) -> TypeLayout {
     TypeLayout {
         header: None,
         fields: vec![ObjectField {
-            class: "".to_owned(),
-            name: "".to_owned(),
+            class: Lowercase::new(""),
+            name: Lowercase::new(""),
             offset: 0,
             ty: field_ty,
-            ty_name: "".to_owned(),
+            ty_name: Lowercase::new(""),
         }],
         properties: vec![ObjectProperty {
-            class: "".to_owned(),
-            name: "".to_owned(),
+            class: Lowercase::new(""),
+            name: Lowercase::new(""),
             var: 0,
         }],
     }

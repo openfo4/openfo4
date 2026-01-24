@@ -10,6 +10,7 @@ mod types;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
+use game_common::string::Lowercase;
 use openfo4_jit::{Compiler, FuncId, Signature, Type as JitType};
 use openfo4_pex::{Class, Function, Instruction, Module, Struct, Value};
 use slab::Slab;
@@ -61,14 +62,17 @@ impl CodegenPass {
 
     pub fn register_module(&mut self, module: &Module) {
         for class in &module.classes {
-            let parent = (!matches!(class.parent.to_lowercase().as_str(), "" | "none"))
-                .then(|| class.parent.clone());
+            let parent = if class.parent.is_empty() || class.parent.eq_ignore_ascii_case("none") {
+                None
+            } else {
+                Some(Lowercase::new(&*class.parent))
+            };
 
             let mut fields = HashMap::new();
             for var in &class.variables {
                 fields.insert(
-                    var.definition.name.to_lowercase(),
-                    var.definition.ty.to_lowercase(),
+                    Lowercase::new(&*var.definition.name),
+                    Lowercase::new(&*var.definition.ty),
                 );
             }
 
@@ -84,10 +88,10 @@ impl CodegenPass {
                         trampoline_func_id: None,
                         props: None,
                         constants: Arc::default(),
-                        class: class.name.to_lowercase(),
+                        class: Lowercase::new(&*class.name),
                     }));
 
-                    functions.insert(func.name.to_lowercase(), id);
+                    functions.insert(Lowercase::new(&*func.name), id);
                 }
             }
 
@@ -95,12 +99,12 @@ impl CodegenPass {
                 let name = format!("{}#{}", class.name, st.name);
                 self.data
                     .structs
-                    .insert(name.to_lowercase(), StructDef { s: st.clone() });
+                    .insert(Lowercase::new(&*name), StructDef { s: st.clone() });
             }
 
             let mut properties = HashMap::new();
             for prop in &class.properties {
-                let variable = prop.variable.as_ref().map(|v| v.to_lowercase());
+                let variable = prop.variable.as_ref().map(|v| Lowercase::new(v.as_str()));
 
                 let getter = prop.getter.as_ref().map(|func| {
                     FunctionId(self.data.functions.insert(FunctionDef {
@@ -111,7 +115,7 @@ impl CodegenPass {
                         trampoline_func_id: None,
                         props: None,
                         constants: Arc::default(),
-                        class: class.name.to_lowercase(),
+                        class: Lowercase::new(&*class.name),
                     }))
                 });
 
@@ -124,12 +128,12 @@ impl CodegenPass {
                         trampoline_func_id: None,
                         props: None,
                         constants: Arc::default(),
-                        class: class.name.to_lowercase(),
+                        class: Lowercase::new(&*class.name),
                     }))
                 });
 
                 properties.insert(
-                    prop.name.to_lowercase(),
+                    Lowercase::new(&*prop.name),
                     ClassProperty {
                         variable,
                         getter,
@@ -139,9 +143,9 @@ impl CodegenPass {
             }
 
             self.data.classes.insert(
-                class.name.to_lowercase(),
+                Lowercase::new(&*class.name),
                 ClassDef {
-                    name: class.name.to_lowercase(),
+                    name: Lowercase::new(&*class.name),
                     functions,
                     parent,
                     fields,
@@ -157,7 +161,13 @@ impl CodegenPass {
     }
 
     pub fn define_native_function(&mut self, class: &str, function: &str, func: NativeFunction) {
-        let Some(func_def) = self.data.get_function_mut(class, function) else {
+        let class = Lowercase::new(class);
+        let function = Lowercase::new(function);
+
+        let Some(func_def) = self
+            .data
+            .get_function_mut(class.as_str(), function.as_str())
+        else {
             panic!("unknown native function: {class}.{function}");
         };
 
@@ -170,24 +180,20 @@ impl CodegenPass {
 
         for class in self.data.classes.values() {
             let Some(parent) = &class.parent else {
-                queue.push(class.name.to_lowercase());
+                queue.push(class.name.clone());
                 continue;
             };
 
             dependencies
-                .entry(parent.to_lowercase())
+                .entry(parent.clone())
                 .or_default()
-                .push(class.name.to_lowercase());
+                .push(class.name.clone());
         }
 
         while let Some(class_name) = queue.pop() {
-            let class = self.data.classes.get(&class_name.to_lowercase()).unwrap();
+            let class = self.data.classes.get(&class_name).unwrap();
             let layout = layout::compute_class_layout(&self.data, &class);
-            let class = self
-                .data
-                .classes
-                .get_mut(&class_name.to_lowercase())
-                .unwrap();
+            let class = self.data.classes.get_mut(&class_name).unwrap();
             class.layout = Some(layout);
 
             if let Some(children) = dependencies.remove(&class_name) {
@@ -207,7 +213,7 @@ impl CodegenPass {
 
             let mut next_class = Some(&class.name);
             while let Some(class_name) = next_class {
-                let class = self.data.get_class(class_name).unwrap();
+                let class = self.data.get_class(class_name.as_str()).unwrap();
                 type_ids.push(class.type_id);
                 next_class = class.parent.as_ref();
             }
@@ -221,7 +227,7 @@ impl CodegenPass {
         }
 
         for (class, header) in class_headers {
-            let class = self.data.classes.get_mut(&class.to_lowercase()).unwrap();
+            let class = self.data.classes.get_mut(&class).unwrap();
             class.header = Some(header);
         }
     }
@@ -229,7 +235,7 @@ impl CodegenPass {
     pub fn compute_class_layouts(
         &mut self,
         class: &str,
-    ) -> Result<HashMap<String, TypeLayout>, Error> {
+    ) -> Result<HashMap<Lowercase<String>, TypeLayout>, Error> {
         self.compute_type_layouts();
 
         let mut class_layouts = HashMap::new();
@@ -247,8 +253,8 @@ impl CodegenPass {
                     let field_ty = self.data.resolve_ty(&field_ty_name);
 
                     class_fields.push(ObjectField {
-                        class: class_name.to_lowercase(),
-                        name: field_name.to_lowercase(),
+                        class: class_name.clone(),
+                        name: field_name.clone(),
                         offset: *field_offset,
                         ty: match field_ty {
                             Type::Bool => FieldType::Bool,
@@ -256,17 +262,14 @@ impl CodegenPass {
                             Type::Float => FieldType::F32,
                             _ => FieldType::Pointer,
                         },
-                        ty_name: field_ty_name.to_lowercase(),
+                        ty_name: field_ty_name.clone(),
                     });
                 }
 
                 for (name, prop) in &class.properties {
                     let Some(field) = class_fields.iter().position(|v| {
-                        v.class.to_lowercase() == class.name.to_lowercase()
-                            && prop
-                                .variable
-                                .as_ref()
-                                .is_some_and(|pv| pv.to_lowercase() == v.name.to_lowercase())
+                        v.class == class.name
+                            && prop.variable.as_ref().is_some_and(|pv| pv == &v.name)
                     }) else {
                         // Properties without a backing variable cannot be accessed
                         // externally.
@@ -284,7 +287,7 @@ impl CodegenPass {
             }
 
             class_layouts.insert(
-                class.name.to_lowercase(),
+                class.name.clone(),
                 TypeLayout {
                     header: class.header.clone(),
                     fields: class_fields,
@@ -302,14 +305,15 @@ impl CodegenPass {
                 let member =
                     st.s.members
                         .iter()
-                        .find(|f| f.name.to_lowercase() == field_name.to_lowercase())
+                        .find(|f| &Lowercase::new(f.name.as_str()) == field_name)
                         .unwrap();
-                let field_ty = self.data.resolve_ty(&member.ty);
+                let member_ty = Lowercase::new(member.ty.as_str());
+                let field_ty = self.data.resolve_ty(&member_ty);
 
                 let var = fields.len();
                 fields.push(ObjectField {
-                    class: "".to_owned(),
-                    name: field_name.to_lowercase(),
+                    class: Lowercase::new(""),
+                    name: field_name.clone(),
                     offset: *field_offset,
                     ty: match field_ty {
                         Type::Bool => FieldType::Bool,
@@ -317,18 +321,18 @@ impl CodegenPass {
                         Type::Float => FieldType::F32,
                         _ => FieldType::Pointer,
                     },
-                    ty_name: member.ty.to_lowercase(),
+                    ty_name: member_ty,
                 });
 
                 properties.push(ObjectProperty {
-                    class: "".to_owned(),
+                    class: Lowercase::new(""),
                     name: field_name.clone(),
                     var,
                 });
             }
 
             class_layouts.insert(
-                name.to_lowercase(),
+                name.clone(),
                 TypeLayout {
                     header: None,
                     fields,
@@ -346,9 +350,12 @@ impl CodegenPass {
         f: &str,
         options: &Options,
     ) -> Result<CompilationResult, Error> {
+        let class = Lowercase::new(class);
+        let f = Lowercase::new(f);
+
         self.compute_type_layouts();
 
-        let root_func_id = self.data.get_function_id(class, f).unwrap();
+        let root_func_id = self.data.get_function_id(&class, &f).unwrap();
 
         let mut funcs_to_compile = HashSet::<FunctionId>::new();
         let mut queue = vec![root_func_id];
@@ -368,7 +375,7 @@ impl CodegenPass {
 
         for func_id in &funcs_to_compile {
             let func = &self.data.functions[func_id.0];
-            let class = &self.data.classes.get(&class.to_lowercase()).unwrap();
+            let class = &self.data.classes.get(&class).unwrap();
             let id = function::declare_function(
                 &self.data,
                 class,
@@ -386,7 +393,7 @@ impl CodegenPass {
 
         for func_id in &funcs_to_compile {
             let func = &self.data.functions[func_id.0];
-            let class = &self.data.classes.get(&func.class.to_lowercase()).unwrap();
+            let class = &self.data.classes.get(&func.class).unwrap();
             let res = function::translate_function(&self.data, class, func, &mut self.compiler);
 
             // TODO: FIXME: Don't leak this here.
@@ -422,8 +429,8 @@ impl CodegenPass {
 #[derive(Clone, Debug)]
 struct CodegenData {
     types: Types,
-    classes: HashMap<String, ClassDef>,
-    structs: HashMap<String, StructDef>,
+    classes: HashMap<Lowercase<String>, ClassDef>,
+    structs: HashMap<Lowercase<String>, StructDef>,
     functions: Slab<FunctionDef>,
     runtime_funcs: RuntimeFunctions,
 }
@@ -439,22 +446,22 @@ impl CodegenData {
         }
     }
 
-    fn resolve_ty(&self, mut ty: &str) -> Type {
+    fn resolve_ty(&self, mut ty: &Lowercase<str>) -> Type {
         let mut array_depth = 0;
         while let Some(p) = ty.strip_suffix("[]") {
             ty = p;
             array_depth += 1;
         }
 
-        let mut typ = match &*ty.to_lowercase() {
+        let mut typ = match ty.as_inner() {
             "none" => Type::None,
             "bool" => Type::Bool,
             "int" => Type::Int,
             "float" => Type::Float,
             "string" => Type::String,
             "var" => Type::Var,
-            name if self.structs.contains_key(name) => Type::Struct(name.to_owned()),
-            name if self.classes.contains_key(name) => Type::Class(name.to_owned()),
+            _ if self.structs.contains_key(ty) => Type::Struct(ty.to_owned()),
+            _ if self.classes.contains_key(ty) => Type::Class(ty.to_owned()),
             _ => unreachable!(),
         };
 
@@ -465,8 +472,8 @@ impl CodegenData {
         typ
     }
 
-    fn resolve_ty_jit(&self, ty: &str) -> JitType {
-        match &*ty.to_lowercase() {
+    fn resolve_ty_jit(&self, ty: &Lowercase<str>) -> JitType {
+        match ty.as_inner() {
             "none" => JitType::I32,
             "bool" => JitType::I32,
             "int" => JitType::I32,
@@ -477,67 +484,79 @@ impl CodegenData {
         }
     }
 
-    fn get_class(&self, class: &str) -> Option<&ClassDef> {
-        self.classes.get(&class.to_lowercase())
+    fn get_class(&self, class: &Lowercase<str>) -> Option<&ClassDef> {
+        self.classes.get(class)
     }
 
-    fn get_function_id(&self, class: &str, func: &str) -> Option<FunctionId> {
+    fn get_function_id(&self, class: &Lowercase<str>, func: &Lowercase<str>) -> Option<FunctionId> {
         let class = get_parent_class_with_function(&self.classes, class, func)?;
-        self.classes
-            .get(&class)?
-            .functions
-            .get(&func.to_lowercase())
-            .copied()
+        self.classes.get(class)?.functions.get(func).copied()
     }
 
-    fn get_function(&self, class: &str, func: &str) -> Option<&FunctionDef> {
+    fn get_function(&self, class: &Lowercase<str>, func: &Lowercase<str>) -> Option<&FunctionDef> {
         let id = self.get_function_id(class, func)?;
         Some(&self.functions[id.0])
     }
 
-    fn get_function_mut(&mut self, class: &str, func: &str) -> Option<&mut FunctionDef> {
+    fn get_function_mut(
+        &mut self,
+        class: &Lowercase<str>,
+        func: &Lowercase<str>,
+    ) -> Option<&mut FunctionDef> {
         let id = self.get_function_id(class, func)?;
         Some(&mut self.functions[id.0])
     }
 
-    fn get_class_property(&self, class: &str, property: &str) -> Option<&ClassProperty> {
+    fn get_class_property(
+        &self,
+        class: &Lowercase<str>,
+        property: &Lowercase<str>,
+    ) -> Option<&ClassProperty> {
         let class = get_parent_class_with_property(&self.classes, class, property)?;
-        let class = self.classes.get(&class.to_lowercase())?;
-        class.properties.get(&property.to_lowercase())
+        let class = self.classes.get(class)?;
+        class.properties.get(property)
     }
 
-    fn get_property_getter_id(&self, class: &str, property: &str) -> Option<FunctionId> {
+    fn get_property_getter_id(
+        &self,
+        class: &Lowercase<str>,
+        property: &Lowercase<str>,
+    ) -> Option<FunctionId> {
         let class = get_parent_class_with_property(&self.classes, class, property)?;
-        let class = self.classes.get(&class.to_lowercase())?;
-        let prop = class.properties.get(&property.to_lowercase())?;
+        let class = self.classes.get(class)?;
+        let prop = class.properties.get(property)?;
         prop.getter
     }
 
-    fn get_property_setter_id(&self, class: &str, property: &str) -> Option<FunctionId> {
+    fn get_property_setter_id(
+        &self,
+        class: &Lowercase<str>,
+        property: &Lowercase<str>,
+    ) -> Option<FunctionId> {
         let class = get_parent_class_with_property(&self.classes, class, property)?;
-        let class = self.classes.get(&class.to_lowercase())?;
-        let prop = class.properties.get(&property.to_lowercase())?;
+        let class = self.classes.get(class)?;
+        let prop = class.properties.get(property)?;
         prop.setter
     }
 }
 
 #[derive(Clone, Debug, Default)]
 struct ClassDef {
-    name: String,
-    functions: HashMap<String, FunctionId>,
-    parent: Option<String>,
-    fields: HashMap<String, String>,
+    name: Lowercase<String>,
+    functions: HashMap<Lowercase<String>, FunctionId>,
+    parent: Option<Lowercase<String>>,
+    fields: HashMap<Lowercase<String>, Lowercase<String>>,
     /// Unique RTTI number stored in the header to identify objects of this class.
     type_id: usize,
     layout: Option<ClassLayout>,
     header: Option<Arc<[usize]>>,
-    properties: HashMap<String, ClassProperty>,
+    properties: HashMap<Lowercase<String>, ClassProperty>,
     class: Option<Class>,
 }
 
 #[derive(Clone, Debug)]
 struct FunctionDef {
-    class: String,
+    class: Lowercase<String>,
     signature: Option<Signature>,
     func_id: Option<FuncId>,
     function: Function,
@@ -549,7 +568,7 @@ struct FunctionDef {
 
 #[derive(Clone, Debug)]
 struct ClassProperty {
-    pub variable: Option<String>,
+    pub variable: Option<Lowercase<String>>,
     pub getter: Option<FunctionId>,
     pub setter: Option<FunctionId>,
 }
@@ -571,31 +590,33 @@ impl StructDef {
 fn find_function_callees(data: &CodegenData, function: &FunctionDef) -> Vec<FunctionId> {
     let mut callees = Vec::new();
 
-    let class = function.class.to_lowercase();
-    let current_class = data.classes.get(&class).unwrap();
+    let class = function.class.as_str();
+    let current_class = data.classes.get(class).unwrap();
 
-    let find_var = |var_name: &str| -> String {
-        match &*var_name.to_lowercase() {
-            "self" => return class.clone(),
+    let find_var = |var_name: &Lowercase<str>| -> Lowercase<String> {
+        match var_name.as_inner() {
+            "self" => return class.to_owned(),
             _ => (),
         }
 
         for param in &function.function.params {
-            if param.name.to_lowercase() == var_name.to_lowercase() {
-                return param.ty.to_lowercase();
+            let name = Lowercase::new(param.name.as_str());
+            if name == *var_name {
+                return Lowercase::new(param.ty.as_str());
             }
         }
 
         for local in &function.function.locals {
-            if local.name.to_lowercase() == var_name.to_lowercase() {
-                return local.ty.to_lowercase();
+            let name = Lowercase::new(local.name.as_str());
+            if name == *var_name {
+                return Lowercase::new(local.ty.as_str());
             }
         }
 
         let mut class = data.get_class(&class).unwrap();
         loop {
-            if let Some(ty) = class.fields.get(&var_name.to_lowercase()) {
-                return ty.to_lowercase();
+            if let Some(ty) = class.fields.get(var_name) {
+                return ty.clone();
             }
 
             if let Some(parent) = &class.parent {
@@ -615,11 +636,14 @@ fn find_function_callees(data: &CodegenData, function: &FunctionDef) -> Vec<Func
                     continue;
                 };
 
+                let object = Lowercase::new(object.as_str());
                 let class_name = find_var(&object);
                 let function_name = match &op.function_name {
                     Value::Ident(v) => v,
                     _ => unreachable!(),
                 };
+
+                let function_name = Lowercase::new(function_name.as_str());
 
                 let func = data.get_function_id(&class_name, &function_name).unwrap();
 
@@ -631,8 +655,9 @@ fn find_function_callees(data: &CodegenData, function: &FunctionDef) -> Vec<Func
                 let Value::Ident(func_name) = &op.function else {
                     unreachable!();
                 };
+                let func_name = Lowercase::new(func_name.as_str());
 
-                let func = data.get_function_id(parent, func_name).unwrap();
+                let func = data.get_function_id(parent, &func_name).unwrap();
                 callees.push(func);
             }
             Instruction::CallStatic(op) => {
@@ -640,6 +665,8 @@ fn find_function_callees(data: &CodegenData, function: &FunctionDef) -> Vec<Func
                     (Value::Ident(a), Value::Ident(b)) => (a, b),
                     _ => unreachable!(),
                 };
+                let class_name = Lowercase::new(class_name.as_str());
+                let function_name = Lowercase::new(function_name.as_str());
 
                 let func = data.get_function_id(&class_name, &function_name).unwrap();
 
@@ -654,7 +681,9 @@ fn find_function_callees(data: &CodegenData, function: &FunctionDef) -> Vec<Func
                     unreachable!()
                 };
 
+                let object = Lowercase::new(object.as_str());
                 let class_name = find_var(&object);
+                let prop_name = Lowercase::new(prop_name.as_str());
 
                 if let Some(func) = data.get_property_getter_id(&class_name, &prop_name) {
                     callees.push(func);
@@ -669,7 +698,9 @@ fn find_function_callees(data: &CodegenData, function: &FunctionDef) -> Vec<Func
                     unreachable!()
                 };
 
+                let object = Lowercase::new(object.as_str());
                 let class_name = find_var(&object);
+                let prop_name = Lowercase::new(prop_name.as_str());
 
                 if let Some(func) = data.get_property_setter_id(&class_name, &prop_name) {
                     callees.push(func);
@@ -684,16 +715,18 @@ fn find_function_callees(data: &CodegenData, function: &FunctionDef) -> Vec<Func
 }
 
 fn get_parent_class_with_function<'a>(
-    classes: &'a HashMap<String, ClassDef>,
-    class_name: &str,
-    func_name: &str,
-) -> Option<String> {
-    let mut class_name = class_name.to_lowercase();
+    classes: &'a HashMap<Lowercase<String>, ClassDef>,
+    class_name: &Lowercase<str>,
+    func_name: &Lowercase<str>,
+) -> Option<&'a Lowercase<str>> {
+    let class = classes.get(class_name)?;
+    let mut class_name = class.name.as_str();
 
     loop {
-        let class = classes.get(&class_name)?;
+        let class = classes.get(class_name)?;
+        class_name = class.name.as_str();
 
-        if class.functions.get(&func_name.to_lowercase()).is_some() {
+        if class.functions.get(func_name).is_some() {
             return Some(class_name);
         }
 
@@ -701,21 +734,23 @@ fn get_parent_class_with_function<'a>(
             return None;
         };
 
-        class_name = parent.to_lowercase();
+        class_name = parent.as_str();
     }
 }
 
 fn get_parent_class_with_property<'a>(
-    classes: &'a HashMap<String, ClassDef>,
-    class_name: &str,
-    prop_name: &str,
-) -> Option<String> {
-    let mut class_name = class_name.to_lowercase();
+    classes: &'a HashMap<Lowercase<String>, ClassDef>,
+    class_name: &Lowercase<str>,
+    prop_name: &Lowercase<str>,
+) -> Option<&'a Lowercase<str>> {
+    let class = classes.get(class_name)?;
+    let mut class_name = class.name.as_str();
 
     loop {
-        let class = classes.get(&class_name)?;
+        let class = classes.get(class_name)?;
+        class_name = class.name.as_str();
 
-        if class.properties.get(&prop_name.to_lowercase()).is_some() {
+        if class.properties.get(prop_name).is_some() {
             return Some(class_name);
         }
 
@@ -723,7 +758,7 @@ fn get_parent_class_with_property<'a>(
             return None;
         };
 
-        class_name = parent.to_lowercase();
+        class_name = parent.as_str();
     }
 }
 
@@ -736,6 +771,6 @@ enum Type {
     String,
     Var,
     Array(Box<Type>),
-    Class(String),
-    Struct(String),
+    Class(Lowercase<String>),
+    Struct(Lowercase<String>),
 }

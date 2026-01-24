@@ -2,6 +2,8 @@ use std::alloc::Layout;
 use std::collections::HashMap;
 use std::sync::{Arc, LazyLock, Mutex};
 
+use game_common::string::Lowercase;
+
 use crate::compiler::{FieldType, ObjectField, ObjectProperty, TypeLayout};
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
@@ -272,11 +274,16 @@ impl Object {
 
     #[track_caller]
     fn get_property_var(&self, class: &str, name: &str) -> &ObjectProperty {
+        let class = Lowercase::new(class);
+        let name = Lowercase::new(name);
+
         // Always prefer properties that match the requested class.
-        if let Some(prop) = self.layout.properties.iter().find(|p| {
-            p.class.to_lowercase() == class.to_lowercase()
-                && p.name.to_lowercase() == name.to_lowercase()
-        }) {
+        if let Some(prop) = self
+            .layout
+            .properties
+            .iter()
+            .find(|p| p.class == class && p.name == name)
+        {
             return prop;
         }
 
@@ -284,12 +291,7 @@ impl Object {
         // FIXME: Ideally we would recursively walk up the class
         // hierarchy instead of selecting any other matching property,
         // this requires us to have access to the class names from here.
-        if let Some(prop) = self
-            .layout
-            .properties
-            .iter()
-            .find(|p| p.name.to_lowercase() == name.to_lowercase())
-        {
+        if let Some(prop) = self.layout.properties.iter().find(|p| p.name == name) {
             return prop;
         }
 
@@ -469,29 +471,29 @@ pub(crate) static ARRAY_LAYOUT: LazyLock<TypeLayout> = LazyLock::new(|| TypeLayo
     header: None,
     fields: vec![
         ObjectField {
-            class: "".to_owned(),
-            name: "ptr".to_owned(),
+            class: Lowercase::new(""),
+            name: Lowercase::new("ptr"),
             offset: 0,
             ty: FieldType::Pointer,
-            ty_name: "".to_owned(),
+            ty_name: Lowercase::new(""),
         },
         ObjectField {
-            class: "".to_owned(),
-            name: "len".to_owned(),
+            class: Lowercase::new(""),
+            name: Lowercase::new("len"),
             offset: size_of::<*mut u8>(),
             ty: FieldType::Isize,
-            ty_name: "".to_owned(),
+            ty_name: Lowercase::new(""),
         },
     ],
     properties: vec![
         ObjectProperty {
-            class: "".to_owned(),
-            name: "ptr".to_owned(),
+            class: Lowercase::new(""),
+            name: Lowercase::new("ptr"),
             var: 0,
         },
         ObjectProperty {
-            class: "".to_owned(),
-            name: "len".to_owned(),
+            class: Lowercase::new(""),
+            name: Lowercase::new("len"),
             var: 1,
         },
     ],
@@ -500,15 +502,15 @@ pub(crate) static ARRAY_LAYOUT: LazyLock<TypeLayout> = LazyLock::new(|| TypeLayo
 pub(crate) const BYTE_LAYOUT: LazyLock<TypeLayout> = LazyLock::new(|| TypeLayout {
     header: None,
     fields: vec![ObjectField {
-        class: "".to_owned(),
-        name: "".to_owned(),
+        class: Lowercase::new(""),
+        name: Lowercase::new(""),
         offset: 0,
         ty: FieldType::I8,
-        ty_name: "".to_owned(),
+        ty_name: Lowercase::new(""),
     }],
     properties: vec![ObjectProperty {
-        class: "".to_owned(),
-        name: "".to_owned(),
+        class: Lowercase::new(""),
+        name: Lowercase::new(""),
         var: 0,
     }],
 });
@@ -517,29 +519,29 @@ pub(crate) const VAR_LAYOUT: LazyLock<TypeLayout> = LazyLock::new(|| TypeLayout 
     header: None,
     fields: vec![
         ObjectField {
-            class: "".to_owned(),
-            name: "tag".to_owned(),
+            class: Lowercase::new(""),
+            name: Lowercase::new("tag"),
             offset: 0,
             ty: FieldType::Isize,
-            ty_name: "".to_owned(),
+            ty_name: Lowercase::new(""),
         },
         ObjectField {
-            class: "".to_owned(),
-            name: "data".to_owned(),
+            class: Lowercase::new(""),
+            name: Lowercase::new("data"),
             offset: 0,
             ty: FieldType::Pointer,
-            ty_name: "".to_owned(),
+            ty_name: Lowercase::new(""),
         },
     ],
     properties: vec![
         ObjectProperty {
-            class: "".to_owned(),
-            name: "tag".to_owned(),
+            class: Lowercase::new(""),
+            name: Lowercase::new("tag"),
             var: 0,
         },
         ObjectProperty {
-            class: "".to_owned(),
-            name: "data".to_owned(),
+            class: Lowercase::new(""),
+            name: Lowercase::new("data"),
             var: 1,
         },
     ],

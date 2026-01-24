@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::mem::offset_of;
 
+use game_common::string::Lowercase;
 use openfo4_jit::{
     Block, Compiler, FloatCompareOp, FuncId, FunctionBuilder, IntCompareOp, Signature,
     Type as JitType, Value as JitValue, Variable as JitVariable,
@@ -132,12 +133,12 @@ fn translate_function_signature(data: &CodegenData, function: &Function) -> Sign
     }
 
     for param in &function.params {
-        let ty = data.resolve_ty_jit(&param.ty);
+        let ty = data.resolve_ty_jit(Lowercase::new(&*param.ty).as_str());
         params.push(ty);
     }
 
     if !function.return_ty.is_empty() && function.return_ty.to_lowercase() != "none" {
-        let ty = data.resolve_ty_jit(&function.return_ty);
+        let ty = data.resolve_ty_jit(Lowercase::new(&*function.return_ty).as_str());
         returns.push(ty);
     }
 
@@ -173,16 +174,18 @@ fn translate_function_body(
 
     // Move function parameters into stack slots.
     for (index, param) in function.params.iter().enumerate() {
-        let ty = data.resolve_ty_jit(&param.ty);
+        let ty_name = Lowercase::new(&*param.ty);
+
+        let ty = data.resolve_ty_jit(ty_name.as_str());
 
         let value = builder.block_params(entry_block)[params_offset + index];
         let variable = builder.def_var(ty, value);
 
         locals.insert(
-            param.name.to_lowercase(),
+            Lowercase::new(&*param.name),
             Local {
                 ty,
-                ty_name: param.ty.to_lowercase(),
+                ty_name,
                 variable,
             },
         );
@@ -190,9 +193,11 @@ fn translate_function_body(
 
     // Create stack slots for local variables.
     for local in &function.locals {
-        let ty = data.resolve_ty_jit(&local.ty);
+        let ty_name = Lowercase::new(&*local.ty);
 
-        let value = match data.resolve_ty(&local.ty) {
+        let ty = data.resolve_ty_jit(ty_name.as_str());
+
+        let value = match data.resolve_ty(ty_name.as_str()) {
             Type::None | Type::Bool | Type::Int => builder.iconst(JitType::I32, 0),
             Type::Float => builder.fconst(JitType::F32, 0.0),
             Type::String | Type::Class(_) | Type::Array(_) | Type::Struct(_) | Type::Var => {
@@ -203,10 +208,10 @@ fn translate_function_body(
         let variable = builder.def_var(ty, value);
 
         locals.insert(
-            local.name.to_lowercase(),
+            Lowercase::new(&*local.name),
             Local {
                 ty,
-                ty_name: local.ty.to_lowercase(),
+                ty_name,
                 variable,
             },
         );
@@ -215,7 +220,7 @@ fn translate_function_body(
     let mut fields = HashMap::new();
     for (name, ty) in &class.fields {
         fields.insert(
-            name.to_lowercase(),
+            name.as_str(),
             Field {
                 ty: data.resolve_ty_jit(&ty),
                 ty_name: ty.clone(),
@@ -230,10 +235,9 @@ fn translate_function_body(
         locals,
         fields,
         self_ptr,
-        self_ty: class.name.to_lowercase(),
+        self_ty: &class.name,
         constants,
         layouts,
-        class_name: &class.name,
     };
 
     let start_block = translator.builder.create_block(&[]);
@@ -305,6 +309,7 @@ fn translate_function_body(
                 };
 
                 let class_name = translator.get_ty_name(&op.value);
+                let prop_name = Lowercase::new(prop_name.as_str());
 
                 if translator
                     .data
@@ -327,6 +332,7 @@ fn translate_function_body(
                 };
 
                 let class_name = translator.get_ty_name(&op.object);
+                let prop_name = Lowercase::new(prop_name.as_str());
 
                 if translator
                     .data
@@ -562,8 +568,11 @@ fn translate_function_body(
                 };
 
                 let class_name = translator.get_ty_name(&op.object);
+                let function_name = Lowercase::new(function_name.as_str());
 
-                let func = data.get_function(&class_name, &function_name).unwrap();
+                let func = data
+                    .get_function(class_name.as_str(), function_name.as_str())
+                    .unwrap();
 
                 let mut args = op
                     .args
@@ -598,15 +607,12 @@ fn translate_function_body(
                 };
 
                 let class_name = translator.get_ty_name(&Value::Ident("self".to_owned()));
-                let class = translator
-                    .data
-                    .classes
-                    .get(&class_name.to_lowercase())
-                    .unwrap();
+                let class = translator.data.classes.get(class_name.as_str()).unwrap();
                 let parent = class.parent.as_ref().unwrap();
+                let function_name = Lowercase::new(function_name.as_str());
 
                 let func = data
-                    .get_function(&parent.to_lowercase(), &function_name)
+                    .get_function(parent.as_str(), function_name.as_str())
                     .unwrap();
 
                 let mut args = op
@@ -641,8 +647,8 @@ fn translate_function_body(
                     _ => unreachable!(),
                 };
 
-                let class_name = class_name.to_lowercase();
-                let function_name = function_name.to_lowercase();
+                let class_name = Lowercase::new(class_name.as_str());
+                let function_name = Lowercase::new(function_name.as_str());
 
                 let mut args = op
                     .args
@@ -693,6 +699,7 @@ fn translate_function_body(
                 };
 
                 let class_name = translator.get_ty_name(&op.value);
+                let prop_name = Lowercase::new(prop_name.as_str());
 
                 let src = translator.load(&op.value);
 
@@ -725,7 +732,7 @@ fn translate_function_body(
                     let class = data.get_class(&class_name).unwrap();
                     let layout = class.layout.as_ref().unwrap();
 
-                    let prop = class.properties.get(&prop_name.to_lowercase()).unwrap();
+                    let prop = class.properties.get(&prop_name).unwrap();
                     let offset = layout.offset(&prop.variable.as_ref().unwrap()).unwrap();
 
                     let ty = translator
@@ -743,6 +750,7 @@ fn translate_function_body(
                 };
 
                 let class_name = translator.get_ty_name(&op.object);
+                let prop_name = Lowercase::new(prop_name.as_str());
 
                 let object = translator.load(&op.object);
                 let value = translator.load(&op.value);
@@ -775,14 +783,16 @@ fn translate_function_body(
                     let class = data.get_class(&class_name).unwrap();
                     let layout = class.layout.as_ref().unwrap();
 
-                    let prop = class.properties.get(&prop_name.to_lowercase()).unwrap();
+                    let prop = class.properties.get(&prop_name).unwrap();
                     let offset = layout.offset(&prop.variable.as_ref().unwrap()).unwrap();
 
                     translator.builder.store(value, object, offset as u32);
                 }
             }
             Instruction::Return(value) => {
-                if !function.return_ty.is_empty() && function.return_ty.to_lowercase() != "none" {
+                if !function.return_ty.is_empty()
+                    && !function.return_ty.eq_ignore_ascii_case("none")
+                {
                     let rval = translator.load(value);
                     translator.builder.return_(&[rval, result_ok]);
                 } else {
@@ -803,6 +813,7 @@ fn translate_function_body(
                 let Value::Ident(class) = &op.class else {
                     unreachable!();
                 };
+                let class = Lowercase::new(class.as_str());
 
                 let res =
                     perform_typecheck(&mut translator, &op.object, &class, &mut current_block);
@@ -814,7 +825,7 @@ fn translate_function_body(
                 let Type::Struct(name) = &ty else {
                     unreachable!();
                 };
-                let st = translator.data.structs.get(&name.to_lowercase()).unwrap();
+                let st = translator.data.structs.get(name).unwrap();
 
                 let layout = compute_struct_type_layout(translator.data, st);
                 let one = translator.builder.iconst(JitType::Pointer, 1);
@@ -823,8 +834,11 @@ fn translate_function_body(
                 // Default-initialize all struct fields.
                 let layout = st.layout(translator.data);
                 for member in &st.s.members {
-                    let offset = layout.offset(&member.name).unwrap();
-                    let ty = translator.data.resolve_ty(&member.ty);
+                    let ty = Lowercase::new(&*member.ty);
+                    let name = Lowercase::new(&*member.name);
+
+                    let offset = layout.offset(&name).unwrap();
+                    let ty = translator.data.resolve_ty(&ty);
                     let value = create_default_value(&mut translator, &ty);
                     translator.builder.store(value, ptr, offset as u32);
                 }
@@ -1385,9 +1399,11 @@ fn translate_function_body(
 
                             let offset = *layout
                                 .field_offsets
-                                .get(&member_name.to_lowercase())
+                                .get(&Lowercase::new(member_name.as_str()))
                                 .unwrap();
-                            let ty = translator.data.resolve_ty(&member.ty);
+                            let ty = translator
+                                .data
+                                .resolve_ty(&Lowercase::new(member.ty.as_str()));
                             (offset, ty)
                         }
                         _ => unreachable!(),
@@ -1449,8 +1465,13 @@ fn translate_function_body(
     // Other functions that don't return also can also sometimes refer to this
     // section due to weird pex codegen, however in that case this section
     // is statically unreachable.
-    let return_ty = (!function.return_ty.is_empty() && function.return_ty.to_lowercase() != "none")
-        .then(|| data.resolve_ty_jit(&function.return_ty));
+    let return_ty =
+        if function.return_ty.is_empty() || function.return_ty.eq_ignore_ascii_case("none") {
+            None
+        } else {
+            let ty = Lowercase::new(&*function.return_ty);
+            Some(data.resolve_ty_jit(&ty))
+        };
 
     if !translator.builder.is_current_block_full() {
         if let Some(return_ty) = return_ty {
@@ -1481,13 +1502,12 @@ pub struct FunctionTranslator<'a> {
     function: &'a Function,
     data: &'a CodegenData,
     pub builder: FunctionBuilder<'a>,
-    locals: HashMap<String, Local>,
-    fields: HashMap<String, Field>,
+    locals: HashMap<Lowercase<String>, Local>,
+    fields: HashMap<&'a Lowercase<str>, Field>,
     self_ptr: Option<JitValue>,
-    self_ty: String,
+    self_ty: &'a Lowercase<str>,
     constants: &'a mut Vec<ConstantData>,
     layouts: &'a mut Vec<Box<TypeLayout>>,
-    class_name: &'a str,
 }
 
 impl<'a> FunctionTranslator<'a> {
@@ -1508,29 +1528,27 @@ impl<'a> FunctionTranslator<'a> {
                     self.builder.iconst(JitType::Pointer, ptr.addr() as i64)
                 }
             }
-            Value::Ident(name) => self.load_var(name),
+            Value::Ident(name) => self.load_var(&Lowercase::new(name.as_str())),
         }
     }
 
-    pub fn load_var(&mut self, name: &str) -> JitValue {
-        let name = name.to_lowercase();
-
-        if name == "self" {
-            return self.self_ptr.unwrap();
+    pub fn load_var(&mut self, name: &Lowercase<str>) -> JitValue {
+        match name.as_inner() {
+            "self" => return self.self_ptr.unwrap(),
+            "::state" => {
+                // TODO
+                return self.builder.iconst(JitType::Pointer, 0);
+            }
+            _ => {}
         }
 
-        if name == "::state" {
-            // TODO
-            return self.builder.iconst(JitType::Pointer, 0);
-        }
-
-        if let Some(local) = self.locals.get(&name.to_lowercase()) {
+        if let Some(local) = self.locals.get(name) {
             return self.builder.get_var(local.variable);
         }
 
-        let mut class = self.data.get_class(self.class_name).unwrap();
+        let mut class = self.data.get_class(&self.self_ty).unwrap();
         loop {
-            if let Some(field_ty) = class.fields.get(&name.to_lowercase()) {
+            if let Some(field_ty) = class.fields.get(name) {
                 let ty = self.data.resolve_ty_jit(&field_ty);
                 let layout = class.layout.as_ref().unwrap();
 
@@ -1553,29 +1571,29 @@ impl<'a> FunctionTranslator<'a> {
             return;
         };
 
-        self.store_var(name, value);
+        self.store_var(&Lowercase::new(name.as_str()), value);
     }
 
-    pub fn store_var(&mut self, name: &str, value: JitValue) {
-        if name.to_lowercase() == "::state" {
-            // TODO
-            return;
+    pub fn store_var(&mut self, name: &Lowercase<str>, value: JitValue) {
+        match name.as_inner() {
+            "::state" => {
+                // TODO
+                return;
+            }
+            // ::nonevar is a magic variable that always holds none.
+            // Writing to it discards the value.
+            "::nonevar" => return,
+            _ => {}
         }
 
-        // ::nonevar is a magic variable that always holds none.
-        // Writing to it discards the value.
-        if name.to_lowercase() == "::nonevar" {
-            return;
-        }
-
-        if let Some(local) = self.locals.get(&name.to_lowercase()) {
+        if let Some(local) = self.locals.get(name) {
             self.builder.set_var(local.variable, value);
             return;
         }
 
-        let mut class = self.data.get_class(self.class_name).unwrap();
+        let mut class = self.data.get_class(&self.self_ty).unwrap();
         loop {
-            if let Some(_) = class.fields.get(&name.to_lowercase()) {
+            if let Some(_) = class.fields.get(name) {
                 let layout = class.layout.as_ref().unwrap();
 
                 let offset = layout.offset(&name).unwrap();
@@ -1598,26 +1616,28 @@ impl<'a> FunctionTranslator<'a> {
         self.data.resolve_ty(&self.get_ty_name(value))
     }
 
-    pub fn get_ty_name(&self, value: &Value) -> String {
+    pub fn get_ty_name(&self, value: &Value) -> Lowercase<String> {
         match value {
-            Value::Null => "none".to_owned(),
-            Value::Bool(_) => "bool".to_owned(),
-            Value::Int(_) => "int".to_owned(),
-            Value::Float(_) => "float".to_owned(),
-            Value::String(_) => "string".to_owned(),
+            Value::Null => Lowercase::new("none"),
+            Value::Bool(_) => Lowercase::new("bool"),
+            Value::Int(_) => Lowercase::new("int"),
+            Value::Float(_) => Lowercase::new("float"),
+            Value::String(_) => Lowercase::new("string"),
             Value::Ident(name) => {
-                if name == "self" {
-                    return self.self_ty.to_lowercase();
+                let name = Lowercase::new(name.as_str());
+
+                if name.as_inner() == "self" {
+                    return self.self_ty.to_owned();
                 };
 
-                if let Some(local) = self.locals.get(&name.to_lowercase()) {
-                    return local.ty_name.to_lowercase();
+                if let Some(local) = self.locals.get(&name) {
+                    return local.ty_name.clone();
                 }
 
-                let mut class = self.data.get_class(&self.class_name).unwrap();
+                let mut class = self.data.get_class(&self.self_ty).unwrap();
                 loop {
-                    if let Some(ty) = class.fields.get(&name.to_lowercase()) {
-                        return ty.to_lowercase();
+                    if let Some(ty) = class.fields.get(&name) {
+                        return ty.clone();
                     }
 
                     if let Some(parent) = &class.parent {
@@ -1636,13 +1656,13 @@ impl<'a> FunctionTranslator<'a> {
 #[derive(Clone, Debug)]
 struct Field {
     ty: JitType,
-    ty_name: String,
+    ty_name: Lowercase<String>,
 }
 
 #[derive(Clone, Debug)]
 struct Local {
     ty: JitType,
-    ty_name: String,
+    ty_name: Lowercase<String>,
     variable: JitVariable,
 }
 
@@ -1683,24 +1703,24 @@ fn perform_cast(
         (Type::Bool, Type::Float) => translator.builder.convert_uint_to_float(src, JitType::F32),
         (Type::Class(src_class), Type::Class(dst_class)) => {
             // Try upcasting.
-            let mut class_name = src_class.to_lowercase();
+            let mut class_name = &src_class;
             loop {
-                if class_name == dst_class.to_lowercase() {
+                if class_name == &dst_class {
                     return src;
                 }
 
-                let class = translator.data.classes.get(&class_name).unwrap();
+                let class = translator.data.classes.get(class_name).unwrap();
                 if let Some(parent) = &class.parent {
-                    class_name = parent.to_lowercase();
+                    class_name = parent;
                 } else {
                     break;
                 }
             }
 
             // Try downcasting.
-            let mut class_name = dst_class.to_lowercase();
+            let mut class_name = &dst_class;
             loop {
-                if class_name == src_class.to_lowercase() {
+                if class_name == &src_class {
                     let is_ok = perform_typecheck(translator, src_val, &class_name, block);
 
                     let continue_block = translator.builder.create_block(&[]);
@@ -1717,9 +1737,9 @@ fn perform_cast(
                     return src;
                 }
 
-                let class = translator.data.classes.get(&class_name).unwrap();
+                let class = translator.data.classes.get(class_name).unwrap();
                 if let Some(parent) = &class.parent {
-                    class_name = parent.to_lowercase();
+                    class_name = parent;
                 } else {
                     break;
                 }
@@ -1733,7 +1753,7 @@ fn perform_cast(
         (Type::Var, Type::Class(class_name)) => {
             // Perform var to class cast, then attempt to downcast the class value.
             let res = perform_var_downcast(translator, src, ObjectTag::Class, block);
-            let is_ok = perform_class_typecheck(translator, res, &class_name.to_lowercase(), block);
+            let is_ok = perform_class_typecheck(translator, res, &class_name, block);
 
             let continue_block = translator.builder.create_block(&[]);
             let abort_block = translator.builder.create_block(&[]);
@@ -1854,7 +1874,7 @@ fn create_var(
 fn perform_typecheck(
     translator: &mut FunctionTranslator<'_>,
     src: &Value,
-    dst_class: &str,
+    dst_class: &Lowercase<str>,
     block: &mut Block,
 ) -> JitValue {
     let src_ty = translator.get_type(src);
@@ -1870,15 +1890,10 @@ fn perform_typecheck(
 fn perform_class_typecheck(
     translator: &mut FunctionTranslator<'_>,
     src: JitValue,
-    dst_class: &str,
+    dst_class: &Lowercase<str>,
     block: &mut Block,
 ) -> JitValue {
-    let dst_id = translator
-        .data
-        .classes
-        .get(&dst_class.to_lowercase())
-        .unwrap()
-        .type_id;
+    let dst_id = translator.data.classes.get(dst_class).unwrap().type_id;
     let dst_id = translator.builder.iconst(JitType::I64, dst_id as i64);
 
     let type_info_ptr = translator.builder.load(JitType::Pointer, src, 0);
@@ -1971,8 +1986,10 @@ fn perform_checked_call(
 
         let mut rvals = Vec::new();
 
-        if !caller.return_ty.is_empty() && caller.return_ty.to_lowercase() != "none" {
-            let ty = translator.data.resolve_ty_jit(&caller.return_ty);
+        if !caller.return_ty.is_empty() && !caller.return_ty.eq_ignore_ascii_case("none") {
+            let ty = translator
+                .data
+                .resolve_ty_jit(&Lowercase::new(caller.return_ty.as_str()));
             rvals.push(translator.builder.uninit(ty));
         }
 
@@ -2160,11 +2177,11 @@ fn abort_function(translator: &mut FunctionTranslator<'_>) {
     let mut rvals = vec![];
 
     if !translator.function.return_ty.is_empty()
-        && translator.function.return_ty.to_lowercase() != "none"
+        && !translator.function.return_ty.eq_ignore_ascii_case("none")
     {
         let ty = translator
             .data
-            .resolve_ty_jit(&translator.function.return_ty);
+            .resolve_ty_jit(&Lowercase::new(translator.function.return_ty.as_str()));
         rvals.push(translator.builder.uninit(ty));
     }
 
@@ -2190,7 +2207,7 @@ fn struct_member_offset(
 
     let member_offset = layout
         .field_offsets
-        .get(&member_name.to_lowercase())
+        .get(&Lowercase::new(member_name.as_str()))
         .unwrap();
 
     *member_offset as u32

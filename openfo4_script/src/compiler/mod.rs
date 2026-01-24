@@ -4,6 +4,7 @@ mod validation;
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use game_common::string::Lowercase;
 use openfo4_jit::{CompiledFunction, Signature};
 use openfo4_pex::Module;
 use thiserror::Error;
@@ -46,7 +47,7 @@ impl Context {
     pub fn compute_class_layouts(
         &mut self,
         class: &str,
-    ) -> Result<HashMap<String, TypeLayout>, Error> {
+    ) -> Result<HashMap<Lowercase<String>, TypeLayout>, Error> {
         self.codegen
             .compute_class_layouts(class)
             .map_err(Error::Codegen)
@@ -132,17 +133,17 @@ impl TypeLayout {
 
 #[derive(Clone, Debug)]
 pub struct ObjectField {
-    pub class: String,
-    pub name: String,
+    pub class: Lowercase<String>,
+    pub name: Lowercase<String>,
     pub offset: usize,
     pub ty: FieldType,
-    pub ty_name: String,
+    pub ty_name: Lowercase<String>,
 }
 
 #[derive(Clone, Debug)]
 pub struct ObjectProperty {
-    pub class: String,
-    pub name: String,
+    pub class: Lowercase<String>,
+    pub name: Lowercase<String>,
     pub var: usize,
 }
 
