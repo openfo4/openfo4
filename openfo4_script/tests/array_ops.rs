@@ -1,5 +1,5 @@
 use openfo4_script::assembler::assemble;
-use openfo4_script::compiler::{FieldType, ObjectField, TypeLayout};
+use openfo4_script::compiler::{FieldType, ObjectField, ObjectProperty, TypeLayout};
 use openfo4_script::engine::{Engine, Options};
 use openfo4_script::runtime::{Caller, Context, Exception, ObjectAddr, Stack};
 
@@ -185,6 +185,7 @@ fn array_clear() {
 
     fn assert_valid_result(caller: Caller<'_, ()>, addr: ObjectAddr) -> Result<(), Exception> {
         let array = unsafe { caller.array::<i32>(addr) };
+        dbg!(&array);
         assert_eq!(array.len(), 0);
         Ok(())
     }
@@ -368,7 +369,11 @@ fn int_layout() -> TypeLayout {
             ty: FieldType::I32,
             ty_name: "".to_owned(),
         }],
-        properties: vec![],
+        properties: vec![ObjectProperty {
+            class: "".to_owned(),
+            name: "".to_owned(),
+            var: 0,
+        }],
     }
 }
 
@@ -382,6 +387,10 @@ fn ptr_layout() -> TypeLayout {
             ty: FieldType::Pointer,
             ty_name: "".to_owned(),
         }],
-        properties: vec![],
+        properties: vec![ObjectProperty {
+            class: "".to_owned(),
+            name: "".to_owned(),
+            var: 0,
+        }],
     }
 }

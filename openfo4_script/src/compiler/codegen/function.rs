@@ -49,7 +49,7 @@ pub fn declare_function(
             Some(native) => {
                 if signature != native.signature {
                     return Err(Error::NativeFuncSignatureMissmatch {
-                        name: format!("{}.{}", class.name, function.function.name),
+                        name: format!("{}.{}", function.class, function.function.name),
                         script: signature,
                         host: native.signature.clone(),
                     });
@@ -65,7 +65,7 @@ pub fn declare_function(
             None => {
                 return Err(Error::UndefNativeFunc(format!(
                     "{}.{}",
-                    class.name, function.function.name
+                    function.class, function.function.name
                 )));
             }
         };

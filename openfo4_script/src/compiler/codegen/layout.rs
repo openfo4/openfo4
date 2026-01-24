@@ -4,7 +4,7 @@ use std::sync::{LazyLock, OnceLock};
 use openfo4_jit::Type as JitType;
 
 use crate::compiler::codegen::{ClassDef, CodegenData, StructDef, Type};
-use crate::compiler::{FieldType, ObjectField, TypeLayout};
+use crate::compiler::{FieldType, ObjectField, ObjectProperty, TypeLayout};
 
 pub fn compute_class_layout(data: &CodegenData, class: &ClassDef) -> ClassLayout {
     let mut fields = HashMap::new();
@@ -74,6 +74,7 @@ pub fn compute_struct_type_layout(data: &CodegenData, st: &StructDef) -> TypeLay
     let layout = compute_struct_layout(data, st);
 
     let mut fields = Vec::new();
+    let mut properties = Vec::new();
     for (field_name, field_offset) in &layout.field_offsets {
         let field_ty_name =
             st.s.members
@@ -95,12 +96,18 @@ pub fn compute_struct_type_layout(data: &CodegenData, st: &StructDef) -> TypeLay
             },
             ty_name: field_ty_name.to_lowercase(),
         });
+
+        properties.push(ObjectProperty {
+            class: st.s.name.to_lowercase(),
+            name: field_name.to_lowercase(),
+            var: 0,
+        });
     }
 
     TypeLayout {
         header: None,
         fields,
-        properties: Vec::new(),
+        properties,
     }
 }
 
@@ -126,6 +133,10 @@ pub fn generate_type_layout(data: &CodegenData, ty: &Type) -> TypeLayout {
             ty: field_ty,
             ty_name: "".to_owned(),
         }],
-        properties: Vec::new(),
+        properties: vec![ObjectProperty {
+            class: "".to_owned(),
+            name: "".to_owned(),
+            var: 0,
+        }],
     }
 }

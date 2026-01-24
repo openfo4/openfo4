@@ -1,8 +1,8 @@
 use std::path::PathBuf;
 
-use openfo4_script::classes::{self, StateProvider};
-use openfo4_script::classes::{CoreActorValues, State};
-use openfo4_script::engine::{Engine, Registry};
+// use openfo4_script::classes::{self, StateProvider};
+// use openfo4_script::classes::{CoreActorValues, State};
+use openfo4_script::engine::{Engine, Options, Registry};
 use openfo4_script::runtime::{Caller, Context, Object, ObjectPool, RawVal, Stack};
 
 fn main() {
@@ -106,149 +106,158 @@ fn main() {
         dbg!(x);
     }
 
-    classes::register_builtins(&mut engine);
+    //     classes::register_builtins(&mut engine);
 
-    // engine.compile("Keyword");
-    // engine.compile("ActorValue");
+    //     // engine.compile("Keyword");
+    //     // engine.compile("ActorValue");
 
-    let instance = engine.compile("Hardcore:HC_ManagerScript");
-    // let instance = engine.compile("CastleArtilleryScrapScript");
+    //     let instance = engine.compile("Hardcore:HC_ManagerScript");
+    //     // let instance = engine.compile("CastleArtilleryScrapScript");
 
-    // dbg!(engine.get_class_layout("YoureSPECIALscript"));
-    // dbg!(engine.get_class_layout("CastleArtilleryScrapScript"));
+    //     // dbg!(engine.get_class_layout("YoureSPECIALscript"));
+    //     // dbg!(engine.get_class_layout("CastleArtilleryScrapScript"));
 
-    let func = instance.get_func("onplayersleepstop").unwrap();
-    // // dbg!(&func);
-
-    dbg!(func.stack_size());
-
-    let typed = func.typed::<(isize, isize), ()>().unwrap();
-
-    let layout = engine.get_class_layout("PlayerSleepScript").unwrap();
-
-    // let mut header = vec![0_usize; 256];
-    // header[..3].copy_from_slice(&[3_usize, 709_usize, 69_usize]);
-    // let object = header.as_ptr();
-    // let object_ptr = &object as *const *const usize;
-    let mut pool = ObjectPool::default();
-    let player = pool
-        .insert(engine.get_class_layout("Actor").unwrap().clone())
-        .finalize();
-    let health = pool
-        .insert(engine.get_class_layout("ActorValue").unwrap().clone())
-        .finalize();
-    let strength = pool
-        .insert(engine.get_class_layout("ActorValue").unwrap().clone())
-        .finalize();
-    let perception = pool
-        .insert(engine.get_class_layout("ActorValue").unwrap().clone())
-        .finalize();
-    let endurance = pool
-        .insert(engine.get_class_layout("ActorValue").unwrap().clone())
-        .finalize();
-    let charisma = pool
-        .insert(engine.get_class_layout("ActorValue").unwrap().clone())
-        .finalize();
-    let intelligence = pool
-        .insert(engine.get_class_layout("ActorValue").unwrap().clone())
-        .finalize();
-    let agility = pool
-        .insert(engine.get_class_layout("ActorValue").unwrap().clone())
-        .finalize();
-    let luck = pool
-        .insert(engine.get_class_layout("ActorValue").unwrap().clone())
-        .finalize();
-    let aggression = pool
-        .insert(engine.get_class_layout("ActorValue").unwrap().clone())
-        .finalize();
-    let confidence = pool
-        .insert(engine.get_class_layout("ActorValue").unwrap().clone())
-        .finalize();
-    let suspicous = pool
-        .insert(engine.get_class_layout("ActorValue").unwrap().clone())
-        .finalize();
-
-    let object = pool.insert(layout.clone());
-
-    let state = State {
-        player,
-        actor_values: CoreActorValues {
-            health,
-            strength,
-            perception,
-            endurance,
-            charisma,
-            intelligence,
-            agility,
-            luck,
-            aggression,
-            confidence,
-            suspicious: suspicous,
+    // let instance = engine.compile("YoureSPECIALScript", &Default::default());
+    let instance = engine.compile(
+        "CA_QuestScript",
+        &Options {
+            use_native_stubs: true,
+            ..Default::default()
         },
-        provider: Box::new(TestProvider {}),
-    };
-    let mut ctx = Context::new(&engine, Stack::new(func.stack_size()), state);
+    );
 
-    let object_ref = object.finalize();
-    let object_ptr = object_ref.addr().to_raw();
+    //     let func = instance.get_func("onplayersleepstop").unwrap();
+    //     // // dbg!(&func);
 
-    let res = typed.call(&mut ctx, (object_ptr as isize, object_ptr as isize));
-    dbg!(&res);
+    //     dbg!(func.stack_size());
 
-    let res = typed.call(&mut ctx, (object_ptr as isize, 0));
-    dbg!(&res);
+    //     let typed = func.typed::<(isize, isize), ()>().unwrap();
 
-    println!("exit");
+    //     let layout = engine.get_class_layout("PlayerSleepScript").unwrap();
+
+    //     // let mut header = vec![0_usize; 256];
+    //     // header[..3].copy_from_slice(&[3_usize, 709_usize, 69_usize]);
+    //     // let object = header.as_ptr();
+    //     // let object_ptr = &object as *const *const usize;
+    //     let mut pool = ObjectPool::default();
+    //     let player = pool
+    //         .insert(engine.get_class_layout("Actor").unwrap().clone())
+    //         .finalize();
+    //     let health = pool
+    //         .insert(engine.get_class_layout("ActorValue").unwrap().clone())
+    //         .finalize();
+    //     let strength = pool
+    //         .insert(engine.get_class_layout("ActorValue").unwrap().clone())
+    //         .finalize();
+    //     let perception = pool
+    //         .insert(engine.get_class_layout("ActorValue").unwrap().clone())
+    //         .finalize();
+    //     let endurance = pool
+    //         .insert(engine.get_class_layout("ActorValue").unwrap().clone())
+    //         .finalize();
+    //     let charisma = pool
+    //         .insert(engine.get_class_layout("ActorValue").unwrap().clone())
+    //         .finalize();
+    //     let intelligence = pool
+    //         .insert(engine.get_class_layout("ActorValue").unwrap().clone())
+    //         .finalize();
+    //     let agility = pool
+    //         .insert(engine.get_class_layout("ActorValue").unwrap().clone())
+    //         .finalize();
+    //     let luck = pool
+    //         .insert(engine.get_class_layout("ActorValue").unwrap().clone())
+    //         .finalize();
+    //     let aggression = pool
+    //         .insert(engine.get_class_layout("ActorValue").unwrap().clone())
+    //         .finalize();
+    //     let confidence = pool
+    //         .insert(engine.get_class_layout("ActorValue").unwrap().clone())
+    //         .finalize();
+    //     let suspicous = pool
+    //         .insert(engine.get_class_layout("ActorValue").unwrap().clone())
+    //         .finalize();
+
+    //     let object = pool.insert(layout.clone());
+
+    //     let state = State {
+    //         player,
+    //         actor_values: CoreActorValues {
+    //             health,
+    //             strength,
+    //             perception,
+    //             endurance,
+    //             charisma,
+    //             intelligence,
+    //             agility,
+    //             luck,
+    //             aggression,
+    //             confidence,
+    //             suspicious: suspicous,
+    //         },
+    //         provider: Box::new(TestProvider {}),
+    //     };
+    //     let mut ctx = Context::new(&engine, Stack::new(func.stack_size()), state);
+
+    //     let object_ref = object.finalize();
+    //     let object_ptr = object_ref.addr().to_raw();
+
+    //     let res = typed.call(&mut ctx, (object_ptr as isize, object_ptr as isize));
+    //     dbg!(&res);
+
+    //     let res = typed.call(&mut ctx, (object_ptr as isize, 0));
+    //     dbg!(&res);
+
+    //     println!("exit");
 }
 
-struct TestProvider {}
+// struct TestProvider {}
 
-impl StateProvider for TestProvider {
-    fn get_actor_value(
-        &self,
-        object: openfo4_script::runtime::ObjectAddr,
-        actor_value: openfo4_script::runtime::ObjectAddr,
-    ) -> Option<f32> {
-        todo!()
-    }
+// impl StateProvider for TestProvider {
+//     fn get_actor_value(
+//         &self,
+//         object: openfo4_script::runtime::ObjectAddr,
+//         actor_value: openfo4_script::runtime::ObjectAddr,
+//     ) -> Option<f32> {
+//         todo!()
+//     }
 
-    fn get_global(&self, global: openfo4_script::runtime::ObjectAddr) -> Option<f32> {
-        todo!()
-    }
+//     fn get_global(&self, global: openfo4_script::runtime::ObjectAddr) -> Option<f32> {
+//         todo!()
+//     }
 
-    fn set_global(&self, global: openfo4_script::runtime::ObjectAddr, value: f32) {
-        todo!()
-    }
+//     fn set_global(&self, global: openfo4_script::runtime::ObjectAddr, value: f32) {
+//         todo!()
+//     }
 
-    fn set_actor_value(
-        &self,
-        object: openfo4_script::runtime::ObjectAddr,
-        actor_value: openfo4_script::runtime::ObjectAddr,
-        value: f32,
-    ) {
-        todo!()
-    }
+//     fn set_actor_value(
+//         &self,
+//         object: openfo4_script::runtime::ObjectAddr,
+//         actor_value: openfo4_script::runtime::ObjectAddr,
+//         value: f32,
+//     ) {
+//         todo!()
+//     }
 
-    fn get_owner(
-        &self,
-        object: openfo4_script::runtime::ObjectAddr,
-    ) -> openfo4_script::runtime::ObjectAddr {
-        todo!()
-    }
+//     fn get_owner(
+//         &self,
+//         object: openfo4_script::runtime::ObjectAddr,
+//     ) -> openfo4_script::runtime::ObjectAddr {
+//         todo!()
+//     }
 
-    fn set_owner(
-        &self,
-        object: openfo4_script::runtime::ObjectAddr,
-        owner: openfo4_script::runtime::ObjectAddr,
-    ) {
-        todo!()
-    }
+//     fn set_owner(
+//         &self,
+//         object: openfo4_script::runtime::ObjectAddr,
+//         owner: openfo4_script::runtime::ObjectAddr,
+//     ) {
+//         todo!()
+//     }
 
-    fn linked_ref(
-        &self,
-        object: openfo4_script::runtime::ObjectAddr,
-        keyword: openfo4_script::runtime::ObjectAddr,
-    ) -> Option<openfo4_script::runtime::ObjectAddr> {
-        todo!()
-    }
-}
+//     fn linked_ref(
+//         &self,
+//         object: openfo4_script::runtime::ObjectAddr,
+//         keyword: openfo4_script::runtime::ObjectAddr,
+//     ) -> Option<openfo4_script::runtime::ObjectAddr> {
+//         todo!()
+//     }
+// }

@@ -2,7 +2,7 @@ use std::alloc::Layout;
 use std::collections::HashMap;
 use std::sync::{Arc, LazyLock, Mutex};
 
-use crate::compiler::{FieldType, ObjectField, TypeLayout};
+use crate::compiler::{FieldType, ObjectField, ObjectProperty, TypeLayout};
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 #[repr(transparent)]
@@ -230,10 +230,8 @@ impl Object {
     }
 
     pub unsafe fn get(&self, class: &str, name: &str) -> Option<&[u8]> {
-        let field = self.layout.fields.iter().find(|f| {
-            f.class.to_lowercase() == class.to_lowercase()
-                && f.name.to_lowercase() == name.to_lowercase()
-        })?;
+        let prop = self.get_property_var(class, name);
+        let field = &self.layout.fields[prop.var];
 
         let ptr = unsafe { self.memory.add(field.offset) };
         let len = field.ty.size();
@@ -244,24 +242,59 @@ impl Object {
     ///
     /// The caller must guarantee that no memory accesses to the field of the `Object` are
     /// currently active.
+    #[track_caller]
     pub unsafe fn set<T>(&mut self, class: &str, name: &str, value: T)
     where
         T: IntoValue,
     {
-        let Some(field) = self.layout.fields.iter().find(|f| {
-            f.class.to_lowercase() == class.to_lowercase()
-                && f.name.to_lowercase() == name.to_lowercase()
-        }) else {
-            panic!("no field {:?}.{:?}", class, name);
-        };
+        let prop = self.get_property_var(class, name);
+
+        let field = &self.layout.fields[prop.var];
 
         let bytes = value.as_bytes();
-        assert_eq!(bytes.len(), field.ty.size());
+
+        assert_eq!(
+            bytes.len(),
+            field.ty.size(),
+            "{:?}.{:?} (type {:?}) requires {} bytes, but {} were provided",
+            prop.class,
+            prop.name,
+            field.ty,
+            field.ty.size(),
+            bytes.len(),
+        );
 
         unsafe {
             let dst = self.memory.add(field.offset);
             core::ptr::copy_nonoverlapping(bytes.as_ptr(), dst, bytes.len());
         }
+    }
+
+    #[track_caller]
+    fn get_property_var(&self, class: &str, name: &str) -> &ObjectProperty {
+        // Always prefer properties that match the requested class.
+        if let Some(prop) = self.layout.properties.iter().find(|p| {
+            p.class.to_lowercase() == class.to_lowercase()
+                && p.name.to_lowercase() == name.to_lowercase()
+        }) {
+            return prop;
+        }
+
+        // We may also access fields of parent classes.
+        // FIXME: Ideally we would recursively walk up the class
+        // hierarchy instead of selecting any other matching property,
+        // this requires us to have access to the class names from here.
+        if let Some(prop) = self
+            .layout
+            .properties
+            .iter()
+            .find(|p| p.name.to_lowercase() == name.to_lowercase())
+        {
+            return prop;
+        }
+
+        dbg!(&self.layout);
+        panic!("no field {:?}.{:?}", class, name);
     }
 
     /// View the entire memory of this `Object`.
@@ -294,6 +327,7 @@ pub struct ObjectBuilder {
 }
 
 impl ObjectBuilder {
+    #[track_caller]
     pub fn set<T>(&mut self, class: &str, name: &str, value: T)
     where
         T: IntoValue,
@@ -329,6 +363,7 @@ pub struct ObjectArrayBuilder {
 }
 
 impl ObjectArrayBuilder {
+    #[track_caller]
     pub fn set_at<T>(&mut self, index: usize, class: &str, name: &str, value: T)
     where
         T: IntoValue,
@@ -439,7 +474,18 @@ pub(crate) static ARRAY_LAYOUT: LazyLock<TypeLayout> = LazyLock::new(|| TypeLayo
             ty_name: "".to_owned(),
         },
     ],
-    properties: Vec::new(),
+    properties: vec![
+        ObjectProperty {
+            class: "".to_owned(),
+            name: "ptr".to_owned(),
+            var: 0,
+        },
+        ObjectProperty {
+            class: "".to_owned(),
+            name: "len".to_owned(),
+            var: 1,
+        },
+    ],
 });
 
 pub(crate) const BYTE_LAYOUT: LazyLock<TypeLayout> = LazyLock::new(|| TypeLayout {
@@ -451,7 +497,11 @@ pub(crate) const BYTE_LAYOUT: LazyLock<TypeLayout> = LazyLock::new(|| TypeLayout
         ty: FieldType::I8,
         ty_name: "".to_owned(),
     }],
-    properties: Vec::new(),
+    properties: vec![ObjectProperty {
+        class: "".to_owned(),
+        name: "".to_owned(),
+        var: 0,
+    }],
 });
 
 pub(crate) const VAR_LAYOUT: LazyLock<TypeLayout> = LazyLock::new(|| TypeLayout {
@@ -472,5 +522,16 @@ pub(crate) const VAR_LAYOUT: LazyLock<TypeLayout> = LazyLock::new(|| TypeLayout 
             ty_name: "".to_owned(),
         },
     ],
-    properties: Vec::new(),
+    properties: vec![
+        ObjectProperty {
+            class: "".to_owned(),
+            name: "tag".to_owned(),
+            var: 0,
+        },
+        ObjectProperty {
+            class: "".to_owned(),
+            name: "data".to_owned(),
+            var: 1,
+        },
+    ],
 });

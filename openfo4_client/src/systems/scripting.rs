@@ -30,6 +30,7 @@ const OPTIONS: Options = Options {
     skip_native: true,
     skip_empty: true,
     only_events: true,
+    use_native_stubs: false,
 };
 
 pub struct Executor {
@@ -1035,7 +1036,11 @@ fn build_array_layout(values: &[Value]) -> TypeLayout {
             ty,
             ty_name: "".to_owned(),
         }],
-        properties: Vec::new(),
+        properties: vec![ObjectProperty {
+            class: "".to_owned(),
+            name: "".to_owned(),
+            var: 0,
+        }],
     }
 }
 
