@@ -1,0 +1,85 @@
+use openfo4_script::{
+    engine::Engine,
+    runtime::{Caller, Exception},
+};
+
+use crate::systems::scripting::classes::State;
+
+pub fn register(engine: &mut Engine) {
+    engine.register_native_function("Math", "exp", exp);
+    engine.register_native_function("Math", "log", log);
+    engine.register_native_function("Math", "LeftShift", left_shift);
+    engine.register_native_function("Math", "RightShift", right_shift);
+    engine.register_native_function("Math", "LogicalNot", logical_not);
+    engine.register_native_function("Math", "LogicalAnd", logical_and);
+    engine.register_native_function("Math", "LogicalOr", logical_or);
+    engine.register_native_function("Math", "LogicalXor", logical_xor);
+}
+
+/// `Exp`
+///
+/// ```text
+/// float Function Exp(float afArg1) native global
+/// ```
+fn exp(_caller: Caller<'_, State>, value: f32) -> Result<f32, Exception> {
+    Ok(value.exp())
+}
+
+/// `LeftShift`
+///
+/// ```text
+/// int Function LeftShift(int value, int shiftBy) native global
+/// ```
+fn left_shift(_caller: Caller<'_, State>, lhs: i32, rhs: i32) -> Result<i32, Exception> {
+    Ok(lhs << rhs)
+}
+
+fn log(_caller: Caller<'_, State>, value: f32) -> Result<f32, Exception> {
+    Ok(value.ln())
+}
+
+/// `LogicalAnd`
+///
+/// ```text
+/// int Function LogicalAnd(int arg1, int arg2) native global
+/// ```
+///
+fn logical_and(_caller: Caller<'_, State>, lhs: i32, rhs: i32) -> Result<i32, Exception> {
+    Ok(lhs & rhs)
+}
+
+/// `LogicalNot`
+///
+/// ```text
+/// int Function LogicalNot(int arg1) native global
+/// ```
+fn logical_not(_caller: Caller<'_, State>, value: i32) -> Result<i32, Exception> {
+    Ok(!value)
+}
+
+/// `LogicalOr`
+///
+/// ```text
+/// int Function LogicalOr(int arg1, int arg2) native global
+/// ```
+fn logical_or(_caller: Caller<'_, State>, lhs: i32, rhs: i32) -> Result<i32, Exception> {
+    Ok(lhs | rhs)
+}
+
+/// `LogicalXor`
+///
+/// ```text
+/// int Function LogicalXor(int arg1, int arg2) native global
+/// ```
+fn logical_xor(_caller: Caller<'_, State>, lhs: i32, rhs: i32) -> Result<i32, Exception> {
+    Ok(lhs ^ rhs)
+}
+
+/// `RightShift`
+///
+/// ```text
+/// int Function RightShift(int value, int shiftBy) native global
+/// ```
+fn right_shift(_caller: Caller<'_, State>, lhs: i32, rhs: i32) -> Result<i32, Exception> {
+    Ok(lhs >> rhs)
+}

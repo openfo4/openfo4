@@ -21,6 +21,7 @@ pub fn register(engine: &mut Engine) {
     engine.register_native_function("ScriptObject", "RegisterForDirectLOSLost", register_for_direct_los_lost);
     engine.register_native_function("ScriptObject", "RegisterForDistanceLessThanEvent", register_for_distance_less_than_event);
     engine.register_native_function("ScriptObject", "RegisterForDistanceGreaterThanEvent", register_for_distance_greater_than_event);
+    engine.register_native_function("ScriptObject", "RegisterForHitEvent", register_for_hit_event);
     engine.register_native_function("ScriptObject", "RegisterForMagicEffectApplyEvent", register_for_magic_effect_apply_event);
     engine.register_native_function("ScriptObject", "RegisterForMenuOpenCloseEvent", register_for_menu_open_close_event);
     engine.register_native_function("ScriptObject", "RegisterForPlayerSleep", register_for_player_sleep);
@@ -281,6 +282,27 @@ fn register_for_distance_greater_than_event(
     ak_obj1: Object,
     ak_obj2: Object,
     af_distance: f32,
+) -> Result<(), Exception> {
+    todo!()
+}
+
+/// `RegisterForHitEvent`
+///
+/// ```text
+/// Function RegisterForHitEvent(ScriptObject akTarget, ScriptObject akAggressorFilter, Form akSourceFilter, Form akProjectileFilter, int aiPowerFilter, int aiSneakFilter, int aiBashFilter, int aiBlockFilter, bool abMatch) native
+/// ```
+fn register_for_hit_event(
+    caller: Caller<'_, State>,
+    self_ptr: Object,
+    target: Object,
+    agressor_filter: Object,
+    source_filter: Object,
+    projectile_filter: Object,
+    power_filter: i32,
+    sneak_filter: i32,
+    bash_filter: i32,
+    bock_filter: i32,
+    ab_match: bool,
 ) -> Result<(), Exception> {
     todo!()
 }

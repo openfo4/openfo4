@@ -1,0 +1,121 @@
+use openfo4_script::engine::Engine;
+use openfo4_script::runtime::{Caller, Exception};
+
+use crate::systems::scripting::classes::{Object, State};
+
+#[rustfmt::skip]
+pub fn register(engine: &mut Engine) {
+    engine.register_native_function("UI", "IsMenuOpen", is_menu_open);
+    engine.register_native_function("UI", "IsMenuRegistered", is_menu_registered);
+    engine.register_native_function("UI", "RegisterCustomMenu", register_custom_menu);
+    engine.register_native_function("UI", "OpenMenu", open_menu);
+    engine.register_native_function("UI", "CloseMenu", close_menu);
+    engine.register_native_function("UI", "Set", set);
+    engine.register_native_function("UI", "Get", get);
+    engine.register_native_function("UI", "Invoke", invoke);
+    engine.register_native_function("UI", "Load", load);
+}
+
+/// `IsMenuOpen`
+///
+/// ```text
+/// bool Function(string menu) native global
+/// ```
+fn is_menu_open(caller: Caller<'_, State>, menu: isize) -> Result<bool, Exception> {
+    todo!()
+}
+
+/// `IsMenuRegistered`
+///
+/// ```text
+/// bool Function(string menu) native global
+/// ```
+fn is_menu_registered(caller: Caller<'_, State>, menu: isize) -> Result<bool, Exception> {
+    todo!()
+}
+
+/// `RegisterCustomMenu`
+///
+/// ```text
+/// bool Function(string menuName, string menuPath, string rootPath, MenuData mData) native global
+/// ```
+fn register_custom_menu(
+    caller: Caller<'_, State>,
+    menu_name: isize,
+    menu_path: isize,
+    root_path: isize,
+    m_data: Object,
+) -> Result<bool, Exception> {
+    todo!()
+}
+
+/// `OpenMenu`
+///
+/// ```text
+/// bool Function(string menuName) native global
+/// ```
+fn open_menu(caller: Caller<'_, State>, menu_name: isize) -> Result<bool, Exception> {
+    todo!()
+}
+
+/// `CloseMenu`
+///
+/// ```text
+/// bool Function(string menuName) native global
+/// ```
+fn close_menu(caller: Caller<'_, State>, menu_name: isize) -> Result<bool, Exception> {
+    todo!()
+}
+
+/// `Set`
+///
+/// ```text
+/// bool Function(string menu, string path, Var arg) native global
+/// ```
+fn set(
+    caller: Caller<'_, State>,
+    menu: isize,
+    path: isize,
+    arg: Object,
+) -> Result<bool, Exception> {
+    todo!()
+}
+
+/// `Get`
+///
+/// ```text
+/// Var Function(string menu, string path) native global
+/// ```
+fn get(caller: Caller<'_, State>, menu: isize, path: isize) -> Result<Object, Exception> {
+    todo!()
+}
+
+/// `Invoke`
+///
+/// ```text
+/// Var Function(string menu, string path, Var[] args) native global
+/// ```
+fn invoke(
+    caller: Caller<'_, State>,
+    menu: isize,
+    path: isize,
+    args: isize,
+) -> Result<Object, Exception> {
+    todo!()
+}
+
+/// `Load`
+///
+/// ```text
+/// bool Function(string menu, string sourceVar, string assetPath, ScriptObject receiver, string callback) native global
+/// ```
+fn load(
+    caller: Caller<'_, State>,
+    menu: isize,
+    source_var: isize,
+    asset_path: isize,
+    receiver: Object,
+    callback: isize,
+) -> Result<bool, Exception> {
+    todo!()
+}

@@ -3,7 +3,10 @@ mod mcm;
 
 mod active_magic_effect;
 mod actor;
+mod actor_base;
 mod alias;
+mod cell;
+mod debug;
 mod faction;
 mod form;
 mod form_list;
@@ -11,6 +14,8 @@ mod game;
 mod global_variable;
 mod input_enable_layer;
 mod keyword;
+mod location;
+mod location_alias;
 mod magic_effect;
 mod math;
 mod message;
@@ -20,10 +25,12 @@ mod potion;
 mod quest;
 mod ref_collection_alias;
 mod reference_alias;
+mod scene;
 mod script_object;
 mod sound;
 mod spell;
 mod utility;
+mod weapon;
 
 use std::collections::{BTreeMap, HashMap};
 use std::time::{Duration, Instant};
@@ -52,8 +59,16 @@ pub fn register_builtins(engine: &mut Engine) {
     input_enable_layer::register(engine);
     music_type::register(engine);
     alias::register(engine);
-
+    scene::register(engine);
+    debug::register(engine);
+    actor_base::register(engine);
+    weapon::register(engine);
+    ref_collection_alias::register(engine);
+    cell::register(engine);
+    location::register(engine);
+    location_alias::register(engine);
     game::register(engine);
+    reference_alias::register(engine);
 
     engine.register_native_function("Message", "ResetHelpMessage", message::reset_help_message);
     engine.register_native_function("Message", "Show", message::show);
@@ -61,7 +76,7 @@ pub fn register_builtins(engine: &mut Engine) {
     engine.register_native_function("Message", "UnshowAsHelpMessage", message::unshow_as_help_message);
 
     script_object::register(engine);
-    
+
 
     engine.register_native_function("Form", "GetFormID", form::get_form_id);
     engine.register_native_function("Form", "GetGoldValue", form::get_gold_value);
@@ -89,14 +104,6 @@ pub fn register_builtins(engine: &mut Engine) {
 
     engine.register_native_function("Keyword", "SendStoryEvent", keyword::send_story_event);
     engine.register_native_function("Keyword", "SendStoryEventAndWait", keyword::send_story_event_and_wait);
-
-    engine.register_native_function("RefCollectionAlias", "GetAt", ref_collection_alias::get_at);
-    engine.register_native_function("RefCollectionAlias", "GetCount", ref_collection_alias::get_count);
-
-    engine.register_native_function("ReferenceAlias", "ApplyToRef", reference_alias::apply_to_ref);
-    engine.register_native_function("ReferenceAlias", "Clear", reference_alias::clear);
-    engine.register_native_function("ReferenceAlias", "ForceRefTo", reference_alias::force_ref_to);
-    engine.register_native_function("ReferenceAlias", "GetReference", reference_alias::get_reference);
 
     engine.register_native_function("ActiveMagicEffect", "Dispel", active_magic_effect::dispel);
     engine.register_native_function("ActiveMagicEffect", "GetBaseObject", active_magic_effect::get_base_object);

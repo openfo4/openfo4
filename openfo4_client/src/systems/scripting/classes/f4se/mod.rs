@@ -1,4 +1,15 @@
+mod cell;
+mod favorites_manger;
+mod form;
+mod game;
+mod input;
+mod location;
+mod math;
 mod object_reference;
+mod script_object;
+mod ui;
+mod water_type;
+mod weapon;
 
 use openfo4_script::engine::Engine;
 
@@ -15,4 +26,16 @@ pub fn register(engine: &mut Engine) {
     engine.register_native_function("ObjectReference", "GetMaterialSwap", object_reference::get_material_swap);
     engine.register_native_function("ObjectReference", "SetMaterialSwap", object_reference::set_material_swap);
     engine.register_native_function("ObjectReference", "TransmitConnectedPower", object_reference::transmit_connected_power);
+
+    math::register(engine);
+    ui::register(engine);
+    form::register(engine);
+    game::register(engine);
+    weapon::register(engine);
+    favorites_manger::register(engine);
+    location::register(engine);
+    input::register(engine);
+    script_object::register(engine);
+    cell::register(engine);
+    water_type::register(engine);
 }
