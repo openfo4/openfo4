@@ -362,7 +362,7 @@ fn show_all_map_markers(caller: Caller<'_, State>) -> Result<(), Exception> {
 /// ActorValue Function() native global
 /// ```
 fn get_aggression_av(caller: Caller<'_, State>) -> Result<Object, Exception> {
-    todo!()
+    Ok(caller.data().core_objects.aggression.addr())
 }
 
 /// `GetAgilityAV`
@@ -371,7 +371,7 @@ fn get_aggression_av(caller: Caller<'_, State>) -> Result<Object, Exception> {
 /// ActorValue Function() native global
 /// ```
 fn get_agility_av(caller: Caller<'_, State>) -> Result<Object, Exception> {
-    todo!()
+    Ok(caller.data().core_objects.agility.addr())
 }
 
 /// `GetCharismaAV`
@@ -380,7 +380,7 @@ fn get_agility_av(caller: Caller<'_, State>) -> Result<Object, Exception> {
 /// ActorValue Function() native global
 /// ```
 fn get_charisma_av(caller: Caller<'_, State>) -> Result<Object, Exception> {
-    todo!()
+    Ok(caller.data().core_objects.charisma.addr())
 }
 
 /// `GetConfidenceAV`
@@ -389,7 +389,7 @@ fn get_charisma_av(caller: Caller<'_, State>) -> Result<Object, Exception> {
 /// ActorValue Function() native global
 /// ```
 fn get_confidence_av(caller: Caller<'_, State>) -> Result<Object, Exception> {
-    todo!()
+    Ok(caller.data().core_objects.confidence.addr())
 }
 
 /// `GetDifficulty`
@@ -407,7 +407,7 @@ fn get_difficulty(caller: Caller<'_, State>) -> Result<i32, Exception> {
 /// ActorValue Function() native global
 /// ```
 fn get_endurance_av(caller: Caller<'_, State>) -> Result<Object, Exception> {
-    todo!()
+    Ok(caller.data().core_objects.endurance.addr())
 }
 
 /// `GetForm`
@@ -474,7 +474,7 @@ fn get_game_setting_string(
 /// ActorValue Function() native global
 /// ```
 fn get_health_av(caller: Caller<'_, State>) -> Result<Object, Exception> {
-    todo!()
+    Ok(caller.data().core_objects.health.addr())
 }
 
 /// `GetIntelligenceAV`
@@ -483,7 +483,7 @@ fn get_health_av(caller: Caller<'_, State>) -> Result<Object, Exception> {
 /// ActorValue Function() native global
 /// ```
 fn get_intelligence_av(caller: Caller<'_, State>) -> Result<Object, Exception> {
-    todo!()
+    Ok(caller.data().core_objects.intelligence.addr())
 }
 
 /// `GetLuckAV`
@@ -492,7 +492,7 @@ fn get_intelligence_av(caller: Caller<'_, State>) -> Result<Object, Exception> {
 /// ActorValue Function() native global
 /// ```
 fn get_luck_av(caller: Caller<'_, State>) -> Result<Object, Exception> {
-    todo!()
+    Ok(caller.data().core_objects.luck.addr())
 }
 
 /// `GetPerceptionAV`
@@ -501,7 +501,7 @@ fn get_luck_av(caller: Caller<'_, State>) -> Result<Object, Exception> {
 /// ActorValue Function() native global
 /// ```
 fn get_perception_av(caller: Caller<'_, State>) -> Result<Object, Exception> {
-    todo!()
+    Ok(caller.data().core_objects.perception.addr())
 }
 
 /// `GetPlayer`
@@ -510,7 +510,7 @@ fn get_perception_av(caller: Caller<'_, State>) -> Result<Object, Exception> {
 /// Actor Function() native global
 /// ```
 fn get_player(caller: Caller<'_, State>) -> Result<Object, Exception> {
-    todo!()
+    Ok(caller.data().core_objects.player.addr())
 }
 
 /// `GetPlayerFollowers`
@@ -564,7 +564,7 @@ fn get_real_hours_passed(caller: Caller<'_, State>) -> Result<f32, Exception> {
 /// ActorValue Function() native global
 /// ```
 fn get_suspicious_av(caller: Caller<'_, State>) -> Result<Object, Exception> {
-    todo!()
+    Ok(caller.data().core_objects.suspicious.addr())
 }
 
 /// `GetStrengthAV`
@@ -573,7 +573,7 @@ fn get_suspicious_av(caller: Caller<'_, State>) -> Result<Object, Exception> {
 /// ActorValue Function() native global
 /// ```
 fn get_strength_av(caller: Caller<'_, State>) -> Result<Object, Exception> {
-    todo!()
+    Ok(caller.data().core_objects.strength.addr())
 }
 
 /// `IncrementSkill`

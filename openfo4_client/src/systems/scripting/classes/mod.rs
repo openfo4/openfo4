@@ -156,8 +156,7 @@ pub fn register_builtins(engine: &mut Engine) {
 }
 
 pub struct State {
-    pub player: ObjectRef,
-    pub actor_values: CoreActorValues,
+    pub core_objects: CoreObjects,
     pub real_timers: TimerSet,
     pub game_timers: TimerSet,
     pub world: *mut World,
@@ -175,8 +174,10 @@ impl State {
     }
 }
 
-#[derive(Debug)]
-pub struct CoreActorValues {
+/// Set of engine-builtin objects that are always loaded.
+#[derive(Clone, Debug)]
+pub struct CoreObjects {
+    pub player: ObjectRef,
     pub health: ObjectRef,
     // SPECIAL
     pub strength: ObjectRef,

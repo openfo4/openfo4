@@ -1,5 +1,6 @@
 mod classes;
 
+use std::borrow::Cow;
 use std::io::Read;
 use std::sync::Arc;
 use std::time::Duration;
@@ -24,8 +25,9 @@ use slab::Slab;
 
 use crate::loader::{FileLoader, fix_path};
 use crate::state::esp::EspLoader;
+use crate::systems::scripting::classes::CoreObjects;
 
-use classes::{CoreActorValues, State};
+use classes::State;
 
 const OPTIONS: Options = Options {
     skip_native: true,
@@ -182,18 +184,13 @@ fn call_func<Params>(
 }
 
 fn core_actor_values(engine: &mut Engine) -> State {
-    // engine.compile("Actor");
-    engine.compile("ActorValue", &OPTIONS);
+    let actor = engine.compile("Actor", &OPTIONS);
+    let actor_value = engine.compile("ActorValue", &OPTIONS);
 
-    let dummy_layout = TypeLayout {
-        header: None,
-        fields: Vec::new(),
-        properties: Vec::new(),
-    };
+    let actor = engine.get_class_layout("Actor").unwrap();
+    let actor_value = engine.get_class_layout("ActorValue").unwrap();
 
-    let actor_value = dummy_layout.clone();
-
-    let player = engine.object_pool().insert(dummy_layout).finalize();
+    let player = engine.object_pool().insert(actor.clone()).finalize();
 
     let [
         health,
@@ -220,8 +217,8 @@ fn core_actor_values(engine: &mut Engine) -> State {
     };
 
     State {
-        player,
-        actor_values: CoreActorValues {
+        core_objects: CoreObjects {
+            player,
             health,
             strength,
             perception,
