@@ -386,7 +386,16 @@ pub trait IntoValue {
 
 impl IntoValue for bool {
     fn as_bytes(&self) -> &[u8] {
-        bytemuck::bytes_of(self)
+        // FIXME: Bool is currently represented as 32-bit, hence
+        // we need this hack.
+        const FALSE: u32 = 0;
+        const TRUE: u32 = 1;
+
+        if *self {
+            bytemuck::bytes_of(&TRUE)
+        } else {
+            bytemuck::bytes_of(&FALSE)
+        }
     }
 }
 
