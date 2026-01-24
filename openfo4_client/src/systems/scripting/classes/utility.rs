@@ -1,3 +1,6 @@
+use std::time::Duration;
+
+use async_io::Timer;
 use openfo4_script::engine::Engine;
 use openfo4_script::runtime::{Caller, Exception};
 
@@ -169,8 +172,16 @@ fn set_ini_string(caller: Caller<'_, State>, ini: isize, value: isize) -> Result
 /// ```text
 /// Function(float afSeconds) native global
 /// ```
-fn wait(caller: Caller<'_, State>, af_seconds: f32) -> Result<(), Exception> {
-    todo!()
+fn wait(mut caller: Caller<'_, State>, seconds: f32) -> Result<(), Exception> {
+    let duration = Duration::from_secs_f32(seconds);
+    if duration.is_zero() {
+        return Ok(());
+    }
+
+    caller.data_mut().continue_when_ready(async move {
+        Timer::after(duration).await;
+    });
+    Err(Exception::Suspend)
 }
 
 /// `WaitGameTime`

@@ -1,11 +1,14 @@
 mod classes;
 
 use std::borrow::Cow;
+use std::f32::consts::E;
 use std::io::Read;
 use std::sync::Arc;
 use std::time::Duration;
 
 use async_lock::Mutex;
+use futures::future::BoxFuture;
+use futures_lite::FutureExt;
 use game_common::collections::arena::{Arena, Key};
 use game_common::string::Lowercase;
 use game_tasks::TaskPool;
@@ -20,7 +23,9 @@ use openfo4_pex::Module;
 use openfo4_script::compiler::{FieldType, ObjectField, ObjectProperty, TypeLayout};
 use openfo4_script::engine::{Engine, Instance, Options};
 use openfo4_script::runtime::object::{IntoValue, ObjectArrayBuilder, ObjectBuilder};
-use openfo4_script::runtime::{Context, Exception, NativeTuple, ObjectAddr, ObjectRef, Stack};
+use openfo4_script::runtime::{
+    Context, Exception, Func, NativeTuple, ObjectAddr, ObjectRef, Stack,
+};
 use slab::Slab;
 
 use crate::loader::{FileLoader, fix_path};
@@ -40,6 +45,7 @@ pub struct Executor {
     loader: Arc<ScriptLoader>,
     invocations: Arena<Invocation>,
     state: Option<State>,
+    suspended_calls: Vec<SuspendedScriptCall>,
 }
 
 impl Executor {
@@ -82,6 +88,7 @@ impl Executor {
             loader,
             invocations: Arena::new(),
             state: Some(state),
+            suspended_calls: Vec::new(),
         }
     }
 
@@ -97,11 +104,13 @@ impl Executor {
     pub fn update(&mut self, world: &mut World, events: &mut EventBus, delta: Duration) {
         let _span = trace_span!("Executor::update").entered();
 
-        let engine = futures_lite::future::block_on(self.loader.engine.lock());
-        let mut instances = futures_lite::future::block_on(self.loader.instances.lock());
-
         let state = self.state.as_mut().unwrap();
         state.world = world;
+
+        self.resume_suspended_tasks();
+
+        let engine = futures_lite::future::block_on(self.loader.engine.lock());
+        let mut instances = futures_lite::future::block_on(self.loader.instances.lock());
 
         for invocation in self.invocations.values() {
             let object = match invocation {
@@ -115,7 +124,15 @@ impl Executor {
 
             let scripts = instances.get_mut(object.0.id.0).unwrap();
 
-            invocation.call(&engine, scripts, &mut self.state);
+            let suspended_calls = invocation.call(&engine, scripts, &mut self.state);
+            for (name, call) in suspended_calls {
+                self.suspended_calls.push(SuspendedScriptCall {
+                    object: object.clone(),
+                    script: name,
+                    call,
+                    invocation: invocation.clone(),
+                });
+            }
         }
 
         let state = self.state.as_mut().unwrap();
@@ -130,6 +147,47 @@ impl Executor {
         //     });
         // }
     }
+
+    fn resume_suspended_tasks(&mut self) {
+        let _span = trace_span!("Executor::resume_suspended_tasks").entered();
+
+        let engine = futures_lite::future::block_on(self.loader.engine.lock());
+        let mut instances = futures_lite::future::block_on(self.loader.instances.lock());
+
+        let mut ctx = std::task::Context::from_waker(std::task::Waker::noop());
+        self.suspended_calls.retain_mut(|call| {
+            if call.call.future.poll(&mut ctx).is_pending() {
+                return true;
+            }
+
+            let scripts = instances.get_mut(call.object.0.id.0).unwrap();
+            let script = scripts.get_mut(&call.script).unwrap();
+
+            if let Some(next_call) = call
+                .invocation
+                .call_single(&engine, script, &mut self.state)
+            {
+                debug_assert_eq!(next_call.name, call.call.name);
+                call.call.future = next_call.future;
+                // Back to suspension...
+                return true;
+            }
+
+            false
+        });
+    }
+}
+
+struct SuspendedScriptCall {
+    object: ScriptObject,
+    script: String,
+    invocation: Invocation,
+    call: SuspendedCall,
+}
+
+struct SuspendedCall {
+    name: &'static str,
+    future: BoxFuture<'static, ()>,
 }
 
 fn call_all_and_await<Params>(
@@ -138,12 +196,17 @@ fn call_all_and_await<Params>(
     state: &mut Option<State>,
     name: &'static str,
     params: impl Fn(&ScriptInstance) -> Params,
-) where
+) -> HashMap<String, SuspendedCall>
+where
     Params: NativeTuple,
 {
-    for script in scripts.values_mut() {
-        call_func(engine, script, state, name, params(&script));
+    let mut calls = HashMap::new();
+    for (script_name, script) in scripts.iter_mut() {
+        if let Some(call) = call_func(engine, script, state, name, params(&script)) {
+            calls.insert(script_name.clone(), call);
+        }
     }
+    calls
 }
 
 fn call_func<Params>(
@@ -152,11 +215,12 @@ fn call_func<Params>(
     state: &mut Option<State>,
     name: &'static str,
     params: Params,
-) where
+) -> Option<SuspendedCall>
+where
     Params: NativeTuple,
 {
     let Some(func) = script.instance.get_func(name) else {
-        return;
+        return None;
     };
 
     let stack = script
@@ -165,7 +229,7 @@ fn call_func<Params>(
         .or_insert_with(|| Stack::new(func.stack_size()));
 
     let Ok(func) = func.typed::<Params, ()>() else {
-        return;
+        return None;
     };
 
     let s = state.take().unwrap();
@@ -173,19 +237,32 @@ fn call_func<Params>(
     tracing::debug!("calling {} on {:?}", name, script.object.addr());
     let res = func.call(&mut ctx, params);
 
-    *state = Some(ctx.into_data());
+    let mut data = ctx.into_data();
+    let mut suspended_call = None;
     match res {
         Ok(()) | Err(Exception::Error) => {
             // Execution is done, reset the stack.
             script.stacks.remove(name);
         }
-        Err(Exception::Suspend) => {}
+        Err(Exception::Suspend) => {
+            debug_assert!(data.waker.is_some(), "suspended script without waker");
+
+            if let Some(waker) = data.waker.take() {
+                suspended_call = Some(SuspendedCall {
+                    future: waker,
+                    name,
+                });
+            }
+        }
     }
+
+    *state = Some(data);
+    suspended_call
 }
 
 fn core_actor_values(engine: &mut Engine) -> State {
-    let actor = engine.compile("Actor", &OPTIONS);
-    let actor_value = engine.compile("ActorValue", &OPTIONS);
+    engine.compile("Actor", &OPTIONS);
+    engine.compile("ActorValue", &OPTIONS);
 
     let actor = engine.get_class_layout("Actor").unwrap();
     let actor_value = engine.get_class_layout("ActorValue").unwrap();
@@ -236,105 +313,17 @@ fn core_actor_values(engine: &mut Engine) -> State {
         world: core::ptr::null_mut(),
         quests: core::ptr::null_mut(),
         objects: Default::default(),
+        waker: None,
     }
-}
-
-async fn test_build_script(engine: &mut Engine, esp_loader: &EspLoader, mut state: State) {
-    // let quest = match esp_loader
-    //     .lookup(Some(RecordKind::Quest), FormId(0x1c53cb))
-    //     .await
-    //     .unwrap()
-    //     .data
-    // {
-    //     RecordData::Quest(q) => q,
-    //     _ => todo!(),
-    // };
-
-    // let vmad = quest.virtual_machine_adapter.as_ref().unwrap();
-
-    // for script in &vmad.scripts {
-    //     let name = &script.name;
-
-    //     let instance = engine.compile(&script.name);
-
-    //     let layout = engine.get_class_layout(&script.name).unwrap();
-
-    //     dbg!(&layout);
-
-    //     for property in &script.properties {
-    //         let var = layout
-    //             .properties
-    //             .iter()
-    //             .find(|p| {
-    //                 p.class.to_lowercase() == script.name.to_lowercase()
-    //                     && p.name.to_lowercase() == property.name.to_lowercase()
-    //             })
-    //             .unwrap();
-
-    //         let var = &layout.fields[var.var];
-
-    //         let (object, object_ref) = pool.insert(layout.clone());
-
-    //         match &property.value {
-    //             Value::Bool(value) => {
-    //                 object.set(&script.name, &var.name, (*value).into());
-    //             }
-    //             Value::Int(value) => {
-    //                 object.set(&script.name, &var.name, (*value).into());
-    //             }
-    //             Value::Float(value) => {
-    //                 object.set(&script.name, &var.name, value.to_bits().into());
-    //             }
-    //             Value::Object(value) => {}
-    //             _ => todo!(),
-    //         }
-    //     }
-
-    //     let f = instance.get_func("OnPlayerSleepStop").unwrap();
-
-    //     let mut stack = Stack::new(f.stack_size());
-    //     let mut ctx = Context::new(&engine, stack, state);
-
-    //     let typed = f.typed::<(isize, isize), ()>().unwrap();
-
-    //     typed.call(&mut ctx, (0, 0)).unwrap();
-
-    //     state = ctx.into_data();
-    // }
-
-    // let mut instances = HashMap::new();
-
-    // instantiate_form(
-    //     engine,
-    //     &mut instances,
-    //     esp_loader,
-    //     // FormId(0x1c53cb),
-    //     // FormId(0x80e),
-    //     FormId(0x89c),
-    // )
-    // .await;
-
-    // let instance = instances.get(&FormId(0x89c)).unwrap();
-    // dbg!(&instance);
-    // let instance = instance
-    //     .get(&"DefaultQuestShutdownScript".to_lowercase())
-    //     .unwrap();
-
-    // let func = instance.instance.get_func("OnTimerGameTime").unwrap();
-    // let typed = func.typed::<(ObjectAddr, i32), ()>().unwrap();
-
-    // let stack = Stack::new(func.stack_size());
-    // let mut ctx = Context::new(engine, stack, ());
-    // typed.call(&mut ctx, (instance.object.addr(), 0)).unwrap();
-
-    // dbg!(instances);
-
-    todo!();
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 struct ScriptObjectId(usize);
 
+/// The script object associated with an instanced record.
+///
+/// Note that a single `ScriptObject` may represent more than one script if more than one script
+/// was attached to a record.
 #[derive(Clone, Debug)]
 pub struct ScriptObject(Arc<ScriptObjectInner>);
 
@@ -748,22 +737,44 @@ impl Invocation {
         engine: &Engine,
         scripts: &mut HashMap<String, ScriptInstance>,
         state: &mut Option<State>,
-    ) {
+    ) -> HashMap<String, SuspendedCall> {
         match self {
             Self::QuestInit { quest: _ } => {
                 call_all_and_await(engine, scripts, state, "OnQuestInit", |script| {
                     script.object.addr()
-                });
+                })
             }
             Self::QuestSetStage {
                 quest: _,
                 stage,
                 item,
-            } => {
-                call_all_and_await(engine, scripts, state, "OnStageSet", |script| {
-                    (script.object.addr(), *stage as i32, *item as i32)
-                });
+            } => call_all_and_await(engine, scripts, state, "OnStageSet", |script| {
+                (script.object.addr(), *stage as i32, *item as i32)
+            }),
+        }
+    }
+
+    fn call_single(
+        &self,
+        engine: &Engine,
+        script: &mut ScriptInstance,
+        state: &mut Option<State>,
+    ) -> Option<SuspendedCall> {
+        match self {
+            Self::QuestInit { quest: _ } => {
+                call_func(engine, script, state, "OnQuestInit", script.object.addr())
             }
+            Self::QuestSetStage {
+                quest: _,
+                stage,
+                item,
+            } => call_func(
+                engine,
+                script,
+                state,
+                "OnStageSet",
+                (script.object.addr(), *stage as i32, *item as i32),
+            ),
         }
     }
 }

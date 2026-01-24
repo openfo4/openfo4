@@ -35,6 +35,7 @@ mod weapon;
 use std::collections::{BTreeMap, HashMap};
 use std::time::{Duration, Instant};
 
+use futures::future::BoxFuture;
 use hecs::World;
 use openfo4_script::engine::Engine;
 use openfo4_script::runtime::{ObjectAddr, ObjectRef};
@@ -162,6 +163,7 @@ pub struct State {
     pub world: *mut World,
     pub quests: *mut QuestManager,
     pub objects: Objects,
+    pub waker: Option<BoxFuture<'static, ()>>,
 }
 
 impl State {
@@ -171,6 +173,17 @@ impl State {
 
     fn quests(&mut self) -> &mut QuestManager {
         unsafe { &mut *self.quests }
+    }
+
+    /// Reschedule the current script when the future resolves.
+    ///
+    /// Only one future can exist for a script at a time. If this function is called multiple times
+    /// only the most recently set future is kept.
+    pub fn continue_when_ready<F>(&mut self, future: F)
+    where
+        F: Future<Output = ()> + Send + 'static,
+    {
+        self.waker = Some(Box::pin(future));
     }
 }
 

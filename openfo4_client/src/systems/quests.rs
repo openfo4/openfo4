@@ -8,7 +8,7 @@ use openfo4_esp::{FormId, RecordData, RecordKind};
 
 use crate::state::esp::EspLoader;
 use crate::state::hardcoded::HARDCODED_MODULE_ID;
-use crate::systems::scripting::{Executor, Invocation};
+use crate::systems::scripting::{Executor, Invocation, ScriptObject};
 
 #[derive(Clone, Debug)]
 pub struct QuestManager {
@@ -28,6 +28,8 @@ impl QuestManager {
         let RecordData::Quest(data) = &quest.local.data else {
             todo!();
         };
+
+        let script = futures_lite::future::block_on(executor.loader().load(quest.id));
 
         let mut stages = IndexMap::new();
         for stage in &*data.stages {
@@ -49,6 +51,7 @@ impl QuestManager {
                 stages,
                 active_stage: None,
                 next_stage: None,
+                script,
             },
         );
 
@@ -57,18 +60,19 @@ impl QuestManager {
 
     pub fn update(&mut self, world: &mut World, events: &mut EventBus, executor: &mut Executor) {
         for (id, quest) in &mut self.quests {
+            let Some(script) = &quest.script else {
+                continue;
+            };
+
             if !quest.is_init {
-                // executor.invoke(Invocation::QuestInit { quest: *id });
-                // executor.invoke(Invocation::QuestSetStage {
-                //     quest: *id,
-                //     stage: 0,
-                //     item: 0,
-                // });
-                // executor.invoke(Invocation::QuestSetStage {
-                //     quest: (),
-                //     stage: (),
-                //     item: (),
-                // });
+                executor.invoke(Invocation::QuestInit {
+                    quest: script.clone(),
+                });
+                executor.invoke(Invocation::QuestSetStage {
+                    quest: script.clone(),
+                    stage: 0,
+                    item: 0,
+                });
             }
         }
     }
@@ -115,6 +119,7 @@ pub struct Quest {
     pub stages: IndexMap<StageId, QuestStage>,
     pub active_stage: Option<StageId>,
     pub next_stage: Option<StageId>,
+    pub script: Option<ScriptObject>,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
