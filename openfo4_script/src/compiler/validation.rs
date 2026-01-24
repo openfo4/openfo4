@@ -1,5 +1,6 @@
 use std::collections::{HashMap, HashSet};
 
+use game_tracing::trace_span;
 use indexmap::IndexSet;
 use openfo4_pex::{Class, Function, Instruction, Module, Property, Value};
 use thiserror::Error;
@@ -899,6 +900,8 @@ impl ValidationPass {
     }
 
     pub fn validate(&mut self) -> Result<(), Error> {
+        let _span = trace_span!("ValidationPass::validate").entered();
+
         while let Some(class_name) = self.unvalidated_classes.pop() {
             let class = self.classes.get(&class_name).unwrap();
             self.validate_class(&class)?;

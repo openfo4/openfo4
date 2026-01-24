@@ -276,6 +276,13 @@ impl<'a, T> Caller<'a, T> {
         }
     }
 
+    pub unsafe fn string(&self, addr: ObjectAddr) -> &str {
+        unsafe {
+            let data = self.array::<u8>(addr);
+            std::str::from_utf8_unchecked(data)
+        }
+    }
+
     pub unsafe fn copy_array_of_structs<U>(&self, addr: ObjectAddr) -> Vec<U> {
         let addrs = unsafe { self.array::<ObjectAddr>(addr) };
 

@@ -19,7 +19,7 @@ use crate::compiler::codegen::{
     ClassDef, CodegenData, Error, FunctionDef, Type, get_parent_class_with_property,
 };
 use crate::compiler::{NativeFunction, TypeLayout};
-use crate::runtime::object::{ARRAY_LAYOUT, VAR_LAYOUT, VarObject};
+use crate::runtime::object::{ARRAY_LAYOUT, BYTE_LAYOUT, VAR_LAYOUT, VarObject};
 use crate::runtime::{ArrayObject, ObjectTag, RESULT_ERROR, RESULT_OK};
 
 #[derive(Debug)]
@@ -1454,7 +1454,57 @@ fn translate_function_body(
                     current_block = final_block;
                 }
             }
-            Instruction::StringConcat(op) => {}
+            Instruction::StringConcat(op) => {
+                let array_lhs = translator.load(&op.lhs);
+                let array_rhs = translator.load(&op.rhs);
+
+                let lhs_ptr = translator.builder.load(
+                    JitType::Pointer,
+                    array_lhs,
+                    offset_of!(ArrayObject, ptr) as u32,
+                );
+                let rhs_ptr = translator.builder.load(
+                    JitType::Pointer,
+                    array_rhs,
+                    offset_of!(ArrayObject, ptr) as u32,
+                );
+
+                let lhs_len = translator.builder.load(
+                    JitType::Pointer,
+                    array_lhs,
+                    offset_of!(ArrayObject, len) as u32,
+                );
+                let rhs_len = translator.builder.load(
+                    JitType::Pointer,
+                    array_rhs,
+                    offset_of!(ArrayObject, len) as u32,
+                );
+                let new_len = translator.builder.iadd(lhs_len, rhs_len);
+
+                // Allocate new string byte buffer and copy over bytes.
+                let new_ptr = call_malloc(&mut translator, ctx_ptr, BYTE_LAYOUT.clone(), new_len);
+                translator.builder.memcpy(lhs_ptr, new_ptr, lhs_len);
+                let rhs_dst_ptr = translator.builder.iadd(new_ptr, lhs_len);
+                translator.builder.memcpy(rhs_ptr, rhs_dst_ptr, rhs_len);
+
+                // Allocate new string object.
+                let one = translator.builder.iconst(JitType::Pointer, 1);
+                let new_string_ptr =
+                    call_malloc(&mut translator, ctx_ptr, ARRAY_LAYOUT.clone(), one);
+
+                translator.builder.store(
+                    new_ptr,
+                    new_string_ptr,
+                    offset_of!(ArrayObject, ptr) as u32,
+                );
+                translator.builder.store(
+                    new_len,
+                    new_string_ptr,
+                    offset_of!(ArrayObject, len) as u32,
+                );
+
+                translator.store(&op.dst, new_string_ptr);
+            }
             op => todo!("{:?}", op),
         }
     }

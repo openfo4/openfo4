@@ -11,6 +11,7 @@ use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 use game_common::string::Lowercase;
+use game_tracing::trace_span;
 use openfo4_jit::{Compiler, FuncId, Signature, Type as JitType};
 use openfo4_pex::{Class, Function, Instruction, Module, Struct, Value};
 use slab::Slab;
@@ -350,6 +351,8 @@ impl CodegenPass {
         f: &str,
         options: &Options,
     ) -> Result<CompilationResult, Error> {
+        let _span = trace_span!("CodegenPass::compile_function").entered();
+
         let class = Lowercase::new(class);
         let f = Lowercase::new(f);
 
