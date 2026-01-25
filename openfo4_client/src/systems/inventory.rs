@@ -20,7 +20,8 @@ use crate::state::esp::EspLoader;
 use crate::state::hardcoded::KEYWORD_FEMALE;
 use crate::state::npc::ActorKeywords;
 use crate::systems::equipment::{EquipmentKey, unequip_item};
-use crate::systems::scripting::{Executor, ScriptObject};
+use crate::systems::scripting::Executor;
+use crate::systems::scripting::loader::ScriptObject;
 use crate::systems::{PickupItemEvent, TransferItemEvent};
 
 /// Unique identifier for an item inside a container.

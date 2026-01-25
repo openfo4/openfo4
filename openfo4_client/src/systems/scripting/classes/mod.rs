@@ -211,7 +211,7 @@ pub struct ObjectData {
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
-pub struct TimerId(Int);
+pub struct TimerId(pub Int);
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Timer {

@@ -1,7 +1,9 @@
+use std::time::Duration;
+
 use openfo4_script::engine::Engine;
 use openfo4_script::runtime::{Caller, Exception};
 
-use crate::systems::scripting::classes::{Object, State};
+use crate::systems::scripting::classes::{Object, State, TimerId};
 
 #[rustfmt::skip]
 pub fn register(engine: &mut Engine) {
@@ -110,11 +112,13 @@ fn call_function_no_wait(
 /// Function(int aiTimerID) native
 /// ```
 fn cancel_timer(
-    caller: Caller<'_, State>,
+    mut caller: Caller<'_, State>,
     self_ptr: Object,
-    ai_timer_id: i32,
+    timer_id: i32,
 ) -> Result<(), Exception> {
-    todo!()
+    let timer_id = TimerId(timer_id);
+    caller.data_mut().real_timers.remove(self_ptr, timer_id);
+    Ok(())
 }
 
 /// `CancelTimerGameTime`
@@ -123,11 +127,13 @@ fn cancel_timer(
 /// Function(int aiTimerID) native
 /// ```
 fn cancel_timer_game_time(
-    caller: Caller<'_, State>,
+    mut caller: Caller<'_, State>,
     self_ptr: Object,
-    ai_timer_id: i32,
+    timer_id: i32,
 ) -> Result<(), Exception> {
-    todo!()
+    let timer_id = TimerId(timer_id);
+    caller.data_mut().game_timers.remove(self_ptr, timer_id);
+    Ok(())
 }
 
 /// `GetPropertyValue`
@@ -505,12 +511,19 @@ fn set_property_value_no_wait(
 /// Function(float afInterval, int aiTimerID) native
 /// ```
 fn start_timer(
-    caller: Caller<'_, State>,
+    mut caller: Caller<'_, State>,
     self_ptr: Object,
-    af_interval: f32,
-    ai_timer_id: i32,
+    interval: f32,
+    timer_id: i32,
 ) -> Result<(), Exception> {
-    todo!()
+    let duration = Duration::from_secs_f32(interval);
+    let timer_id = TimerId(timer_id);
+
+    caller
+        .data_mut()
+        .game_timers
+        .insert(self_ptr, timer_id, duration);
+    Ok(())
 }
 
 /// `StartTimerGameTime`
@@ -519,12 +532,20 @@ fn start_timer(
 /// Function(float afInterval, int aiTimerID) native
 /// ```
 fn start_timer_game_time(
-    caller: Caller<'_, State>,
+    mut caller: Caller<'_, State>,
     self_ptr: Object,
-    af_interval: f32,
-    ai_timer_id: i32,
+    interval: f32,
+    timer_id: i32,
 ) -> Result<(), Exception> {
-    todo!()
+    // interval is in game-hours.
+    let duration = Duration::from_secs_f32(interval * 3600.0);
+    let timer_id = TimerId(timer_id);
+
+    caller
+        .data_mut()
+        .game_timers
+        .insert(self_ptr, timer_id, duration);
+    Ok(())
 }
 
 /// `UnregisterForAllEvents`

@@ -10,6 +10,7 @@ use std::sync::Arc;
 
 use game_common::cell::UnsafeRefCell;
 use openfo4_jit::{Signature, Type};
+use parking_lot::WaitTimeoutResult;
 use thiserror::Error;
 
 pub use object::{ArrayObject, Object, ObjectAddr, ObjectPool, ObjectRef, ObjectTag, StringObject};
@@ -83,6 +84,45 @@ pub union RawVal {
     pub ptr: *mut u8,
 }
 
+#[derive(Copy, Clone)]
+pub enum Val {
+    I8(i8),
+    I16(i16),
+    I32(i32),
+    I64(i64),
+    Isize(isize),
+    F32(f32),
+    F64(f64),
+    Ptr(*mut u8),
+}
+
+impl Val {
+    fn ty(&self) -> Type {
+        match self {
+            Self::I8(_) => Type::I8,
+            Self::I16(_) => Type::I16,
+            Self::I32(_) => Type::I32,
+            Self::I64(_) => Type::I64,
+            Self::F32(_) => Type::F32,
+            Self::F64(_) => Type::F64,
+            Self::Isize(_) | Self::Ptr(_) => Type::Pointer,
+        }
+    }
+
+    fn into_raw(self) -> RawVal {
+        match self {
+            Self::I8(v) => RawVal { i8: v },
+            Self::I16(v) => RawVal { i16: v },
+            Self::I32(v) => RawVal { i32: v },
+            Self::I64(v) => RawVal { i64: v },
+            Self::F32(v) => RawVal { f32: v },
+            Self::F64(v) => RawVal { f64: v },
+            Self::Isize(v) => RawVal { isize: v },
+            Self::Ptr(v) => RawVal { ptr: v },
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct Func {
     pub(crate) ptr: NativeFnPtr,
@@ -116,6 +156,73 @@ impl Func {
     /// Returns the minimum stack size required to call this function.
     pub fn stack_size(&self) -> usize {
         self.stack_size
+    }
+
+    pub fn call<T>(&self, ctx: &mut Context<'_, T>, params: &[Val]) -> Result<Vec<Val>, Exception>
+    where
+        T: 'static,
+    {
+        assert_eq!(self.signature.params.len() - 1, params.len());
+        for (lhs, rhs) in self.signature.params[1..].iter().zip(params) {
+            assert_eq!(*lhs, rhs.ty());
+        }
+
+        let mut values = vec![
+            MaybeUninit::<RawVal>::uninit();
+            1 + self.signature.params.len() + self.signature.returns.len()
+        ];
+
+        for (index, param) in params.iter().enumerate() {
+            values[index].write(param.into_raw());
+        }
+
+        // SAFETY:
+        // - We have validated that the given parameters are the same as the parameters
+        //   of the function signature.
+        // - We have filled the first N values with initialized values according to the
+        //   function signature.
+        unsafe {
+            self.call_unchecked(ctx, values.as_mut_ptr().cast::<RawVal>());
+        }
+
+        let result = unsafe {
+            &*values
+                .as_ptr()
+                .add(params.len() + self.signature.returns.len() - 1)
+                .cast::<RawVal>()
+        };
+
+        let result = unsafe { <i32 as NativeType>::from_raw(result) };
+
+        if result != RESULT_OK {
+            // SAFETY: The result parameter is only created as RESULT_OK from inside
+            // compiled functions. All other values are only produced by host functions
+            // that return a Exception, so we are doing a type roundtrip.
+            let exception = unsafe { transmute::<i32, Exception>(result) };
+            return Err(exception);
+        }
+
+        let mut returns = Vec::with_capacity(self.signature.returns.len() - 1);
+        for (index, ty) in self.signature.returns[..self.signature.returns.len() - 1]
+            .iter()
+            .enumerate()
+        {
+            let raw = unsafe { values[self.signature.params.len() + index].assume_init_ref() };
+
+            unsafe {
+                returns.push(match ty {
+                    Type::I8 => Val::I8(<u8 as NativeType>::from_raw(raw) as i8),
+                    Type::I16 => Val::I16(<u16 as NativeType>::from_raw(raw) as i16),
+                    Type::I32 => Val::I32(<i32 as NativeType>::from_raw(raw)),
+                    Type::I64 => todo!(),
+                    Type::F32 => Val::F32(<f32 as NativeType>::from_raw(raw)),
+                    Type::F64 => todo!(),
+                    Type::Pointer => Val::Ptr(<isize as NativeType>::from_raw(raw) as *mut u8),
+                });
+            }
+        }
+
+        Ok(returns)
     }
 
     pub unsafe fn call_unchecked<T>(&self, ctx: &mut Context<'_, T>, values: *mut RawVal)

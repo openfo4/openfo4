@@ -8,7 +8,9 @@ use openfo4_esp::{FormId, RecordData, RecordKind};
 
 use crate::state::esp::EspLoader;
 use crate::state::hardcoded::HARDCODED_MODULE_ID;
-use crate::systems::scripting::{Executor, Invocation, ScriptObject};
+use crate::systems::scripting::Executor;
+use crate::systems::scripting::invocations::{QuestInit, QuestSetStage};
+use crate::systems::scripting::loader::ScriptObject;
 
 #[derive(Clone, Debug)]
 pub struct QuestManager {
@@ -65,10 +67,10 @@ impl QuestManager {
             };
 
             if !quest.is_init {
-                executor.invoke(Invocation::QuestInit {
+                executor.invoke(QuestInit {
                     quest: script.clone(),
                 });
-                executor.invoke(Invocation::QuestSetStage {
+                executor.invoke(QuestSetStage {
                     quest: script.clone(),
                     stage: 0,
                     item: 0,
