@@ -1,10 +1,11 @@
+use std::num::NonZeroU32;
 use std::time::Duration;
 
 use openfo4_script::engine::Engine;
 use openfo4_script::runtime::{Caller, Exception};
 
 use crate::systems::scripting::classes::{Object, State, TimerId};
-use crate::systems::scripting::registration::{Event, EventSender};
+use crate::systems::scripting::registration::{Event, EventKind, EventSender};
 
 #[rustfmt::skip]
 pub fn register(engine: &mut Engine) {
@@ -181,12 +182,27 @@ fn is_bound_game_object_available(
 /// bool Function(ObjectReference akSender, string asEventName) native
 /// ```
 fn register_for_animation_event(
-    caller: Caller<'_, State>,
+    mut caller: Caller<'_, State>,
     self_ptr: Object,
-    ak_sender: Object,
-    as_event_name: isize,
+    sender: Object,
+    event_name: Object,
 ) -> Result<bool, Exception> {
-    todo!()
+    if sender.is_null() {
+        return Ok(false);
+    }
+
+    let event_name = unsafe { caller.string(event_name).to_owned() };
+
+    caller.data_mut().registration.register(
+        self_ptr,
+        Event {
+            kind: EventKind::Animation { event_name },
+            sender: EventSender::Object(sender),
+            limit: None,
+        },
+    );
+
+    Ok(true)
 }
 
 /// `RegisterForCustomEvent`
@@ -195,12 +211,27 @@ fn register_for_animation_event(
 /// Function(ScriptObject akSender, CustomEventName asEventName) native
 /// ```
 fn register_for_custom_event(
-    caller: Caller<'_, State>,
+    mut caller: Caller<'_, State>,
     self_ptr: Object,
-    ak_sender: Object,
-    as_event_name: Object,
+    sender: Object,
+    event_name: Object,
 ) -> Result<(), Exception> {
-    todo!()
+    if sender.is_null() {
+        return Ok(());
+    }
+
+    let event_name = unsafe { caller.string(event_name).to_owned() };
+
+    caller.data_mut().registration.register(
+        self_ptr,
+        Event {
+            kind: EventKind::Custom(event_name),
+            sender: EventSender::Object(sender),
+            limit: None,
+        },
+    );
+
+    Ok(())
 }
 
 /// `RegisterForDetectionLOSGain`
@@ -209,12 +240,26 @@ fn register_for_custom_event(
 /// Function(Actor akViewer, ObjectReference akTarget) native
 /// ```
 fn register_for_detection_los_gain(
-    caller: Caller<'_, State>,
+    mut caller: Caller<'_, State>,
     self_ptr: Object,
-    ak_viewer: Object,
-    ak_target: Object,
+    viewer: Object,
+    target: Object,
 ) -> Result<(), Exception> {
-    todo!()
+    if viewer.is_null() || target.is_null() {
+        return Ok(());
+    }
+
+    caller.data_mut().registration.register(
+        self_ptr,
+        Event {
+            kind: EventKind::DetectionLosGain { viewer, target },
+            sender: EventSender::Any,
+            // Only receive event once.
+            limit: Some(NonZeroU32::MIN),
+        },
+    );
+
+    Ok(())
 }
 
 /// `RegisterForDetectionLOSLost`
@@ -223,12 +268,26 @@ fn register_for_detection_los_gain(
 /// Function(Actor akViewer, ObjectReference akTarget) native
 /// ```
 fn register_for_detection_los_lost(
-    caller: Caller<'_, State>,
+    mut caller: Caller<'_, State>,
     self_ptr: Object,
-    ak_viewer: Object,
-    ak_target: Object,
+    viewer: Object,
+    target: Object,
 ) -> Result<(), Exception> {
-    todo!()
+    if viewer.is_null() || target.is_null() {
+        return Ok(());
+    }
+
+    caller.data_mut().registration.register(
+        self_ptr,
+        Event {
+            kind: EventKind::DetectionLosLost { viewer, target },
+            sender: EventSender::Any,
+            // Only receive event once.
+            limit: Some(NonZeroU32::MIN),
+        },
+    );
+
+    Ok(())
 }
 
 /// `RegisterForDirectLOSGain`
@@ -237,14 +296,36 @@ fn register_for_detection_los_lost(
 /// Function(ObjectReference akViewer, ObjectReference akTarget, string asViewerNode, string asTargetNode) native
 /// ```
 fn register_for_direct_los_gain(
-    caller: Caller<'_, State>,
+    mut caller: Caller<'_, State>,
     self_ptr: Object,
-    ak_viewer: Object,
-    ak_target: Object,
-    as_viewer_node: isize,
-    as_target_node: isize,
+    viewer: Object,
+    target: Object,
+    viewer_node: Object,
+    target_node: Object,
 ) -> Result<(), Exception> {
-    todo!()
+    if viewer.is_null() || target.is_null() {
+        return Ok(());
+    }
+
+    let viewer_node = unsafe { caller.string(viewer_node).to_owned() };
+    let target_node = unsafe { caller.string(target_node).to_owned() };
+
+    caller.data_mut().registration.register(
+        self_ptr,
+        Event {
+            kind: EventKind::DirectLosGain {
+                viewer,
+                target,
+                viewer_node,
+                target_node,
+            },
+            sender: EventSender::Any,
+            // Only receive event once.
+            limit: Some(NonZeroU32::MIN),
+        },
+    );
+
+    Ok(())
 }
 
 /// `RegisterForDirectLOSLost`
@@ -253,14 +334,36 @@ fn register_for_direct_los_gain(
 /// Function(ObjectReference akViewer, ObjectReference akTarget, string asViewerNode, string asTargetNode) native
 /// ```
 fn register_for_direct_los_lost(
-    caller: Caller<'_, State>,
+    mut caller: Caller<'_, State>,
     self_ptr: Object,
-    ak_viewer: Object,
-    ak_target: Object,
-    as_viewer_node: isize,
-    as_target_node: isize,
+    viewer: Object,
+    target: Object,
+    viewer_node: Object,
+    target_node: Object,
 ) -> Result<(), Exception> {
-    todo!()
+    if viewer.is_null() || target.is_null() {
+        return Ok(());
+    }
+
+    let viewer_node = unsafe { caller.string(viewer_node).to_owned() };
+    let target_node = unsafe { caller.string(target_node).to_owned() };
+
+    caller.data_mut().registration.register(
+        self_ptr,
+        Event {
+            kind: EventKind::DirectLosLost {
+                viewer,
+                target,
+                viewer_node,
+                target_node,
+            },
+            sender: EventSender::Any,
+            // Only receive event once.
+            limit: Some(NonZeroU32::MIN),
+        },
+    );
+
+    Ok(())
 }
 
 /// `RegisterForDistanceLessThanEvent`
@@ -269,13 +372,31 @@ fn register_for_direct_los_lost(
 /// Function(ScriptObject akObj1, ScriptObject akObj2, float afDistance) native
 /// ```
 fn register_for_distance_less_than_event(
-    caller: Caller<'_, State>,
+    mut caller: Caller<'_, State>,
     self_ptr: Object,
-    ak_obj1: Object,
-    ak_obj2: Object,
-    af_distance: f32,
+    object1: Object,
+    object2: Object,
+    distance: f32,
 ) -> Result<(), Exception> {
-    todo!()
+    if object1.is_null() || object2.is_null() || !distance.is_finite() {
+        return Ok(());
+    }
+
+    caller.data_mut().registration.register(
+        self_ptr,
+        Event {
+            kind: EventKind::DistanceLessThan {
+                object1,
+                object2,
+                distance,
+            },
+            sender: EventSender::Any,
+            // Only receive event once.
+            limit: Some(NonZeroU32::MIN),
+        },
+    );
+
+    Ok(())
 }
 
 /// `RegisterForDistanceGreaterThanEvent`
@@ -284,13 +405,31 @@ fn register_for_distance_less_than_event(
 /// Function(ScriptObject akObj1, ScriptObject akObj2, float afDistance) native
 /// ```
 fn register_for_distance_greater_than_event(
-    caller: Caller<'_, State>,
+    mut caller: Caller<'_, State>,
     self_ptr: Object,
-    ak_obj1: Object,
-    ak_obj2: Object,
-    af_distance: f32,
+    object1: Object,
+    object2: Object,
+    distance: f32,
 ) -> Result<(), Exception> {
-    todo!()
+    if object1.is_null() || object2.is_null() || !distance.is_finite() {
+        return Ok(());
+    }
+
+    caller.data_mut().registration.register(
+        self_ptr,
+        Event {
+            kind: EventKind::DistanceGreaterThan {
+                object1,
+                object2,
+                distance,
+            },
+            sender: EventSender::Any,
+            // Only receive event once.
+            limit: Some(NonZeroU32::MIN),
+        },
+    );
+
+    Ok(())
 }
 
 /// `RegisterForHitEvent`
@@ -299,7 +438,7 @@ fn register_for_distance_greater_than_event(
 /// Function RegisterForHitEvent(ScriptObject akTarget, ScriptObject akAggressorFilter, Form akSourceFilter, Form akProjectileFilter, int aiPowerFilter, int aiSneakFilter, int aiBashFilter, int aiBlockFilter, bool abMatch) native
 /// ```
 fn register_for_hit_event(
-    caller: Caller<'_, State>,
+    mut caller: Caller<'_, State>,
     self_ptr: Object,
     target: Object,
     agressor_filter: Object,
@@ -308,10 +447,37 @@ fn register_for_hit_event(
     power_filter: i32,
     sneak_filter: i32,
     bash_filter: i32,
-    bock_filter: i32,
-    ab_match: bool,
+    block_filter: i32,
+    must_match: bool,
 ) -> Result<(), Exception> {
-    todo!()
+    if target.is_null() {
+        return Ok(());
+    }
+
+    let aggressor_filter = (!agressor_filter.is_null()).then_some(agressor_filter);
+    let source_filter = (!source_filter.is_null()).then_some(source_filter);
+    let projectile_filter = (!projectile_filter.is_null()).then_some(projectile_filter);
+
+    caller.data_mut().registration.register(
+        self_ptr,
+        Event {
+            kind: EventKind::Hit {
+                aggressor_filter,
+                source_filter,
+                projectile_filter,
+                power_filter,
+                sneak_filter,
+                bash_filter,
+                block_filter,
+                filters_must_match: must_match,
+            },
+            sender: EventSender::Object(target),
+            // Only receive event once.
+            limit: Some(NonZeroU32::MIN),
+        },
+    );
+
+    Ok(())
 }
 
 /// `RegisterForMagicEffectApplyEvent`
@@ -320,14 +486,35 @@ fn register_for_hit_event(
 /// Function(ScriptObject akTarget, ScriptObject akCasterFilter, Form akEffectFilter, bool abMatch) native
 /// ```
 fn register_for_magic_effect_apply_event(
-    caller: Caller<'_, State>,
+    mut caller: Caller<'_, State>,
     self_ptr: Object,
-    ak_target: Object,
-    ak_caster_filter: Object,
-    ak_effect_filter: Object,
-    ab_match: bool,
+    target: Object,
+    caster_filter: Object,
+    effect_filter: Object,
+    must_match: bool,
 ) -> Result<(), Exception> {
-    todo!()
+    if target.is_null() {
+        return Ok(());
+    }
+
+    let caster_filter = (!caster_filter.is_null()).then_some(caster_filter);
+    let effect_filter = (!effect_filter.is_null()).then_some(effect_filter);
+
+    caller.data_mut().registration.register(
+        self_ptr,
+        Event {
+            kind: EventKind::MagicEffectApply {
+                caster_filter,
+                effect_filter,
+                filters_must_match: must_match,
+            },
+            sender: EventSender::Object(target),
+            // Only receive event once.
+            limit: Some(NonZeroU32::MIN),
+        },
+    );
+
+    Ok(())
 }
 
 /// `RegisterForMenuOpenCloseEvent`
@@ -336,11 +523,22 @@ fn register_for_magic_effect_apply_event(
 /// Function(string asMenuName) native
 /// ```
 fn register_for_menu_open_close_event(
-    caller: Caller<'_, State>,
+    mut caller: Caller<'_, State>,
     self_ptr: Object,
-    as_menu_name: isize,
+    menu_name: Object,
 ) -> Result<(), Exception> {
-    todo!()
+    let menu_name = unsafe { caller.string(menu_name).to_owned() };
+
+    caller.data_mut().registration.register(
+        self_ptr,
+        Event {
+            kind: EventKind::MenuOpenClose(menu_name),
+            sender: EventSender::Any,
+            limit: None,
+        },
+    );
+
+    Ok(())
 }
 
 /// `RegisterForPlayerSleep`
@@ -348,8 +546,20 @@ fn register_for_menu_open_close_event(
 /// ```text
 /// Function() native
 /// ```
-fn register_for_player_sleep(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Exception> {
-    todo!()
+fn register_for_player_sleep(
+    mut caller: Caller<'_, State>,
+    self_ptr: Object,
+) -> Result<(), Exception> {
+    caller.data_mut().registration.register(
+        self_ptr,
+        Event {
+            kind: EventKind::PlayerSleep,
+            sender: EventSender::Any,
+            limit: None,
+        },
+    );
+
+    Ok(())
 }
 
 /// `RegisterForPlayerTeleport`
@@ -358,10 +568,19 @@ fn register_for_player_sleep(caller: Caller<'_, State>, self_ptr: Object) -> Res
 /// Function() native
 /// ```
 fn register_for_player_teleport(
-    caller: Caller<'_, State>,
+    mut caller: Caller<'_, State>,
     self_ptr: Object,
 ) -> Result<(), Exception> {
-    todo!()
+    caller.data_mut().registration.register(
+        self_ptr,
+        Event {
+            kind: EventKind::PlayerTeleport,
+            sender: EventSender::Any,
+            limit: None,
+        },
+    );
+
+    Ok(())
 }
 
 /// `RegisterForPlayerWait`
@@ -369,8 +588,20 @@ fn register_for_player_teleport(
 /// ```text
 /// Function() native
 /// ```
-fn register_for_player_wait(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Exception> {
-    todo!()
+fn register_for_player_wait(
+    mut caller: Caller<'_, State>,
+    self_ptr: Object,
+) -> Result<(), Exception> {
+    caller.data_mut().registration.register(
+        self_ptr,
+        Event {
+            kind: EventKind::PlayerWait,
+            sender: EventSender::Any,
+            limit: None,
+        },
+    );
+
+    Ok(())
 }
 
 /// `RegisterForRadiationDamageEvent`
@@ -379,11 +610,25 @@ fn register_for_player_wait(caller: Caller<'_, State>, self_ptr: Object) -> Resu
 /// Function(ScriptObject akTarget) native
 /// ```
 fn register_for_radiation_damage_event(
-    caller: Caller<'_, State>,
+    mut caller: Caller<'_, State>,
     self_ptr: Object,
-    ak_target: Object,
+    target: Object,
 ) -> Result<(), Exception> {
-    todo!()
+    if target.is_null() {
+        return Ok(());
+    }
+
+    caller.data_mut().registration.register(
+        self_ptr,
+        Event {
+            kind: EventKind::RadiationDamage,
+            sender: EventSender::Object(target),
+            // Only receive event once.
+            limit: Some(NonZeroU32::MIN),
+        },
+    );
+
+    Ok(())
 }
 
 /// `RegisterForRemoteEvent`
@@ -412,6 +657,7 @@ fn register_for_remote_event(
         Event {
             sender: EventSender::Object(event_source),
             kind,
+            limit: None,
         },
     );
 
@@ -424,12 +670,24 @@ fn register_for_remote_event(
 /// Function(string asStat, int aiThreshold) native
 /// ```
 fn register_for_tracked_stats_event(
-    caller: Caller<'_, State>,
+    mut caller: Caller<'_, State>,
     self_ptr: Object,
-    as_stat: isize,
-    ai_threshold: i32,
+    stat: Object,
+    threshold: i32,
 ) -> Result<(), Exception> {
-    todo!()
+    let stat = unsafe { caller.string(stat).to_owned() };
+
+    caller.data_mut().registration.register(
+        self_ptr,
+        Event {
+            kind: EventKind::TrackedStats { stat, threshold },
+            sender: EventSender::Any,
+            // Only receive event once.
+            limit: Some(NonZeroU32::MIN),
+        },
+    );
+
+    Ok(())
 }
 
 /// `RegisterForLooksMenuEvent`
@@ -438,10 +696,19 @@ fn register_for_tracked_stats_event(
 /// Function() native
 /// ```
 fn register_for_looks_menu_event(
-    caller: Caller<'_, State>,
+    mut caller: Caller<'_, State>,
     self_ptr: Object,
 ) -> Result<(), Exception> {
-    todo!()
+    caller.data_mut().registration.register(
+        self_ptr,
+        Event {
+            kind: EventKind::LooksMenu,
+            sender: EventSender::Any,
+            limit: None,
+        },
+    );
+
+    Ok(())
 }
 
 /// `RegisterForTutorialEvent`
@@ -450,11 +717,23 @@ fn register_for_looks_menu_event(
 /// Function(String asEventName) native
 /// ```
 fn register_for_tutorial_event(
-    caller: Caller<'_, State>,
+    mut caller: Caller<'_, State>,
     self_ptr: Object,
-    as_event_name: isize,
+    event_name: Object,
 ) -> Result<(), Exception> {
-    todo!()
+    let name = unsafe { caller.string(event_name).to_owned() };
+
+    caller.data_mut().registration.register(
+        self_ptr,
+        Event {
+            kind: EventKind::TutorialEvent { name },
+            sender: EventSender::Any,
+            // Event is only received once.
+            limit: Some(NonZeroU32::MIN),
+        },
+    );
+
+    Ok(())
 }
 
 /// `RemoveAllInventoryEventFilters`
@@ -572,8 +851,12 @@ fn start_timer_game_time(
 /// ```text
 /// Function() native
 /// ```
-fn unregister_for_all_events(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Exception> {
-    todo!()
+fn unregister_for_all_events(
+    mut caller: Caller<'_, State>,
+    self_ptr: Object,
+) -> Result<(), Exception> {
+    caller.data_mut().registration.unregister_all(self_ptr);
+    Ok(())
 }
 
 /// `UnregisterForAllCustomEvents`
@@ -582,10 +865,14 @@ fn unregister_for_all_events(caller: Caller<'_, State>, self_ptr: Object) -> Res
 /// Function() native
 /// ```
 fn unregister_for_all_custom_events(
-    caller: Caller<'_, State>,
+    mut caller: Caller<'_, State>,
     self_ptr: Object,
 ) -> Result<(), Exception> {
-    todo!()
+    caller
+        .data_mut()
+        .registration
+        .unregister_matching(self_ptr, |event| matches!(event.kind, EventKind::Custom(_)));
+    Ok(())
 }
 
 /// `UnregisterForAllHitEvents`
@@ -594,11 +881,40 @@ fn unregister_for_all_custom_events(
 /// Function(ScriptObject akTarget) native
 /// ```
 fn unregister_for_all_hit_events(
-    caller: Caller<'_, State>,
+    mut caller: Caller<'_, State>,
     self_ptr: Object,
-    ak_target: Object,
+    target: Object,
 ) -> Result<(), Exception> {
-    todo!()
+    let all_targets = target.is_null();
+
+    caller
+        .data_mut()
+        .registration
+        .unregister_matching(self_ptr, |event| {
+            if !matches!(
+                event.kind,
+                EventKind::Hit {
+                    aggressor_filter: _,
+                    source_filter: _,
+                    projectile_filter: _,
+                    power_filter: _,
+                    sneak_filter: _,
+                    bash_filter: _,
+                    block_filter: _,
+                    filters_must_match: _
+                }
+            ) {
+                return false;
+            }
+
+            if all_targets {
+                true
+            } else {
+                event.sender == EventSender::Object(target)
+            }
+        });
+
+    Ok(())
 }
 
 /// `UnregisterForAllMagicEffectApplyEvents`
@@ -607,11 +923,35 @@ fn unregister_for_all_hit_events(
 /// Function(ScriptObject akTarget) native
 /// ```
 fn unregister_for_all_magic_effect_apply_events(
-    caller: Caller<'_, State>,
+    mut caller: Caller<'_, State>,
     self_ptr: Object,
-    ak_target: Object,
+    target: Object,
 ) -> Result<(), Exception> {
-    todo!()
+    let all_targets = target.is_null();
+
+    caller
+        .data_mut()
+        .registration
+        .unregister_matching(self_ptr, |event| {
+            if !matches!(
+                event.kind,
+                EventKind::MagicEffectApply {
+                    caster_filter: _,
+                    effect_filter: _,
+                    filters_must_match: _
+                }
+            ) {
+                return false;
+            }
+
+            if all_targets {
+                true
+            } else {
+                event.sender == EventSender::Object(target)
+            }
+        });
+
+    Ok(())
 }
 
 /// `UnregisterForAllMenuOpenCloseEvents`
@@ -620,10 +960,16 @@ fn unregister_for_all_magic_effect_apply_events(
 /// Function() native
 /// ```
 fn unregister_for_all_menu_open_close_events(
-    caller: Caller<'_, State>,
+    mut caller: Caller<'_, State>,
     self_ptr: Object,
 ) -> Result<(), Exception> {
-    todo!()
+    caller
+        .data_mut()
+        .registration
+        .unregister_matching(self_ptr, |event| {
+            matches!(event.kind, EventKind::MenuOpenClose(_))
+        });
+    Ok(())
 }
 
 /// `UnregisterForAllRadiationDamageEvents`
@@ -632,10 +978,17 @@ fn unregister_for_all_menu_open_close_events(
 /// Function() native
 /// ```
 fn unregister_for_all_radiation_damage_events(
-    caller: Caller<'_, State>,
+    mut caller: Caller<'_, State>,
     self_ptr: Object,
 ) -> Result<(), Exception> {
-    todo!()
+    caller
+        .data_mut()
+        .registration
+        .unregister_matching(self_ptr, |event| {
+            matches!(event.kind, EventKind::RadiationDamage)
+        });
+
+    Ok(())
 }
 
 /// `UnregisterForAllRemoteEvents`
@@ -644,10 +997,17 @@ fn unregister_for_all_radiation_damage_events(
 /// Function() native
 /// ```
 fn unregister_for_all_remote_events(
-    caller: Caller<'_, State>,
+    mut caller: Caller<'_, State>,
     self_ptr: Object,
 ) -> Result<(), Exception> {
-    todo!()
+    caller
+        .data_mut()
+        .registration
+        .unregister_matching(self_ptr, |event| match event.sender {
+            EventSender::Any => false,
+            EventSender::Object(object) => object != self_ptr,
+        });
+    Ok(())
 }
 
 /// `UnregisterForAllTrackedStatsEvents`
@@ -656,10 +1016,22 @@ fn unregister_for_all_remote_events(
 /// Function() native
 /// ```
 fn unregister_for_all_tracked_stats_events(
-    caller: Caller<'_, State>,
+    mut caller: Caller<'_, State>,
     self_ptr: Object,
 ) -> Result<(), Exception> {
-    todo!()
+    caller
+        .data_mut()
+        .registration
+        .unregister_matching(self_ptr, |event| {
+            matches!(
+                event.kind,
+                EventKind::TrackedStats {
+                    stat: _,
+                    threshold: _
+                }
+            )
+        });
+    Ok(())
 }
 
 /// `UnregisterForAnimationEvent`
@@ -668,12 +1040,27 @@ fn unregister_for_all_tracked_stats_events(
 /// Function(ObjectReference akSender, string asEventName) native
 /// ```
 fn unregister_for_animation_event(
-    caller: Caller<'_, State>,
+    mut caller: Caller<'_, State>,
     self_ptr: Object,
-    ak_sender: Object,
-    as_event_name: isize,
+    sender: Object,
+    event_name: Object,
 ) -> Result<(), Exception> {
-    todo!()
+    if sender.is_null() {
+        return Ok(());
+    }
+
+    let event_name = unsafe { caller.string(event_name).to_owned() };
+
+    caller.data_mut().registration.unregister(
+        self_ptr,
+        Event {
+            kind: EventKind::Animation { event_name },
+            sender: EventSender::Object(sender),
+            limit: None,
+        },
+    );
+
+    Ok(())
 }
 
 /// `UnregisterForCustomEvent`
@@ -682,12 +1069,27 @@ fn unregister_for_animation_event(
 /// Function(ScriptObject akSender, CustomEventName asEventName) native
 /// ```
 fn unregister_for_custom_event(
-    caller: Caller<'_, State>,
+    mut caller: Caller<'_, State>,
     self_ptr: Object,
-    ak_sender: Object,
-    as_event_name: Object,
+    sender: Object,
+    event_name: Object,
 ) -> Result<(), Exception> {
-    todo!()
+    if sender.is_null() {
+        return Ok(());
+    }
+
+    let event_name = unsafe { caller.string(event_name).to_owned() };
+
+    caller.data_mut().registration.unregister(
+        self_ptr,
+        Event {
+            kind: EventKind::Custom(event_name),
+            sender: EventSender::Object(sender),
+            limit: None,
+        },
+    );
+
+    Ok(())
 }
 
 /// `UnregisterForDistanceEvents`
@@ -696,12 +1098,34 @@ fn unregister_for_custom_event(
 /// Function(ScriptObject akObj1, ScriptObject akObj2) native
 /// ```
 fn unregister_for_distance_events(
-    caller: Caller<'_, State>,
+    mut caller: Caller<'_, State>,
     self_ptr: Object,
-    ak_obj1: Object,
-    ak_obj2: Object,
+    object1: Object,
+    object2: Object,
 ) -> Result<(), Exception> {
-    todo!()
+    if object1.is_null() || object2.is_null() {
+        return Ok(());
+    }
+
+    caller
+        .data_mut()
+        .registration
+        .unregister_matching(self_ptr, |event| {
+            matches!(
+                event.kind,
+                EventKind::DistanceLessThan {
+                    object1: _,
+                    object2: _,
+                    distance: _
+                } | EventKind::DistanceGreaterThan {
+                    object1: _,
+                    object2: _,
+                    distance: _
+                }
+            )
+        });
+
+    Ok(())
 }
 
 /// `UnregisterForLOS`
@@ -710,12 +1134,40 @@ fn unregister_for_distance_events(
 /// Function(ObjectReference akViewer, ObjectReference akTarget) native
 /// ```
 fn unregister_for_los(
-    caller: Caller<'_, State>,
+    mut caller: Caller<'_, State>,
     self_ptr: Object,
-    ak_viewer: Object,
-    ak_target: Object,
+    viewer: Object,
+    target: Object,
 ) -> Result<(), Exception> {
-    todo!()
+    if viewer.is_null() || target.is_null() {
+        return Ok(());
+    }
+
+    let viewer2 = viewer;
+    let target2 = target;
+
+    caller
+        .data_mut()
+        .registration
+        .unregister_matching(self_ptr, |event| match event.kind {
+            EventKind::DetectionLosGain { viewer, target }
+            | EventKind::DetectionLosLost { viewer, target }
+            | EventKind::DirectLosGain {
+                viewer,
+                target,
+                viewer_node: _,
+                target_node: _,
+            }
+            | EventKind::DirectLosLost {
+                viewer,
+                target,
+                viewer_node: _,
+                target_node: _,
+            } => viewer == viewer2 && target == target2,
+            _ => false,
+        });
+
+    Ok(())
 }
 
 /// `UnregisterForMagicEffectApplyEvent`
@@ -724,14 +1176,38 @@ fn unregister_for_los(
 /// Function(ScriptObject akTarget, ScriptObject akCasterFilter, Form akEffectFilter, bool abMatch) native
 /// ```
 fn unregister_for_magic_effect_apply_event(
-    caller: Caller<'_, State>,
+    mut caller: Caller<'_, State>,
     self_ptr: Object,
-    ak_target: Object,
-    ak_caster_filter: Object,
-    ak_effect_filter: Object,
-    ab_match: bool,
+    target: Object,
+    caster_filter: Object,
+    effect_filter: Object,
+    must_match: bool,
 ) -> Result<(), Exception> {
-    todo!()
+    if target.is_null() {
+        return Ok(());
+    }
+
+    let caster_filter2 = (!caster_filter.is_null()).then_some(caster_filter);
+    let effect_filter2 = (!effect_filter.is_null()).then_some(effect_filter);
+
+    caller
+        .data_mut()
+        .registration
+        .unregister_matching(self_ptr, |event| match event.kind {
+            EventKind::MagicEffectApply {
+                caster_filter,
+                effect_filter,
+                filters_must_match,
+            } => {
+                caster_filter == caster_filter2
+                    && effect_filter == effect_filter2
+                    && filters_must_match == must_match
+                    && event.sender == EventSender::Object(target)
+            }
+            _ => false,
+        });
+
+    Ok(())
 }
 
 /// `UnregisterForMenuOpenCloseEvent`
@@ -740,11 +1216,22 @@ fn unregister_for_magic_effect_apply_event(
 /// Function(string asMenuName) native
 /// ```
 fn unregister_for_menu_open_close_event(
-    caller: Caller<'_, State>,
+    mut caller: Caller<'_, State>,
     self_ptr: Object,
-    as_menu_name: isize,
+    menu_name: Object,
 ) -> Result<(), Exception> {
-    todo!()
+    let menu_name = unsafe { caller.string(menu_name).to_owned() };
+
+    caller.data_mut().registration.register(
+        self_ptr,
+        Event {
+            kind: EventKind::MenuOpenClose(menu_name),
+            sender: EventSender::Any,
+            limit: None,
+        },
+    );
+
+    Ok(())
 }
 
 /// `UnregisterForPlayerSleep`
@@ -753,10 +1240,19 @@ fn unregister_for_menu_open_close_event(
 /// Function() native
 /// ```
 fn unregister_for_player_sleep(
-    caller: Caller<'_, State>,
+    mut caller: Caller<'_, State>,
     self_ptr: Object,
 ) -> Result<(), Exception> {
-    todo!()
+    caller.data_mut().registration.unregister(
+        self_ptr,
+        Event {
+            kind: EventKind::PlayerSleep,
+            sender: EventSender::Any,
+            limit: None,
+        },
+    );
+
+    Ok(())
 }
 
 /// `UnregisterForPlayerTeleport`
@@ -765,10 +1261,19 @@ fn unregister_for_player_sleep(
 /// Function() native
 /// ```
 fn unregister_for_player_teleport(
-    caller: Caller<'_, State>,
+    mut caller: Caller<'_, State>,
     self_ptr: Object,
 ) -> Result<(), Exception> {
-    todo!()
+    caller.data_mut().registration.unregister(
+        self_ptr,
+        Event {
+            kind: EventKind::PlayerTeleport,
+            sender: EventSender::Any,
+            limit: None,
+        },
+    );
+
+    Ok(())
 }
 
 /// `UnregisterForPlayerWait`
@@ -777,10 +1282,19 @@ fn unregister_for_player_teleport(
 /// Function() native
 /// ```
 fn unregister_for_player_wait(
-    caller: Caller<'_, State>,
+    mut caller: Caller<'_, State>,
     self_ptr: Object,
 ) -> Result<(), Exception> {
-    todo!()
+    caller.data_mut().registration.unregister(
+        self_ptr,
+        Event {
+            kind: EventKind::PlayerWait,
+            sender: EventSender::Any,
+            limit: None,
+        },
+    );
+
+    Ok(())
 }
 
 /// `UnregisterForRadiationDamageEvent`
@@ -789,11 +1303,24 @@ fn unregister_for_player_wait(
 /// Function(ScriptObject akTarget) native
 /// ```
 fn unregister_for_radiation_damage_event(
-    caller: Caller<'_, State>,
+    mut caller: Caller<'_, State>,
     self_ptr: Object,
-    ak_target: Object,
+    target: Object,
 ) -> Result<(), Exception> {
-    todo!()
+    if target.is_null() {
+        return Ok(());
+    }
+
+    caller.data_mut().registration.unregister(
+        self_ptr,
+        Event {
+            kind: EventKind::RadiationDamage,
+            sender: EventSender::Object(target),
+            limit: None,
+        },
+    );
+
+    Ok(())
 }
 
 /// `UnregisterForRemoteEvent`
@@ -822,6 +1349,7 @@ fn unregister_for_remote_event(
         Event {
             sender: EventSender::Object(event_source),
             kind,
+            limit: None,
         },
     );
 
@@ -834,11 +1362,21 @@ fn unregister_for_remote_event(
 /// Function(string asStat) native
 /// ```
 fn unregister_for_tracked_stats_event(
-    caller: Caller<'_, State>,
+    mut caller: Caller<'_, State>,
     self_ptr: Object,
-    as_stat: isize,
+    stat: Object,
 ) -> Result<(), Exception> {
-    todo!()
+    let name = unsafe { caller.string(stat).to_owned() };
+
+    caller
+        .data_mut()
+        .registration
+        .unregister_matching(self_ptr, |event| match &event.kind {
+            EventKind::TrackedStats { stat, threshold: _ } => *stat == name,
+            _ => false,
+        });
+
+    Ok(())
 }
 
 /// `UnregisterForLooksMenuEvent`
@@ -847,10 +1385,18 @@ fn unregister_for_tracked_stats_event(
 /// Function() native
 /// ```
 fn unregister_for_looks_menu_event(
-    caller: Caller<'_, State>,
+    mut caller: Caller<'_, State>,
     self_ptr: Object,
 ) -> Result<(), Exception> {
-    todo!()
+    caller.data_mut().registration.unregister(
+        self_ptr,
+        Event {
+            kind: EventKind::LooksMenu,
+            sender: EventSender::Any,
+            limit: None,
+        },
+    );
+    Ok(())
 }
 
 /// `UnregisterForTutorialEvent`
@@ -859,9 +1405,20 @@ fn unregister_for_looks_menu_event(
 /// Function(String asEventName) native
 /// ```
 fn unregister_for_tutorial_event(
-    caller: Caller<'_, State>,
+    mut caller: Caller<'_, State>,
     self_ptr: Object,
-    as_event_name: isize,
+    event_name: Object,
 ) -> Result<(), Exception> {
-    todo!()
+    let name = unsafe { caller.string(event_name).to_owned() };
+
+    caller.data_mut().registration.register(
+        self_ptr,
+        Event {
+            kind: EventKind::TutorialEvent { name },
+            sender: EventSender::Any,
+            limit: None,
+        },
+    );
+
+    Ok(())
 }
