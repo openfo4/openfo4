@@ -11,6 +11,7 @@ pub mod npc;
 pub mod terrain;
 
 mod data;
+mod globals;
 
 use std::f32::consts::PI;
 use std::path::PathBuf;
@@ -63,6 +64,7 @@ use crate::systems::animation_sync::{bounce_animation_events, update_animation_p
 use crate::systems::camera::CameraMode;
 use crate::systems::controller::apply_player_movements;
 use crate::systems::door::{handle_automatic_doors, handle_door_activations};
+use crate::systems::global::{Difficulty, GlobalProperties};
 use crate::systems::inventory::InventorySystem;
 use crate::systems::quests::QuestManager;
 use crate::systems::scripting::Executor;
@@ -100,6 +102,7 @@ pub struct GameState {
     inventory: InventorySystem,
     executor: Executor,
     quests: QuestManager,
+    globals: GlobalProperties,
 }
 
 impl GameState {
@@ -193,6 +196,9 @@ impl GameState {
 
         let quests = QuestManager::new(&loader, &mut executor);
 
+        let global_variables =
+            futures_lite::future::block_on(globals::load_global_variables(&loader));
+
         Self {
             weather: WeatherSystem::new(loader.clone(), pool.clone(), &asset_loader, &shared),
             inventory: InventorySystem::new(pool.clone(), asset_loader.clone(), loader.clone()),
@@ -214,6 +220,10 @@ impl GameState {
             object_ref_set: ObjectReferenceSet::default(),
             executor,
             quests,
+            globals: GlobalProperties {
+                variables: global_variables,
+                difficulty: Difficulty::Survival,
+            },
         }
     }
 
@@ -289,6 +299,7 @@ impl GameState {
         self.executor.update(
             &mut self.world,
             &mut self.event_bus,
+            &mut self.globals,
             Duration::from_secs(1) / UPS,
         );
 

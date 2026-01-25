@@ -25,6 +25,7 @@ use openfo4_script::runtime::{Context, Exception, ObjectAddr, ObjectRef, Stack, 
 
 use crate::loader::{FileLoader, fix_path};
 use crate::state::esp::EspLoader;
+use crate::systems::global::GlobalProperties;
 use crate::systems::scripting::classes::CoreObjects;
 use crate::systems::scripting::invocations::{EventInvocation, Value};
 use crate::systems::scripting::loader::{ScriptLoader, ScriptObject};
@@ -104,11 +105,18 @@ impl Executor {
         InvocationId(id)
     }
 
-    pub fn update(&mut self, world: &mut World, events: &mut EventBus, delta: Duration) {
+    pub fn update(
+        &mut self,
+        world: &mut World,
+        events: &mut EventBus,
+        globals: &mut GlobalProperties,
+        delta: Duration,
+    ) {
         let _span = trace_span!("Executor::update").entered();
 
         let state = self.state.as_mut().unwrap();
         state.world = world;
+        state.globals = globals;
 
         self.resume_suspended_tasks();
 
@@ -291,16 +299,8 @@ fn core_actor_values(engine: &mut Engine) -> State {
         quests: core::ptr::null_mut(),
         objects: Default::default(),
         waker: None,
+        globals: core::ptr::null_mut(),
     }
-}
-
-enum NativeObject {
-    Spell,
-}
-
-#[derive(Clone, Debug)]
-struct ObjectInstance {
-    scripts: HashMap<String, ScriptInstance>,
 }
 
 #[derive(Clone, Debug)]
@@ -309,10 +309,6 @@ struct ScriptInstance {
     layout: TypeLayout,
     object: ObjectRef,
     stacks: HashMap<String, Stack>,
-}
-
-pub enum Event {
-    PlayerSleepStop { interrupted: bool, bed: RecordId },
 }
 
 #[derive(Clone, Debug, Default)]

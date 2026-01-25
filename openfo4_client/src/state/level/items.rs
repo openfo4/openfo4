@@ -6,7 +6,7 @@ use crate::state::equipment::load_equipment_item;
 use crate::state::esp::EspLoader;
 use crate::state::level::leveled_list::select_from_leveled_list;
 use crate::systems::inventory::{ItemData, ItemKind, ItemStack};
-use crate::systems::scripting::{ScriptLoader, ScriptObject};
+use crate::systems::scripting::loader::{ScriptLoader, ScriptObject};
 
 // FIXME: Unhardcode this guy.
 const PLAYER_LEVEL: u16 = 1000;
@@ -249,5 +249,5 @@ pub async fn resolve_item(
 
 async fn load_item_script(record: RecordId, loader: &ScriptLoader) -> Option<ScriptObject> {
     let base_object = loader.load(record).await?;
-    Some(loader.clone_object(&base_object))
+    Some(loader.clone_object(&base_object).await)
 }

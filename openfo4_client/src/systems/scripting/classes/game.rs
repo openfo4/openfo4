@@ -1,6 +1,7 @@
 use openfo4_script::engine::Engine;
 use openfo4_script::runtime::{Caller, Exception};
 
+use crate::systems::global::Difficulty;
 use crate::systems::scripting::classes::{Object, State};
 
 #[rustfmt::skip]
@@ -398,7 +399,7 @@ fn get_confidence_av(caller: Caller<'_, State>) -> Result<Object, Exception> {
 /// int Function() native global
 /// ```
 fn get_difficulty(caller: Caller<'_, State>) -> Result<i32, Exception> {
-    todo!()
+    Ok(caller.data().globals().difficulty.to_i32())
 }
 
 /// `GetEnduranceAV`

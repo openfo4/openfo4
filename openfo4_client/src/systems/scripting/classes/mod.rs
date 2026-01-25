@@ -42,6 +42,7 @@ use openfo4_script::runtime::{ObjectAddr, ObjectRef};
 use parking_lot::Mutex;
 use slab::Slab;
 
+use crate::systems::global::GlobalProperties;
 use crate::systems::quests::QuestManager;
 use crate::systems::scripting::Objects;
 
@@ -162,6 +163,7 @@ pub struct State {
     pub game_timers: TimerSet,
     pub world: *mut World,
     pub quests: *mut QuestManager,
+    pub globals: *mut GlobalProperties,
     pub objects: Objects,
     pub waker: Option<BoxFuture<'static, ()>>,
 }
@@ -173,6 +175,10 @@ impl State {
 
     fn quests(&mut self) -> &mut QuestManager {
         unsafe { &mut *self.quests }
+    }
+
+    fn globals(&self) -> &GlobalProperties {
+        unsafe { &*self.globals }
     }
 
     /// Reschedule the current script when the future resolves.

@@ -9,7 +9,7 @@ use openfo4_esp::{FormId, RecordData, RecordKind};
 use crate::state::esp::EspLoader;
 use crate::state::hardcoded::HARDCODED_MODULE_ID;
 use crate::systems::scripting::Executor;
-use crate::systems::scripting::invocations::{QuestInit, QuestSetStage};
+use crate::systems::scripting::invocations::{Init, QuestInit, QuestSetStage};
 use crate::systems::scripting::loader::ScriptObject;
 
 #[derive(Clone, Debug)]
@@ -24,7 +24,7 @@ impl QuestManager {
 
         let quest = quests
             .iter()
-            .find(|v| v.id == RecordId::new(HARDCODED_MODULE_ID, FormId(0x89c)))
+            .find(|v| v.id == RecordId::new(HARDCODED_MODULE_ID, FormId(0x80e)))
             .unwrap();
 
         let RecordData::Quest(data) = &quest.local.data else {
@@ -67,6 +67,10 @@ impl QuestManager {
             };
 
             if !quest.is_init {
+                executor.invoke(Init {
+                    object: script.clone(),
+                });
+
                 executor.invoke(QuestInit {
                     quest: script.clone(),
                 });

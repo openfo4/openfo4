@@ -2,6 +2,7 @@
 
 use std::num::NonZeroU32;
 
+use game_common::components::actor;
 use hashbrown::HashMap;
 use openfo4_core::record::{ModuleId, RecordId};
 use openfo4_esp::records::ActorValueInfo;
@@ -23,9 +24,7 @@ pub const ACTOR_VALUE_HEALTH: FormId = FormId(0x2d4);
 
 pub const PATH_SKY_ATMOSPHERE: &str = "meshes/sky/atmosphere.nif";
 
-pub const ACTOR_VALUE_WORKSHOP_PLAYER_OWNED: FormId = FormId(0x33c);
 pub const ACTOR_VALUE_FATIGUE: FormId = FormId(0x34f);
-pub const ACTOR_VALUE_BED: FormId = FormId(0x334);
 pub const ACTOR_VALUE_POWER_ARMOR_HEAD_CONDITION: FormId = FormId(0x2ef);
 pub const ACTOR_VALUE_POWER_ARMOR_TORSO_CONDITION: FormId = FormId(0x2f0);
 pub const ACTOR_VALUE_POWER_ARMOR_LEFT_ARM_CONDITION: FormId = FormId(0x2f1);
@@ -33,6 +32,30 @@ pub const ACTOR_VALUE_POWER_ARMOR_RIGHT_ARM_CONDITION: FormId = FormId(0x35d);
 pub const ACTOR_VALUE_POWER_ARMOR_LEFT_LEG_CONDITION: FormId = FormId(0x35e);
 pub const ACTOR_VALUE_POWER_ARMOR_RIGHT_LEG_CONDITION: FormId = FormId(0x388);
 pub const ACTOR_VALUE_POWER_ARMOR_BATTERY: FormId = FormId(0x35c);
+
+pub const ACTOR_VALUE_PARALYSIS: FormId = FormId(0x2f2);
+
+pub const ACTOR_VALUE_WAITING_FOR_PLAYER: FormId = FormId(0x31c);
+
+pub const ACTOR_VALUE_WORKSHOP_ID: FormId = FormId(0x2d1);
+pub const ACTOR_VALUE_WORKSHOP_ACTOR_WOUNDED: FormId = FormId(0x33b);
+pub const ACTOR_VALUE_WORKSHOP_PLAYER_OWNED: FormId = FormId(0x33c);
+
+pub const ACTOR_VALUE_WORKSHOP_CURRENT_DRAWS: FormId = FormId(0x34a);
+pub const ACTOR_VALUE_WORKSHOP_MAX_DRAWS: FormId = FormId(0x34b);
+pub const ACTOR_VALUE_WORKSHOP_MAX_TRIANGLES: FormId = FormId(0x349);
+pub const ACTOR_VALUE_WORKSHOP_CURRENT_TRIANGLES: FormId = FormId(0x348);
+
+// Workshop resources?
+pub const ACTOR_VALUE_FOOD: FormId = FormId(0x331);
+pub const ACTOR_VALUE_WATER: FormId = FormId(0x332);
+pub const ACTOR_VALUE_BED: FormId = FormId(0x334);
+pub const ACTOR_VALUE_HAPPINESS: FormId = FormId(0x335);
+pub const ACTOR_VALUE_ARTILLERY: FormId = FormId(0x336);
+
+pub const ACTOR_VALUE_POWER_GENERATED: FormId = FormId(0x32e);
+pub const ACTOR_VALUE_POWER_RADIATION: FormId = FormId(0x32f);
+pub const ACTOR_VALUE_POWER_REQUIRED: FormId = FormId(0x330);
 
 pub fn load_hardcoded_forms() -> HashMap<FormId, Record> {
     fn actor_value(id: FormId, name: &str) -> (FormId, Record) {
@@ -77,6 +100,25 @@ pub fn load_hardcoded_forms() -> HashMap<FormId, Record> {
             "PowerArmorRightArmCondition",
         ),
         actor_value(ACTOR_VALUE_POWER_ARMOR_BATTERY, "PowerArmorBattery"),
+        actor_value(ACTOR_VALUE_PARALYSIS, "Paralysis"),
+        actor_value(ACTOR_VALUE_WAITING_FOR_PLAYER, "WaitingForPlayer"),
+        actor_value(ACTOR_VALUE_WORKSHOP_CURRENT_DRAWS, "WorkshopCurrentDraws"),
+        actor_value(ACTOR_VALUE_WORKSHOP_MAX_TRIANGLES, "WorkshopMaxTriangles"),
+        actor_value(ACTOR_VALUE_POWER_GENERATED, "PowerGenerated"),
+        actor_value(ACTOR_VALUE_FOOD, "Food"),
+        actor_value(ACTOR_VALUE_WATER, "Water"),
+        actor_value(ACTOR_VALUE_BED, "Bed"),
+        actor_value(ACTOR_VALUE_HAPPINESS, "Happiness"),
+        actor_value(ACTOR_VALUE_ARTILLERY, "Artillery"),
+        actor_value(ACTOR_VALUE_WORKSHOP_ACTOR_WOUNDED, "WorkshopActorWounded"),
+        actor_value(ACTOR_VALUE_WORKSHOP_ID, "WorkshopID"),
+        actor_value(
+            ACTOR_VALUE_WORKSHOP_CURRENT_TRIANGLES,
+            "WorkshopCurrentTriangles",
+        ),
+        actor_value(ACTOR_VALUE_POWER_RADIATION, "PowerRadiation"),
+        actor_value(ACTOR_VALUE_POWER_REQUIRED, "PowerRequired"),
+        actor_value(ACTOR_VALUE_WORKSHOP_MAX_DRAWS, "WorkshopMaxDraws"),
     ]
     .into_iter()
     .collect()

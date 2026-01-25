@@ -33,7 +33,8 @@ use crate::shared::SharedState;
 use crate::state::level::partial::PartialEntityFlags;
 use crate::state::level::record::SpawnEntity;
 use crate::state::terrain::TerrainManager;
-use crate::systems::scripting::{Executor, ScriptLoader};
+use crate::systems::scripting::Executor;
+use crate::systems::scripting::loader::ScriptLoader;
 
 use super::esp::EspLoader;
 
@@ -70,30 +71,30 @@ impl Level {
         let events = Arc::new(SegQueue::new());
         let state = Arc::new(LoaderState::default());
 
-        pool.spawn({
-            let asset_loader = asset_loader.clone();
-            let loader = loader.clone();
-            let pool = pool.clone();
-            let events = events.clone();
-            let shared = shared.clone();
-            let file_loader = file_loader.clone();
-            let state = state.clone();
-            let script_loader = executor.loader().clone();
+        // pool.spawn({
+        //     let asset_loader = asset_loader.clone();
+        //     let loader = loader.clone();
+        //     let pool = pool.clone();
+        //     let events = events.clone();
+        //     let shared = shared.clone();
+        //     let file_loader = file_loader.clone();
+        //     let state = state.clone();
+        //     let script_loader = executor.loader().clone();
 
-            async move {
-                load_persistent(
-                    &asset_loader,
-                    &loader,
-                    &events,
-                    &pool,
-                    &file_loader,
-                    &shared,
-                    &state,
-                    &script_loader,
-                )
-                .await;
-            }
-        });
+        //     async move {
+        //         load_persistent(
+        //             &asset_loader,
+        //             &loader,
+        //             &events,
+        //             &pool,
+        //             &file_loader,
+        //             &shared,
+        //             &state,
+        //             &script_loader,
+        //         )
+        //         .await;
+        //     }
+        // });
 
         pool.spawn({
             let events = events.clone();

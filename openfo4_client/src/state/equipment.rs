@@ -20,7 +20,7 @@ use crate::state::esp::{EspLoader, GlobalRecord};
 use crate::state::hardcoded::DAMAGE_TYPE_PHYSICAL;
 use crate::systems::equipment::{Equipment, EquipmentKey, equip_item};
 use crate::systems::inventory::{AimProps, ItemData, ItemKind, WeaponItemData};
-use crate::systems::scripting::{ScriptLoader, ScriptObject};
+use crate::systems::scripting::loader::{ScriptLoader, ScriptObject};
 
 #[derive(Clone, Debug)]
 pub struct EquipmentItem {
@@ -653,5 +653,5 @@ fn extract_biped_object_flags(slots: BipedObjectFlags, dst: &mut HashSet<u32>) {
 
 async fn load_item_script(record: RecordId, loader: &ScriptLoader) -> Option<ScriptObject> {
     let base_object = loader.load(record).await?;
-    Some(loader.clone_object(&base_object))
+    Some(loader.clone_object(&base_object).await)
 }

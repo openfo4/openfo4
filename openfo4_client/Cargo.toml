@@ -44,6 +44,8 @@ async-lock = "3.4.0"
 hashbrown = "0.15.4"
 slab = "0.4.10"
 indexmap = "2.12.1"
+futures = "0.3.31"
+async-io = "2.6.0"
 
 # DDS support for image crate
 # See https://github.com/image-rs/image/pull/225

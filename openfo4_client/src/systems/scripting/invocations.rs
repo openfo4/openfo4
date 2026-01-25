@@ -83,3 +83,18 @@ impl From<TimerGameTime> for EventInvocation {
         }
     }
 }
+
+#[derive(Clone, Debug)]
+pub struct Init {
+    pub object: ScriptObject,
+}
+
+impl From<Init> for EventInvocation {
+    fn from(value: Init) -> Self {
+        Self {
+            receiver: value.object,
+            name: Cow::Borrowed("OnInit"),
+            args: Vec::new(),
+        }
+    }
+}

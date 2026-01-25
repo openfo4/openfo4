@@ -14,6 +14,7 @@ pub mod camera;
 pub mod controller;
 pub mod door;
 pub mod equipment;
+pub mod global;
 pub mod hierarchy;
 pub mod inventory;
 pub mod lights;
