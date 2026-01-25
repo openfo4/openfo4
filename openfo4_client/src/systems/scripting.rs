@@ -4,6 +4,7 @@ pub mod loader;
 mod classes;
 mod registration;
 
+use std::collections::VecDeque;
 use std::io::Read;
 use std::sync::Arc;
 use std::time::Duration;
@@ -27,7 +28,7 @@ use openfo4_script::runtime::{Context, Exception, ObjectAddr, ObjectRef, Stack, 
 use crate::loader::{FileLoader, fix_path};
 use crate::state::esp::EspLoader;
 use crate::systems::global::GlobalProperties;
-use crate::systems::scripting::classes::{CoreObjects, Object};
+use crate::systems::scripting::classes::CoreObjects;
 use crate::systems::scripting::invocations::{EventInvocation, Value};
 use crate::systems::scripting::loader::{ScriptLoader, ScriptObject};
 use crate::systems::scripting::registration::RegistrationSet;
@@ -43,9 +44,10 @@ const COMPILER_OPTIONS: Options = Options {
 
 pub struct Executor {
     loader: Arc<ScriptLoader>,
-    invocations: Arena<EventInvocation>,
+    invocations: Arena<InvocationState>,
     state: Option<State>,
     suspended_calls: Vec<SuspendedCall>,
+    queue: VecDeque<ScheduledTask>,
 }
 
 impl Executor {
@@ -89,6 +91,7 @@ impl Executor {
             invocations: Arena::new(),
             state: Some(state),
             suspended_calls: Vec::new(),
+            queue: VecDeque::new(),
         }
     }
 
@@ -103,8 +106,35 @@ impl Executor {
     where
         T: Into<EventInvocation>,
     {
-        let id = self.invocations.insert(invocation.into());
+        self.invoke_inner(invocation.into())
+    }
+
+    fn invoke_inner(&mut self, invocation: EventInvocation) -> InvocationId {
+        let instances = futures_lite::future::block_on(self.loader.instances.lock());
+
+        let scripts = instances.get(invocation.receiver.0.id.0).unwrap();
+
+        let id = self.invocations.insert(InvocationState {
+            running_tasks: scripts.len(),
+        });
+
+        for script in scripts.keys() {
+            self.queue.push_back(ScheduledTask {
+                invocation: invocation.clone(),
+                object: invocation.receiver.clone(),
+                script: script.clone(),
+                invocation_id: InvocationId(id),
+            });
+        }
+
         InvocationId(id)
+    }
+
+    /// Returns `true` if the previously spawned invocation via [`invoke`] has complted execution.
+    ///
+    /// [`invoke`]: Self::invoke
+    pub fn is_invocation_done(&self, id: InvocationId) -> bool {
+        !self.invocations.contains_key(id.0)
     }
 
     pub fn update(
@@ -125,20 +155,21 @@ impl Executor {
         let engine = futures_lite::future::block_on(self.loader.engine.lock());
         let mut instances = futures_lite::future::block_on(self.loader.instances.lock());
 
-        for invocation in self.invocations.values() {
-            let object = &invocation.receiver;
+        while let Some(task) = self.queue.pop_front() {
+            let scripts = instances.get_mut(task.object.0.id.0).unwrap();
+            let script = scripts.get_mut(&task.script).unwrap();
 
-            let scripts = instances.get_mut(object.0.id.0).unwrap();
+            if let Some(future) =
+                call_event_invocation_single(&engine, script, &mut self.state, &task.invocation)
+            {
+                self.suspended_calls.push(SuspendedCall { task, future });
+                continue;
+            }
 
-            let suspended_calls =
-                call_event_invocation(&engine, scripts, &mut self.state, invocation);
-            for (name, future) in suspended_calls {
-                self.suspended_calls.push(SuspendedCall {
-                    object: object.clone(),
-                    script: name,
-                    invocation: invocation.clone(),
-                    future,
-                });
+            let invocation = self.invocations.get_mut(task.invocation_id.0).unwrap();
+            invocation.running_tasks -= 1;
+            if invocation.running_tasks == 0 {
+                self.invocations.remove(task.invocation_id.0).unwrap();
             }
         }
 
@@ -158,26 +189,13 @@ impl Executor {
     fn resume_suspended_tasks(&mut self) {
         let _span = trace_span!("Executor::resume_suspended_tasks").entered();
 
-        let engine = futures_lite::future::block_on(self.loader.engine.lock());
-        let mut instances = futures_lite::future::block_on(self.loader.instances.lock());
-
         let mut ctx = std::task::Context::from_waker(std::task::Waker::noop());
         self.suspended_calls.retain_mut(|call| {
             if call.future.poll(&mut ctx).is_pending() {
                 return true;
             }
 
-            let scripts = instances.get_mut(call.object.0.id.0).unwrap();
-            let script = scripts.get_mut(&call.script).unwrap();
-
-            if let Some(waker) =
-                call_event_invocation_single(&engine, script, &mut self.state, &call.invocation)
-            {
-                call.future = waker;
-                // Back to suspension...
-                return true;
-            }
-
+            self.queue.push_back(call.task.clone());
             false
         });
     }
@@ -189,19 +207,18 @@ impl Executor {
     }
 }
 
-fn call_event_invocation(
-    engine: &Engine,
-    scripts: &mut HashMap<String, ScriptInstance>,
-    state: &mut Option<State>,
-    invocation: &EventInvocation,
-) -> HashMap<String, BoxFuture<'static, ()>> {
-    let mut suspended_calls = HashMap::new();
-    for (script_name, script) in scripts {
-        if let Some(future) = call_event_invocation_single(engine, script, state, invocation) {
-            suspended_calls.insert(script_name.clone(), future);
-        }
-    }
-    suspended_calls
+#[derive(Clone, Debug)]
+struct ScheduledTask {
+    invocation: EventInvocation,
+    object: ScriptObject,
+    script: String,
+    invocation_id: InvocationId,
+}
+
+#[derive(Clone, Debug)]
+struct InvocationState {
+    /// Tasks that are not completed yet.
+    running_tasks: usize,
 }
 
 fn call_event_invocation_single(
@@ -251,9 +268,7 @@ fn call_event_invocation_single(
 }
 
 struct SuspendedCall {
-    object: ScriptObject,
-    script: String,
-    invocation: EventInvocation,
+    task: ScheduledTask,
     future: BoxFuture<'static, ()>,
 }
 
