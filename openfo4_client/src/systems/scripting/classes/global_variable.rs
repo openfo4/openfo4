@@ -8,14 +8,18 @@ use super::{Float, Object, State};
 /// float Function GetValue() native
 /// ```
 pub fn get_value(caller: Caller<'_, State>, self_ptr: Object) -> Result<Float, Exception> {
-    // let value = caller
-    //     .data()
-    //     .provider
-    //     .get_global(self_ptr)
-    //     .unwrap_or_default();
-
-    // Ok(value)
-    todo!()
+    let id = caller
+        .data()
+        .objects
+        .global(self_ptr)
+        .ok_or(Exception::Error)?;
+    let value = *caller
+        .data()
+        .globals()
+        .variables
+        .get(&id)
+        .ok_or(Exception::Error)?;
+    Ok(value)
 }
 
 /// `SetValue`
@@ -24,11 +28,15 @@ pub fn get_value(caller: Caller<'_, State>, self_ptr: Object) -> Result<Float, E
 /// Function SetValue(float afNewValue) native
 /// ```
 pub fn set_value(
-    caller: Caller<'_, State>,
+    mut caller: Caller<'_, State>,
     self_ptr: Object,
     value: Float,
 ) -> Result<(), Exception> {
-    // caller.data().provider.set_global(self_ptr, value);
-    // Ok(())
-    todo!()
+    let id = caller
+        .data()
+        .objects
+        .global(self_ptr)
+        .ok_or(Exception::Error)?;
+    caller.data_mut().globals_mut().variables.insert(id, value);
+    Ok(())
 }

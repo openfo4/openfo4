@@ -45,6 +45,7 @@ use slab::Slab;
 use crate::systems::global::GlobalProperties;
 use crate::systems::quests::QuestManager;
 use crate::systems::scripting::Objects;
+use crate::systems::scripting::registration::RegistrationSet;
 
 pub type Int = i32;
 pub type Float = f32;
@@ -165,6 +166,7 @@ pub struct State {
     pub quests: *mut QuestManager,
     pub globals: *mut GlobalProperties,
     pub objects: Objects,
+    pub registration: RegistrationSet,
     pub waker: Option<BoxFuture<'static, ()>>,
 }
 
@@ -179,6 +181,10 @@ impl State {
 
     fn globals(&self) -> &GlobalProperties {
         unsafe { &*self.globals }
+    }
+
+    fn globals_mut(&mut self) -> &mut GlobalProperties {
+        unsafe { &mut *self.globals }
     }
 
     /// Reschedule the current script when the future resolves.

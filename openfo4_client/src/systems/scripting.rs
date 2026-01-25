@@ -2,6 +2,7 @@ pub mod invocations;
 pub mod loader;
 
 mod classes;
+mod registration;
 
 use std::io::Read;
 use std::sync::Arc;
@@ -26,9 +27,10 @@ use openfo4_script::runtime::{Context, Exception, ObjectAddr, ObjectRef, Stack, 
 use crate::loader::{FileLoader, fix_path};
 use crate::state::esp::EspLoader;
 use crate::systems::global::GlobalProperties;
-use crate::systems::scripting::classes::CoreObjects;
+use crate::systems::scripting::classes::{CoreObjects, Object};
 use crate::systems::scripting::invocations::{EventInvocation, Value};
 use crate::systems::scripting::loader::{ScriptLoader, ScriptObject};
+use crate::systems::scripting::registration::RegistrationSet;
 
 use classes::State;
 
@@ -300,6 +302,7 @@ fn core_actor_values(engine: &mut Engine) -> State {
         objects: Default::default(),
         waker: None,
         globals: core::ptr::null_mut(),
+        registration: RegistrationSet::default(),
     }
 }
 
@@ -321,6 +324,10 @@ struct Objects {
 }
 
 impl Objects {
+    pub fn global(&self, addr: ObjectAddr) -> Option<RecordId> {
+        self.globals.get(&addr).copied()
+    }
+
     pub fn quest(&self, addr: ObjectAddr) -> Option<RecordId> {
         self.quests.get(&addr).copied()
     }

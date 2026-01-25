@@ -4,6 +4,7 @@ use openfo4_script::engine::Engine;
 use openfo4_script::runtime::{Caller, Exception};
 
 use crate::systems::scripting::classes::{Object, State, TimerId};
+use crate::systems::scripting::registration::{Event, EventSender};
 
 #[rustfmt::skip]
 pub fn register(engine: &mut Engine) {
@@ -391,12 +392,30 @@ fn register_for_radiation_damage_event(
 /// bool Function(ScriptObject akEventSource, ScriptEventName asEventName) native
 /// ```
 fn register_for_remote_event(
-    caller: Caller<'_, State>,
+    mut caller: Caller<'_, State>,
     self_ptr: Object,
-    ak_event_source: Object,
-    as_event_name: Object,
+    event_source: Object,
+    event_name: Object,
 ) -> Result<bool, Exception> {
-    todo!()
+    if event_source.is_null() {
+        return Ok(false);
+    }
+
+    let event_name = unsafe { caller.string(event_name) };
+    let Ok(kind) = event_name.parse() else {
+        tracing::warn!("unknown event name: {}", event_name);
+        return Ok(false);
+    };
+
+    caller.data_mut().registration.register(
+        self_ptr,
+        Event {
+            sender: EventSender::Object(event_source),
+            kind,
+        },
+    );
+
+    Ok(true)
 }
 
 /// `RegisterForTrackedStatsEvent`
@@ -783,12 +802,30 @@ fn unregister_for_radiation_damage_event(
 /// Function(ScriptObject akEventSource, ScriptEventName asEventName) native
 /// ```
 fn unregister_for_remote_event(
-    caller: Caller<'_, State>,
+    mut caller: Caller<'_, State>,
     self_ptr: Object,
-    ak_event_source: Object,
-    as_event_name: Object,
+    event_source: Object,
+    event_name: Object,
 ) -> Result<(), Exception> {
-    todo!()
+    if event_source.is_null() {
+        return Ok(());
+    }
+
+    let event_name = unsafe { caller.string(event_name) };
+    let Ok(kind) = event_name.parse() else {
+        tracing::warn!("unknown event name: {}", event_name);
+        return Ok(());
+    };
+
+    caller.data_mut().registration.unregister(
+        self_ptr,
+        Event {
+            sender: EventSender::Object(event_source),
+            kind,
+        },
+    );
+
+    Ok(())
 }
 
 /// `UnregisterForTrackedStatsEvent`
