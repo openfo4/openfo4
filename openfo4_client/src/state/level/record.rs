@@ -28,6 +28,8 @@ use crate::state::terrain::{TerrainManager, TerrainRegion};
 use crate::systems::door::{Door, PortalDoor};
 use crate::systems::inventory::{Inventory, ItemStack};
 use crate::systems::lights::{LightFlicker, LightFlickerMode};
+use crate::systems::scripting::ScriptEntities;
+use crate::systems::scripting::loader::ScriptObject;
 
 #[derive(Debug, Default)]
 pub struct SpawnEntity {
@@ -46,6 +48,7 @@ pub struct SpawnEntity {
     pub inventory: Option<Inventory>,
     pub placed_item: Option<PlacedItem>,
     pub terrain: Option<TerrainRegion>,
+    pub script: Option<ScriptObject>,
 }
 
 impl SpawnEntity {
@@ -55,6 +58,7 @@ impl SpawnEntity {
         events: &mut EventBus,
         object_ref_set: &mut ObjectReferenceSet,
         terrain_manager: &mut TerrainManager,
+        script_entities: &mut ScriptEntities,
     ) -> Entity {
         // Destructure pattern so we get warned if we forget
         // to add new items here.
@@ -74,6 +78,7 @@ impl SpawnEntity {
             inventory,
             placed_item,
             terrain,
+            script,
         } = self;
 
         // If the object reference already exists we will overwrite it.
@@ -124,6 +129,13 @@ impl SpawnEntity {
 
         if let Some(placed_item) = placed_item {
             world.insert_one(entity, placed_item).unwrap();
+        }
+
+        if let Some(script) = script {
+            script_entities.0.insert(script.id(), entity);
+
+            // Insert into entity to keep the script alive.
+            world.insert_one(entity, script).unwrap();
         }
 
         if persistent {

@@ -67,7 +67,7 @@ use crate::systems::door::{handle_automatic_doors, handle_door_activations};
 use crate::systems::global::{Difficulty, GlobalProperties};
 use crate::systems::inventory::InventorySystem;
 use crate::systems::quests::QuestManager;
-use crate::systems::scripting::Executor;
+use crate::systems::scripting::{Executor, ScriptEntities};
 use crate::systems::time::{init_time, update_time};
 use crate::systems::weapon::{
     handle_weapon_draw_events, handle_weapon_fire_events, handle_weapon_hit_damage,
@@ -103,6 +103,7 @@ pub struct GameState {
     executor: Executor,
     quests: QuestManager,
     globals: GlobalProperties,
+    script_entities: ScriptEntities,
 }
 
 impl GameState {
@@ -224,6 +225,7 @@ impl GameState {
                 variables: global_variables,
                 difficulty: Difficulty::Survival,
             },
+            script_entities: ScriptEntities::default(),
         }
     }
 
@@ -271,6 +273,7 @@ impl GameState {
             &mut self.events,
             &mut self.event_bus,
             &mut self.object_ref_set,
+            &mut self.script_entities,
         );
 
         animation_test::animation_test(
@@ -300,6 +303,7 @@ impl GameState {
             &mut self.world,
             &mut self.event_bus,
             &mut self.globals,
+            &self.script_entities,
             Duration::from_secs(1) / UPS,
         );
 

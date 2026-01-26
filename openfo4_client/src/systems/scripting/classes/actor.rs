@@ -214,6 +214,8 @@ fn add_perk(
     ak_perk: Object,
     ab_notify_false: bool,
 ) -> Result<(), Exception> {
+    let entity = caller.data().entity(self_ptr);
+
     todo!()
 }
 

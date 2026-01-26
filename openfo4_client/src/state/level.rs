@@ -33,8 +33,8 @@ use crate::shared::SharedState;
 use crate::state::level::partial::PartialEntityFlags;
 use crate::state::level::record::SpawnEntity;
 use crate::state::terrain::TerrainManager;
-use crate::systems::scripting::Executor;
 use crate::systems::scripting::loader::ScriptLoader;
+use crate::systems::scripting::{Executor, ScriptEntities};
 
 use super::esp::EspLoader;
 
@@ -133,6 +133,7 @@ impl Level {
         events: &mut Vec<Event>,
         event_bus: &mut EventBus,
         object_ref_set: &mut ObjectReferenceSet,
+        script_entities: &mut ScriptEntities,
     ) {
         let _span = trace_span!("Level::update").entered();
 
@@ -187,7 +188,13 @@ impl Level {
                 continue;
             }
 
-            entity.instantiate(world, event_bus, object_ref_set, &mut self.terrain_manager);
+            entity.instantiate(
+                world,
+                event_bus,
+                object_ref_set,
+                &mut self.terrain_manager,
+                script_entities,
+            );
         }
 
         for cell in prev_cells_loaded {

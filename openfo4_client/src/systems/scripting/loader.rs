@@ -25,6 +25,12 @@ pub struct ScriptObjectId(pub(super) usize);
 #[derive(Clone, Debug)]
 pub struct ScriptObject(pub(super) Arc<ScriptObjectInner>);
 
+impl ScriptObject {
+    pub fn id(&self) -> ScriptObjectId {
+        self.0.id
+    }
+}
+
 #[derive(Debug)]
 pub(super) struct ScriptObjectInner {
     base: RecordId,

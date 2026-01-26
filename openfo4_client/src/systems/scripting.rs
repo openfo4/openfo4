@@ -13,6 +13,7 @@ use async_lock::Mutex;
 use futures::future::BoxFuture;
 use futures_lite::FutureExt;
 use game_common::collections::arena::{Arena, Key};
+use game_common::collections::bimap::BiMap;
 use game_egui::egui::TextBuffer;
 use game_tasks::TaskPool;
 use game_tracing::trace_span;
@@ -30,7 +31,7 @@ use crate::state::esp::EspLoader;
 use crate::systems::global::GlobalProperties;
 use crate::systems::scripting::classes::CoreObjects;
 use crate::systems::scripting::invocations::{EventInvocation, Value};
-use crate::systems::scripting::loader::{ScriptLoader, ScriptObject};
+use crate::systems::scripting::loader::{ScriptLoader, ScriptObject, ScriptObjectId};
 use crate::systems::scripting::registration::RegistrationSet;
 
 use classes::State;
@@ -142,18 +143,31 @@ impl Executor {
         world: &mut World,
         events: &mut EventBus,
         globals: &mut GlobalProperties,
+        script_entities: &ScriptEntities,
         delta: Duration,
     ) {
         let _span = trace_span!("Executor::update").entered();
-
-        let state = self.state.as_mut().unwrap();
-        state.world = world;
-        state.globals = globals;
 
         self.resume_suspended_tasks();
 
         let engine = futures_lite::future::block_on(self.loader.engine.lock());
         let mut instances = futures_lite::future::block_on(self.loader.instances.lock());
+
+        // FIXME: Don't recompute this every update.
+        let mut entities = HashMap::new();
+        for (id, scripts) in &*instances {
+            let id = ScriptObjectId(id);
+
+            for script in scripts.values() {
+                entities.insert(script.object.addr(), id);
+            }
+        }
+
+        let state = self.state.as_mut().unwrap();
+        state.world = world;
+        state.globals = globals;
+        state.objects.entities = entities;
+        state.entities = script_entities;
 
         while let Some(task) = self.queue.pop_front() {
             let scripts = instances.get_mut(task.object.0.id.0).unwrap();
@@ -177,6 +191,7 @@ impl Executor {
         // FIXME: Not necessarly required, we can leave pointers dangling.
         state.world = core::ptr::null_mut();
         state.quests = core::ptr::null_mut();
+        state.entities = core::ptr::null();
 
         // for entry in real_timers.tick(delta) {
         //     self.invocations.insert(Invocation::Timer {
@@ -318,6 +333,7 @@ fn core_actor_values(engine: &mut Engine) -> State {
         waker: None,
         globals: core::ptr::null_mut(),
         registration: RegistrationSet::default(),
+        entities: core::ptr::null(),
     }
 }
 
@@ -336,6 +352,8 @@ struct Objects {
     objects: HashMap<ObjectAddr, Entity>,
     actor_values: HashMap<ObjectAddr, RecordId>,
     quests: HashMap<ObjectAddr, RecordId>,
+    /// Entities that exist in the game world.
+    entities: HashMap<ObjectAddr, ScriptObjectId>,
 }
 
 impl Objects {
@@ -350,3 +368,7 @@ impl Objects {
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct InvocationId(Key);
+
+/// Maps [`ScriptObject`]s to game world [`Entity`].
+#[derive(Clone, Debug, Default)]
+pub struct ScriptEntities(pub BiMap<ScriptObjectId, Entity>);

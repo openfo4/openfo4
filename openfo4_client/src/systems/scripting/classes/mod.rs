@@ -36,16 +36,17 @@ use std::collections::{BTreeMap, HashMap};
 use std::time::{Duration, Instant};
 
 use futures::future::BoxFuture;
-use hecs::World;
-use openfo4_script::engine::Engine;
+use hecs::{Entity, World};
+use openfo4_script::engine::{Engine, ScriptInstance};
 use openfo4_script::runtime::{ObjectAddr, ObjectRef};
 use parking_lot::Mutex;
 use slab::Slab;
 
+use crate::components::Player;
 use crate::systems::global::GlobalProperties;
 use crate::systems::quests::QuestManager;
-use crate::systems::scripting::Objects;
 use crate::systems::scripting::registration::RegistrationSet;
+use crate::systems::scripting::{Objects, ScriptEntities};
 
 pub type Int = i32;
 pub type Float = f32;
@@ -137,6 +138,7 @@ pub struct State {
     pub game_timers: TimerSet,
     pub world: *mut World,
     pub quests: *mut QuestManager,
+    pub entities: *const ScriptEntities,
     pub globals: *mut GlobalProperties,
     pub objects: Objects,
     pub registration: RegistrationSet,
@@ -144,7 +146,7 @@ pub struct State {
 }
 
 impl State {
-    fn world(&mut self) -> &mut World {
+    fn world(&self) -> &World {
         unsafe { &mut *self.world }
     }
 
@@ -158,6 +160,21 @@ impl State {
 
     fn globals_mut(&mut self) -> &mut GlobalProperties {
         unsafe { &mut *self.globals }
+    }
+
+    fn entities(&self) -> &ScriptEntities {
+        unsafe { &*self.entities }
+    }
+
+    /// Returns the game world entity associated with a script object, if any exists.
+    pub fn entity(&self, addr: ObjectAddr) -> Option<Entity> {
+        if addr == self.core_objects.player.addr() {
+            let (entity, _) = self.world().query::<&Player>().iter().next().unwrap();
+            return Some(entity);
+        }
+
+        let id = *self.objects.entities.get(&addr)?;
+        self.entities().0.get_left(&id).copied()
     }
 
     /// Reschedule the current script when the future resolves.
