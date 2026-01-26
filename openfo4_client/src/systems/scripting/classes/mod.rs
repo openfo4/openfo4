@@ -72,6 +72,7 @@ pub fn register_builtins(engine: &mut Engine) {
     location_alias::register(engine);
     game::register(engine);
     reference_alias::register(engine);
+    quest::register(engine);
 
     engine.register_native_function("Message", "ResetHelpMessage", message::reset_help_message);
     engine.register_native_function("Message", "Show", message::show);
@@ -79,7 +80,6 @@ pub fn register_builtins(engine: &mut Engine) {
     engine.register_native_function("Message", "UnshowAsHelpMessage", message::unshow_as_help_message);
 
     script_object::register(engine);
-
 
     engine.register_native_function("Form", "GetFormID", form::get_form_id);
     engine.register_native_function("Form", "GetGoldValue", form::get_gold_value);
@@ -126,33 +126,6 @@ pub fn register_builtins(engine: &mut Engine) {
     engine.register_native_function("FormList", "Revert", form_list::revert);
 
     engine.register_native_function("Faction", "CanPayCrimeGold", faction::can_pay_crime_gold);
-
-    engine.register_native_function("Quest", "CompleteAllObjectives", quest::complete_all_objectives);
-    engine.register_native_function("Quest", "CompleteQuest", quest::complete_quest);
-    engine.register_native_function("Quest", "FailAllObjectives", quest::fail_all_objectives);
-    engine.register_native_function("Quest", "GetAlias", quest::get_alias);
-    engine.register_native_function("Quest", "GetCurrentStageID", quest::get_current_stage_id);
-    engine.register_native_function("Quest", "HasObjective", quest::has_objective);
-    engine.register_native_function("Quest", "IsActive", quest::is_active);
-    engine.register_native_function("Quest", "IsCompleted", quest::is_completed);
-    engine.register_native_function("Quest", "IsObjectiveCompleted", quest::is_objective_completed);
-    engine.register_native_function("Quest", "IsObjectiveDisplayed", quest::is_objective_displayed);
-    engine.register_native_function("Quest", "IsObjectiveFailed", quest::is_objective_failed);
-    engine.register_native_function("Quest", "IsRunning", quest::is_running);
-    engine.register_native_function("Quest", "IsStageDone", quest::is_stage_done);
-    engine.register_native_function("Quest", "IsStarting", quest::is_starting);
-    engine.register_native_function("Quest", "IsStopping", quest::is_stopping);
-    engine.register_native_function("Quest", "IsStopped", quest::is_stopped);
-    engine.register_native_function("Quest", "Reset", quest::reset);
-    engine.register_native_function("Quest", "ResetSpeechChallenges", quest::reset_speech_challenges);
-    engine.register_native_function("Quest", "SetActive", quest::set_active);
-    engine.register_native_function("Quest", "SetCurrentStageID", quest::set_current_stage_id);
-    engine.register_native_function("Quest", "SetObjectiveCompleted", quest::set_objective_completed);
-    engine.register_native_function("Quest", "SetObjectiveDisplayed", quest::set_objective_displayed);
-    engine.register_native_function("Quest", "SetObjectiveFailed", quest::set_objective_failed);
-    engine.register_native_function("Quest", "Start", quest::start);
-    engine.register_native_function("Quest", "stop", quest::stop);
-    engine.register_native_function("Quest", "UpdateCurrentInstanceGlobal", quest::update_current_instance_global);
 
     f4se::register(engine);
     mcm::register(engine);

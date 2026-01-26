@@ -1,15 +1,46 @@
+use openfo4_script::engine::Engine;
 use openfo4_script::runtime::{Caller, Exception};
 
 use crate::systems::quests::QuestState;
 
 use super::{Int, Object, State};
 
+#[rustfmt::skip]
+pub fn register(engine: &mut Engine) {
+    engine.register_native_function("Quest", "CompleteAllObjectives", complete_all_objectives);
+    engine.register_native_function("Quest", "CompleteQuest", complete_quest);
+    engine.register_native_function("Quest", "FailAllObjectives", fail_all_objectives);
+    engine.register_native_function("Quest", "GetAlias", get_alias);
+    engine.register_native_function("Quest", "GetCurrentStageID", get_current_stage_id);
+    engine.register_native_function("Quest", "HasObjective", has_objective);
+    engine.register_native_function("Quest", "IsActive", is_active);
+    engine.register_native_function("Quest", "IsCompleted", is_completed);
+    engine.register_native_function("Quest", "IsObjectiveCompleted", is_objective_completed);
+    engine.register_native_function("Quest", "IsObjectiveDisplayed", is_objective_displayed);
+    engine.register_native_function("Quest", "IsObjectiveFailed", is_objective_failed);
+    engine.register_native_function("Quest", "IsRunning", is_running);
+    engine.register_native_function("Quest", "IsStageDone", is_stage_done);
+    engine.register_native_function("Quest", "IsStarting", is_starting);
+    engine.register_native_function("Quest", "IsStopping", is_stopping);
+    engine.register_native_function("Quest", "IsStopped", is_stopped);
+    engine.register_native_function("Quest", "Reset", reset);
+    engine.register_native_function("Quest", "ResetSpeechChallenges", reset_speech_challenges);
+    engine.register_native_function("Quest", "SetActive", set_active);
+    engine.register_native_function("Quest", "SetCurrentStageID", set_current_stage_id);
+    engine.register_native_function("Quest", "SetObjectiveCompleted", set_objective_completed);
+    engine.register_native_function("Quest", "SetObjectiveDisplayed", set_objective_displayed);
+    engine.register_native_function("Quest", "SetObjectiveFailed", set_objective_failed);
+    engine.register_native_function("Quest", "Start", start);
+    engine.register_native_function("Quest", "stop", stop);
+    engine.register_native_function("Quest", "UpdateCurrentInstanceGlobal", update_current_instance_global);
+}
+
 /// `CompleteAllObjectives`
 ///
 /// ```text
 /// Function CompleteAllObjectives() native
 /// ```
-pub fn complete_all_objectives(caller: Caller<'_, State>, quest: Object) -> Result<(), Exception> {
+fn complete_all_objectives(caller: Caller<'_, State>, quest: Object) -> Result<(), Exception> {
     todo!()
 }
 
@@ -18,7 +49,7 @@ pub fn complete_all_objectives(caller: Caller<'_, State>, quest: Object) -> Resu
 /// ```text
 /// CompleteQuest
 /// ```
-pub fn complete_quest(caller: Caller<'_, State>, quest: Object) -> Result<(), Exception> {
+fn complete_quest(caller: Caller<'_, State>, quest: Object) -> Result<(), Exception> {
     todo!()
 }
 
@@ -27,7 +58,7 @@ pub fn complete_quest(caller: Caller<'_, State>, quest: Object) -> Result<(), Ex
 /// ```text
 /// Function FailAllObjectives() native
 /// ```
-pub fn fail_all_objectives(caller: Caller<'_, State>, quest: Object) -> Result<(), Exception> {
+fn fail_all_objectives(caller: Caller<'_, State>, quest: Object) -> Result<(), Exception> {
     todo!()
 }
 
@@ -36,11 +67,7 @@ pub fn fail_all_objectives(caller: Caller<'_, State>, quest: Object) -> Result<(
 /// ```text
 /// Alias Function GetAlias(int aiAliasID) native
 /// ```
-pub fn get_alias(
-    caller: Caller<'_, State>,
-    quest: Object,
-    alias_id: Int,
-) -> Result<Object, Exception> {
+fn get_alias(caller: Caller<'_, State>, quest: Object, alias_id: Int) -> Result<Object, Exception> {
     todo!()
 }
 
@@ -49,10 +76,7 @@ pub fn get_alias(
 /// ```text
 /// int Function GetCurrentStageID() native
 /// ```
-pub fn get_current_stage_id(
-    mut caller: Caller<'_, State>,
-    quest: Object,
-) -> Result<Int, Exception> {
+fn get_current_stage_id(mut caller: Caller<'_, State>, quest: Object) -> Result<Int, Exception> {
     let id = caller.data().objects.quest(quest).ok_or(Exception::Error)?;
     let quest = caller.data_mut().quests().get(id).ok_or(Exception::Error)?;
     Ok(quest.active_stage.unwrap_or_default().into())
@@ -63,7 +87,7 @@ pub fn get_current_stage_id(
 /// ```text
 /// bool Function HasObjective(int aiObjective) native
 /// ```
-pub fn has_objective(
+fn has_objective(
     caller: Caller<'_, State>,
     quest: Object,
     objective: Int,
@@ -76,7 +100,7 @@ pub fn has_objective(
 /// ```text
 /// bool Function IsActive() native
 /// ```
-pub fn is_active(caller: Caller<'_, State>, quest: Object) -> Result<bool, Exception> {
+fn is_active(caller: Caller<'_, State>, quest: Object) -> Result<bool, Exception> {
     todo!()
 }
 
@@ -85,7 +109,7 @@ pub fn is_active(caller: Caller<'_, State>, quest: Object) -> Result<bool, Excep
 /// ```text
 /// bool Function IsCompleted() native
 /// ```
-pub fn is_completed(caller: Caller<'_, State>, quest: Object) -> Result<bool, Exception> {
+fn is_completed(caller: Caller<'_, State>, quest: Object) -> Result<bool, Exception> {
     todo!()
 }
 
@@ -94,7 +118,7 @@ pub fn is_completed(caller: Caller<'_, State>, quest: Object) -> Result<bool, Ex
 /// ```text
 /// bool Function IsObjectiveCompleted(int aiObjective) native
 /// ```
-pub fn is_objective_completed(
+fn is_objective_completed(
     caller: Caller<'_, State>,
     quest: Object,
     objective: Int,
@@ -107,7 +131,7 @@ pub fn is_objective_completed(
 /// ```text
 /// bool Function IsObjectiveDisplayed(int aiObjective) native
 /// ```
-pub fn is_objective_displayed(
+fn is_objective_displayed(
     caller: Caller<'_, State>,
     quest: Object,
     objective: Int,
@@ -120,7 +144,7 @@ pub fn is_objective_displayed(
 /// ```text
 /// bool Function IsObjectiveFailed(int aiObjective) native
 /// ```
-pub fn is_objective_failed(
+fn is_objective_failed(
     caller: Caller<'_, State>,
     quest: Object,
     objective: Int,
@@ -133,7 +157,7 @@ pub fn is_objective_failed(
 /// ```text
 /// bool Function IsRunning() native
 /// ```
-pub fn is_running(mut caller: Caller<'_, State>, quest: Object) -> Result<bool, Exception> {
+fn is_running(mut caller: Caller<'_, State>, quest: Object) -> Result<bool, Exception> {
     let id = caller.data().objects.quest(quest).ok_or(Exception::Error)?;
     let quest = caller.data_mut().quests().get(id).ok_or(Exception::Error)?;
     Ok(quest.state == QuestState::Running)
@@ -144,11 +168,7 @@ pub fn is_running(mut caller: Caller<'_, State>, quest: Object) -> Result<bool, 
 /// ```text
 /// bool Function IsStageDone(int aiStage) native
 /// ```
-pub fn is_stage_done(
-    caller: Caller<'_, State>,
-    quest: Object,
-    stage: Int,
-) -> Result<bool, Exception> {
+fn is_stage_done(caller: Caller<'_, State>, quest: Object, stage: Int) -> Result<bool, Exception> {
     todo!()
 }
 
@@ -157,7 +177,7 @@ pub fn is_stage_done(
 /// ```text
 /// bool Function IsStarting() native
 /// ```
-pub fn is_starting(mut caller: Caller<'_, State>, quest: Object) -> Result<bool, Exception> {
+fn is_starting(mut caller: Caller<'_, State>, quest: Object) -> Result<bool, Exception> {
     let id = caller.data().objects.quest(quest).ok_or(Exception::Error)?;
     let quest = caller.data_mut().quests().get(id).ok_or(Exception::Error)?;
     Ok(quest.state == QuestState::Starting)
@@ -168,7 +188,7 @@ pub fn is_starting(mut caller: Caller<'_, State>, quest: Object) -> Result<bool,
 /// ```text
 /// bool Function IsStopping() native
 /// ```
-pub fn is_stopping(mut caller: Caller<'_, State>, quest: Object) -> Result<bool, Exception> {
+fn is_stopping(mut caller: Caller<'_, State>, quest: Object) -> Result<bool, Exception> {
     let id = caller.data().objects.quest(quest).ok_or(Exception::Error)?;
     let quest = caller.data_mut().quests().get(id).ok_or(Exception::Error)?;
     Ok(quest.state == QuestState::Stopping)
@@ -179,7 +199,7 @@ pub fn is_stopping(mut caller: Caller<'_, State>, quest: Object) -> Result<bool,
 /// ```text
 /// bool Function IsStopped() native
 /// ```
-pub fn is_stopped(mut caller: Caller<'_, State>, quest: Object) -> Result<bool, Exception> {
+fn is_stopped(mut caller: Caller<'_, State>, quest: Object) -> Result<bool, Exception> {
     let id = caller.data().objects.quest(quest).ok_or(Exception::Error)?;
     let quest = caller.data_mut().quests().get(id).ok_or(Exception::Error)?;
     Ok(quest.state == QuestState::Stopped)
@@ -190,7 +210,7 @@ pub fn is_stopped(mut caller: Caller<'_, State>, quest: Object) -> Result<bool, 
 /// ```text
 /// Function Reset() native
 /// ```
-pub fn reset(caller: Caller<'_, State>, quest: Object) -> Result<(), Exception> {
+fn reset(caller: Caller<'_, State>, quest: Object) -> Result<(), Exception> {
     todo!()
 }
 
@@ -199,7 +219,7 @@ pub fn reset(caller: Caller<'_, State>, quest: Object) -> Result<(), Exception> 
 /// ```text
 /// Function ResetSpeechChallenges() native
 /// ```
-pub fn reset_speech_challenges(caller: Caller<'_, State>, quest: Object) -> Result<(), Exception> {
+fn reset_speech_challenges(caller: Caller<'_, State>, quest: Object) -> Result<(), Exception> {
     todo!()
 }
 
@@ -208,7 +228,7 @@ pub fn reset_speech_challenges(caller: Caller<'_, State>, quest: Object) -> Resu
 /// ```text
 /// Function SetActive(bool abActive = true) native
 /// ```
-pub fn set_active(caller: Caller<'_, State>, quest: Object, active: bool) -> Result<(), Exception> {
+fn set_active(caller: Caller<'_, State>, quest: Object, active: bool) -> Result<(), Exception> {
     todo!()
 }
 
@@ -217,7 +237,7 @@ pub fn set_active(caller: Caller<'_, State>, quest: Object, active: bool) -> Res
 /// ```text
 /// bool Function SetCurrentStageID(int aiStageID) native
 /// ```
-pub fn set_current_stage_id(
+fn set_current_stage_id(
     mut caller: Caller<'_, State>,
     quest: Object,
     stage: Int,
@@ -241,7 +261,7 @@ pub fn set_current_stage_id(
 /// ```text
 /// Function SetObjectiveCompleted(int aiObjective, bool abCompleted = true) native
 /// ```
-pub fn set_objective_completed(
+fn set_objective_completed(
     caller: Caller<'_, State>,
     quest: Object,
     objective: Int,
@@ -255,7 +275,7 @@ pub fn set_objective_completed(
 /// ```text
 /// Function SetObjectiveDisplayed(int aiObjective, bool abDisplayed = true, bool abForce = false) native
 /// ```
-pub fn set_objective_displayed(
+fn set_objective_displayed(
     caller: Caller<'_, State>,
     quest: Object,
     objective: Int,
@@ -270,7 +290,7 @@ pub fn set_objective_displayed(
 /// ```text
 /// Function SetObjectiveFailed(int aiObjective, bool abFailed = true) native
 /// ```
-pub fn set_objective_failed(
+fn set_objective_failed(
     caller: Caller<'_, State>,
     quest: Object,
     objective: Int,
@@ -284,7 +304,7 @@ pub fn set_objective_failed(
 /// ```text
 /// bool Function Start() native
 /// ```
-pub fn start(mut caller: Caller<'_, State>, quest: Object) -> Result<bool, Exception> {
+fn start(mut caller: Caller<'_, State>, quest: Object) -> Result<bool, Exception> {
     let id = caller.data().objects.quest(quest).ok_or(Exception::Error)?;
     caller.data_mut().quests().start_quest(id);
     // FIXME: Should we returns false if quest already running?
@@ -296,7 +316,7 @@ pub fn start(mut caller: Caller<'_, State>, quest: Object) -> Result<bool, Excep
 /// ```text
 /// Function Stop() native
 /// ```
-pub fn stop(mut caller: Caller<'_, State>, quest: Object) -> Result<(), Exception> {
+fn stop(mut caller: Caller<'_, State>, quest: Object) -> Result<(), Exception> {
     let id = caller.data().objects.quest(quest).ok_or(Exception::Error)?;
     caller.data_mut().quests().stop_quest(id);
     Ok(())
@@ -307,7 +327,7 @@ pub fn stop(mut caller: Caller<'_, State>, quest: Object) -> Result<(), Exceptio
 /// ```text
 /// bool Function UpdateCurrentInstanceGlobal(GlobalVariable aUpdateGlobal) native
 /// ```
-pub fn update_current_instance_global(
+fn update_current_instance_global(
     caller: Caller<'_, State>,
     quest: Object,
     gobal: Object,
