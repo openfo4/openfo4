@@ -358,57 +358,37 @@ impl CraneliftModule {
                             .map(|v| values[v.0].unwrap())
                             .collect::<Vec<_>>();
 
-                        // FIXME: cranelift 0.125 emits 32 bit relocations, which
-                        // causes some executable addresses to be too far away to call
-                        // each other.
-                        // https://github.com/bytecodealliance/wasmtime/issues/4000
-                        // As a temporary workaround we use indirect calls to the address
-                        // when calling host functions.
-                        // This is not possible for guest functions because they may
-                        // not be compiled and may not have an address yet.
                         let func = &self.functions[func_id.0];
                         let signature = convert_signature(&func.signature);
                         let sig_ref = builder.import_signature(signature.clone());
 
-                        let inst = match &func.definition {
-                            Some(FunctionDefinition::Host(def)) => {
-                                let addr = u64::try_from(def.ptr.addr()).unwrap() as i64;
-                                let callee = builder.ins().iconst(ptr_type, addr);
-
-                                builder.ins().call_indirect(sig_ref, callee, &args)
-                            }
-                            Some(FunctionDefinition::Guest(_)) => {
-                                if let Some(compiled) = &func.compiled {
-                                    let addr =
-                                        u64::try_from(compiled.allocation.as_exec_ptr().addr())
-                                            .unwrap()
-                                            as i64;
-
-                                    let callee = builder.ins().iconst(ptr_type, addr);
-                                    builder.ins().call_indirect(sig_ref, callee, &args)
-                                } else {
-                                    funcs_to_compile.push(*func_id);
-
-                                    let func_ref = *callees.entry(*func_id).or_insert_with(|| {
-                                        let name = builder.func.declare_imported_user_function(
-                                            UserExternalName::new(0, func_id.0.try_into().unwrap()),
-                                        );
-
-                                        refs_to_funcs.insert(name, *func_id);
-
-                                        builder.import_function(ExtFuncData {
-                                            name: ExternalName::User(name),
-                                            signature: sig_ref,
-                                            colocated: false,
-                                            patchable: false,
-                                        })
-                                    });
-
-                                    builder.ins().call(func_ref, &args)
-                                }
-                            }
+                        let compile_func = match func.definition {
+                            Some(FunctionDefinition::Host(_)) => false,
+                            Some(FunctionDefinition::Guest(_)) => func.compiled.is_none(),
                             None => unreachable!(),
                         };
+
+                        if compile_func {
+                            funcs_to_compile.push(*func_id);
+                        }
+
+                        let func_ref =
+                            *callees.entry(*func_id).or_insert_with(|| {
+                                let name = builder.func.declare_imported_user_function(
+                                    UserExternalName::new(0, func_id.0.try_into().unwrap()),
+                                );
+
+                                refs_to_funcs.insert(name, *func_id);
+
+                                builder.import_function(ExtFuncData {
+                                    name: ExternalName::User(name),
+                                    signature: sig_ref,
+                                    colocated: false,
+                                    patchable: false,
+                                })
+                            });
+
+                        let inst = builder.ins().call(func_ref, &args);
 
                         let return_values = builder.inst_results(inst);
                         debug_assert_eq!(returns.len(), return_values.len());
