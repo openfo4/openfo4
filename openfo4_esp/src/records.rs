@@ -5,7 +5,7 @@ use bytes::Buf;
 use glam::Vec3;
 use openfo4_esp_derive::{BinaryStruct, Record};
 
-use crate::fields::{FieldMap, Read, SubRecordArray, SubRecordSection};
+use crate::fields::{FieldMap, Read, SubField, SubRecordArray, SubRecordSection};
 use crate::vmad::{QuestFragments, VirtualMachineAdapter};
 use crate::{Decode, Error, FormId, LString, Rgb, RgbPadded, Text, ZString};
 
@@ -4763,7 +4763,18 @@ pub struct Quest {
     pub story_manager_conditions: SubRecordArray<Condition>,
     #[record("INDX")]
     pub stages: SubRecordArray<QuestStage>,
-    // ...
+    #[record("QOBJ")]
+    pub objectives: SubRecordArray<QuestObjective>,
+    #[record("ANAM")]
+    pub next_alias_id: u32,
+    #[record("????")] // Ignored
+    pub aliases: QuestAliases,
+    #[record("NNAM")]
+    pub description: Option<ZString>,
+    #[record("GNAM")]
+    pub quest_group: Option<FormId>,
+    #[record("SNAM")]
+    pub swf_file: Option<ZString>,
 }
 
 #[derive(Copy, Clone, Debug, BinaryStruct)]
@@ -4871,6 +4882,302 @@ bitflags! {
 }
 
 impl_decode_bitflags!(QuestStageLogEntryFlags: u8);
+
+#[derive(Clone, Debug, Record)]
+#[record(ordered)]
+pub struct QuestObjective {
+    #[record("QOBJ")]
+    pub objective_index: u16,
+    #[record("FNAM")]
+    pub flags: QuestObjectiveFlags,
+    #[record("NNAM")]
+    pub display_text: Option<LString>,
+    #[record("QSTA")]
+    pub targets: SubRecordArray<QuestObjectiveTarget>,
+}
+
+bitflags! {
+    #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+    pub struct QuestObjectiveFlags: u32 {
+        const OR_WITH_PREVIOUS = 0x01;
+        const NO_STATS_TRACKING = 0x02;
+    }
+}
+
+impl_decode_bitflags!(QuestObjectiveFlags: u32);
+
+#[derive(Clone, Debug, Record)]
+#[record(ordered)]
+pub struct QuestObjectiveTarget {
+    #[record("QSTA")]
+    pub data: QuestObjectiveTargetData,
+    #[record("CTDA")]
+    pub conditions: SubRecordArray<Condition>,
+}
+
+#[derive(Copy, Clone, Debug, BinaryStruct)]
+pub struct QuestObjectiveTargetData {
+    pub alias: i32,
+    pub flags: QuestObjectiveTargetDataFlags,
+    pub keyword: FormId,
+}
+
+bitflags! {
+    #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+    pub struct QuestObjectiveTargetDataFlags: u32 {
+        const COMPASS_MARKER_IGNORES_LOCKS = 0x01;
+        const HOSTILE = 0x02;
+        const USE_STRAIGHT_LINE_PATHING = 0x04;
+    }
+}
+
+impl_decode_bitflags!(QuestObjectiveTargetDataFlags: u32);
+
+#[derive(Clone, Debug)]
+pub struct QuestAliases {
+    pub references: Vec<QuestReferenceAlias>,
+    pub locations: Vec<QuestLocationAlias>,
+    pub ref_collections: Vec<QuestAliasRefCollectionAlias>,
+}
+
+impl Read for QuestAliases {
+    type Error = Error;
+
+    fn read(map: &mut FieldMap, key: Text<4>) -> Result<Self, Self::Error> {
+        let mut references = Vec::new();
+        let mut locations = Vec::new();
+        let mut ref_collections = Vec::new();
+
+        loop {
+            match map.next_key() {
+                Some(Text([b'A', b'L', b'S', b'T'])) => {
+                    let alias = QuestReferenceAlias::read(map, key)?;
+                    references.push(alias);
+                }
+                Some(Text([b'A', b'L', b'L', b'S'])) => {
+                    let location = QuestLocationAlias::read(map, key)?;
+                    locations.push(location);
+                }
+                Some(Text([b'A', b'L', b'C', b'S'])) => {
+                    let ref_col = QuestAliasRefCollectionAlias::read(map, key)?;
+                    ref_collections.push(ref_col);
+                }
+                _ => {
+                    return Ok(Self {
+                        references,
+                        locations,
+                        ref_collections,
+                    });
+                }
+            }
+        }
+    }
+
+    fn read_next(map: &mut FieldMap, key: Text<4>) -> Result<Self, Self::Error> {
+        Self::read(map, key)
+    }
+}
+
+#[derive(Clone, Debug, Record)]
+#[record(ordered)]
+pub struct QuestReferenceAlias {
+    #[record("ALST")]
+    pub id: u32,
+    #[record("ALID")]
+    pub name: Option<ZString>,
+    #[record("FNAM")]
+    pub flags: QuestAliasFlags,
+    #[record("ALFI")]
+    pub force_into_alias_when_filled: Option<i32>,
+    #[record("ALFR")]
+    pub forced_reference: Option<FormId>,
+    #[record("ALUA")]
+    pub unique_actor: Option<FormId>,
+    #[record("ALFA")]
+    pub location_alias_reference: Option<SubField<QuestAliasLocationAliasReference>>,
+    #[record("ALEQ")]
+    pub external_alias_reference: Option<SubField<QuestAliasExternalAlias>>,
+    #[record("ALCO")]
+    pub create_reference_to_object: Option<SubField<QuestAliasCreateReferenceToObject>>,
+    #[record("ALNA")]
+    pub find_matching_reference_near_alias:
+        Option<SubField<QuestAliasFindMatchingReferenceNearAlias>>,
+    #[record("ALFE")]
+    pub find_matching_reference_from_event: Option<SubField<QuestAliasFindMatchingFromEvent>>,
+    #[record("ALCC")]
+    pub closest_to_alias: Option<i32>,
+    #[record("CTDA")]
+    pub conditions: SubRecordArray<Condition>,
+    #[record("KSIZ")]
+    _keywords_len: Option<u32>,
+    #[record("KWDA")]
+    pub keywords: Option<Array<FormId>>,
+    #[record("SPOR")]
+    pub spectator_override_package_list: Option<FormId>,
+    #[record("OCOR")]
+    pub observe_dead_body_override_package_list: Option<FormId>,
+    #[record("GWOR")]
+    pub guard_warn_override_package_list: Option<FormId>,
+    #[record("ECOR")]
+    pub combat_override_package_list: Option<FormId>,
+    #[record("ALLA")]
+    pub linked_aliases: Option<QuestAliasLinkedAlias>,
+    #[record("ALDN")]
+    pub display_name: Option<FormId>,
+    #[record("VTYP")]
+    pub forced_voice: Option<FormId>,
+    #[record("ALDI")]
+    pub death_item: Option<FormId>,
+    #[record("ALSP")]
+    pub spells: SubRecordArray<FormId>,
+    #[record("ALFC")]
+    pub factions: SubRecordArray<FormId>,
+    #[record("ALPC")]
+    pub packages: SubRecordArray<FormId>,
+    #[record("VTCK")]
+    pub voice_types: Option<FormId>,
+    #[record("ALED")]
+    _end_marker: Option<()>,
+}
+
+#[derive(Clone, Debug, Record)]
+#[record(ordered)]
+pub struct QuestAliasCreateReferenceToObject {
+    #[record("ALCO")]
+    pub object: FormId,
+    #[record("ALCA")]
+    pub alias: i16,
+    #[record("ALCL")]
+    pub level: Option<QuestAliasLevel>,
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, BinaryStruct)]
+#[primitive(u32)]
+pub enum QuestAliasLevel {
+    Easy = 0,
+    Medium = 1,
+    Hard = 2,
+    VeryHard = 3,
+    None = 4,
+}
+
+#[derive(Clone, Debug, Record)]
+pub struct QuestAliasFindMatchingReferenceNearAlias {
+    #[record("ALNA")]
+    pub alias: i32,
+    #[record("ALNT")]
+    pub r#type: i32,
+}
+
+#[derive(Clone, Debug, Record)]
+#[record(ordered)]
+pub struct QuestLocationAlias {
+    #[record("ALLS")]
+    pub id: u32,
+    #[record("ALID")]
+    pub name: Option<ZString>,
+    #[record("FNAM")]
+    pub flags: QuestAliasFlags,
+    #[record("ALFI")]
+    pub force_into_alias_when_filled: Option<i32>,
+    #[record("ALFL")]
+    pub specific_location: Option<FormId>,
+    #[record("ALFA")]
+    pub reference_alias_location: Option<SubField<QuestAliasReferenceAliasLocation>>,
+    #[record("ALEQ")]
+    pub external_alias_location: Option<SubField<QuestAliasExternalAlias>>,
+    #[record("ALFE")]
+    pub find_matching_location_from_event: Option<SubField<QuestAliasFindMatchingFromEvent>>,
+    #[record("ALCC")]
+    pub closest_to_alias: Option<i32>,
+    #[record("ALED")]
+    _end_marker: Option<()>,
+}
+
+#[derive(Clone, Debug, Record)]
+#[record(ordered)]
+pub struct QuestAliasLocationAliasReference {
+    #[record("ALFA")]
+    pub alias: i32,
+    #[record("KNAM")]
+    pub keyword: Option<FormId>,
+    #[record("ALRT")]
+    pub ref_type: FormId,
+}
+
+#[derive(Clone, Debug, Record)]
+#[record(ordered)]
+pub struct QuestAliasReferenceAliasLocation {
+    #[record("ALFA")]
+    pub alias: i32,
+    #[record("KNAM")]
+    pub keyword: Option<FormId>,
+}
+
+#[derive(Clone, Debug, Record)]
+#[record(ordered)]
+pub struct QuestAliasExternalAlias {
+    #[record("ALEQ")]
+    pub quest: FormId,
+    #[record("ALEA")]
+    pub alias: i32,
+}
+
+#[derive(Clone, Debug, Record)]
+#[record(ordered)]
+pub struct QuestAliasFindMatchingFromEvent {
+    #[record("ALFE")]
+    pub from_event: u32,
+    #[record("ALFD")]
+    pub event_data: u32,
+}
+
+#[derive(Clone, Debug, BinaryStruct)]
+pub struct QuestAliasLinkedAlias {
+    pub keyword: FormId,
+    pub alias: i32,
+}
+
+bitflags! {
+    #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+    pub struct QuestAliasFlags: u32 {
+        const RESERVES = 0x00000001;
+        const OPTIONAL = 0x00000002;
+        const QUEST_OBJECT = 0x00000004;
+        const ALLOW_REUSE_IN_QUEST = 0x00000008;
+        const ALLOW_DEAD = 0x00000010;
+        const MATCHING_REF_IN_LOADED_AREA = 0x00000020;
+        const ESSENTIAL = 0x00000040;
+        const ALLOW_DISABLED = 0x00000080;
+        const STORES_TEXT = 0x00000100;
+        const ALLOW_RESERVED = 0x00000200;
+        const PROTECTED = 0x00000400;
+        const FORCED_BY_ALIASES = 0x00000800;
+        const ALLOW_DESTROYED = 0x00001000;
+        const MATCHING_REF_CLOSEST = 0x00002000;
+        const USES_STORED_TEXT = 0x00004000;
+        const INITIALLY_DISABLED = 0x00008000;
+        const ALLOW_CLEARED = 0x00010000;
+        const CLEAR_NAMES_WHEN_REMOVED = 0x00020000;
+        const MATCHING_REF_ACTORS_ONLY = 0x00040000;
+        const CREATE_REF_TEMP = 0x00080000;
+        const EXTERNAL_ALIAS_LINKED = 0x00100000;
+        const NO_PICKPOCKET = 0x00200000;
+        const CAN_APPLY_DATA_TO_NON_ALIASED_REFS = 0x00400000;
+        const IS_COMPANION = 0x00800000;
+        const OPTIONAL_ALL_SCENES = 0x01000000;
+    }
+}
+
+impl_decode_bitflags!(QuestAliasFlags: u32);
+
+#[derive(Clone, Debug, Record)]
+pub struct QuestAliasRefCollectionAlias {
+    #[record("ALCS")]
+    pub id: u32,
+    #[record("ALMI")]
+    pub max_initial_fill_count: Option<u8>,
+}
 
 #[derive(Clone, Debug, Record)]
 pub struct DialogueBranch {

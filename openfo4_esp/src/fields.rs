@@ -253,3 +253,28 @@ where
         }
     }
 }
+
+/// Reads `T` if a the next key is matching. The key is not consumed.
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub struct SubField<T>(pub T);
+
+impl<T> Read for Option<SubField<T>>
+where
+    T: Read<Error = Error>,
+{
+    type Error = T::Error;
+
+    fn read(map: &mut FieldMap, key: Text<4>) -> Result<Self, Self::Error> {
+        match map.next_key() {
+            Some(next_key) if next_key == key => {
+                let section = T::read(map, key)?;
+                Ok(Some(SubField(section)))
+            }
+            None | Some(_) => Ok(None),
+        }
+    }
+
+    fn read_next(map: &mut FieldMap, key: Text<4>) -> Result<Self, Self::Error> {
+        Self::read(map, key)
+    }
+}
