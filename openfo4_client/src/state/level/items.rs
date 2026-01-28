@@ -19,11 +19,23 @@ pub async fn resolve_item(
 ) -> Vec<ItemStack> {
     let mut items = Vec::new();
 
+    let mut visited = HashSet::new();
+
     let mut queue = vec![(record_id, count)];
-    while let Some((parent_rid, count)) = queue.pop() {
+    while let Some((record_id, count)) = queue.pop() {
+        visited.insert(record_id);
+
         let record = esp_loader.lookup(None, record_id).await.unwrap();
         match record.local.data {
-            RecordData::LeveledItem(data) => {
+            RecordData::LeveledItem(mut data) => {
+                // Discard any entries that we have already seen, otherwise
+                // we might get a cycle in the reference graph.
+                data.entries.retain(|entry| {
+                    esp_loader
+                        .resolve_form(entry.reference, record_id)
+                        .is_some_and(|id| !visited.contains(&id))
+                });
+
                 let Some(index) = select_from_leveled_list(data.flags, &data.entries, PLAYER_LEVEL)
                 else {
                     continue;
@@ -31,7 +43,7 @@ pub async fn resolve_item(
 
                 let form = data.entries[index].reference;
                 let count = u64::from(data.entries[index].count);
-                let rid = esp_loader.resolve_form(form, parent_rid).unwrap();
+                let rid = esp_loader.resolve_form(form, record_id).unwrap();
                 queue.push((rid, count));
             }
             RecordData::MiscObject(data) => {
@@ -39,13 +51,13 @@ pub async fn resolve_item(
                     .keywords
                     .iter()
                     .flatten()
-                    .map(|form| esp_loader.resolve_form(*form, parent_rid).unwrap())
+                    .map(|form| esp_loader.resolve_form(*form, record_id).unwrap())
                     .collect();
 
                 let script = load_item_script(record.id, script_loader).await;
 
                 items.push(ItemStack {
-                    item: parent_rid,
+                    item: record_id,
                     name: data.id.as_str().unwrap().to_owned(),
                     hidden: false,
                     kind: ItemKind::Misc,
@@ -64,12 +76,12 @@ pub async fn resolve_item(
             }
             RecordData::Weapon(_) | RecordData::Armor(_) => {
                 // FIXME: Merge this function into this file.
-                let item = load_equipment_item(esp_loader, script_loader, parent_rid, &[]).await;
+                let item = load_equipment_item(esp_loader, script_loader, record_id, &[]).await;
 
                 let script = load_item_script(record.id, script_loader).await;
 
                 items.push(ItemStack {
-                    item: parent_rid,
+                    item: record_id,
                     name: item.name,
                     hidden: false,
                     kind: item.kind,
@@ -91,13 +103,13 @@ pub async fn resolve_item(
                     .keywords
                     .iter()
                     .flatten()
-                    .map(|form| esp_loader.resolve_form(*form, parent_rid).unwrap())
+                    .map(|form| esp_loader.resolve_form(*form, record_id).unwrap())
                     .collect();
 
                 let script = load_item_script(record.id, script_loader).await;
 
                 items.push(ItemStack {
-                    item: parent_rid,
+                    item: record_id,
                     name: data.id.as_str().unwrap().to_string(),
                     hidden: false,
                     kind: ItemKind::Ammo,
@@ -119,13 +131,13 @@ pub async fn resolve_item(
                     .keywords
                     .iter()
                     .flatten()
-                    .map(|form| esp_loader.resolve_form(*form, parent_rid).unwrap())
+                    .map(|form| esp_loader.resolve_form(*form, record_id).unwrap())
                     .collect();
 
                 let script = load_item_script(record.id, script_loader).await;
 
                 items.push(ItemStack {
-                    item: parent_rid,
+                    item: record_id,
                     name: data.id.as_str().unwrap().to_string(),
                     hidden: false,
                     kind: ItemKind::Aid,
@@ -147,13 +159,13 @@ pub async fn resolve_item(
                     .keywords
                     .iter()
                     .flatten()
-                    .map(|form| esp_loader.resolve_form(*form, parent_rid).unwrap())
+                    .map(|form| esp_loader.resolve_form(*form, record_id).unwrap())
                     .collect();
 
                 let script = load_item_script(record.id, script_loader).await;
 
                 items.push(ItemStack {
-                    item: parent_rid,
+                    item: record_id,
                     name: data.id.as_str().unwrap().to_string(),
                     hidden: false,
                     kind: ItemKind::Misc,
@@ -175,13 +187,13 @@ pub async fn resolve_item(
                     .keywords
                     .iter()
                     .flatten()
-                    .map(|form| esp_loader.resolve_form(*form, parent_rid).unwrap())
+                    .map(|form| esp_loader.resolve_form(*form, record_id).unwrap())
                     .collect();
 
                 let script = load_item_script(record.id, script_loader).await;
 
                 items.push(ItemStack {
-                    item: parent_rid,
+                    item: record_id,
                     name: data.id.as_str().unwrap().to_string(),
                     hidden: false,
                     kind: ItemKind::Misc,
@@ -202,7 +214,7 @@ pub async fn resolve_item(
                 let script = load_item_script(record.id, script_loader).await;
 
                 items.push(ItemStack {
-                    item: parent_rid,
+                    item: record_id,
                     name: data.id.as_str().unwrap().to_string(),
                     hidden: false,
                     kind: ItemKind::Junk,
@@ -223,7 +235,7 @@ pub async fn resolve_item(
                 let script = load_item_script(record.id, script_loader).await;
 
                 items.push(ItemStack {
-                    item: parent_rid,
+                    item: record_id,
                     name: data.id.as_str().unwrap().to_string(),
                     hidden: false,
                     kind: ItemKind::Misc,

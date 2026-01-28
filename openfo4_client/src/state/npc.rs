@@ -307,9 +307,12 @@ async fn resolve_actor_props(
 
     let mut queue = VecDeque::new();
     queue.push_back((NpcTemplateFlags::all(), npc));
+    let mut visited = HashSet::new();
 
     while let Some((flags, record)) = queue.pop_front() {
-        match &record.local.data {
+        visited.insert(record.id);
+
+        match record.local.data {
             RecordData::Npc(data) => {
                 if flags.contains(NpcTemplateFlags::TRAITS) {
                     race = Some(esp_loader.resolve_form(data.race, record.id).unwrap());
@@ -419,7 +422,15 @@ async fn resolve_actor_props(
                     }
                 }
             }
-            RecordData::LeveledActor(data) => {
+            RecordData::LeveledActor(mut data) => {
+                // Discard any entries that we have already seen, otherwise
+                // we might get a cycle in the reference graph.
+                data.entries.retain(|entry| {
+                    esp_loader
+                        .resolve_form(entry.reference, record.id)
+                        .is_some_and(|id| !visited.contains(&id))
+                });
+
                 let Some(index) = select_from_leveled_list(data.flags, &data.entries, PLAYER_LEVEL)
                 else {
                     continue;
