@@ -33,7 +33,7 @@ use crate::state::hardcoded::HARDCODED_MODULE_ID;
 use crate::state::level::Streamer;
 use crate::state::npc::{ActorInstanceProps, BodyPartBone, spawn_actor};
 use crate::systems::PlayerControlState;
-use crate::systems::inventory::{AddItemEvent, EquipItemEvent, Inventory};
+use crate::systems::inventory::{AddItemEventAsync, EquipItemEvent, Inventory};
 
 #[derive(Clone, Debug)]
 pub struct SkinInstance {
@@ -82,18 +82,18 @@ pub fn animation_test(
 
     ONCE.get_or_init(|| {
         let start_x = std::env::var("OF4_SX")
-            .unwrap_or("2".to_owned())
+            .unwrap_or("-13".to_owned())
             .parse()
             .unwrap();
         let start_y = std::env::var("OF4_SX")
-            .unwrap_or("7".to_owned())
+            .unwrap_or("13".to_owned())
             .parse()
             .unwrap();
 
         let offset = CellId(IVec2::new(start_x, start_y)).min();
         for (index, offset) in [
-            NiTransform::from_translation(offset.extend(0.0) - Vec3::new(1024.0, 1024.0, 0.0)),
-            NiTransform::from_translation(offset.extend(0.0) - Vec3::new(2000.0, 2000.0, 0.0)),
+            NiTransform::from_translation(offset.extend(0.0) + Vec3::new(1024.0, 1024.0, 8096.0)),
+            // NiTransform::from_translation(offset.extend(0.0) - Vec3::new(2000.0, 2000.0, 0.0)),
         ]
         .iter()
         .enumerate()
@@ -143,7 +143,7 @@ pub fn animation_test(
             //     item: armor,
             // });
 
-            events.send(AddItemEvent {
+            events.send(AddItemEventAsync {
                 actor: root,
                 item: RecordId::new(HARDCODED_MODULE_ID, FormId(0x9983b)),
                 // OMODs
@@ -156,13 +156,15 @@ pub fn animation_test(
                 ],
                 hidden: false,
                 count: 1,
+                equip: true,
             });
-            events.send(AddItemEvent {
+            events.send(AddItemEventAsync {
                 actor: root,
                 item: RecordId::new(HARDCODED_MODULE_ID, FormId(0x000C1897)),
                 attachments: Vec::new(),
                 hidden: false,
                 count: 100,
+                equip: true,
             });
             events.send(EquipItemEvent {
                 actor: root,

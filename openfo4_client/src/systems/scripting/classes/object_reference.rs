@@ -1,6 +1,11 @@
+use game_common::components::Transform;
+use glam::EulerRot;
+use openfo4_core::transform::ConvertCoordinateSystem;
 use openfo4_script::engine::Engine;
 use openfo4_script::runtime::{Caller, Exception};
 
+use crate::systems::actor_value::ActorValueProperties;
+use crate::systems::inventory::Inventory;
 use crate::systems::scripting::classes::{Object, State};
 
 #[rustfmt::skip]
@@ -926,9 +931,19 @@ fn get_current_scene(caller: Caller<'_, State>, self_ptr: Object) -> Result<Obje
 fn get_distance(
     caller: Caller<'_, State>,
     self_ptr: Object,
-    ak_other: Object,
+    other: Object,
 ) -> Result<f32, Exception> {
-    todo!()
+    let this = caller.data().entity(self_ptr).ok_or(Exception::Error)?;
+    let other = caller.data().entity(other).ok_or(Exception::Error)?;
+
+    // Entities are guaranteed to exist, otherwise `entity()` would return `None`.
+    let this_transform = caller.data().world().get::<&Transform>(this).unwrap();
+    let other_transform = caller.data().world().get::<&Transform>(other).unwrap();
+
+    let a = this_transform.to_nif();
+    let b = other_transform.to_nif();
+
+    Ok(a.translation.distance(b.translation))
 }
 
 /// `GetEditorLocation`
@@ -997,9 +1012,26 @@ fn get_inventory_value(caller: Caller<'_, State>, self_ptr: Object) -> Result<i3
 fn get_item_count(
     caller: Caller<'_, State>,
     self_ptr: Object,
-    ak_item: Object,
+    item: Object,
 ) -> Result<i32, Exception> {
-    todo!()
+    let entity = caller.data().entity(self_ptr).ok_or(Exception::Error)?;
+
+    let Ok(inventory) = caller.data().world().get::<&Inventory>(entity) else {
+        return Ok(0);
+    };
+
+    let count = if item.is_null() {
+        inventory
+            .items()
+            .fold(0_u64, |sum, (_, stack)| sum.saturating_add(stack.count))
+    } else {
+        let id = caller.data().objects.item(item).ok_or(Exception::Error)?;
+        inventory
+            .get_by_form(id)
+            .fold(0_u64, |sum, (_, stack)| sum.saturating_add(stack.count))
+    };
+
+    Ok(count.try_into().unwrap_or(i32::MAX))
 }
 
 /// `GetComponentCount`
@@ -1156,7 +1188,8 @@ fn get_parent_cell(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object
 /// float Function() native
 /// ```
 fn get_position_x(caller: Caller<'_, State>, self_ptr: Object) -> Result<f32, Exception> {
-    todo!()
+    let transform = get_transform(caller, self_ptr).ok_or(Exception::Error)?;
+    Ok(transform.translation.x)
 }
 
 /// `GetPositionY`
@@ -1165,7 +1198,8 @@ fn get_position_x(caller: Caller<'_, State>, self_ptr: Object) -> Result<f32, Ex
 /// float Function() native
 /// ```
 fn get_position_y(caller: Caller<'_, State>, self_ptr: Object) -> Result<f32, Exception> {
-    todo!()
+    let transform = get_transform(caller, self_ptr).ok_or(Exception::Error)?;
+    Ok(transform.translation.y)
 }
 
 /// `GetPositionZ`
@@ -1174,7 +1208,8 @@ fn get_position_y(caller: Caller<'_, State>, self_ptr: Object) -> Result<f32, Ex
 /// float Function() native
 /// ```
 fn get_position_z(caller: Caller<'_, State>, self_ptr: Object) -> Result<f32, Exception> {
-    todo!()
+    let transform = get_transform(caller, self_ptr).ok_or(Exception::Error)?;
+    Ok(transform.translation.z)
 }
 
 /// `GetRadioFrequency`
@@ -1282,7 +1317,9 @@ fn get_workshop_resource_objects(
 /// float Function() native
 /// ```
 fn get_scale(caller: Caller<'_, State>, self_ptr: Object) -> Result<f32, Exception> {
-    todo!()
+    let transform = get_transform(caller, self_ptr).ok_or(Exception::Error)?;
+    // Assume we have uniform scale.
+    Ok(transform.scale.x)
 }
 
 /// `GetTeleportCell`
@@ -1326,7 +1363,11 @@ fn get_trigger_object_count(caller: Caller<'_, State>, self_ptr: Object) -> Resu
 /// ```text
 /// float Function(ActorValue akAV) native
 /// ```
-fn get_value(caller: Caller<'_, State>, self_ptr: Object, ak_av: Object) -> Result<f32, Exception> {
+fn get_value(
+    caller: Caller<'_, State>,
+    self_ptr: Object,
+    actor_value: Object,
+) -> Result<f32, Exception> {
     todo!()
 }
 
@@ -2086,8 +2127,8 @@ fn pause_audio(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Except
 /// ```text
 /// Function() native
 /// ```
-fn preload_exterior_cell(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Exception> {
-    todo!()
+fn preload_exterior_cell(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<(), Exception> {
+    Ok(())
 }
 
 /// `PreloadTargetArea`
@@ -2095,8 +2136,8 @@ fn preload_exterior_cell(caller: Caller<'_, State>, self_ptr: Object) -> Result<
 /// ```text
 /// Function() native
 /// ```
-fn preload_target_area(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Exception> {
-    todo!()
+fn preload_target_area(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<(), Exception> {
+    Ok(())
 }
 
 /// `ProcessTrapHit`
@@ -2914,4 +2955,10 @@ fn scrap(
     ak_workshop: Object,
 ) -> Result<bool, Exception> {
     todo!()
+}
+
+fn get_transform(caller: Caller<'_, State>, object: Object) -> Option<Transform> {
+    let entity = caller.data().entity(object)?;
+    let transform = caller.data().world().get::<&Transform>(entity).ok()?;
+    Some(transform.to_nif())
 }

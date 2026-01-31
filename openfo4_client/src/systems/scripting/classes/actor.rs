@@ -216,7 +216,8 @@ fn add_perk(
 ) -> Result<(), Exception> {
     let entity = caller.data().entity(self_ptr);
 
-    todo!()
+    // todo!()
+    Ok(())
 }
 
 /// `AddSpell`
@@ -230,7 +231,8 @@ fn add_spell(
     ak_spell: Object,
     ab_verbose_true: bool,
 ) -> Result<bool, Exception> {
-    todo!()
+    // todo!()
+    Ok(true)
 }
 
 /// `AllowBleedoutDialogue`

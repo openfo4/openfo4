@@ -22,7 +22,7 @@ use crate::systems::FacingDirection;
 use crate::systems::actor_value::ActorValueProperties;
 use crate::systems::controller::ControllerShape;
 use crate::systems::equipment::{Equipment, equip_item};
-use crate::systems::inventory::{AddItemEvent, EquipItemEvent, Inventory};
+use crate::systems::inventory::{AddItemEventAsync, EquipItemEvent, Inventory};
 
 // FIXME: Unhardcode this guy.
 const PLAYER_LEVEL: u16 = 1000;
@@ -95,17 +95,13 @@ impl Actor {
         let instance = spawned_actor.skeleton;
 
         if let Some(skin) = self.skin {
-            events.send(AddItemEvent {
+            events.send(AddItemEventAsync {
                 actor: root,
                 item: skin,
                 attachments: Vec::new(),
                 hidden: true,
                 count: 1,
-            });
-
-            events.send(EquipItemEvent {
-                actor: root,
-                item: skin,
+                equip: true,
             });
         }
 

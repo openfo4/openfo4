@@ -2,7 +2,7 @@ use std::fmt::Debug;
 use std::sync::Arc;
 use std::time::Duration;
 
-use game_tasks::{TaskPool, TaskQueue};
+use game_tasks::{Task, TaskPool, TaskQueue};
 use game_tracing::trace_span;
 use hashbrown::{HashMap, HashSet};
 use hecs::{Entity, World};
@@ -202,10 +202,19 @@ pub struct Attachment {
 #[derive(Clone, Debug)]
 pub struct AddItemEvent {
     pub actor: Entity,
+    pub item: ItemStack,
+}
+
+/// Queues an item to be added to an inventory.
+#[derive(Clone, Debug)]
+pub struct AddItemEventAsync {
+    pub actor: Entity,
     pub item: RecordId,
     pub attachments: Vec<RecordId>,
-    pub hidden: bool,
     pub count: u64,
+    pub hidden: bool,
+    /// Cause the item to get equipped when loaded.
+    pub equip: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -227,6 +236,7 @@ pub struct InventorySystem {
     loader: AssetLoader,
     esp_loader: Arc<EspLoader>,
     tasks: TaskQueue<(Entity, InventoryKey, EquipmentItemModels)>,
+    async_item_add_tasks: TaskQueue<(AddItemEvent, Option<EquipItemEvent>)>,
 }
 
 impl InventorySystem {
@@ -236,6 +246,7 @@ impl InventorySystem {
             loader,
             esp_loader,
             tasks: TaskQueue::new(),
+            async_item_add_tasks: TaskQueue::new(),
         }
     }
 
@@ -246,6 +257,57 @@ impl InventorySystem {
         executor: &mut Executor,
     ) {
         let _span = trace_span!("handle_inventory_events").entered();
+
+        for event in events.read::<AddItemEventAsync>() {
+            let esp_loader = self.esp_loader.clone();
+            let script_loader = executor.loader().clone();
+            let event = event.clone();
+
+            self.async_item_add_tasks.push(self.pool.spawn(async move {
+                let item = load_equipment_item(
+                    &esp_loader,
+                    &script_loader,
+                    event.item,
+                    &event.attachments,
+                )
+                .await;
+
+                let add_event = AddItemEvent {
+                    actor: event.actor,
+                    item: ItemStack {
+                        item: event.item,
+                        kind: item.kind,
+                        count: event.count,
+                        attachments: event.attachments.clone(),
+                        equipped: false,
+                        base_keywords: item.base_keywords,
+                        combined_keywords: item.combined_keywords,
+                        data: item.data,
+                        name: item.name,
+                        hidden: event.hidden,
+                        equipment_keys: Vec::new(),
+                        equipment_slots: item.equipment_slots,
+                        visibility_slots: item.visibility_slots,
+                        visible: true,
+                        script: item.script,
+                    },
+                };
+
+                let equip_event = event.equip.then(|| EquipItemEvent {
+                    actor: event.actor,
+                    item: event.item,
+                });
+
+                (add_event, equip_event)
+            }));
+        }
+
+        while let Some((add_event, equip_event)) = self.async_item_add_tasks.pop() {
+            events.send(add_event);
+            if let Some(equip_event) = equip_event {
+                events.send(equip_event);
+            }
+        }
 
         // Before we transfer anything we must first unequip it.
         let unequip_transfer_events = events
@@ -262,30 +324,7 @@ impl InventorySystem {
                 continue;
             };
 
-            let item = futures_lite::future::block_on(load_equipment_item(
-                &self.esp_loader,
-                executor.loader(),
-                event.item,
-                &event.attachments,
-            ));
-
-            inventory.insert(ItemStack {
-                item: event.item,
-                kind: item.kind,
-                count: event.count,
-                attachments: event.attachments.clone(),
-                equipped: false,
-                base_keywords: item.base_keywords,
-                combined_keywords: item.combined_keywords,
-                data: item.data,
-                name: item.name,
-                hidden: event.hidden,
-                equipment_keys: Vec::new(),
-                equipment_slots: item.equipment_slots,
-                visibility_slots: item.visibility_slots,
-                visible: true,
-                script: item.script,
-            });
+            inventory.insert(event.item.clone());
         }
 
         let mut unequip_conflicting_events = Vec::new();

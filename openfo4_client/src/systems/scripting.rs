@@ -46,7 +46,6 @@ const COMPILER_OPTIONS: Options = Options {
 pub struct Executor {
     loader: Arc<ScriptLoader>,
     invocations: Arena<InvocationState>,
-    state: Option<State>,
     suspended_calls: Vec<SuspendedCall>,
     queue: VecDeque<ScheduledTask>,
 }
@@ -85,12 +84,12 @@ impl Executor {
             instances: Mutex::default(),
             base_records: Mutex::default(),
             esp_loader,
+            state: Mutex::new(Some(state)),
         });
 
         Self {
             loader,
             invocations: Arena::new(),
-            state: Some(state),
             suspended_calls: Vec::new(),
             queue: VecDeque::new(),
         }
@@ -152,6 +151,7 @@ impl Executor {
 
         let engine = futures_lite::future::block_on(self.loader.engine.lock());
         let mut instances = futures_lite::future::block_on(self.loader.instances.lock());
+        let mut state = futures_lite::future::block_on(self.loader.state.lock());
 
         // FIXME: Don't recompute this every update.
         let mut entities = HashMap::new();
@@ -163,18 +163,17 @@ impl Executor {
             }
         }
 
-        let state = self.state.as_mut().unwrap();
-        state.world = world;
-        state.globals = globals;
-        state.objects.entities = entities;
-        state.entities = script_entities;
+        state.as_mut().unwrap().world = world;
+        state.as_mut().unwrap().globals = globals;
+        state.as_mut().unwrap().objects.entities = entities;
+        state.as_mut().unwrap().entities = script_entities;
 
         while let Some(task) = self.queue.pop_front() {
             let scripts = instances.get_mut(task.object.0.id.0).unwrap();
             let script = scripts.get_mut(&task.script).unwrap();
 
             if let Some(future) =
-                call_event_invocation_single(&engine, script, &mut self.state, &task.invocation)
+                call_event_invocation_single(&engine, script, &mut state, &task.invocation)
             {
                 self.suspended_calls.push(SuspendedCall { task, future });
                 continue;
@@ -187,11 +186,10 @@ impl Executor {
             }
         }
 
-        let state = self.state.as_mut().unwrap();
         // FIXME: Not necessarly required, we can leave pointers dangling.
-        state.world = core::ptr::null_mut();
-        state.quests = core::ptr::null_mut();
-        state.entities = core::ptr::null();
+        // state.world = core::ptr::null_mut();
+        // state.quests = core::ptr::null_mut();
+        // state.entities = core::ptr::null();
 
         // for entry in real_timers.tick(delta) {
         //     self.invocations.insert(Invocation::Timer {
@@ -218,7 +216,7 @@ impl Executor {
     fn poll_timers(&mut self, delta: Duration) {
         let _span = trace_span!("Executor::poll_timers").entered();
 
-        let state = self.state.as_mut().unwrap();
+        // let state = self.state.as_mut().unwrap();
     }
 }
 
@@ -352,6 +350,7 @@ struct Objects {
     objects: HashMap<ObjectAddr, Entity>,
     actor_values: HashMap<ObjectAddr, RecordId>,
     quests: HashMap<ObjectAddr, RecordId>,
+    perks: HashMap<ObjectAddr, RecordId>,
     /// Entities that exist in the game world.
     entities: HashMap<ObjectAddr, ScriptObjectId>,
 }
@@ -363,6 +362,16 @@ impl Objects {
 
     pub fn quest(&self, addr: ObjectAddr) -> Option<RecordId> {
         self.quests.get(&addr).copied()
+    }
+
+    pub fn perk(&self, addr: ObjectAddr) -> Option<RecordId> {
+        self.perks.get(&addr).copied()
+    }
+
+    /// Look up an item-like record (weapon, armor, etc..), i.e. any item that can be contained
+    /// inside an inventory.
+    pub fn item(&self, addr: ObjectAddr) -> Option<RecordId> {
+        todo!()
     }
 }
 

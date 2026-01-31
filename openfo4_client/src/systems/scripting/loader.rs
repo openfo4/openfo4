@@ -12,7 +12,8 @@ use openfo4_script::runtime::object::{IntoValue, ObjectArrayBuilder, ObjectBuild
 use openfo4_script::runtime::{ObjectAddr, ObjectRef};
 use slab::Slab;
 
-use crate::state::esp::EspLoader;
+use crate::state::esp::{EspLoader, GlobalRecord};
+use crate::systems::scripting::classes::State;
 use crate::systems::scripting::{COMPILER_OPTIONS, ScriptInstance};
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
@@ -46,6 +47,7 @@ pub struct ScriptLoader {
     /// Cache of compiled classes.
     pub(super) classes: Mutex<HashMap<String, Instance>>,
     pub(super) esp_loader: Arc<EspLoader>,
+    pub(super) state: Mutex<Option<State>>,
 }
 
 impl ScriptLoader {
@@ -60,6 +62,7 @@ impl ScriptLoader {
         let mut instances = self.instances.lock().await;
         let mut base_records = self.base_records.lock().await;
         let mut classes = self.classes.lock().await;
+        let mut state = self.state.lock().await;
 
         let id = instantiate_form(
             &mut engine,
@@ -68,6 +71,7 @@ impl ScriptLoader {
             &self.esp_loader,
             record,
             &mut classes,
+            state.as_mut().unwrap(),
         )
         .await?;
 
@@ -118,6 +122,7 @@ async fn instantiate_form(
     esp_loader: &EspLoader,
     root: RecordId,
     compiled_classes: &mut HashMap<String, Instance>,
+    state: &mut State,
 ) -> Option<ScriptObjectId> {
     if let Some(id) = base_instances.get(&root) {
         return Some(*id);
@@ -238,6 +243,10 @@ async fn instantiate_form(
                     script: Some(script),
                 },
             );
+        }
+
+        for script in &scripts {
+            register_base_object(state, &record, script.1.builder.addr());
         }
 
         records.insert(record.id, scripts);
@@ -373,6 +382,27 @@ fn record_script_name(data: &RecordData) -> Option<&'static str> {
         RecordData::DialogueTopic(_) => Some("Topic"),
         RecordData::Scene(_) => Some("Scene"),
         x => todo!("{:?}", x),
+    }
+}
+
+fn register_base_object(state: &mut State, record: &GlobalRecord, addr: ObjectAddr) {
+    match record.local.data {
+        RecordData::GLOB(_) => {
+            state.objects.globals.insert(addr, record.id);
+        }
+        RecordData::Keyword(_) => {
+            state.objects.keywords.insert(addr, record.id);
+        }
+        RecordData::ActorValueInfo(_) => {
+            state.objects.actor_values.insert(addr, record.id);
+        }
+        RecordData::Quest(_) => {
+            state.objects.quests.insert(addr, record.id);
+        }
+        RecordData::Perk(_) => {
+            state.objects.perks.insert(addr, record.id);
+        }
+        _ => {}
     }
 }
 

@@ -2,7 +2,7 @@ use hashbrown::HashMap;
 use hecs::World;
 use indexmap::IndexMap;
 use openfo4_core::events::EventBus;
-use openfo4_core::record::RecordId;
+use openfo4_core::record::{ModuleId, RecordId};
 use openfo4_esp::records::QuestStageFlags;
 use openfo4_esp::{FormId, RecordData, RecordKind};
 
@@ -45,17 +45,17 @@ impl QuestManager {
         }
 
         let mut quests = HashMap::new();
-        quests.insert(
-            quest.id,
-            Quest {
-                state: QuestState::Stopping,
-                is_init: false,
-                stages,
-                active_stage: None,
-                next_stage: None,
-                script,
-            },
-        );
+        // quests.insert(
+        //     quest.id,
+        //     Quest {
+        //         state: QuestState::Stopping,
+        //         is_init: false,
+        //         stages,
+        //         active_stage: None,
+        //         next_stage: None,
+        //         script,
+        //     },
+        // );
 
         Self { quests }
     }
@@ -67,10 +67,12 @@ impl QuestManager {
             };
 
             if !quest.is_init {
+                quest.is_init = true;
+                tracing::debug!("starting quest {:?}", id);
+
                 executor.invoke(Init {
                     object: script.clone(),
                 });
-
                 executor.invoke(QuestInit {
                     quest: script.clone(),
                 });
