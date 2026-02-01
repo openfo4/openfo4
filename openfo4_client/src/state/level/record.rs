@@ -28,6 +28,7 @@ use crate::state::terrain::{TerrainManager, TerrainRegion};
 use crate::systems::door::{Door, PortalDoor};
 use crate::systems::inventory::{Inventory, ItemStack};
 use crate::systems::lights::{LightFlicker, LightFlickerMode};
+use crate::systems::linked_refs::LinkedRefs;
 use crate::systems::scripting::ScriptEntities;
 use crate::systems::scripting::loader::ScriptObject;
 
@@ -143,6 +144,8 @@ impl SpawnEntity {
         }
 
         world.insert_one(entity, Root).unwrap();
+
+        world.insert_one(entity, LinkedRefs::default()).unwrap();
 
         if is_actor {
             world.insert_one(entity, ActorMarker).unwrap();

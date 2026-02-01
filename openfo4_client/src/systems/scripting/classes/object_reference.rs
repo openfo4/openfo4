@@ -1,11 +1,13 @@
 use game_common::components::Transform;
-use glam::EulerRot;
+use hashbrown::HashSet;
+use hecs::Entity;
+use openfo4_core::record::RecordId;
 use openfo4_core::transform::ConvertCoordinateSystem;
 use openfo4_script::engine::Engine;
 use openfo4_script::runtime::{Caller, Exception};
 
-use crate::systems::actor_value::ActorValueProperties;
 use crate::systems::inventory::Inventory;
+use crate::systems::linked_refs::LinkedRefs;
 use crate::systems::scripting::classes::{Object, State};
 
 #[rustfmt::skip]
@@ -1091,9 +1093,11 @@ fn get_length(caller: Caller<'_, State>, self_ptr: Object) -> Result<f32, Except
 fn get_linked_ref(
     caller: Caller<'_, State>,
     self_ptr: Object,
-    ap_keyword: Object,
+    keyword: Object,
 ) -> Result<Object, Exception> {
-    todo!()
+    let mut iter = LinkedRefChainIter::new(&caller, self_ptr, keyword).ok_or(Exception::Error)?;
+    let addr = iter.next().unwrap_or(Object::NULL);
+    Ok(addr)
 }
 
 /// `GetLinkedRefChain`
@@ -1104,9 +1108,9 @@ fn get_linked_ref(
 fn get_linked_ref_chain(
     caller: Caller<'_, State>,
     self_ptr: Object,
-    ap_keyword: Object,
-    i_max_expected_linked_refs: i32,
-) -> Result<isize, Exception> {
+    keyword: Object,
+    max_linked_refs: i32,
+) -> Result<Object, Exception> {
     todo!()
 }
 
@@ -1149,10 +1153,14 @@ fn get_loc_ref_types(caller: Caller<'_, State>, self_ptr: Object) -> Result<isiz
 fn get_nth_linked_ref(
     caller: Caller<'_, State>,
     self_ptr: Object,
-    ai_linked_ref: i32,
-    ap_keyword: Object,
+    index: i32,
+    keyword: Object,
 ) -> Result<Object, Exception> {
-    todo!()
+    let index = usize::try_from(index).map_err(|_| Exception::Error)?;
+
+    let mut iter = LinkedRefChainIter::new(&caller, self_ptr, keyword).ok_or(Exception::Error)?;
+    let addr = iter.nth(index).unwrap_or(Object::NULL);
+    Ok(addr)
 }
 
 /// `GetMass`
@@ -2635,10 +2643,28 @@ fn set_harvested(
 fn set_linked_ref(
     caller: Caller<'_, State>,
     self_ptr: Object,
-    ak_linked_ref: Object,
-    ap_keyword: Object,
+    linked_ref: Object,
+    keyword: Object,
 ) -> Result<(), Exception> {
-    todo!()
+    let keyword = (!keyword.is_null())
+        .then(|| caller.data().objects.keywords.get(&keyword).copied())
+        .ok_or(Exception::Error)?;
+
+    let entity = caller.data().entity(self_ptr).ok_or(Exception::Error)?;
+    let mut linked_refs = caller
+        .data()
+        .world()
+        .get::<&mut LinkedRefs>(entity)
+        .unwrap();
+
+    if linked_ref.is_null() {
+        linked_refs.remove(keyword);
+    } else {
+        let linked_ref = caller.data().entity(linked_ref).ok_or(Exception::Error)?;
+        linked_refs.set(keyword, linked_ref);
+    }
+
+    Ok(())
 }
 
 /// `SetLockLevel`
@@ -2961,4 +2987,54 @@ fn get_transform(caller: Caller<'_, State>, object: Object) -> Option<Transform>
     let entity = caller.data().entity(object)?;
     let transform = caller.data().world().get::<&Transform>(entity).ok()?;
     Some(transform.to_nif())
+}
+
+#[derive(Clone, Debug)]
+struct LinkedRefChainIter<'a> {
+    state: &'a State,
+    entity: Entity,
+    keyword: Option<RecordId>,
+    // Keep track of visited entities to avoid cycles.
+    visited: HashSet<Entity>,
+}
+
+impl<'a> LinkedRefChainIter<'a> {
+    fn new(caller: &'a Caller<'_, State>, self_ptr: Object, keyword: Object) -> Option<Self> {
+        let state = caller.data();
+
+        let keyword = if keyword.is_null() {
+            None
+        } else {
+            Some(*state.objects.keywords.get(&keyword)?)
+        };
+
+        let entity = state.entity(self_ptr)?;
+
+        Some(Self {
+            state,
+            keyword,
+            entity,
+            visited: HashSet::new(),
+        })
+    }
+}
+
+impl<'a> Iterator for LinkedRefChainIter<'a> {
+    type Item = Object;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.visited.contains(&self.entity) {
+            return None;
+        }
+        self.visited.insert(self.entity);
+
+        let linked_refs = self.state.world().get::<&LinkedRefs>(self.entity).ok()?;
+        let entity = linked_refs.get(self.keyword)?;
+
+        let script = self.state.get_script_object(entity);
+        let addr = self.state.lookup_script_instances(script.id())?;
+
+        self.entity = entity;
+        Some(addr)
+    }
 }

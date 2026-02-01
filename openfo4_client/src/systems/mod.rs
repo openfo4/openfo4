@@ -18,6 +18,7 @@ pub mod global;
 pub mod hierarchy;
 pub mod inventory;
 pub mod lights;
+pub mod linked_refs;
 pub mod ni_transform;
 pub mod projectile;
 pub mod quests;

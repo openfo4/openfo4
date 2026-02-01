@@ -368,6 +368,10 @@ impl Objects {
         self.perks.get(&addr).copied()
     }
 
+    pub fn keyword(&self, addr: ObjectAddr) -> Option<RecordId> {
+        self.keywords.get(&addr).copied()
+    }
+
     /// Look up an item-like record (weapon, armor, etc..), i.e. any item that can be contained
     /// inside an inventory.
     pub fn item(&self, addr: ObjectAddr) -> Option<RecordId> {

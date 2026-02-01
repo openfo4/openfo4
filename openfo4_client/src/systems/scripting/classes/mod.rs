@@ -45,6 +45,7 @@ use slab::Slab;
 use crate::components::Player;
 use crate::systems::global::GlobalProperties;
 use crate::systems::quests::QuestManager;
+use crate::systems::scripting::loader::{ScriptObject, ScriptObjectId};
 use crate::systems::scripting::registration::RegistrationSet;
 use crate::systems::scripting::{Objects, ScriptEntities};
 
@@ -164,6 +165,26 @@ impl State {
 
     fn entities(&self) -> &ScriptEntities {
         unsafe { &*self.entities }
+    }
+
+    pub fn get_script_object(&self, entity: Entity) -> ScriptObject {
+        if let Ok(object) = self.world().get::<&ScriptObject>(entity) {
+            return ScriptObject::clone(&object);
+        }
+
+        todo!()
+    }
+
+    pub fn lookup_script_instances(&self, id: ScriptObjectId) -> Option<ObjectAddr> {
+        // FIXME 1: Don't linear search here.
+        // FIXME 2: This is not fully correct as there may be multiple
+        // script instances here with the same ScriptObjectId.
+        // The caller should be able to decide which is wanted.
+        self.objects
+            .entities
+            .iter()
+            .find(|(_, v)| **v == id)
+            .map(|(k, _)| *k)
     }
 
     /// Returns the game world entity associated with a script object, if any exists.
