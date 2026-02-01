@@ -48,7 +48,7 @@ where
                     continue;
                 }
 
-                if file_path.is_file() {
+                if file_type.is_file() {
                     if is_plugin_file(&file_path) {
                         plugins.push(file_path);
                     } else if is_archive_file(&file_path) {
