@@ -18,7 +18,7 @@ use crate::state::equipment::{
 };
 use crate::state::esp::EspLoader;
 use crate::state::hardcoded::KEYWORD_FEMALE;
-use crate::state::npc::ActorKeywords;
+use crate::state::npc::ObjectKeywords;
 use crate::systems::equipment::{EquipmentKey, unequip_item};
 use crate::systems::scripting::Executor;
 use crate::systems::scripting::loader::ScriptObject;
@@ -331,7 +331,7 @@ impl InventorySystem {
 
         for event in events.read::<EquipItemEvent>() {
             let female = world
-                .get::<&ActorKeywords>(event.actor)
+                .get::<&ObjectKeywords>(event.actor)
                 .is_ok_and(|kw| kw.contains(KEYWORD_FEMALE));
 
             let Ok(mut inventory) = world.get::<&mut Inventory>(event.actor) else {
@@ -459,7 +459,7 @@ impl InventorySystem {
 
         for actor in rescan_visiblity {
             let female = world
-                .get::<&ActorKeywords>(actor)
+                .get::<&ObjectKeywords>(actor)
                 .is_ok_and(|kw| kw.contains(KEYWORD_FEMALE));
 
             let Ok(mut inventory) = world.get::<&mut Inventory>(actor) else {

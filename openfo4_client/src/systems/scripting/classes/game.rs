@@ -117,8 +117,8 @@ pub fn register(engine: &mut Engine) {
 /// ```text
 /// Function(int aiAchievementID) native global
 /// ```
-fn add_achievement(caller: Caller<'_, State>, ai_achievement_id: i32) -> Result<(), Exception> {
-    todo!()
+fn add_achievement(_caller: Caller<'_, State>, _achievement_id: i32) -> Result<(), Exception> {
+    Ok(())
 }
 
 /// `AddPerkPoints`
@@ -175,8 +175,10 @@ fn enable_pipboy_hdr_mask(caller: Caller<'_, State>, ab_enable: bool) -> Result<
 /// ```text
 /// Function(string asMessage) native global
 /// ```
-fn error(caller: Caller<'_, State>, as_message: isize) -> Result<(), Exception> {
-    todo!()
+fn error(caller: Caller<'_, State>, msg: Object) -> Result<(), Exception> {
+    let msg = unsafe { caller.string(msg) };
+    tracing::error!("script message: {}", msg);
+    Ok(())
 }
 
 /// `FadeOutGame`
@@ -791,8 +793,8 @@ fn pass_time(caller: Caller<'_, State>, ai_hours: i32) -> Result<(), Exception> 
 /// ```text
 /// Function() native global
 /// ```
-fn precache_char_gen(caller: Caller<'_, State>) -> Result<(), Exception> {
-    todo!()
+fn precache_char_gen(_caller: Caller<'_, State>) -> Result<(), Exception> {
+    Ok(())
 }
 
 /// `PrecacheCharGenClear`
@@ -800,8 +802,8 @@ fn precache_char_gen(caller: Caller<'_, State>) -> Result<(), Exception> {
 /// ```text
 /// Function() native global
 /// ```
-fn precache_char_gen_clear(caller: Caller<'_, State>) -> Result<(), Exception> {
-    todo!()
+fn precache_char_gen_clear(_caller: Caller<'_, State>) -> Result<(), Exception> {
+    Ok(())
 }
 
 /// `QueryStat`
@@ -1174,8 +1176,10 @@ fn using_gamepad(caller: Caller<'_, State>) -> Result<bool, Exception> {
 /// ```text
 /// Function(string asMessage) native global
 /// ```
-fn warning(caller: Caller<'_, State>, as_message: isize) -> Result<(), Exception> {
-    todo!()
+fn warning(caller: Caller<'_, State>, msg: Object) -> Result<(), Exception> {
+    let msg = unsafe { caller.string(msg) };
+    tracing::warn!("script message: {}", msg);
+    Ok(())
 }
 
 /// `UpdateThirdPerson`

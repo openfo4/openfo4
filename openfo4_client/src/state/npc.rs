@@ -27,12 +27,59 @@ use crate::systems::inventory::{AddItemEventAsync, EquipItemEvent, Inventory};
 // FIXME: Unhardcode this guy.
 const PLAYER_LEVEL: u16 = 1000;
 
-#[derive(Clone, Debug)]
-pub struct ActorKeywords(pub HashSet<RecordId>);
+/// Keywords for ObjectReferences.
+#[derive(Clone, Debug, Default)]
+pub struct ObjectKeywords {
+    keywords: HashSet<RecordId>,
+    /// Dynamically added keywords.
+    added: HashSet<RecordId>,
+    /// Dynamically removed keywords.
+    removed: HashSet<RecordId>,
+}
 
-impl ActorKeywords {
+impl ObjectKeywords {
+    pub fn new(keywords: HashSet<RecordId>) -> Self {
+        Self {
+            keywords,
+            added: HashSet::new(),
+            removed: HashSet::new(),
+        }
+    }
+
     pub fn contains(&self, keyword: RecordId) -> bool {
-        self.0.contains(&keyword)
+        self.keywords.contains(&keyword)
+    }
+
+    pub fn add(&mut self, keyword: RecordId) {
+        if self.keywords.contains(&keyword) {
+            return;
+        }
+
+        self.keywords.insert(keyword);
+        self.added.insert(keyword);
+        self.removed.remove(&keyword);
+    }
+
+    pub fn remove(&mut self, keyword: RecordId) {
+        if !self.keywords.contains(&keyword) {
+            return;
+        }
+
+        self.keywords.remove(&keyword);
+        self.added.remove(&keyword);
+        self.removed.insert(keyword);
+    }
+
+    /// Resets the dynamically added/removed keyword to the default state.
+    pub fn reset(&mut self, keyword: RecordId) {
+        // Keyword was either removed or added, but not both.
+        debug_assert!(!(self.added.contains(&keyword) && self.removed.contains(&keyword)));
+
+        if self.removed.remove(&keyword) {
+            self.keywords.insert(keyword);
+        } else if self.added.remove(&keyword) {
+            self.keywords.remove(&keyword);
+        }
     }
 }
 
@@ -72,10 +119,10 @@ pub struct Actor {
     controller: ControllerShape,
     skin: Option<RecordId>,
     properties: ActorValueProperties,
-    keywords: ActorKeywords,
     body_parts: ActorBodyParts,
     dead: bool,
     customization_scenes: Vec<Handle<NifScene>>,
+    pub keywords: HashSet<RecordId>,
 }
 
 impl Actor {
@@ -122,7 +169,6 @@ impl Actor {
                     self.controller,
                     instance,
                     self.properties,
-                    self.keywords,
                     FacingDirection::default(),
                     self.body_parts,
                 ),
@@ -264,7 +310,7 @@ pub async fn spawn_actor(
         character,
         skin,
         properties,
-        keywords: ActorKeywords(keywords),
+        keywords,
         body_parts: ActorBodyParts(actor_body_parts),
         dead: instance_props.dead,
         customization_scenes,

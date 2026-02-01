@@ -6,6 +6,7 @@ use openfo4_core::transform::ConvertCoordinateSystem;
 use openfo4_script::engine::Engine;
 use openfo4_script::runtime::{Caller, Exception};
 
+use crate::state::npc::ObjectKeywords;
 use crate::systems::inventory::Inventory;
 use crate::systems::linked_refs::LinkedRefs;
 use crate::systems::scripting::classes::{Object, State};
@@ -281,9 +282,23 @@ fn add_item(
 fn add_keyword(
     caller: Caller<'_, State>,
     self_ptr: Object,
-    ap_keyword: Object,
+    keyword: Object,
 ) -> Result<(), Exception> {
-    todo!()
+    let entity = caller.data().entity(self_ptr).ok_or(Exception::Error)?;
+    let keyword = caller
+        .data()
+        .objects
+        .keyword(keyword)
+        .ok_or(Exception::Error)?;
+
+    let mut keywords = caller
+        .data()
+        .world()
+        .get::<&mut ObjectKeywords>(entity)
+        .unwrap();
+    keywords.add(keyword);
+
+    Ok(())
 }
 
 /// `AddTextReplacementData`
@@ -1464,9 +1479,21 @@ fn has_effect_keyword(
 fn has_keyword(
     caller: Caller<'_, State>,
     self_ptr: Object,
-    ap_keyword: Object,
+    keyword: Object,
 ) -> Result<bool, Exception> {
-    todo!()
+    let entity = caller.data().entity(self_ptr).ok_or(Exception::Error)?;
+    let keyword = caller
+        .data()
+        .objects
+        .keyword(keyword)
+        .ok_or(Exception::Error)?;
+
+    let keywords = caller
+        .data()
+        .world()
+        .get::<&ObjectKeywords>(entity)
+        .unwrap();
+    Ok(keywords.contains(keyword))
 }
 
 /// `HasKeywordInFormList`
@@ -2263,9 +2290,23 @@ fn remove_item_by_component(
 fn remove_keyword(
     caller: Caller<'_, State>,
     self_ptr: Object,
-    ap_keyword: Object,
+    keyword: Object,
 ) -> Result<(), Exception> {
-    todo!()
+    let entity = caller.data().entity(self_ptr).ok_or(Exception::Error)?;
+    let keyword = caller
+        .data()
+        .objects
+        .keyword(keyword)
+        .ok_or(Exception::Error)?;
+
+    let mut keywords = caller
+        .data()
+        .world()
+        .get::<&mut ObjectKeywords>(entity)
+        .unwrap();
+    keywords.remove(keyword);
+
+    Ok(())
 }
 
 /// `RemoveAllMods`
@@ -2356,9 +2397,23 @@ fn reset(caller: Caller<'_, State>, self_ptr: Object, ak_target: Object) -> Resu
 fn reset_keyword(
     caller: Caller<'_, State>,
     self_ptr: Object,
-    ap_keyword: Object,
+    keyword: Object,
 ) -> Result<(), Exception> {
-    todo!()
+    let entity = caller.data().entity(self_ptr).ok_or(Exception::Error)?;
+    let keyword = caller
+        .data()
+        .objects
+        .keyword(keyword)
+        .ok_or(Exception::Error)?;
+
+    let mut keywords = caller
+        .data()
+        .world()
+        .get::<&mut ObjectKeywords>(entity)
+        .unwrap();
+    keywords.reset(keyword);
+
+    Ok(())
 }
 
 /// `RestoreValue`

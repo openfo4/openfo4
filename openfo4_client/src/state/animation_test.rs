@@ -31,7 +31,7 @@ use crate::state::animation::{self, SkeletonConfig, load_anim};
 use crate::state::esp::EspLoader;
 use crate::state::hardcoded::HARDCODED_MODULE_ID;
 use crate::state::level::Streamer;
-use crate::state::npc::{ActorInstanceProps, BodyPartBone, spawn_actor};
+use crate::state::npc::{ActorInstanceProps, BodyPartBone, ObjectKeywords, spawn_actor};
 use crate::systems::PlayerControlState;
 use crate::systems::inventory::{AddItemEventAsync, EquipItemEvent, Inventory};
 
@@ -106,7 +106,10 @@ pub fn animation_test(
             ))
             .unwrap();
 
-            let root = actor.instantiate(world, events);
+            let root = actor.clone().instantiate(world, events);
+            world
+                .insert_one(root, ObjectKeywords::new(actor.keywords))
+                .unwrap();
 
             // let race = futures_lite::future::block_on(
             //     esp_loader.lookup(Some(RecordKind::Race), FormId(0x13746)),

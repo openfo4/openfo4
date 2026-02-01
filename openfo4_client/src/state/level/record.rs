@@ -2,6 +2,7 @@ use std::time::Duration;
 
 use game_common::components::{Color, PointLight, Transform};
 use glam::{EulerRot, Quat, Vec3};
+use hashbrown::{HashMap, HashSet};
 use hecs::{Entity, World};
 use openfo4_asset::Handle;
 use openfo4_core::WorldExt;
@@ -20,10 +21,11 @@ use crate::components::{
 use crate::render::RenderObject;
 use crate::state::esp::GlobalRecord;
 use crate::state::level::LoadContext;
+use crate::state::level::data_ext::RecordDataExt;
 use crate::state::level::items::resolve_item;
 use crate::state::level::partial::PartialEntityFlags;
 use crate::state::level::terrain::load_land;
-use crate::state::npc::{Actor, ActorInstanceProps};
+use crate::state::npc::{Actor, ActorInstanceProps, ObjectKeywords};
 use crate::state::terrain::{TerrainManager, TerrainRegion};
 use crate::systems::door::{Door, PortalDoor};
 use crate::systems::inventory::{Inventory, ItemStack};
@@ -50,6 +52,7 @@ pub struct SpawnEntity {
     pub placed_item: Option<PlacedItem>,
     pub terrain: Option<TerrainRegion>,
     pub script: Option<ScriptObject>,
+    pub keywords: ObjectKeywords,
 }
 
 impl SpawnEntity {
@@ -80,6 +83,7 @@ impl SpawnEntity {
             placed_item,
             terrain,
             script,
+            keywords,
         } = self;
 
         // If the object reference already exists we will overwrite it.
@@ -146,6 +150,7 @@ impl SpawnEntity {
         world.insert_one(entity, Root).unwrap();
 
         world.insert_one(entity, LinkedRefs::default()).unwrap();
+        world.insert_one(entity, keywords).unwrap();
 
         if is_actor {
             world.insert_one(entity, ActorMarker).unwrap();
@@ -274,6 +279,12 @@ impl SpawnEntity {
         let mut actor = None;
         let mut inventory = None;
 
+        let mut keywords = HashSet::default();
+        for keyword in base.local.data.keywords() {
+            let keyword = ctx.esp_loader.resolve_form(*keyword, base.id).unwrap();
+            keywords.insert(keyword);
+        }
+
         let item = load_item(ctx, &base).await;
 
         match base.local.data {
@@ -324,10 +335,14 @@ impl SpawnEntity {
                         dead: record.local.flags.contains(RecordHeaderFlags::STARTS_DEAD),
                     };
 
-                    actor =
+                    if let Some(mut res) =
                         crate::state::npc::spawn_actor(ctx.loader, ctx.esp_loader, base.id, &props)
                             .await
-                            .ok();
+                            .ok()
+                    {
+                        keywords = core::mem::take(&mut res.keywords);
+                        actor = Some(res);
+                    }
                 }
             }
             RecordData::IdleMarker(_) => return None,
@@ -432,6 +447,7 @@ impl SpawnEntity {
             door,
             inventory,
             placed_item: item.map(PlacedItem),
+            keywords: ObjectKeywords::new(keywords),
             ..Default::default()
         })
     }

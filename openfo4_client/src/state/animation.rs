@@ -23,7 +23,7 @@ use crate::loader::fix_path;
 use crate::state::actions::{Action, Actions};
 use crate::state::anim_starter::{ActiveBehaviorGraphs, AnimationEventQueue};
 use crate::state::animation_test::load_behavior_data;
-use crate::state::npc::{ActorAnimationGraphData, ActorKeywords};
+use crate::state::npc::{ActorAnimationGraphData, ObjectKeywords};
 use crate::systems::inventory::{Inventory, ItemData};
 use crate::systems::{WeaponDrawnEvent, WeaponSheathEvent};
 
@@ -237,7 +237,7 @@ pub fn update_actor_animation_graphs(world: &mut World, loader: &AssetLoader, po
 
     for (entity, (graphs, keywords, inventory, active_graph)) in world.query_mut::<(
         &ActorAnimationGraphData,
-        &ActorKeywords,
+        &ObjectKeywords,
         &Inventory,
         Option<&ActiveAnimationGraph>,
     )>() {
@@ -275,11 +275,7 @@ pub fn update_actor_animation_graphs(world: &mut World, loader: &AssetLoader, po
                 continue;
             }
 
-            if !graph
-                .actor_keywords
-                .iter()
-                .all(|kw| keywords.0.contains(kw))
-            {
+            if !graph.actor_keywords.iter().all(|kw| keywords.contains(*kw)) {
                 continue;
             }
 

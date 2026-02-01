@@ -17,7 +17,7 @@ use crate::state::UPS;
 use crate::state::actions::{Action, Actions};
 use crate::state::anim_starter::AnimationEventQueue;
 use crate::state::hardcoded::KEYWORD_FEMALE;
-use crate::state::npc::ActorKeywords;
+use crate::state::npc::ObjectKeywords;
 use crate::systems::animation_sync::AnimationParameters;
 use crate::systems::camera::{CameraMode, CameraOffset, PlayerControlled};
 use crate::systems::{FacingDirection, GunFireEvent, PlayerControlState};
@@ -169,7 +169,7 @@ pub fn apply_player_movements(world: &mut World, pipeline: &mut PhysicsPipeline)
             &mut PlayerControlState,
             Option<&mut CharacterController>,
             &ControllerShape,
-            &ActorKeywords,
+            &ObjectKeywords,
             Option<&Player>,
         )>()
     {
@@ -259,7 +259,7 @@ pub fn apply_player_movements(world: &mut World, pipeline: &mut PhysicsPipeline)
                     || state.moving_right,
                 is_sprinting: state.sprinting,
                 is_player: player.is_some(),
-                is_female: actor_keywords.0.contains(&KEYWORD_FEMALE),
+                is_female: actor_keywords.contains(KEYWORD_FEMALE),
                 is_jumping: state.jumping,
                 facing_direction,
             },
