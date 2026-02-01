@@ -2321,7 +2321,7 @@ pub struct Furniture {
     #[record("KSIZ")]
     keyword_size: Option<u32>,
     #[record("KWDA")]
-    pub keywords: Option<Keywords>,
+    pub keywords: Option<Array<FormId>>,
     #[record("PNAM")]
     pub pnam: u32,
     #[record("FNAM")]
@@ -5677,6 +5677,11 @@ pub struct AssocationType {
 pub struct Outfit {
     #[record("EDID")]
     pub id: Option<ZString>,
+    /// Equipment items that are part of the outfit.
+    ///
+    /// References to [`Armor`] or [`LeveledItem`] forms.
+    #[record("INAM")]
+    pub items: Array<FormId>,
 }
 
 #[derive(Clone, Debug, Record)]

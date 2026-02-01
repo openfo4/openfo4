@@ -22,7 +22,7 @@ use crate::systems::FacingDirection;
 use crate::systems::actor_value::ActorValueProperties;
 use crate::systems::controller::ControllerShape;
 use crate::systems::equipment::{Equipment, equip_item};
-use crate::systems::inventory::{AddItemEventAsync, EquipItemEvent, Inventory};
+use crate::systems::inventory::{AddItemEventAsync, Inventory};
 
 // FIXME: Unhardcode this guy.
 const PLAYER_LEVEL: u16 = 1000;
@@ -123,6 +123,7 @@ pub struct Actor {
     dead: bool,
     customization_scenes: Vec<Handle<NifScene>>,
     pub keywords: HashSet<RecordId>,
+    outfit_items: Vec<RecordId>,
 }
 
 impl Actor {
@@ -156,6 +157,17 @@ impl Actor {
 
         for scene in self.customization_scenes {
             equip_item(root, &scene, &instance, world, &mut equipment, None);
+        }
+
+        for item in self.outfit_items {
+            events.send(AddItemEventAsync {
+                actor: root,
+                item,
+                attachments: Vec::new(),
+                hidden: false,
+                count: 1,
+                equip: true,
+            });
         }
 
         world
@@ -296,6 +308,12 @@ pub async fn spawn_actor(
 
     let customization_scenes = load_actor_customization(loader, esp_loader, npc_form).await;
 
+    let outfit_items = if let Some(outfit) = props.outfit {
+        load_outfit(esp_loader, outfit).await
+    } else {
+        Vec::new()
+    };
+
     Ok(Actor {
         anim_graphs: ActorAnimationGraphData {
             character: character.clone(),
@@ -314,6 +332,7 @@ pub async fn spawn_actor(
         body_parts: ActorBodyParts(actor_body_parts),
         dead: instance_props.dead,
         customization_scenes,
+        outfit_items,
     })
 }
 
@@ -346,6 +365,9 @@ async fn resolve_actor_props(
     let mut factions = Vec::new();
 
     let mut keywords = Vec::new();
+
+    // Inventory
+    let mut outfit = None;
 
     let mut queue = VecDeque::new();
     queue.push_back((NpcTemplateFlags::all(), npc));
@@ -417,6 +439,12 @@ async fn resolve_actor_props(
                         .copied()
                         .map(|form| esp_loader.resolve_form(form, record.id).unwrap())
                         .collect();
+                }
+
+                if flags.contains(NpcTemplateFlags::INVENTORY) {
+                    outfit = data
+                        .default_outfit
+                        .map(|form| esp_loader.resolve_form(form, record.id).unwrap());
                 }
 
                 if let Some(template) = data.template_actors {
@@ -499,6 +527,7 @@ async fn resolve_actor_props(
         class,
         properties,
         keywords,
+        outfit,
     }
 }
 
@@ -511,6 +540,7 @@ struct ActorProps {
     class: Option<RecordId>,
     properties: ActorValueProperties,
     keywords: Vec<RecordId>,
+    outfit: Option<RecordId>,
 }
 
 #[derive(Clone, Debug)]
@@ -672,4 +702,24 @@ async fn load_actor_customization(
     }
 
     scenes
+}
+
+async fn load_outfit(esp_loader: &EspLoader, outfit: RecordId) -> Vec<RecordId> {
+    let mut items = Vec::new();
+
+    let outfit = esp_loader
+        .lookup(Some(RecordKind::Outfit), outfit)
+        .await
+        .unwrap();
+
+    let RecordData::Outfit(data) = outfit.local.data else {
+        unreachable!();
+    };
+
+    for item in &*data.items {
+        let item = esp_loader.resolve_form(*item, outfit.id).unwrap();
+        items.push(item);
+    }
+
+    items
 }

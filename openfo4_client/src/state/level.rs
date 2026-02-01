@@ -1,5 +1,5 @@
 mod data_ext;
-mod items;
+pub mod items;
 pub mod leveled_list;
 mod partial;
 mod record;

@@ -320,6 +320,7 @@ impl SpawnEntity {
                         ctx.script_loader,
                         item_id,
                         item.count.into(),
+                        &[],
                     )
                     .await;
                     for item in items {
@@ -475,7 +476,7 @@ async fn load_item(ctx: &LoadContext<'_>, record: &GlobalRecord) -> Option<ItemS
 
     if is_item {
         Some(
-            resolve_item(ctx.esp_loader, ctx.script_loader, record.id, 1)
+            resolve_item(ctx.esp_loader, ctx.script_loader, record.id, 1, &[])
                 .await
                 .remove(0),
         )

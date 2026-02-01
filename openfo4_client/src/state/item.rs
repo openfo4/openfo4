@@ -10,5 +10,3 @@ pub struct Item {
 
 #[derive(Clone, Debug)]
 pub struct Attachment {}
-
-pub async fn load_item(esp_loader: &EspLoader, id: FormId) {}

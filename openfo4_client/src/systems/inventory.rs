@@ -14,7 +14,7 @@ use slab::Slab;
 
 use crate::components::PlacedItem;
 use crate::state::equipment::{
-    EquipmentItemModels, load_equipment_item, load_equipment_item_models,
+    EquipmentItemModels, load_equipment_item, load_equipment_item_models, load_item,
 };
 use crate::state::esp::EspLoader;
 use crate::state::hardcoded::KEYWORD_FEMALE;
@@ -236,7 +236,7 @@ pub struct InventorySystem {
     loader: AssetLoader,
     esp_loader: Arc<EspLoader>,
     tasks: TaskQueue<(Entity, InventoryKey, EquipmentItemModels)>,
-    async_item_add_tasks: TaskQueue<(AddItemEvent, Option<EquipItemEvent>)>,
+    async_item_add_tasks: TaskQueue<(Vec<AddItemEvent>, Vec<EquipItemEvent>)>,
 }
 
 impl InventorySystem {
@@ -264,48 +264,41 @@ impl InventorySystem {
             let event = event.clone();
 
             self.async_item_add_tasks.push(self.pool.spawn(async move {
-                let item = load_equipment_item(
+                let items = load_item(
                     &esp_loader,
                     &script_loader,
                     event.item,
                     &event.attachments,
+                    event.count,
                 )
                 .await;
 
-                let add_event = AddItemEvent {
-                    actor: event.actor,
-                    item: ItemStack {
-                        item: event.item,
-                        kind: item.kind,
-                        count: event.count,
-                        attachments: event.attachments.clone(),
-                        equipped: false,
-                        base_keywords: item.base_keywords,
-                        combined_keywords: item.combined_keywords,
-                        data: item.data,
-                        name: item.name,
-                        hidden: event.hidden,
-                        equipment_keys: Vec::new(),
-                        equipment_slots: item.equipment_slots,
-                        visibility_slots: item.visibility_slots,
-                        visible: true,
-                        script: item.script,
-                    },
-                };
+                let equip_events = items
+                    .iter()
+                    .map(|item| EquipItemEvent {
+                        actor: event.actor,
+                        item: item.item,
+                    })
+                    .collect();
+                let add_events = items
+                    .into_iter()
+                    .map(|item| AddItemEvent {
+                        actor: event.actor,
+                        item,
+                    })
+                    .collect();
 
-                let equip_event = event.equip.then(|| EquipItemEvent {
-                    actor: event.actor,
-                    item: event.item,
-                });
-
-                (add_event, equip_event)
+                (add_events, equip_events)
             }));
         }
 
-        while let Some((add_event, equip_event)) = self.async_item_add_tasks.pop() {
-            events.send(add_event);
-            if let Some(equip_event) = equip_event {
-                events.send(equip_event);
+        while let Some((add_events, equip_events)) = self.async_item_add_tasks.pop() {
+            for event in add_events {
+                events.send(event);
+            }
+
+            for event in equip_events {
+                events.send(event);
             }
         }
 

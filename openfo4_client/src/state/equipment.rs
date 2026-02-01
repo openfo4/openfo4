@@ -16,10 +16,11 @@ use openfo4_esp::{FormId, RecordData, RecordKind};
 
 use crate::assets::nif_v2::{LoadNifFlags, NifKey, NifScene};
 use crate::components::WorldSpace;
-use crate::state::esp::{EspLoader, GlobalRecord};
+use crate::state::esp::EspLoader;
 use crate::state::hardcoded::DAMAGE_TYPE_PHYSICAL;
+use crate::state::level::items::resolve_item;
 use crate::systems::equipment::{Equipment, EquipmentKey, equip_item};
-use crate::systems::inventory::{AimProps, ItemData, ItemKind, WeaponItemData};
+use crate::systems::inventory::{AimProps, ItemData, ItemKind, ItemStack, WeaponItemData};
 use crate::systems::scripting::loader::{ScriptLoader, ScriptObject};
 
 #[derive(Clone, Debug)]
@@ -115,6 +116,16 @@ struct EquipmentProperties {
     weapon_cone_of_fire_increase_per_shot: f32,
     weapon_cone_of_fire_decrease_per_second: f32,
     weapon_cone_of_fire_decrease_delay_milliseconds: u32,
+}
+
+pub async fn load_item(
+    esp_loader: &EspLoader,
+    script_loader: &ScriptLoader,
+    record: RecordId,
+    attachments: &[RecordId],
+    count: u64,
+) -> Vec<ItemStack> {
+    resolve_item(esp_loader, script_loader, record, count, attachments).await
 }
 
 pub async fn load_equipment_item(

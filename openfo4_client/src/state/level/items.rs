@@ -16,13 +16,14 @@ pub async fn resolve_item(
     script_loader: &ScriptLoader,
     record_id: RecordId,
     count: u64,
+    attachments: &[RecordId],
 ) -> Vec<ItemStack> {
     let mut items = Vec::new();
 
     let mut visited = HashSet::new();
 
-    let mut queue = vec![(record_id, count)];
-    while let Some((record_id, count)) = queue.pop() {
+    let mut queue = vec![(record_id, count, attachments.to_vec())];
+    while let Some((record_id, count, attachments)) = queue.pop() {
         visited.insert(record_id);
 
         let record = esp_loader.lookup(None, record_id).await.unwrap();
@@ -44,7 +45,7 @@ pub async fn resolve_item(
                 let form = data.entries[index].reference;
                 let count = u64::from(data.entries[index].count);
                 let rid = esp_loader.resolve_form(form, record_id).unwrap();
-                queue.push((rid, count));
+                queue.push((rid, count, Vec::new()));
             }
             RecordData::MiscObject(data) => {
                 let keywords: HashSet<RecordId> = data
@@ -76,7 +77,8 @@ pub async fn resolve_item(
             }
             RecordData::Weapon(_) | RecordData::Armor(_) => {
                 // FIXME: Merge this function into this file.
-                let item = load_equipment_item(esp_loader, script_loader, record_id, &[]).await;
+                let item =
+                    load_equipment_item(esp_loader, script_loader, record_id, &attachments).await;
 
                 let script = load_item_script(record.id, script_loader).await;
 
