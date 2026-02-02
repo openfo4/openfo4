@@ -18,6 +18,14 @@ use num_traits::Float;
 /// ```
 #[macro_export]
 macro_rules! assert_approx_eq {
+    ($lhs:expr, $rhs:expr, $epsilon:expr $(,)?) => {{
+        $crate::utils::approx_eq_assertion_eps($lhs, $rhs, $epsilon, ::core::option::Option::None);
+    }};
+    ($lhs:expr, $rhs:expr, $epsilon:expr, $($arg:tt)+) => {{
+        $crate::utils::approx_eq_assertion_eps($lhs, $rhs, $epsilon, ::core::option::Option::Some(
+            ::core::format_args!($($arg)+)
+        ));
+    }};
     // Note that we're going through a function so rustc can infer what
     // type `$lhs` and `$rhs` is. This is necessary to get the epsilon value
     // of the type.
@@ -124,6 +132,20 @@ where
 {
     for (lhs_elem, rhs_elem) in lhs.elements().zip(rhs.elements()) {
         if (lhs_elem - rhs_elem).abs() > <T::Primitive as Float>::epsilon() {
+            approx_eq_assertion_failed(lhs, rhs, args);
+        }
+    }
+}
+
+#[track_caller]
+#[doc(hidden)]
+pub fn approx_eq_assertion_eps<T, P>(lhs: T, rhs: T, eps: P, args: Option<Arguments<'_>>)
+where
+    T: ApproxFloatEq<Primitive = P> + Debug,
+    P: Float,
+{
+    for (lhs_elem, rhs_elem) in lhs.elements().zip(rhs.elements()) {
+        if (lhs_elem - rhs_elem).abs() > eps {
             approx_eq_assertion_failed(lhs, rhs, args);
         }
     }

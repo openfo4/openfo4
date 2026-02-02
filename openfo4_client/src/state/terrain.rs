@@ -348,10 +348,11 @@ fn lerp_pixel(a: Rgba<u8>, b: Rgba<u8>, s: f32) -> Rgba<u8> {
 
 #[cfg(test)]
 mod tests {
+    use game_common::assert_approx_eq;
     use image::ImageBuffer;
 
     use crate::cell::CELL_SIZE;
-    use crate::state::terrain::{TerrainLayer, merge_layers};
+    use crate::state::terrain::{SampleImage, TerrainLayer, merge_layers};
 
     #[test]
     fn test_merge_layers() {
@@ -375,5 +376,28 @@ mod tests {
                 assert!(v >= 0.0 && v <= 1.0);
             },
         );
+    }
+
+    #[test]
+    fn test_sample_linear() {
+        const EPSILON: f32 = 0.01;
+
+        let mut data = [[0.0; 100]; 100];
+        for x in 0..100 {
+            for y in 0..100 {
+                data[x][y] = (x + y) as f32;
+            }
+        }
+
+        assert_approx_eq!(data.sample_linear(0.0, 0.0), 0.0, EPSILON);
+        assert_approx_eq!(
+            data.sample_linear(1.0 - f32::EPSILON, 1.0 - f32::EPSILON),
+            198.0,
+            EPSILON,
+        );
+        assert_approx_eq!(data.sample_linear(0.1, 0.5), 60.0, EPSILON);
+        assert_approx_eq!(data.sample_linear(0.5, 0.5), 100.0, EPSILON);
+        assert_approx_eq!(data.sample_linear(0.9, 0.2), 110.0, EPSILON);
+        assert_approx_eq!(data.sample_linear(0.35339, 0.29234), 64.573, EPSILON);
     }
 }
