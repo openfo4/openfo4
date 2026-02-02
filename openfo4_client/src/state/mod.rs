@@ -199,6 +199,7 @@ impl GameState {
 
         let global_variables =
             futures_lite::future::block_on(globals::load_global_variables(&loader));
+        let form_lists = futures_lite::future::block_on(globals::load_form_lists(&loader));
 
         Self {
             weather: WeatherSystem::new(loader.clone(), pool.clone(), &asset_loader, &shared),
@@ -224,6 +225,7 @@ impl GameState {
             globals: GlobalProperties {
                 variables: global_variables,
                 difficulty: Difficulty::Survival,
+                form_lists,
             },
             script_entities: ScriptEntities::default(),
         }

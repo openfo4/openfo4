@@ -351,6 +351,7 @@ struct Objects {
     actor_values: HashMap<ObjectAddr, RecordId>,
     quests: HashMap<ObjectAddr, RecordId>,
     perks: HashMap<ObjectAddr, RecordId>,
+    form_lists: HashMap<ObjectAddr, RecordId>,
     /// Entities that exist in the game world.
     entities: HashMap<ObjectAddr, ScriptObjectId>,
 }
@@ -375,6 +376,18 @@ impl Objects {
     /// Look up an item-like record (weapon, armor, etc..), i.e. any item that can be contained
     /// inside an inventory.
     pub fn item(&self, addr: ObjectAddr) -> Option<RecordId> {
+        todo!()
+    }
+
+    pub fn form(&self, addr: ObjectAddr) -> Option<RecordId> {
+        todo!()
+    }
+
+    pub fn form_list(&self, addr: ObjectAddr) -> Option<RecordId> {
+        self.form_lists.get(&addr).copied()
+    }
+
+    pub fn addr(&self, id: RecordId) -> Option<ObjectAddr> {
         todo!()
     }
 }
