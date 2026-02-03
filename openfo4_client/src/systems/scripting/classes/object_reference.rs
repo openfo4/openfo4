@@ -1,6 +1,8 @@
 use game_common::components::Transform;
 use hashbrown::HashSet;
 use hecs::Entity;
+use openfo4_animation::Value;
+use openfo4_animation::driver::AnimationDriver;
 use openfo4_core::record::RecordId;
 use openfo4_core::transform::ConvertCoordinateSystem;
 use openfo4_script::engine::Engine;
@@ -857,9 +859,20 @@ fn get_angle_z(caller: Caller<'_, State>, self_ptr: Object) -> Result<f32, Excep
 fn get_animation_variable_bool(
     caller: Caller<'_, State>,
     self_ptr: Object,
-    ar_variable_name: isize,
+    variable_name: Object,
 ) -> Result<bool, Exception> {
-    todo!()
+    let name = unsafe { caller.string(variable_name) };
+
+    let entity = caller.data().entity(self_ptr).ok_or(Exception::Error)?;
+    let Ok(driver) = caller.data().world().get::<&AnimationDriver>(entity) else {
+        return Ok(false);
+    };
+
+    if let Some(Value::Bool(value)) = driver.get_variable(name) {
+        return Ok(value);
+    }
+
+    Ok(false)
 }
 
 /// `GetAnimationVariableInt`
@@ -870,9 +883,20 @@ fn get_animation_variable_bool(
 fn get_animation_variable_int(
     caller: Caller<'_, State>,
     self_ptr: Object,
-    ar_variable_name: isize,
+    variable_name: Object,
 ) -> Result<i32, Exception> {
-    todo!()
+    let name = unsafe { caller.string(variable_name) };
+
+    let entity = caller.data().entity(self_ptr).ok_or(Exception::Error)?;
+    let Ok(driver) = caller.data().world().get::<&AnimationDriver>(entity) else {
+        return Ok(0);
+    };
+
+    if let Some(Value::I32(value)) = driver.get_variable(name) {
+        return Ok(value);
+    }
+
+    Ok(0)
 }
 
 /// `GetAnimationVariableFloat`
@@ -883,9 +907,20 @@ fn get_animation_variable_int(
 fn get_animation_variable_float(
     caller: Caller<'_, State>,
     self_ptr: Object,
-    ar_variable_name: isize,
+    variable_name: Object,
 ) -> Result<f32, Exception> {
-    todo!()
+    let name = unsafe { caller.string(variable_name) };
+
+    let entity = caller.data().entity(self_ptr).ok_or(Exception::Error)?;
+    let Ok(driver) = caller.data().world().get::<&AnimationDriver>(entity) else {
+        return Ok(0.0);
+    };
+
+    if let Some(Value::F32(value)) = driver.get_variable(name) {
+        return Ok(value);
+    }
+
+    Ok(0.0)
 }
 
 /// `GetBaseObject`
@@ -2574,10 +2609,21 @@ fn set_angle(
 fn set_animation_variable_bool(
     caller: Caller<'_, State>,
     self_ptr: Object,
-    ar_variable_name: isize,
-    ab_new_value: bool,
+    variable_name: Object,
+    new_value: bool,
 ) -> Result<(), Exception> {
-    todo!()
+    let variable_name = unsafe { caller.string(variable_name) };
+
+    let entity = caller.data().entity(self_ptr).ok_or(Exception::Error)?;
+    let Ok(mut driver) = caller.data().world().get::<&mut AnimationDriver>(entity) else {
+        return Ok(());
+    };
+
+    if let Some(Value::Bool(value)) = driver.get_variable_mut(variable_name) {
+        *value = new_value;
+    }
+
+    Ok(())
 }
 
 /// `SetAnimationVariableInt`
@@ -2588,10 +2634,21 @@ fn set_animation_variable_bool(
 fn set_animation_variable_int(
     caller: Caller<'_, State>,
     self_ptr: Object,
-    ar_variable_name: isize,
-    ai_new_value: i32,
+    variable_name: Object,
+    new_value: i32,
 ) -> Result<(), Exception> {
-    todo!()
+    let variable_name = unsafe { caller.string(variable_name) };
+
+    let entity = caller.data().entity(self_ptr).ok_or(Exception::Error)?;
+    let Ok(mut driver) = caller.data().world().get::<&mut AnimationDriver>(entity) else {
+        return Ok(());
+    };
+
+    if let Some(Value::I32(value)) = driver.get_variable_mut(variable_name) {
+        *value = new_value;
+    }
+
+    Ok(())
 }
 
 /// `SetAnimationVariableFloat`
@@ -2602,10 +2659,21 @@ fn set_animation_variable_int(
 fn set_animation_variable_float(
     caller: Caller<'_, State>,
     self_ptr: Object,
-    ar_variable_name: isize,
-    af_new_value: f32,
+    variable_name: Object,
+    new_value: f32,
 ) -> Result<(), Exception> {
-    todo!()
+    let variable_name = unsafe { caller.string(variable_name) };
+
+    let entity = caller.data().entity(self_ptr).ok_or(Exception::Error)?;
+    let Ok(mut driver) = caller.data().world().get::<&mut AnimationDriver>(entity) else {
+        return Ok(());
+    };
+
+    if let Some(Value::F32(value)) = driver.get_variable_mut(variable_name) {
+        *value = new_value;
+    }
+
+    Ok(())
 }
 
 /// `SetAttractionActive`
