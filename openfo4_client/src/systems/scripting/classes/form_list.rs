@@ -14,7 +14,12 @@ pub fn add_form(
     self_ptr: Object,
     form: Object,
 ) -> Result<(), Exception> {
-    let form = caller.data().objects.form(form).ok_or(Exception::Error)?;
+    let form = caller
+        .data()
+        .objects
+        .get_by_addr(form)
+        .and_then(|s| s.record())
+        .ok_or(Exception::Error)?;
     let form_list = get_form_list(&mut caller, self_ptr)?;
     form_list.add(form);
     Ok(())
@@ -30,7 +35,12 @@ pub fn find(
     self_ptr: Object,
     form: Object,
 ) -> Result<Int, Exception> {
-    let form = caller.data().objects.form(form).ok_or(Exception::Error)?;
+    let form = caller
+        .data()
+        .objects
+        .get_by_addr(form)
+        .and_then(|s| s.record())
+        .ok_or(Exception::Error)?;
     let form_list = get_form_list(&mut caller, self_ptr)?;
     let index = form_list
         .index(form)
@@ -59,7 +69,13 @@ pub fn get_at(
         return Ok(Object::NULL);
     };
 
-    Ok(caller.data().objects.addr(id).unwrap_or(Object::NULL))
+    Ok(caller
+        .data()
+        .objects
+        .get_by_record(id)
+        .and_then(|v| v.get("Form"))
+        .map(|v| v.get().object.addr())
+        .unwrap_or(Object::NULL))
 }
 
 /// `GetSize`
@@ -82,7 +98,12 @@ pub fn has_form(
     self_ptr: Object,
     form: Object,
 ) -> Result<Bool, Exception> {
-    let form = caller.data().objects.form(form).ok_or(Exception::Error)?;
+    let form = caller
+        .data()
+        .objects
+        .get_by_addr(form)
+        .and_then(|s| s.record())
+        .ok_or(Exception::Error)?;
     let form_list = get_form_list(&mut caller, self_ptr)?;
     Ok(form_list.contains(form))
 }
@@ -97,7 +118,12 @@ pub fn remove_added_form(
     self_ptr: Object,
     form: Object,
 ) -> Result<(), Exception> {
-    let form = caller.data().objects.form(form).ok_or(Exception::Error)?;
+    let form = caller
+        .data()
+        .objects
+        .get_by_addr(form)
+        .and_then(|s| s.record())
+        .ok_or(Exception::Error)?;
     let form_list = get_form_list(&mut caller, self_ptr)?;
     form_list.remove(form);
     Ok(())
@@ -121,7 +147,8 @@ fn get_form_list<'a>(
     let form_list = caller
         .data()
         .objects
-        .form_list(addr)
+        .get_by_addr(addr)
+        .and_then(|s| s.record())
         .ok_or(Exception::Error)?;
     caller
         .data_mut()

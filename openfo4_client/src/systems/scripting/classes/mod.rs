@@ -32,22 +32,23 @@ mod spell;
 mod utility;
 mod weapon;
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::BTreeMap;
 use std::time::{Duration, Instant};
 
 use futures::future::BoxFuture;
+use hashbrown::HashMap;
 use hecs::{Entity, World};
-use openfo4_script::engine::{Engine, ScriptInstance};
+use openfo4_script::engine::Engine;
 use openfo4_script::runtime::{ObjectAddr, ObjectRef};
-use parking_lot::Mutex;
 use slab::Slab;
 
 use crate::components::Player;
 use crate::systems::global::GlobalProperties;
 use crate::systems::quests::QuestManager;
+use crate::systems::scripting::ScriptEntities;
 use crate::systems::scripting::loader::{ScriptObject, ScriptObjectId};
+use crate::systems::scripting::objects::ScriptObjects;
 use crate::systems::scripting::registration::RegistrationSet;
-use crate::systems::scripting::{Objects, ScriptEntities};
 
 pub type Int = i32;
 pub type Float = f32;
@@ -141,9 +142,10 @@ pub struct State {
     pub quests: *mut QuestManager,
     pub entities: *const ScriptEntities,
     pub globals: *mut GlobalProperties,
-    pub objects: Objects,
     pub registration: RegistrationSet,
     pub waker: Option<BoxFuture<'static, ()>>,
+    pub objects: ScriptObjects,
+    pub game_entities: HashMap<ObjectAddr, ScriptObjectId>,
 }
 
 impl State {
@@ -175,18 +177,6 @@ impl State {
         todo!()
     }
 
-    pub fn lookup_script_instances(&self, id: ScriptObjectId) -> Option<ObjectAddr> {
-        // FIXME 1: Don't linear search here.
-        // FIXME 2: This is not fully correct as there may be multiple
-        // script instances here with the same ScriptObjectId.
-        // The caller should be able to decide which is wanted.
-        self.objects
-            .entities
-            .iter()
-            .find(|(_, v)| **v == id)
-            .map(|(k, _)| *k)
-    }
-
     /// Returns the game world entity associated with a script object, if any exists.
     pub fn entity(&self, addr: ObjectAddr) -> Option<Entity> {
         if addr == self.core_objects.player.addr() {
@@ -194,7 +184,7 @@ impl State {
             return Some(entity);
         }
 
-        let id = *self.objects.entities.get(&addr)?;
+        let id = *self.game_entities.get(&addr)?;
         self.entities().0.get_left(&id).copied()
     }
 

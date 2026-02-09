@@ -10,10 +10,10 @@ use openfo4_script::compiler::{FieldType, ObjectField, ObjectProperty, TypeLayou
 use openfo4_script::engine::{Engine, Instance};
 use openfo4_script::runtime::object::{IntoValue, ObjectArrayBuilder, ObjectBuilder};
 use openfo4_script::runtime::{ObjectAddr, ObjectRef};
-use slab::Slab;
 
-use crate::state::esp::{EspLoader, GlobalRecord};
+use crate::state::esp::EspLoader;
 use crate::systems::scripting::classes::State;
+use crate::systems::scripting::objects::ScriptObjects;
 use crate::systems::scripting::{COMPILER_OPTIONS, ScriptInstance};
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
@@ -42,8 +42,6 @@ pub(super) struct ScriptObjectInner {
 #[derive(Debug)]
 pub struct ScriptLoader {
     pub(super) engine: Arc<Mutex<Engine>>,
-    pub(super) instances: Mutex<Slab<HashMap<String, ScriptInstance>>>,
-    pub(super) base_records: Mutex<HashMap<RecordId, ScriptObjectId>>,
     /// Cache of compiled classes.
     pub(super) classes: Mutex<HashMap<String, Instance>>,
     pub(super) esp_loader: Arc<EspLoader>,
@@ -59,15 +57,11 @@ impl ScriptLoader {
         tracing::debug!("loading script for {:?}", record);
 
         let mut engine = self.engine.lock().await;
-        let mut instances = self.instances.lock().await;
-        let mut base_records = self.base_records.lock().await;
         let mut classes = self.classes.lock().await;
         let mut state = self.state.lock().await;
 
         let id = instantiate_form(
             &mut engine,
-            &mut instances,
-            &mut base_records,
             &self.esp_loader,
             record,
             &mut classes,
@@ -86,27 +80,32 @@ impl ScriptLoader {
     /// Only the top level properties are cloned.
     pub async fn clone_object(&self, object: &ScriptObject) -> ScriptObject {
         let engine = self.engine.lock().await;
-        let mut instances = self.instances.lock().await;
-        let instance = instances.get(object.0.id.0).unwrap();
+        let mut state = self.state.lock().await;
+        let state = state.as_mut().unwrap();
 
-        let scripts = instance
+        let scripts = state.objects.get_by_id(object.id()).unwrap();
+
+        let scripts = scripts
             .iter()
-            .map(|(key, val)| {
+            .map(|script| {
                 (
-                    key.to_owned(),
+                    script.name().to_owned(),
                     ScriptInstance {
-                        instance: val.instance.clone(),
-                        layout: val.layout.clone(),
-                        stacks: val.stacks.clone(),
+                        instance: script.get().instance.clone(),
+                        layout: script.get().layout.clone(),
+                        stacks: script.get().stacks.clone(),
                         object: unsafe {
-                            engine.object_pool().clone_object(&val.object).finalize()
+                            engine
+                                .object_pool()
+                                .clone_object(&script.get().object)
+                                .finalize()
                         },
                     },
                 )
             })
             .collect();
 
-        let id = ScriptObjectId(instances.insert(scripts));
+        let id = state.objects.insert(scripts, None);
 
         ScriptObject(Arc::new(ScriptObjectInner {
             base: object.0.base,
@@ -117,15 +116,13 @@ impl ScriptLoader {
 
 async fn instantiate_form(
     engine: &mut Engine,
-    instances: &mut Slab<HashMap<String, ScriptInstance>>,
-    base_instances: &mut HashMap<RecordId, ScriptObjectId>,
     esp_loader: &EspLoader,
     root: RecordId,
     compiled_classes: &mut HashMap<String, Instance>,
     state: &mut State,
 ) -> Option<ScriptObjectId> {
-    if let Some(id) = base_instances.get(&root) {
-        return Some(*id);
+    if let Some(scripts) = state.objects.get_by_record(root) {
+        return Some(scripts.id());
     }
 
     let mut root_id = None;
@@ -133,7 +130,7 @@ async fn instantiate_form(
     let mut records = HashMap::new();
     let mut queue = vec![root];
     while let Some(record) = queue.pop() {
-        if base_instances.contains_key(&record) {
+        if state.objects.get_by_record(record).is_some() {
             continue;
         }
 
@@ -183,7 +180,9 @@ async fn instantiate_form(
                         } else {
                             let id = esp_loader.resolve_form(value.form, record.id).unwrap();
 
-                            if base_instances.contains_key(&id) || records.contains_key(&id) {
+                            if state.objects.get_by_record(id).is_some()
+                                || records.contains_key(&id)
+                            {
                                 continue;
                             }
 
@@ -204,7 +203,7 @@ async fn instantiate_form(
         }
 
         for id in depends {
-            debug_assert!(!base_instances.contains_key(&id));
+            debug_assert!(state.objects.get_by_record(id).is_none());
             debug_assert!(!records.contains_key(&id));
             queue.push(id);
         }
@@ -245,10 +244,6 @@ async fn instantiate_form(
             );
         }
 
-        for script in &scripts {
-            register_base_object(state, &record, script.1.builder.addr());
-        }
-
         records.insert(record.id, scripts);
     }
 
@@ -272,8 +267,7 @@ async fn instantiate_form(
                     |form| esp_loader.resolve_form(form, record).unwrap(),
                     engine,
                     script,
-                    instances,
-                    base_instances,
+                    &state.objects,
                     &partial_object_addrs,
                     &mut object.builder,
                 );
@@ -291,9 +285,8 @@ async fn instantiate_form(
             );
         }
 
-        debug_assert!(!base_instances.contains_key(&record));
-        let id = ScriptObjectId(instances.insert(final_instances));
-        base_instances.insert(record, id);
+        debug_assert!(state.objects.get_by_record(record).is_none());
+        let id = state.objects.insert(final_instances, Some(record));
 
         if record == root {
             root_id = Some(id);
@@ -385,34 +378,12 @@ fn record_script_name(data: &RecordData) -> Option<&'static str> {
     }
 }
 
-fn register_base_object(state: &mut State, record: &GlobalRecord, addr: ObjectAddr) {
-    match record.local.data {
-        RecordData::GLOB(_) => {
-            state.objects.globals.insert(addr, record.id);
-        }
-        RecordData::Keyword(_) => {
-            state.objects.keywords.insert(addr, record.id);
-        }
-        RecordData::ActorValueInfo(_) => {
-            state.objects.actor_values.insert(addr, record.id);
-        }
-        RecordData::Quest(_) => {
-            state.objects.quests.insert(addr, record.id);
-        }
-        RecordData::Perk(_) => {
-            state.objects.perks.insert(addr, record.id);
-        }
-        _ => {}
-    }
-}
-
 // FIXME: Use script layout reflection to determine we're actually setting values of the correct type.
 fn build_script_object(
     resolve_form: impl Fn(FormId) -> RecordId,
     engine: &Engine,
     script: &Script,
-    instances: &Slab<HashMap<String, ScriptInstance>>,
-    base_instances: &HashMap<RecordId, ScriptObjectId>,
+    scripts: &ScriptObjects,
     partial_addrs: &HashMap<RecordId, HashMap<String, ObjectAddr>>,
     builder: &mut ObjectBuilder,
 ) -> ObjectRef {
@@ -521,13 +492,12 @@ fn build_script_object(
                 } else {
                     let id = resolve_form(value.form);
 
-                    let addr = if let Some(instance) = base_instances.get(&id) {
-                        let scripts = &instances[instance.0];
+                    let addr = if let Some(scripts) = scripts.get_by_record(id) {
                         // FIXME: Which script to choose here?
                         // We need to inspect the actual class layout to get this.
-                        let script = scripts.values().next().unwrap();
+                        let script = scripts.iter().next().unwrap();
 
-                        script.object.addr()
+                        script.get().object.addr()
                     } else {
                         let scripts = partial_addrs.get(&id).unwrap();
                         // FIXME: Which script to choose here?
@@ -684,7 +654,8 @@ mod tests {
     use openfo4_script::assembler::assemble;
     use openfo4_script::engine::{Engine, Options};
     use openfo4_script::runtime::{ObjectAddr, ObjectRef};
-    use slab::Slab;
+
+    use crate::systems::scripting::objects::ScriptObjects;
 
     use super::build_script_object;
 
@@ -692,16 +663,14 @@ mod tests {
         let layout = engine.get_class_layout(&script.name).unwrap();
         let mut builder = engine.object_pool().insert(layout.clone());
 
-        let instances = Slab::new();
-        let base_instances = HashMap::new();
+        let scripts = ScriptObjects::default();
         let partial_addrs = HashMap::new();
 
         build_script_object(
             |_| unreachable!(),
             &engine,
             &script,
-            &instances,
-            &base_instances,
+            &scripts,
             &partial_addrs,
             &mut builder,
         )

@@ -11,7 +11,8 @@ pub fn get_value(caller: Caller<'_, State>, self_ptr: Object) -> Result<Float, E
     let id = caller
         .data()
         .objects
-        .global(self_ptr)
+        .get_by_addr(self_ptr)
+        .and_then(|s| s.record())
         .ok_or(Exception::Error)?;
     let value = *caller
         .data()
@@ -35,7 +36,8 @@ pub fn set_value(
     let id = caller
         .data()
         .objects
-        .global(self_ptr)
+        .get_by_addr(self_ptr)
+        .and_then(|s| s.record())
         .ok_or(Exception::Error)?;
     caller.data_mut().globals_mut().variables.insert(id, value);
     Ok(())

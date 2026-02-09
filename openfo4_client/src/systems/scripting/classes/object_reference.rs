@@ -290,7 +290,8 @@ fn add_keyword(
     let keyword = caller
         .data()
         .objects
-        .keyword(keyword)
+        .get_by_addr(keyword)
+        .and_then(|s| s.record())
         .ok_or(Exception::Error)?;
 
     let mut keywords = caller
@@ -1077,7 +1078,12 @@ fn get_item_count(
             .items()
             .fold(0_u64, |sum, (_, stack)| sum.saturating_add(stack.count))
     } else {
-        let id = caller.data().objects.item(item).ok_or(Exception::Error)?;
+        let id = caller
+            .data()
+            .objects
+            .get_by_addr(item)
+            .and_then(|s| s.record())
+            .ok_or(Exception::Error)?;
         inventory
             .get_by_form(id)
             .fold(0_u64, |sum, (_, stack)| sum.saturating_add(stack.count))
@@ -1520,7 +1526,8 @@ fn has_keyword(
     let keyword = caller
         .data()
         .objects
-        .keyword(keyword)
+        .get_by_addr(keyword)
+        .and_then(|s| s.record())
         .ok_or(Exception::Error)?;
 
     let keywords = caller
@@ -2331,7 +2338,8 @@ fn remove_keyword(
     let keyword = caller
         .data()
         .objects
-        .keyword(keyword)
+        .get_by_addr(keyword)
+        .and_then(|s| s.record())
         .ok_or(Exception::Error)?;
 
     let mut keywords = caller
@@ -2438,7 +2446,8 @@ fn reset_keyword(
     let keyword = caller
         .data()
         .objects
-        .keyword(keyword)
+        .get_by_addr(keyword)
+        .and_then(|s| s.record())
         .ok_or(Exception::Error)?;
 
     let mut keywords = caller
@@ -2770,7 +2779,13 @@ fn set_linked_ref(
     keyword: Object,
 ) -> Result<(), Exception> {
     let keyword = (!keyword.is_null())
-        .then(|| caller.data().objects.keywords.get(&keyword).copied())
+        .then(|| {
+            caller
+                .data()
+                .objects
+                .get_by_addr(keyword)
+                .and_then(|s| s.record())
+        })
         .ok_or(Exception::Error)?;
 
     let entity = caller.data().entity(self_ptr).ok_or(Exception::Error)?;
@@ -3128,7 +3143,12 @@ impl<'a> LinkedRefChainIter<'a> {
         let keyword = if keyword.is_null() {
             None
         } else {
-            Some(*state.objects.keywords.get(&keyword)?)
+            Some(
+                state
+                    .objects
+                    .get_by_addr(keyword)
+                    .and_then(|s| s.record())?,
+            )
         };
 
         let entity = state.entity(self_ptr)?;
@@ -3155,7 +3175,9 @@ impl<'a> Iterator for LinkedRefChainIter<'a> {
         let entity = linked_refs.get(self.keyword)?;
 
         let script = self.state.get_script_object(entity);
-        let addr = self.state.lookup_script_instances(script.id())?;
+        let scripts = self.state.objects.get_by_id(script.id())?;
+        let script = scripts.get("ObjectReference")?;
+        let addr = script.get().object.addr();
 
         self.entity = entity;
         Some(addr)

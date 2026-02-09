@@ -77,7 +77,12 @@ fn get_alias(caller: Caller<'_, State>, quest: Object, alias_id: Int) -> Result<
 /// int Function GetCurrentStageID() native
 /// ```
 fn get_current_stage_id(mut caller: Caller<'_, State>, quest: Object) -> Result<Int, Exception> {
-    let id = caller.data().objects.quest(quest).ok_or(Exception::Error)?;
+    let id = caller
+        .data()
+        .objects
+        .get_by_addr(quest)
+        .and_then(|s| s.record())
+        .ok_or(Exception::Error)?;
     let quest = caller.data_mut().quests().get(id).ok_or(Exception::Error)?;
     Ok(quest.active_stage.unwrap_or_default().into())
 }
@@ -158,7 +163,12 @@ fn is_objective_failed(
 /// bool Function IsRunning() native
 /// ```
 fn is_running(mut caller: Caller<'_, State>, quest: Object) -> Result<bool, Exception> {
-    let id = caller.data().objects.quest(quest).ok_or(Exception::Error)?;
+    let id = caller
+        .data()
+        .objects
+        .get_by_addr(quest)
+        .and_then(|s| s.record())
+        .ok_or(Exception::Error)?;
     let quest = caller.data_mut().quests().get(id).ok_or(Exception::Error)?;
     Ok(quest.state == QuestState::Running)
 }
@@ -178,7 +188,12 @@ fn is_stage_done(caller: Caller<'_, State>, quest: Object, stage: Int) -> Result
 /// bool Function IsStarting() native
 /// ```
 fn is_starting(mut caller: Caller<'_, State>, quest: Object) -> Result<bool, Exception> {
-    let id = caller.data().objects.quest(quest).ok_or(Exception::Error)?;
+    let id = caller
+        .data()
+        .objects
+        .get_by_addr(quest)
+        .and_then(|s| s.record())
+        .ok_or(Exception::Error)?;
     let quest = caller.data_mut().quests().get(id).ok_or(Exception::Error)?;
     Ok(quest.state == QuestState::Starting)
 }
@@ -189,7 +204,12 @@ fn is_starting(mut caller: Caller<'_, State>, quest: Object) -> Result<bool, Exc
 /// bool Function IsStopping() native
 /// ```
 fn is_stopping(mut caller: Caller<'_, State>, quest: Object) -> Result<bool, Exception> {
-    let id = caller.data().objects.quest(quest).ok_or(Exception::Error)?;
+    let id = caller
+        .data()
+        .objects
+        .get_by_addr(quest)
+        .and_then(|s| s.record())
+        .ok_or(Exception::Error)?;
     let quest = caller.data_mut().quests().get(id).ok_or(Exception::Error)?;
     Ok(quest.state == QuestState::Stopping)
 }
@@ -200,7 +220,12 @@ fn is_stopping(mut caller: Caller<'_, State>, quest: Object) -> Result<bool, Exc
 /// bool Function IsStopped() native
 /// ```
 fn is_stopped(mut caller: Caller<'_, State>, quest: Object) -> Result<bool, Exception> {
-    let id = caller.data().objects.quest(quest).ok_or(Exception::Error)?;
+    let id = caller
+        .data()
+        .objects
+        .get_by_addr(quest)
+        .and_then(|s| s.record())
+        .ok_or(Exception::Error)?;
     let quest = caller.data_mut().quests().get(id).ok_or(Exception::Error)?;
     Ok(quest.state == QuestState::Stopped)
 }
@@ -246,7 +271,12 @@ fn set_current_stage_id(
         return Ok(false);
     };
 
-    let id = caller.data().objects.quest(quest).ok_or(Exception::Error)?;
+    let id = caller
+        .data()
+        .objects
+        .get_by_addr(quest)
+        .and_then(|s| s.record())
+        .ok_or(Exception::Error)?;
     let quest = caller.data_mut().quests().get(id).ok_or(Exception::Error)?;
     if !quest.stages.contains_key(&stage_id) {
         return Ok(false);
@@ -305,7 +335,12 @@ fn set_objective_failed(
 /// bool Function Start() native
 /// ```
 fn start(mut caller: Caller<'_, State>, quest: Object) -> Result<bool, Exception> {
-    let id = caller.data().objects.quest(quest).ok_or(Exception::Error)?;
+    let id = caller
+        .data()
+        .objects
+        .get_by_addr(quest)
+        .and_then(|s| s.record())
+        .ok_or(Exception::Error)?;
     caller.data_mut().quests().start_quest(id);
     // FIXME: Should we returns false if quest already running?
     Ok(true)
@@ -317,7 +352,12 @@ fn start(mut caller: Caller<'_, State>, quest: Object) -> Result<bool, Exception
 /// Function Stop() native
 /// ```
 fn stop(mut caller: Caller<'_, State>, quest: Object) -> Result<(), Exception> {
-    let id = caller.data().objects.quest(quest).ok_or(Exception::Error)?;
+    let id = caller
+        .data()
+        .objects
+        .get_by_addr(quest)
+        .and_then(|s| s.record())
+        .ok_or(Exception::Error)?;
     caller.data_mut().quests().stop_quest(id);
     Ok(())
 }

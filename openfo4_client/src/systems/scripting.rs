@@ -2,6 +2,7 @@ pub mod invocations;
 pub mod loader;
 
 mod classes;
+mod objects;
 mod registration;
 
 use std::collections::VecDeque;
@@ -14,25 +15,25 @@ use futures::future::BoxFuture;
 use futures_lite::FutureExt;
 use game_common::collections::arena::{Arena, Key};
 use game_common::collections::bimap::BiMap;
-use game_egui::egui::TextBuffer;
 use game_tasks::TaskPool;
 use game_tracing::trace_span;
 use hashbrown::HashMap;
 use hecs::{Entity, World};
 use openfo4_core::events::EventBus;
-use openfo4_core::record::RecordId;
 use openfo4_pex::Module;
 use openfo4_script::compiler::TypeLayout;
 use openfo4_script::engine::{Engine, Instance, Options};
 use openfo4_script::runtime::{Context, Exception, ObjectAddr, ObjectRef, Stack, Val};
 
+use crate::events::inventory::ItemAddedEvent;
 use crate::loader::{FileLoader, fix_path};
 use crate::state::esp::EspLoader;
 use crate::systems::global::GlobalProperties;
+use crate::systems::inventory::Inventory;
 use crate::systems::scripting::classes::CoreObjects;
 use crate::systems::scripting::invocations::{EventInvocation, Value};
-use crate::systems::scripting::loader::{ScriptLoader, ScriptObject, ScriptObjectId};
-use crate::systems::scripting::registration::RegistrationSet;
+use crate::systems::scripting::loader::{ScriptLoader, ScriptObjectId};
+use crate::systems::scripting::registration::{EventKind, EventSender, RegistrationSet};
 
 use classes::State;
 
@@ -81,8 +82,6 @@ impl Executor {
         let loader = Arc::new(ScriptLoader {
             engine,
             classes: Mutex::default(),
-            instances: Mutex::default(),
-            base_records: Mutex::default(),
             esp_loader,
             state: Mutex::new(Some(state)),
         });
@@ -110,20 +109,22 @@ impl Executor {
     }
 
     fn invoke_inner(&mut self, invocation: EventInvocation) -> InvocationId {
-        let instances = futures_lite::future::block_on(self.loader.instances.lock());
+        let state = futures_lite::future::block_on(self.loader.state.lock());
+        let state = state.as_ref().unwrap();
 
-        let scripts = instances.get(invocation.receiver.0.id.0).unwrap();
+        let scripts = state.objects.get_by_id(invocation.receiver.id()).unwrap();
 
         let id = self.invocations.insert(InvocationState {
             running_tasks: scripts.len(),
         });
 
-        for script in scripts.keys() {
+        for script in scripts.iter() {
             self.queue.push_back(ScheduledTask {
-                invocation: invocation.clone(),
-                object: invocation.receiver.clone(),
-                script: script.clone(),
-                invocation_id: InvocationId(id),
+                object: invocation.receiver.id(),
+                script: script.name().to_owned(),
+                invocation_id: Some(InvocationId(id)),
+                func_name: invocation.name.to_string(),
+                args: invocation.args.clone(),
             });
         }
 
@@ -147,42 +148,52 @@ impl Executor {
     ) {
         let _span = trace_span!("Executor::update").entered();
 
+        self.collect_game_events(world, events, script_entities);
         self.resume_suspended_tasks();
 
         let engine = futures_lite::future::block_on(self.loader.engine.lock());
-        let mut instances = futures_lite::future::block_on(self.loader.instances.lock());
         let mut state = futures_lite::future::block_on(self.loader.state.lock());
 
         // FIXME: Don't recompute this every update.
         let mut entities = HashMap::new();
-        for (id, scripts) in &*instances {
-            let id = ScriptObjectId(id);
-
-            for script in scripts.values() {
-                entities.insert(script.object.addr(), id);
+        for scripts in state.as_ref().unwrap().objects.iter() {
+            for script in scripts.iter() {
+                entities.insert(script.get().object.addr(), scripts.id());
             }
         }
 
         state.as_mut().unwrap().world = world;
         state.as_mut().unwrap().globals = globals;
-        state.as_mut().unwrap().objects.entities = entities;
+        state.as_mut().unwrap().game_entities = entities;
         state.as_mut().unwrap().entities = script_entities;
 
         while let Some(task) = self.queue.pop_front() {
-            let scripts = instances.get_mut(task.object.0.id.0).unwrap();
-            let script = scripts.get_mut(&task.script).unwrap();
+            let scripts = state
+                .as_mut()
+                .unwrap()
+                .objects
+                .get_by_id(task.object)
+                .unwrap();
+            let script = scripts.get(&task.script).unwrap();
 
-            if let Some(future) =
-                call_event_invocation_single(&engine, script, &mut state, &task.invocation)
-            {
+            if let Some(future) = call_event_invocation_single(
+                &engine,
+                script.id(),
+                &script.name().to_owned(),
+                &mut state,
+                &task.func_name,
+                &task.args,
+            ) {
                 self.suspended_calls.push(SuspendedCall { task, future });
                 continue;
             }
 
-            let invocation = self.invocations.get_mut(task.invocation_id.0).unwrap();
-            invocation.running_tasks -= 1;
-            if invocation.running_tasks == 0 {
-                self.invocations.remove(task.invocation_id.0).unwrap();
+            if let Some(invocation_id) = task.invocation_id {
+                let invocation = self.invocations.get_mut(invocation_id.0).unwrap();
+                invocation.running_tasks -= 1;
+                if invocation.running_tasks == 0 {
+                    self.invocations.remove(invocation_id.0).unwrap();
+                }
             }
         }
 
@@ -197,6 +208,80 @@ impl Executor {
         //         timer: entry.id,
         //     });
         // }
+    }
+
+    fn collect_game_events(
+        &mut self,
+        world: &mut World,
+        events: &mut EventBus,
+        entities: &ScriptEntities,
+    ) {
+        let _span = trace_span!("Executor::collect_game_events").entered();
+
+        let mut state = futures_lite::future::block_on(self.loader.state.lock());
+        let state = state.as_mut().unwrap();
+
+        for event in events.read::<ItemAddedEvent>() {
+            let Ok(inventory) = world.get::<&Inventory>(event.entity) else {
+                continue;
+            };
+
+            let Some(stack) = inventory.get(event.slot) else {
+                continue;
+            };
+
+            let base_item = state.objects.get_by_record(stack.item).unwrap();
+            let base_item = base_item.iter().next().unwrap();
+
+            // TODO: Get or create
+            let Some(actor) = entities.0.get_right(&event.entity) else {
+                continue;
+            };
+
+            // Close enough
+            let count = i32::try_from(event.count.get()).unwrap_or(i32::MAX);
+
+            // Dispatch one event for every script object.
+            let scripts = state.objects.get_by_id(*actor).unwrap();
+            for script in scripts.iter() {
+                for (receiver, event) in state.registration.get(
+                    &EventKind::ItemAdded,
+                    &EventSender::Object(script.get().object.addr()),
+                ) {
+                    // receier (ObjectAddr) => ScriptObjectID, ScriptName
+                    // so we can get ScriptObject.
+                    let receiver = state.objects.get_by_addr(*receiver).unwrap();
+
+                    if receiver.get().object.addr() == script.get().object.addr() {
+                        self.queue.push_back(ScheduledTask {
+                            object: receiver.id(),
+                            script: receiver.name().to_owned(),
+                            invocation_id: None,
+                            func_name: "OnItemAdded".to_owned(),
+                            args: vec![
+                                // Use ObjectRef
+                                Value::ObjectRef(base_item.get().object.clone()),
+                                Value::Int(count),
+                                Value::ObjectAddr(ObjectAddr::NULL),
+                            ],
+                        });
+                    } else {
+                        self.queue.push_back(ScheduledTask {
+                            object: receiver.id(),
+                            script: receiver.name().to_owned(),
+                            invocation_id: None,
+                            func_name: event.kind.remote_func_name().to_owned(),
+                            args: vec![
+                                Value::ObjectRef(script.get().object.clone()),
+                                Value::ObjectRef(base_item.get().object.clone()),
+                                Value::Int(count),
+                                Value::ObjectAddr(ObjectAddr::NULL),
+                            ],
+                        });
+                    }
+                }
+            }
+        }
     }
 
     fn resume_suspended_tasks(&mut self) {
@@ -222,10 +307,11 @@ impl Executor {
 
 #[derive(Clone, Debug)]
 struct ScheduledTask {
-    invocation: EventInvocation,
-    object: ScriptObject,
+    object: ScriptObjectId,
     script: String,
-    invocation_id: InvocationId,
+    invocation_id: Option<InvocationId>,
+    func_name: String,
+    args: Vec<Value>,
 }
 
 #[derive(Clone, Debug)]
@@ -236,31 +322,40 @@ struct InvocationState {
 
 fn call_event_invocation_single(
     engine: &Engine,
-    script: &mut ScriptInstance,
+    id: ScriptObjectId,
+    script_name: &str,
     state: &mut Option<State>,
-    invocation: &EventInvocation,
+    func_name: &str,
+    args: &[Value],
 ) -> Option<BoxFuture<'static, ()>> {
-    let Some(func) = script.instance.get_func(&invocation.name) else {
+    let mut script = {
+        let state = state.as_mut().unwrap();
+        let scripts = state.objects.instances.get(id.0).unwrap();
+        scripts.scripts.get(script_name).unwrap().clone()
+    };
+
+    let Some(func) = script.instance.get_func(func_name) else {
         return None;
     };
 
     let stack = script
         .stacks
-        .entry(invocation.name.to_string())
+        .entry(func_name.to_string())
         .or_insert_with(|| Stack::for_func(func));
 
-    let mut args = invocation
-        .args
+    let mut args = args
         .iter()
         .map(|value| match value {
             Value::Int(v) => Val::I32(*v),
+            Value::ObjectRef(object) => Val::Ptr(object.addr().to_raw()),
+            Value::ObjectAddr(addr) => Val::Ptr(addr.to_raw()),
         })
         .collect::<Vec<_>>();
     args.insert(0, Val::Ptr(script.object.addr().to_raw()));
 
     let s = state.take().unwrap();
     let mut ctx = Context::new(engine, stack, s);
-    tracing::debug!("calling {} on {:?}", invocation.name, script.object.addr());
+    tracing::debug!("calling {} on {:?}", func_name, script.object.addr());
     let res = func.call(&mut ctx, &args);
 
     let mut data = ctx.into_data();
@@ -268,7 +363,7 @@ fn call_event_invocation_single(
     match res {
         Ok(_) | Err(Exception::Error) => {
             // Execution is done, reset the stack.
-            script.stacks.remove(invocation.name.as_str());
+            script.stacks.remove(func_name);
         }
         Err(Exception::Suspend) => {
             debug_assert!(data.waker.is_some(), "suspended script without waker");
@@ -277,6 +372,14 @@ fn call_event_invocation_single(
     }
 
     *state = Some(data);
+
+    // FIXME: Avoid this hack.
+    {
+        let state = state.as_mut().unwrap();
+        let scripts = state.objects.instances.get_mut(id.0).unwrap();
+        *scripts.scripts.get_mut(script_name).unwrap() = script;
+    }
+
     waker
 }
 
@@ -332,6 +435,7 @@ fn core_actor_values(engine: &mut Engine) -> State {
         globals: core::ptr::null_mut(),
         registration: RegistrationSet::default(),
         entities: core::ptr::null(),
+        game_entities: HashMap::new(),
     }
 }
 
@@ -341,55 +445,6 @@ struct ScriptInstance {
     layout: TypeLayout,
     object: ObjectRef,
     stacks: HashMap<String, Stack>,
-}
-
-#[derive(Clone, Debug, Default)]
-struct Objects {
-    globals: HashMap<ObjectAddr, RecordId>,
-    keywords: HashMap<ObjectAddr, RecordId>,
-    objects: HashMap<ObjectAddr, Entity>,
-    actor_values: HashMap<ObjectAddr, RecordId>,
-    quests: HashMap<ObjectAddr, RecordId>,
-    perks: HashMap<ObjectAddr, RecordId>,
-    form_lists: HashMap<ObjectAddr, RecordId>,
-    /// Entities that exist in the game world.
-    entities: HashMap<ObjectAddr, ScriptObjectId>,
-}
-
-impl Objects {
-    pub fn global(&self, addr: ObjectAddr) -> Option<RecordId> {
-        self.globals.get(&addr).copied()
-    }
-
-    pub fn quest(&self, addr: ObjectAddr) -> Option<RecordId> {
-        self.quests.get(&addr).copied()
-    }
-
-    pub fn perk(&self, addr: ObjectAddr) -> Option<RecordId> {
-        self.perks.get(&addr).copied()
-    }
-
-    pub fn keyword(&self, addr: ObjectAddr) -> Option<RecordId> {
-        self.keywords.get(&addr).copied()
-    }
-
-    /// Look up an item-like record (weapon, armor, etc..), i.e. any item that can be contained
-    /// inside an inventory.
-    pub fn item(&self, addr: ObjectAddr) -> Option<RecordId> {
-        todo!()
-    }
-
-    pub fn form(&self, addr: ObjectAddr) -> Option<RecordId> {
-        todo!()
-    }
-
-    pub fn form_list(&self, addr: ObjectAddr) -> Option<RecordId> {
-        self.form_lists.get(&addr).copied()
-    }
-
-    pub fn addr(&self, id: RecordId) -> Option<ObjectAddr> {
-        todo!()
-    }
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]

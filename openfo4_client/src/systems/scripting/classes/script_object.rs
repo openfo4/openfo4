@@ -1,6 +1,7 @@
 use std::num::NonZeroU32;
 use std::time::Duration;
 
+use game_common::components::object;
 use openfo4_script::engine::Engine;
 use openfo4_script::runtime::{Caller, Exception};
 
@@ -64,6 +65,7 @@ pub fn register(engine: &mut Engine) {
     engine.register_native_function("ScriptObject", "UnregisterForRemoteEvent", unregister_for_remote_event);
     engine.register_native_function("ScriptObject", "UnregisterForTrackedStatsEvent", unregister_for_tracked_stats_event);
     engine.register_native_function("ScriptObject", "UnregisterForLooksMenuEvent", unregister_for_looks_menu_event);
+    engine.register_native_function("ScriptObject", "UnregisterForHitEvent", unregister_for_hit_event);
     engine.register_native_function("ScriptObject", "UnregisterForTutorialEvent", unregister_for_tutorial_event);
 }
 
@@ -1397,6 +1399,27 @@ fn unregister_for_looks_menu_event(
         },
     );
     Ok(())
+}
+
+/// `UnregisterForHitEvent`
+///
+/// ```text
+/// Function UnregisterForHitEvent(ScriptObject akTarget, ScriptObject akAggressorFilter, Form akSourceFilter, Form akProjectileFilter = None, int aiPowerFilter, int aiSneakFilter, int aiBashFilter, int aiBlockFilter, bool abMatch) native
+/// ```
+fn unregister_for_hit_event(
+    mut caller: Caller<'_, State>,
+    self_ptr: Object,
+    target: Object,
+    aggressor_filter: Object,
+    source_filter: Object,
+    projectile_filter: Object,
+    power_filter: i32,
+    sneak_filter: i32,
+    bash_filter: i32,
+    block_filter: i32,
+    must_match: bool,
+) -> Result<(), Exception> {
+    todo!()
 }
 
 /// `UnregisterForTutorialEvent`

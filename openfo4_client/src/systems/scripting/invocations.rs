@@ -1,5 +1,7 @@
 use std::borrow::Cow;
 
+use openfo4_script::runtime::{ObjectAddr, ObjectRef};
+
 use crate::systems::scripting::classes::TimerId;
 use crate::systems::scripting::loader::ScriptObject;
 
@@ -15,6 +17,8 @@ pub struct EventInvocation {
 #[derive(Clone, Debug)]
 pub enum Value {
     Int(i32),
+    ObjectRef(ObjectRef),
+    ObjectAddr(ObjectAddr),
 }
 
 #[derive(Clone, Debug)]
@@ -97,4 +101,13 @@ impl From<Init> for EventInvocation {
             args: Vec::new(),
         }
     }
+}
+
+#[derive(Clone, Debug)]
+pub struct ItemAdded {
+    pub object: ScriptObject,
+    pub count: i32,
+    pub base_item: ScriptObject,
+    pub item_reference: ScriptObject,
+    pub source_container: ScriptObject,
 }

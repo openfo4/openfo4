@@ -6,35 +6,45 @@ use openfo4_script::runtime::ObjectAddr;
 
 #[derive(Clone, Debug, Default)]
 pub struct RegistrationSet {
-    objects: HashMap<ObjectAddr, Vec<Event>>,
+    events: Vec<(ObjectAddr, Event)>,
     // events: HashMap<EventKind, HashSet<ObjectAddr>>,
 }
 
 impl RegistrationSet {
     pub fn register(&mut self, object: ObjectAddr, event: Event) {
-        // self.events
-        //     .entry(event.kind.clone())
-        //     .or_default()
-        //     .insert(object);
-        self.objects.entry(object).or_default().push(event);
+        // Only register for event once.
+        self.unregister(object, event.clone());
+        self.events.push((object, event));
     }
 
     pub fn unregister(&mut self, object: ObjectAddr, event: Event) {
-        todo!()
+        self.events
+            .retain(|(k, v)| *k != object || v.kind == event.kind || v.sender == event.sender);
     }
 
     pub fn unregister_all(&mut self, object: ObjectAddr) {
-        todo!()
+        self.events.retain(|(v, _)| *v != object);
     }
 
-    pub fn unregister_matching<F>(&mut self, object: ObjectAddr, f: F)
+    pub fn unregister_matching<F>(&mut self, object: ObjectAddr, mut f: F)
     where
         F: FnMut(&Event) -> bool,
     {
-        todo!()
+        self.events
+            .retain(|(k, v)| if *k == object { !f(v) } else { true });
     }
 
-    pub fn get(&self) {}
+    pub fn get(
+        &mut self,
+        kind: &EventKind,
+        sender: &EventSender,
+    ) -> impl Iterator<Item = &(ObjectAddr, Event)> {
+        self.events
+            .iter()
+            .filter(|v| &v.1.kind == kind && &v.1.sender == sender)
+            .collect::<Vec<_>>()
+            .into_iter()
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -123,6 +133,17 @@ pub enum EventKind {
     PlayerHealTeammate,
     PipboyMenu,
     LocationChange,
+    ItemAdded,
+}
+
+impl EventKind {
+    /// Returns the function name for remote functions.
+    pub fn remote_func_name(&self) -> &'static str {
+        match self {
+            Self::EnterBleedout => "::remote_ObjectReference_OnItemAdded",
+            _ => todo!(),
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -144,6 +165,7 @@ impl FromStr for EventKind {
             "OnPlayerHealTeammate" => Ok(Self::PlayerHealTeammate),
             "OnPipboyMenu" => Ok(Self::PipboyMenu),
             "OnLocationChange" => Ok(Self::LocationChange),
+            "OnItemAdded" => Ok(Self::ItemAdded),
             _ => Err(UnknownEvent),
         }
     }
