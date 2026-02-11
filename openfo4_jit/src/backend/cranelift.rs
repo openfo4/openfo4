@@ -832,10 +832,6 @@ impl CompiledFunction {
     }
 }
 
-impl Drop for CompiledFunction {
-    fn drop(&mut self) {}
-}
-
 // SAFETY: We carry a function pointer which is always read-only
 // and can be called from any thread.
 unsafe impl Send for CompiledFunction {}

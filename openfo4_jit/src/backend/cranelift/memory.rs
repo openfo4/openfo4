@@ -1,45 +1,60 @@
 use std::alloc::Layout;
 use std::ffi::c_void;
 use std::os::fd::OwnedFd;
+use std::sync::Arc;
 
 use hashbrown::HashMap;
+use parking_lot::Mutex;
 use rustix::fs::{MemfdFlags, ftruncate, memfd_create};
 use rustix::mm::{MapFlags, ProtFlags, mmap, munmap};
 use slab::Slab;
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct MemoryAllocator {
-    bins: HashMap<usize, BinList>,
+    bins: Arc<Mutex<HashMap<usize, BinList>>>,
 }
 
 impl MemoryAllocator {
     pub fn new() -> Self {
         Self {
-            bins: HashMap::new(),
+            bins: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 
-    pub fn alloc(&mut self, layout: Layout) -> Allocation {
+    pub fn alloc(&self, layout: Layout) -> Allocation {
         let layout = layout.pad_to_align();
         let bin_size = layout.size().next_power_of_two();
 
-        let bins = self
-            .bins
+        let mut bins = self.bins.lock();
+
+        let bins = bins
             .entry(bin_size)
             .or_insert_with(|| BinList::new(bin_size));
 
-        let (bin_index, memory) = bins.alloc(layout);
+        let (bin_index, memory) = bins.alloc();
 
         Allocation {
+            allocator: self.clone(),
             memory,
             bin_size,
             bin_index,
+        }
+    }
+
+    unsafe fn dealloc(&self, alloc: &Allocation) {
+        let mut bins = self.bins.lock();
+
+        let bins = bins.get_mut(&alloc.bin_size).unwrap();
+
+        unsafe {
+            bins.dealloc(alloc.bin_index, &alloc.memory);
         }
     }
 }
 
 #[derive(Debug)]
 pub struct Allocation {
+    allocator: MemoryAllocator,
     memory: AllocationMemory,
     bin_index: usize,
     bin_size: usize,
@@ -52,6 +67,14 @@ impl Allocation {
 
     pub fn as_exec_ptr(&self) -> *const u8 {
         self.memory.rx_mem.cast()
+    }
+}
+
+impl Drop for Allocation {
+    fn drop(&mut self) {
+        unsafe {
+            self.allocator.dealloc(self);
+        }
     }
 }
 
@@ -74,7 +97,7 @@ impl BinList {
         }
     }
 
-    fn alloc(&mut self, layout: Layout) -> (usize, AllocationMemory) {
+    fn alloc(&mut self) -> (usize, AllocationMemory) {
         for (bin_index, bin) in &mut self.bins {
             if let Some(index) = bin.free_slots.pop() {
                 bin.num_allocs += 1;
@@ -88,7 +111,7 @@ impl BinList {
                     AllocationMemory {
                         rw_mem,
                         rx_mem,
-                        size: layout.size(),
+                        bin_slot: index,
                     },
                 );
             }
@@ -114,9 +137,20 @@ impl BinList {
             AllocationMemory {
                 rw_mem,
                 rx_mem,
-                size: layout.size(),
+                bin_slot: index,
             },
         )
+    }
+
+    unsafe fn dealloc(&mut self, bin_index: usize, mem: &AllocationMemory) {
+        let bin = &mut self.bins[bin_index];
+
+        bin.free_slots.push(mem.bin_slot);
+        bin.num_allocs -= 1;
+
+        if bin.num_allocs == 0 {
+            self.bins.remove(bin_index);
+        }
     }
 }
 
@@ -131,7 +165,7 @@ struct Bin {
 struct AllocationMemory {
     rw_mem: *mut c_void,
     rx_mem: *mut c_void,
-    size: usize,
+    bin_slot: usize,
 }
 
 unsafe impl Send for AllocationMemory {}
@@ -139,7 +173,7 @@ unsafe impl Sync for AllocationMemory {}
 
 #[derive(Debug)]
 struct Page {
-    fd: OwnedFd,
+    _fd: OwnedFd,
     rw_map: *mut c_void,
     rx_map: *mut c_void,
     size: usize,
@@ -179,7 +213,7 @@ impl Page {
             rw_map,
             rx_map,
             size,
-            fd,
+            _fd: fd,
         }
     }
 }
