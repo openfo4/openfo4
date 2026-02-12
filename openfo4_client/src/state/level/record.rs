@@ -5,12 +5,12 @@ use glam::{EulerRot, Quat, Vec3};
 use hashbrown::{HashMap, HashSet};
 use hecs::{Entity, World};
 use openfo4_asset::Handle;
-use openfo4_core::WorldExt;
 use openfo4_core::events::EventBus;
 use openfo4_core::hierarchy::Children;
 use openfo4_core::object_ref_set::ObjectReferenceSet;
 use openfo4_core::record::RecordId;
 use openfo4_core::transform::ConvertCoordinateSystem;
+use openfo4_core::{Frozen, WorldExt};
 use openfo4_esp::records::{DoorFlags, LightDataFlags};
 use openfo4_esp::{RecordData, RecordHeaderFlags};
 use openfo4_physics::components::{Collider, RigidBody};
@@ -153,6 +153,8 @@ impl SpawnEntity {
         if persistent {
             world.insert_one(entity, Persistent).unwrap();
         }
+
+        world.insert_one(entity, Frozen::default()).unwrap();
 
         world.insert_one(entity, Root).unwrap();
 

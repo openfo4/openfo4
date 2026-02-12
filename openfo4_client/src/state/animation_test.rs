@@ -10,10 +10,10 @@ use openfo4_animation::builder::{Builder, Hint};
 use openfo4_animation::skeleton::{BoneMarker, Skeleton, SkeletonInstance};
 use openfo4_animation::{AnimationGraph, Value};
 use openfo4_asset::{AssetLoader, Handle};
-use openfo4_core::WorldExt;
 use openfo4_core::events::EventBus;
 use openfo4_core::hierarchy::Children;
 use openfo4_core::record::{ModuleId, RecordId};
+use openfo4_core::{Frozen, WorldExt};
 use openfo4_esp::FormId;
 use openfo4_esp::records::Race;
 use openfo4_hkx::behavior::VariableType;
@@ -110,6 +110,7 @@ pub fn animation_test(
             world
                 .insert_one(root, ObjectKeywords::new(actor.keywords))
                 .unwrap();
+            world.insert_one(root, Frozen::default()).unwrap();
 
             // let race = futures_lite::future::block_on(
             //     esp_loader.lookup(Some(RecordKind::Race), FormId(0x13746)),

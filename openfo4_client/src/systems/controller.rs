@@ -5,6 +5,7 @@ use game_input::keyboard::KeyCode;
 use game_window::events::WindowEvent;
 use glam::{Mat3, Quat, Vec3};
 use hecs::{CommandBuffer, World};
+use openfo4_core::Frozen;
 use openfo4_core::events::EventBus;
 use openfo4_core::transform::ConvertCoordinateSystem;
 use openfo4_physics::PhysicsPipeline;
@@ -162,17 +163,19 @@ pub fn handle_inputs(
 pub fn apply_player_movements(world: &mut World, pipeline: &mut PhysicsPipeline) {
     let mut buffer = CommandBuffer::new();
 
-    for (entity, (transform, offset, state, controller, collider, actor_keywords, player)) in world
-        .query_mut::<(
-            &mut Transform,
-            &CameraOffset,
-            &mut PlayerControlState,
-            Option<&mut CharacterController>,
-            &ControllerShape,
-            &ObjectKeywords,
-            Option<&Player>,
-        )>()
-    {
+    for (
+        entity,
+        (transform, offset, state, controller, collider, actor_keywords, player, frozen),
+    ) in world.query_mut::<(
+        &mut Transform,
+        &CameraOffset,
+        &mut PlayerControlState,
+        Option<&mut CharacterController>,
+        &ControllerShape,
+        &ObjectKeywords,
+        Option<&Player>,
+        Option<&Frozen>,
+    )>() {
         let mut direction = Vec3::ZERO;
 
         if state.moving_front {
@@ -205,24 +208,28 @@ pub fn apply_player_movements(world: &mut World, pipeline: &mut PhysicsPipeline)
         translation *= speed * NIF_TO_METERS / UPS as f32;
 
         if let Some(controller) = controller {
-            let movement = controller.move_shape(
-                pipeline,
-                *transform * collider.offset,
-                &collider.shape,
-                translation,
-                entity,
-            );
+            if frozen.is_none_or(|v| !v.controls) {
+                let movement = controller.move_shape(
+                    pipeline,
+                    *transform * collider.offset,
+                    &collider.shape,
+                    translation,
+                    entity,
+                );
 
-            transform.translation += movement.translation;
+                transform.translation += movement.translation;
+            }
 
-            let gravity_movement = controller.apply_gravity(
-                pipeline,
-                *transform * collider.offset,
-                &collider.shape,
-                entity,
-            );
+            if frozen.is_none_or(|v| !v.physics) {
+                let gravity_movement = controller.apply_gravity(
+                    pipeline,
+                    *transform * collider.offset,
+                    &collider.shape,
+                    entity,
+                );
 
-            transform.translation += gravity_movement.translation;
+                transform.translation += gravity_movement.translation;
+            }
         } else {
             transform.translation += translation;
         }

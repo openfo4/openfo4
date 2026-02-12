@@ -62,3 +62,11 @@ impl WorldExt for World {
         entities
     }
 }
+
+#[derive(Copy, Clone, Debug, Default)]
+pub struct Frozen {
+    /// Physics interactions are frozen.
+    pub physics: bool,
+    /// Controls/Inputs are frozen.
+    pub controls: bool,
+}

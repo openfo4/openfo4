@@ -10,25 +10,26 @@ use std::sync::Arc;
 
 use async_channel::Receiver;
 use crossbeam::queue::SegQueue;
+use futures::StreamExt;
+use futures::stream::FuturesUnordered;
 use game_common::components::Transform;
 use game_tasks::TaskPool;
 use game_tracing::trace_span;
 use glam::Vec2;
 use hashbrown::HashMap;
-use hecs::World;
+use hecs::{CommandBuffer, World};
 use openfo4_asset::AssetLoader;
-use openfo4_core::WorldExt;
 use openfo4_core::events::EventBus;
 use openfo4_core::object_ref_set::ObjectReferenceSet;
 use openfo4_core::record::RecordId;
+use openfo4_core::{Frozen, WorldExt};
 use openfo4_esp::records::Cell;
-use openfo4_esp::{FormId, RecordChildren, RecordData, RecordHeaderFlags, RecordKind};
+use openfo4_esp::{RecordChildren, RecordData, RecordHeaderFlags, RecordKind};
 use parking_lot::RwLock;
 use tracing::instrument;
 
 use crate::cell::CellId;
 use crate::components::{NiTransform, Persistent, Root, WorldSpace};
-use crate::events::{Event, UnloadCell};
 use crate::loader::FileLoader;
 use crate::shared::SharedState;
 use crate::state::level::partial::PartialEntityFlags;
@@ -48,10 +49,10 @@ pub struct Streamer {
 }
 
 pub struct Level {
-    events: Arc<SegQueue<SpawnEntity>>,
+    events: Arc<SegQueue<Event>>,
     tx: async_channel::Sender<Request>,
-    // Worldspace, Cell
-    cells_loaded: HashSet<(RecordId, CellId)>,
+    // Worldspace, Cell, fully loaded
+    cells_loaded: HashMap<(RecordId, CellId), bool>,
     // Worldspace, Cell
     cells_to_unload_next_tick: HashSet<(RecordId, CellId)>,
     terrain_manager: TerrainManager,
@@ -122,7 +123,7 @@ impl Level {
         Self {
             events,
             tx,
-            cells_loaded: HashSet::new(),
+            cells_loaded: HashMap::new(),
             cells_to_unload_next_tick: HashSet::new(),
             terrain_manager,
         }
@@ -131,7 +132,6 @@ impl Level {
     pub fn update(
         &mut self,
         world: &mut World,
-        events: &mut Vec<Event>,
         event_bus: &mut EventBus,
         object_ref_set: &mut ObjectReferenceSet,
         script_entities: &mut ScriptEntities,
@@ -156,8 +156,8 @@ impl Level {
                 // loaded in the previous tick and we have not already started
                 // loading it this tick.
                 // This should happen at most once in the current tick.
-                if !prev_cells_loaded.contains(&(worldspace.record, cell))
-                    && !self.cells_loaded.contains(&(worldspace.record, cell))
+                if !prev_cells_loaded.contains_key(&(worldspace.record, cell))
+                    && !self.cells_loaded.contains_key(&(worldspace.record, cell))
                 {
                     tracing::debug!("loading cell {:?}", cell);
                     self.tx
@@ -168,37 +168,53 @@ impl Level {
                         .unwrap();
                 }
 
-                self.cells_loaded.insert((worldspace.record, cell));
+                let is_fully_loaded = prev_cells_loaded
+                    .get(&(worldspace.record, cell))
+                    .is_some_and(|v| *v);
+
+                self.cells_loaded
+                    .insert((worldspace.record, cell), is_fully_loaded);
                 prev_cells_loaded.remove(&(worldspace.record, cell));
             }
         }
 
-        while let Some(entity) = self.events.pop() {
-            let worldspace = entity.worldspace.unwrap();
-            let cell = if worldspace.is_interior {
-                INTERIOR_CELL
-            } else {
-                CellId::from(entity.transform)
-            };
+        while let Some(event) = self.events.pop() {
+            match event {
+                Event::SpawnEntity(entity) => {
+                    let worldspace = entity.worldspace.unwrap();
+                    let cell = if worldspace.is_interior {
+                        INTERIOR_CELL
+                    } else {
+                        CellId::from(entity.transform)
+                    };
 
-            // It is possible for the event to arrive after the cell
-            // was already unloaded again.
-            // In this case we must not spawn the new entity to prevent
-            // duplicating entities when the cell gets loaded again.
-            if !self.cells_loaded.contains(&(worldspace.record, cell)) && !entity.persistent {
-                continue;
+                    // It is possible for the event to arrive after the cell
+                    // was already unloaded again.
+                    // In this case we must not spawn the new entity to prevent
+                    // duplicating entities when the cell gets loaded again.
+                    if !self.cells_loaded.contains_key(&(worldspace.record, cell))
+                        && !entity.persistent
+                    {
+                        continue;
+                    }
+
+                    entity.instantiate(
+                        world,
+                        event_bus,
+                        object_ref_set,
+                        &mut self.terrain_manager,
+                        script_entities,
+                    );
+                }
+                Event::CellLoadDone { worldspace, cell } => {
+                    if let Some(loaded) = self.cells_loaded.get_mut(&(worldspace, cell)) {
+                        *loaded = true;
+                    }
+                }
             }
-
-            entity.instantiate(
-                world,
-                event_bus,
-                object_ref_set,
-                &mut self.terrain_manager,
-                script_entities,
-            );
         }
 
-        for cell in prev_cells_loaded {
+        for cell in prev_cells_loaded.into_keys() {
             tracing::debug!("unloading cell {:?}", cell);
 
             // Mark the cell for removal in the next tick.
@@ -208,6 +224,7 @@ impl Level {
         }
 
         self.terrain_manager.update(world, event_bus);
+        self.update_frozen_entities(world);
     }
 
     #[instrument(name = "Level::unload_cells", skip_all)]
@@ -247,6 +264,35 @@ impl Level {
 
         self.cells_to_unload_next_tick.clear();
     }
+
+    fn update_frozen_entities(&self, world: &mut World) {
+        let _span = trace_span!("Level::update_frozen_entities").entered();
+
+        let mut commands = CommandBuffer::new();
+        for (entity, (transform, worldspace)) in world.query::<(&Transform, &WorldSpace)>().iter() {
+            let cell = CellId::from(NiTransform::from(*transform));
+
+            if self
+                .cells_loaded
+                .get(&(worldspace.record, cell))
+                .is_some_and(|v| *v)
+            {
+                // Unfreeze
+                commands.insert_one(entity, Frozen::default());
+            } else {
+                // Freeze
+                commands.insert_one(
+                    entity,
+                    Frozen {
+                        physics: true,
+                        controls: true,
+                    },
+                );
+            }
+        }
+
+        commands.run_on(world);
+    }
 }
 
 #[derive(Copy, Clone, Debug)]
@@ -276,7 +322,7 @@ async fn load_cells_task(
     esp_loader: &Arc<EspLoader>,
     loader: &AssetLoader,
     file_loader: &Arc<FileLoader>,
-    events: &Arc<SegQueue<SpawnEntity>>,
+    events: &Arc<SegQueue<Event>>,
     pool: &Arc<TaskPool>,
     shared: &Arc<SharedState>,
     state: &Arc<LoaderState>,
@@ -326,7 +372,7 @@ async fn load_cells_task(
 async fn load_persistent(
     asset_loader: &AssetLoader,
     loader: &Arc<EspLoader>,
-    events: &Arc<SegQueue<SpawnEntity>>,
+    events: &Arc<SegQueue<Event>>,
     pool: &Arc<TaskPool>,
     file_loader: &Arc<FileLoader>,
     shared: &Arc<SharedState>,
@@ -397,7 +443,7 @@ async fn load_persistent(
 async fn load_cell(
     asset_loader: &AssetLoader,
     loader: &Arc<EspLoader>,
-    events: &Arc<SegQueue<SpawnEntity>>,
+    events: &Arc<SegQueue<Event>>,
     pool: &TaskPool,
     file_loader: &Arc<FileLoader>,
     shared: &Arc<SharedState>,
@@ -458,6 +504,7 @@ async fn load_cell(
         persistent
     };
 
+    let mut tasks = FuturesUnordered::new();
     for record in records {
         let loader = loader.clone();
         let file_loader = file_loader.clone();
@@ -467,7 +514,7 @@ async fn load_cell(
         let state = state.clone();
         let script_loader = script_loader.clone();
 
-        pool.spawn(async move {
+        let task = pool.spawn(async move {
             let ctx = LoadContext {
                 cell: cell_id,
                 loader: &asset_loader,
@@ -509,10 +556,18 @@ async fn load_cell(
                         .push(record.id);
                 }
 
-                events.push(entity);
+                events.push(Event::SpawnEntity(entity));
             }
         });
+
+        tasks.push(task);
     }
+
+    while let Some(()) = tasks.next().await {}
+    events.push(Event::CellLoadDone {
+        worldspace,
+        cell: cell_id,
+    });
 }
 
 #[derive(Copy, Clone, Debug)]
@@ -529,4 +584,14 @@ impl LoadContext<'_> {
     fn grid_offset(&self) -> Vec2 {
         self.cell.min()
     }
+}
+
+#[derive(Debug)]
+enum Event {
+    SpawnEntity(SpawnEntity),
+    /// Cell is fully loaded.
+    CellLoadDone {
+        worldspace: RecordId,
+        cell: CellId,
+    },
 }
