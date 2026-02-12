@@ -1,6 +1,6 @@
 use std::ops::{Mul, MulAssign};
 
-use game_common::components::Transform;
+use game_common::components::{Color, Transform};
 use glam::{Quat, Vec3};
 use hecs::Entity;
 use openfo4_core::record::RecordId;
@@ -108,3 +108,9 @@ pub struct LookingAtTarget(pub Entity);
 /// An item placed in the world.
 #[derive(Clone, Debug)]
 pub struct PlacedItem(pub ItemStack);
+
+#[derive(Copy, Clone, Debug)]
+pub struct TriggerBox {
+    pub half_extents: Vec3,
+    pub marker_color: Color,
+}

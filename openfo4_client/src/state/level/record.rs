@@ -10,13 +10,14 @@ use openfo4_core::events::EventBus;
 use openfo4_core::hierarchy::Children;
 use openfo4_core::object_ref_set::ObjectReferenceSet;
 use openfo4_core::record::RecordId;
+use openfo4_core::transform::ConvertCoordinateSystem;
 use openfo4_esp::records::{DoorFlags, LightDataFlags};
 use openfo4_esp::{RecordData, RecordHeaderFlags};
 use openfo4_physics::components::{Collider, RigidBody};
 
 use crate::assets::nif_v2::{Instantiate, LoadNifFlags, NIF_TO_METERS, NifKey, NifScene};
 use crate::components::{
-    ActorMarker, NiTransform, Persistent, PlacedItem, Root, RootParent, WorldSpace,
+    ActorMarker, NiTransform, Persistent, PlacedItem, Root, RootParent, TriggerBox, WorldSpace,
 };
 use crate::render::RenderObject;
 use crate::state::esp::GlobalRecord;
@@ -53,6 +54,7 @@ pub struct SpawnEntity {
     pub terrain: Option<TerrainRegion>,
     pub script: Option<ScriptObject>,
     pub keywords: ObjectKeywords,
+    pub trigger_box: Option<TriggerBox>,
 }
 
 impl SpawnEntity {
@@ -84,6 +86,7 @@ impl SpawnEntity {
             terrain,
             script,
             keywords,
+            trigger_box,
         } = self;
 
         // If the object reference already exists we will overwrite it.
@@ -134,6 +137,10 @@ impl SpawnEntity {
 
         if let Some(placed_item) = placed_item {
             world.insert_one(entity, placed_item).unwrap();
+        }
+
+        if let Some(tb) = trigger_box {
+            world.insert_one(entity, tb).unwrap();
         }
 
         if let Some(script) = script {
@@ -195,6 +202,7 @@ impl SpawnEntity {
 
         let mut light_mod = LightModification::default();
         let mut door = None;
+        let mut trigger_box = None;
 
         match &record.local.data {
             RecordData::PlacedObject(object) => {
@@ -230,6 +238,14 @@ impl SpawnEntity {
                             scale: Vec3::ONE,
                         }),
                     }));
+                }
+
+                if let Some(primitive) = object.primitive {
+                    trigger_box = Some(TriggerBox {
+                        half_extents: Vec3::from_array(primitive.bound_half_extents).to_opengl()
+                            * NIF_TO_METERS,
+                        marker_color: Color::from_rgb(primitive.color),
+                    });
                 }
             }
             RecordData::PlacedNpc(npc) => {
@@ -449,6 +465,7 @@ impl SpawnEntity {
             inventory,
             placed_item: item.map(PlacedItem),
             keywords: ObjectKeywords::new(keywords),
+            trigger_box,
             ..Default::default()
         })
     }

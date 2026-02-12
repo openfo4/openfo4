@@ -38,7 +38,9 @@ use render::physics_debug::{
 use shared::SharedState;
 use state::GameState;
 
-use crate::render::physics_debug::{draw_doors, draw_hitscan_markers, draw_light_markers};
+use crate::render::physics_debug::{
+    draw_doors, draw_hitscan_markers, draw_light_markers, draw_trigger_boxes,
+};
 
 #[derive(Clone, Debug, Parser)]
 #[command(version, about, long_about = None)]
@@ -197,6 +199,10 @@ impl game_window::App for App {
 
         if self.ui_state.debug.draw_doors {
             draw_doors(self.game.world(), &self.state.gizmos);
+        }
+
+        if self.ui_state.debug.draw_trigger_boxes {
+            draw_trigger_boxes(&self.game.world, &self.state.gizmos);
         }
 
         self.egui_ctx.draw(|ctx| {

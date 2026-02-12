@@ -11,7 +11,7 @@ use openfo4_core::hierarchy::Children;
 use openfo4_physics::components::{Collider, ColliderShape};
 
 use crate::cell::CellId;
-use crate::components::{Camera, NiTransform};
+use crate::components::{Camera, NiTransform, TriggerBox};
 use crate::state::npc::BodyPartBone;
 use crate::systems::door::{AUTOLOAD_DOOR_RADIUS, Door};
 
@@ -234,5 +234,65 @@ pub fn draw_doors(world: &World, gizmos: &Gizmos) {
         }
 
         gizmos.sphere(transform.translation, AUTOLOAD_DOOR_RADIUS, AUTO_DOOR_COLOR);
+    }
+}
+
+pub fn draw_trigger_boxes(world: &World, gizmos: &Gizmos) {
+    for (_, (transform, trigger_box)) in world.query::<(&Transform, &TriggerBox)>().iter() {
+        let min = transform.translation - trigger_box.half_extents;
+        let max = transform.translation + trigger_box.half_extents;
+
+        for (start, end) in [
+            (
+                Vec3::new(min.x, min.y, min.z),
+                Vec3::new(min.x, min.y, max.z),
+            ),
+            (
+                Vec3::new(min.x, min.y, min.z),
+                Vec3::new(min.x, max.y, min.z),
+            ),
+            (
+                Vec3::new(min.x, min.y, min.z),
+                Vec3::new(max.x, min.y, min.z),
+            ),
+            (
+                Vec3::new(max.x, max.y, max.z),
+                Vec3::new(max.x, max.y, min.z),
+            ),
+            (
+                Vec3::new(max.x, max.y, max.z),
+                Vec3::new(max.x, min.y, max.z),
+            ),
+            (
+                Vec3::new(max.x, max.y, max.z),
+                Vec3::new(min.x, max.y, max.z),
+            ),
+            (
+                Vec3::new(max.x, min.y, min.z),
+                Vec3::new(max.x, max.y, min.z),
+            ),
+            (
+                Vec3::new(max.x, min.y, min.z),
+                Vec3::new(max.x, min.y, max.z),
+            ),
+            (
+                Vec3::new(min.x, max.y, min.z),
+                Vec3::new(max.x, max.y, min.z),
+            ),
+            (
+                Vec3::new(min.x, max.y, min.z),
+                Vec3::new(min.x, max.y, max.z),
+            ),
+            (
+                Vec3::new(min.x, min.y, max.z),
+                Vec3::new(min.x, max.y, max.z),
+            ),
+            (
+                Vec3::new(min.x, min.y, max.z),
+                Vec3::new(max.x, min.y, max.z),
+            ),
+        ] {
+            gizmos.line(start, end, trigger_box.marker_color);
+        }
     }
 }
