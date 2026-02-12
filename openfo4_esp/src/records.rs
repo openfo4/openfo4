@@ -4989,12 +4989,21 @@ pub struct QuestReferenceAlias {
     pub flags: QuestAliasFlags,
     #[record("ALFI")]
     pub force_into_alias_when_filled: Option<i32>,
+    /// Select a specific reference.
+    ///
+    /// Reference to [`PlacedObject`] or [`PlacedNpc`].
     #[record("ALFR")]
     pub forced_reference: Option<FormId>,
+    /// Select the reference of an actor that has the [`UNIQUE`] flag.
+    ///
+    /// Reference to an [`Npc`].
+    ///
+    /// [`UNIQUE`]: NpcBaseFlags::UNIQUE
     #[record("ALUA")]
     pub unique_actor: Option<FormId>,
     #[record("ALFA")]
     pub location_alias_reference: Option<SubField<QuestAliasLocationAliasReference>>,
+    /// Select an alias from another quest.
     #[record("ALEQ")]
     pub external_alias_reference: Option<SubField<QuestAliasExternalAlias>>,
     #[record("ALCO")]
@@ -5004,6 +5013,7 @@ pub struct QuestReferenceAlias {
         Option<SubField<QuestAliasFindMatchingReferenceNearAlias>>,
     #[record("ALFE")]
     pub find_matching_reference_from_event: Option<SubField<QuestAliasFindMatchingFromEvent>>,
+    /// Select the closest reference to another alias.
     #[record("ALCC")]
     pub closest_to_alias: Option<i32>,
     #[record("CTDA")]
@@ -5117,8 +5127,10 @@ pub struct QuestAliasReferenceAliasLocation {
 #[derive(Clone, Debug, Record)]
 #[record(ordered)]
 pub struct QuestAliasExternalAlias {
+    /// The [`Quest`] from which the alias should be selected.
     #[record("ALEQ")]
     pub quest: FormId,
+    /// The ID of the alias in the other quest.
     #[record("ALEA")]
     pub alias: i32,
 }
@@ -5142,15 +5154,23 @@ bitflags! {
     #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
     pub struct QuestAliasFlags: u32 {
         const RESERVES = 0x00000001;
+        /// Allow nothing to be selected.
+        ///
+        /// If not `OPTIONAL` and nothing was selected quest creation should fail.
         const OPTIONAL = 0x00000002;
         const QUEST_OBJECT = 0x00000004;
+        /// Allow the same entity to be selected for multiple aliases.
         const ALLOW_REUSE_IN_QUEST = 0x00000008;
+        /// Allow dead references to be selected.
         const ALLOW_DEAD = 0x00000010;
         const MATCHING_REF_IN_LOADED_AREA = 0x00000020;
+        /// Make the actor essential for the duration of the quest.
         const ESSENTIAL = 0x00000040;
+        /// Allow disabled entities to be selected.
         const ALLOW_DISABLED = 0x00000080;
         const STORES_TEXT = 0x00000100;
         const ALLOW_RESERVED = 0x00000200;
+        /// Make the actor protected for the duration of the quest.
         const PROTECTED = 0x00000400;
         const FORCED_BY_ALIASES = 0x00000800;
         const ALLOW_DESTROYED = 0x00001000;
@@ -5318,6 +5338,10 @@ pub struct ImageSpaceAdapter {
 pub struct FormList {
     #[record("EDID")]
     pub id: Option<ZString>,
+    #[record("FULL")]
+    pub full_name: Option<LString>,
+    #[record("LNAM")]
+    pub forms: Vec<FormId>,
 }
 
 #[derive(Clone, Debug, Record)]
@@ -5581,6 +5605,65 @@ pub struct EncounterZone {
 pub struct Location {
     #[record("EDID")]
     pub id: Option<ZString>,
+    #[record("ACPR")]
+    pub added_persistent_refs: Option<Array<LocationPersistentReference>>,
+    #[record("LCPR")]
+    pub persistent_refs: Option<Array<LocationPersistentReference>>,
+    #[record("RCPR")]
+    pub removed_persistent_refs: Option<Array<FormId>>,
+    #[record("ACUN")]
+    pub added_unique_npcs: Option<Array<LocationUniqueNpc>>,
+    #[record("LCUN")]
+    pub unique_npcs: Option<Array<LocationUniqueNpc>>,
+    #[record("RCUN")]
+    pub removed_unique_npcs: Option<Array<FormId>>,
+    #[record("ACSR")]
+    pub added_special_refs: Option<Array<LocationSpecialReference>>,
+    #[record("LCSR")]
+    pub special_refs: Option<Array<LocationSpecialReference>>,
+    #[record("RCSR")]
+    pub removed_special_refs: Option<Array<FormId>>,
+    // TODO: SOme more fields here...
+    #[record("FULL")]
+    pub full_name: Option<LString>,
+    #[record("KSIZ")]
+    _keyword_count: Option<u32>,
+    #[record("KWDA")]
+    pub keywords: Option<Array<FormId>>,
+    #[record("PNAM")]
+    pub parent_location: Option<FormId>,
+    #[record("NAM1")]
+    pub music: Option<FormId>,
+    #[record("FNAM")]
+    pub unreported_crime_faction: Option<FormId>,
+    #[record("RNAM")]
+    pub world_location_radius: Option<f32>,
+    #[record("ANAM")]
+    pub actor_fade_mult: Option<f32>,
+}
+
+#[derive(Copy, Clone, Debug, BinaryStruct)]
+pub struct LocationPersistentReference {
+    pub reference: FormId,
+    pub location: FormId,
+    pub grid_y: i16,
+    pub grid_x: i16,
+}
+
+#[derive(Copy, Clone, Debug, BinaryStruct)]
+pub struct LocationUniqueNpc {
+    pub actor: FormId,
+    pub reference: FormId,
+    pub location: FormId,
+}
+
+#[derive(Copy, Clone, Debug, BinaryStruct)]
+pub struct LocationSpecialReference {
+    pub location_ref_type: FormId,
+    pub reference: FormId,
+    pub location: FormId,
+    pub grid_y: i16,
+    pub grid_x: i16,
 }
 
 #[derive(Clone, Debug, Record)]
