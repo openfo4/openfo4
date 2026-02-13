@@ -29,8 +29,9 @@ fn apply_to_ref(
 /// ```text
 /// Function Clear() native
 /// ```
-fn clear(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Exception> {
-    todo!()
+fn clear(mut caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Exception> {
+    caller.data_mut().aliases.set(self_ptr, None);
+    Ok(())
 }
 
 /// `ForceRefTo`
@@ -39,11 +40,13 @@ fn clear(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Exception> {
 /// Function ForceRefTo(ObjectReference akNewRef) native
 /// ```
 fn force_ref_to(
-    caller: Caller<'_, State>,
+    mut caller: Caller<'_, State>,
     self_ptr: Object,
     new_ref: Object,
 ) -> Result<(), Exception> {
-    todo!()
+    let new_ref = (!new_ref.is_null()).then_some(new_ref);
+    caller.data_mut().aliases.set(self_ptr, new_ref);
+    Ok(())
 }
 
 /// `GetReference`
@@ -52,7 +55,23 @@ fn force_ref_to(
 /// ObjectReference Function GetReference() native
 /// ```
 fn get_reference(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Exception> {
-    todo!()
+    let alias = caller
+        .data()
+        .aliases
+        .get(self_ptr)
+        .ok_or(Exception::Error)?;
+
+    let Some(object) = alias.object else {
+        return Ok(Object::NULL);
+    };
+
+    let script = caller
+        .data()
+        .objects
+        .get_by_addr(object)
+        .ok_or(Exception::Error)?;
+
+    Ok(script.get().object.addr())
 }
 
 /// `RemoveFromRef`

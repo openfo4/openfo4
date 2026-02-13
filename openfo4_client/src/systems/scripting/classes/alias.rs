@@ -16,7 +16,18 @@ pub fn register(engine: &mut Engine) {
 /// Quest Function() native
 /// ```
 fn get_owning_quest(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Exception> {
-    todo!()
+    let alias = caller
+        .data()
+        .aliases
+        .get(self_ptr)
+        .ok_or(Exception::Error)?;
+    let quest = caller
+        .data()
+        .objects
+        .get_by_record(alias.quest)
+        .ok_or(Exception::Error)?;
+    let script = quest.get("Quest").ok_or(Exception::Error)?;
+    Ok(script.get().object.addr())
 }
 
 /// `StartObjectProfiling`
@@ -24,8 +35,8 @@ fn get_owning_quest(caller: Caller<'_, State>, self_ptr: Object) -> Result<Objec
 /// ```text
 /// Function() native
 /// ```
-fn start_object_profiling(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Exception> {
-    todo!()
+fn start_object_profiling(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<(), Exception> {
+    Ok(())
 }
 
 /// `StopObjectProfiling`
@@ -33,6 +44,6 @@ fn start_object_profiling(caller: Caller<'_, State>, self_ptr: Object) -> Result
 /// ```text
 /// Function() native
 /// ```
-fn stop_object_profiling(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Exception> {
-    todo!()
+fn stop_object_profiling(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<(), Exception> {
+    Ok(())
 }

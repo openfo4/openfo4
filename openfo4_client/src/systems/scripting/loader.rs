@@ -488,6 +488,7 @@ fn build_script_object(
             }
             Value::Object(value) => {
                 if let Some(alias) = value.alias {
+
                     // TODO
                 } else {
                     let id = resolve_form(value.form);

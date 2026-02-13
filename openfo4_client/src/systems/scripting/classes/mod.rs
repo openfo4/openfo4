@@ -38,6 +38,7 @@ use std::time::{Duration, Instant};
 use futures::future::BoxFuture;
 use hashbrown::HashMap;
 use hecs::{Entity, World};
+use openfo4_core::record::RecordId;
 use openfo4_script::engine::Engine;
 use openfo4_script::runtime::{ObjectAddr, ObjectRef};
 use slab::Slab;
@@ -146,6 +147,32 @@ pub struct State {
     pub waker: Option<BoxFuture<'static, ()>>,
     pub objects: ScriptObjects,
     pub game_entities: HashMap<ObjectAddr, ScriptObjectId>,
+    pub aliases: AliasSet,
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct AliasSet {
+    aliases: HashMap<ObjectAddr, AliasState>,
+}
+
+impl AliasSet {
+    pub fn get(&self, addr: ObjectAddr) -> Option<AliasState> {
+        self.aliases.get(&addr).copied()
+    }
+
+    pub fn set(&mut self, alias: ObjectAddr, object: Option<ObjectAddr>) {
+        if let Some(state) = self.aliases.get_mut(&alias) {
+            state.object = object;
+        }
+    }
+}
+
+#[derive(Copy, Clone, Debug)]
+pub struct AliasState {
+    /// The quest that owns this alias.
+    pub quest: RecordId,
+    /// The real object that this alias points to.
+    pub object: Option<ObjectAddr>,
 }
 
 impl State {

@@ -30,7 +30,7 @@ use crate::loader::{FileLoader, fix_path};
 use crate::state::esp::EspLoader;
 use crate::systems::global::GlobalProperties;
 use crate::systems::inventory::Inventory;
-use crate::systems::scripting::classes::CoreObjects;
+use crate::systems::scripting::classes::{AliasSet, CoreObjects};
 use crate::systems::scripting::invocations::{EventInvocation, Value};
 use crate::systems::scripting::loader::{ScriptLoader, ScriptObjectId};
 use crate::systems::scripting::registration::{EventKind, EventSender, RegistrationSet};
@@ -436,6 +436,7 @@ fn core_actor_values(engine: &mut Engine) -> State {
         registration: RegistrationSet::default(),
         entities: core::ptr::null(),
         game_entities: HashMap::new(),
+        aliases: AliasSet::default(),
     }
 }
 
