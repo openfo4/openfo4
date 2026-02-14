@@ -33,6 +33,7 @@ use crate::loader::{FileLoader, fix_path};
 use crate::state::esp::EspLoader;
 use crate::systems::global::GlobalProperties;
 use crate::systems::inventory::Inventory;
+use crate::systems::quests::QuestManager;
 use crate::systems::scripting::classes::{AliasSet, CoreObjects};
 use crate::systems::scripting::invocations::{EventInvocation, Value};
 use crate::systems::scripting::loader::{ScriptLoader, ScriptObjectId};
@@ -148,6 +149,7 @@ impl Executor {
         events: &mut EventBus,
         globals: &mut GlobalProperties,
         script_entities: &mut ScriptEntities,
+        quests: &mut QuestManager,
         delta: Duration,
     ) {
         let _span = trace_span!("Executor::update").entered();
@@ -176,6 +178,7 @@ impl Executor {
         state.as_mut().unwrap().globals = globals;
         state.as_mut().unwrap().game_entities = entities;
         state.as_mut().unwrap().entities = script_entities;
+        state.as_mut().unwrap().quests = quests;
 
         while let Some(task) = self.queue.pop_front() {
             let scripts = state

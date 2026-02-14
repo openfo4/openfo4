@@ -1,5 +1,7 @@
+use game_tracing::trace_span;
 use openfo4_script::engine::Engine;
 use openfo4_script::runtime::{Caller, Exception};
+use tracing::instrument;
 
 use crate::systems::quests::QuestState;
 

@@ -110,9 +110,7 @@ impl QuestManager {
                 quest.next_stage = Some(0);
             }
 
-            if let Some(stage_id) = quest.next_stage.take()
-                && let Some(stage) = quest.stages.get(&stage_id)
-            {
+            if let Some(stage_id) = quest.next_stage.take() {
                 tracing::debug!(
                     "advancing quest {:?} from stage {:?} to {}",
                     id,
@@ -120,21 +118,29 @@ impl QuestManager {
                     stage_id
                 );
 
-                executor.invoke(QuestSetStage {
-                    quest: script.clone(),
-                    stage: stage_id,
-                    // TODO
-                    item: 0,
-                });
-
-                for func_name in &stage.fragment_functions {
-                    executor.invoke(QuestFragmentSetStage {
-                        quest: script.clone(),
-                        func_name: func_name.clone(),
-                    });
+                if let Some(prev_id) = quest.active_stage
+                    && let Some(stage) = quest.stages.get_mut(&prev_id)
+                {
+                    stage.is_done = true;
                 }
 
-                quest.active_stage = Some(stage_id);
+                if let Some(stage) = quest.stages.get(&stage_id) {
+                    executor.invoke(QuestSetStage {
+                        quest: script.clone(),
+                        stage: stage_id,
+                        // TODO
+                        item: 0,
+                    });
+
+                    for func_name in &stage.fragment_functions {
+                        executor.invoke(QuestFragmentSetStage {
+                            quest: script.clone(),
+                            func_name: func_name.clone(),
+                        });
+                    }
+
+                    quest.active_stage = Some(stage_id);
+                }
             }
         }
     }

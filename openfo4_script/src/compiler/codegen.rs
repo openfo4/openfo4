@@ -291,6 +291,8 @@ impl CodegenPass {
                 next_class = class.parent.as_ref();
             }
 
+            class_names.reverse();
+
             class_layouts.insert(
                 class.name.clone(),
                 TypeLayout {

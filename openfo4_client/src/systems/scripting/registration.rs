@@ -1,7 +1,6 @@
 use std::num::NonZeroU32;
 use std::str::FromStr;
 
-use hashbrown::{HashMap, HashSet};
 use openfo4_script::runtime::ObjectAddr;
 
 #[derive(Clone, Debug, Default)]
@@ -152,6 +151,8 @@ impl EventKind {
     pub fn remote_func_name(&self) -> &'static str {
         match self {
             Self::ItemAdded => "::remote_ObjectReference_OnItemAdded",
+            Self::TriggerEnter => "::remote_ObjectReference_OnTriggerEnter",
+            Self::TriggerLeave => "::remote_ObjectReference_OnTriggerLeave",
             _ => todo!(),
         }
     }

@@ -10,7 +10,7 @@ use crate::systems::scripting::loader::ScriptObjectId;
 pub struct ScriptObjects {
     // FIXME: Remove this hack
     pub(super) instances: Slab<ObjectInfo>,
-    addrs: HashMap<ObjectAddr, (ScriptObjectId, String)>,
+    addrs: HashMap<ObjectAddr, (ScriptObjectId, usize)>,
     records: HashMap<RecordId, ScriptObjectId>,
 }
 
@@ -37,10 +37,7 @@ impl ScriptObjects {
                 class_names.insert(class.to_owned(), index);
             }
 
-            self.addrs.insert(
-                script.object.addr(),
-                (id, classes.last().unwrap().to_owned()),
-            );
+            self.addrs.insert(script.object.addr(), (id, index));
         }
 
         let id2 = self.instances.insert(ObjectInfo {
@@ -58,15 +55,13 @@ impl ScriptObjects {
     }
 
     pub fn get_by_addr(&self, addr: ObjectAddr) -> Option<ScriptRef<'_>> {
-        let (id, name) = self.addrs.get(&addr)?;
+        let (id, index) = self.addrs.get(&addr)?;
         let info = self.instances.get(id.0).unwrap();
-        let index = *info.class_names.get(name).unwrap();
-        let instance = &info.scripts[index];
+        let instance = &info.scripts[*index];
 
         Some(ScriptRef {
             instance,
             record: info.record,
-            name,
             id: *id,
         })
     }
@@ -103,7 +98,6 @@ impl<'a> ScriptsRef<'a> {
         Some(ScriptRef {
             instance: instance,
             record: self.info.record,
-            name,
             id: self.id,
         })
     }
@@ -119,7 +113,6 @@ impl<'a> ScriptsRef<'a> {
             ScriptRef {
                 instance,
                 record: self.info.record,
-                name: &k,
                 id: self.id,
             }
         })
@@ -129,7 +122,6 @@ impl<'a> ScriptsRef<'a> {
 #[derive(Copy, Clone, Debug)]
 pub struct ScriptRef<'a> {
     instance: &'a ScriptInstance,
-    name: &'a str,
     record: Option<RecordId>,
     id: ScriptObjectId,
 }
@@ -147,7 +139,13 @@ impl<'a> ScriptRef<'a> {
     }
 
     pub fn name(&self) -> &str {
-        self.name
+        self.instance
+            .layout
+            .classes
+            .as_ref()
+            .unwrap()
+            .last()
+            .unwrap()
     }
 
     pub fn get(&self) -> &ScriptInstance {
