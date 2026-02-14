@@ -46,6 +46,7 @@ impl QuestManager {
                 QuestStage {
                     run_on_start: stage.index.flags.contains(QuestStageFlags::RUN_ON_START),
                     run_on_stop: stage.index.flags.contains(QuestStageFlags::RUN_ON_STOP),
+                    is_done: false,
                     fragment_functions: HashSet::new(),
                 },
             );
@@ -198,5 +199,6 @@ pub type StageId = u16;
 pub struct QuestStage {
     pub run_on_start: bool,
     pub run_on_stop: bool,
+    pub is_done: bool,
     pub fragment_functions: HashSet<String>,
 }

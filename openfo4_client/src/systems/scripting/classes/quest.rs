@@ -178,8 +178,28 @@ fn is_running(mut caller: Caller<'_, State>, quest: Object) -> Result<bool, Exce
 /// ```text
 /// bool Function IsStageDone(int aiStage) native
 /// ```
-fn is_stage_done(caller: Caller<'_, State>, quest: Object, stage: Int) -> Result<bool, Exception> {
-    todo!()
+fn is_stage_done(
+    mut caller: Caller<'_, State>,
+    quest: Object,
+    stage: Int,
+) -> Result<bool, Exception> {
+    let id = caller
+        .data()
+        .objects
+        .get_by_addr(quest)
+        .and_then(|s| s.record())
+        .ok_or(Exception::Error)?;
+    let quest = caller.data_mut().quests().get(id).ok_or(Exception::Error)?;
+
+    let Ok(stage) = u16::try_from(stage) else {
+        return Ok(false);
+    };
+
+    let Some(stage) = quest.stages.get(&stage) else {
+        return Ok(false);
+    };
+
+    Ok(stage.is_done)
 }
 
 /// `IsStarting`

@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use async_lock::Mutex;
 use game_common::string::Lowercase;
+use game_egui::egui::menu::context_menu_opened;
 use hashbrown::{HashMap, HashSet};
 use openfo4_core::record::RecordId;
 use openfo4_esp::vmad::{Property, Script, Value};
@@ -14,6 +15,7 @@ use openfo4_script::runtime::{ObjectAddr, ObjectRef};
 use crate::state::esp::EspLoader;
 use crate::systems::scripting::classes::State;
 use crate::systems::scripting::objects::ScriptObjects;
+use crate::systems::scripting::registration::{Event, EventKind, EventSender};
 use crate::systems::scripting::{COMPILER_OPTIONS, ScriptInstance};
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
@@ -257,6 +259,8 @@ async fn instantiate_form(
         let mut final_instances = Vec::new();
 
         for (name, mut object) in scripts {
+            register_static_events(&object, state);
+
             if let Some(script) = &object.script {
                 tracing::debug!("instantiating script {} (record {:?})", name, record);
 
@@ -288,6 +292,26 @@ async fn instantiate_form(
     }
 
     root_id
+}
+
+fn register_static_events(object: &PartialObject, state: &mut State) {
+    for (name, kind) in [
+        ("OnTriggerEnter", EventKind::TriggerEnter),
+        ("OnTriggerLeave", EventKind::TriggerLeave),
+    ] {
+        if object.instance.get_func(name).is_none() {
+            continue;
+        }
+
+        state.registration.register(
+            object.builder.addr(),
+            Event {
+                kind,
+                sender: EventSender::Object(object.builder.addr()),
+                limit: None,
+            },
+        );
+    }
 }
 
 #[derive(Debug)]
