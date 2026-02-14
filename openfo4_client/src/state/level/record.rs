@@ -449,6 +449,12 @@ impl SpawnEntity {
             Some(_) | None => None,
         };
 
+        let script = if record.local.data.virtual_machine_adapter().is_some() {
+            ctx.script_loader.load(record.id).await
+        } else {
+            None
+        };
+
         Some(SpawnEntity {
             transform: NiTransform::from_ni_transform(transform),
             scene,
@@ -469,6 +475,7 @@ impl SpawnEntity {
             placed_item: item.map(PlacedItem),
             keywords: ObjectKeywords::new(keywords),
             trigger_box,
+            script,
             ..Default::default()
         })
     }

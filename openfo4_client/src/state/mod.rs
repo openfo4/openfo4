@@ -303,7 +303,7 @@ impl GameState {
             &mut self.world,
             &mut self.event_bus,
             &mut self.globals,
-            &self.script_entities,
+            &mut self.script_entities,
             Duration::from_secs(1) / UPS,
         );
 

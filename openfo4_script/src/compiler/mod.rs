@@ -92,6 +92,11 @@ pub struct TypeLayout {
     pub header: Option<Arc<[usize]>>,
     pub fields: Vec<ObjectField>,
     pub properties: Vec<ObjectProperty>,
+    /// The class names of the hierarchy of this type.
+    ///
+    /// Same order as `header`, index 0 is the "root" class (`ScriptObject`)
+    /// and the last index is the most concrete class.
+    pub classes: Option<Arc<[String]>>,
 }
 
 impl TypeLayout {

@@ -244,8 +244,12 @@ impl CodegenPass {
             let mut class_fields = Vec::new();
             let mut properties = Vec::new();
 
+            let mut class_names = Vec::new();
+
             let mut next_class = Some(&class.name);
             while let Some(class_name) = next_class.take() {
+                class_names.push(class_name.to_owned().into_inner());
+
                 let class = self.data.get_class(class_name).unwrap();
                 let layout = class.layout.as_ref().unwrap();
 
@@ -293,6 +297,7 @@ impl CodegenPass {
                     header: class.header.clone(),
                     fields: class_fields,
                     properties,
+                    classes: Some(Arc::from(class_names)),
                 },
             );
         }
@@ -338,6 +343,7 @@ impl CodegenPass {
                     header: None,
                     fields,
                     properties,
+                    classes: None,
                 },
             );
         }

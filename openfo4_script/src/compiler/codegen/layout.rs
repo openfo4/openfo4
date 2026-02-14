@@ -110,6 +110,7 @@ pub fn compute_struct_type_layout(data: &CodegenData, st: &StructDef) -> TypeLay
         header: None,
         fields,
         properties,
+        classes: None,
     }
 }
 
@@ -140,5 +141,6 @@ pub fn generate_type_layout(data: &CodegenData, ty: &Type) -> TypeLayout {
             name: Lowercase::new(""),
             var: 0,
         }],
+        classes: None,
     }
 }

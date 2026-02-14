@@ -375,6 +375,7 @@ fn int_layout() -> TypeLayout {
             name: Lowercase::new(""),
             var: 0,
         }],
+        classes: None,
     }
 }
 
@@ -393,5 +394,6 @@ fn ptr_layout() -> TypeLayout {
             name: Lowercase::new(""),
             var: 0,
         }],
+        classes: None,
     }
 }

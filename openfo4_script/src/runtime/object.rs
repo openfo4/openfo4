@@ -20,6 +20,10 @@ impl ObjectAddr {
     pub const fn to_raw(self) -> *mut u8 {
         self.0
     }
+
+    pub const fn is_null(self) -> bool {
+        self.0.is_null()
+    }
 }
 
 impl AsRef<ObjectAddr> for ObjectAddr {
@@ -497,6 +501,7 @@ pub(crate) static ARRAY_LAYOUT: LazyLock<TypeLayout> = LazyLock::new(|| TypeLayo
             var: 1,
         },
     ],
+    classes: None,
 });
 
 pub(crate) const BYTE_LAYOUT: LazyLock<TypeLayout> = LazyLock::new(|| TypeLayout {
@@ -513,6 +518,7 @@ pub(crate) const BYTE_LAYOUT: LazyLock<TypeLayout> = LazyLock::new(|| TypeLayout
         name: Lowercase::new(""),
         var: 0,
     }],
+    classes: None,
 });
 
 pub(crate) const VAR_LAYOUT: LazyLock<TypeLayout> = LazyLock::new(|| TypeLayout {
@@ -545,4 +551,5 @@ pub(crate) const VAR_LAYOUT: LazyLock<TypeLayout> = LazyLock::new(|| TypeLayout 
             var: 1,
         },
     ],
+    classes: None,
 });

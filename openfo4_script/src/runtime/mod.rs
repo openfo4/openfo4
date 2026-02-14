@@ -401,6 +401,10 @@ impl<'a, T> Caller<'a, T> {
 
         objects
     }
+
+    pub fn object_pool(&self) -> &ObjectPool {
+        unsafe { &(*self.ctx.state).pool }
+    }
 }
 
 #[derive(Default)]

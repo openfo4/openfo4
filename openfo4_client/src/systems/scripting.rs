@@ -26,6 +26,7 @@ use openfo4_script::compiler::TypeLayout;
 use openfo4_script::engine::{Engine, Instance, Options};
 use openfo4_script::runtime::{Context, Exception, ObjectAddr, ObjectRef, Stack, Val};
 
+use crate::components::Player;
 use crate::events::inventory::{ItemAddedEvent, ItemEquippedEvent};
 use crate::events::trigger::{TriggerEnter, TriggerLeave};
 use crate::loader::{FileLoader, fix_path};
@@ -35,6 +36,7 @@ use crate::systems::inventory::Inventory;
 use crate::systems::scripting::classes::{AliasSet, CoreObjects};
 use crate::systems::scripting::invocations::{EventInvocation, Value};
 use crate::systems::scripting::loader::{ScriptLoader, ScriptObjectId};
+use crate::systems::scripting::objects::ScriptObjects;
 use crate::systems::scripting::registration::{EventKind, EventSender, RegistrationSet};
 
 use classes::State;
@@ -145,7 +147,7 @@ impl Executor {
         world: &mut World,
         events: &mut EventBus,
         globals: &mut GlobalProperties,
-        script_entities: &ScriptEntities,
+        script_entities: &mut ScriptEntities,
         delta: Duration,
     ) {
         let _span = trace_span!("Executor::update").entered();
@@ -155,6 +157,12 @@ impl Executor {
 
         let engine = futures_lite::future::block_on(self.loader.engine.lock());
         let mut state = futures_lite::future::block_on(self.loader.state.lock());
+
+        for (entity, _) in world.query::<&Player>().iter() {
+            let addr = state.as_mut().unwrap().core_objects.player.addr();
+            let script = state.as_mut().unwrap().objects.get_by_addr(addr).unwrap();
+            script_entities.0.insert(script.id(), entity);
+        }
 
         // FIXME: Don't recompute this every update.
         let mut entities = HashMap::new();
@@ -351,7 +359,8 @@ fn call_event_invocation_single(
     let mut script = {
         let state = state.as_mut().unwrap();
         let scripts = state.objects.instances.get(id.0).unwrap();
-        scripts.scripts.get(script_name).unwrap().clone()
+        let index = *scripts.class_names.get(script_name).unwrap();
+        scripts.scripts[index].clone()
     };
 
     let Some(func) = script.instance.get_func(func_name) else {
@@ -397,7 +406,8 @@ fn call_event_invocation_single(
     {
         let state = state.as_mut().unwrap();
         let scripts = state.objects.instances.get_mut(id.0).unwrap();
-        *scripts.scripts.get_mut(script_name).unwrap() = script;
+        let index = *scripts.class_names.get_mut(script_name).unwrap();
+        scripts.scripts[index] = script;
     }
 
     waker
@@ -409,13 +419,11 @@ struct SuspendedCall {
 }
 
 fn core_actor_values(engine: &mut Engine) -> State {
-    engine.compile("Actor", &COMPILER_OPTIONS);
+    let actor = engine.compile("Actor", &COMPILER_OPTIONS);
     engine.compile("ActorValue", &COMPILER_OPTIONS);
 
-    let actor = engine.get_class_layout("Actor").unwrap();
+    let actor_layout = engine.get_class_layout("Actor").unwrap();
     let actor_value = engine.get_class_layout("ActorValue").unwrap();
-
-    let player = engine.object_pool().insert(actor.clone()).finalize();
 
     let [
         health,
@@ -431,9 +439,19 @@ fn core_actor_values(engine: &mut Engine) -> State {
         suspicious,
     ] = std::array::from_fn(|_| engine.object_pool().insert(actor_value.clone()).finalize());
 
+    let player = ScriptInstance {
+        layout: actor_layout.clone(),
+        instance: actor,
+        object: engine.object_pool().insert(actor_layout.clone()).finalize(),
+        stacks: HashMap::new(),
+    };
+
+    let mut objects = ScriptObjects::default();
+    objects.insert(vec![player.clone()], None);
+
     State {
         core_objects: CoreObjects {
-            player,
+            player: player.object.clone(),
             health,
             strength,
             perception,
@@ -450,7 +468,7 @@ fn core_actor_values(engine: &mut Engine) -> State {
         game_timers: Default::default(),
         world: core::ptr::null_mut(),
         quests: core::ptr::null_mut(),
-        objects: Default::default(),
+        objects,
         waker: None,
         globals: core::ptr::null_mut(),
         registration: RegistrationSet::default(),

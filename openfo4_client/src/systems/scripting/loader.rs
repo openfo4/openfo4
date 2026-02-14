@@ -69,6 +69,8 @@ impl ScriptLoader {
         )
         .await?;
 
+        tracing::trace!("script for {:?} is {:?}", record, id);
+
         Some(ScriptObject(Arc::new(ScriptObjectInner {
             base: record,
             id,
@@ -87,21 +89,16 @@ impl ScriptLoader {
 
         let scripts = scripts
             .iter()
-            .map(|script| {
-                (
-                    script.name().to_owned(),
-                    ScriptInstance {
-                        instance: script.get().instance.clone(),
-                        layout: script.get().layout.clone(),
-                        stacks: script.get().stacks.clone(),
-                        object: unsafe {
-                            engine
-                                .object_pool()
-                                .clone_object(&script.get().object)
-                                .finalize()
-                        },
-                    },
-                )
+            .map(|script| ScriptInstance {
+                instance: script.get().instance.clone(),
+                layout: script.get().layout.clone(),
+                stacks: script.get().stacks.clone(),
+                object: unsafe {
+                    engine
+                        .object_pool()
+                        .clone_object(&script.get().object)
+                        .finalize()
+                },
             })
             .collect();
 
@@ -257,7 +254,7 @@ async fn instantiate_form(
     }
 
     for (record, scripts) in records {
-        let mut final_instances = HashMap::new();
+        let mut final_instances = Vec::new();
 
         for (name, mut object) in scripts {
             if let Some(script) = &object.script {
@@ -274,15 +271,12 @@ async fn instantiate_form(
             }
 
             let layout = engine.get_class_layout(&name).unwrap();
-            final_instances.insert(
-                name.clone(),
-                ScriptInstance {
-                    instance: object.instance,
-                    layout: layout.clone(),
-                    object: object.builder.finalize(),
-                    stacks: HashMap::new(),
-                },
-            );
+            final_instances.push(ScriptInstance {
+                instance: object.instance,
+                layout: layout.clone(),
+                object: object.builder.finalize(),
+                stacks: HashMap::new(),
+            });
         }
 
         debug_assert!(state.objects.get_by_record(record).is_none());
@@ -488,7 +482,6 @@ fn build_script_object(
             }
             Value::Object(value) => {
                 if let Some(alias) = value.alias {
-
                     // TODO
                 } else {
                     let id = resolve_form(value.form);
@@ -617,6 +610,7 @@ fn build_struct_layout(props: &[Property]) -> TypeLayout {
         header: None,
         fields,
         properties,
+        classes: None,
     }
 }
 
@@ -645,6 +639,7 @@ fn build_array_layout(values: &[Value]) -> TypeLayout {
             name: Lowercase::new(""),
             var: 0,
         }],
+        classes: None,
     }
 }
 

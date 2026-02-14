@@ -17,21 +17,37 @@ pub struct ScriptObjects {
 impl ScriptObjects {
     pub fn insert(
         &mut self,
-        scripts: HashMap<String, ScriptInstance>,
+        scripts: Vec<ScriptInstance>,
         record: Option<RecordId>,
     ) -> ScriptObjectId {
         let id = ScriptObjectId(self.instances.vacant_key());
-
-        for (name, script) in &scripts {
-            self.addrs.insert(script.object.addr(), (id, name.clone()));
-        }
 
         if let Some(record) = record {
             debug_assert!(!self.records.contains_key(&record));
             self.records.insert(record, id);
         }
 
-        let id2 = self.instances.insert(ObjectInfo { scripts, record });
+        let mut class_names = HashMap::new();
+        for (index, script) in scripts.iter().enumerate() {
+            let Some(classes) = &script.layout.classes else {
+                continue;
+            };
+
+            for class in classes.iter() {
+                class_names.insert(class.to_owned(), index);
+            }
+
+            self.addrs.insert(
+                script.object.addr(),
+                (id, classes.last().unwrap().to_owned()),
+            );
+        }
+
+        let id2 = self.instances.insert(ObjectInfo {
+            scripts,
+            class_names,
+            record,
+        });
         debug_assert_eq!(id.0, id2);
         id
     }
@@ -44,7 +60,8 @@ impl ScriptObjects {
     pub fn get_by_addr(&self, addr: ObjectAddr) -> Option<ScriptRef<'_>> {
         let (id, name) = self.addrs.get(&addr)?;
         let info = self.instances.get(id.0).unwrap();
-        let instance = info.scripts.get(name).unwrap();
+        let index = *info.class_names.get(name).unwrap();
+        let instance = &info.scripts[index];
 
         Some(ScriptRef {
             instance,
@@ -80,7 +97,9 @@ impl<'a> ScriptsRef<'a> {
     }
 
     pub fn get(&self, name: &str) -> Option<ScriptRef<'a>> {
-        let (name, instance) = self.info.scripts.get_key_value(name)?;
+        let (name, index) = self.info.class_names.get_key_value(&name.to_lowercase())?;
+        let instance = &self.info.scripts[*index];
+
         Some(ScriptRef {
             instance: instance,
             record: self.info.record,
@@ -90,15 +109,19 @@ impl<'a> ScriptsRef<'a> {
     }
 
     pub fn len(&self) -> usize {
-        self.info.scripts.len()
+        self.info.class_names.len()
     }
 
     pub fn iter(&self) -> impl Iterator<Item = ScriptRef<'a>> + '_ {
-        self.info.scripts.iter().map(|(k, v)| ScriptRef {
-            instance: v,
-            record: self.info.record,
-            name: &k,
-            id: self.id,
+        self.info.class_names.iter().map(|(k, index)| {
+            let instance = &self.info.scripts[*index];
+
+            ScriptRef {
+                instance,
+                record: self.info.record,
+                name: &k,
+                id: self.id,
+            }
         })
     }
 }
@@ -134,6 +157,11 @@ impl<'a> ScriptRef<'a> {
 
 #[derive(Clone, Debug)]
 pub(super) struct ObjectInfo {
-    pub(super) scripts: HashMap<String, ScriptInstance>,
+    pub(super) scripts: Vec<ScriptInstance>,
+    /// Maps class names to script instances.
+    ///
+    /// Note that it is possible for multiple scripts with the same class hierarchy
+    /// to exist, but in that case which one we return is not defined.
+    pub(super) class_names: HashMap<String, usize>,
     record: Option<RecordId>,
 }
