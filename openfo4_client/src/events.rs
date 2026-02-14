@@ -1,3 +1,5 @@
+pub mod inventory;
+
 use crate::cell::CellId;
 
 #[derive(Clone, Debug)]

@@ -2,6 +2,7 @@ pub mod invocations;
 pub mod loader;
 
 mod classes;
+mod events;
 mod objects;
 mod registration;
 
@@ -25,7 +26,7 @@ use openfo4_script::compiler::TypeLayout;
 use openfo4_script::engine::{Engine, Instance, Options};
 use openfo4_script::runtime::{Context, Exception, ObjectAddr, ObjectRef, Stack, Val};
 
-use crate::events::inventory::ItemAddedEvent;
+use crate::events::inventory::{ItemAddedEvent, ItemEquippedEvent};
 use crate::loader::{FileLoader, fix_path};
 use crate::state::esp::EspLoader;
 use crate::systems::global::GlobalProperties;
@@ -221,35 +222,34 @@ impl Executor {
         let mut state = futures_lite::future::block_on(self.loader.state.lock());
         let state = state.as_mut().unwrap();
 
-        for event in events.read::<ItemAddedEvent>() {
-            let Ok(inventory) = world.get::<&Inventory>(event.entity) else {
-                continue;
-            };
+        fn collect_event_dispatches<T: events::Event + openfo4_core::events::Event>(
+            dst: &mut Vec<events::DispatchEvent>,
+            events: &EventBus,
+            ctx: events::Context<'_>,
+        ) {
+            for event in events.read::<T>() {
+                dst.extend(event.extract(ctx));
+            }
+        }
 
-            let Some(stack) = inventory.get(event.slot) else {
-                continue;
-            };
+        let ctx = events::Context {
+            state: &state,
+            world: &world,
+            entities,
+        };
 
-            let base_item = state.objects.get_by_record(stack.item).unwrap();
-            let base_item = base_item.iter().next().unwrap();
+        let mut dispatches = Vec::new();
+        collect_event_dispatches::<ItemAddedEvent>(&mut dispatches, events, ctx);
+        collect_event_dispatches::<ItemEquippedEvent>(&mut dispatches, events, ctx);
 
-            // TODO: Get or create
-            let Some(actor) = entities.0.get_right(&event.entity) else {
-                continue;
-            };
-
-            // Close enough
-            let count = i32::try_from(event.count.get()).unwrap_or(i32::MAX);
-
+        for dispatch in dispatches {
             // Dispatch one event for every script object.
-            let scripts = state.objects.get_by_id(*actor).unwrap();
+            let scripts = state.objects.get_by_id(dispatch.receiver).unwrap();
             for script in scripts.iter() {
                 for (receiver, event) in state.registration.get(
-                    &EventKind::ItemAdded,
+                    &dispatch.kind,
                     &EventSender::Object(script.get().object.addr()),
                 ) {
-                    // receier (ObjectAddr) => ScriptObjectID, ScriptName
-                    // so we can get ScriptObject.
                     let receiver = state.objects.get_by_addr(*receiver).unwrap();
 
                     if receiver.get().object.addr() == script.get().object.addr() {
@@ -257,28 +257,39 @@ impl Executor {
                             object: receiver.id(),
                             script: receiver.name().to_owned(),
                             invocation_id: None,
-                            func_name: "OnItemAdded".to_owned(),
-                            args: vec![
-                                // Use ObjectRef
-                                Value::ObjectRef(base_item.get().object.clone()),
-                                Value::Int(count),
-                                Value::ObjectAddr(ObjectAddr::NULL),
-                            ],
+                            func_name: event.kind.func_name().to_owned(),
+                            args: dispatch.args.to_vec(),
                         });
                     } else {
+                        let mut args = dispatch.args.to_vec();
+                        args.insert(0, Value::ObjectRef(script.get().object.clone()));
+
                         self.queue.push_back(ScheduledTask {
                             object: receiver.id(),
                             script: receiver.name().to_owned(),
                             invocation_id: None,
                             func_name: event.kind.remote_func_name().to_owned(),
-                            args: vec![
-                                Value::ObjectRef(script.get().object.clone()),
-                                Value::ObjectRef(base_item.get().object.clone()),
-                                Value::Int(count),
-                                Value::ObjectAddr(ObjectAddr::NULL),
-                            ],
+                            args,
                         });
                     }
+                }
+
+                for alias in state
+                    .aliases
+                    .get_alises_for_object(script.get().object.addr())
+                {
+                    let alias = state.objects.get_by_addr(alias).unwrap();
+
+                    let mut args = dispatch.args.to_vec();
+                    args.insert(0, Value::ObjectRef(script.get().object.clone()));
+
+                    self.queue.push_back(ScheduledTask {
+                        object: alias.id(),
+                        script: alias.name().to_owned(),
+                        invocation_id: None,
+                        func_name: dispatch.kind.remote_ref_alias_func_name().to_owned(),
+                        args,
+                    });
                 }
             }
         }

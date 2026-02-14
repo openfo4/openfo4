@@ -137,12 +137,23 @@ pub enum EventKind {
 }
 
 impl EventKind {
+    pub fn func_name(&self) -> &'static str {
+        match self {
+            Self::ItemAdded => "OnItemAdded",
+            _ => todo!(),
+        }
+    }
+
     /// Returns the function name for remote functions.
     pub fn remote_func_name(&self) -> &'static str {
         match self {
-            Self::EnterBleedout => "::remote_ObjectReference_OnItemAdded",
+            Self::ItemAdded => "::remote_ObjectReference_OnItemAdded",
             _ => todo!(),
         }
+    }
+
+    pub fn remote_ref_alias_func_name(&self) -> &'static str {
+        todo!()
     }
 }
 

@@ -36,7 +36,7 @@ use std::collections::BTreeMap;
 use std::time::{Duration, Instant};
 
 use futures::future::BoxFuture;
-use hashbrown::HashMap;
+use hashbrown::{HashMap, HashSet};
 use hecs::{Entity, World};
 use openfo4_core::record::RecordId;
 use openfo4_script::engine::Engine;
@@ -153,6 +153,8 @@ pub struct State {
 #[derive(Clone, Debug, Default)]
 pub struct AliasSet {
     aliases: HashMap<ObjectAddr, AliasState>,
+    /// Maps "real" objects to aliases.
+    objects: HashMap<ObjectAddr, HashSet<ObjectAddr>>,
 }
 
 impl AliasSet {
@@ -162,8 +164,28 @@ impl AliasSet {
 
     pub fn set(&mut self, alias: ObjectAddr, object: Option<ObjectAddr>) {
         if let Some(state) = self.aliases.get_mut(&alias) {
+            if state.object == object {
+                return;
+            }
+
+            if let Some(prev_object) = state.object {
+                self.objects.get_mut(&prev_object).unwrap().remove(&alias);
+            }
+
             state.object = object;
+
+            if let Some(object) = object {
+                self.objects.entry(object).or_default().insert(alias);
+            }
         }
+    }
+
+    /// Returns all alias objects that point to the given object.
+    pub fn get_alises_for_object(
+        &self,
+        object: ObjectAddr,
+    ) -> impl Iterator<Item = ObjectAddr> + '_ {
+        self.objects.get(&object).into_iter().flatten().copied()
     }
 }
 
@@ -344,3 +366,6 @@ pub struct TimerEntry {
     pub id: TimerId,
     pub at: Instant,
 }
+
+#[derive(Clone, Debug)]
+pub struct BaseObjects {}
