@@ -2,6 +2,7 @@ use std::ops::{Mul, MulAssign};
 
 use game_common::components::{Color, Transform};
 use glam::{Quat, Vec3};
+use hashbrown::HashSet;
 use hecs::Entity;
 use openfo4_core::record::RecordId;
 use openfo4_core::transform::ConvertCoordinateSystem;
@@ -109,8 +110,9 @@ pub struct LookingAtTarget(pub Entity);
 #[derive(Clone, Debug)]
 pub struct PlacedItem(pub ItemStack);
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Clone, Debug)]
 pub struct TriggerBox {
     pub half_extents: Vec3,
     pub marker_color: Color,
+    pub entities_inside: HashSet<Entity>,
 }

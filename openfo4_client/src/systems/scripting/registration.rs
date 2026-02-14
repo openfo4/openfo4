@@ -134,12 +134,16 @@ pub enum EventKind {
     PipboyMenu,
     LocationChange,
     ItemAdded,
+    TriggerEnter,
+    TriggerLeave,
 }
 
 impl EventKind {
     pub fn func_name(&self) -> &'static str {
         match self {
             Self::ItemAdded => "OnItemAdded",
+            Self::TriggerEnter => "OnTriggerEnter",
+            Self::TriggerLeave => "OnTriggerLeave",
             _ => todo!(),
         }
     }

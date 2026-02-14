@@ -27,6 +27,7 @@ use openfo4_script::engine::{Engine, Instance, Options};
 use openfo4_script::runtime::{Context, Exception, ObjectAddr, ObjectRef, Stack, Val};
 
 use crate::events::inventory::{ItemAddedEvent, ItemEquippedEvent};
+use crate::events::trigger::{TriggerEnter, TriggerLeave};
 use crate::loader::{FileLoader, fix_path};
 use crate::state::esp::EspLoader;
 use crate::systems::global::GlobalProperties;
@@ -241,8 +242,16 @@ impl Executor {
         let mut dispatches = Vec::new();
         collect_event_dispatches::<ItemAddedEvent>(&mut dispatches, events, ctx);
         collect_event_dispatches::<ItemEquippedEvent>(&mut dispatches, events, ctx);
+        collect_event_dispatches::<TriggerEnter>(&mut dispatches, events, ctx);
+        collect_event_dispatches::<TriggerLeave>(&mut dispatches, events, ctx);
 
         for dispatch in dispatches {
+            tracing::debug!(
+                "dispatching event {:?} for {:?}",
+                dispatch.kind,
+                dispatch.receiver,
+            );
+
             // Dispatch one event for every script object.
             let scripts = state.objects.get_by_id(dispatch.receiver).unwrap();
             for script in scripts.iter() {

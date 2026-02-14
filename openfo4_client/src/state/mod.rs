@@ -49,7 +49,6 @@ use crate::assets::data_file::{DataFile, DataFileContext};
 use crate::assets::nif_v2::NifLoaderContext;
 use crate::cell::CellId;
 use crate::components::{Camera, NiTransform, Player, WorldSpace};
-use crate::events::Event;
 use crate::loader::FileLoader;
 use crate::render::RenderObject;
 use crate::render::physics_debug::despawn_expired;
@@ -69,6 +68,7 @@ use crate::systems::inventory::InventorySystem;
 use crate::systems::quests::QuestManager;
 use crate::systems::scripting::{Executor, ScriptEntities};
 use crate::systems::time::{init_time, update_time};
+use crate::systems::trigger_box::update_trigger_box_contacts;
 use crate::systems::weapon::{
     handle_weapon_draw_events, handle_weapon_fire_events, handle_weapon_hit_damage,
     handle_weapon_reload_events, handle_weapon_reload_requests,
@@ -88,7 +88,6 @@ pub struct GameState {
     loader: Arc<FileLoader>,
     level: Level,
     physics: PhysicsPipeline,
-    events: Vec<Event>,
     anim_event: Option<&'static str>,
     asset_loader: AssetLoader,
     pub event_bus: EventBus,
@@ -210,7 +209,6 @@ impl GameState {
             level,
             loader: file_loader.clone(),
             physics: PhysicsPipeline::new(),
-            events: Vec::new(),
             anim_event: None,
             asset_loader,
             event_bus: EventBus::new(),
@@ -272,7 +270,6 @@ impl GameState {
 
         self.level.update(
             &mut self.world,
-            &mut self.events,
             &mut self.event_bus,
             &mut self.object_ref_set,
             &mut self.script_entities,
@@ -292,6 +289,7 @@ impl GameState {
 
         apply_player_movements(&mut self.world, &mut self.physics);
         update_animation_parameters(&mut self.world);
+        update_trigger_box_contacts(&mut self.world, &mut self.event_bus);
 
         // systems::ni_transform::compute_transform_from_ni_transform(&mut self.world);
         // systems::ni_transform::compute_cell_ids_from_ni_transform(&mut self.world);

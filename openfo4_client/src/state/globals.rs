@@ -35,10 +35,13 @@ pub async fn load_form_lists(esp_loader: &EspLoader) -> HashMap<RecordId, FormLi
             unreachable!();
         };
 
-        let forms = data
-            .forms
-            .iter()
-            .map(|form| esp_loader.resolve_form(*form, record.id).unwrap());
+        let forms = data.forms.iter().filter_map(|form| {
+            esp_loader.resolve_form(*form, record.id).or_else(|| {
+                // TODO: Don't do this, something with the id resolving is weird.
+                tracing::warn!("failed to resolve {:?} in formlist {:?}", form, record.id);
+                None
+            })
+        });
         lists.insert(record.id, FormList::new(forms));
     }
 

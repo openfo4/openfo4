@@ -1,7 +1,9 @@
 use hecs::World;
 use openfo4_script::runtime::ObjectAddr;
 
+use crate::components::Player;
 use crate::events::inventory::{ItemAddedEvent, ItemEquippedEvent};
+use crate::events::trigger::{TriggerEnter, TriggerLeave};
 use crate::systems::inventory::Inventory;
 use crate::systems::scripting::ScriptEntities;
 use crate::systems::scripting::classes::State;
@@ -87,6 +89,48 @@ impl Event for ItemEquippedEvent {
                 // TODO
                 Value::ObjectAddr(ObjectAddr::NULL),
             ],
+        }]
+    }
+}
+
+impl Event for TriggerEnter {
+    fn extract(&self, ctx: Context<'_>) -> Vec<DispatchEvent> {
+        let Some(zone) = ctx.entities.0.get_right(&self.zone) else {
+            return Vec::new();
+        };
+
+        let Some(entity) = ctx.entities.0.get_right(&self.entity) else {
+            return Vec::new();
+        };
+
+        let entity = ctx.state.objects.get_by_id(*entity).unwrap();
+        let entity = entity.get("ObjectReference").unwrap();
+
+        vec![DispatchEvent {
+            receiver: *zone,
+            kind: EventKind::TriggerEnter,
+            args: vec![Value::ObjectRef(entity.get().object.clone())],
+        }]
+    }
+}
+
+impl Event for TriggerLeave {
+    fn extract(&self, ctx: Context<'_>) -> Vec<DispatchEvent> {
+        let Some(zone) = ctx.entities.0.get_right(&self.zone) else {
+            return Vec::new();
+        };
+
+        let Some(entity) = ctx.entities.0.get_right(&self.entity) else {
+            return Vec::new();
+        };
+
+        let entity = ctx.state.objects.get_by_id(*entity).unwrap();
+        let entity = entity.get("ObjectReference").unwrap();
+
+        vec![DispatchEvent {
+            receiver: *zone,
+            kind: EventKind::TriggerLeave,
+            args: vec![Value::ObjectRef(entity.get().object.clone())],
         }]
     }
 }

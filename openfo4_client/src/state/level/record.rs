@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use game_common::components::{Color, PointLight, Transform};
 use glam::{EulerRot, Quat, Vec3};
-use hashbrown::{HashMap, HashSet};
+use hashbrown::HashSet;
 use hecs::{Entity, World};
 use openfo4_asset::Handle;
 use openfo4_core::events::EventBus;
@@ -247,6 +247,7 @@ impl SpawnEntity {
                         half_extents: Vec3::from_array(primitive.bound_half_extents).to_opengl()
                             * NIF_TO_METERS,
                         marker_color: Color::from_rgb(primitive.color),
+                        entities_inside: HashSet::new(),
                     });
                 }
             }

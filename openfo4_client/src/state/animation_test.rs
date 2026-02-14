@@ -111,6 +111,7 @@ pub fn animation_test(
                 .insert_one(root, ObjectKeywords::new(actor.keywords))
                 .unwrap();
             world.insert_one(root, Frozen::default()).unwrap();
+            world.insert_one(root, crate::components::Root).unwrap();
 
             // let race = futures_lite::future::block_on(
             //     esp_loader.lookup(Some(RecordKind::Race), FormId(0x13746)),
