@@ -1,15 +1,17 @@
-use hashbrown::HashMap;
+use hashbrown::{HashMap, HashSet};
 use hecs::World;
 use indexmap::IndexMap;
 use openfo4_core::events::EventBus;
-use openfo4_core::record::{ModuleId, RecordId};
-use openfo4_esp::records::QuestStageFlags;
+use openfo4_core::record::RecordId;
+use openfo4_esp::records::{QuestDataFlags, QuestStageFlags};
 use openfo4_esp::{FormId, RecordData, RecordKind};
 
 use crate::state::esp::EspLoader;
 use crate::state::hardcoded::HARDCODED_MODULE_ID;
 use crate::systems::scripting::Executor;
-use crate::systems::scripting::invocations::{Init, QuestInit, QuestSetStage};
+use crate::systems::scripting::invocations::{
+    Init, QuestFragmentSetStage, QuestInit, QuestSetStage,
+};
 use crate::systems::scripting::loader::ScriptObject;
 
 #[derive(Clone, Debug)]
@@ -22,9 +24,13 @@ impl QuestManager {
         let quests =
             futures_lite::future::block_on(esp_loader.lookup_all(Some(RecordKind::Quest))).unwrap();
 
+        // let quest = quests
+        //     .iter()
+        //     .find(|v| v.id == RecordId::new(HARDCODED_MODULE_ID, FormId(0x80e)))
+        //     .unwrap();
         let quest = quests
             .iter()
-            .find(|v| v.id == RecordId::new(HARDCODED_MODULE_ID, FormId(0x80e)))
+            .find(|v| v.id == RecordId::new(HARDCODED_MODULE_ID, FormId(0x1069a9)))
             .unwrap();
 
         let RecordData::Quest(data) = &quest.local.data else {
@@ -40,22 +46,38 @@ impl QuestManager {
                 QuestStage {
                     run_on_start: stage.index.flags.contains(QuestStageFlags::RUN_ON_START),
                     run_on_stop: stage.index.flags.contains(QuestStageFlags::RUN_ON_STOP),
+                    fragment_functions: HashSet::new(),
                 },
             );
         }
 
+        if let Some(vmad) = &data.virtual_machine_adapter
+            && let Some(fragments) = &vmad.fragments
+        {
+            for stage in &fragments.fragments {
+                let Some(s) = stages.get_mut(&stage.quest_stage) else {
+                    continue;
+                };
+
+                // FIXME: This will call ALL scripts with the name,
+                // however we only want to call the fragment script.
+                s.fragment_functions.insert(stage.fragment_name.clone());
+            }
+        }
+
         let mut quests = HashMap::new();
-        // quests.insert(
-        //     quest.id,
-        //     Quest {
-        //         state: QuestState::Stopping,
-        //         is_init: false,
-        //         stages,
-        //         active_stage: None,
-        //         next_stage: None,
-        //         script,
-        //     },
-        // );
+        quests.insert(
+            quest.id,
+            Quest {
+                state: QuestState::Stopped,
+                is_init: false,
+                stages,
+                active_stage: None,
+                next_stage: None,
+                script,
+                start_now: data.data.flags.contains(QuestDataFlags::START_GAME_ENABLED),
+            },
+        );
 
         Self { quests }
     }
@@ -68,19 +90,50 @@ impl QuestManager {
 
             if !quest.is_init {
                 quest.is_init = true;
-                tracing::debug!("starting quest {:?}", id);
+                tracing::debug!("init quest {:?}", id);
 
                 executor.invoke(Init {
                     object: script.clone(),
                 });
+            }
+
+            if quest.start_now {
+                quest.start_now = false;
+                tracing::debug!("starting quest {:?}", id);
+
                 executor.invoke(QuestInit {
                     quest: script.clone(),
                 });
+
+                quest.active_stage = Some(0);
+                quest.next_stage = Some(0);
+            }
+
+            if let Some(stage_id) = quest.next_stage.take()
+                && let Some(stage) = quest.stages.get(&stage_id)
+            {
+                tracing::debug!(
+                    "advancing quest {:?} from stage {:?} to {}",
+                    id,
+                    quest.active_stage,
+                    stage_id
+                );
+
                 executor.invoke(QuestSetStage {
                     quest: script.clone(),
-                    stage: 0,
+                    stage: stage_id,
+                    // TODO
                     item: 0,
                 });
+
+                for func_name in &stage.fragment_functions {
+                    executor.invoke(QuestFragmentSetStage {
+                        quest: script.clone(),
+                        func_name: func_name.clone(),
+                    });
+                }
+
+                quest.active_stage = Some(stage_id);
             }
         }
     }
@@ -124,6 +177,7 @@ impl QuestManager {
 pub struct Quest {
     pub state: QuestState,
     pub is_init: bool,
+    pub start_now: bool,
     pub stages: IndexMap<StageId, QuestStage>,
     pub active_stage: Option<StageId>,
     pub next_stage: Option<StageId>,
@@ -144,4 +198,5 @@ pub type StageId = u16;
 pub struct QuestStage {
     pub run_on_start: bool,
     pub run_on_stop: bool,
+    pub fragment_functions: HashSet<String>,
 }

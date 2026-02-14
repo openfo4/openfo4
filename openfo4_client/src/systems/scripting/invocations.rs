@@ -57,6 +57,22 @@ impl From<QuestSetStage> for EventInvocation {
 }
 
 #[derive(Clone, Debug)]
+pub struct QuestFragmentSetStage {
+    pub quest: ScriptObject,
+    pub func_name: String,
+}
+
+impl From<QuestFragmentSetStage> for EventInvocation {
+    fn from(value: QuestFragmentSetStage) -> Self {
+        Self {
+            receiver: value.quest,
+            name: Cow::Owned(value.func_name),
+            args: Vec::new(),
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
 pub struct Timer {
     pub object: ScriptObject,
     pub timer: TimerId,

@@ -1,8 +1,9 @@
 use std::fmt::Debug;
+use std::num::NonZeroU64;
 use std::sync::Arc;
 use std::time::Duration;
 
-use game_tasks::{Task, TaskPool, TaskQueue};
+use game_tasks::{TaskPool, TaskQueue};
 use game_tracing::trace_span;
 use hashbrown::{HashMap, HashSet};
 use hecs::{Entity, World};
@@ -13,9 +14,8 @@ use openfo4_core::record::RecordId;
 use slab::Slab;
 
 use crate::components::PlacedItem;
-use crate::state::equipment::{
-    EquipmentItemModels, load_equipment_item, load_equipment_item_models, load_item,
-};
+use crate::events::inventory::{ItemAddedEvent, ItemEquippedEvent, ItemUnequippedEvent};
+use crate::state::equipment::{EquipmentItemModels, load_equipment_item_models, load_item};
 use crate::state::esp::EspLoader;
 use crate::state::hardcoded::KEYWORD_FEMALE;
 use crate::state::npc::ObjectKeywords;
@@ -312,16 +312,31 @@ impl InventorySystem {
             .collect::<Vec<_>>();
         events.extend(unequip_transfer_events);
 
+        let mut items_added = Vec::new();
         for event in events.read::<AddItemEvent>() {
+            let Some(count) = NonZeroU64::new(event.item.count) else {
+                continue;
+            };
+
             let Ok(mut inventory) = world.get::<&mut Inventory>(event.actor) else {
                 continue;
             };
 
-            inventory.insert(event.item.clone());
+            let slot = inventory.insert(event.item.clone());
+
+            items_added.push(ItemAddedEvent {
+                entity: event.actor,
+                slot,
+                count,
+                source: None,
+            });
         }
+
+        events.extend(items_added);
 
         let mut unequip_conflicting_events = Vec::new();
 
+        let mut items_equipped = Vec::new();
         for event in events.read::<EquipItemEvent>() {
             let female = world
                 .get::<&ObjectKeywords>(event.actor)
@@ -346,6 +361,10 @@ impl InventorySystem {
             }
 
             item.equipped = true;
+            items_equipped.push(ItemEquippedEvent {
+                actor: event.actor,
+                slot: key,
+            });
 
             match &mut item.data {
                 ItemData::Weapon(weapon) => {
@@ -416,8 +435,11 @@ impl InventorySystem {
             unequip_item(event.actor, unequip_keys, world);
         }
 
+        events.extend(items_equipped);
+
         let mut rescan_visiblity = HashSet::new();
 
+        let mut items_unequipped = Vec::new();
         for event in events.read::<UnequipItemEvent>() {
             let Ok(mut inventory) = world.get::<&mut Inventory>(event.actor) else {
                 continue;
@@ -438,6 +460,10 @@ impl InventorySystem {
 
             item.equipped = false;
             let keys = core::mem::take(&mut item.equipment_keys);
+            items_unequipped.push(ItemUnequippedEvent {
+                actor: event.actor,
+                slot: event.item,
+            });
 
             // Reset visibility state.
             item.visible = true;
@@ -449,6 +475,8 @@ impl InventorySystem {
             drop(inventory);
             unequip_item(event.actor, keys, world);
         }
+
+        events.extend(items_unequipped);
 
         for actor in rescan_visiblity {
             let female = world
