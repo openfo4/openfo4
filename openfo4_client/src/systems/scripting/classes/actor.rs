@@ -1,7 +1,9 @@
 use openfo4_script::engine::Engine;
 use openfo4_script::runtime::{Caller, Exception};
 
+use crate::systems::inventory::Inventory;
 use crate::systems::scripting::classes::{Object, State};
+use crate::systems::scripting::effects::{EquipItemEffect, UnequipItemEffect};
 
 #[rustfmt::skip]
 pub fn register(engine: &mut Engine) {
@@ -446,13 +448,25 @@ fn end_deferred_kill(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), 
 /// Function(Form akItem, bool abPreventRemoval, bool abSilent) native
 /// ```
 fn equip_item(
-    caller: Caller<'_, State>,
+    mut caller: Caller<'_, State>,
     self_ptr: Object,
-    ak_item: Object,
-    ab_prevent_removal: bool,
-    ab_silent: bool,
+    item: Object,
+    prevent_removal: bool,
+    silent: bool,
 ) -> Result<(), Exception> {
-    todo!()
+    let actor = caller.data().entity(self_ptr).ok_or(Exception::Error)?;
+    let item = caller
+        .data()
+        .objects
+        .get_by_addr(item)
+        .and_then(|s| s.record())
+        .ok_or(Exception::Error)?;
+
+    caller
+        .data_mut()
+        .run_effect_and_wait(EquipItemEffect { actor, item })?;
+
+    Ok(())
 }
 
 /// `EquipSpell`
@@ -1042,9 +1056,27 @@ fn is_doing_favor(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, E
 fn is_equipped(
     caller: Caller<'_, State>,
     self_ptr: Object,
-    ak_item: Object,
+    item: Object,
 ) -> Result<bool, Exception> {
-    todo!()
+    let actor = caller.data().entity(self_ptr).ok_or(Exception::Error)?;
+    let item = caller
+        .data()
+        .objects
+        .get_by_addr(item)
+        .and_then(|s| s.record())
+        .ok_or(Exception::Error)?;
+
+    let Ok(inventory) = caller.data().world().get::<&Inventory>(actor) else {
+        return Ok(false);
+    };
+
+    for (_, stack) in inventory.get_by_form(item) {
+        if stack.item == item && stack.equipped {
+            return Ok(true);
+        }
+    }
+
+    Ok(false)
 }
 
 /// `IsEssential`
@@ -2131,13 +2163,35 @@ fn unequip_all(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Except
 /// Function(Form akItem, bool abPreventEquip, bool abSilent) native
 /// ```
 fn unequip_item(
-    caller: Caller<'_, State>,
+    mut caller: Caller<'_, State>,
     self_ptr: Object,
-    ak_item: Object,
-    ab_prevent_equip: bool,
-    ab_silent: bool,
+    item: Object,
+    prevent_equip: bool,
+    silent: bool,
 ) -> Result<(), Exception> {
-    todo!()
+    let actor = caller.data().entity(self_ptr).ok_or(Exception::Error)?;
+    let item = caller
+        .data()
+        .objects
+        .get_by_addr(item)
+        .and_then(|s| s.record())
+        .ok_or(Exception::Error)?;
+
+    let Ok(inventory) = caller.data().world().get::<&Inventory>(actor) else {
+        return Ok(());
+    };
+
+    let Some((slot, _)) = inventory.get_by_form(item).next() else {
+        return Ok(());
+    };
+
+    drop(inventory);
+
+    caller
+        .data_mut()
+        .run_effect_and_wait(UnequipItemEffect { actor, slot })?;
+
+    Ok(())
 }
 
 /// `UnequipItemSlot`

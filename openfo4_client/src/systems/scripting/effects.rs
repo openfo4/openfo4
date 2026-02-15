@@ -9,7 +9,9 @@ use openfo4_core::record::RecordId;
 
 use crate::state::equipment::load_item;
 use crate::state::esp::EspLoader;
-use crate::systems::inventory::{AddItemEvent, ItemStack};
+use crate::systems::inventory::{
+    AddItemEvent, EquipItemEvent, InventoryKey, ItemStack, UnequipItemEvent,
+};
 use crate::systems::scripting::loader::ScriptLoader;
 
 #[derive(Default)]
@@ -94,12 +96,12 @@ pub trait Effect: 'static + Send {
     fn run(&self, ctx: Context<'_>) -> EffectResult;
 }
 
-enum EffectResult {
+pub enum EffectResult {
     Done,
     Forked(Vec<Task<Box<dyn Effect>>>),
 }
 
-struct Context<'a> {
+pub struct Context<'a> {
     pool: &'a TaskPool,
     world: &'a mut World,
     events: &'a mut EventBus,
@@ -146,6 +148,40 @@ impl Effect for AddItemsImmediate {
                 item: item.clone(),
             });
         }
+
+        EffectResult::Done
+    }
+}
+
+#[derive(Copy, Clone, Debug)]
+pub struct EquipItemEffect {
+    pub actor: Entity,
+    pub item: RecordId,
+}
+
+impl Effect for EquipItemEffect {
+    fn run(&self, ctx: Context<'_>) -> EffectResult {
+        ctx.events.send(EquipItemEvent {
+            actor: self.actor,
+            item: self.item,
+        });
+
+        EffectResult::Done
+    }
+}
+
+#[derive(Copy, Clone, Debug)]
+pub struct UnequipItemEffect {
+    pub actor: Entity,
+    pub slot: InventoryKey,
+}
+
+impl Effect for UnequipItemEffect {
+    fn run(&self, ctx: Context<'_>) -> EffectResult {
+        ctx.events.send(UnequipItemEvent {
+            actor: self.actor,
+            item: self.slot,
+        });
 
         EffectResult::Done
     }
