@@ -97,6 +97,7 @@ pub fn compute_struct_type_layout(data: &CodegenData, st: &StructDef) -> TypeLay
                 _ => FieldType::Pointer,
             },
             ty_name: field_ty_name,
+            default_value: None,
         });
 
         properties.push(ObjectProperty {
@@ -135,6 +136,7 @@ pub fn generate_type_layout(data: &CodegenData, ty: &Type) -> TypeLayout {
             offset: 0,
             ty: field_ty,
             ty_name: Lowercase::new(""),
+            default_value: None,
         }],
         properties: vec![ObjectProperty {
             class: Lowercase::new(""),

@@ -627,6 +627,7 @@ fn build_struct_layout(props: &[Property]) -> TypeLayout {
             offset,
             ty,
             ty_name: Lowercase::new(""),
+            default_value: None,
         });
     }
 
@@ -657,6 +658,7 @@ fn build_array_layout(values: &[Value]) -> TypeLayout {
             offset: 0,
             ty,
             ty_name: Lowercase::new(""),
+            default_value: None,
         }],
         properties: vec![ObjectProperty {
             class: Lowercase::new(""),

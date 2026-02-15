@@ -30,3 +30,7 @@ path = "tests/recursion.rs"
 [[test]]
 name = "string"
 path = "tests/string.rs"
+
+[[test]]
+name = "object_builder"
+path = "tests/object_builder.rs"

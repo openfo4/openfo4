@@ -229,6 +229,20 @@ impl Object {
             }
         }
 
+        for field in &layout.fields {
+            if let Some(default_value) = &field.default_value {
+                assert!(default_value.len() <= field.ty.size());
+
+                unsafe {
+                    core::ptr::copy_nonoverlapping(
+                        default_value.as_ptr(),
+                        ptr.add(field.offset),
+                        default_value.len(),
+                    );
+                }
+            }
+        }
+
         Self {
             memory: ptr,
             layout,
@@ -480,6 +494,7 @@ pub(crate) static ARRAY_LAYOUT: LazyLock<TypeLayout> = LazyLock::new(|| TypeLayo
             offset: 0,
             ty: FieldType::Pointer,
             ty_name: Lowercase::new(""),
+            default_value: None,
         },
         ObjectField {
             class: Lowercase::new(""),
@@ -487,6 +502,7 @@ pub(crate) static ARRAY_LAYOUT: LazyLock<TypeLayout> = LazyLock::new(|| TypeLayo
             offset: size_of::<*mut u8>(),
             ty: FieldType::Isize,
             ty_name: Lowercase::new(""),
+            default_value: None,
         },
     ],
     properties: vec![
@@ -512,6 +528,7 @@ pub(crate) const BYTE_LAYOUT: LazyLock<TypeLayout> = LazyLock::new(|| TypeLayout
         offset: 0,
         ty: FieldType::I8,
         ty_name: Lowercase::new(""),
+        default_value: None,
     }],
     properties: vec![ObjectProperty {
         class: Lowercase::new(""),
@@ -530,6 +547,7 @@ pub(crate) const VAR_LAYOUT: LazyLock<TypeLayout> = LazyLock::new(|| TypeLayout 
             offset: 0,
             ty: FieldType::Isize,
             ty_name: Lowercase::new(""),
+            default_value: None,
         },
         ObjectField {
             class: Lowercase::new(""),
@@ -537,6 +555,7 @@ pub(crate) const VAR_LAYOUT: LazyLock<TypeLayout> = LazyLock::new(|| TypeLayout 
             offset: 0,
             ty: FieldType::Pointer,
             ty_name: Lowercase::new(""),
+            default_value: None,
         },
     ],
     properties: vec![

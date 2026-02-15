@@ -17,7 +17,7 @@ use openfo4_pex::{Class, Function, Instruction, Module, Struct, Value};
 use slab::Slab;
 use thiserror::Error;
 
-use crate::compiler::codegen::constant::ConstantData;
+use crate::compiler::codegen::constant::{ConstantData, create_string_constant};
 use crate::compiler::codegen::function_props::{FunctionProps, function_properties};
 use crate::compiler::codegen::layout::{ClassLayout, compute_struct_layout};
 use crate::compiler::codegen::runtime::RuntimeFunctions;
@@ -257,6 +257,50 @@ impl CodegenPass {
                     let field_ty_name = class.fields.get(field_name).unwrap();
                     let field_ty = self.data.resolve_ty(&field_ty_name);
 
+                    let var = class
+                        .class
+                        .as_ref()
+                        .unwrap()
+                        .variables
+                        .iter()
+                        .find(|var| &Lowercase::new(&*var.definition.name) == field_name)
+                        .unwrap();
+
+                    let default_value =
+                        match Lowercase::new(&*var.definition.ty).as_str().as_inner() {
+                            "int" => match &var.value {
+                                Value::Int(v) => bytemuck::bytes_of(v).to_vec(),
+                                Value::Null => [0; 4].to_vec(),
+                                _ => todo!(),
+                            },
+                            "float" => match &var.value {
+                                Value::Float(v) => bytemuck::bytes_of(v).to_vec(),
+                                Value::Null => [0; 4].to_vec(),
+                                _ => todo!(),
+                            },
+                            "string" => match &var.value {
+                                Value::Null => [0; size_of::<usize>()].to_vec(),
+                                Value::String(v) => {
+                                    let mut constants = Vec::new();
+                                    let ptr = create_string_constant(&mut constants, &v);
+                                    // FIXME: Don't leak here either..
+                                    core::mem::forget(constants);
+
+                                    bytemuck::bytes_of(&ptr.expose_provenance()).to_vec()
+                                }
+                                _ => todo!(),
+                            },
+                            "bool" => match &var.value {
+                                Value::Bool(v) => bytemuck::bytes_of(&(*v as i32)).to_vec(),
+                                Value::Null => [0; 4].to_vec(),
+                                _ => todo!(),
+                            },
+                            _ => match &var.value {
+                                Value::Null => [0; size_of::<usize>()].to_vec(),
+                                _ => todo!(),
+                            },
+                        };
+
                     class_fields.push(ObjectField {
                         class: class_name.clone(),
                         name: field_name.clone(),
@@ -268,6 +312,7 @@ impl CodegenPass {
                             _ => FieldType::Pointer,
                         },
                         ty_name: field_ty_name.clone(),
+                        default_value: Some(default_value),
                     });
                 }
 
@@ -330,6 +375,7 @@ impl CodegenPass {
                         _ => FieldType::Pointer,
                     },
                     ty_name: member_ty,
+                    default_value: None,
                 });
 
                 properties.push(ObjectProperty {

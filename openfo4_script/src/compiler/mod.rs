@@ -143,6 +143,7 @@ pub struct ObjectField {
     pub offset: usize,
     pub ty: FieldType,
     pub ty_name: Lowercase<String>,
+    pub default_value: Option<Vec<u8>>,
 }
 
 #[derive(Clone, Debug)]

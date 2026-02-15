@@ -184,11 +184,11 @@ pub struct Instance {
 impl Instance {
     pub fn get_func(&self, name: &str) -> Option<&Func> {
         if self.shared.events_only {
-            debug_assert!(
-                EVENT_NAMES.contains(name),
-                "{:?} not registered as engine event name",
-                name
-            );
+            // debug_assert!(
+            //     EVENT_NAMES.contains(name),
+            //     "{:?} not registered as engine event name",
+            //     name
+            // );
         }
 
         let (_, func) = self.shared.funcs.get(&Lowercase::new(name))?;

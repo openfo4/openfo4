@@ -369,6 +369,7 @@ fn int_layout() -> TypeLayout {
             offset: 0,
             ty: FieldType::I32,
             ty_name: Lowercase::new(""),
+            default_value: None,
         }],
         properties: vec![ObjectProperty {
             class: Lowercase::new(""),
@@ -388,6 +389,7 @@ fn ptr_layout() -> TypeLayout {
             offset: 0,
             ty: FieldType::Pointer,
             ty_name: Lowercase::new(""),
+            default_value: None,
         }],
         properties: vec![ObjectProperty {
             class: Lowercase::new(""),
