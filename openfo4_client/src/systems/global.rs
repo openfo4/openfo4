@@ -1,3 +1,5 @@
+use std::iter::FusedIterator;
+
 use hashbrown::{HashMap, HashSet};
 use indexmap::{IndexMap, IndexSet};
 use openfo4_core::record::RecordId;
@@ -92,4 +94,35 @@ impl FormList {
             self.entries.shift_remove(&id);
         }
     }
+
+    pub fn iter(&self) -> FormListIter<'_> {
+        FormListIter {
+            inner: self.entries.iter(),
+        }
+    }
 }
+
+#[derive(Clone, Debug)]
+pub struct FormListIter<'a> {
+    inner: indexmap::set::Iter<'a, RecordId>,
+}
+
+impl<'a> Iterator for FormListIter<'a> {
+    type Item = RecordId;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.inner.next().copied()
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        (self.len(), Some(self.len()))
+    }
+}
+
+impl<'a> ExactSizeIterator for FormListIter<'a> {
+    fn len(&self) -> usize {
+        self.inner.len()
+    }
+}
+
+impl<'a> FusedIterator for FormListIter<'a> {}

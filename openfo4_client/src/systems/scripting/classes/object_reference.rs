@@ -1568,9 +1568,35 @@ fn has_keyword(
 fn has_keyword_in_form_list(
     caller: Caller<'_, State>,
     self_ptr: Object,
-    ak_keyword_list: Object,
+    keyword_list: Object,
 ) -> Result<bool, Exception> {
-    todo!()
+    let entity = caller.data().entity(self_ptr).ok_or(Exception::Error)?;
+    let form_list = caller
+        .data()
+        .objects
+        .get_by_addr(keyword_list)
+        .and_then(|s| s.record())
+        .ok_or(Exception::Error)?;
+    let form_list = caller
+        .data()
+        .globals()
+        .form_lists
+        .get(&form_list)
+        .ok_or(Exception::Error)?;
+
+    let keywords = caller
+        .data()
+        .world()
+        .get::<&ObjectKeywords>(entity)
+        .unwrap();
+
+    for id in form_list.iter() {
+        if keywords.contains(id) {
+            return Ok(true);
+        }
+    }
+
+    Ok(false)
 }
 
 /// `HasLocRefType`
