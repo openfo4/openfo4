@@ -2,6 +2,7 @@ pub mod invocations;
 pub mod loader;
 
 mod classes;
+mod effects;
 mod events;
 mod objects;
 mod registration;
@@ -35,6 +36,7 @@ use crate::systems::global::GlobalProperties;
 use crate::systems::inventory::Inventory;
 use crate::systems::quests::QuestManager;
 use crate::systems::scripting::classes::{AliasSet, CoreObjects};
+use crate::systems::scripting::effects::{EffectId, Effects};
 use crate::systems::scripting::invocations::{EventInvocation, Value};
 use crate::systems::scripting::loader::{ScriptLoader, ScriptObjectId};
 use crate::systems::scripting::objects::ScriptObjects;
@@ -52,7 +54,7 @@ const COMPILER_OPTIONS: Options = Options {
 pub struct Executor {
     loader: Arc<ScriptLoader>,
     invocations: Arena<InvocationState>,
-    suspended_calls: Vec<SuspendedCall>,
+    suspended_calls: HashMap<EffectId, ScheduledTask>,
     queue: VecDeque<ScheduledTask>,
 }
 
@@ -94,7 +96,7 @@ impl Executor {
         Self {
             loader,
             invocations: Arena::new(),
-            suspended_calls: Vec::new(),
+            suspended_calls: HashMap::new(),
             queue: VecDeque::new(),
         }
     }
@@ -150,12 +152,13 @@ impl Executor {
         globals: &mut GlobalProperties,
         script_entities: &mut ScriptEntities,
         quests: &mut QuestManager,
+        pool: &TaskPool,
+        esp_loader: &Arc<EspLoader>,
         delta: Duration,
     ) {
         let _span = trace_span!("Executor::update").entered();
 
         self.collect_game_events(world, events, script_entities);
-        self.resume_suspended_tasks();
 
         let engine = futures_lite::future::block_on(self.loader.engine.lock());
         let mut state = futures_lite::future::block_on(self.loader.state.lock());
@@ -189,7 +192,7 @@ impl Executor {
                 .unwrap();
             let script = scripts.get(&task.script).unwrap();
 
-            if let Some(future) = call_event_invocation_single(
+            if let Some(id) = call_event_invocation_single(
                 &engine,
                 script.id(),
                 &script.name().to_owned(),
@@ -197,7 +200,7 @@ impl Executor {
                 &task.func_name,
                 &task.args,
             ) {
-                self.suspended_calls.push(SuspendedCall { task, future });
+                self.suspended_calls.insert(id, task);
                 continue;
             }
 
@@ -207,6 +210,17 @@ impl Executor {
                 if invocation.running_tasks == 0 {
                     self.invocations.remove(invocation_id.0).unwrap();
                 }
+            }
+        }
+
+        let state = state.as_mut().unwrap();
+        let completed_effects = state
+            .effects
+            .run(pool, world, events, esp_loader, self.loader());
+
+        for effect in completed_effects {
+            if let Some(task) = self.suspended_calls.remove(&effect) {
+                self.queue.push_back(task);
             }
         }
 
@@ -315,20 +329,6 @@ impl Executor {
         }
     }
 
-    fn resume_suspended_tasks(&mut self) {
-        let _span = trace_span!("Executor::resume_suspended_tasks").entered();
-
-        let mut ctx = std::task::Context::from_waker(std::task::Waker::noop());
-        self.suspended_calls.retain_mut(|call| {
-            if call.future.poll(&mut ctx).is_pending() {
-                return true;
-            }
-
-            self.queue.push_back(call.task.clone());
-            false
-        });
-    }
-
     fn poll_timers(&mut self, delta: Duration) {
         let _span = trace_span!("Executor::poll_timers").entered();
 
@@ -358,7 +358,7 @@ fn call_event_invocation_single(
     state: &mut Option<State>,
     func_name: &str,
     args: &[Value],
-) -> Option<BoxFuture<'static, ()>> {
+) -> Option<EffectId> {
     let mut script = {
         let state = state.as_mut().unwrap();
         let scripts = state.objects.instances.get(id.0).unwrap();
@@ -391,15 +391,19 @@ fn call_event_invocation_single(
     let res = func.call(&mut ctx, &args);
 
     let mut data = ctx.into_data();
-    let mut waker = None;
+    let mut wait_on_effect = None;
     match res {
         Ok(_) | Err(Exception::Error) => {
             // Execution is done, reset the stack.
             script.stacks.remove(func_name);
         }
         Err(Exception::Suspend) => {
-            debug_assert!(data.waker.is_some(), "suspended script without waker");
-            waker = data.waker.take();
+            debug_assert!(
+                data.wait_on_effect.is_some(),
+                "suspended script without waiting on effect"
+            );
+
+            wait_on_effect = data.wait_on_effect.take();
         }
     }
 
@@ -413,7 +417,7 @@ fn call_event_invocation_single(
         scripts.scripts[index] = script;
     }
 
-    waker
+    wait_on_effect
 }
 
 struct SuspendedCall {
@@ -472,12 +476,13 @@ fn core_actor_values(engine: &mut Engine) -> State {
         world: core::ptr::null_mut(),
         quests: core::ptr::null_mut(),
         objects,
-        waker: None,
         globals: core::ptr::null_mut(),
         registration: RegistrationSet::default(),
         entities: core::ptr::null(),
         game_entities: HashMap::new(),
         aliases: AliasSet::default(),
+        effects: Effects::default(),
+        wait_on_effect: None,
     }
 }
 

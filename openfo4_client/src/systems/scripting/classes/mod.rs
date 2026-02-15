@@ -40,13 +40,14 @@ use hashbrown::{HashMap, HashSet};
 use hecs::{Entity, World};
 use openfo4_core::record::RecordId;
 use openfo4_script::engine::Engine;
-use openfo4_script::runtime::{ObjectAddr, ObjectRef};
+use openfo4_script::runtime::{Exception, ObjectAddr, ObjectRef};
 use slab::Slab;
 
 use crate::components::Player;
 use crate::systems::global::GlobalProperties;
 use crate::systems::quests::QuestManager;
 use crate::systems::scripting::ScriptEntities;
+use crate::systems::scripting::effects::{Effect, EffectId, Effects};
 use crate::systems::scripting::loader::{ScriptObject, ScriptObjectId};
 use crate::systems::scripting::objects::ScriptObjects;
 use crate::systems::scripting::registration::RegistrationSet;
@@ -144,10 +145,11 @@ pub struct State {
     pub entities: *const ScriptEntities,
     pub globals: *mut GlobalProperties,
     pub registration: RegistrationSet,
-    pub waker: Option<BoxFuture<'static, ()>>,
     pub objects: ScriptObjects,
     pub game_entities: HashMap<ObjectAddr, ScriptObjectId>,
     pub aliases: AliasSet,
+    pub effects: Effects,
+    pub wait_on_effect: Option<EffectId>,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -237,15 +239,18 @@ impl State {
         self.entities().0.get_left(&id).copied()
     }
 
-    /// Reschedule the current script when the future resolves.
-    ///
-    /// Only one future can exist for a script at a time. If this function is called multiple times
-    /// only the most recently set future is kept.
-    pub fn continue_when_ready<F>(&mut self, future: F)
+    pub fn run_effect_and_wait<T>(&mut self, effect: T) -> Result<(), Exception>
     where
-        F: Future<Output = ()> + Send + 'static,
+        T: Effect,
     {
-        self.waker = Some(Box::pin(future));
+        // Previous effect complete, wake up.
+        if self.wait_on_effect.take().is_some() {
+            return Ok(());
+        }
+
+        let id = self.effects.push(effect);
+        self.wait_on_effect = Some(id);
+        Err(Exception::Suspend)
     }
 }
 

@@ -178,10 +178,7 @@ fn wait(mut caller: Caller<'_, State>, seconds: f32) -> Result<(), Exception> {
         return Ok(());
     }
 
-    caller.data_mut().continue_when_ready(async move {
-        Timer::after(duration).await;
-    });
-    Err(Exception::Suspend)
+    todo!()
 }
 
 /// `WaitGameTime`

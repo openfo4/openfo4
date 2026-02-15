@@ -12,6 +12,7 @@ use crate::state::npc::ObjectKeywords;
 use crate::systems::inventory::Inventory;
 use crate::systems::linked_refs::LinkedRefs;
 use crate::systems::scripting::classes::{Object, State};
+use crate::systems::scripting::effects::AddItemEffect;
 
 #[rustfmt::skip]
 pub fn register(engine: &mut Engine) {
@@ -267,13 +268,34 @@ fn add_dependent_animated_object_reference(
 /// Function(Form akItemToAdd, int aiCount, bool abSilent) native
 /// ```
 fn add_item(
-    caller: Caller<'_, State>,
+    mut caller: Caller<'_, State>,
     self_ptr: Object,
-    ak_item_to_add: Object,
-    ai_count: i32,
-    ab_silent: bool,
+    item: Object,
+    count: i32,
+    silent: bool,
 ) -> Result<(), Exception> {
-    todo!()
+    let entity = caller.data().entity(self_ptr).ok_or(Exception::Error)?;
+
+    let item = caller
+        .data()
+        .objects
+        .get_by_addr(item)
+        .map(|s| s.record())
+        .flatten()
+        .ok_or(Exception::Error)?;
+
+    // Ignore negative item counts.
+    let Ok(count) = u64::try_from(count) else {
+        return Ok(());
+    };
+
+    caller.data_mut().run_effect_and_wait(AddItemEffect {
+        entity,
+        item,
+        count,
+    })?;
+
+    Ok(())
 }
 
 /// `AddKeyword`

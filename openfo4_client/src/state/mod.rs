@@ -305,6 +305,8 @@ impl GameState {
             &mut self.globals,
             &mut self.script_entities,
             &mut self.quests,
+            &self.pool,
+            &self.esp_loader,
             Duration::from_secs(1) / UPS,
         );
 
