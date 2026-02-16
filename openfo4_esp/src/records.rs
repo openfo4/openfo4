@@ -4949,6 +4949,7 @@ impl Read for QuestAliases {
         let mut ref_collections = Vec::new();
 
         loop {
+            dbg!(map.next_key());
             match map.next_key() {
                 Some(Text([b'A', b'L', b'S', b'T'])) => {
                     let alias = QuestReferenceAlias::read(map, key)?;
@@ -5034,7 +5035,7 @@ pub struct QuestReferenceAlias {
     pub linked_aliases: Option<QuestAliasLinkedAlias>,
     #[record("ALDN")]
     pub display_name: Option<FormId>,
-    #[record("VTYP")]
+    #[record("ALFV")]
     pub forced_voice: Option<FormId>,
     #[record("ALDI")]
     pub death_item: Option<FormId>,
