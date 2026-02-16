@@ -453,7 +453,7 @@ impl DecodeScriptSection for QuestFragments {
 
 #[derive(Clone, Debug)]
 pub struct QuestFragment {
-    pub quest_stage: i16,
+    pub quest_stage: u16,
     pub quest_stage_index: u32,
     pub script_name: String,
     pub fragment_name: String,
@@ -466,7 +466,7 @@ impl Decode for QuestFragment {
     where
         B: Buf,
     {
-        let quest_stage = i16::decode(&mut buf)?;
+        let quest_stage = u16::decode(&mut buf)?;
         u16::decode(&mut buf)?; // Unknown?
         let quest_stage_index = u32::decode(&mut buf)?;
         u8::decode(&mut buf)?; // Unknown?
