@@ -24,14 +24,14 @@ impl QuestManager {
         let quests =
             futures_lite::future::block_on(esp_loader.lookup_all(Some(RecordKind::Quest))).unwrap();
 
-        // let quest = quests
-        //     .iter()
-        //     .find(|v| v.id == RecordId::new(HARDCODED_MODULE_ID, FormId(0x80e)))
-        //     .unwrap();
         let quest = quests
             .iter()
-            .find(|v| v.id == RecordId::new(HARDCODED_MODULE_ID, FormId(0x1069a9)))
+            .find(|v| v.id == RecordId::new(HARDCODED_MODULE_ID, FormId(0x80e)))
             .unwrap();
+        // let quest = quests
+        //     .iter()
+        //     .find(|v| v.id == RecordId::new(HARDCODED_MODULE_ID, FormId(0x1069a9)))
+        //     .unwrap();
 
         let RecordData::Quest(data) = &quest.local.data else {
             todo!();
@@ -75,7 +75,7 @@ impl QuestManager {
                 stages,
                 active_stage: None,
                 next_stage: None,
-                script,
+                script: script.map(|v| v.object),
                 start_now: data.data.flags.contains(QuestDataFlags::START_GAME_ENABLED),
             },
         );

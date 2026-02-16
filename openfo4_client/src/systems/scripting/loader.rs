@@ -2,11 +2,10 @@ use std::sync::Arc;
 
 use async_lock::Mutex;
 use game_common::string::Lowercase;
-use game_egui::egui::menu::context_menu_opened;
 use hashbrown::{HashMap, HashSet};
 use openfo4_core::record::RecordId;
 use openfo4_esp::vmad::{Property, Script, Value};
-use openfo4_esp::{FormId, RecordData};
+use openfo4_esp::{FormId, RecordData, RecordKind};
 use openfo4_script::compiler::{FieldType, ObjectField, ObjectProperty, TypeLayout};
 use openfo4_script::engine::{Engine, Instance};
 use openfo4_script::runtime::object::{IntoValue, ObjectArrayBuilder, ObjectBuilder};
@@ -36,7 +35,7 @@ impl ScriptObject {
 
 #[derive(Debug)]
 pub(super) struct ScriptObjectInner {
-    base: RecordId,
+    base: Option<RecordId>,
     pub(super) id: ScriptObjectId,
     // TODO: Cleanup when this is dropped.
 }
@@ -55,14 +54,14 @@ impl ScriptLoader {
     ///
     /// Returns `None` if no script is attached to the record.
     #[tracing::instrument(name = "ScriptLoader::load", skip_all)]
-    pub async fn load(&self, record: RecordId) -> Option<ScriptObject> {
+    pub async fn load(&self, record: RecordId) -> Option<LoadResult> {
         tracing::debug!("loading script for {:?}", record);
 
         let mut engine = self.engine.lock().await;
         let mut classes = self.classes.lock().await;
         let mut state = self.state.lock().await;
 
-        let id = instantiate_form(
+        let res = instantiate_form(
             &mut engine,
             &self.esp_loader,
             record,
@@ -71,12 +70,9 @@ impl ScriptLoader {
         )
         .await?;
 
-        tracing::trace!("script for {:?} is {:?}", record, id);
+        tracing::trace!("script for {:?} is {:?}", record, res.object.id());
 
-        Some(ScriptObject(Arc::new(ScriptObjectInner {
-            base: record,
-            id,
-        })))
+        Some(res)
     }
 
     /// Returns a deep clone of the [`ScriptObject`].
@@ -113,20 +109,43 @@ impl ScriptLoader {
     }
 }
 
+/// The result of a loading the script for a record.
+#[derive(Clone, Debug)]
+pub struct LoadResult {
+    /// The script object of the requested record.
+    pub object: ScriptObject,
+    /// Alias objects that we build together with the requested objects.
+    ///
+    /// Note that these objects are only compiled and don't point to any entities yet.
+    /// You must manually assign them to a real entity using the [`AliasSet`].
+    ///
+    /// [`AliasSet`]: super::AliasSet
+    pub aliases: HashMap<AliasKey, ScriptObject>,
+}
+
 async fn instantiate_form(
     engine: &mut Engine,
     esp_loader: &EspLoader,
     root: RecordId,
     compiled_classes: &mut HashMap<String, Instance>,
     state: &mut State,
-) -> Option<ScriptObjectId> {
+) -> Option<LoadResult> {
     if let Some(scripts) = state.objects.get_by_record(root) {
-        return Some(scripts.id());
+        return Some(LoadResult {
+            object: ScriptObject(Arc::new(ScriptObjectInner {
+                base: Some(root),
+                id: scripts.id(),
+            })),
+            // FIXME: What should we do here?
+            aliases: HashMap::new(),
+        });
     }
 
     let mut root_id = None;
 
     let mut records = HashMap::new();
+    let mut record_aliases = HashMap::new();
+
     let mut queue = vec![root];
     while let Some(record) = queue.pop() {
         if state.objects.get_by_record(record).is_some() {
@@ -134,6 +153,8 @@ async fn instantiate_form(
         }
 
         let record = esp_loader.lookup(None, record).await.unwrap();
+
+        let mut aliases = HashMap::new();
 
         let vmad = match record.local.data.clone() {
             RecordData::Activator(data) => data.virtual_machine_adapter,
@@ -153,7 +174,68 @@ async fn instantiate_form(
             RecordData::Note(data) => data.virtual_machine_adapter,
             RecordData::Package(data) => data.virtual_machine_adapter,
             RecordData::Perk(data) => data.virtual_machine_adapter,
-            RecordData::Quest(data) => data.virtual_machine_adapter.map(|v| v.without_fragments()),
+            RecordData::Quest(data) => {
+                for alias in &data.aliases.references {
+                    aliases.insert(
+                        (record.id, alias.id),
+                        AliasInfo {
+                            ty: AliasType::Reference,
+                            scripts: Vec::new(),
+                        },
+                    );
+                }
+
+                for alias in &data.aliases.locations {
+                    aliases.insert(
+                        (record.id, alias.id),
+                        AliasInfo {
+                            ty: AliasType::Location,
+                            scripts: Vec::new(),
+                        },
+                    );
+                }
+
+                for alias in &data.aliases.ref_collections {
+                    aliases.insert(
+                        (record.id, alias.id),
+                        AliasInfo {
+                            ty: AliasType::RefCollection,
+                            scripts: Vec::new(),
+                        },
+                    );
+                }
+
+                if let Some(vmad) = &data.virtual_machine_adapter {
+                    if let Some(frags) = &vmad.fragments {
+                        for alias in &frags.aliases {
+                            let alias_id = alias.object.alias.unwrap();
+
+                            let id = esp_loader
+                                .resolve_form(alias.object.form, record.id)
+                                .unwrap();
+
+                            match aliases.get_mut(&(id, alias_id as u32)) {
+                                Some(a) => {
+                                    a.scripts.extend(alias.scripts.clone());
+                                }
+                                None => {
+                                    let ty = load_alias_type(esp_loader, id, alias_id as u32).await;
+
+                                    aliases.insert(
+                                        (id, alias_id as u32),
+                                        AliasInfo {
+                                            ty,
+                                            scripts: alias.scripts.clone(),
+                                        },
+                                    );
+                                }
+                            }
+                        }
+                    }
+                }
+
+                data.virtual_machine_adapter.map(|v| v.without_fragments())
+            }
             RecordData::STAT(data) => data.virtual_machine_adapter,
             RecordData::TACT(data) => data.vmad,
             RecordData::Terminal(data) => data.virtual_machine_adapter,
@@ -168,20 +250,45 @@ async fn instantiate_form(
         // Note that scripts may reference the same form multiple times, which
         // is why we use a HashSet instead of a Vec or directly pushing to queue.
         let mut depends = HashSet::new();
-        for script in vmad.iter().flat_map(|v| &v.scripts) {
+
+        // FIXME: Avoid cloning here.
+        let aliases2 = aliases.clone();
+        let scripts_to_iter: Vec<&Script> = vmad
+            .iter()
+            .flat_map(|v| &v.scripts)
+            .chain(aliases2.values().map(|a| a.scripts.iter()).flatten())
+            .collect();
+        for script in scripts_to_iter {
             let mut values_queue: Vec<_> = script.properties.iter().map(|v| &v.value).collect();
 
             while let Some(value) = values_queue.pop() {
                 match value {
                     Value::Object(value) => {
-                        if let Some(alias) = &value.alias {
-                            // TODO
-                        } else {
-                            let id = esp_loader.resolve_form(value.form, record.id).unwrap();
+                        dbg!(&value);
 
-                            if state.objects.get_by_record(id).is_some()
-                                || records.contains_key(&id)
-                            {
+                        let id = esp_loader.resolve_form(value.form, record.id).unwrap();
+                        let is_loaded =
+                            state.objects.get_by_record(id).is_some() || records.contains_key(&id);
+
+                        // Even if an alias with another owner record is referenced here,
+                        // we still create a new object here.
+                        // The "local" alias (defined in this record) may still attach additional
+                        // scripts that are not attached to the alias in the owner record.
+                        // FIXME: We could in theory skip this, if no scripts are attached
+                        // locally, right?
+                        if let Some(alias) = &value.alias {
+                            if !aliases.contains_key(&(id, *alias as u32)) {
+                                let ty = load_alias_type(esp_loader, id, *alias as u32).await;
+                                aliases.insert(
+                                    (id, *alias as u32),
+                                    AliasInfo {
+                                        ty,
+                                        scripts: Vec::new(),
+                                    },
+                                );
+                            }
+                        } else {
+                            if is_loaded {
                                 continue;
                             }
 
@@ -244,6 +351,53 @@ async fn instantiate_form(
         }
 
         records.insert(record.id, scripts);
+
+        // Build alias objects
+        for ((alias_owner, alias_id), alias) in aliases {
+            let mut scripts = HashMap::new();
+
+            let base_class_name = alias.ty.script_name();
+            let instance = compiled_classes
+                .entry(base_class_name.to_owned())
+                .or_insert_with(|| engine.compile(base_class_name, &COMPILER_OPTIONS));
+            let layout = engine.get_class_layout(base_class_name).unwrap();
+            let builder = engine.object_pool().insert(layout.clone());
+
+            scripts.insert(
+                base_class_name.to_owned(),
+                PartialObject {
+                    instance: instance.clone(),
+                    builder,
+                    script: None,
+                },
+            );
+
+            for script in alias.scripts.into_iter() {
+                let instance = compiled_classes
+                    .entry(script.name.clone())
+                    .or_insert_with(|| engine.compile(&script.name, &COMPILER_OPTIONS));
+                let layout = engine.get_class_layout(&script.name).unwrap();
+                let builder = engine.object_pool().insert(layout.clone());
+
+                scripts.insert(
+                    script.name.clone(),
+                    PartialObject {
+                        instance: instance.clone(),
+                        builder,
+                        script: Some(script),
+                    },
+                );
+            }
+
+            record_aliases.insert(
+                AliasKey {
+                    accessor: record.id,
+                    owner: alias_owner,
+                    id: alias_id,
+                },
+                scripts,
+            );
+        }
     }
 
     let mut partial_object_addrs = HashMap::new();
@@ -255,6 +409,15 @@ async fn instantiate_form(
         partial_object_addrs.insert(*id, addrs);
     }
 
+    let mut partial_alias_addrs = HashMap::new();
+    for (key, alias) in &record_aliases {
+        let mut addrs = HashMap::new();
+        for (name, script) in alias {
+            addrs.insert(name.clone(), script.builder.addr());
+        }
+        partial_alias_addrs.insert(*key, addrs);
+    }
+
     for (record, scripts) in records {
         let mut final_instances = Vec::new();
 
@@ -262,7 +425,7 @@ async fn instantiate_form(
             register_static_events(&object, state);
 
             if let Some(script) = &object.script {
-                tracing::debug!("instantiating script {} (record {:?})", name, record);
+                tracing::debug!("instantiating script {:?} (record {:?})", name, record);
 
                 build_script_object(
                     |form| esp_loader.resolve_form(form, record).unwrap(),
@@ -270,7 +433,9 @@ async fn instantiate_form(
                     script,
                     &state.objects,
                     &partial_object_addrs,
+                    &partial_alias_addrs,
                     &mut object.builder,
+                    record,
                 );
             }
 
@@ -291,7 +456,120 @@ async fn instantiate_form(
         }
     }
 
-    root_id
+    let mut compiled_aliases = HashMap::new();
+    for (key, scripts) in record_aliases {
+        let mut final_instances = Vec::new();
+
+        for (name, mut object) in scripts {
+            register_static_events(&object, state);
+
+            if let Some(script) = &object.script {
+                tracing::debug!("instantiating alias script {:?} for {:?}", name, key);
+
+                build_script_object(
+                    |form| esp_loader.resolve_form(form, key.accessor).unwrap(),
+                    engine,
+                    script,
+                    &state.objects,
+                    &partial_object_addrs,
+                    &partial_alias_addrs,
+                    &mut object.builder,
+                    key.accessor,
+                );
+            }
+
+            let layout = engine.get_class_layout(&name).unwrap();
+            final_instances.push(ScriptInstance {
+                instance: object.instance,
+                layout: layout.clone(),
+                object: object.builder.finalize(),
+                stacks: HashMap::new(),
+            });
+        }
+
+        let id = state.objects.insert(final_instances, None);
+        compiled_aliases.insert(
+            key,
+            ScriptObject(Arc::new(ScriptObjectInner { base: None, id })),
+        );
+    }
+
+    let root_id = root_id?;
+
+    Some(LoadResult {
+        object: ScriptObject(Arc::new(ScriptObjectInner {
+            base: Some(root),
+            id: root_id,
+        })),
+        aliases: compiled_aliases,
+    })
+}
+
+async fn load_alias_type(esp_loader: &EspLoader, id: RecordId, alias_id: u32) -> AliasType {
+    let RecordData::Quest(data) = esp_loader
+        .lookup(Some(RecordKind::Quest), id)
+        .await
+        .unwrap()
+        .local
+        .data
+    else {
+        todo!();
+    };
+
+    dbg!(&data.aliases);
+
+    for alias in &data.aliases.references {
+        if alias.id == alias_id {
+            return AliasType::Reference;
+        }
+    }
+
+    for alias in &data.aliases.locations {
+        if alias.id == alias_id {
+            return AliasType::Location;
+        }
+    }
+
+    for alias in &data.aliases.ref_collections {
+        if alias.id == alias_id {
+            return AliasType::RefCollection;
+        }
+    }
+
+    todo!("alias {} not defined in quest {:?}", alias_id, id)
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub struct AliasKey {
+    /// The object that accesses the alias.
+    pub accessor: RecordId,
+    /// The owner quest of the alias.
+    pub owner: RecordId,
+    /// The ID of the alias in the owner quest.
+    pub id: u32,
+}
+
+#[derive(Clone, Debug)]
+struct AliasInfo {
+    ty: AliasType,
+    scripts: Vec<Script>,
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+enum AliasType {
+    Reference,
+    Location,
+    RefCollection,
+}
+
+impl AliasType {
+    const fn script_name(&self) -> &'static str {
+        match self {
+            Self::Reference => "ReferenceAlias",
+            Self::Location => "LocationAlias",
+            Self::RefCollection => "RefCollectionAlias",
+        }
+    }
 }
 
 fn register_static_events(object: &PartialObject, state: &mut State) {
@@ -403,7 +681,9 @@ fn build_script_object(
     script: &Script,
     scripts: &ScriptObjects,
     partial_addrs: &HashMap<RecordId, HashMap<String, ObjectAddr>>,
+    aliases: &HashMap<AliasKey, HashMap<String, ObjectAddr>>,
     builder: &mut ObjectBuilder,
+    script_defined_in: RecordId,
 ) -> ObjectRef {
     let layout = engine.get_class_layout(&script.name).unwrap();
 
@@ -505,12 +785,24 @@ fn build_script_object(
                 builder.set(class_name, var_name, array_index, object.addr());
             }
             Value::Object(value) => {
-                if let Some(alias) = value.alias {
-                    // TODO
-                } else {
-                    let id = resolve_form(value.form);
+                let id = resolve_form(value.form);
 
-                    let addr = if let Some(scripts) = scripts.get_by_record(id) {
+                let addr = if let Some(alias) = value.alias {
+                    let scripts = aliases
+                        .get(&AliasKey {
+                            accessor: script_defined_in,
+                            owner: id,
+                            id: alias.into(),
+                        })
+                        .unwrap();
+
+                    // FIXME: Which script to choose here?
+                    // We need to inspect the actual class layout to get this.
+                    let addr = *scripts.values().next().unwrap();
+
+                    addr
+                } else {
+                    if let Some(scripts) = scripts.get_by_record(id) {
                         // FIXME: Which script to choose here?
                         // We need to inspect the actual class layout to get this.
                         let script = scripts.iter().next().unwrap();
@@ -523,10 +815,10 @@ fn build_script_object(
                         let addr = *scripts.values().next().unwrap();
 
                         addr
-                    };
+                    }
+                };
 
-                    builder.set(class_name, var_name, array_index, addr);
-                }
+                builder.set(class_name, var_name, array_index, addr);
             }
             Value::Struct(fields, _) => {
                 if entry.pop_builder {
@@ -672,6 +964,7 @@ fn build_array_layout(values: &[Value]) -> TypeLayout {
 #[cfg(test)]
 mod tests {
     use hashbrown::HashMap;
+    use openfo4_core::record::RecordId;
     use openfo4_esp::vmad::{Property, Script, Value};
     use openfo4_script::assembler::assemble;
     use openfo4_script::engine::{Engine, Options};
@@ -687,6 +980,7 @@ mod tests {
 
         let scripts = ScriptObjects::default();
         let partial_addrs = HashMap::new();
+        let aliases = HashMap::new();
 
         build_script_object(
             |_| unreachable!(),
@@ -694,7 +988,9 @@ mod tests {
             &script,
             &scripts,
             &partial_addrs,
+            &aliases,
             &mut builder,
+            RecordId::DANGLING,
         )
     }
 

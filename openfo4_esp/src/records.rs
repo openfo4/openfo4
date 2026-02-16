@@ -4949,7 +4949,6 @@ impl Read for QuestAliases {
         let mut ref_collections = Vec::new();
 
         loop {
-            dbg!(map.next_key());
             match map.next_key() {
                 Some(Text([b'A', b'L', b'S', b'T'])) => {
                     let alias = QuestReferenceAlias::read(map, key)?;

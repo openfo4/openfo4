@@ -32,6 +32,7 @@ use crate::events::inventory::{ItemAddedEvent, ItemEquippedEvent};
 use crate::events::trigger::{TriggerEnter, TriggerLeave};
 use crate::loader::{FileLoader, fix_path};
 use crate::state::esp::EspLoader;
+use crate::systems::TransferItemEvent;
 use crate::systems::global::GlobalProperties;
 use crate::systems::inventory::Inventory;
 use crate::systems::quests::QuestManager;
@@ -387,7 +388,12 @@ fn call_event_invocation_single(
 
     let s = state.take().unwrap();
     let mut ctx = Context::new(engine, stack, s);
-    tracing::debug!("calling {} on {:?}", func_name, script.object.addr());
+    tracing::debug!(
+        "calling {}.{} ({:?})",
+        script_name,
+        func_name,
+        script.object.addr()
+    );
     let res = func.call(&mut ctx, &args);
 
     let mut data = ctx.into_data();

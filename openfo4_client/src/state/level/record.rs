@@ -450,7 +450,7 @@ impl SpawnEntity {
         };
 
         let script = if record.local.data.virtual_machine_adapter().is_some() {
-            ctx.script_loader.load(record.id).await
+            ctx.script_loader.load(record.id).await.map(|v| v.object)
         } else {
             None
         };

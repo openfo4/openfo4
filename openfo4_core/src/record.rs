@@ -15,6 +15,11 @@ pub struct RecordId {
 }
 
 impl RecordId {
+    pub const DANGLING: Self = Self {
+        module: ModuleId(NonZeroU32::MAX),
+        form: FormId::NULL,
+    };
+
     pub const fn new(module: ModuleId, form: FormId) -> Self {
         Self { module, form }
     }

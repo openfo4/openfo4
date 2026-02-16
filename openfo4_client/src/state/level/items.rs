@@ -262,6 +262,6 @@ pub async fn resolve_item(
 }
 
 async fn load_item_script(record: RecordId, loader: &ScriptLoader) -> Option<ScriptObject> {
-    let base_object = loader.load(record).await?;
+    let base_object = loader.load(record).await?.object;
     Some(loader.clone_object(&base_object).await)
 }
