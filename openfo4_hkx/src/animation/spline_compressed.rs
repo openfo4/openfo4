@@ -600,7 +600,7 @@ fn decode_quantized_quat_threecomp40(mut buf: &mut Cursor<&[u8]>) -> Result<Quat
     const POSITIVE_MASK: u64 = MASK >> 1;
     // The float value that a int value of 1 represents.
     // FRAC = (1 / sqrt(2) ) / POSITIVE_MASK
-    const FRAC: f32 = 0.00034543565275356496;
+    const FRAC: f32 = 0.00034543566;
 
     let val0 = u8::decode(&mut buf)?;
     let val1 = u8::decode(&mut buf)?;
@@ -610,8 +610,8 @@ fn decode_quantized_quat_threecomp40(mut buf: &mut Cursor<&[u8]>) -> Result<Quat
 
     let val = u64::from_le_bytes([val0, val1, val2, val3, val4, 0, 0, 0]);
 
-    let mut x = ((val >> (BITS_PER_COMPONENT * 0)) & MASK) as i64;
-    let mut y = ((val >> (BITS_PER_COMPONENT * 1)) & MASK) as i64;
+    let mut x = (val & MASK) as i64;
+    let mut y = ((val >> BITS_PER_COMPONENT) & MASK) as i64;
     let mut z = ((val >> (BITS_PER_COMPONENT * 2)) & MASK) as i64;
 
     let w_index = (val >> (BITS_PER_COMPONENT * 3)) & 3;

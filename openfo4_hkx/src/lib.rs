@@ -295,10 +295,10 @@ impl ZString {
 }
 
 impl Decode for ZString {
-    fn decode(mut reader: &mut Reader<'_>) -> Result<Self, Error> {
+    fn decode(reader: &mut Reader<'_>) -> Result<Self, Error> {
         let mut bytes = Vec::new();
         loop {
-            let b = u8::decode(&mut reader)?;
+            let b = u8::decode(reader)?;
             if b == 0 {
                 return Ok(Self(bytes));
             }

@@ -134,12 +134,12 @@ impl CompressedMeshShapeData {
 
                 // A->B->C C->D->A
                 indices.extend([
-                    vertices.len() as u32 + 0,
+                    vertices.len() as u32,
                     vertices.len() as u32 + 1,
                     vertices.len() as u32 + 2,
                     vertices.len() as u32 + 2,
                     vertices.len() as u32 + 3,
-                    vertices.len() as u32 + 0,
+                    vertices.len() as u32,
                 ]);
                 vertices.extend(vs);
             }
