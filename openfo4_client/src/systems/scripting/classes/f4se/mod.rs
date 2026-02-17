@@ -1,13 +1,16 @@
 mod cell;
+mod default_object;
 mod favorites_manger;
 mod form;
 mod game;
 mod input;
 mod location;
 mod math;
+mod object_mod;
 mod object_reference;
 mod script_object;
 mod ui;
+mod utility;
 mod water_type;
 mod weapon;
 
@@ -38,4 +41,7 @@ pub fn register(engine: &mut Engine) {
     script_object::register(engine);
     cell::register(engine);
     water_type::register(engine);
+    object_mod::register(engine);
+    default_object::register(engine);
+    utility::register(engine);
 }

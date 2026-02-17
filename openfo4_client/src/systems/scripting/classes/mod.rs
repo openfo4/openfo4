@@ -14,6 +14,8 @@ mod game;
 mod global_variable;
 mod input_enable_layer;
 mod keyword;
+mod leveled_actor;
+mod leveled_item;
 mod location;
 mod location_alias;
 mod magic_effect;
@@ -78,6 +80,8 @@ pub fn register_builtins(engine: &mut Engine) {
     game::register(engine);
     reference_alias::register(engine);
     quest::register(engine);
+    leveled_item::register(engine);
+    leveled_actor::register(engine);
 
     engine.register_native_function("Message", "ResetHelpMessage", message::reset_help_message);
     engine.register_native_function("Message", "Show", message::show);
