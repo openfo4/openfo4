@@ -7,17 +7,17 @@ use crate::{Array, OpaquePtr, Ptr, ReferencedObject};
 #[derive(Clone, Debug, HkStruct)]
 pub struct RefCountedProperties {
     // Offset: 0
-    entries: Array<RefCountedPropertiesEntry>,
+    _entries: Array<RefCountedPropertiesEntry>,
 }
 
 #[derive(Clone, Debug, HkStruct)]
 pub struct RefCountedPropertiesEntry {
     // Offset: 0
-    object: Ptr<ReferencedObject>,
+    _object: Ptr<ReferencedObject>,
     // Offset: 8
-    key: u16,
+    _key: u16,
     // Offset: 10
-    flags: u16,
+    _flags: u16,
 }
 
 #[derive(Clone, Debug, HkStruct)]
@@ -108,45 +108,45 @@ pub struct SurfaceVelocity {
 #[derive(Clone, Debug, HkStruct)]
 pub struct MotionProperties {
     // Offset: 0
-    is_exclusive: u32,
+    pub is_exclusive: u32,
     // Offset: 4
-    flags: u32,
+    pub flags: u32,
     // Offset: 8
-    gravity_factor: f32,
+    pub gravity_factor: f32,
     // Offset: 12
-    time_factor: f32,
+    pub time_factor: f32,
     // Offset: 16
-    max_linear_speed: f32,
+    pub max_linear_speed: f32,
     // Offset: 20
-    max_angular_speed: f32,
+    pub max_angular_speed: f32,
     // Offset: 24
-    linear_damping: f32,
+    pub linear_damping: f32,
     // Offset: 28
-    angular_damping: f32,
+    pub angular_damping: f32,
     // Offset: 32
-    solver_stabilization_speed_threshold: f32,
+    pub solver_stabilization_speed_threshold: f32,
     // Offset: 36
-    solver_stabilization_speed_reduction: f32,
+    pub solver_stabilization_speed_reduction: f32,
     // Offset: 40
-    max_dist_squared: f32,
+    pub max_dist_squared: f32,
     // Offset: 44
-    max_rot_squared: f32,
+    pub max_rot_squared: f32,
     // Offset: 48
-    inv_block_size: f32,
+    pub inv_block_size: f32,
     // Offset: 52
-    pathing_upper_threshold: i16,
+    pub pathing_upper_threshold: i16,
     // Offset: 54
-    pathing_lower_threshold: i16,
+    pub pathing_lower_threshold: i16,
     // Offset: 56
-    num_deactivation_frequency_passes: u8,
+    pub num_deactivation_frequency_passes: u8,
     // Offset: 57
-    deactivation_velocity_scale_square: u8,
+    pub deactivation_velocity_scale_square: u8,
     // Offset: 58
-    minimum_pathing_velocity_scale_square: u8,
+    pub minimum_pathing_velocity_scale_square: u8,
     // Offset: 59
-    spiking_velocity_scale_threshold_squared: u8,
+    pub spiking_velocity_scale_threshold_squared: u8,
     // Offset: 60
-    minimum_spiking_velocity_scale_squared: u8,
+    pub minimum_spiking_velocity_scale_squared: u8,
 }
 
 #[derive(Clone, Debug, HkStruct)]
@@ -216,17 +216,17 @@ pub struct Shape {
     // Offset: 0
     pub object: ReferencedObject,
     // Offset: 16
-    flags: u16,
+    pub flags: u16,
     // Offset: 18
-    num_shape_key_bits: u8,
+    pub num_shape_key_bits: u8,
     // Offset: 19
-    dispatch_type: u8,
+    pub dispatch_type: u8,
     // Offset: 20
     pub convex_radius: f32,
     // Offset: 24
-    user_data: u64,
+    pub user_data: u64,
     // Offset: 32
-    properties: Option<Ptr<RefCountedProperties>>,
+    pub properties: Option<Ptr<RefCountedProperties>>,
 }
 
 #[derive(Clone, Debug, HkStruct)]
