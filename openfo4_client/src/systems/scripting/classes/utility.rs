@@ -118,8 +118,8 @@ fn is_in_menu_mode(caller: Caller<'_, State>) -> Result<bool, Exception> {
 /// ```text
 /// int Function(int aiMin, int aiMax) native global
 /// ```
-fn random_int(caller: Caller<'_, State>, ai_min: i32, ai_max: i32) -> Result<i32, Exception> {
-    todo!()
+fn random_int(_caller: Caller<'_, State>, min: i32, max: i32) -> Result<i32, Exception> {
+    Ok(rand::random_range(min..=max))
 }
 
 /// `RandomFloat`
@@ -127,8 +127,8 @@ fn random_int(caller: Caller<'_, State>, ai_min: i32, ai_max: i32) -> Result<i32
 /// ```text
 /// float Function(float afMin, float afMax) native global
 /// ```
-fn random_float(caller: Caller<'_, State>, af_min: f32, af_max: f32) -> Result<f32, Exception> {
-    todo!()
+fn random_float(_caller: Caller<'_, State>, min: f32, max: f32) -> Result<f32, Exception> {
+    Ok(rand::random_range(min..=max))
 }
 
 /// `SetINIFloat`
