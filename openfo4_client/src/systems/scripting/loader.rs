@@ -516,8 +516,6 @@ async fn load_alias_type(esp_loader: &EspLoader, id: RecordId, alias_id: u32) ->
         todo!();
     };
 
-    dbg!(&data.aliases);
-
     for alias in &data.aliases.references {
         if alias.id == alias_id {
             return AliasType::Reference;

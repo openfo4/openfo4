@@ -9,7 +9,7 @@ use crate::systems::scripting::classes::{Object, State};
 /// ```
 pub fn apply_material_swap(
     caller: Caller<'_, State>,
-    object: Object,
+    self_ptr: Object,
     material_swap: Object,
     rename_material: bool,
 ) -> Result<isize, Exception> {
@@ -23,6 +23,7 @@ pub fn apply_material_swap(
 /// ```
 pub fn attach_wire(
     caller: Caller<'_, State>,
+    self_ptr: Object,
     object: Object,
     spline: Object,
 ) -> Result<Object, Exception> {
@@ -34,7 +35,7 @@ pub fn attach_wire(
 /// ```text
 /// ObjectMod[] Function GetAllMods() Native
 /// ```
-pub fn get_all_mods(caller: Caller<'_, State>, object: Object) -> Result<isize, Exception> {
+pub fn get_all_mods(caller: Caller<'_, State>, self_ptr: Object) -> Result<isize, Exception> {
     todo!()
 }
 
@@ -43,7 +44,7 @@ pub fn get_all_mods(caller: Caller<'_, State>, object: Object) -> Result<isize, 
 /// ```text
 /// ConnectPoint[] Function GetConnectPoints() Native
 /// ```
-pub fn get_connect_points(caller: Caller<'_, State>, object: Object) -> Result<isize, Exception> {
+pub fn get_connect_points(caller: Caller<'_, State>, self_ptr: Object) -> Result<isize, Exception> {
     todo!()
 }
 
@@ -54,7 +55,7 @@ pub fn get_connect_points(caller: Caller<'_, State>, object: Object) -> Result<i
 /// ```
 pub fn get_connected_objects(
     caller: Caller<'_, State>,
-    object: Object,
+    self_ptr: Object,
 ) -> Result<isize, Exception> {
     todo!()
 }
@@ -64,7 +65,7 @@ pub fn get_connected_objects(
 /// ```text
 /// string Function GetDisplayName() Native
 /// ```
-pub fn get_display_name(caller: Caller<'_, State>, object: Object) -> Result<isize, Exception> {
+pub fn get_display_name(caller: Caller<'_, State>, self_ptr: Object) -> Result<isize, Exception> {
     todo!()
 }
 
@@ -73,7 +74,10 @@ pub fn get_display_name(caller: Caller<'_, State>, object: Object) -> Result<isi
 /// ```text
 /// Form[] Function GetInventoryItems() Native
 /// ```
-pub fn get_inventory_items(caller: Caller<'_, State>, object: Object) -> Result<isize, Exception> {
+pub fn get_inventory_items(
+    caller: Caller<'_, State>,
+    self_ptr: Object,
+) -> Result<isize, Exception> {
     todo!()
 }
 
@@ -82,7 +86,7 @@ pub fn get_inventory_items(caller: Caller<'_, State>, object: Object) -> Result<
 /// ```text
 /// float Function GetInventoryWeight() Native
 /// ```
-pub fn get_inventory_weight(caller: Caller<'_, State>, object: Object) -> Result<f32, Exception> {
+pub fn get_inventory_weight(caller: Caller<'_, State>, self_ptr: Object) -> Result<f32, Exception> {
     todo!()
 }
 
@@ -91,7 +95,7 @@ pub fn get_inventory_weight(caller: Caller<'_, State>, object: Object) -> Result
 /// ```text
 /// GetMaterialSwap
 /// ```
-pub fn get_material_swap(caller: Caller<'_, State>, object: Object) -> Result<Object, Exception> {
+pub fn get_material_swap(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Exception> {
     todo!()
 }
 
@@ -102,7 +106,7 @@ pub fn get_material_swap(caller: Caller<'_, State>, object: Object) -> Result<Ob
 /// ```
 pub fn set_material_swap(
     caller: Caller<'_, State>,
-    object: Object,
+    self_ptr: Object,
     material_swap: Object,
 ) -> Result<(), Exception> {
     todo!()
@@ -115,7 +119,7 @@ pub fn set_material_swap(
 /// ```
 pub fn transmit_connected_power(
     caller: Caller<'_, State>,
-    object: Object,
+    self_ptr: Object,
 ) -> Result<bool, Exception> {
     todo!()
 }

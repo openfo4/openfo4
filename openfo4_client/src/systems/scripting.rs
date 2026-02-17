@@ -14,7 +14,6 @@ use std::time::Duration;
 
 use async_lock::Mutex;
 use futures::future::BoxFuture;
-use futures_lite::FutureExt;
 use game_common::collections::arena::{Arena, Key};
 use game_common::collections::bimap::BiMap;
 use game_tasks::TaskPool;
@@ -25,30 +24,27 @@ use openfo4_core::events::EventBus;
 use openfo4_pex::Module;
 use openfo4_script::compiler::TypeLayout;
 use openfo4_script::engine::{Engine, Instance, Options};
-use openfo4_script::runtime::{Context, Exception, ObjectAddr, ObjectRef, Stack, Val};
+use openfo4_script::runtime::{Context, Exception, ObjectRef, Stack, Val};
 
 use crate::components::Player;
 use crate::events::inventory::{ItemAddedEvent, ItemEquippedEvent};
 use crate::events::trigger::{TriggerEnter, TriggerLeave};
 use crate::loader::{FileLoader, fix_path};
 use crate::state::esp::EspLoader;
-use crate::systems::TransferItemEvent;
 use crate::systems::global::GlobalProperties;
-use crate::systems::inventory::Inventory;
 use crate::systems::quests::QuestManager;
 use crate::systems::scripting::classes::{AliasSet, CoreObjects};
 use crate::systems::scripting::effects::{EffectId, Effects};
 use crate::systems::scripting::invocations::{EventInvocation, Value};
 use crate::systems::scripting::loader::{ScriptLoader, ScriptObjectId};
 use crate::systems::scripting::objects::ScriptObjects;
-use crate::systems::scripting::registration::{EventKind, EventSender, RegistrationSet};
+use crate::systems::scripting::registration::{EventSender, RegistrationSet};
 
 use classes::State;
 
 const COMPILER_OPTIONS: Options = Options {
     skip_native: true,
     skip_empty: true,
-    only_events: true,
     use_native_stubs: false,
 };
 
