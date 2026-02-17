@@ -65,6 +65,15 @@ pub unsafe extern "C" fn f32_to_string(ctx: *mut RawContext, value: f32) -> Obje
     })
 }
 
+pub unsafe extern "C" fn object_to_string(ctx: *mut RawContext, addr: *mut u8) -> ObjectAddr {
+    abort_on_unwind(|| {
+        let ctx = unsafe { &mut *ctx };
+
+        let s = format!("{:x}", addr.addr());
+        unsafe { (*ctx.state).pool.insert_string(&s).addr() }
+    })
+}
+
 fn abort_on_unwind<F, R>(f: F) -> R
 where
     F: FnOnce() -> R,

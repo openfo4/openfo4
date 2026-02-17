@@ -1847,6 +1847,13 @@ fn perform_cast(
                 .call(translator.data.runtime_funcs.f32_to_string, &[ctx_ptr, src])[0];
             ptr
         }
+        (Type::Class(_), Type::String) => {
+            let ptr = translator.builder.call(
+                translator.data.runtime_funcs.object_to_string,
+                &[ctx_ptr, src],
+            )[0];
+            ptr
+        }
         // A null pointer.
         (Type::None, Type::Class(_)) => translator.builder.iconst(JitType::Pointer, 0),
         (src_ty, dst_ty) => todo!("{:?} {:?}", src_ty, dst_ty),
