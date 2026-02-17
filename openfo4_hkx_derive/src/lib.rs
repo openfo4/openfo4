@@ -2,8 +2,7 @@ use proc_macro::TokenStream;
 use proc_macro2::{Span, TokenStream as TokenStream2};
 use quote::quote;
 use syn::{
-    Data, DeriveInput, Expr, ExprLit, ItemStruct, Lit, LitInt, LitStr, Type, UnOp,
-    parse_macro_input,
+    Data, DeriveInput, Expr, ItemStruct, Lit, LitInt, LitStr, Type, UnOp, parse_macro_input,
 };
 
 #[proc_macro_derive(HkStruct)]
@@ -77,12 +76,11 @@ pub fn signature(args: TokenStream, input: TokenStream) -> TokenStream {
 pub fn derive_hk_enum(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
 
-    let Some(size) = input.attrs.iter().find(|attr| {
-        attr.meta
-            .path()
-            .get_ident()
-            .is_some_and(|v| v.to_string() == "size")
-    }) else {
+    let Some(size) = input
+        .attrs
+        .iter()
+        .find(|attr| attr.meta.path().get_ident().is_some_and(|v| *v == "size"))
+    else {
         return emit_compile_error("#[size] attribute must be present in the enum");
     };
 
@@ -128,7 +126,7 @@ pub fn derive_hk_enum(input: TokenStream) -> TokenStream {
                     unops.push(expr.op);
                     discriminant = &*expr.expr;
                 }
-                _ => return emit_compile_error(format!("expected literal in discriminant")),
+                _ => return emit_compile_error("expected literal in discriminant".to_string()),
             }
         }
 
