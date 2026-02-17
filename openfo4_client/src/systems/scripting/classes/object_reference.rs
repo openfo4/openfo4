@@ -568,10 +568,15 @@ fn count_actors_linked_to_me(
 fn count_linked_ref_chain(
     caller: Caller<'_, State>,
     self_ptr: Object,
-    ap_keyword: Object,
+    keyword: Object,
     max_expected_linked_refs: i32,
 ) -> Result<i32, Exception> {
-    todo!()
+    let Ok(max_count) = usize::try_from(max_expected_linked_refs) else {
+        return Ok(0);
+    };
+
+    let iter = LinkedRefChainIter::new(&caller, self_ptr, keyword).ok_or(Exception::Error)?;
+    Ok(iter.take(max_count).count().try_into().unwrap_or(i32::MAX))
 }
 
 /// `CountRefsLinkedToMe`
