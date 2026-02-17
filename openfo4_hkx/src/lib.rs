@@ -399,7 +399,7 @@ impl HkxFile {
         let ptr_size = u8::decode(&mut reader)?;
         let is_little_endian = bool::decode(&mut reader)?;
         let padding_option = bool::decode(&mut reader)?;
-        let base_class = u8::decode(&mut reader)?;
+        let _base_class = u8::decode(&mut reader)?;
 
         assert!(!padding_option);
 
@@ -411,15 +411,15 @@ impl HkxFile {
         };
 
         let section_count = u32::decode(&mut reader)?;
-        let contents_section_index = u32::decode(&mut reader)?;
-        let contents_section_offset = u32::decode(&mut reader)?;
-        let contents_class_name_section_index = u32::decode(&mut reader)?;
-        let contents_class_name_section_offset = u32::decode(&mut reader)?;
+        let _contents_section_index = u32::decode(&mut reader)?;
+        let _contents_section_offset = u32::decode(&mut reader)?;
+        let _contents_class_name_section_index = u32::decode(&mut reader)?;
+        let _contents_class_name_section_offset = u32::decode(&mut reader)?;
 
         // Version string "hk_2014..."
         <[u8; 16]>::decode(&mut reader)?;
-        let flags = u32::decode(&mut reader)?;
-        let max_predicate = u16::decode(&mut reader)?;
+        let _flags = u32::decode(&mut reader)?;
+        let _max_predicate = u16::decode(&mut reader)?;
         let section_offset = u16::decode(&mut reader)?;
 
         reader.cursor.advance(section_offset.into());
@@ -445,7 +445,7 @@ impl HkxFile {
             let global_fixup_offset = u32::decode(&mut reader)?;
             let virtual_fixup_offset = u32::decode(&mut reader)?;
             let exports_offset = u32::decode(&mut reader)?;
-            let imports_offset = u32::decode(&mut reader)?;
+            let _imports_offset = u32::decode(&mut reader)?;
             let end_offset = u32::decode(&mut reader)?;
 
             let num_local_fixups = (global_fixup_offset - local_fixup_offset) / 8;
@@ -470,7 +470,7 @@ impl HkxFile {
                     reader.fork(u64::from(abs_data_start) + u64::from(global_fixup_offset));
                 for _ in 0..num_global_fixups {
                     let src = u32::decode(&mut reader)?;
-                    let dst_section_index = u32::decode(&mut reader)?;
+                    let _dst_section_index = u32::decode(&mut reader)?;
                     let dst = u32::decode(&mut reader)?;
 
                     if src != u32::MAX {
@@ -484,7 +484,7 @@ impl HkxFile {
                     reader.fork(u64::from(abs_data_start) + u64::from(virtual_fixup_offset));
                 for _ in 0..num_virtual_fixups {
                     let src = u32::decode(&mut reader)?;
-                    let dst_section_index = u32::decode(&mut reader)?;
+                    let _dst_section_index = u32::decode(&mut reader)?;
                     let dst = u32::decode(&mut reader)?;
 
                     if src != u32::MAX {
@@ -514,7 +514,7 @@ impl HkxFile {
 
                         let signature = ClassSignature::from_sig_and_name(sig, &name)?;
 
-                        class_names.insert(src as u32, ClassName { signature, name });
+                        class_names.insert(src as u32, ClassName { signature });
                     }
                 }
                 Some("__data__") => {
@@ -622,7 +622,6 @@ impl Decode for Option<OpaquePtr> {
 #[derive(Clone, Debug)]
 struct ClassName {
     signature: ClassSignature,
-    name: ZString,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
@@ -862,11 +861,11 @@ impl ClassSignature {
 pub struct ReferencedObject {
     // Offset: 0
     // Ptr sized
-    id: u64,
+    _id: u64,
     // Offset: 8
-    mem_size_and_flags: u16,
+    _mem_size_and_flags: u16,
     // Offset: 10
-    ref_count: u16,
+    _ref_count: u16,
     // Offset: 12
     _pad0: u32,
 }
