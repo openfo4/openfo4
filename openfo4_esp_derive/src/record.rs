@@ -1,5 +1,5 @@
 use proc_macro2::{Ident, TokenStream as TokenStream2};
-use quote::{quote, ToTokens};
+use quote::quote;
 use syn::parse::{Parse, ParseStream};
 use syn::{Attribute, Data, DeriveInput, LitStr, Type};
 
@@ -15,33 +15,28 @@ pub fn derive_record_impl(input: DeriveInput) -> Result<TokenStream2, Error> {
     let mut fields = Vec::new();
     for field in data.fields {
         let mut key = None;
-        let mut count = None;
         let mut unordered = false;
 
         for attr in field.attrs {
-            match attr
+            if attr
                 .meta
                 .path()
                 .get_ident()
                 .map(|i| i.to_string())
                 .as_deref()
+                != Some("record")
             {
-                Some("record") => match attr.parse_args::<RecordAttr>()? {
-                    RecordAttr::Key(k) => {
-                        assert!(key.is_none());
-                        key = Some(k);
-                    }
-                    RecordAttr::Unordered => {
-                        unordered = true;
-                    }
-                },
-                Some("count") => {
-                    assert!(count.is_none());
-                    let attr = attr.parse_args::<CountAttr>()?;
+                continue;
+            }
 
-                    count = Some(attr.key);
+            match attr.parse_args::<RecordAttr>()? {
+                RecordAttr::Key(k) => {
+                    assert!(key.is_none());
+                    key = Some(k);
                 }
-                _ => (),
+                RecordAttr::Unordered => {
+                    unordered = true;
+                }
             }
         }
 
@@ -56,7 +51,6 @@ pub fn derive_record_impl(input: DeriveInput) -> Result<TokenStream2, Error> {
                 .unwrap_or_else(|| todo!("todo: support unnamed fields")),
             ty: field.ty,
             key,
-            count,
             read_unordered: unordered,
         });
     }
@@ -94,7 +88,6 @@ struct Field {
     ident: Ident,
     ty: Type,
     key: String,
-    count: Option<String>,
     read_unordered: bool,
 }
 
@@ -194,18 +187,6 @@ impl Parse for RecordAttr {
 }
 
 #[derive(Clone, Debug)]
-struct CountAttr {
-    key: String,
-}
-
-impl Parse for CountAttr {
-    fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
-        let key = input.parse::<LitStr>()?;
-        Ok(Self { key: key.value() })
-    }
-}
-
-#[derive(Clone, Debug)]
 struct StructAttributes {
     pub is_ordered: bool,
 }
@@ -219,7 +200,7 @@ impl StructAttributes {
                 continue;
             };
 
-            if name.to_string() != "record" {
+            if *name != "record" {
                 continue;
             }
 

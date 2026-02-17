@@ -204,12 +204,6 @@ fn derive_binary_struct_enum(
 }
 
 #[derive(Clone, Debug)]
-struct BinaryField {
-    ident: Ident,
-    ty: Type,
-}
-
-#[derive(Clone, Debug)]
 enum DefaultAttr {
     Default,
     Expr(Expr),
