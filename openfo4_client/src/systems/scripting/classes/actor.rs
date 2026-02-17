@@ -1,6 +1,7 @@
 use openfo4_script::engine::Engine;
 use openfo4_script::runtime::{Caller, Exception};
 
+use crate::components::{ActorProperties, ActorProtection};
 use crate::systems::inventory::Inventory;
 use crate::systems::scripting::classes::{Object, State};
 use crate::systems::scripting::effects::{EquipItemEffect, UnequipItemEffect};
@@ -1085,7 +1086,13 @@ fn is_equipped(
 /// bool Function() native
 /// ```
 fn is_essential(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Exception> {
-    todo!()
+    let entity = caller.data().entity(self_ptr).ok_or(Exception::Error)?;
+
+    let Ok(props) = caller.data().world().get::<&ActorProperties>(entity) else {
+        return Ok(false);
+    };
+
+    Ok(props.protection == ActorProtection::Essential)
 }
 
 /// `IsFlying`
@@ -1739,9 +1746,27 @@ fn set_eye_texture(
 fn set_essential(
     caller: Caller<'_, State>,
     self_ptr: Object,
-    ab_essential: bool,
+    essential: bool,
 ) -> Result<(), Exception> {
-    todo!()
+    let entity = caller.data().entity(self_ptr).ok_or(Exception::Error)?;
+    let mut props = caller
+        .data()
+        .world()
+        .get::<&mut ActorProperties>(entity)
+        .map_err(|_| Exception::Error)?;
+
+    if essential {
+        // Overwrite the protected flag if set.
+        props.protection = ActorProtection::Essential;
+    } else {
+        // If called with essential = false, don't drop the protected
+        // flag if it is currently set.
+        if props.protection == ActorProtection::Essential {
+            props.protection = ActorProtection::None
+        }
+    }
+
+    Ok(())
 }
 
 /// `SetFactionRank`
@@ -2539,5 +2564,12 @@ fn get_furniture_reference(
 /// bool Function() native
 /// ```
 fn is_protected(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Exception> {
-    todo!()
+    let entity = caller.data().entity(self_ptr).ok_or(Exception::Error)?;
+    let props = caller
+        .data()
+        .world()
+        .get::<&mut ActorProperties>(entity)
+        .map_err(|_| Exception::Error)?;
+
+    Ok(props.protection == ActorProtection::Protected)
 }

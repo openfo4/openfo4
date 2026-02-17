@@ -116,3 +116,23 @@ pub struct TriggerBox {
     pub marker_color: Color,
     pub entities_inside: HashSet<Entity>,
 }
+
+/// Assorted actor properties.
+#[derive(Clone, Debug)]
+pub struct ActorProperties {
+    pub protection: ActorProtection,
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub enum ActorProtection {
+    /// No protection.
+    None,
+    /// Protected
+    ///
+    /// Protected actors ignore lethal damage from any non-player actors.
+    Protected,
+    /// Essential
+    ///
+    /// Essential actors ignore lethal damage from any actor.
+    Essential,
+}

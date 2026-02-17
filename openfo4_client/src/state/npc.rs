@@ -13,7 +13,7 @@ use openfo4_esp::{RecordData, RecordKind, ZString};
 use openfo4_physics::components::{Collider, CollisionLayer, RigidBody};
 
 use crate::assets::nif_v2::{LoadNifFlags, NifKey, NifScene};
-use crate::components::DeadActor;
+use crate::components::{ActorProperties, ActorProtection, DeadActor};
 use crate::state::animation_test::{ActorCharacter, BodyPartBoneProps, load_character};
 use crate::state::esp::EspLoader;
 use crate::state::hardcoded::KEYWORD_FEMALE;
@@ -124,6 +124,7 @@ pub struct Actor {
     customization_scenes: Vec<Handle<NifScene>>,
     pub keywords: HashSet<RecordId>,
     outfit_items: Vec<RecordId>,
+    protection: ActorProtection,
 }
 
 impl Actor {
@@ -183,6 +184,9 @@ impl Actor {
                     self.properties,
                     FacingDirection::default(),
                     self.body_parts,
+                    ActorProperties {
+                        protection: self.protection,
+                    },
                 ),
             )
             .unwrap();
@@ -333,6 +337,7 @@ pub async fn spawn_actor(
         dead: instance_props.dead,
         customization_scenes,
         outfit_items,
+        protection: props.protection,
     })
 }
 
@@ -520,6 +525,14 @@ async fn resolve_actor_props(
         keywords.push(KEYWORD_FEMALE);
     }
 
+    let protection = if essential {
+        ActorProtection::Essential
+    } else if protected {
+        ActorProtection::Protected
+    } else {
+        ActorProtection::None
+    };
+
     ActorProps {
         race,
         skin,
@@ -528,6 +541,7 @@ async fn resolve_actor_props(
         properties,
         keywords,
         outfit,
+        protection,
     }
 }
 
@@ -541,6 +555,7 @@ struct ActorProps {
     properties: ActorValueProperties,
     keywords: Vec<RecordId>,
     outfit: Option<RecordId>,
+    protection: ActorProtection,
 }
 
 #[derive(Clone, Debug)]
