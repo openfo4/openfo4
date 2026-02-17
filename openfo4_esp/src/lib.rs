@@ -73,6 +73,7 @@ pub enum Error {
     Other(String),
     #[error("unknown record type: {0:?}")]
     UnknownRecordType(Text<4>),
+    /// Reached end of file while searched for record.
     #[error("end of file")]
     EndOfFile,
 }
@@ -1516,6 +1517,10 @@ bitflags::bitflags! {
 pub struct ZString(Vec<u8>);
 
 impl ZString {
+    pub fn new(bytes: Vec<u8>) -> Self {
+        Self(bytes)
+    }
+
     pub fn as_bytes(&self) -> &[u8] {
         &self.0
     }
@@ -1658,6 +1663,10 @@ where
 pub struct Text<const N: usize>([u8; N]);
 
 impl Text<4> {
+    pub(crate) fn new(bytes: &[u8; 4]) -> Self {
+        Self(*bytes)
+    }
+
     const TES4: Self = Self([b'T', b'E', b'S', b'4']);
     const GRUP: Self = Self([b'G', b'R', b'U', b'P']);
 
@@ -1745,8 +1754,25 @@ pub struct FormId(pub u32);
 impl FormId {
     pub const NULL: Self = Self(0);
 
+    /// Creates a new `FormId` from a plugin and form part.
+    ///
+    /// The highest 8 bit of the `form` part are truncated.
+    pub const fn new(plugin: u8, form: u32) -> Self {
+        Self(((plugin as u32) << 24) | form & 0xff_ff_ff)
+    }
+
     pub const fn is_null(&self) -> bool {
         self.0 == 0
+    }
+
+    /// Returns the bits identifiying the form.
+    pub const fn form(&self) -> u32 {
+        self.0 & 0xff_ff_ff
+    }
+
+    /// Returns the bits identifying the plugin.
+    pub const fn plugin(&self) -> u8 {
+        (self.0 >> 24) as u8
     }
 }
 

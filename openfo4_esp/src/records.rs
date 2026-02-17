@@ -5212,9 +5212,466 @@ pub struct DialogueTopic {
 }
 
 #[derive(Clone, Debug, Record)]
+#[record(ordered)]
 pub struct Scene {
     #[record("EDID")]
     pub id: Option<ZString>,
+    // TODO: Fragments
+    #[record("VMAD")]
+    pub virtual_machine_adapter: Option<VirtualMachineAdapter>,
+    #[record("FNAM")]
+    pub flags: SceneFlags,
+    #[record("HNAM")]
+    pub phases: SubRecordArray<ScenePhase>,
+    #[record("ALID")]
+    pub actors: SubRecordArray<SceneActor>,
+    #[record("ANAM")]
+    pub actions: SubRecordArray<SceneAction>,
+    #[record("PNAM")]
+    pub parent_quest: FormId,
+    #[record("INAM")]
+    pub last_action_index: Option<u32>,
+    #[record("VNAM")]
+    pub actor_behavior_settings: Option<SceneActorBehaviorSettings>,
+    #[record("CNAM")]
+    pub camera_distance_override: Option<f32>,
+    #[record("ACTV")]
+    pub dialogue_distance_override: Option<f32>,
+    #[record("CRIS")]
+    pub fov_override: Option<f32>,
+    #[record("KSIZ")]
+    _keyword_count: Option<u32>,
+    #[record("KWDA")]
+    pub keywords: Option<Array<FormId>>,
+    #[record("CTDA")]
+    pub conditions: SubRecordArray<Condition>,
+    #[record("SCQS")]
+    pub set_parent_quest_stage: Option<SceneSetStage>,
+    #[record("NNAM")]
+    pub notes: Option<ZString>,
+    #[record("TNAM")]
+    pub template_scene: Option<FormId>,
+    #[record("XNAM")]
+    pub index: Option<u32>,
+}
+
+bitflags! {
+    #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+    pub struct SceneFlags: u32 {
+        const BEGIN_ON_QUEST_START = 1 << 0;
+        const STOP_ON_QUEST_END = 1 << 1;
+        const SHOW_ALL_TEXT = 1 << 2;
+        const REPEAT_CONDITIONS_WHILE_TRUE = 1 << 3;
+        const INTERRUPTIBLE = 1 << 4;
+        const HAS_PLAYER_DIALOGUE = 1 << 5;
+        const PREVENT_PLAYER_EXIT_DIALOGUE = 1 << 6;
+        const PAUSE_ACTORS_CURRENT_SCENES = 1 << 7;
+        const DISABLE_DIALOGUE_CAMERA = 1 << 8;
+        const NO_FOLLOWER_IDLE_CHATTER = 1 << 9;
+    }
+}
+
+impl_decode_bitflags!(SceneFlags: u32);
+
+#[derive(Clone, Debug, Record)]
+#[record(ordered)]
+pub struct ScenePhase {
+    #[record("HNAM")]
+    _marker_start: (),
+    #[record("NAM0")]
+    pub name: Option<ZString>,
+    #[record("CTDA")]
+    pub start_conditions: SubRecordArray<Condition>,
+    #[record("NEXT")]
+    _marker_start_conditions_end: (),
+    #[record("CTDA")]
+    pub completion_conditions: SubRecordArray<Condition>,
+    #[record("NEXT")]
+    _marker_completion_conditions_end: (),
+    #[record("WNAM")]
+    pub editor_width: Option<u32>,
+    #[record("FNAM")]
+    pub flags: Option<ScenePhaseFlags>,
+    #[record("SCQS")]
+    pub set_parent_quest_stage: Option<SceneSetStage>,
+    #[record("HNAM")]
+    _marker_end: (),
+}
+
+bitflags! {
+    #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+    pub struct ScenePhaseFlags: u16 {
+        const START_WALK_AWAY_PHASE = 1 << 0;
+        const DONT_RUN_END_SCRIPTS_ON_SCENE_JUMP = 1 << 1;
+        const START_INHERIT_IN_TEMPLATED_SCENES = 1 << 2;
+    }
+}
+
+impl_decode_bitflags!(ScenePhaseFlags: u16);
+
+#[derive(Copy, Clone, Debug, BinaryStruct)]
+pub struct SceneSetStage {
+    pub on_start: u16,
+    pub on_completion: u16,
+}
+
+#[derive(Clone, Debug, Record)]
+#[record(ordered)]
+pub struct SceneActor {
+    /// Alias ID of the actor in the owning [`Quest`].
+    #[record("ALID")]
+    pub alias: i32,
+    #[record("LNAM")]
+    pub flags: Option<SceneActorFlags>,
+    #[record("DNAM")]
+    pub behavior_flags: Option<SceneActorBehaviorFlags>,
+}
+
+bitflags! {
+    #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+    pub struct SceneActorFlags: u32 {
+        const NO_PLAYER_ACTIVATION = 1 << 0;
+        const OPTIONAL = 1 << 1;
+        const RUN_ONLY_SCENE_PACKAGES = 1 << 2;
+        const NO_COMMAND_STATE = 1 << 3;
+    }
+}
+
+impl_decode_bitflags!(SceneActorFlags: u32);
+
+bitflags! {
+    #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+    pub struct SceneActorBehaviorFlags: u32 {
+        const DEATH_PAUSE = 1 << 0;
+        const DEATH_END = 1 << 1;
+        const COMBAT_PAUSE = 1 << 2;
+        const COMBAT_END = 1 << 3;
+        const DIALOGUE_PAUSE = 1 << 4;
+        const DIALOGUE_END = 1 << 5;
+        const OBS_COM_PAUSE = 1 << 6;
+        const OBS_COM_END = 1 << 7;
+    }
+}
+
+impl_decode_bitflags!(SceneActorBehaviorFlags: u32);
+
+#[derive(Clone, Debug)]
+pub struct SceneAction {
+    pub name: Option<ZString>,
+    pub actor: i32,
+    pub index: u32,
+    pub flags: Option<SceneActionFlags>,
+    pub start_phase: u32,
+    pub end_phase: u32,
+    pub data: SceneActionData,
+}
+
+impl Read for SceneAction {
+    type Error = Error;
+
+    fn read(map: &mut FieldMap, key: Text<4>) -> Result<Self, Self::Error> {
+        Self::read_next(map, key)
+    }
+
+    fn read_next(map: &mut FieldMap, key: Text<4>) -> Result<Self, Self::Error> {
+        #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, BinaryStruct)]
+        #[primitive(u16)]
+        enum SceneActionType {
+            Dialogue = 0,
+            Package = 1,
+            Timer = 2,
+            PlayerDialogue = 3,
+            StartScene = 4,
+            NpcResponseDialogue = 5,
+            Radio = 6,
+        }
+
+        let ty = map.consume_next(Text::new(b"ANAM"))?;
+        let ty = ty.ok_or(Error::MissingField("ANAM"))?.value;
+
+        let name = map.consume_next(Text::new(b"NAM0"))?;
+        let name = name.map(|v| v.value);
+
+        let actor = map.consume_next(Text::new(b"ALID"))?;
+        let actor = actor.ok_or(Error::MissingField("ALID"))?.value;
+
+        let index = map.consume_next(Text::new(b"INAM"))?;
+        let index = index.ok_or(Error::MissingField("INAM"))?.value;
+
+        let flags = map.consume_next(Text::new(b"FNAM"))?;
+        let flags = flags.map(|v| v.value);
+
+        let start_phase = map.consume_next(Text::new(b"SNAM"))?;
+        let start_phase = start_phase.ok_or(Error::MissingField("SNAM"))?.value;
+
+        let end_phase = map.consume_next(Text::new(b"ENAM"))?;
+        let end_phase = end_phase.ok_or(Error::MissingField("ENAM"))?.value;
+
+        let data = match ty {
+            SceneActionType::Dialogue => {
+                let data = SceneActionDialogueData::read_next(map, key)?;
+                SceneActionData::Dialogue(data)
+            }
+            SceneActionType::Package => {
+                let data = SceneActionPackageData::read_next(map, key)?;
+                SceneActionData::Package(data)
+            }
+            SceneActionType::Timer => {
+                let data = SceneActionTimerData::read_next(map, key)?;
+                SceneActionData::Timer(data)
+            }
+            SceneActionType::PlayerDialogue => {
+                let data = SceneActionPlayerDialogueData::read_next(map, key)?;
+                SceneActionData::PlayerDialogue(data)
+            }
+            SceneActionType::StartScene => {
+                let data = SceneActionStartSceneData::read_next(map, key)?;
+                SceneActionData::StartScene(data)
+            }
+            SceneActionType::NpcResponseDialogue => {
+                let data = SceneActionNpcResponseDialogueData::read_next(map, key)?;
+                SceneActionData::NpcResponseDialogue(data)
+            }
+            SceneActionType::Radio => {
+                let data = SceneActionRadioData::read_next(map, key)?;
+                SceneActionData::Radio(data)
+            }
+        };
+
+        map.consume_next::<()>(Text::new(b"ANAM"))?
+            .ok_or(Error::MissingField("ANAM"))?;
+
+        Ok(Self {
+            name,
+            actor,
+            index,
+            flags,
+            start_phase,
+            end_phase,
+            data,
+        })
+    }
+}
+
+bitflags! {
+    #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+    pub struct SceneActionFlags: u32 {
+        const PLAYER_POSITIVE_USE_DIALOGUE_SUBTYPE = 1 << 7;
+        const PLAYER_NEGATIVE_USE_DIALOGUE_SUBTYPE = 1 << 8;
+        const PLAYER_NEUTRAL_USE_DIALOGUE_SUBTYPE = 1 << 9;
+        const USE_DIALOGUE_SUBTYPE = 1 << 10;
+        const PLAYER_QUESTION_DIALOGUE_SUBTYPE = 1 << 11;
+        const KEEP_CLEAR_TARGET_ON_ACTION_END = 1 << 12;
+        const RUN_ON_END_OF_PHASE = 1 << 13;
+        const FACE_TARGET = 1 << 14;
+        const LOOPING = 1 << 15;
+        const HEADTRACK_PLAYER = 1 << 16;
+        const IGNORE_FOR_COMPLETION = 1 << 17;
+        const CAMERA_SPEAKER_TARGET = 1 << 21;
+        const COMPLETE_FACE_TARGET = 1 << 22;
+        const NPC_POSITIVE_USE_DIALOGUE_SUBTYPE = 1 << 27;
+        const NPC_NEGATIVE_USE_DIALOGUE_SUBTYPE = 1 << 28;
+        const NPC_NEUTRAL_USE_DIALOGUE_SUBTYPE = 1 << 29;
+        const NPC_QUESTION_USE_DIALOGUE_SUBTYPE = 1 << 30;
+    }
+}
+
+impl_decode_bitflags!(SceneActionFlags: u32);
+
+#[derive(Clone, Debug)]
+pub enum SceneActionData {
+    Dialogue(SceneActionDialogueData),
+    Package(SceneActionPackageData),
+    Timer(SceneActionTimerData),
+    PlayerDialogue(SceneActionPlayerDialogueData),
+    StartScene(SceneActionStartSceneData),
+    NpcResponseDialogue(SceneActionNpcResponseDialogueData),
+    Radio(SceneActionRadioData),
+}
+
+#[derive(Clone, Debug, Record)]
+pub struct SceneActionDialogueData {
+    #[record("DATA")]
+    pub topic: FormId,
+    #[record("DMAX")]
+    pub looping_max: f32,
+    #[record("DMIN")]
+    pub looping_min: f32,
+    #[record("CRIS")]
+    pub camera: Option<SceneActionDialogueDataCamera>,
+    #[record("DEMO")]
+    pub emotion_type: Option<u32>,
+    #[record("DEVA")]
+    pub emotion_value: Option<u32>,
+    #[record("HTID")]
+    pub player_headtracking: Option<Array<u32>>,
+    #[record("VENC")]
+    pub dialogue_subtype: Option<FormId>,
+    #[record("ONAM")]
+    pub audio_output_override: Option<FormId>,
+    #[record("PNAM")]
+    pub anim_archetype: Option<FormId>,
+}
+
+#[derive(Clone, Debug, BinaryStruct)]
+pub struct SceneActionDialogueDataCamera {
+    pub fov_on_player_camera: f32,
+    pub rate_of_camera_change: f32,
+}
+
+#[derive(Clone, Debug, Record)]
+pub struct SceneActionPackageData {
+    #[record("PNAM")]
+    pub packages: Vec<FormId>,
+}
+
+#[derive(Clone, Debug, Record)]
+pub struct SceneActionTimerData {
+    #[record("SNAM")]
+    pub max_seconds_seconds: Option<f32>,
+    #[record("SCQS")]
+    pub phase_index: Option<u16>,
+    #[record("TNAM")]
+    pub min_time_seconds: Option<f32>,
+}
+
+#[derive(Clone, Debug, Record)]
+pub struct SceneActionPlayerDialogueData {
+    #[record("PTOP")]
+    pub player_positive_response: Option<FormId>,
+    #[record("NTOP")]
+    pub player_negative_response: Option<FormId>,
+    #[record("NETO")]
+    pub player_neutral_response: Option<FormId>,
+    #[record("QTOP")]
+    pub player_question_response: Option<FormId>,
+    #[record("VENC")]
+    pub player_positive_dialogue_subtype: Option<FormId>,
+    #[record("PLVD")]
+    pub player_negative_dialogue_subtype: Option<FormId>,
+    #[record("JOUT")]
+    pub player_neutral_dialogue_subtype: Option<FormId>,
+    #[record("DALC")]
+    pub player_question_dialogue_subtype: Option<FormId>,
+    #[record("DTID")]
+    pub npc_headtracking: Option<Array<u32>>,
+    #[record("ONAM")]
+    pub audio_output_override: Option<FormId>,
+    #[record("NPOT")]
+    pub npc_positive_response: Option<FormId>,
+    #[record("NNGT")]
+    pub npc_negative_response: Option<FormId>,
+    #[record("NNUT")]
+    pub npc_neutral_response: Option<FormId>,
+    #[record("NQUT")]
+    pub npc_question_response: Option<FormId>,
+    #[record("NPOS")]
+    pub npc_positive_dialogue_subtype: Option<FormId>,
+    #[record("NNGS")]
+    pub npc_negative_dialogue_subtype: Option<FormId>,
+    #[record("NNUS")]
+    pub npc_neutral_dialogue_subtype: Option<FormId>,
+    #[record("NQUS")]
+    pub npc_question_dialogue_subtype: Option<FormId>,
+    #[record("DTGT")]
+    pub dialogue_actor_target: Option<u32>,
+}
+
+#[derive(Clone, Debug, Record)]
+pub struct SceneActionStartSceneData {
+    #[record("STSC")]
+    pub topic: Option<FormId>,
+    #[record("LCEP")]
+    pub scenes: SubRecordArray<SceneActionStartSceneDataScene>,
+    #[record("HTID")]
+    pub end_scene_say_greeting: Option<()>,
+}
+
+#[derive(Clone, Debug, Record)]
+pub struct SceneActionStartSceneDataScene {
+    #[record("LCEP")]
+    pub scene: FormId,
+    #[record("INTT")]
+    pub phase_index: u16,
+    #[record("SSPN")]
+    pub start_phase_for_scene: Option<ZString>,
+    #[record("CITC")]
+    _condition_count: Option<u32>,
+    // CITC
+    #[record("CTDA")]
+    pub conditions: SubRecordArray<Condition>,
+}
+
+#[derive(Clone, Debug, Record)]
+pub struct SceneActionNpcResponseDialogueData {
+    #[record("PTOP")]
+    pub player_positive_response: Option<FormId>,
+    #[record("NTOP")]
+    pub player_negative_response: Option<FormId>,
+    #[record("NETO")]
+    pub player_neutral_response: Option<FormId>,
+    #[record("QTOP")]
+    pub player_question_response: Option<FormId>,
+    #[record("VENC")]
+    pub player_positive_dialogue_subtype: Option<FormId>,
+    #[record("PLVD")]
+    pub player_negative_dialogue_subtype: Option<FormId>,
+    #[record("JOUT")]
+    pub player_neutral_dialogue_subtype: Option<FormId>,
+    #[record("DALC")]
+    pub player_question_dialogue_subtype: Option<FormId>,
+    #[record("DTID")]
+    pub npc_headtracking: Option<Array<u32>>,
+    #[record("ONAM")]
+    pub audio_output_override: Option<FormId>,
+}
+
+#[derive(Clone, Debug, Record)]
+pub struct SceneActionRadioData {
+    #[record("DATA")]
+    pub topic: Option<FormId>,
+    #[record("HTID")]
+    pub play_sound: Option<FormId>,
+    #[record("DMAX")]
+    pub looping_max: Option<f32>,
+    #[record("VENC")]
+    pub dialogue_subtype: Option<FormId>,
+}
+
+#[derive(Copy, Clone, Debug, BinaryStruct)]
+pub struct SceneActorBehaviorSettings {
+    pub death: SceneActorBehavior,
+    pub combat: SceneActorBehavior,
+    pub player_dialogue: SceneActorBehavior,
+    pub observe_combat: SceneActorBehavior,
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub enum SceneActorBehavior {
+    SetAllNormal,
+    SetAllPause,
+    SetAllEnd,
+    DontSetAll,
+}
+
+impl Decode for SceneActorBehavior {
+    type Error = Error;
+
+    fn decode<B>(buf: B) -> Result<Self, Self::Error>
+    where
+        B: Buf,
+    {
+        match u32::decode(buf)? {
+            0 => Ok(Self::SetAllNormal),
+            1 => Ok(Self::SetAllPause),
+            2 => Ok(Self::SetAllEnd),
+            // Interstingly, sometimes the last SceneActorBehaviorSettings
+            // field contains garbage data.
+            // For most fields we read the expected value of 3 here,
+            // but the garbage seems to also represent DontSetAll?
+            _ => Ok(Self::DontSetAll),
+        }
+    }
 }
 
 #[derive(Clone, Debug, Record)]
