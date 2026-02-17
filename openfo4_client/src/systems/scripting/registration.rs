@@ -135,6 +135,14 @@ pub enum EventKind {
     ItemAdded,
     TriggerEnter,
     TriggerLeave,
+    /// `OnEquipped`
+    ///
+    /// An item was equipped by an actor.
+    Equipped,
+    /// `OnUnequipped`
+    ///
+    /// An item was unequipped by an actor.
+    Unequipped,
 }
 
 impl EventKind {
@@ -143,6 +151,8 @@ impl EventKind {
             Self::ItemAdded => "OnItemAdded",
             Self::TriggerEnter => "OnTriggerEnter",
             Self::TriggerLeave => "OnTriggerLeave",
+            Self::Equipped => "OnEquipped",
+            Self::Unequipped => "OnUnequipped",
             _ => todo!(),
         }
     }

@@ -81,7 +81,8 @@ impl Event for ItemEquippedEvent {
             return Vec::new();
         };
 
-        vec![DispatchEvent {
+        // ItemEquipped event for the actor.
+        let mut events = vec![DispatchEvent {
             receiver: *actor,
             kind: EventKind::ItemEquipped,
             args: vec![
@@ -89,7 +90,21 @@ impl Event for ItemEquippedEvent {
                 // TODO
                 Value::ObjectAddr(ObjectAddr::NULL),
             ],
-        }]
+        }];
+
+        // Equipped event for the item.
+        if let Some(script) = &stack.script {
+            let actor = ctx.state.objects.get_by_id(*actor).unwrap();
+            let actor = actor.get("Actor").unwrap();
+
+            events.push(DispatchEvent {
+                receiver: script.id(),
+                kind: EventKind::Equipped,
+                args: vec![Value::ObjectRef(actor.get().object.clone())],
+            });
+        }
+
+        events
     }
 }
 
