@@ -70,8 +70,8 @@ impl CompressedMeshShapeData {
                 let is_tri_a_degen = primitive[0] == primitive[1]
                     || primitive[0] == primitive[2]
                     || primitive[1] == primitive[2];
-                let is_tri_b_degen = primitive[2] == primitive[3]
-                    || primitive[2] == primitive[0]
+                let is_tri_b_degen = primitive[0] == primitive[3]
+                    || primitive[0] == primitive[2]
                     || primitive[2] == primitive[3];
                 if is_tri_a_degen && is_tri_b_degen {
                     continue;
