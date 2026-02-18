@@ -1,6 +1,7 @@
 mod data_ext;
 pub mod items;
 pub mod leveled_list;
+pub mod loader;
 mod partial;
 mod record;
 mod terrain;
@@ -17,7 +18,7 @@ use game_tasks::TaskPool;
 use game_tracing::trace_span;
 use glam::Vec2;
 use hashbrown::HashMap;
-use hecs::{CommandBuffer, World};
+use hecs::{CommandBuffer, Entity, World};
 use openfo4_asset::AssetLoader;
 use openfo4_core::events::EventBus;
 use openfo4_core::object_ref_set::ObjectReferenceSet;
@@ -32,6 +33,7 @@ use crate::cell::CellId;
 use crate::components::{NiTransform, Persistent, Root, WorldSpace};
 use crate::loader::FileLoader;
 use crate::shared::SharedState;
+use crate::state::level::loader::{EntityLoader, EntityRefInner};
 use crate::state::level::partial::PartialEntityFlags;
 use crate::state::level::record::SpawnEntity;
 use crate::state::terrain::TerrainManager;
@@ -56,6 +58,8 @@ pub struct Level {
     // Worldspace, Cell
     cells_to_unload_next_tick: HashSet<(RecordId, CellId)>,
     terrain_manager: TerrainManager,
+    loader: Arc<EntityLoader>,
+    alive_entities: HashSet<Entity>,
 }
 
 impl Level {
@@ -101,6 +105,10 @@ impl Level {
         pool.spawn({
             let events = events.clone();
             let pool = pool.clone();
+            let loader = loader.clone();
+            let file_loader = file_loader.clone();
+            let shared = shared.clone();
+            let asset_loader = asset_loader.clone();
             let script_loader = executor.loader().clone();
 
             async move {
@@ -121,12 +129,26 @@ impl Level {
         .deatch();
 
         Self {
-            events,
+            events: events.clone(),
             tx,
             cells_loaded: HashMap::new(),
             cells_to_unload_next_tick: HashSet::new(),
             terrain_manager,
+            alive_entities: HashSet::new(),
+            loader: Arc::new(EntityLoader::new(
+                loader,
+                file_loader,
+                shared,
+                asset_loader,
+                executor.loader().clone(),
+                events,
+            )),
         }
+    }
+
+    /// Returns the [`EntityLoader`] that can be used to selectively load entities.
+    pub fn loader(&self) -> &Arc<EntityLoader> {
+        &self.loader
     }
 
     pub fn update(
@@ -180,7 +202,11 @@ impl Level {
 
         while let Some(event) = self.events.pop() {
             match event {
-                Event::SpawnEntity(entity) => {
+                Event::SpawnEntity {
+                    record,
+                    entity,
+                    make_ref,
+                } => {
                     let worldspace = entity.worldspace.unwrap();
                     let cell = if worldspace.is_interior {
                         INTERIOR_CELL
@@ -198,18 +224,43 @@ impl Level {
                         continue;
                     }
 
-                    entity.instantiate(
+                    let entity = entity.instantiate(
                         world,
                         event_bus,
                         object_ref_set,
                         &mut self.terrain_manager,
                         script_entities,
                     );
+
+                    let mut entities = self.loader.entities.write();
+                    entities.entities.insert(record, entity);
+                    if make_ref {
+                        entities
+                            .ref_counts
+                            .insert(entity, Arc::new(EntityRefInner::new_with_one_rc()));
+                    }
                 }
                 Event::CellLoadDone { worldspace, cell } => {
                     if let Some(loaded) = self.cells_loaded.get_mut(&(worldspace, cell)) {
                         *loaded = true;
                     }
+                }
+                Event::CreateRef(entity) => {
+                    if self.alive_entities.contains(&entity) {
+                        let mut entities = self.loader.entities.write();
+                        entities
+                            .ref_counts
+                            .insert(entity, Arc::new(EntityRefInner::new_with_one_rc()));
+                    }
+                }
+                Event::DropLastRefByRecord(id) => {
+                    let mut entities = self.loader.entities.write();
+                    let entity = entities.entities.remove(&id).unwrap();
+                    entities.ref_counts.remove(&entity);
+                }
+                Event::DropLastRefByEntity(entity) => {
+                    let mut entities = self.loader.entities.write();
+                    entities.ref_counts.remove(&entity);
                 }
             }
         }
@@ -235,9 +286,13 @@ impl Level {
 
         let mut entities = Vec::new();
 
+        let loader_entities = self.loader.entities.read();
+
         for (entity, (transform, worldspace, _, persistent)) in
             world.query_mut::<(&Transform, &WorldSpace, &Root, Option<&Persistent>)>()
         {
+            self.alive_entities.insert(entity);
+
             if persistent.is_some() {
                 continue;
             }
@@ -255,7 +310,14 @@ impl Level {
                 continue;
             }
 
+            // Don't despawn entities that are explicitly marked as referenced
+            // by other systems.
+            if loader_entities.ref_counts.contains_key(&entity) {
+                continue;
+            }
+
             entities.push(entity);
+            self.alive_entities.remove(&entity);
         }
 
         for entity in entities {
@@ -556,7 +618,11 @@ async fn load_cell(
                         .push(record.id);
                 }
 
-                events.push(Event::SpawnEntity(entity));
+                events.push(Event::SpawnEntity {
+                    record: record.id,
+                    entity,
+                    make_ref: false,
+                });
             }
         });
 
@@ -588,10 +654,19 @@ impl LoadContext<'_> {
 
 #[derive(Debug)]
 enum Event {
-    SpawnEntity(SpawnEntity),
+    SpawnEntity {
+        record: RecordId,
+        entity: SpawnEntity,
+        // Make a ref count with value 1 in the EntitySet.
+        make_ref: bool,
+    },
     /// Cell is fully loaded.
     CellLoadDone {
         worldspace: RecordId,
         cell: CellId,
     },
+    /// Create a ref count for an existing entity.
+    CreateRef(Entity),
+    DropLastRefByRecord(RecordId),
+    DropLastRefByEntity(Entity),
 }
