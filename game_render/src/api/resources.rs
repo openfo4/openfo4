@@ -2,6 +2,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 
 use crossbeam_queue::SegQueue;
+use game_common::collections::slab;
 use game_common::collections::vec_map::{Index, VecMap};
 use hashbrown::HashMap;
 use parking_lot::{Mutex, MutexGuard};
