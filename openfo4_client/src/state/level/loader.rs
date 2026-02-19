@@ -120,6 +120,7 @@ impl EntityLoader {
                 queue: &'a SegQueue<Event>,
                 event: EventListener,
                 entity: Entity,
+                drop_ref: bool,
             }
 
             impl<'a> Future for WaitForRef<'a> {
@@ -132,16 +133,20 @@ impl EntityLoader {
 
             impl<'a> Drop for WaitForRef<'a> {
                 fn drop(&mut self) {
-                    self.queue.push(Event::DropLastRefByEntity(self.entity));
+                    if self.drop_ref {
+                        self.queue.push(Event::DropLastRefByEntity(self.entity));
+                    }
                 }
             }
 
-            WaitForRef {
+            let mut fut = WaitForRef {
                 queue: &self.events,
                 event: self.tick.listen(),
                 entity,
-            }
-            .await;
+                drop_ref: true,
+            };
+            (&mut fut).await;
+            fut.drop_ref = false;
 
             let entities = self.entities.read();
 
@@ -153,6 +158,9 @@ impl EntityLoader {
             let Some(ref_count) = entities.ref_counts.get(&entity) else {
                 continue;
             };
+
+            debug_assert_eq!(ref_count.ref_count.load(Ordering::SeqCst), 1);
+            debug_assert_eq!(ref_count.deleted.load(Ordering::SeqCst), false);
 
             return Ok(EntityRef {
                 ref_count: ref_count.clone(),
@@ -206,6 +214,7 @@ impl EntityLoader {
             queue: &'a SegQueue<Event>,
             event: EventListener,
             record: RecordId,
+            drop_ref: bool,
         }
 
         impl<'a> Future for WaitForRef<'a> {
@@ -218,16 +227,20 @@ impl EntityLoader {
 
         impl<'a> Drop for WaitForRef<'a> {
             fn drop(&mut self) {
-                self.queue.push(Event::DropLastRefByRecord(self.record));
+                if self.drop_ref {
+                    self.queue.push(Event::DropLastRefByRecord(self.record));
+                }
             }
         }
 
-        let fut = WaitForRef {
+        let mut fut = WaitForRef {
             queue: &self.events,
             event: self.tick.listen(),
             record: record.id,
+            drop_ref: true,
         };
-        fut.await;
+        (&mut fut).await;
+        fut.drop_ref = false;
 
         let entities = self.entities.read();
         let entity = *entities.entities.get(&record.id).unwrap();
