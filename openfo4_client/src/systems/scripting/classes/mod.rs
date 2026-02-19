@@ -31,6 +31,7 @@ mod scene;
 mod script_object;
 mod sound;
 mod spell;
+mod topic_info;
 mod utility;
 mod weapon;
 
@@ -82,6 +83,7 @@ pub fn register_builtins(engine: &mut Engine) {
     quest::register(engine);
     leveled_item::register(engine);
     leveled_actor::register(engine);
+    topic_info::register(engine);
 
     engine.register_native_function("Message", "ResetHelpMessage", message::reset_help_message);
     engine.register_native_function("Message", "Show", message::show);
