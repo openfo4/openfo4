@@ -84,6 +84,7 @@ pub fn register_builtins(engine: &mut Engine) {
     leveled_item::register(engine);
     leveled_actor::register(engine);
     topic_info::register(engine);
+    faction::register(engine);;
 
     engine.register_native_function("Message", "ResetHelpMessage", message::reset_help_message);
     engine.register_native_function("Message", "Show", message::show);
@@ -136,7 +137,6 @@ pub fn register_builtins(engine: &mut Engine) {
     engine.register_native_function("FormList", "RemoveAddedForm", form_list::remove_added_form);
     engine.register_native_function("FormList", "Revert", form_list::revert);
 
-    engine.register_native_function("Faction", "CanPayCrimeGold", faction::can_pay_crime_gold);
 
     f4se::register(engine);
     mcm::register(engine);
