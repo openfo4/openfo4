@@ -1,7 +1,9 @@
+use std::collections::VecDeque;
 use std::sync::{Arc, Once};
 
 use crossbeam::queue::SegQueue;
 use game_tasks::{Task, TaskPool};
+use game_tracing::trace_span;
 use hashbrown::{HashMap, HashSet};
 use hecs::World;
 use indexmap::IndexMap;
@@ -14,7 +16,7 @@ use crate::state::esp::EspLoader;
 use crate::state::hardcoded::HARDCODED_MODULE_ID;
 use crate::state::level::loader::{EntityLoader, EntityRef};
 use crate::systems::scripting::invocations::{
-    Init, QuestFragmentSetStage, QuestInit, QuestSetStage,
+    AliasInit, AliasShutdown, Init, QuestFragmentSetStage, QuestInit, QuestSetStage, QuestShutdown,
 };
 use crate::systems::scripting::loader::{ScriptLoader, ScriptObject};
 use crate::systems::scripting::{Executor, InvocationId};
@@ -49,10 +51,11 @@ impl QuestManager {
     }
 
     pub fn update(&mut self, world: &mut World, events: &mut EventBus, executor: &mut Executor) {
+        let _span = trace_span!("QuestManager::update").entered();
+
         ONCE.call_once(|| {
             let events = self.events.clone();
             let esp_loader = self.esp_loader.clone();
-            let loader = self.entity_loader.clone();
             let script_loader = self.script_loader.clone();
 
             self.pool.spawn(async move {
@@ -74,7 +77,7 @@ impl QuestManager {
                     todo!();
                 };
 
-                let script = script_loader.load(quest.id).await;
+                let mut script = script_loader.load(quest.id).await;
 
                 let mut stages = IndexMap::new();
                 for stage in &*data.stages {
@@ -103,82 +106,238 @@ impl QuestManager {
                     }
                 }
 
-                let aliases = load_aliases(&esp_loader, quest.id, data, &loader).await;
-                dbg!(&aliases);
-                todo!();
+                let mut aliases = HashMap::new();
+                if let Some(script) = &mut script {
+                    for (key, script) in script.aliases.drain() {
+                        // TODO: Figure out what happens when we touch aliases from
+                        // other quests.
+                        assert_eq!(key.accessor, quest.id);
+                        assert_eq!(key.owner, quest.id);
+
+                        aliases.insert(
+                            key.id,
+                            AliasState {
+                                entity: None,
+                                script: Some(script),
+                            },
+                        );
+                    }
+                }
+
+                let mut actions = VecDeque::new();
+                if data.data.flags.contains(QuestDataFlags::START_GAME_ENABLED) {
+                    actions.push_back(QuestAction::Start);
+                }
 
                 events.push(Event::Discover(
                     quest.id,
                     Quest {
-                        state: QuestState::Stopped,
-                        is_init: false,
+                        state: QuestState::PreInit,
                         stages,
-                        active_stage: None,
-                        next_stage: None,
+                        active_stage: 0,
                         script: script.map(|v| v.object),
-                        start_now: data.data.flags.contains(QuestDataFlags::START_GAME_ENABLED),
                         aliases: HashMap::new(),
+                        actions,
                     },
                 ));
             });
         });
 
-        for (id, quest) in &mut self.quests {
-            let Some(script) = &quest.script else {
-                continue;
-            };
-
-            if !quest.is_init {
-                quest.is_init = true;
-                tracing::debug!("init quest {:?}", id);
-
-                executor.invoke(Init {
-                    object: script.clone(),
-                });
-            }
-
-            if quest.start_now {
-                quest.start_now = false;
-                tracing::debug!("starting quest {:?}", id);
-
-                executor.invoke(QuestInit {
-                    quest: script.clone(),
-                });
-
-                quest.active_stage = Some(0);
-                quest.next_stage = Some(0);
-            }
-
-            if let Some(stage_id) = quest.next_stage.take() {
-                tracing::debug!(
-                    "advancing quest {:?} from stage {:?} to {}",
-                    id,
-                    quest.active_stage,
-                    stage_id
-                );
-
-                if let Some(prev_id) = quest.active_stage
-                    && let Some(stage) = quest.stages.get_mut(&prev_id)
-                {
-                    stage.is_done = true;
+        while let Some(event) = self.events.pop() {
+            match event {
+                Event::Discover(id, quest) => {
+                    self.quests.insert(id, quest);
                 }
+            }
+        }
 
-                if let Some(stage) = quest.stages.get(&stage_id) {
-                    executor.invoke(QuestSetStage {
-                        quest: script.clone(),
-                        stage: stage_id,
-                        // TODO
-                        item: 0,
-                    });
+        for (id, quest) in &mut self.quests {
+            loop {
+                match &mut quest.state {
+                    QuestState::PreInit => {
+                        if let Some(script) = &quest.script {
+                            let id = executor.invoke(Init {
+                                object: script.clone(),
+                            });
 
-                    for func_name in &stage.fragment_functions {
-                        executor.invoke(QuestFragmentSetStage {
-                            quest: script.clone(),
-                            func_name: func_name.clone(),
-                        });
+                            quest.state = QuestState::Init(id);
+                        } else {
+                            quest.state = QuestState::Stopped;
+                        }
                     }
+                    QuestState::Init(invocation) => {
+                        if !executor.is_invocation_done(*invocation) {
+                            break;
+                        }
 
-                    quest.active_stage = Some(stage_id);
+                        quest.state = QuestState::Stopped;
+                    }
+                    QuestState::Stopped => {
+                        if quest
+                            .actions
+                            .pop_front_if(|action| *action == QuestAction::Start)
+                            .is_none()
+                        {
+                            break;
+                        }
+
+                        tracing::debug!("starting quest {:?}", id);
+
+                        let id = *id;
+                        let esp_loader = self.esp_loader.clone();
+                        let entity_loader = self.entity_loader.clone();
+
+                        // Let's load some aliases!
+                        let task = self.pool.spawn(async move {
+                            let quest = esp_loader
+                                .lookup(Some(RecordKind::Quest), id)
+                                .await
+                                .unwrap();
+                            let RecordData::Quest(data) = &quest.local.data else {
+                                unreachable!();
+                            };
+
+                            load_aliases(&esp_loader, id, data, &entity_loader).await
+                        });
+
+                        quest.state = QuestState::Starting(QuestStarting::Load(task));
+                    }
+                    QuestState::Starting(QuestStarting::Load(task)) => {
+                        let Some(aliases) = task.get_output() else {
+                            break;
+                        };
+
+                        for (id, entity) in aliases {
+                            quest.aliases.entry(id).or_default().entity = Some(entity);
+                        }
+
+                        let mut invocations = Vec::new();
+                        for alias in quest.aliases.values() {
+                            if let Some(script) = &alias.script {
+                                let id = executor.invoke(AliasInit {
+                                    object: script.clone(),
+                                });
+                                invocations.push(id);
+                            }
+                        }
+
+                        quest.state = QuestState::Starting(QuestStarting::AliasInit(invocations));
+                    }
+                    QuestState::Starting(QuestStarting::AliasInit(invocations)) => {
+                        invocations.retain(|id| !executor.is_invocation_done(*id));
+                        if !invocations.is_empty() {
+                            break;
+                        }
+
+                        if let Some(script) = &quest.script {
+                            let id = executor.invoke(QuestInit {
+                                quest: script.clone(),
+                            });
+
+                            quest.state = QuestState::Starting(QuestStarting::QuestInit(id));
+                        } else {
+                            quest.state = QuestState::Running;
+                        }
+                    }
+                    QuestState::Starting(QuestStarting::QuestInit(id)) => {
+                        if !executor.is_invocation_done(*id) {
+                            break;
+                        }
+
+                        quest.state = QuestState::Running;
+                    }
+                    QuestState::Running => {
+                        let Some(action) = quest.actions.pop_front() else {
+                            break;
+                        };
+
+                        debug_assert_ne!(
+                            action,
+                            QuestAction::Start,
+                            "received QuestAction::Start on quest that is already running"
+                        );
+
+                        match action {
+                            QuestAction::Start => {}
+                            QuestAction::Stop => {
+                                tracing::debug!("stopping quest {:?}", id);
+
+                                if let Some(script) = &quest.script {
+                                    let id = executor.invoke(QuestShutdown {
+                                        object: script.clone(),
+                                    });
+
+                                    quest.state =
+                                        QuestState::Stopping(QuestStopping::QuestShutdown(id));
+                                } else {
+                                    let mut invocations = Vec::new();
+                                    for alias in quest.aliases.values() {
+                                        if let Some(script) = &alias.script {
+                                            let id = executor.invoke(AliasShutdown {
+                                                object: script.clone(),
+                                            });
+                                            invocations.push(id);
+                                        }
+                                    }
+
+                                    quest.state = QuestState::Stopping(
+                                        QuestStopping::AliasShutdown(invocations),
+                                    );
+                                }
+                            }
+                            QuestAction::SetStage(id) => {
+                                tracing::debug!(
+                                    "advancing quest {:?} from stage {:?} to {}",
+                                    id,
+                                    quest.active_stage,
+                                    id
+                                );
+
+                                if let Some(script) = &quest.script {
+                                    executor.invoke(QuestSetStage {
+                                        quest: script.clone(),
+                                        stage: id,
+                                        item: 0,
+                                    });
+
+                                    if let Some(stage) = quest.stages.get(&id) {
+                                        for name in &stage.fragment_functions {
+                                            executor.invoke(QuestFragmentSetStage {
+                                                quest: script.clone(),
+                                                func_name: name.clone(),
+                                            });
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    QuestState::Stopping(QuestStopping::QuestShutdown(id)) => {
+                        if !executor.is_invocation_done(*id) {
+                            break;
+                        }
+
+                        let mut invocations = Vec::new();
+                        for alias in quest.aliases.values() {
+                            if let Some(script) = &alias.script {
+                                let id = executor.invoke(AliasShutdown {
+                                    object: script.clone(),
+                                });
+                                invocations.push(id);
+                            }
+                        }
+
+                        quest.state =
+                            QuestState::Stopping(QuestStopping::AliasShutdown(invocations));
+                    }
+                    QuestState::Stopping(QuestStopping::AliasShutdown(invocations)) => {
+                        invocations.retain(|id| !executor.is_invocation_done(*id));
+                        if !invocations.is_empty() {
+                            break;
+                        }
+
+                        quest.state = QuestState::Stopped;
+                    }
                 }
             }
         }
@@ -193,12 +352,7 @@ impl QuestManager {
             return;
         };
 
-        // if quest.state != QuestState::Stopped {
-        //     return;
-        // }
-
-        // quest.state = QuestState::Starting;
-        quest.is_init = false;
+        quest.actions.push_back(QuestAction::Start);
     }
 
     pub fn stop_quest(&mut self, quest: RecordId) {
@@ -206,8 +360,7 @@ impl QuestManager {
             return;
         };
 
-        // quest.state = QuestState::Stopping;
-        quest.is_init = false;
+        quest.actions.push_back(QuestAction::Stop);
     }
 
     pub fn set_quest_stage(&mut self, quest: RecordId, id: StageId) {
@@ -215,27 +368,26 @@ impl QuestManager {
             return;
         };
 
-        quest.next_stage = Some(id);
+        quest.actions.push_back(QuestAction::SetStage(id));
     }
 }
 
 #[derive(Debug)]
 pub struct Quest {
     pub state: QuestState,
-    pub is_init: bool,
-    pub start_now: bool,
     pub stages: IndexMap<StageId, QuestStage>,
-    pub active_stage: Option<StageId>,
-    pub next_stage: Option<StageId>,
-    pub script: Option<ScriptObject>,
-    pub aliases: HashMap<u32, EntityRef>,
+    pub active_stage: StageId,
+    script: Option<ScriptObject>,
+    aliases: HashMap<u32, AliasState>,
+    actions: VecDeque<QuestAction>,
 }
 
 #[derive(Debug)]
 pub enum QuestState {
     /// The quest is loaded, but `OnInit` was not called yet.
-    PreInit(Option<InvocationId>),
-    Init,
+    PreInit,
+    /// `OnInit` is being called on the quest.
+    Init(InvocationId),
     Starting(QuestStarting),
     /// The quest is currently active.
     Running,
@@ -246,7 +398,7 @@ pub enum QuestState {
 #[derive(Debug)]
 pub enum QuestStarting {
     /// The quest is loading some data before being started.
-    Load(Task<()>),
+    Load(Task<HashMap<u32, EntityRef>>),
     /// `OnAliasInit` is being called on all aliases.
     AliasInit(Vec<InvocationId>),
     /// `OnQuestInit` is being called on the quest.
@@ -261,6 +413,14 @@ pub enum QuestStopping {
     AliasShutdown(Vec<InvocationId>),
 }
 
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+enum QuestAction {
+    Start,
+    Stop,
+    SetStage(StageId),
+}
+
+#[derive(Debug)]
 enum Event {
     Discover(RecordId, Quest),
 }
@@ -371,4 +531,10 @@ async fn load_reference_alias(
 #[derive(Clone, Debug)]
 enum AliasLoadError {
     NoLocation,
+}
+
+#[derive(Clone, Debug, Default)]
+struct AliasState {
+    entity: Option<EntityRef>,
+    script: Option<ScriptObject>,
 }

@@ -84,7 +84,7 @@ fn get_current_stage_id(mut caller: Caller<'_, State>, quest: Object) -> Result<
         .and_then(|s| s.record())
         .ok_or(Exception::Error)?;
     let quest = caller.data_mut().quests().get(id).ok_or(Exception::Error)?;
-    Ok(quest.active_stage.unwrap_or_default().into())
+    Ok(quest.active_stage.into())
 }
 
 /// `HasObjective`

@@ -127,3 +127,48 @@ pub struct ItemAdded {
     pub item_reference: ScriptObject,
     pub source_container: ScriptObject,
 }
+
+#[derive(Clone, Debug)]
+pub struct AliasInit {
+    pub object: ScriptObject,
+}
+
+impl From<AliasInit> for EventInvocation {
+    fn from(value: AliasInit) -> Self {
+        Self {
+            receiver: value.object,
+            name: Cow::Borrowed("OnAliasInit"),
+            args: Vec::new(),
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct AliasShutdown {
+    pub object: ScriptObject,
+}
+
+impl From<AliasShutdown> for EventInvocation {
+    fn from(value: AliasShutdown) -> Self {
+        Self {
+            receiver: value.object,
+            name: Cow::Borrowed("OnAliasShutdown"),
+            args: Vec::new(),
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct QuestShutdown {
+    pub object: ScriptObject,
+}
+
+impl From<QuestShutdown> for EventInvocation {
+    fn from(value: QuestShutdown) -> Self {
+        Self {
+            receiver: value.object,
+            name: Cow::Borrowed("OnQuestShutdown"),
+            args: Vec::new(),
+        }
+    }
+}
