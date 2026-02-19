@@ -5022,6 +5022,10 @@ pub struct QuestReferenceAlias {
     _keywords_len: Option<u32>,
     #[record("KWDA")]
     pub keywords: Option<Array<FormId>>,
+    #[record("COCT")]
+    _item_count: Option<()>,
+    #[record("CNTO")]
+    pub items: Vec<ContainerItem>,
     #[record("SPOR")]
     pub spectator_override_package_list: Option<FormId>,
     #[record("OCOR")]
