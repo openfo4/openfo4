@@ -194,7 +194,7 @@ impl GameState {
         let mut world = World::new();
         init_time(&mut world);
 
-        let quests = QuestManager::new(&loader, &mut executor);
+        let quests = QuestManager::new(pool.clone(), &loader, &mut executor, &level.loader());
 
         let global_variables =
             futures_lite::future::block_on(globals::load_global_variables(&loader));

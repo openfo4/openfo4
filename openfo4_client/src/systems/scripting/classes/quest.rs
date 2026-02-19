@@ -1,7 +1,5 @@
-use game_tracing::trace_span;
 use openfo4_script::engine::Engine;
 use openfo4_script::runtime::{Caller, Exception};
-use tracing::instrument;
 
 use crate::systems::quests::QuestState;
 
@@ -172,7 +170,7 @@ fn is_running(mut caller: Caller<'_, State>, quest: Object) -> Result<bool, Exce
         .and_then(|s| s.record())
         .ok_or(Exception::Error)?;
     let quest = caller.data_mut().quests().get(id).ok_or(Exception::Error)?;
-    Ok(quest.state == QuestState::Running)
+    Ok(matches!(quest.state, QuestState::Running))
 }
 
 /// `IsStageDone`
@@ -217,7 +215,7 @@ fn is_starting(mut caller: Caller<'_, State>, quest: Object) -> Result<bool, Exc
         .and_then(|s| s.record())
         .ok_or(Exception::Error)?;
     let quest = caller.data_mut().quests().get(id).ok_or(Exception::Error)?;
-    Ok(quest.state == QuestState::Starting)
+    Ok(matches!(quest.state, QuestState::Starting(_)))
 }
 
 /// `IsStopping`
@@ -233,7 +231,7 @@ fn is_stopping(mut caller: Caller<'_, State>, quest: Object) -> Result<bool, Exc
         .and_then(|s| s.record())
         .ok_or(Exception::Error)?;
     let quest = caller.data_mut().quests().get(id).ok_or(Exception::Error)?;
-    Ok(quest.state == QuestState::Stopping)
+    Ok(matches!(quest.state, QuestState::Stopping(_)))
 }
 
 /// `IsStopped`
@@ -249,7 +247,7 @@ fn is_stopped(mut caller: Caller<'_, State>, quest: Object) -> Result<bool, Exce
         .and_then(|s| s.record())
         .ok_or(Exception::Error)?;
     let quest = caller.data_mut().quests().get(id).ok_or(Exception::Error)?;
-    Ok(quest.state == QuestState::Stopped)
+    Ok(matches!(quest.state, QuestState::Stopped))
 }
 
 /// `Reset`

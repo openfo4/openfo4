@@ -239,6 +239,8 @@ impl Level {
                             .ref_counts
                             .insert(entity, Arc::new(EntityRefInner::new_with_one_rc()));
                     }
+
+                    self.alive_entities.insert(entity);
                 }
                 Event::CellLoadDone { worldspace, cell } => {
                     if let Some(loaded) = self.cells_loaded.get_mut(&(worldspace, cell)) {
@@ -264,6 +266,13 @@ impl Level {
                 }
             }
         }
+
+        // Notify the EntityLoader that we're done touching entities for this
+        // interation.
+        // Note that it is valid for `total_listeners` to be outdated by the
+        // time `notify` is called, however in this case some listeners may
+        // have to wait for an additional tick, which is valid.
+        self.loader.tick.notify(self.loader.tick.total_listeners());
 
         for cell in prev_cells_loaded.into_keys() {
             tracing::debug!("unloading cell {:?}", cell);

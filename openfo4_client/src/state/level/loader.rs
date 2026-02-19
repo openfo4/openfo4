@@ -10,12 +10,15 @@ use hashbrown::HashMap;
 use hecs::Entity;
 use openfo4_asset::AssetLoader;
 use openfo4_core::record::RecordId;
+use openfo4_esp::FormId;
 use parking_lot::RwLock;
 
 use crate::cell::CellId;
+use crate::components::WorldSpace;
 use crate::loader::FileLoader;
 use crate::shared::SharedState;
 use crate::state::esp::EspLoader;
+use crate::state::hardcoded::HARDCODED_MODULE_ID;
 use crate::state::level::partial::PartialEntityFlags;
 use crate::state::level::record::SpawnEntity;
 use crate::state::level::{Event, LoadContext};
@@ -30,7 +33,7 @@ pub struct EntityLoader {
     script_loader: Arc<ScriptLoader>,
     pub(super) entities: RwLock<EntitySet>,
     events: Arc<SegQueue<Event>>,
-    tick: event_listener::Event,
+    pub(super) tick: event_listener::Event,
 }
 
 #[derive(Clone, Debug)]
@@ -70,34 +73,44 @@ impl EntityLoader {
     /// When the entity is not spawned yet, it will be spawned before this function returns. The
     /// returned [`EntityRef`] will keep the entity alive until it it dropped, even if the entity
     /// is not in the active streaming area.
+    ///
+    /// In addition note that the game loop must make progress in case this future suspends. If
+    /// that is not the case, the future might never resolve.
+    #[tracing::instrument(name = "EntityLoader::load", skip_all)]
     pub async fn load(&self, id: RecordId) -> Result<EntityRef, ()> {
-        let mut entities = self.entities.read();
-
         loop {
-            let Some(entity) = entities.entities.get(&id).copied() else {
-                drop(entities);
+            let entity = {
+                let entities = self.entities.read();
+                entities.entities.get(&id).copied()
+            };
+
+            let Some(entity) = entity else {
                 return self.load_single_entity(id).await;
             };
 
-            if let Some(ref_count) = entities.ref_counts.get(&entity) {
-                if ref_count.ref_count.fetch_add(1, Ordering::Relaxed) != 0 {
-                    return Ok(EntityRef {
-                        ref_count: ref_count.clone(),
-                        queue: self.events.clone(),
-                        entity,
-                    });
+            {
+                let entities = self.entities.read();
+
+                if let Some(ref_count) = entities.ref_counts.get(&entity) {
+                    if ref_count.ref_count.fetch_add(1, Ordering::Relaxed) != 0 {
+                        return Ok(EntityRef {
+                            ref_count: ref_count.clone(),
+                            queue: self.events.clone(),
+                            entity,
+                        });
+                    }
+
+                    // If ref_count == 0, entity deletion has already started.
+                    // We must request a new ref from the game loop.
+                    // Note that we must wait until the last entity ref sent
+                    // the deletion event before we can request it again.
+                    while !ref_count.deleted.load(Ordering::Acquire) {}
                 }
 
-                // If ref_count == 0, entity deletion has already started.
-                // We must request a new ref from the game loop.
-                // Note that we must wait until the last entity ref sent
-                // the deletion event before we can request it again.
-                while !ref_count.deleted.load(Ordering::Acquire) {}
+                self.events.push(Event::CreateRef(entity));
+
+                drop(entities);
             }
-
-            self.events.push(Event::CreateRef(entity));
-
-            drop(entities);
 
             // Since we marked the SpawnEntity event with make_ref = true,
             // we must send a DropLastRef event to cleanup any references.
@@ -130,7 +143,7 @@ impl EntityLoader {
             }
             .await;
 
-            entities = self.entities.read();
+            let entities = self.entities.read();
 
             // The entity may no longer exist if the DropLastRef was executed
             // in the previous tick, but our CreateRef was executed in the next
@@ -149,6 +162,7 @@ impl EntityLoader {
         }
     }
 
+    #[tracing::instrument(name = "EntityLoader::load_single_entity", skip_all)]
     async fn load_single_entity(&self, id: RecordId) -> Result<EntityRef, ()> {
         let record = self.esp_loader.lookup(None, id).await.unwrap();
 
@@ -164,7 +178,18 @@ impl EntityLoader {
 
         let flags = PartialEntityFlags::empty();
 
-        let entity = SpawnEntity::load(&ctx, &record, flags).await.unwrap();
+        let mut entity = SpawnEntity::load(&ctx, &record, flags).await.unwrap();
+        // FIXME: We need to either:
+        // 1. Make the caller provide this (viable, since Locations include the WRLD record)
+        // 2. or compute this ourselves here, but the record doesn't contain it, we need
+        // to scan for the parent. Need to check how expensive that is.
+        entity.worldspace = Some(WorldSpace {
+            record: RecordId {
+                module: HARDCODED_MODULE_ID,
+                form: FormId(0x3c),
+            },
+            is_interior: false,
+        });
 
         self.events.push(Event::SpawnEntity {
             entity,
