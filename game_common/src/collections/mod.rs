@@ -3,6 +3,7 @@ pub mod bimap;
 pub mod linked_list;
 pub mod lru;
 pub mod scratch_buffer;
+pub mod slab;
 pub mod sparse_set;
 pub mod string;
 pub mod vec_map;
