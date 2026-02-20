@@ -271,9 +271,17 @@ impl QuestManager {
                             }
                             QuestAction::StartScene(scene) => {
                                 tracing::debug!("starting scene {:?} of quest {:?}", scene, id);
+
+                                if let Some(scene) = quest.scenes.get_mut(&scene) {
+                                    scene.is_playing = true;
+                                }
                             }
                             QuestAction::StopScene(scene) => {
                                 tracing::debug!("stopping scene {:?} of quest {:?}", scene, id);
+
+                                if let Some(scene) = quest.scenes.get_mut(&scene) {
+                                    scene.is_playing = false;
+                                }
                             }
                         }
                     }
@@ -303,6 +311,49 @@ impl QuestManager {
 
                         quest.state = QuestState::Stopped;
                     }
+                }
+            }
+        }
+
+        // Advance playing scenes
+        for quest in self.quests.values_mut() {
+            if !matches!(quest.state, QuestState::Running) {
+                continue;
+            }
+
+            for (scene_id, scene) in &mut quest.scenes {
+                if !scene.is_playing {
+                    continue;
+                }
+
+                if let Some(phase_id) = scene.active_phase
+                    && let Some(phase) = scene.phases.get_mut(phase_id)
+                {
+                    if !phase.playing.is_empty() {
+                        continue;
+                    }
+
+                    tracing::debug!("phase {} of scene {:?} has finished", phase_id, scene_id);
+                }
+
+                let next_phase = match scene.active_phase {
+                    Some(v) => v + 1,
+                    None => 0,
+                };
+                scene.active_phase = None;
+
+                if let Some(phase) = scene.phases.get_mut(next_phase) {
+                    tracing::debug!("starting phase {} of scene {:?}", next_phase, scene_id);
+                    scene.active_phase = Some(next_phase);
+
+                    for action in &phase.actions {
+                        match action {
+                            Action::FaceTarget { actor, target } => {}
+                            Action::PlayDialogue { actor, dialogue } => {}
+                        }
+                    }
+                } else {
+                    scene.is_playing = false;
                 }
             }
         }
@@ -652,7 +703,15 @@ async fn load_scenes(
             }
         }
 
-        scenes.insert(record.id, SceneState { quest, phases });
+        scenes.insert(
+            record.id,
+            SceneState {
+                quest,
+                phases,
+                active_phase: None,
+                is_playing: false,
+            },
+        );
     }
 
     scenes
@@ -673,11 +732,14 @@ struct AliasState {
 pub struct SceneState {
     pub quest: RecordId,
     phases: VecMap<u32, Phase>,
+    is_playing: bool,
+    active_phase: Option<u32>,
 }
 
 #[derive(Clone, Debug, Default)]
 struct Phase {
     actions: Vec<Action>,
+    playing: Vec<PlayingAction>,
 }
 
 #[derive(Clone, Debug)]
@@ -697,3 +759,6 @@ struct PlayDialogueAction {
 
 #[derive(Clone, Debug)]
 struct Dialogue {}
+
+#[derive(Clone, Debug)]
+enum PlayingAction {}
