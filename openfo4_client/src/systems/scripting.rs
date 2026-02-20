@@ -13,7 +13,6 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use async_lock::Mutex;
-use futures::future::BoxFuture;
 use game_common::collections::arena::{Arena, Key};
 use game_common::collections::bimap::BiMap;
 use game_tasks::TaskPool;
@@ -24,7 +23,7 @@ use openfo4_core::events::EventBus;
 use openfo4_pex::Module;
 use openfo4_script::compiler::TypeLayout;
 use openfo4_script::engine::{Engine, Instance, Options};
-use openfo4_script::runtime::{Context, Exception, ObjectRef, Stack, Val};
+use openfo4_script::runtime::{Context, Exception, ObjectAddr, ObjectRef, Stack, Val};
 
 use crate::components::Player;
 use crate::events::inventory::{ItemAddedEvent, ItemEquippedEvent};
@@ -53,6 +52,7 @@ pub struct Executor {
     invocations: Arena<InvocationState>,
     suspended_calls: HashMap<EffectId, ScheduledTask>,
     queue: VecDeque<ScheduledTask>,
+    stacks: HashMap<ObjectAddr, HashMap<String, Stack>>,
 }
 
 impl Executor {
@@ -95,6 +95,7 @@ impl Executor {
             invocations: Arena::new(),
             suspended_calls: HashMap::new(),
             queue: VecDeque::new(),
+            stacks: HashMap::new(),
         }
     }
 
@@ -196,6 +197,7 @@ impl Executor {
                 &mut state,
                 &task.func_name,
                 &task.args,
+                &mut self.stacks,
             ) {
                 self.suspended_calls.insert(id, task);
                 continue;
@@ -355,22 +357,35 @@ fn call_event_invocation_single(
     state: &mut Option<State>,
     func_name: &str,
     args: &[Value],
+    stacks: &mut HashMap<ObjectAddr, HashMap<String, Stack>>,
 ) -> Option<EffectId> {
-    let mut script = {
-        let state = state.as_mut().unwrap();
-        let scripts = state.objects.instances.get(id.0).unwrap();
-        let index = *scripts.class_names.get(script_name).unwrap();
-        scripts.scripts[index].clone()
-    };
+    let script = state
+        .as_ref()
+        .unwrap()
+        .objects
+        .get_by_id(id)
+        .unwrap()
+        .get(script_name)
+        .unwrap();
 
-    let Some(func) = script.instance.get_func(func_name) else {
+    let addr = script.get().object.addr();
+
+    let Some(func) = script.get().instance.get_func(func_name) else {
         return None;
     };
 
-    let stack = script
-        .stacks
+    // FIXME: Can we avoid this clone?
+    let func = func.clone();
+
+    let is_resumed = stacks
+        .get(&script.get().object.addr())
+        .is_some_and(|funcs| funcs.contains_key(func_name));
+
+    let stack = stacks
+        .entry(script.get().object.addr())
+        .or_default()
         .entry(func_name.to_string())
-        .or_insert_with(|| Stack::for_func(func));
+        .or_insert_with(|| Stack::for_func(&func));
 
     let mut args = args
         .iter()
@@ -380,24 +395,38 @@ fn call_event_invocation_single(
             Value::ObjectAddr(addr) => Val::Ptr(addr.to_raw()),
         })
         .collect::<Vec<_>>();
-    args.insert(0, Val::Ptr(script.object.addr().to_raw()));
+    args.insert(0, Val::Ptr(script.get().object.addr().to_raw()));
 
     let s = state.take().unwrap();
     let mut ctx = Context::new(engine, stack, s);
-    tracing::debug!(
-        "calling {}.{} ({:?})",
-        script_name,
-        func_name,
-        script.object.addr()
-    );
+
+    if is_resumed {
+        tracing::debug!(
+            "calling {}.{} ({:?}) (resumed)",
+            script_name,
+            func_name,
+            addr,
+        );
+    } else {
+        tracing::debug!("calling {}.{} ({:?})", script_name, func_name, addr);
+    }
+
     let res = func.call(&mut ctx, &args);
 
     let mut data = ctx.into_data();
     let mut wait_on_effect = None;
     match res {
         Ok(_) | Err(Exception::Error) => {
+            if res.is_err() {
+                tracing::error!("script returned with error");
+            }
+
             // Execution is done, reset the stack.
-            script.stacks.remove(func_name);
+            let funcs = stacks.get_mut(&addr).unwrap();
+            funcs.remove(func_name);
+            if funcs.is_empty() {
+                stacks.remove(&addr);
+            }
         }
         Err(Exception::Suspend) => {
             debug_assert!(
@@ -411,20 +440,7 @@ fn call_event_invocation_single(
 
     *state = Some(data);
 
-    // FIXME: Avoid this hack.
-    {
-        let state = state.as_mut().unwrap();
-        let scripts = state.objects.instances.get_mut(id.0).unwrap();
-        let index = *scripts.class_names.get_mut(script_name).unwrap();
-        scripts.scripts[index] = script;
-    }
-
     wait_on_effect
-}
-
-struct SuspendedCall {
-    task: ScheduledTask,
-    future: BoxFuture<'static, ()>,
 }
 
 fn core_actor_values(engine: &mut Engine) -> State {

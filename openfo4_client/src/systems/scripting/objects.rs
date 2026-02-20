@@ -8,8 +8,7 @@ use crate::systems::scripting::loader::ScriptObjectId;
 
 #[derive(Clone, Debug, Default)]
 pub struct ScriptObjects {
-    // FIXME: Remove this hack
-    pub(super) instances: Slab<ObjectInfo>,
+    instances: Slab<ObjectInfo>,
     addrs: HashMap<ObjectAddr, (ScriptObjectId, usize)>,
     records: HashMap<RecordId, ScriptObjectId>,
 }
@@ -92,7 +91,7 @@ impl<'a> ScriptsRef<'a> {
     }
 
     pub fn get(&self, name: &str) -> Option<ScriptRef<'a>> {
-        let (name, index) = self.info.class_names.get_key_value(&name.to_lowercase())?;
+        let index = self.info.class_names.get(&name.to_lowercase())?;
         let instance = &self.info.scripts[*index];
 
         Some(ScriptRef {
@@ -107,7 +106,7 @@ impl<'a> ScriptsRef<'a> {
     }
 
     pub fn iter(&self) -> impl Iterator<Item = ScriptRef<'a>> + '_ {
-        self.info.class_names.iter().map(|(k, index)| {
+        self.info.class_names.values().map(|index| {
             let instance = &self.info.scripts[*index];
 
             ScriptRef {
@@ -154,12 +153,12 @@ impl<'a> ScriptRef<'a> {
 }
 
 #[derive(Clone, Debug)]
-pub(super) struct ObjectInfo {
-    pub(super) scripts: Vec<ScriptInstance>,
+struct ObjectInfo {
+    scripts: Vec<ScriptInstance>,
     /// Maps class names to script instances.
     ///
     /// Note that it is possible for multiple scripts with the same class hierarchy
     /// to exist, but in that case which one we return is not defined.
-    pub(super) class_names: HashMap<String, usize>,
+    class_names: HashMap<String, usize>,
     record: Option<RecordId>,
 }
