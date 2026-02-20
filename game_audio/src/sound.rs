@@ -72,6 +72,7 @@ pub struct SoundId(pub(crate) Key);
 pub(crate) struct PlayingSound {
     pub source: AudioSource,
     pub destination: Destination,
+    pub looping: bool,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]

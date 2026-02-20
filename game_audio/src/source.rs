@@ -8,7 +8,7 @@ use game_tracing::trace_span;
 use symphonia::core::audio::{AudioBuffer, AudioBufferRef, Signal};
 use symphonia::core::codecs::Decoder;
 use symphonia::core::conv::FromSample;
-use symphonia::core::formats::FormatReader;
+use symphonia::core::formats::{FormatReader, SeekMode, SeekTo};
 use symphonia::core::io::MediaSourceStream;
 use symphonia::core::sample::Sample;
 use thiserror::Error;
@@ -100,7 +100,11 @@ impl AudioSource {
     }
 
     /// Reads frames of this source into `buf`. Returns the number of frames written.
-    pub(crate) fn read(&mut self, mut buf: &mut [Frame]) -> Result<usize, Error> {
+    ///
+    /// When `looping` is `true` the sound will start wrap to the start and [`Eof`] is never returned.
+    ///
+    /// [`Eof`]: Error::Eof
+    pub(crate) fn read(&mut self, mut buf: &mut [Frame], looping: bool) -> Result<usize, Error> {
         let _span = trace_span!("AudioSource::read").entered();
 
         // If we samples from the previous packet we flush
@@ -117,6 +121,12 @@ impl AudioSource {
             match self.prepare_next_frame() {
                 Ok(()) => (),
                 Err(Error::Eof) => {
+                    // Read the next frame from the source start.
+                    if looping {
+                        self.source.reset()?;
+                        continue;
+                    }
+
                     // If we have already written some frames those
                     // need to be returned first.
                     // The next call to `read` will then yield EOF.
@@ -395,6 +405,21 @@ impl Source {
                 },
             },
         }
+    }
+
+    fn reset(&mut self) -> Result<(), Error> {
+        match self {
+            Self::Empty => {}
+            Self::Io(source) => {
+                source
+                    .format_reader
+                    .seek(SeekMode::Accurate, SeekTo::TimeStamp { ts: 0, track_id: 0 })
+                    .map_err(Error::Decode)?;
+                source.decoder.reset();
+            }
+        }
+
+        Ok(())
     }
 }
 

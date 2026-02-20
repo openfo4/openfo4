@@ -118,4 +118,6 @@ where
 #[derive(Clone, Debug, Default)]
 pub struct Settings {
     pub destination: Destination,
+    /// Whether the sound loops.
+    pub looping: bool,
 }

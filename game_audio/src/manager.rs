@@ -54,6 +54,7 @@ where
         let key = self.sounds.insert(PlayingSound {
             source,
             destination: settings.destination,
+            looping: settings.looping,
         });
 
         SoundId(key)
@@ -116,7 +117,7 @@ where
                     }
 
                     let dst = &mut buf[0..spare_cap];
-                    match sound.source.read(dst) {
+                    match sound.source.read(dst, sound.looping) {
                         Ok(frames_written) => {
                             for frame in &mut dst[..frames_written] {
                                 *frame = crate::spatial::process(listener, emitter, *frame);
@@ -153,7 +154,7 @@ where
                     }
 
                     let dst = &mut buf[0..spare_cap];
-                    match sound.source.read(dst) {
+                    match sound.source.read(dst, sound.looping) {
                         Ok(_) => (),
                         Err(err) => {
                             drop_sounds.push(id);
