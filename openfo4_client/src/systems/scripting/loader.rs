@@ -156,24 +156,24 @@ async fn instantiate_form(
 
         let mut aliases = HashMap::new();
 
-        let vmad = match record.local.data.clone() {
-            RecordData::Activator(data) => data.virtual_machine_adapter,
-            RecordData::Armor(data) => data.virtual_machine_adapter,
-            RecordData::Book(data) => data.virtual_machine_adapter,
-            RecordData::Container(data) => data.virtual_machine_adapter,
-            RecordData::Door(data) => data.virtual_machine_adapter,
-            RecordData::FLOR(data) => data.vmad,
-            RecordData::Furniture(data) => data.virtual_machine_adapter,
-            RecordData::INGR(data) => data.vmad,
-            RecordData::Key(data) => data.virtual_machine_adapter,
-            RecordData::Light(data) => data.virtual_machine_adapter,
-            RecordData::MagicEffect(data) => data.virtual_machine_adpater,
-            RecordData::MiscObject(data) => data.virtual_machine_adapter,
-            RecordData::MSTT(data) => data.virtual_machine_adapter,
-            RecordData::Npc(data) => data.virtual_machine_adapter,
-            RecordData::Note(data) => data.virtual_machine_adapter,
-            RecordData::Package(data) => data.virtual_machine_adapter,
-            RecordData::Perk(data) => data.virtual_machine_adapter,
+        let record_scripts = match record.local.data.clone() {
+            RecordData::Activator(data) => data.virtual_machine_adapter.map(|v| v.scripts),
+            RecordData::Armor(data) => data.virtual_machine_adapter.map(|v| v.scripts),
+            RecordData::Book(data) => data.virtual_machine_adapter.map(|v| v.scripts),
+            RecordData::Container(data) => data.virtual_machine_adapter.map(|v| v.scripts),
+            RecordData::Door(data) => data.virtual_machine_adapter.map(|v| v.scripts),
+            RecordData::FLOR(data) => data.vmad.map(|v| v.scripts),
+            RecordData::Furniture(data) => data.virtual_machine_adapter.map(|v| v.scripts),
+            RecordData::INGR(data) => data.vmad.map(|v| v.scripts),
+            RecordData::Key(data) => data.virtual_machine_adapter.map(|v| v.scripts),
+            RecordData::Light(data) => data.virtual_machine_adapter.map(|v| v.scripts),
+            RecordData::MagicEffect(data) => data.virtual_machine_adpater.map(|v| v.scripts),
+            RecordData::MiscObject(data) => data.virtual_machine_adapter.map(|v| v.scripts),
+            RecordData::MSTT(data) => data.virtual_machine_adapter.map(|v| v.scripts),
+            RecordData::Npc(data) => data.virtual_machine_adapter.map(|v| v.scripts),
+            RecordData::Note(data) => data.virtual_machine_adapter.map(|v| v.scripts),
+            RecordData::Package(data) => data.virtual_machine_adapter.map(|v| v.scripts),
+            RecordData::Perk(data) => data.virtual_machine_adapter.map(|v| v.scripts),
             RecordData::Quest(data) => {
                 for alias in &data.aliases.references {
                     aliases.insert(
@@ -234,15 +234,27 @@ async fn instantiate_form(
                     }
                 }
 
-                data.virtual_machine_adapter.map(|v| v.without_fragments())
+                if let Some(vmad) = data.virtual_machine_adapter {
+                    let mut scripts = vmad.scripts;
+
+                    if let Some(frags) = vmad.fragments {
+                        let script = frags.script.unwrap();
+
+                        scripts.push(script);
+                    }
+
+                    Some(scripts)
+                } else {
+                    None
+                }
             }
-            RecordData::STAT(data) => data.virtual_machine_adapter,
-            RecordData::TACT(data) => data.vmad,
-            RecordData::Terminal(data) => data.virtual_machine_adapter,
-            RecordData::Tree(data) => data.virtual_machine_adapter,
-            RecordData::Weapon(data) => data.virtual_machine_adapter,
-            RecordData::PlacedObject(data) => data.virtual_machine_adapter,
-            RecordData::PlacedNpc(data) => data.virtual_machine_adapter,
+            RecordData::STAT(data) => data.virtual_machine_adapter.map(|v| v.scripts),
+            RecordData::TACT(data) => data.vmad.map(|v| v.scripts),
+            RecordData::Terminal(data) => data.virtual_machine_adapter.map(|v| v.scripts),
+            RecordData::Tree(data) => data.virtual_machine_adapter.map(|v| v.scripts),
+            RecordData::Weapon(data) => data.virtual_machine_adapter.map(|v| v.scripts),
+            RecordData::PlacedObject(data) => data.virtual_machine_adapter.map(|v| v.scripts),
+            RecordData::PlacedNpc(data) => data.virtual_machine_adapter.map(|v| v.scripts),
             _ => None,
         };
 
@@ -253,9 +265,9 @@ async fn instantiate_form(
 
         // FIXME: Avoid cloning here.
         let aliases2 = aliases.clone();
-        let scripts_to_iter: Vec<&Script> = vmad
+        let scripts_to_iter: Vec<&Script> = record_scripts
             .iter()
-            .flat_map(|v| &v.scripts)
+            .flat_map(|v| v)
             .chain(aliases2.values().map(|a| a.scripts.iter()).flatten())
             .collect();
         for script in scripts_to_iter {
@@ -264,8 +276,6 @@ async fn instantiate_form(
             while let Some(value) = values_queue.pop() {
                 match value {
                     Value::Object(value) => {
-                        dbg!(&value);
-
                         let id = esp_loader.resolve_form(value.form, record.id).unwrap();
                         let is_loaded =
                             state.objects.get_by_record(id).is_some() || records.contains_key(&id);
@@ -333,7 +343,7 @@ async fn instantiate_form(
             },
         );
 
-        for script in vmad.into_iter().flat_map(|v| v.scripts) {
+        for script in record_scripts.into_iter().flat_map(|v| v) {
             let instance = compiled_classes
                 .entry(script.name.clone())
                 .or_insert_with(|| engine.compile(&script.name, &COMPILER_OPTIONS));

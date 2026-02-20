@@ -84,7 +84,7 @@ pub fn register_builtins(engine: &mut Engine) {
     leveled_item::register(engine);
     leveled_actor::register(engine);
     topic_info::register(engine);
-    faction::register(engine);;
+    faction::register(engine);
 
     engine.register_native_function("Message", "ResetHelpMessage", message::reset_help_message);
     engine.register_native_function("Message", "Show", message::show);

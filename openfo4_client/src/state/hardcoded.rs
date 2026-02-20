@@ -13,6 +13,12 @@ pub const HARDCODED_MODULE_ID: ModuleId = ModuleId(NonZeroU32::MIN);
 pub const DAMAGE_TYPE_PHYSICAL: RecordId = RecordId::new(HARDCODED_MODULE_ID, FormId(0x00060A87));
 pub const KEYWORD_FEMALE: RecordId = RecordId::new(HARDCODED_MODULE_ID, FormId(0x00084486));
 
+pub const ACTOR_VALUE_AGGRESSION: FormId = FormId(0x2bc);
+pub const ACTOR_VALUE_CONFIDENCE: FormId = FormId(0x2bd);
+pub const ACTOR_VALUE_ENERGY: FormId = FormId(0x2be);
+pub const ACTOR_VALUE_MORALITY: FormId = FormId(0x2bf);
+pub const ACTOR_VALUE_ASSISTANCE: FormId = FormId(0x2c1);
+
 pub const ACTOR_VALUE_STRENGTH: FormId = FormId(0x2c2);
 pub const ACTOR_VALUE_PERCEPTION: FormId = FormId(0x2c3);
 pub const ACTOR_VALUE_ENDURANCE: FormId = FormId(0x2c4);
@@ -73,6 +79,11 @@ pub fn load_hardcoded_forms() -> HashMap<FormId, Record> {
 
     [
         actor_value(ACTOR_VALUE_WORKSHOP_PLAYER_OWNED, "WorkshopPlayerOwned"),
+        actor_value(ACTOR_VALUE_AGGRESSION, "Aggression"),
+        actor_value(ACTOR_VALUE_CONFIDENCE, "Confidence"),
+        actor_value(ACTOR_VALUE_ENERGY, "Energy"),
+        actor_value(ACTOR_VALUE_MORALITY, "Morality"),
+        actor_value(ACTOR_VALUE_ASSISTANCE, "Assistance"),
         actor_value(ACTOR_VALUE_FATIGUE, "Fatigue"),
         actor_value(ACTOR_VALUE_BED, "Bed"),
         actor_value(
