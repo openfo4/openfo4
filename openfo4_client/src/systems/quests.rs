@@ -2,6 +2,7 @@ use std::collections::VecDeque;
 use std::sync::{Arc, Once};
 
 use crossbeam::queue::SegQueue;
+use game_common::collections::vec_map::VecMap;
 use game_tasks::{Task, TaskPool};
 use game_tracing::trace_span;
 use hashbrown::{HashMap, HashSet};
@@ -9,9 +10,13 @@ use hecs::World;
 use indexmap::IndexMap;
 use openfo4_core::events::EventBus;
 use openfo4_core::record::RecordId;
-use openfo4_esp::records::{QuestAliasFlags, QuestDataFlags, QuestReferenceAlias, QuestStageFlags};
-use openfo4_esp::{FormId, RecordData, RecordKind};
+use openfo4_esp::records::{
+    QuestAliasFlags, QuestDataFlags, QuestReferenceAlias, QuestStageFlags, SceneActionData,
+    SceneActionFlags,
+};
+use openfo4_esp::{FormId, RecordChildren, RecordData, RecordKind};
 
+use crate::events::quest::{StartQuestScene, StopQuestScene};
 use crate::state::esp::EspLoader;
 use crate::state::hardcoded::HARDCODED_MODULE_ID;
 use crate::state::level::loader::{EntityLoader, EntityRef};
@@ -29,8 +34,9 @@ pub struct QuestManager {
     esp_loader: Arc<EspLoader>,
     script_loader: Arc<ScriptLoader>,
     entity_loader: Arc<EntityLoader>,
-    quests: HashMap<RecordId, Quest>,
     events: Arc<SegQueue<Event>>,
+    quests: HashMap<RecordId, Quest>,
+    scenes_to_quest: HashMap<RecordId, RecordId>,
 }
 
 impl QuestManager {
@@ -47,6 +53,7 @@ impl QuestManager {
             script_loader: executor.loader().clone(),
             entity_loader: loader.clone(),
             events: Arc::default(),
+            scenes_to_quest: HashMap::new(),
         }
     }
 
@@ -59,96 +66,41 @@ impl QuestManager {
             let script_loader = self.script_loader.clone();
 
             self.pool.spawn(async move {
-                let quests = esp_loader
-                    .lookup_all(Some(RecordKind::Quest))
-                    .await
-                    .unwrap();
-
-                // let quest = quests
-                //     .iter()
-                //     .find(|v| v.id == RecordId::new(HARDCODED_MODULE_ID, FormId(0x80e)))
-                //     .unwrap();
-                let quest = quests
-                    .iter()
-                    .find(|v| v.id == RecordId::new(HARDCODED_MODULE_ID, FormId(0x1069a9)))
-                    .unwrap();
-
-                let RecordData::Quest(data) = &quest.local.data else {
-                    todo!();
-                };
-
-                let mut script = script_loader.load(quest.id).await;
-
-                let mut stages = IndexMap::new();
-                for stage in &*data.stages {
-                    stages.insert(
-                        stage.index.stage_index,
-                        QuestStage {
-                            run_on_start: stage.index.flags.contains(QuestStageFlags::RUN_ON_START),
-                            run_on_stop: stage.index.flags.contains(QuestStageFlags::RUN_ON_STOP),
-                            is_done: false,
-                            fragment_functions: HashSet::new(),
-                        },
-                    );
-                }
-
-                if let Some(vmad) = &data.virtual_machine_adapter
-                    && let Some(fragments) = &vmad.fragments
-                {
-                    for stage in &fragments.fragments {
-                        let Some(s) = stages.get_mut(&stage.quest_stage) else {
-                            continue;
-                        };
-
-                        // FIXME: This will call ALL scripts with the name,
-                        // however we only want to call the fragment script.
-                        s.fragment_functions.insert(stage.fragment_name.clone());
-                    }
-                }
-
-                let mut aliases = HashMap::new();
-                if let Some(script) = &mut script {
-                    for (key, script) in script.aliases.drain() {
-                        // TODO: Figure out what happens when we touch aliases from
-                        // other quests.
-                        assert_eq!(key.accessor, quest.id);
-                        assert_eq!(key.owner, quest.id);
-
-                        aliases.insert(
-                            key.id,
-                            AliasState {
-                                entity: None,
-                                script: Some(script),
-                            },
-                        );
-                    }
-                }
-
-                let mut actions = VecDeque::new();
-                if data.data.flags.contains(QuestDataFlags::START_GAME_ENABLED) {
-                    actions.push_back(QuestAction::Start);
-                }
-
-                events.push(Event::Discover(
-                    quest.id,
-                    Quest {
-                        state: QuestState::PreInit,
-                        stages,
-                        active_stage: 0,
-                        script: script.map(|v| v.object),
-                        aliases: HashMap::new(),
-                        actions,
-                    },
-                ));
+                let id = RecordId::new(HARDCODED_MODULE_ID, FormId(0x1069a9));
+                load_quest(&esp_loader, &script_loader, &events, id).await;
             });
         });
 
         while let Some(event) = self.events.pop() {
             match event {
                 Event::Discover(id, quest) => {
+                    for scene in quest.scenes.keys() {
+                        self.scenes_to_quest.insert(*scene, id);
+                    }
+
                     self.quests.insert(id, quest);
                 }
             }
+        }
+
+        for event in events.read::<StartQuestScene>() {
+            let Some(quest) = self.scenes_to_quest.get(&event.scene) else {
+                continue;
+            };
+
+            let quest = self.quests.get_mut(quest).unwrap();
+            quest
+                .actions
+                .push_back(QuestAction::StartScene(event.scene));
+        }
+
+        for event in events.read::<StopQuestScene>() {
+            let Some(quest) = self.scenes_to_quest.get(&event.scene) else {
+                continue;
+            };
+
+            let quest = self.quests.get_mut(quest).unwrap();
+            quest.actions.push_back(QuestAction::StopScene(event.scene));
         }
 
         for (id, quest) in &mut self.quests {
@@ -285,30 +237,43 @@ impl QuestManager {
                                     );
                                 }
                             }
-                            QuestAction::SetStage(id) => {
+                            QuestAction::SetStage(stage_id) => {
+                                let Some(stage) = quest.stages.get_mut(&stage_id) else {
+                                    continue;
+                                };
+
+                                if stage.is_done {
+                                    continue;
+                                }
+                                stage.is_done = true;
+
                                 tracing::debug!(
                                     "advancing quest {:?} from stage {:?} to {}",
-                                    id,
+                                    stage_id,
                                     quest.active_stage,
-                                    id
+                                    stage_id
                                 );
 
                                 if let Some(script) = &quest.script {
                                     executor.invoke(QuestSetStage {
                                         quest: script.clone(),
-                                        stage: id,
+                                        stage: stage_id,
                                         item: 0,
                                     });
 
-                                    if let Some(stage) = quest.stages.get(&id) {
-                                        for name in &stage.fragment_functions {
-                                            executor.invoke(QuestFragmentSetStage {
-                                                quest: script.clone(),
-                                                func_name: name.clone(),
-                                            });
-                                        }
+                                    for name in &stage.fragment_functions {
+                                        executor.invoke(QuestFragmentSetStage {
+                                            quest: script.clone(),
+                                            func_name: name.clone(),
+                                        });
                                     }
                                 }
+                            }
+                            QuestAction::StartScene(scene) => {
+                                tracing::debug!("starting scene {:?} of quest {:?}", scene, id);
+                            }
+                            QuestAction::StopScene(scene) => {
+                                tracing::debug!("stopping scene {:?} of quest {:?}", scene, id);
                             }
                         }
                     }
@@ -341,6 +306,12 @@ impl QuestManager {
                 }
             }
         }
+    }
+
+    pub fn get_scene(&self, scene: RecordId) -> Option<&SceneState> {
+        let quest = self.scenes_to_quest.get(&scene)?;
+        let quest = self.quests.get(quest)?;
+        quest.scenes.get(&scene)
     }
 
     pub fn get(&self, quest: RecordId) -> Option<&Quest> {
@@ -380,6 +351,7 @@ pub struct Quest {
     script: Option<ScriptObject>,
     aliases: HashMap<u32, AliasState>,
     actions: VecDeque<QuestAction>,
+    scenes: HashMap<RecordId, SceneState>,
 }
 
 #[derive(Debug)]
@@ -418,6 +390,8 @@ enum QuestAction {
     Start,
     Stop,
     SetStage(StageId),
+    StartScene(RecordId),
+    StopScene(RecordId),
 }
 
 #[derive(Debug)]
@@ -433,6 +407,89 @@ pub struct QuestStage {
     pub run_on_stop: bool,
     pub is_done: bool,
     pub fragment_functions: HashSet<String>,
+}
+
+async fn load_quest(
+    esp_loader: &EspLoader,
+    script_loader: &ScriptLoader,
+    events: &SegQueue<Event>,
+    id: RecordId,
+) {
+    let quest = esp_loader
+        .lookup(Some(RecordKind::Quest), id)
+        .await
+        .unwrap();
+
+    let RecordData::Quest(data) = &quest.local.data else {
+        todo!();
+    };
+
+    let mut script = script_loader.load(quest.id).await;
+
+    let mut stages = IndexMap::new();
+    for stage in &*data.stages {
+        stages.insert(
+            stage.index.stage_index,
+            QuestStage {
+                run_on_start: stage.index.flags.contains(QuestStageFlags::RUN_ON_START),
+                run_on_stop: stage.index.flags.contains(QuestStageFlags::RUN_ON_STOP),
+                is_done: false,
+                fragment_functions: HashSet::new(),
+            },
+        );
+    }
+
+    if let Some(vmad) = &data.virtual_machine_adapter
+        && let Some(fragments) = &vmad.fragments
+    {
+        for stage in &fragments.fragments {
+            let Some(s) = stages.get_mut(&stage.quest_stage) else {
+                continue;
+            };
+
+            // FIXME: This will call ALL scripts with the name,
+            // however we only want to call the fragment script.
+            s.fragment_functions.insert(stage.fragment_name.clone());
+        }
+    }
+
+    let mut aliases = HashMap::new();
+    if let Some(script) = &mut script {
+        for (key, script) in script.aliases.drain() {
+            // TODO: Figure out what happens when we touch aliases from
+            // other quests.
+            assert_eq!(key.accessor, quest.id);
+            assert_eq!(key.owner, quest.id);
+
+            aliases.insert(
+                key.id,
+                AliasState {
+                    entity: None,
+                    script: Some(script),
+                },
+            );
+        }
+    }
+
+    let mut actions = VecDeque::new();
+    if data.data.flags.contains(QuestDataFlags::START_GAME_ENABLED) {
+        actions.push_back(QuestAction::Start);
+    }
+
+    let scenes = load_scenes(esp_loader, script_loader, id).await;
+
+    events.push(Event::Discover(
+        quest.id,
+        Quest {
+            state: QuestState::PreInit,
+            stages,
+            active_stage: 0,
+            script: script.map(|v| v.object),
+            aliases: HashMap::new(),
+            actions,
+            scenes,
+        },
+    ));
 }
 
 #[tracing::instrument(skip_all)]
@@ -528,6 +585,79 @@ async fn load_reference_alias(
     todo!("TODO: {:?}", alias)
 }
 
+async fn load_scenes(
+    esp_loader: &EspLoader,
+    script_loader: &ScriptLoader,
+    quest: RecordId,
+) -> HashMap<RecordId, SceneState> {
+    let records = esp_loader
+        .children(RecordChildren::Scenes, quest)
+        .await
+        .unwrap();
+
+    let mut scenes = HashMap::new();
+    for record in records {
+        let RecordData::Scene(data) = record.local.data else {
+            continue;
+        };
+
+        let mut phases = VecMap::new();
+        for (index, phase) in data.phases.iter().enumerate() {
+            phases.insert(index as u32, Phase::default());
+        }
+
+        for action in &*data.actions {
+            let Some(phase) = phases.get_mut(action.start_phase) else {
+                continue;
+            };
+
+            let face_target = action
+                .flags
+                .is_some_and(|flags| flags.contains(SceneActionFlags::FACE_TARGET));
+
+            match &action.data {
+                SceneActionData::Dialogue(data) => {
+                    // FIXME: What does facetracking multiple targets mean?
+                    if let Some(targets) = &data.player_headtracking
+                        && let Some(target) = targets.first()
+                        && face_target
+                    {
+                        phase.actions.push(Action::FaceTarget {
+                            actor: action.actor as u32,
+                            target: *target,
+                        });
+                    }
+
+                    let topic_id = esp_loader.resolve_form(data.topic, record.id).unwrap();
+                    let infos = esp_loader
+                        .children(RecordChildren::DialogueInfos, topic_id)
+                        .await
+                        .unwrap();
+
+                    let mut options = Vec::new();
+                    for info in infos {
+                        let RecordData::DialogueInfo(data) = info.local.data else {
+                            continue;
+                        };
+
+                        options.push(Dialogue {});
+                    }
+
+                    phase.actions.push(Action::PlayDialogue {
+                        actor: action.actor as u32,
+                        dialogue: PlayDialogueAction { options },
+                    });
+                }
+                _ => {}
+            }
+        }
+
+        scenes.insert(record.id, SceneState { quest, phases });
+    }
+
+    scenes
+}
+
 #[derive(Clone, Debug)]
 enum AliasLoadError {
     NoLocation,
@@ -538,3 +668,32 @@ struct AliasState {
     entity: Option<EntityRef>,
     script: Option<ScriptObject>,
 }
+
+#[derive(Clone, Debug)]
+pub struct SceneState {
+    pub quest: RecordId,
+    phases: VecMap<u32, Phase>,
+}
+
+#[derive(Clone, Debug, Default)]
+struct Phase {
+    actions: Vec<Action>,
+}
+
+#[derive(Clone, Debug)]
+enum Action {
+    /// Make the `actor` face the given `target`.
+    FaceTarget { actor: u32, target: u32 },
+    PlayDialogue {
+        actor: u32,
+        dialogue: PlayDialogueAction,
+    },
+}
+
+#[derive(Clone, Debug)]
+struct PlayDialogueAction {
+    options: Vec<Dialogue>,
+}
+
+#[derive(Clone, Debug)]
+struct Dialogue {}

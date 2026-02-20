@@ -7,6 +7,7 @@ use hecs::{Entity, World};
 use openfo4_core::events::EventBus;
 use openfo4_core::record::RecordId;
 
+use crate::events::quest::{StartQuestScene, StopQuestScene};
 use crate::state::equipment::load_item;
 use crate::state::esp::EspLoader;
 use crate::systems::inventory::{
@@ -183,6 +184,30 @@ impl Effect for UnequipItemEffect {
             item: self.slot,
         });
 
+        EffectResult::Done
+    }
+}
+
+#[derive(Copy, Clone, Debug)]
+pub struct StartQuestSceneEffect {
+    pub scene: RecordId,
+}
+
+impl Effect for StartQuestSceneEffect {
+    fn run(&self, ctx: Context<'_>) -> EffectResult {
+        ctx.events.send(StartQuestScene { scene: self.scene });
+        EffectResult::Done
+    }
+}
+
+#[derive(Copy, Clone, Debug)]
+pub struct StopQuestSceneEffect {
+    pub scene: RecordId,
+}
+
+impl Effect for StopQuestSceneEffect {
+    fn run(&self, ctx: Context<'_>) -> EffectResult {
+        ctx.events.send(StopQuestScene { scene: self.scene });
         EffectResult::Done
     }
 }

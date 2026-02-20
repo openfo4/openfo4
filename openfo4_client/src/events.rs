@@ -1,4 +1,5 @@
 pub mod inventory;
+pub mod quest;
 pub mod trigger;
 
 use crate::cell::CellId;
