@@ -5213,6 +5213,32 @@ pub struct DialogueBranch {
 pub struct DialogueTopic {
     #[record("EDID")]
     pub id: Option<ZString>,
+    #[record("FULL")]
+    pub full_name: Option<LString>,
+    #[record("PNAM")]
+    pub priority: Option<f32>,
+    #[record("BNAM")]
+    pub branch: Option<FormId>,
+    #[record("QNAM")]
+    pub quest: Option<FormId>,
+    #[record("KNAM")]
+    pub keyword: Option<FormId>,
+    #[record("DATA")]
+    pub data: DialogueTopicData,
+    #[record("SNAM")]
+    pub subtype_name: Option<Text<4>>,
+    #[record("TIFC")]
+    pub info_count: Option<u32>,
+    // TODO:
+    // INOM
+    // INOA
+}
+
+#[derive(Clone, Debug, BinaryStruct)]
+pub struct DialogueTopicData {
+    pub flags: u8,
+    pub category: u8,
+    pub subtype: u16,
 }
 
 #[derive(Clone, Debug, Record)]
@@ -5679,9 +5705,113 @@ impl Decode for SceneActorBehavior {
 }
 
 #[derive(Clone, Debug, Record)]
+#[record(ordered)]
 pub struct DialogueInfo {
     #[record("EDID")]
     pub id: Option<ZString>,
+    // TODO: Fragments
+    #[record("VMAD")]
+    pub virtual_machine_adapter: Option<VirtualMachineAdapter>,
+    // TODO
+    #[record("ENAM")]
+    pub response_flags: Option<()>,
+    #[record("TPIC")]
+    pub topic: Option<FormId>,
+    #[record("PNAM")]
+    pub previous_info: Option<FormId>,
+    #[record("DNAM")]
+    pub shared_info: Option<FormId>,
+    #[record("GNAM")]
+    pub info_group: Option<FormId>,
+    #[record("IOVR")]
+    pub override_filename: Option<ZString>,
+    #[record("TRDA")]
+    pub responses: SubRecordArray<DialogueInfoResponse>,
+    #[record("CWDA")]
+    pub conditions: SubRecordArray<Condition>,
+    #[record("RNAM")]
+    pub prompt: Option<LString>,
+    #[record("ANAM")]
+    pub speaker: Option<FormId>,
+    #[record("TSCE")]
+    pub start_scene: Option<FormId>,
+    #[record("INTV")]
+    _intv: Option<()>,
+    #[record("ALFA")]
+    pub forced_alias: Option<i32>,
+    #[record("ONAM")]
+    pub audio_output_override: Option<FormId>,
+    #[record("GREE")]
+    pub greet_distance: Option<u32>,
+    #[record("TIQS")]
+    pub set_parent_quest_stage: Option<SceneSetStage>,
+    #[record("NAM0")]
+    pub start_scene_phase: Option<ZString>,
+    #[record("INCC")]
+    pub challenge: Option<DialogueInfoChallenge>,
+    #[record("MODQ")]
+    pub reset_global: Option<FormId>,
+    #[record("INAM")]
+    pub subtitle_priority: Option<DialogueInfoSubtitlePriority>,
+}
+
+#[derive(Clone, Debug, Record)]
+pub struct DialogueInfoResponse {
+    #[record("TRDA")]
+    pub response: DialogueInfoResponseData,
+    #[record("NAM1")]
+    pub response_text: Option<LString>,
+    #[record("NAM2")]
+    pub script_notes: Option<ZString>,
+    #[record("NAM3")]
+    pub edits: Option<ZString>,
+    #[record("NAM4")]
+    pub alternate_lip_text: Option<ZString>,
+    #[record("SNAM")]
+    pub idle_animation_speaker: Option<FormId>,
+    #[record("LNAM")]
+    pub idle_animation_listener: Option<FormId>,
+    #[record("TNAM")]
+    pub interrupt_percentage: Option<u16>,
+    #[record("NAM9")]
+    pub text_hash: Option<Array<u8>>,
+    #[record("SRAF")]
+    pub camera_path: Option<FormId>,
+    #[record("WZMD")]
+    pub stop_on_scene_end: Option<()>,
+}
+
+#[derive(Clone, Debug, BinaryStruct)]
+pub struct DialogueInfoResponseData {
+    pub emotion: FormId,
+    pub response_number: u8,
+    pub sound_file: FormId,
+    _pad0: u8,
+    pub interrupt_percentage: u16,
+    pub camera_target_alias: i32,
+    pub camera_location_alias: i32,
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, BinaryStruct)]
+#[primitive(u32)]
+pub enum DialogueInfoChallenge {
+    None = 0,
+    Easy = 1,
+    Medium = 2,
+    Hard = 3,
+    AlwaysSucceeds = 4,
+    EasyRepeatable = 5,
+    MediumRepeatable = 6,
+    HardRepeatable = 7,
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, BinaryStruct)]
+#[primitive(u32)]
+pub enum DialogueInfoSubtitlePriority {
+    Low = 0,
+    Normal = 1,
+    _Unknown2 = 2,
+    Force = 3,
 }
 
 #[derive(Clone, Debug, Record)]

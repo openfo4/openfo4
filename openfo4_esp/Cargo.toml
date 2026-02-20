@@ -13,3 +13,8 @@ thiserror = "2.0.12"
 hashbrown = "0.15.4"
 # Use zlib-rs since it performs better.
 flate2 = { version = "1.1.0", default-features = false, features = ["zlib-rs"] }
+parking_lot = "0.12.5"
+
+openfo4_io = { version = "0.1.0", path = "../openfo4_io" }
+
+futures-lite = "2.6.1"

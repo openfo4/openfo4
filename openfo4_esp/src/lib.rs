@@ -340,6 +340,100 @@ where
 
                     return self.read_records(header).await;
                 }
+                RecordChildren::Scenes => {
+                    let mut scenes = Vec::new();
+
+                    let mut bytes_remaining = header.into_group().size;
+                    while bytes_remaining > 0 {
+                        let header = self.read_record_header().await?;
+                        bytes_remaining = bytes_remaining.saturating_sub(RecordHeader::SIZE as u32);
+
+                        // Skip over GRUPs for dialogue infos.
+                        if header.typ == Text::GRUP {
+                            let header = header.into_group();
+                            self.cursor.advance(header.size.into());
+                            bytes_remaining = bytes_remaining.saturating_sub(header.size);
+                            continue;
+                        }
+
+                        if header.typ != RecordKind::Scene.label() {
+                            self.cursor.advance(header.size.into());
+                            bytes_remaining = bytes_remaining.saturating_sub(header.size);
+                            continue;
+                        }
+
+                        let data = self.read_record_data(header).await?;
+                        scenes.push(Record {
+                            id: header.form_id,
+                            flags: header.flags,
+                            data,
+                        });
+
+                        bytes_remaining = bytes_remaining.saturating_sub(header.size);
+                    }
+
+                    return Ok(scenes);
+                }
+                RecordChildren::DialogueTopics => {
+                    let mut topics = Vec::new();
+
+                    let mut bytes_remaining = header.into_group().size;
+                    while bytes_remaining > 0 {
+                        let header = self.read_record_header().await?;
+                        bytes_remaining = bytes_remaining.saturating_sub(RecordHeader::SIZE as u32);
+
+                        // Skip over GRUPs for dialogue infos.
+                        if header.typ == Text::GRUP {
+                            let header = header.into_group();
+                            self.cursor.advance(header.size.into());
+                            bytes_remaining = bytes_remaining.saturating_sub(header.size);
+                            continue;
+                        }
+
+                        if header.typ != RecordKind::DialogueTopic.label() {
+                            self.cursor.advance(header.size.into());
+                            bytes_remaining = bytes_remaining.saturating_sub(header.size);
+                            continue;
+                        }
+
+                        let data = self.read_record_data(header).await?;
+                        topics.push(Record {
+                            id: header.form_id,
+                            flags: header.flags,
+                            data,
+                        });
+
+                        bytes_remaining = bytes_remaining.saturating_sub(header.size);
+                    }
+
+                    return Ok(topics);
+                }
+                RecordChildren::DialogueInfos => {
+                    let mut infos = Vec::new();
+
+                    let mut bytes_remaining = header.into_group().size;
+                    while bytes_remaining > 0 {
+                        let header = self.read_record_header().await?;
+                        bytes_remaining = bytes_remaining.saturating_sub(RecordHeader::SIZE as u32);
+
+                        if header.typ != RecordKind::DialogueInfo.label() {
+                            self.cursor.advance(header.size.into());
+                            bytes_remaining = bytes_remaining.saturating_sub(header.size);
+                            continue;
+                        }
+
+                        let data = self.read_record_data(header).await?;
+                        infos.push(Record {
+                            id: header.form_id,
+                            flags: header.flags,
+                            data,
+                        });
+
+                        bytes_remaining = bytes_remaining.saturating_sub(header.size);
+                    }
+
+                    return Ok(infos);
+                }
             }
         }
     }
@@ -584,6 +678,12 @@ pub enum RecordChildren {
     Cells,
     PersistentEntities,
     TemporaryEntities,
+    /// [`Scene`]s of a [`Quest`].
+    Scenes,
+    /// [`DialogueTopic`]s of a [`Quest`].
+    DialogueTopics,
+    /// [`DialogueInfo`]s of a [`DialogueTopic`].
+    DialogueInfos,
 }
 
 impl RecordChildren {
@@ -592,6 +692,9 @@ impl RecordChildren {
             Self::Cells => RecordKind::Worldspace,
             Self::PersistentEntities => RecordKind::Cell,
             Self::TemporaryEntities => RecordKind::Cell,
+            Self::Scenes => RecordKind::Quest,
+            Self::DialogueTopics => RecordKind::Quest,
+            Self::DialogueInfos => RecordKind::DialogueTopic,
         }
     }
 }
