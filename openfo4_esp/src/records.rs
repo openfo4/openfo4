@@ -4440,6 +4440,98 @@ pub enum LockLevel {
 }
 
 #[derive(Clone, Debug, Record)]
+pub struct NavMesh {
+    #[record("EDID")]
+    pub id: Option<ZString>,
+    #[record("NVNM")]
+    pub geometry: NavMeshGeometry,
+}
+
+#[derive(Clone, Debug)]
+pub struct NavMeshGeometry {
+    pub hash: u32,
+    pub parent_world: FormId,
+    pub grid_x: i16,
+    pub grid_y: i16,
+    pub vertices: Vec<Vec3>,
+    pub triangles: Vec<NavMeshGeometryTriangle>,
+    pub edge_links: Vec<NavMeshGeometryEdgeLink>,
+}
+
+impl Decode for NavMeshGeometry {
+    type Error = Error;
+
+    fn decode<B>(mut buf: B) -> Result<Self, Self::Error>
+    where
+        B: Buf,
+    {
+        #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, BinaryStruct)]
+        #[primitive(u32)]
+        enum NavMeshGeometryVersion {
+            V15 = 15,
+        }
+
+        NavMeshGeometryVersion::decode(&mut buf)?;
+
+        let hash = u32::decode(&mut buf)?;
+        let parent_world = FormId::decode(&mut buf)?;
+        let grid_x = i16::decode(&mut buf)?;
+        let grid_y = i16::decode(&mut buf)?;
+
+        let vertex_count = u32::decode(&mut buf)?;
+        let mut vertices = Vec::new();
+        for _ in 0..vertex_count {
+            let vertex = Vec3::decode(&mut buf)?;
+            vertices.push(vertex);
+        }
+
+        let triangle_count = u32::decode(&mut buf)?;
+        let mut triangles = Vec::new();
+        for _ in 0..triangle_count {
+            let triangle = NavMeshGeometryTriangle::decode(&mut buf)?;
+            triangles.push(triangle);
+        }
+
+        let edge_link_count = u32::decode(&mut buf)?;
+        let mut edge_links = Vec::new();
+        for _ in 0..edge_link_count {
+            let edge_link = NavMeshGeometryEdgeLink::decode(&mut buf)?;
+            edge_links.push(edge_link);
+        }
+
+        // TODO: Door Triangles, Cover Array, ..
+
+        Ok(Self {
+            hash,
+            parent_world,
+            grid_x,
+            grid_y,
+            vertices,
+            triangles,
+            edge_links,
+        })
+    }
+}
+
+#[derive(Copy, Clone, Debug, BinaryStruct)]
+pub struct NavMeshGeometryTriangle {
+    pub vertices: [u16; 3],
+    pub edges: [u16; 3],
+    pub height: f32,
+    _unknown0: u8,
+    pub flags: u16,
+    pub cover_flags: u16,
+}
+
+#[derive(Copy, Clone, Debug, BinaryStruct)]
+pub struct NavMeshGeometryEdgeLink {
+    pub ty: u32,
+    pub navmesh: FormId,
+    pub triangle: u16,
+    pub edge_index: u8,
+}
+
+#[derive(Clone, Debug, Record)]
 pub struct PlacedGrenade {
     #[record("EDID")]
     pub id: Option<ZString>,

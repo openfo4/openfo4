@@ -18,10 +18,10 @@ use std::mem::MaybeUninit;
 use bytes::Buf;
 use records::{
     AcousticSpace, Action, Activator, Ammo, Armor, Book, Cell, Class, Climate, Component,
-    Container, DMGT, Door, ENCH, Empty, FACT, FLOR, Furniture, GLOB, GRAS, GameSetting, Hazard,
-    HeadPart, INGR, IdleMarker, Ingestible, Key, Keyword, Land, LandTexture, LeveledActor,
-    LeveledItem, Light, LocationReferenceType, MSTT, MagicEffect, MiscObject, Note, Npc,
-    PlacedGrenade, PlacedHazard, PlacedNpc, PlacedObject, Projectile, Race, SOUN, SPEL, STAT,
+    Container, DMGT, Door, ENCH, FACT, FLOR, Furniture, GLOB, GRAS, GameSetting, Hazard, HeadPart,
+    INGR, IdleMarker, Ingestible, Key, Keyword, Land, LandTexture, LeveledActor, LeveledItem,
+    Light, LocationReferenceType, MSTT, MagicEffect, MiscObject, Note, Npc, PlacedGrenade,
+    PlacedHazard, PlacedNpc, PlacedObject, Projectile, Race, SOUN, SPEL, STAT,
     ShaderParticleGeometry, StaticCollection, TACT, TRNS, Tes4, TextureSet, VisualEffect, Weather,
     Worldspace,
 };
@@ -34,7 +34,7 @@ use crate::records::{
     DialogueTopic, DialogueView, EffectShader, EncounterZone, EquipType, Explosion, Footstep,
     FootstepSet, FormList, GodRays, ImageSpace, ImageSpaceAdapter, Impact, ImpactDataSet,
     InstanceNamingRules, Layer, LensFlare, LightingTemplate, LoadScreen, Location, MaterialObject,
-    MaterialSwap, MaterialType, Message, MovementType, MusicTrack, MusicType, NAVI,
+    MaterialSwap, MaterialType, Message, MovementType, MusicTrack, MusicType, NAVI, NavMesh,
     NavigationMeshObstacleManager, ObjectModification, ObjectVisibilityManager, Outfit, PackIn,
     Package, Perk, PlacedMissile, Quest, ReferenceGroup, Region, Relationship, ReverbParameters,
     Scene, SceneCollection, SoundCategory, SoundDescriptor, SoundKeywordMapping, SoundOutputModel,
@@ -767,7 +767,7 @@ pub enum RecordData {
     Cell(Cell),
     PlacedNpc(PlacedNpc),
     PlacedObject(PlacedObject),
-    NavMesh(Empty),
+    NavMesh(NavMesh),
     PlacedGrenade(PlacedGrenade),
     PlacedHazard(PlacedHazard),
     Worldspace(Worldspace),
