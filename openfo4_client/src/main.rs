@@ -45,6 +45,13 @@ use crate::render::physics_debug::{
 #[derive(Clone, Debug, Parser)]
 #[command(version, about, long_about = None)]
 struct Args {
+    /// Disable the crash handler shim.
+    // Note: This flag is handled by the crash handler shim
+    // and should not be used by us.
+    // It only exists so that the flag is included in the help
+    // message.
+    #[arg(long = "no-crash-handler")]
+    _no_crash_handler: bool,
     /// Path to a data directory. This argument can be repeated. The data directories will be
     /// loaded in the exact order specified.
     #[arg(long)]
