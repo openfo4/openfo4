@@ -204,6 +204,11 @@ struct InputParams {
 }
 
 func sample_pcf_shadow(coords: Vec2, depth: f32) -> f32 {
+    // Outside of shadow map texture.
+    if (coords.x < 0.0 || coords.y < 0.0 || coords.x > 1.0 || coords.y > 1.0) {
+        return 1.0;
+    }
+
     let range = 1;
 
     let texel_size = 1.0 / Vec2(4096);
