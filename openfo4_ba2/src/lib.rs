@@ -4,6 +4,7 @@ use std::io::{self, Read};
 
 use flate2::read::ZlibDecoder;
 use hashbrown::HashMap;
+use openfo4_core::path::{DataPath, DataPathBuf};
 use openfo4_io::fs::{AsyncReadAt, Cursor};
 use thiserror::Error;
 
@@ -19,8 +20,6 @@ pub enum Error {
     UnknownVersion(u32),
     #[error("unknown data format: {0}")]
     UnknownDataFormat(u32),
-    #[error(transparent)]
-    InvalidString(std::string::FromUtf8Error),
     #[error("no key in archive")]
     NoKey,
 }
@@ -28,7 +27,7 @@ pub enum Error {
 #[derive(Debug)]
 pub struct Archive<T> {
     reader: T,
-    files: HashMap<String, FileHeader>,
+    files: HashMap<DataPathBuf, FileHeader>,
 }
 
 impl<T> Archive<T>
@@ -58,8 +57,7 @@ where
 
         let mut file_names = Vec::new();
         for _ in 0..header.file_count {
-            let name = String::decode(&mut cursor).await?;
-            let name = name.to_lowercase().replace("\\", "/");
+            let name = DataPathBuf::decode(&mut cursor).await?;
 
             file_names.push(name);
         }
@@ -69,15 +67,15 @@ where
         Ok(Self { reader, files })
     }
 
-    pub fn file_names(&self) -> impl Iterator<Item = &str> {
-        self.files.keys().map(|v| v.as_str())
+    pub fn file_names(&self) -> impl Iterator<Item = &DataPath> {
+        self.files.keys().map(|v| v.as_ref())
     }
 
-    pub fn contains(&self, path: &str) -> bool {
+    pub fn contains(&self, path: &DataPath) -> bool {
         self.files.contains_key(path)
     }
 
-    pub async fn read(&self, name: &str) -> Result<Vec<u8>, Error> {
+    pub async fn read(&self, name: &DataPath) -> Result<Vec<u8>, Error> {
         let header = self.files.get(name).ok_or(Error::NoKey)?;
 
         let mut buf = Vec::new();
@@ -218,7 +216,7 @@ macro_rules! impl_decode {
 
 impl_decode!(u8, u16, u32, u64, i8, i16, i32, i64, f32, f64);
 
-impl Decode for String {
+impl Decode for DataPathBuf {
     async fn decode<R>(mut reader: &mut Cursor<R>) -> Result<Self, Error>
     where
         R: AsyncReadAt,
@@ -228,7 +226,7 @@ impl Decode for String {
         let mut bytes = vec![0; len.into()];
         reader.read_exact(&mut bytes).await?;
 
-        Self::from_utf8(bytes).map_err(Error::InvalidString)
+        Ok(Self::new(&*bytes))
     }
 }
 

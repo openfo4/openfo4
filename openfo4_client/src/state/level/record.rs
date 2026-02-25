@@ -8,6 +8,7 @@ use openfo4_asset::Handle;
 use openfo4_core::events::EventBus;
 use openfo4_core::hierarchy::Children;
 use openfo4_core::object_ref_set::ObjectReferenceSet;
+use openfo4_core::path::DataPathBuf;
 use openfo4_core::record::RecordId;
 use openfo4_core::transform::ConvertCoordinateSystem;
 use openfo4_core::{Frozen, WorldExt};
@@ -430,11 +431,13 @@ impl SpawnEntity {
 
         let scene = match model {
             Some(model) if flags.contains(PartialEntityFlags::SCENE) => {
-                let path = format!("meshes/{}", model.as_str().unwrap());
+                let mut path = DataPathBuf::new(model.as_bytes());
+                path.push_front("meshes");
+
                 match ctx
                     .loader
                     .load::<NifScene, _>(&NifKey {
-                        path: path.clone(),
+                        path,
                         flags: nif_flags,
                     })
                     .await

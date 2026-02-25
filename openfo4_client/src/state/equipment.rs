@@ -7,6 +7,7 @@ use hecs::{Entity, World};
 use openfo4_animation::skeleton::SkeletonInstance;
 use openfo4_asset::{AssetLoader, Handle};
 use openfo4_core::hierarchy::Children;
+use openfo4_core::path::DataPathBuf;
 use openfo4_core::record::RecordId;
 use openfo4_esp::records::{
     BipedObjectFlags, ObjectModificationFunctionType, ObjectModificationPropertyProperty,
@@ -520,7 +521,7 @@ pub async fn load_equipment_item_models(
 
                 let scene = loader
                     .load::<NifScene, _>(&NifKey {
-                        path: model_path.as_str().unwrap().to_owned(),
+                        path: DataPathBuf::new(model_path.as_bytes()),
                         flags: LoadNifFlags::all(),
                     })
                     .await
@@ -533,7 +534,7 @@ pub async fn load_equipment_item_models(
             if let Some(model) = &weapon.model.model {
                 let scene = loader
                     .load::<NifScene, _>(&NifKey {
-                        path: model.as_str().unwrap().to_owned(),
+                        path: DataPathBuf::new(model.as_bytes()),
                         flags: LoadNifFlags::all(),
                     })
                     .await
@@ -569,7 +570,7 @@ pub async fn load_equipment_item_models(
         let model_index = if let Some(model) = &attachment.model.model {
             let scene = loader
                 .load::<NifScene, _>(&NifKey {
-                    path: model.as_str().unwrap().to_owned(),
+                    path: DataPathBuf::new(model.as_bytes()),
                     flags: LoadNifFlags::all(),
                 })
                 .await

@@ -11,6 +11,7 @@ use hashbrown::HashSet;
 use hecs::{Entity, EntityBuilder, World};
 use openfo4_asset::{Asset, AssetLoader, Handle, HandleOrAsset};
 use openfo4_core::hierarchy::Children;
+use openfo4_core::path::{DataPath, DataPathBuf};
 use openfo4_hkx::mesh::ExtractCompressedMeshShapeError;
 use openfo4_hkx::{HkObject, HkxFile};
 use openfo4_nif::material::{AlphaTestFunction, NiAlphaProperty, ShaderFlags1};
@@ -23,7 +24,6 @@ use crate::assets::Error;
 use crate::assets::data_file::DataFile;
 use crate::assets::material::{BgsmMaterial, MaterialKey};
 use crate::assets::texture::FileImageHandle;
-use crate::loader::fix_path;
 use crate::render::RenderObject;
 
 pub const NIF_TO_METERS: f32 = 1.0 / 69.99125;
@@ -46,7 +46,7 @@ bitflags! {
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct NifKey {
-    pub path: String,
+    pub path: DataPathBuf,
     pub flags: LoadNifFlags,
 }
 
@@ -226,19 +226,19 @@ impl Asset for NifScene {
         key: &Self::Key,
         ctx: &Self::Context,
     ) -> Result<Self, Self::Error> {
-        let mut path = fix_path(&key.path);
+        let mut key = key.clone();
 
         // All nif files are located in the meshes directory.
-        if !path.starts_with("meshes") {
-            path.insert_str(0, "meshes/");
+        if !key.path.starts_with(DataPath::from_str("meshes")) {
+            key.path.push_front("meshes");
         }
 
         // `meshes/markers` contains editor markers.
         // There does not seem any other indication that a
         // file/object is a marker.
         // Some markers are not inside this directory.
-        if path.starts_with("meshes/markers/") {
-            tracing::info!("skip {}", path);
+        if key.path.starts_with(DataPath::from_str("meshes/markers/")) {
+            tracing::info!("skip {}", key.path);
 
             return Ok(Self {
                 nodes: Hierarchy::new(),
@@ -248,7 +248,7 @@ impl Asset for NifScene {
             });
         }
 
-        let nif = loader.load::<DataFile<Nif>, _>(&path).await?;
+        let nif = loader.load::<DataFile<Nif>, _>(&key.path).await?;
 
         let Some(root) = nif.root() else {
             // Nif file is empty, return an empty scene.
@@ -407,7 +407,6 @@ impl Asset for NifScene {
                             Some(shader_property) => {
                                 if materials.get(&shader_property).is_none() {
                                     let material = load_material(
-                                        &path,
                                         loader,
                                         &ctx.entities,
                                         &nif,
@@ -418,7 +417,7 @@ impl Asset for NifScene {
                                     .map_err(|err| {
                                         Error::Other(format!(
                                             "invalid material in nif file {}: {}",
-                                            path, err
+                                            key.path, err
                                         ))
                                     })?;
 
@@ -556,7 +555,11 @@ impl Asset for NifScene {
                             },
                             Ok(None) => Node::default(),
                             Err(err) => {
-                                tracing::error!("failed to load collider from {}: {}", path, err);
+                                tracing::error!(
+                                    "failed to load collider from {}: {}",
+                                    key.path,
+                                    err
+                                );
                                 Node::default()
                             }
                         }
@@ -640,7 +643,6 @@ fn build_mesh(shape: &BSTriShape) -> Mesh {
 }
 
 async fn load_material(
-    p: &str,
     loader: &AssetLoader,
     entities: &Entities,
     nif: &Nif,
@@ -679,7 +681,7 @@ async fn load_material(
             let material = loader
                 .load::<BgsmMaterial, _>(&MaterialKey {
                     alpha_mode,
-                    path: shader_property.name.clone(),
+                    path: DataPathBuf::new(&*shader_property.name),
                 })
                 .await?;
 
@@ -727,7 +729,8 @@ async fn load_material(
 
                 if let Some(path) = texture_set.textures.get(0) {
                     if !path.is_empty() {
-                        let handle = loader.load::<FileImageHandle, _>(path).await?;
+                        let path = DataPathBuf::new(&**path);
+                        let handle = loader.load::<FileImageHandle, _>(&path).await?;
 
                         material.base_color_texture = Some(handle.0.clone());
                         textures.push(handle);
@@ -736,7 +739,8 @@ async fn load_material(
 
                 if let Some(path) = texture_set.textures.get(1) {
                     if !path.is_empty() {
-                        let handle = loader.load::<FileImageHandle, _>(path).await?;
+                        let path = DataPathBuf::new(&**path);
+                        let handle = loader.load::<FileImageHandle, _>(&path).await?;
 
                         material.normal_texture = Some(handle.0.clone());
                         textures.push(handle);
@@ -745,7 +749,8 @@ async fn load_material(
 
                 if let Some(path) = texture_set.textures.get(3) {
                     if !path.is_empty() {
-                        let handle = loader.load::<FileImageHandle, _>(path).await?;
+                        let path = DataPathBuf::new(&**path);
+                        let handle = loader.load::<FileImageHandle, _>(&path).await?;
 
                         material.grayscale_palette = Some(handle.0.clone());
                         textures.push(handle);
@@ -754,7 +759,8 @@ async fn load_material(
 
                 if let Some(path) = texture_set.textures.get(7) {
                     if !path.is_empty() {
-                        let handle = loader.load::<FileImageHandle, _>(path).await?;
+                        let path = DataPathBuf::new(&**path);
+                        let handle = loader.load::<FileImageHandle, _>(&path).await?;
 
                         material.specular_glossiness_texture = Some(handle.0.clone());
                         textures.push(handle);
@@ -780,7 +786,7 @@ async fn load_material(
 
             if !property.source_texture.is_empty() {
                 let handle = loader
-                    .load::<FileImageHandle, _>(&property.source_texture)
+                    .load::<FileImageHandle, _>(&DataPathBuf::new(&*property.source_texture))
                     .await?;
 
                 material.base_color_texture = Some(handle.0.clone());

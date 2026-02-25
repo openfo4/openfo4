@@ -3,16 +3,17 @@ use std::collections::VecDeque;
 use hashbrown::HashMap;
 use hecs::World;
 use openfo4_animation::driver::AnimationDriver;
+use openfo4_core::path::DataPathBuf;
 use openfo4_core::record::RecordId;
 use openfo4_esp::{RecordData, RecordKind};
 
-use crate::{loader::fix_path, state::esp::EspLoader};
+use crate::state::esp::EspLoader;
 
 #[derive(Clone, Debug)]
 struct Reaction {
     id: RecordId,
     /// Only trigger the reaction when the animation graph is active.
-    behavior_graph: String,
+    behavior_graph: DataPathBuf,
     /// The event that is sent to the animation graph when this reaction is triggered.
     event: Option<String>,
 }
@@ -53,7 +54,7 @@ impl AnimationSystem {
 
             reactions.entry(parent).or_default().push(Reaction {
                 id: record.id,
-                behavior_graph: fix_path(behavior_graph),
+                behavior_graph: DataPathBuf::new(behavior_graph),
                 event,
             });
         }
@@ -91,7 +92,7 @@ impl AnimationSystem {
 }
 
 #[derive(Clone, Debug)]
-pub struct ActiveBehaviorGraphs(pub Vec<String>);
+pub struct ActiveBehaviorGraphs(pub Vec<DataPathBuf>);
 
 #[derive(Clone, Debug, Default)]
 pub struct AnimationEventQueue(pub VecDeque<RecordId>);

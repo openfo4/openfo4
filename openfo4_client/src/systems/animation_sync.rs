@@ -8,6 +8,7 @@ use openfo4_animation::Value;
 use openfo4_animation::driver::AnimationDriver;
 use openfo4_animation::systems::{GameAnimationEvent, GameEvent};
 use openfo4_core::events::EventBus;
+use openfo4_core::path::DataPathBuf;
 
 use crate::state::anim_starter::ActiveBehaviorGraphs;
 use crate::systems::{GunFireEvent, GunReloadEvent};
@@ -92,7 +93,7 @@ pub fn update_animation_parameters(world: &mut World) {
         // however how they are generated still remains a mystery for now.
 
         for path in &graphs.0 {
-            if let Some(vars) = HARDCODED_GRAPH_VARIABLES.get(path.as_str()) {
+            if let Some(vars) = HARDCODED_GRAPH_VARIABLES.get(path) {
                 for movement in vars.movement {
                     let Some(mode) = movement.modes.iter().min_by(|a, b| {
                         f32::total_cmp(
@@ -133,11 +134,11 @@ struct GraphVariables {
     directions: &'static [Direction],
 }
 
-static HARDCODED_GRAPH_VARIABLES: LazyLock<HashMap<&'static str, GraphVariables>> =
+static HARDCODED_GRAPH_VARIABLES: LazyLock<HashMap<DataPathBuf, GraphVariables>> =
     LazyLock::new(|| {
         [
             (
-                "actors/character/behaviors/mtbehavior.hkx",
+                DataPathBuf::new("actors/character/behaviors/mtbehavior.hkx"),
                 GraphVariables {
                     movement: &[Movement {
                         modes: &[
@@ -166,7 +167,7 @@ static HARDCODED_GRAPH_VARIABLES: LazyLock<HashMap<&'static str, GraphVariables>
                 },
             ),
             (
-                "actors/character/behaviors/weaponbehavior.hkx",
+                DataPathBuf::new("actors/character/behaviors/weaponbehavior.hkx"),
                 GraphVariables {
                     movement: &[Movement {
                         modes: &[

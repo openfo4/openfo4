@@ -9,6 +9,7 @@ openfo4_esp = { version = "0.1.0", path = "../openfo4_esp" }
 
 hecs = "0.10.5"
 glam = { version = "0.28.0", features = ["bytemuck"] }
+bstr = "1.12.1"
 
 [lints]
 workspace = true

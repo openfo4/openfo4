@@ -3,18 +3,18 @@ use game_render::backend::TextureFormat;
 use game_render::texture::Image;
 use game_render::texture::image::MipImage;
 use openfo4_asset::{Asset, AssetLoader};
+use openfo4_core::path::{DataPath, DataPathBuf};
 use openfo4_dds::Format;
 
 use crate::assets::data_file::DataFile;
 use crate::assets::{Error, FileLoadContext};
-use crate::loader::fix_path;
 
 /// An [`ImageHandle`] that was loaded by a file.
 #[derive(Clone, Debug)]
 pub struct FileImageHandle(pub ImageHandle);
 
 impl Asset for FileImageHandle {
-    type Key = String;
+    type Key = DataPathBuf;
     type Error = Error;
     type Context = FileLoadContext;
 
@@ -23,12 +23,12 @@ impl Asset for FileImageHandle {
         path: &Self::Key,
         ctx: &Self::Context,
     ) -> Result<Self, Self::Error> {
-        let mut path = fix_path(&path);
-        if !path.starts_with("textures") {
-            path = format!("textures/{}", path);
+        let mut path = path.clone();
+        if !path.starts_with(DataPath::from_str("textures")) {
+            path.push_front("textures");
         }
 
-        if path.to_lowercase().ends_with(".dds") {
+        if path.extension().is_some_and(|v| v == "dds") {
             let image = loader
                 .load::<DataFile<openfo4_dds::Image>, _>(&path)
                 .await
@@ -39,7 +39,7 @@ impl Asset for FileImageHandle {
                 Format::Bc2Unorm => TextureFormat::Bc2RgbaUnorm,
                 Format::Bc3Unorm => TextureFormat::Bc3RgbaUnorm,
                 Format::Bc5Unorm => TextureFormat::Bc5RgUnorm,
-                Format::Rgba8Unorm => TextureFormat::Rgb8Unorm,
+                Format::Rgba8Unorm => TextureFormat::Rgba8Unorm,
                 Format::Bgra8Unorm => TextureFormat::Bgra8Unorm,
                 Format::Bgra8UnormSrgb => TextureFormat::Bgra8UnormSrgb,
                 _ => todo!(),

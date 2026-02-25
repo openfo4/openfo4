@@ -12,6 +12,7 @@ mod form;
 mod form_list;
 mod game;
 mod global_variable;
+mod image_space_modifier;
 mod input_enable_layer;
 mod keyword;
 mod leveled_actor;

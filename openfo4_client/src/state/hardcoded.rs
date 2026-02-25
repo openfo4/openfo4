@@ -2,8 +2,8 @@
 
 use std::num::NonZeroU32;
 
-use game_common::components::actor;
 use hashbrown::HashMap;
+use openfo4_core::path::DataPath;
 use openfo4_core::record::{ModuleId, RecordId};
 use openfo4_esp::records::ActorValueInfo;
 use openfo4_esp::{FormId, Record, RecordData, RecordHeaderFlags, ZString};
@@ -28,7 +28,7 @@ pub const ACTOR_VALUE_AGILITY: FormId = FormId(0x2c7);
 pub const ACTOR_VALUE_LUCK: FormId = FormId(0x2c8);
 pub const ACTOR_VALUE_HEALTH: FormId = FormId(0x2d4);
 
-pub const PATH_SKY_ATMOSPHERE: &str = "meshes/sky/atmosphere.nif";
+pub const PATH_SKY_ATMOSPHERE: &DataPath = DataPath::from_str("meshes/sky/atmosphere.nif");
 
 pub const ACTOR_VALUE_FATIGUE: FormId = FormId(0x34f);
 pub const ACTOR_VALUE_POWER_ARMOR_HEAD_CONDITION: FormId = FormId(0x2ef);

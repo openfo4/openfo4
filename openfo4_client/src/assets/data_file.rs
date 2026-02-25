@@ -4,6 +4,7 @@ use std::sync::Arc;
 
 use image::{ImageBuffer, Rgba};
 use openfo4_asset::{Asset, AssetLoader};
+use openfo4_core::path::DataPathBuf;
 use openfo4_dds::Image;
 use openfo4_hkx::HkxFile;
 use openfo4_nif::Nif;
@@ -11,7 +12,7 @@ use openfo4_nif::bgsm::Bgsm;
 use tracing::instrument;
 
 use super::Error;
-use crate::loader::{FileLoader, fix_path};
+use crate::loader::FileLoader;
 
 #[derive(Clone, Debug)]
 pub struct DataFileContext {
@@ -39,7 +40,7 @@ impl<T> Asset for DataFile<T>
 where
     T: DecodeAsset + Send + Sync + 'static,
 {
-    type Key = String;
+    type Key = DataPathBuf;
     type Context = DataFileContext;
     type Error = Error;
 
@@ -49,9 +50,7 @@ where
         path: &Self::Key,
         ctx: &Self::Context,
     ) -> Result<Self, Self::Error> {
-        let path = fix_path(path);
-
-        let mut reader = ctx.loader.open(&path).await.map_err(|err| match err {
+        let mut reader = ctx.loader.open(path).await.map_err(|err| match err {
             crate::loader::Error::NotFound(_) => Error::NotFound,
             err => Error::from(err),
         })?;

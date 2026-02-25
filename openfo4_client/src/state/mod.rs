@@ -297,8 +297,6 @@ impl GameState {
 
         self.animation.update(&mut self.world);
 
-        self.quests
-            .update(&mut self.world, &mut self.event_bus, &mut self.executor);
         self.executor.update(
             &mut self.world,
             &mut self.event_bus,
@@ -309,6 +307,8 @@ impl GameState {
             &self.esp_loader,
             Duration::from_secs(1) / UPS,
         );
+        self.quests
+            .update(&mut self.world, &mut self.event_bus, &mut self.executor);
 
         openfo4_animation::systems::drive_animations::<AnimationSet>(
             &mut self.world,

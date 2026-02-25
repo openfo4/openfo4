@@ -4,6 +4,7 @@ use game_render::mesh::{Indices, Mesh};
 use glam::{UVec2, Vec2, Vec3};
 use image::{ImageBuffer, Rgba};
 use openfo4_asset::AssetLoader;
+use openfo4_core::path::DataPathBuf;
 use openfo4_core::record::RecordId;
 use openfo4_esp::records::{Land, LandLandTexture, LandTextureAlphaLayerPoint, Quadrant};
 use openfo4_esp::{FormId, RecordData, RecordKind};
@@ -188,38 +189,54 @@ async fn load_terrain_layer(
     };
 
     let bgsm = match &texture_set.material {
-        Some(bgsm) => {
-            let bgsm = loader
-                .load::<DataFile<Bgsm>, _>(&format!("materials/{}", bgsm.as_str().unwrap()))
-                .await
-                .unwrap();
+        Some(path) => {
+            let mut path = DataPathBuf::new(path.as_bytes());
+            path.push_front("materials");
 
+            let bgsm = loader.load::<DataFile<Bgsm>, _>(&path).await.unwrap();
             Some(bgsm)
         }
         None => None,
     };
 
     let diffuse_path = match &bgsm {
-        Some(bgsm) => Some(format!("textures/{}", bgsm.diffuse_texture)),
+        Some(bgsm) => Some(bgsm.diffuse_texture.as_bytes()),
         None => match &texture_set.diffuse_texture {
-            Some(path) => Some(format!("textures/{}", path.as_str().unwrap())),
+            Some(path) => Some(path.as_bytes()),
             None => None,
         },
-    };
+    }
+    .map(|path| {
+        let mut path = DataPathBuf::new(path);
+        path.push_front("textures");
+        path
+    });
+
     let normal_path = match &bgsm {
-        Some(bgsm) => Some(format!("textures/{}", bgsm.normal_texture)),
+        Some(bgsm) => Some(bgsm.normal_texture.as_bytes()),
         None => match &texture_set.normal_texture {
-            Some(path) => Some(format!("textures/{}", path.as_str().unwrap())),
+            Some(path) => Some(path.as_bytes()),
             None => None,
         },
-    };
+    }
+    .map(|path| {
+        let mut path = DataPathBuf::new(path);
+        path.push_front("textures");
+        path
+    });
+
     let smooth_spec_path = match &bgsm {
-        Some(bgsm) => Some(format!("textures/{}", bgsm.smooth_spec_texture)),
+        Some(bgsm) => Some(bgsm.smooth_spec_texture.as_bytes()),
         None => match &texture_set.smooth_spec_texture {
-            Some(path) => Some(format!("textures/{}", path.as_str().unwrap())),
+            Some(path) => Some(path.as_bytes()),
             None => None,
         },
-    };
+    }
+    .map(|path| {
+        let mut path = DataPathBuf::new(path);
+        path.push_front("textures");
+        path
+    });
 
     let diffuse_texture = match &diffuse_path {
         Some(path) => Some(

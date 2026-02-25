@@ -5,6 +5,7 @@ use game_common::components::Transform;
 use openfo4_animation::AnimationProvider;
 use openfo4_animation::animation::{AnimationClip, AnimationClipFlags, Annotation, BlendMode};
 use openfo4_asset::{Asset, AssetLoader, Handle};
+use openfo4_core::path::DataPathBuf;
 use openfo4_hkx::animation::BlendHint;
 use openfo4_hkx::{HkObject, HkxFile};
 use tracing::instrument;
@@ -17,7 +18,7 @@ use crate::assets::data_file::DataFile;
 pub struct FileAnimationClip(pub AnimationClip);
 
 impl Asset for FileAnimationClip {
-    type Key = String;
+    type Key = DataPathBuf;
     type Error = Error;
     type Context = ();
 

@@ -1,4 +1,3 @@
-use std::borrow::Cow;
 use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
 
@@ -10,37 +9,36 @@ use hecs::{CommandBuffer, World};
 use openfo4_animation::driver::AnimationDriver;
 use openfo4_animation::skeleton::{Bone, Skeleton};
 use openfo4_asset::{AssetLoader, Handle};
-use openfo4_core::events::EventBus;
+use openfo4_core::path::DataPath;
 use openfo4_esp::records::{SubgraphPerspective, SubgraphRole};
-use openfo4_hkx::behavior::EventBase;
 use openfo4_hkx::{HkObject, HkxFile};
 
 use crate::assets::Error;
 use crate::assets::animation::FileAnimationClip;
 use crate::assets::data_file::DataFile;
 use crate::assets::nif_v2::{LoadNifFlags, NifKey, NifScene};
-use crate::loader::fix_path;
-use crate::state::actions::{Action, Actions};
-use crate::state::anim_starter::{ActiveBehaviorGraphs, AnimationEventQueue};
+use crate::state::anim_starter::ActiveBehaviorGraphs;
 use crate::state::animation_test::load_behavior_data;
 use crate::state::npc::{ActorAnimationGraphData, ObjectKeywords};
 use crate::systems::inventory::{Inventory, ItemData};
-use crate::systems::{WeaponDrawnEvent, WeaponSheathEvent};
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct SkeletonConfig<'a> {
     /// Path to the nif file of the skeleton.
-    pub nif_skeleton: &'a str,
+    pub nif_skeleton: &'a DataPath,
     /// Path to the project hkx file.
-    pub hkx_project: &'a str,
+    pub hkx_project: &'a DataPath,
 }
 
 pub async fn load(
     loader: &AssetLoader,
     config: SkeletonConfig<'_>,
 ) -> (Handle<NifScene>, Skeleton) {
-    let nif_skeleton = format!("meshes/{}", fix_path(config.nif_skeleton));
-    let project_path = format!("meshes/{}", fix_path(config.hkx_project));
+    let mut nif_skeleton = config.nif_skeleton.to_owned();
+    nif_skeleton.push_front("meshes");
+
+    let mut project_path = config.hkx_project.to_owned();
+    project_path.push_front("meshes");
 
     let nif_skeleton = loader
         .load::<NifScene, _>(&NifKey {
@@ -50,10 +48,7 @@ pub async fn load(
         .await
         .unwrap();
 
-    let mut root = project_path.clone();
-    if let Some(position) = root.rfind("/") {
-        root.truncate(position);
-    }
+    let root = project_path.parent().unwrap();
 
     let root_file = loader
         .load::<DataFile<HkxFile>, _>(&project_path)
@@ -74,8 +69,12 @@ pub async fn load(
         .first()
         .unwrap();
 
+    let mut character_path = root.to_owned();
+    character_path.push(&**character_filename);
+    character_path.set_extension("hkx");
+
     let character_file = loader
-        .load::<DataFile<HkxFile>, _>(&format!("{}/{}", root, hkt_to_hkx(character_filename)))
+        .load::<DataFile<HkxFile>, _>(&character_path)
         .await
         .unwrap();
 
@@ -87,10 +86,14 @@ pub async fn load(
         })
         .unwrap();
 
-    let skeleton_filename = hkt_to_hkx(&character_data.string_data.rig_name);
+    let skeleton_filename = &character_data.string_data.rig_name;
+
+    let mut skeleton_path = root.to_owned();
+    skeleton_path.push(&**skeleton_filename);
+    skeleton_path.set_extension("hkx");
 
     let skeleton_file = loader
-        .load::<DataFile<HkxFile>, _>(&format!("{}/{}", root, skeleton_filename))
+        .load::<DataFile<HkxFile>, _>(&skeleton_path)
         .await
         .unwrap();
 
@@ -102,7 +105,7 @@ pub async fn load(
 
 pub async fn load_anim(
     loader: &AssetLoader,
-    search_paths: &[&str],
+    search_paths: &[&DataPath],
 ) -> Result<Handle<FileAnimationClip>, ()> {
     for path in search_paths {
         match loader.load::<FileAnimationClip, _>(*path).await {
@@ -115,16 +118,6 @@ pub async fn load_anim(
     }
 
     Err(())
-}
-
-fn hkt_to_hkx(path: &str) -> Cow<'_, str> {
-    if let Some(path) = path.to_lowercase().strip_suffix(".hkt") {
-        let mut path = path.to_owned();
-        path.push_str(".hkx");
-        Cow::Owned(path)
-    } else {
-        Cow::Borrowed(path)
-    }
 }
 
 fn load_skeleton(file: &HkxFile, nif: &NifScene) -> Option<Skeleton> {
@@ -313,7 +306,7 @@ pub fn update_actor_animation_graphs(world: &mut World, loader: &AssetLoader, po
         let search_paths = graph
             .search_paths
             .iter()
-            .map(|v| v.as_str())
+            .map(|v| v.as_ref())
             .collect::<Vec<_>>();
 
         let behavior = futures_lite::future::block_on(load_behavior_data(

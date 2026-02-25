@@ -5,6 +5,7 @@ edition = "2024"
 
 [dependencies]
 openfo4_io = { version = "0.1.0", path = "../openfo4_io" }
+openfo4_core = { version = "0.1.0", path = "../openfo4_core" }
 
 thiserror = "2.0.12"
 hashbrown = "0.15.4"

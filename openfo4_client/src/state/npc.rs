@@ -7,6 +7,7 @@ use hecs::{Entity, World};
 use openfo4_asset::{AssetLoader, Handle};
 use openfo4_core::WorldExt;
 use openfo4_core::events::EventBus;
+use openfo4_core::path::DataPathBuf;
 use openfo4_core::record::RecordId;
 use openfo4_esp::records::{Class, NpcBaseFlags, NpcTemplateFlags, Race, SubgraphFlags};
 use openfo4_esp::{RecordData, RecordKind, ZString};
@@ -283,13 +284,13 @@ pub async fn spawn_actor(
         let search_paths = subgraph
             .animation_paths
             .iter()
-            .map(|v| v.as_str().unwrap().to_owned())
+            .map(|v| DataPathBuf::new(v.as_bytes()))
             .collect::<Vec<_>>();
 
         subgraphs.push(ActorAnimationGraph {
             // graph: Arc::new(behavior.graph),
             // animation: behavior.clips,
-            behavior: subgraph.behavior_graph.as_str().unwrap().to_owned(),
+            behavior: DataPathBuf::new(subgraph.behavior_graph.as_bytes()),
             actor_keywords: subgraph.actor_keywords.clone(),
             target_keywords: subgraph.target_keywords.clone(),
             flags: subgraph.flags,
@@ -322,7 +323,7 @@ pub async fn spawn_actor(
         anim_graphs: ActorAnimationGraphData {
             character: character.clone(),
             root_path: character.root_path.clone(),
-            root_behavior_path: character.behavior_filename.clone(),
+            root_behavior_path: DataPathBuf::new(&*character.behavior_filename),
             subgraphs,
         },
         controller: ControllerShape {
@@ -647,20 +648,20 @@ pub struct RaceSubgraphData {
 #[derive(Clone, Debug)]
 pub struct ActorAnimationGraphData {
     pub character: ActorCharacter,
-    pub root_path: String,
-    pub root_behavior_path: String,
+    pub root_path: DataPathBuf,
+    pub root_behavior_path: DataPathBuf,
     pub subgraphs: Vec<ActorAnimationGraph>,
 }
 
 #[derive(Clone, Debug)]
 pub struct ActorAnimationGraph {
     // pub graph: Arc<AnimationGraph>,
-    pub behavior: String,
+    pub behavior: DataPathBuf,
     // pub animation: AnimationSet,
     pub actor_keywords: Vec<RecordId>,
     pub target_keywords: Vec<RecordId>,
     pub flags: SubgraphFlags,
-    pub search_paths: Vec<String>,
+    pub search_paths: Vec<DataPathBuf>,
 }
 
 async fn load_actor_customization(
@@ -705,9 +706,11 @@ async fn load_actor_customization(
             continue;
         };
 
+        let path = DataPathBuf::new(path.as_bytes());
+
         let scene = loader
             .load::<NifScene, _>(&NifKey {
-                path: path.as_str().unwrap().to_owned(),
+                path,
                 flags: LoadNifFlags::all(),
             })
             .await

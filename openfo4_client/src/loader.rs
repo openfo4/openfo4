@@ -4,6 +4,7 @@ use std::path::{Path, PathBuf};
 use game_tracing::trace_span;
 use hashbrown::HashMap;
 use openfo4_ba2::Archive;
+use openfo4_core::path::{DataPath, DataPathBuf};
 use openfo4_io::fs::File;
 use thiserror::Error;
 
@@ -14,13 +15,13 @@ pub enum Error {
     #[error("error reading ba2 archive: {0}")]
     Ba2(openfo4_ba2::Error),
     #[error("file {0} not found")]
-    NotFound(String),
+    NotFound(DataPathBuf),
 }
 
 #[derive(Debug)]
 pub struct FileLoader {
     sources: Vec<Source>,
-    files: HashMap<String, usize>,
+    files: HashMap<DataPathBuf, usize>,
 }
 
 impl FileLoader {
@@ -82,18 +83,16 @@ impl FileLoader {
         Self { sources, files }
     }
 
-    pub async fn open(&self, path: &str) -> Result<Reader, Error> {
-        let path = fix_path(path);
-
+    pub async fn open(&self, path: &DataPath) -> Result<Reader, Error> {
         tracing::debug!("loading {}", path);
 
-        let Some(index) = self.files.get(&path) else {
+        let Some(index) = self.files.get(path) else {
             return Err(Error::NotFound(path.to_owned()));
         };
 
         match &self.sources[*index] {
             Source::Directory(source) => {
-                let path = source.files.get(&path).unwrap();
+                let path = source.files.get(path).unwrap();
                 let file = std::fs::File::open(path).map_err(Error::Io)?;
                 Ok(Reader::File(file))
             }
@@ -104,8 +103,8 @@ impl FileLoader {
         }
     }
 
-    pub fn files(&self) -> impl Iterator<Item = &str> {
-        self.files.keys().map(|v| v.as_str())
+    pub fn files(&self) -> impl Iterator<Item = &DataPath> {
+        self.files.keys().map(|v| v.as_ref())
     }
 }
 
@@ -149,7 +148,7 @@ impl Seek for Reader {
 
 #[derive(Debug)]
 struct DirectorySource {
-    files: HashMap<String, PathBuf>,
+    files: HashMap<DataPathBuf, PathBuf>,
 }
 
 impl DirectorySource {
@@ -180,61 +179,13 @@ impl DirectorySource {
                     // We recursively visit all subentries of the root directory,
                     // so all paths should start with the root directory.
                     let name = file_path.strip_prefix(&root_dir).unwrap();
+                    let name = DataPathBuf::new(name.to_str().unwrap());
 
-                    files.insert(name.to_str().unwrap().to_lowercase(), file_path);
+                    files.insert(name, file_path);
                 }
             }
         }
 
         Ok(Self { files })
-    }
-}
-
-/// Normalizes the asset path.
-pub fn fix_path(path: &str) -> String {
-    let mut path = path.trim().replace("\\", "/");
-    path.make_ascii_lowercase();
-
-    let mut start = 0;
-    let mut acc = 0;
-    for seg in path.split('/') {
-        if seg != "data" {
-            acc += seg.len() + 1;
-            continue;
-        }
-
-        start = acc + seg.len() + 1;
-    }
-    let path = &path[start..];
-
-    // The file paths are all over the place.
-    // Some start with data\, some with \data, some are even absolute
-    // and start at c:\ and some have no prefix at all.
-    let path = path.strip_prefix("/").unwrap_or(&path);
-    let path = path.strip_prefix("data/").unwrap_or(&path);
-    let path = path.strip_prefix("data").unwrap_or(&path);
-
-    path.to_owned()
-}
-
-#[cfg(test)]
-mod tests {
-    use crate::loader::fix_path;
-
-    #[test]
-    fn test_fix_path() {
-        assert_eq!(fix_path("\\NO_UPPERCASE\\ALLOWED"), "no_uppercase/allowed");
-        assert_eq!(fix_path("meshes\\my_mesh"), "meshes/my_mesh");
-        assert_eq!(fix_path("\\meshes\\my_mesh"), "meshes/my_mesh");
-        assert_eq!(fix_path("data\\meshes\\my_mesh"), "meshes/my_mesh");
-        assert_eq!(fix_path("\\data\\meshes\\my_mesh"), "meshes/my_mesh");
-        assert_eq!(
-            fix_path("c:\\a\\b\\data\\meshes\\my_mesh"),
-            "meshes/my_mesh"
-        );
-        assert_eq!(
-            fix_path("c:\\a\\b\\data\\a\\b\\data\\meshes\\my_mesh"),
-            "meshes/my_mesh"
-        );
     }
 }

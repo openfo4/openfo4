@@ -28,7 +28,7 @@ use openfo4_script::runtime::{Context, Exception, ObjectAddr, ObjectRef, Stack, 
 use crate::components::Player;
 use crate::events::inventory::{ItemAddedEvent, ItemEquippedEvent};
 use crate::events::trigger::{TriggerEnter, TriggerLeave};
-use crate::loader::{FileLoader, fix_path};
+use crate::loader::FileLoader;
 use crate::state::esp::EspLoader;
 use crate::systems::global::GlobalProperties;
 use crate::systems::quests::QuestManager;
@@ -66,9 +66,10 @@ impl Executor {
         let mut engine = Engine::new();
 
         for path in file_loader.files() {
-            let path = fix_path(path);
-            if path.starts_with("scripts/") && path.ends_with(".pex") {
-                let mut reader = file_loader.open(&path).await.unwrap();
+            if path.components().next().is_some_and(|v| v == "scripts")
+                && path.extension().is_some_and(|v| v == "pex")
+            {
+                let mut reader = file_loader.open(path).await.unwrap();
                 let mut buf = Vec::new();
                 reader.read_to_end(&mut buf).unwrap();
 

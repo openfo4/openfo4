@@ -2,6 +2,7 @@ use game_common::components::Color;
 use game_core_pipeline::entities::MaterialHandle;
 use game_core_pipeline::material::{AlphaMode, StandardMaterial};
 use openfo4_asset::{Asset, AssetLoader, Handle};
+use openfo4_core::path::DataPathBuf;
 use openfo4_nif::bgsm::Bgsm;
 
 use crate::assets::data_file::DataFile;
@@ -11,7 +12,7 @@ use crate::assets::{Error, FileLoadContext};
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct MaterialKey {
-    pub path: String,
+    pub path: DataPathBuf,
     pub alpha_mode: Option<AlphaMode>,
 }
 
@@ -60,7 +61,7 @@ impl Asset for BgsmMaterial {
 
         if !bgsm.diffuse_texture.is_empty() {
             let handle = loader
-                .load::<FileImageHandle, _>(&bgsm.diffuse_texture)
+                .load::<FileImageHandle, _>(&DataPathBuf::new(&*bgsm.diffuse_texture))
                 .await?;
 
             material.base_color_texture = Some(handle.0.clone());
@@ -69,7 +70,7 @@ impl Asset for BgsmMaterial {
 
         if !bgsm.normal_texture.is_empty() {
             let handle = loader
-                .load::<FileImageHandle, _>(&bgsm.normal_texture)
+                .load::<FileImageHandle, _>(&DataPathBuf::new(&*bgsm.normal_texture))
                 .await?;
 
             material.normal_texture = Some(handle.0.clone());
@@ -78,7 +79,7 @@ impl Asset for BgsmMaterial {
 
         if !bgsm.smooth_spec_texture.is_empty() {
             let handle = loader
-                .load::<FileImageHandle, _>(&bgsm.smooth_spec_texture)
+                .load::<FileImageHandle, _>(&DataPathBuf::new(&*bgsm.smooth_spec_texture))
                 .await?;
 
             material.specular_glossiness_texture = Some(handle.0.clone());
@@ -87,7 +88,9 @@ impl Asset for BgsmMaterial {
 
         if let Some(grayscale_palette) = &bgsm.grayscale_palette {
             let handle = loader
-                .load::<FileImageHandle, _>(&grayscale_palette.grayscale_texture)
+                .load::<FileImageHandle, _>(&DataPathBuf::new(
+                    &*grayscale_palette.grayscale_texture,
+                ))
                 .await?;
 
             material.grayscale_palette_scale = grayscale_palette.scale;
