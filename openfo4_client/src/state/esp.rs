@@ -5,6 +5,7 @@ use async_lock::RwLock;
 use game_common::collections::lru::LruCache;
 use hashbrown::{HashMap, HashSet};
 use openfo4_core::record::{ModuleId, RecordId};
+use openfo4_esp::vmad::{Object, Value};
 use openfo4_esp::{Error, EspFile, FormId, Record, RecordChildren, RecordData, RecordKind};
 use openfo4_io::fs::File;
 
@@ -200,15 +201,13 @@ impl EspLoader {
         let form = FormId::new(index as u8, id.form.form());
 
         let record = file.file.lookup(kind, form).await?;
-        self.cache.write().await.insert(
-            id,
-            GlobalRecord {
-                id,
-                local: record.clone(),
-            },
-        );
 
-        Ok(GlobalRecord { id, local: record })
+        let mut record = GlobalRecord { id, local: record };
+        apply_patches(&mut record);
+
+        self.cache.write().await.insert(id, record.clone());
+
+        Ok(record)
     }
 
     pub async fn lookup_all(&self, kind: Option<RecordKind>) -> Result<Vec<GlobalRecord>, Error> {
@@ -220,13 +219,16 @@ impl EspLoader {
             let local_records = file.file.lookup_all(kind).collect::<Result<Vec<_>, _>>()?;
             records.reserve(local_records.len());
             for local in local_records {
-                records.push(GlobalRecord {
+                let mut record = GlobalRecord {
                     id: RecordId {
                         module: file.id,
                         form: local.id,
                     },
                     local,
-                });
+                };
+
+                apply_patches(&mut record);
+                records.push(record);
             }
         }
 
@@ -259,13 +261,16 @@ impl EspLoader {
             records.reserve(local_records.len());
 
             for local in local_records {
-                records.push(GlobalRecord {
+                let mut record = GlobalRecord {
                     id: RecordId {
                         module: file.id,
                         form: local.id,
                     },
                     local,
-                });
+                };
+
+                apply_patches(&mut record);
+                records.push(record);
             }
         }
 
@@ -294,4 +299,37 @@ struct PluginFile {
 pub struct GlobalRecord {
     pub id: RecordId,
     pub local: Record,
+}
+
+/// Apply hardcoded patches on the record.
+fn apply_patches(record: &mut GlobalRecord) {
+    // Only patch Fallout4.esm
+    if record.id.module != HARDCODED_MODULE_ID {
+        return;
+    }
+
+    // QUST: DialogueDrumlinDiner
+    // Contains a broken quest fragment property.
+    if record.id.form == FormId(0x1069a9) {
+        tracing::debug!("patching record {:?}", record.id.form);
+
+        let RecordData::Quest(data) = &mut record.local.data else {
+            return;
+        };
+
+        if let Some(vmad) = &mut data.virtual_machine_adapter
+            && let Some(frag) = &mut vmad.fragments
+            && let Some(script) = &mut frag.script
+        {
+            script.properties.retain(|prop| {
+                !matches!(
+                    prop.value,
+                    Value::Object(Object {
+                        form: FormId(0x1069aa),
+                        alias: None,
+                    })
+                )
+            });
+        }
+    }
 }
