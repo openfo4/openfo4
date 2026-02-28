@@ -25,6 +25,7 @@ use crate::state::esp::GlobalRecord;
 use crate::state::level::LoadContext;
 use crate::state::level::data_ext::RecordDataExt;
 use crate::state::level::items::resolve_item;
+use crate::state::level::navmesh::load_navmesh;
 use crate::state::level::partial::PartialEntityFlags;
 use crate::state::level::terrain::load_land;
 use crate::state::npc::{Actor, ActorInstanceProps, ObjectKeywords};
@@ -33,6 +34,7 @@ use crate::systems::door::{Door, PortalDoor};
 use crate::systems::inventory::{Inventory, ItemStack};
 use crate::systems::lights::{LightFlicker, LightFlickerMode};
 use crate::systems::linked_refs::LinkedRefs;
+use crate::systems::pathing::NavMesh;
 use crate::systems::scripting::ScriptEntities;
 use crate::systems::scripting::loader::ScriptObject;
 
@@ -56,6 +58,7 @@ pub struct SpawnEntity {
     pub script: Option<ScriptObject>,
     pub keywords: ObjectKeywords,
     pub trigger_box: Option<TriggerBox>,
+    pub navmesh: Option<NavMesh>,
 }
 
 impl SpawnEntity {
@@ -88,6 +91,7 @@ impl SpawnEntity {
             script,
             keywords,
             trigger_box,
+            navmesh,
         } = self;
 
         // If the object reference already exists we will overwrite it.
@@ -142,6 +146,10 @@ impl SpawnEntity {
 
         if let Some(tb) = trigger_box {
             world.insert_one(entity, tb).unwrap();
+        }
+
+        if let Some(navmesh) = navmesh {
+            world.insert_one(entity, navmesh).unwrap();
         }
 
         if let Some(script) = script {
@@ -259,6 +267,10 @@ impl SpawnEntity {
             }
             RecordData::Land(land) => {
                 let entity = load_land(ctx, record.id, &land).await;
+                return Some(entity);
+            }
+            RecordData::NavMesh(mesh) => {
+                let entity = load_navmesh(ctx, &mesh).await;
                 return Some(entity);
             }
             _ => return None,

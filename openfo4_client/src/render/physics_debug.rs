@@ -14,6 +14,7 @@ use crate::cell::CellId;
 use crate::components::{Camera, NiTransform, TriggerBox};
 use crate::state::npc::BodyPartBone;
 use crate::systems::door::{AUTOLOAD_DOOR_RADIUS, Door};
+use crate::systems::pathing::NavMesh;
 
 const COLOR: Color = Color::RED;
 
@@ -22,6 +23,8 @@ const HITSCAN_RAYCAST_LINE_MISS_COLOR: Color = Color::RED;
 const HITSCAN_RAYCAST_HIT_COLOR: Color = Color::GREEN;
 
 const AUTO_DOOR_COLOR: Color = Color::GREEN;
+
+const NAVMESH_TRIANGLE_COLOR: Color = Color::BLUE;
 
 #[derive(Copy, Clone, Debug)]
 pub struct HitscanRaycast {
@@ -293,6 +296,20 @@ pub fn draw_trigger_boxes(world: &World, gizmos: &Gizmos) {
             ),
         ] {
             gizmos.line(start, end, trigger_box.marker_color);
+        }
+    }
+}
+
+pub fn draw_navmesh(world: &World, gizmos: &Gizmos) {
+    for (_, mesh) in world.query::<&NavMesh>().iter() {
+        for indices in mesh.indices.chunks(3) {
+            let a = mesh.vertices[indices[0] as usize];
+            let b = mesh.vertices[indices[1] as usize];
+            let c = mesh.vertices[indices[2] as usize];
+
+            gizmos.line(a, b, NAVMESH_TRIANGLE_COLOR);
+            gizmos.line(b, c, NAVMESH_TRIANGLE_COLOR);
+            gizmos.line(c, a, NAVMESH_TRIANGLE_COLOR);
         }
     }
 }

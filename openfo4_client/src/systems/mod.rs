@@ -20,6 +20,7 @@ pub mod inventory;
 pub mod lights;
 pub mod linked_refs;
 pub mod ni_transform;
+pub mod pathing;
 pub mod projectile;
 pub mod quests;
 pub mod scripting;

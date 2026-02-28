@@ -2,6 +2,7 @@ mod data_ext;
 pub mod items;
 pub mod leveled_list;
 pub mod loader;
+mod navmesh;
 mod partial;
 mod record;
 mod terrain;
