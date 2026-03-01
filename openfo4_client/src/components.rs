@@ -1,7 +1,7 @@
 use std::ops::{Mul, MulAssign};
 
 use game_common::components::{Color, Transform};
-use glam::{Quat, Vec3};
+use glam::{IVec3, Quat, Vec3};
 use hashbrown::HashSet;
 use hecs::Entity;
 use openfo4_core::record::RecordId;
@@ -135,4 +135,11 @@ pub enum ActorProtection {
     ///
     /// Essential actors ignore lethal damage from any actor.
     Essential,
+}
+
+/// Object bounds as reported in the form in NIF space.
+#[derive(Copy, Clone, Debug, PartialEq)]
+pub struct ObjectBounds {
+    pub min: IVec3,
+    pub max: IVec3,
 }

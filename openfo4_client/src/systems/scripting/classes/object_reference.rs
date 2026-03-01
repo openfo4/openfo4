@@ -8,6 +8,7 @@ use openfo4_core::transform::ConvertCoordinateSystem;
 use openfo4_script::engine::Engine;
 use openfo4_script::runtime::{Caller, Exception};
 
+use crate::components::{ObjectBounds, TriggerBox};
 use crate::state::npc::ObjectKeywords;
 use crate::systems::inventory::Inventory;
 use crate::systems::linked_refs::LinkedRefs;
@@ -1072,7 +1073,8 @@ fn get_heading_angle(
 /// float Function() native
 /// ```
 fn get_height(caller: Caller<'_, State>, self_ptr: Object) -> Result<f32, Exception> {
-    todo!()
+    let bounds = get_bounds(caller, self_ptr).ok_or(Exception::Error)?;
+    Ok(bounds.min.z.abs_diff(bounds.max.z) as f32)
 }
 
 /// `GetInventoryValue`
@@ -1165,7 +1167,8 @@ fn get_key(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Except
 /// float Function() native
 /// ```
 fn get_length(caller: Caller<'_, State>, self_ptr: Object) -> Result<f32, Exception> {
-    todo!()
+    let bounds = get_bounds(caller, self_ptr).ok_or(Exception::Error)?;
+    Ok(bounds.min.y.abs_diff(bounds.max.y) as f32)
 }
 
 /// `GetLinkedRef`
@@ -1446,7 +1449,16 @@ fn get_transmitter_distance(caller: Caller<'_, State>, self_ptr: Object) -> Resu
 /// int Function() native
 /// ```
 fn get_trigger_object_count(caller: Caller<'_, State>, self_ptr: Object) -> Result<i32, Exception> {
-    todo!()
+    let entity = caller.data().entity(self_ptr).ok_or(Exception::Error)?;
+
+    let tbox = caller
+        .data()
+        .world()
+        .get::<&TriggerBox>(entity)
+        .map_err(|_| Exception::Error)?;
+
+    let count = tbox.entities_inside.len().try_into().unwrap_or(i32::MAX);
+    Ok(count)
 }
 
 /// `GetValue`
@@ -1490,7 +1502,8 @@ fn get_voice_type(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object,
 /// float Function() native
 /// ```
 fn get_width(caller: Caller<'_, State>, self_ptr: Object) -> Result<f32, Exception> {
-    todo!()
+    let bounds = get_bounds(caller, self_ptr).ok_or(Exception::Error)?;
+    Ok(bounds.min.x.abs_diff(bounds.max.x) as f32)
 }
 
 /// `GetWorldSpace`
@@ -3178,6 +3191,12 @@ fn get_transform(caller: Caller<'_, State>, object: Object) -> Option<Transform>
     let entity = caller.data().entity(object)?;
     let transform = caller.data().world().get::<&Transform>(entity).ok()?;
     Some(transform.to_nif())
+}
+
+fn get_bounds(caller: Caller<'_, State>, object: Object) -> Option<ObjectBounds> {
+    let entity = caller.data().entity(object)?;
+    let bounds = caller.data().world().get::<&ObjectBounds>(entity).ok()?;
+    Some(*bounds)
 }
 
 #[derive(Clone, Debug)]

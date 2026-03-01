@@ -18,7 +18,8 @@ use openfo4_physics::components::{Collider, RigidBody};
 
 use crate::assets::nif_v2::{Instantiate, LoadNifFlags, NIF_TO_METERS, NifKey, NifScene};
 use crate::components::{
-    ActorMarker, NiTransform, Persistent, PlacedItem, Root, RootParent, TriggerBox, WorldSpace,
+    ActorMarker, NiTransform, ObjectBounds, Persistent, PlacedItem, Root, RootParent, TriggerBox,
+    WorldSpace,
 };
 use crate::render::RenderObject;
 use crate::state::esp::GlobalRecord;
@@ -59,6 +60,7 @@ pub struct SpawnEntity {
     pub keywords: ObjectKeywords,
     pub trigger_box: Option<TriggerBox>,
     pub navmesh: Option<NavMesh>,
+    pub object_bounds: Option<ObjectBounds>,
 }
 
 impl SpawnEntity {
@@ -92,6 +94,7 @@ impl SpawnEntity {
             keywords,
             trigger_box,
             navmesh,
+            object_bounds,
         } = self;
 
         // If the object reference already exists we will overwrite it.
@@ -150,6 +153,10 @@ impl SpawnEntity {
 
         if let Some(navmesh) = navmesh {
             world.insert_one(entity, navmesh).unwrap();
+        }
+
+        if let Some(object_bounds) = object_bounds {
+            world.insert_one(entity, object_bounds).unwrap();
         }
 
         if let Some(script) = script {
@@ -310,6 +317,7 @@ impl SpawnEntity {
         let mut light_flicker = None;
         let mut actor = None;
         let mut inventory = None;
+        let mut object_bounds = None;
 
         let mut keywords = HashSet::default();
         for keyword in base.local.data.keywords() {
@@ -322,12 +330,15 @@ impl SpawnEntity {
         match base.local.data {
             RecordData::STAT(data) => {
                 model = data.modl.model;
+                object_bounds = Some(data.object_bounds);
             }
             RecordData::StaticCollection(data) => {
                 model = data.model.model;
+                object_bounds = Some(data.object_bounds);
             }
             RecordData::MSTT(data) => {
                 model = data.model.model;
+                object_bounds = Some(data.obnd);
             }
             RecordData::Door(data) => {
                 model = data.model.model;
@@ -338,6 +349,8 @@ impl SpawnEntity {
                         door => door,
                     });
                 }
+
+                object_bounds = Some(data.object_bounds);
             }
             RecordData::Container(data) => {
                 model = data.model.model;
@@ -361,6 +374,8 @@ impl SpawnEntity {
                 }
 
                 inventory = Some(inv);
+
+                object_bounds = Some(data.object_bounds);
             }
             RecordData::Npc(_) => {
                 if flags.contains(PartialEntityFlags::ACTOR) {
@@ -381,12 +396,15 @@ impl SpawnEntity {
             RecordData::IdleMarker(_) => return None,
             RecordData::Activator(data) => {
                 model = data.model.model;
+                object_bounds = Some(data.object_bounds);
             }
             RecordData::MiscObject(data) => {
                 model = data.model.model;
+                object_bounds = Some(data.object_bounds);
             }
             RecordData::Furniture(data) => {
                 model = data.model.model;
+                object_bounds = Some(data.object_bounds);
             }
             RecordData::Light(data) => {
                 model = data.model.model;
@@ -425,9 +443,12 @@ impl SpawnEntity {
                         state: Default::default(),
                     });
                 }
+
+                object_bounds = Some(data.object_bounds);
             }
             RecordData::Ingestible(data) => {
                 model = data.model.model;
+                object_bounds = Some(data.object_bounds);
             }
             _ => return None,
             x => todo!("{:?}", x),
@@ -464,6 +485,11 @@ impl SpawnEntity {
             Some(_) | None => None,
         };
 
+        let object_bounds = object_bounds.map(|b| ObjectBounds {
+            min: (Vec3::new(b.min_x as f32, b.min_y as f32, b.min_z as f32) * scale).as_ivec3(),
+            max: (Vec3::new(b.max_x as f32, b.max_y as f32, b.max_z as f32) * scale).as_ivec3(),
+        });
+
         let script = if record.local.data.virtual_machine_adapter().is_some() {
             ctx.script_loader.load(record.id).await.map(|v| v.object)
         } else {
@@ -491,6 +517,7 @@ impl SpawnEntity {
             keywords: ObjectKeywords::new(keywords),
             trigger_box,
             script,
+            object_bounds,
             ..Default::default()
         })
     }

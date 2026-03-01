@@ -212,32 +212,14 @@ pub struct Component {
     pub mod_scrap_scalar: Option<FormId>,
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, BinaryStruct)]
 pub struct Bounds {
-    x1: i16,
-    y1: i16,
-    z1: i16,
-    x2: i16,
-    y2: i16,
-    z2: i16,
-}
-
-impl Decode for Bounds {
-    type Error = Error;
-
-    fn decode<B>(mut buf: B) -> Result<Self, Self::Error>
-    where
-        B: bytes::Buf,
-    {
-        Ok(Self {
-            x1: i16::decode(&mut buf)?,
-            y1: i16::decode(&mut buf)?,
-            z1: i16::decode(&mut buf)?,
-            x2: i16::decode(&mut buf)?,
-            y2: i16::decode(&mut buf)?,
-            z2: i16::decode(&mut buf)?,
-        })
-    }
+    pub min_x: i16,
+    pub min_y: i16,
+    pub min_z: i16,
+    pub max_x: i16,
+    pub max_y: i16,
+    pub max_z: i16,
 }
 
 #[derive(Clone, Debug, Record)]
