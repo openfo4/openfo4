@@ -63,7 +63,7 @@ use crate::systems::animation_sync::{bounce_animation_events, update_animation_p
 use crate::systems::camera::CameraMode;
 use crate::systems::controller::apply_player_movements;
 use crate::systems::door::{handle_automatic_doors, handle_door_activations};
-use crate::systems::global::{Difficulty, GlobalProperties};
+use crate::systems::global::{Difficulty, GameRules, GlobalProperties};
 use crate::systems::inventory::InventorySystem;
 use crate::systems::quests::QuestManager;
 use crate::systems::scripting::{Executor, ScriptEntities};
@@ -222,8 +222,11 @@ impl GameState {
             quests,
             globals: GlobalProperties {
                 variables: global_variables,
-                difficulty: Difficulty::Survival,
                 form_lists,
+                game_rules: GameRules {
+                    difficulty: Difficulty::Survival,
+                    fast_travel_enabled: true,
+                },
             },
             script_entities: ScriptEntities::default(),
         }

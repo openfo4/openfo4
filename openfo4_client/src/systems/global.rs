@@ -7,10 +7,18 @@ use openfo4_core::record::RecordId;
 /// Globals valid across the entire game state.
 #[derive(Clone, Debug)]
 pub struct GlobalProperties {
+    pub game_rules: GameRules,
     /// Global variables / Globals / `GLOB`
     pub variables: HashMap<RecordId, f32>,
-    pub difficulty: Difficulty,
     pub form_lists: HashMap<RecordId, FormList>,
+}
+
+/// Set of game rules.
+#[derive(Clone, Debug)]
+pub struct GameRules {
+    pub difficulty: Difficulty,
+    /// Whether the player is allowed to fast travel.
+    pub fast_travel_enabled: bool,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]

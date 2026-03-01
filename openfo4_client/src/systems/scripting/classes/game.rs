@@ -401,7 +401,7 @@ fn get_confidence_av(caller: Caller<'_, State>) -> Result<Object, Exception> {
 /// int Function() native global
 /// ```
 fn get_difficulty(caller: Caller<'_, State>) -> Result<i32, Exception> {
-    Ok(caller.data().globals().difficulty.to_i32())
+    Ok(caller.data().globals().game_rules.difficulty.to_i32())
 }
 
 /// `GetEnduranceAV`
