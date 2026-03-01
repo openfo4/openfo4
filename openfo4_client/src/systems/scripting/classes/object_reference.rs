@@ -1724,7 +1724,14 @@ fn is_conveyor_belt_on(caller: Caller<'_, State>, self_ptr: Object) -> Result<bo
 /// bool Function() native
 /// ```
 fn is_created(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Exception> {
-    todo!()
+    let script = caller
+        .data()
+        .objects
+        .get_by_addr(self_ptr)
+        .ok_or(Exception::Error)?;
+
+    // Dynamically created objects have no RecordId.
+    Ok(script.record().is_none())
 }
 
 /// `IsDeleted`
