@@ -43,7 +43,7 @@ pub fn register(engine: &mut Engine) {
 /// ```text
 /// Function(string asCellname) native global
 /// ```
-fn center_on_cell(caller: Caller<'_, State>, as_cellname: isize) -> Result<(), Exception> {
+fn center_on_cell(caller: Caller<'_, State>, as_cellname: Object) -> Result<(), Exception> {
     todo!()
 }
 
@@ -66,7 +66,7 @@ fn center_on_cell_and_wait(
 /// ```
 fn player_move_to_and_wait(
     caller: Caller<'_, State>,
-    as_dest_ref: isize,
+    as_dest_ref: Object,
 ) -> Result<f32, Exception> {
     todo!()
 }
@@ -76,8 +76,8 @@ fn player_move_to_and_wait(
 /// ```text
 /// Function(string asLogName) native global
 /// ```
-fn close_user_log(caller: Caller<'_, State>, as_log_name: isize) -> Result<(), Exception> {
-    todo!()
+fn close_user_log(_caller: Caller<'_, State>, _log_name: Object) -> Result<(), Exception> {
+    Ok(())
 }
 
 /// `DumpAliasData`
@@ -85,8 +85,8 @@ fn close_user_log(caller: Caller<'_, State>, as_log_name: isize) -> Result<(), E
 /// ```text
 /// Function(Quest akQuest) native global
 /// ```
-fn dump_alias_data(caller: Caller<'_, State>, ak_quest: Object) -> Result<(), Exception> {
-    todo!()
+fn dump_alias_data(_caller: Caller<'_, State>, _quest: Object) -> Result<(), Exception> {
+    Ok(())
 }
 
 /// `DumpEventRegistrations`
@@ -184,8 +184,8 @@ fn notification(caller: Caller<'_, State>, as_notification_text: isize) -> Resul
 /// ```text
 /// bool Function(string asLogName) native global
 /// ```
-fn open_user_log(caller: Caller<'_, State>, as_log_name: isize) -> Result<bool, Exception> {
-    todo!()
+fn open_user_log(_caller: Caller<'_, State>, _log_name: Object) -> Result<bool, Exception> {
+    Ok(true)
 }
 
 /// `QuitGame`
@@ -221,10 +221,10 @@ fn set_god_mode(caller: Caller<'_, State>, ab_god_mode: bool) -> Result<(), Exce
 /// Function(string asScriptName) native global
 /// ```
 fn start_script_profiling(
-    caller: Caller<'_, State>,
-    as_script_name: isize,
+    _caller: Caller<'_, State>,
+    _script_name: Object,
 ) -> Result<(), Exception> {
-    todo!()
+    Ok(())
 }
 
 /// `StartStackProfiling`
@@ -232,8 +232,8 @@ fn start_script_profiling(
 /// ```text
 /// Function() native global
 /// ```
-fn start_stack_profiling(caller: Caller<'_, State>) -> Result<(), Exception> {
-    todo!()
+fn start_stack_profiling(_caller: Caller<'_, State>) -> Result<(), Exception> {
+    Ok(())
 }
 
 /// `StartStackRootProfiling`
@@ -242,11 +242,11 @@ fn start_stack_profiling(caller: Caller<'_, State>) -> Result<(), Exception> {
 /// Function(string asScriptName, ScriptObject akObj) native global
 /// ```
 fn start_stack_root_profiling(
-    caller: Caller<'_, State>,
-    as_script_name: isize,
-    ak_obj: Object,
+    _caller: Caller<'_, State>,
+    _script_name: Object,
+    _object: Object,
 ) -> Result<(), Exception> {
-    todo!()
+    Ok(())
 }
 
 /// `StopScriptProfiling`
@@ -255,10 +255,10 @@ fn start_stack_root_profiling(
 /// Function(string asScriptName) native global
 /// ```
 fn stop_script_profiling(
-    caller: Caller<'_, State>,
-    as_script_name: isize,
+    _caller: Caller<'_, State>,
+    _script_name: Object,
 ) -> Result<(), Exception> {
-    todo!()
+    Ok(())
 }
 
 /// `StopStackProfiling`
@@ -266,8 +266,8 @@ fn stop_script_profiling(
 /// ```text
 /// Function() native global
 /// ```
-fn stop_stack_profiling(caller: Caller<'_, State>) -> Result<(), Exception> {
-    todo!()
+fn stop_stack_profiling(_caller: Caller<'_, State>) -> Result<(), Exception> {
+    Ok(())
 }
 
 /// `StopStackRootProfiling`
@@ -276,11 +276,11 @@ fn stop_stack_profiling(caller: Caller<'_, State>) -> Result<(), Exception> {
 /// Function(string asScriptName, ScriptObject akObj) native global
 /// ```
 fn stop_stack_root_profiling(
-    caller: Caller<'_, State>,
-    as_script_name: isize,
-    ak_obj: Object,
+    _caller: Caller<'_, State>,
+    _script_name: Object,
+    _object: Object,
 ) -> Result<(), Exception> {
-    todo!()
+    Ok(())
 }
 
 /// `Trace`
@@ -288,12 +288,25 @@ fn stop_stack_root_profiling(
 /// ```text
 /// Function(string asTextToPrint, int aiSeverity) native global
 /// ```
-fn trace(
-    caller: Caller<'_, State>,
-    as_text_to_print: isize,
-    ai_severity: i32,
-) -> Result<(), Exception> {
-    todo!()
+fn trace(caller: Caller<'_, State>, text: Object, severity: i32) -> Result<(), Exception> {
+    let msg = unsafe { caller.string(text) };
+
+    match severity {
+        0 => {
+            tracing::info!("{}", msg);
+        }
+        1 => {
+            tracing::warn!("{}", msg);
+        }
+        2 => {
+            tracing::error!("{}", msg);
+        }
+        _ => {
+            tracing::info!("[UNKNOWN SEVERITY] {}", msg);
+        }
+    }
+
+    Ok(())
 }
 
 /// `TraceFunction`
@@ -301,12 +314,8 @@ fn trace(
 /// ```text
 /// Function(string asTextToPrint, int aiSeverity) native global
 /// ```
-fn trace_function(
-    caller: Caller<'_, State>,
-    as_text_to_print: isize,
-    ai_severity: i32,
-) -> Result<(), Exception> {
-    todo!()
+fn trace_function(caller: Caller<'_, State>, text: Object, severity: i32) -> Result<(), Exception> {
+    trace(caller, text, severity)
 }
 
 /// `TraceStack`
@@ -314,12 +323,8 @@ fn trace_function(
 /// ```text
 /// Function(string asTextToPrint, int aiSeverity) native global
 /// ```
-fn trace_stack(
-    caller: Caller<'_, State>,
-    as_text_to_print: isize,
-    ai_severity: i32,
-) -> Result<(), Exception> {
-    todo!()
+fn trace_stack(caller: Caller<'_, State>, text: Object, severity: i32) -> Result<(), Exception> {
+    trace(caller, text, severity)
 }
 
 /// `TraceUser`
@@ -329,11 +334,12 @@ fn trace_stack(
 /// ```
 fn trace_user(
     caller: Caller<'_, State>,
-    as_user_log: isize,
-    as_text_to_print: isize,
-    ai_severity: i32,
+    _user_log: Object,
+    text: Object,
+    severity: i32,
 ) -> Result<bool, Exception> {
-    todo!()
+    trace(caller, text, severity)?;
+    Ok(true)
 }
 
 /// `ShowRefPosition`
