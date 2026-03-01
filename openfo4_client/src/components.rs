@@ -121,6 +121,7 @@ pub struct TriggerBox {
 #[derive(Clone, Debug)]
 pub struct ActorProperties {
     pub protection: ActorProtection,
+    pub level: u32,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]

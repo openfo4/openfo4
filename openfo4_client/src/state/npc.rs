@@ -1,6 +1,5 @@
 use std::collections::VecDeque;
 use std::hash::Hash;
-use std::num::NonZeroU16;
 
 use hashbrown::{HashMap, HashSet};
 use hecs::{Entity, World};
@@ -126,6 +125,7 @@ pub struct Actor {
     pub keywords: HashSet<RecordId>,
     outfit_items: Vec<RecordId>,
     protection: ActorProtection,
+    level: u32,
 }
 
 impl Actor {
@@ -187,6 +187,7 @@ impl Actor {
                     self.body_parts,
                     ActorProperties {
                         protection: self.protection,
+                        level: self.level,
                     },
                 ),
             )
@@ -319,6 +320,14 @@ pub async fn spawn_actor(
         Vec::new()
     };
 
+    let level = match props.level {
+        ActorLevel::Fixed(level) => u32::from(level),
+        ActorLevel::PlayerScaled { factor, min, max } => {
+            let level = u32::from(PLAYER_LEVEL).saturating_mul(u32::from(factor));
+            u32::clamp(level, u32::from(min), u32::from(max))
+        }
+    };
+
     Ok(Actor {
         anim_graphs: ActorAnimationGraphData {
             character: character.clone(),
@@ -339,6 +348,7 @@ pub async fn spawn_actor(
         customization_scenes,
         outfit_items,
         protection: props.protection,
+        level,
     })
 }
 
@@ -401,14 +411,14 @@ async fn resolve_actor_props(
                         class = Some(esp_loader.resolve_form(form, record.id).unwrap());
                     }
 
-                    level = ActorLevel {
-                        level: data.base_stats.level,
-                        scales_with_player: data
-                            .base_stats
-                            .flags
-                            .contains(NpcBaseFlags::PC_LEVEL_MULT),
-                        min_level: NonZeroU16::new(data.base_stats.calc_min_level),
-                        max_level: NonZeroU16::new(data.base_stats.calc_max_level),
+                    level = if data.base_stats.flags.contains(NpcBaseFlags::PC_LEVEL_MULT) {
+                        ActorLevel::PlayerScaled {
+                            factor: data.base_stats.level as u16,
+                            min: data.base_stats.calc_min_level,
+                            max: data.base_stats.calc_max_level,
+                        }
+                    } else {
+                        ActorLevel::Fixed(data.base_stats.level as u16)
                     };
                 }
 
@@ -543,6 +553,7 @@ async fn resolve_actor_props(
         keywords,
         outfit,
         protection,
+        level,
     }
 }
 
@@ -557,6 +568,7 @@ struct ActorProps {
     keywords: Vec<RecordId>,
     outfit: Option<RecordId>,
     protection: ActorProtection,
+    level: ActorLevel,
 }
 
 #[derive(Clone, Debug)]
@@ -569,18 +581,15 @@ pub struct FactionMembership {
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
-pub enum NpcProtection {
-    None,
-    Essential,
-    Protected,
+enum ActorLevel {
+    Fixed(u16),
+    PlayerScaled { factor: u16, min: u16, max: u16 },
 }
 
-#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Hash)]
-struct ActorLevel {
-    level: i16,
-    scales_with_player: bool,
-    min_level: Option<NonZeroU16>,
-    max_level: Option<NonZeroU16>,
+impl Default for ActorLevel {
+    fn default() -> Self {
+        Self::Fixed(0)
+    }
 }
 
 #[derive(Clone, Debug)]

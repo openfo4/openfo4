@@ -691,7 +691,13 @@ fn get_killer(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Exc
 /// int Function() native
 /// ```
 fn get_level(caller: Caller<'_, State>, self_ptr: Object) -> Result<i32, Exception> {
-    todo!()
+    let entity = caller.data().entity(self_ptr).ok_or(Exception::Error)?;
+
+    let Ok(props) = caller.data().world().get::<&ActorProperties>(entity) else {
+        return Ok(0);
+    };
+
+    Ok(props.level.try_into().unwrap_or(i32::MAX))
 }
 
 /// `GetLightLevel`
