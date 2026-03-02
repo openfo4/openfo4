@@ -21,8 +21,13 @@ use crate::state::esp::EspLoader;
 use crate::state::hardcoded::DAMAGE_TYPE_PHYSICAL;
 use crate::state::level::items::resolve_item;
 use crate::systems::equipment::{Equipment, EquipmentKey, equip_item};
-use crate::systems::inventory::{AimProps, ItemData, ItemKind, ItemStack, WeaponItemData};
+use crate::systems::inventory::{
+    AimProps, ItemData, ItemKind, ItemStack, WeaponItemData, WeaponProjectileNode,
+};
 use crate::systems::scripting::loader::{ScriptLoader, ScriptObject};
+
+// Note: The "P-" prefix is already stripped in the NifScene.
+const PROJECTILE_NODE_NAME: &str = "ProjectileNode";
 
 #[derive(Clone, Debug)]
 pub struct EquipmentItem {
@@ -45,10 +50,14 @@ pub struct EquipmentItem {
 pub struct EquipmentItemModels {
     models: Vec<Handle<NifScene>>,
     attachment_parents: HashMap<usize, usize>,
+    /// Index of the model which contains the `P-ProjectileNode` attachment point.
+    ///
+    /// This is where weapon projectiles should be spawned.
+    projectile_node: Option<usize>,
 }
 
 impl EquipmentItemModels {
-    pub fn attach_scene(&self, world: &mut World, root: Entity) -> Vec<EquipmentKey> {
+    pub fn attach_scene(&self, world: &mut World, root: Entity) -> AttachedScenes {
         let _span = trace_span!("EquipmentItemModels::attach_scene").entered();
 
         // FIXME: We currently remove these components, then put them
@@ -84,8 +93,6 @@ impl EquipmentItemModels {
             }
         }
 
-        world.insert(root, (skeleton, equipment)).unwrap();
-
         // Copy worldspace to all new entities.
         // This is required for them to get rendered correctly.
         if let Ok(worldspace) = world.get::<&WorldSpace>(root).map(|v| *v) {
@@ -98,8 +105,29 @@ impl EquipmentItemModels {
             }
         }
 
-        keys.into_values().collect()
+        let projectile_node = self.projectile_node.map(|index| {
+            let key = keys.get(&index).unwrap();
+            let item = equipment.get(*key).unwrap();
+            let attachment = item.attachment(PROJECTILE_NODE_NAME).unwrap();
+            WeaponProjectileNode {
+                entity: attachment.entity,
+                offset: attachment.offset,
+            }
+        });
+
+        world.insert(root, (skeleton, equipment)).unwrap();
+
+        AttachedScenes {
+            keys: keys.into_values().collect(),
+            projectile_node,
+        }
     }
+}
+
+#[derive(Clone, Debug)]
+pub struct AttachedScenes {
+    pub keys: Vec<EquipmentKey>,
+    pub projectile_node: Option<WeaponProjectileNode>,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -455,6 +483,7 @@ pub async fn load_equipment_item(
                     )),
                 },
                 ammo: combined_props.weapon_ammo,
+                projectile_node: None,
             })
         }
         ItemKind::Ammo | ItemKind::Misc | ItemKind::Aid | ItemKind::Junk => ItemData::None,
@@ -539,6 +568,7 @@ pub async fn load_equipment_item_models(
                     })
                     .await
                     .unwrap();
+
                 models.push(scene);
             }
 
@@ -593,10 +623,66 @@ pub async fn load_equipment_item_models(
         }
     }
 
+    let projectile_node =
+        find_deepest_scene_with_attachment(&models, &attachment_parents, PROJECTILE_NODE_NAME);
+
     EquipmentItemModels {
         models,
         attachment_parents,
+        projectile_node,
     }
+}
+
+/// Finds the index of the deepest [`NifScene`] with the given attachment name.
+///
+/// If multiple independent branches have the same attachment, which leaf node is returned is
+/// not specified.
+fn find_deepest_scene_with_attachment(
+    models: &[Handle<NifScene>],
+    parents: &HashMap<usize, usize>,
+    name: &str,
+) -> Option<usize> {
+    // Mark all scenes that contain a node with the given name.
+    let mut models_with_name = Vec::new();
+    for (index, model) in models.iter().enumerate() {
+        if model
+            .nodes
+            .values()
+            .flat_map(|node| &node.attachments)
+            .find(|attachment| attachment.name == name)
+            .is_none()
+        {
+            continue;
+        }
+
+        models_with_name.push(index);
+    }
+
+    // For each scene:
+    // Walk up the hierarchy and remove all parent nodes
+    // from the set of viable nodes.
+    // This leaves the set of leaf nodes remaining.
+    let mut remaining = models_with_name.len();
+    while remaining != 0 {
+        let index = models_with_name.pop().unwrap();
+
+        let mut current = index;
+        while let Some(parent) = parents.get(&current) {
+            if models_with_name.contains(parent) {
+                models_with_name.retain(|v| v != parent);
+                remaining -= 1;
+            }
+
+            current = *parent;
+        }
+
+        models_with_name.push(index);
+        remaining -= 1;
+    }
+
+    // This may contain more than one node, however in that
+    // case we are allowed to return any node.
+    models_with_name.pop()
 }
 
 #[derive(Copy, Clone, Debug, PartialEq)]

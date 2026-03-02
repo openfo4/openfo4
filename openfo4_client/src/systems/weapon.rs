@@ -89,6 +89,14 @@ pub fn handle_weapon_fire_events(
                 continue;
             }
 
+            let origin = weapon
+                .projectile_node
+                .map(|node| {
+                    let node_transform = world.get::<&GlobalTransform>(node.entity).unwrap();
+                    node_transform.0 * node.offset
+                })
+                .unwrap_or(transform.0);
+
             weapon.current_ammo -= 1;
 
             // We must exclude the actor itself, otherwise we're just gonna
@@ -122,7 +130,7 @@ pub fn handle_weapon_fire_events(
                 * -Vec3::Z;
 
             let ray = Ray {
-                origin: transform.0.translation,
+                origin: origin.translation,
                 direction,
             };
             let max_toi = 1000.0;

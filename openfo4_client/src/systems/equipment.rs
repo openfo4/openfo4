@@ -58,6 +58,10 @@ impl EquippedItem {
     pub fn skins(&self) -> &[SkinInstance] {
         &self.skins
     }
+
+    pub fn attachment(&self, name: &str) -> Option<&AttachmentPoint> {
+        self.attachments.get(name)
+    }
 }
 
 #[derive(Clone, Debug)]

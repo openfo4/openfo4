@@ -3,6 +3,7 @@ use std::num::NonZeroU64;
 use std::sync::Arc;
 use std::time::Duration;
 
+use game_common::components::Transform;
 use game_tasks::{TaskPool, TaskQueue};
 use game_tracing::trace_span;
 use hashbrown::{HashMap, HashSet};
@@ -162,6 +163,10 @@ pub struct WeaponItemData {
     pub aim_props: AimProps,
     /// Ammo consumed by this weapon.
     pub ammo: Option<RecordId>,
+    /// The node where weapon projectiles should be spawned.
+    ///
+    /// Only valid while the weapon is equipped and drawn.
+    pub projectile_node: Option<WeaponProjectileNode>,
 }
 
 /// Defines properties for the aiming of guns.
@@ -175,6 +180,12 @@ pub struct AimProps {
     pub cone_of_fire_dec_per_sec: f32,
     /// The idle time (no shots) fired until `cone_of_fire_dec_per_sec` kicks in.
     pub cone_of_fire_dec_delay: Duration,
+}
+
+#[derive(Copy, Clone, Debug)]
+pub struct WeaponProjectileNode {
+    pub entity: Entity,
+    pub offset: Transform,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
@@ -622,14 +633,18 @@ impl InventorySystem {
             }
 
             drop(inventory);
-            let keys = models.attach_scene(world, entity);
+            let attached = models.attach_scene(world, entity);
 
             let Ok(mut inventory) = world.get::<&mut Inventory>(entity) else {
                 continue;
             };
 
             let item = inventory.get_mut(key).unwrap();
-            item.equipment_keys = keys;
+            item.equipment_keys = attached.keys;
+
+            if let ItemData::Weapon(weapon) = &mut item.data {
+                weapon.projectile_node = attached.projectile_node;
+            }
         }
     }
 }
