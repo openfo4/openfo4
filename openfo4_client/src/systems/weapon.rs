@@ -7,13 +7,14 @@ use glam::{Quat, Vec2, Vec3};
 use hecs::{CommandBuffer, World};
 use openfo4_core::events::EventBus;
 use openfo4_core::hierarchy::Children;
+use openfo4_core::record::RecordId;
 use openfo4_physics::components::{Collider, CollisionLayer};
 use openfo4_physics::{PhysicsPipeline, QueryFilter};
 
 use crate::render::physics_debug::{DespawnAt, HitscanRaycast};
 use crate::state::actions::{Action, Actions};
 use crate::state::anim_starter::AnimationEventQueue;
-use crate::state::hardcoded::ACTOR_VALUE_HEALTH;
+use crate::state::hardcoded::{ACTOR_VALUE_HEALTH, HARDCODED_MODULE_ID};
 use crate::state::npc::{ActorBodyParts, BodyPartBone};
 use crate::systems::actor_value::ActorValueProperties;
 use crate::systems::inventory::{Inventory, ItemData};
@@ -258,12 +259,17 @@ pub fn handle_weapon_hit_damage(world: &mut World, events: &mut EventBus) {
             // TODO: Damage resistance
         }
 
-        let Some(mut health) = properties.get(ACTOR_VALUE_HEALTH) else {
+        let Some(mut health) =
+            properties.get(RecordId::new(HARDCODED_MODULE_ID, ACTOR_VALUE_HEALTH))
+        else {
             continue;
         };
 
-        health = f32::max(health - damage, 0.0);
-        properties.set(ACTOR_VALUE_HEALTH, health);
+        health.damaged = f32::max(health.damaged - damage, 0.0);
+        properties.set(
+            RecordId::new(HARDCODED_MODULE_ID, ACTOR_VALUE_HEALTH),
+            health,
+        );
 
         death_events.push(DeathEvent {
             actor: event.target,

@@ -19,7 +19,7 @@ use crate::state::esp::EspLoader;
 use crate::state::hardcoded::KEYWORD_FEMALE;
 use crate::state::level::leveled_list::select_from_leveled_list;
 use crate::systems::FacingDirection;
-use crate::systems::actor_value::ActorValueProperties;
+use crate::systems::actor_value::{ActorValue, ActorValueProperties};
 use crate::systems::controller::ControllerShape;
 use crate::systems::equipment::{Equipment, equip_item};
 use crate::systems::inventory::{AddItemEventAsync, Inventory};
@@ -226,11 +226,13 @@ pub async fn spawn_actor(
             .lookup(Some(RecordKind::Class), class)
             .await
             .unwrap();
-        let class = &class.local.data.as_variant::<Class>().unwrap();
+        let class_data = &class.local.data.as_variant::<Class>().unwrap();
 
-        for prop in &*class.properties {
-            let old_value = properties.get(prop.actor_value).unwrap_or_default();
-            properties.set(prop.actor_value, old_value + prop.value);
+        for prop in &*class_data.properties {
+            let actor_value = esp_loader.resolve_form(prop.actor_value, class.id).unwrap();
+
+            let old_value = properties.get(actor_value).unwrap_or_default();
+            properties.set(actor_value, ActorValue::new(old_value.value + prop.value));
         }
     }
 
@@ -405,7 +407,15 @@ async fn resolve_actor_props(
                 }
 
                 if flags.contains(NpcTemplateFlags::STATS) {
-                    properties = data.properties.iter().copied().collect();
+                    properties.clear();
+                    for prop in &*data.properties {
+                        let actor_value = esp_loader
+                            .resolve_form(prop.actor_value, record.id)
+                            .unwrap();
+
+                        let old_value = properties.get(actor_value).unwrap_or_default();
+                        properties.set(actor_value, ActorValue::new(old_value.value + prop.value));
+                    }
 
                     if let Some(form) = data.class {
                         class = Some(esp_loader.resolve_form(form, record.id).unwrap());

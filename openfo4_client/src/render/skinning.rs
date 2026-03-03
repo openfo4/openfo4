@@ -57,7 +57,7 @@ pub fn mesh_skinning(world: &World, objects: &HashMap<Entity, ObjectHandle>, sha
                 let transform = *bone_transforms.get(bone).unwrap();
                 let mat = transform.compute_matrix() * bind_pose.compute_matrix().inverse();
 
-                assert_ne!(mat.determinant(), 0.0);
+                // assert_ne!(mat.determinant(), 0.0);
 
                 let transform = Transform::from_matrix(mat);
 

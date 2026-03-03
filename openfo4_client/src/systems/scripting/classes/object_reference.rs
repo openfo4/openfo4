@@ -10,6 +10,7 @@ use openfo4_script::runtime::{Caller, Exception};
 
 use crate::components::{ObjectBounds, TriggerBox};
 use crate::state::npc::ObjectKeywords;
+use crate::systems::actor_value::ActorValueProperties;
 use crate::systems::inventory::Inventory;
 use crate::systems::linked_refs::LinkedRefs;
 use crate::systems::scripting::classes::{Object, State};
@@ -629,10 +630,34 @@ fn damage_object(
 fn damage_value(
     caller: Caller<'_, State>,
     self_ptr: Object,
-    ak_av: Object,
-    af_damage: f32,
+    actor_value: Object,
+    damage: f32,
 ) -> Result<(), Exception> {
-    todo!()
+    let entity = caller.data().entity(self_ptr).ok_or(Exception::Error)?;
+    let actor_value = caller
+        .data()
+        .objects
+        .get_by_addr(actor_value)
+        .and_then(|s| s.record())
+        .ok_or(Exception::Error)?;
+
+    let Ok(mut props) = caller
+        .data()
+        .world()
+        .get::<&mut ActorValueProperties>(entity)
+    else {
+        return Ok(());
+    };
+
+    let Some(mut value) = props.get(actor_value) else {
+        return Ok(());
+    };
+
+    // It looks like damage is clamped at 0.
+    value.damaged = f32::clamp(value.damaged - damage, 0.0, value.value);
+
+    props.set(actor_value, value);
+    Ok(())
 }
 
 /// `Delete`
@@ -1471,7 +1496,26 @@ fn get_value(
     self_ptr: Object,
     actor_value: Object,
 ) -> Result<f32, Exception> {
-    todo!()
+    let entity = caller.data().entity(self_ptr).ok_or(Exception::Error)?;
+    let actor_value = caller
+        .data()
+        .objects
+        .get_by_addr(actor_value)
+        .and_then(|s| s.record())
+        .ok_or(Exception::Error)?;
+
+    let Ok(props) = caller.data().world().get::<&ActorValueProperties>(entity) else {
+        // Returns 0.0 when the actor value is not present.
+        return Ok(0.0);
+    };
+
+    let Some(value) = props.get(actor_value) else {
+        // Returns 0.0 when the actor value is not present.
+        return Ok(0.0);
+    };
+
+    // `GetValue` returns the damaged value, not the "full" value.
+    Ok(value.damaged())
 }
 
 /// `GetValuePercentage`
@@ -1983,10 +2027,32 @@ fn make_transmitter_repeater(
 fn mod_value(
     caller: Caller<'_, State>,
     self_ptr: Object,
-    ak_av: Object,
-    af_amount: f32,
+    actor_value: Object,
+    amount: f32,
 ) -> Result<(), Exception> {
-    todo!()
+    let entity = caller.data().entity(self_ptr).ok_or(Exception::Error)?;
+    let actor_value = caller
+        .data()
+        .objects
+        .get_by_addr(actor_value)
+        .and_then(|s| s.record())
+        .ok_or(Exception::Error)?;
+
+    let Ok(mut props) = caller
+        .data()
+        .world()
+        .get::<&mut ActorValueProperties>(entity)
+    else {
+        return Ok(());
+    };
+
+    // The current damage value is retained.
+    let mut value = props.get(actor_value).unwrap_or_default();
+    value.value += amount;
+    value.damaged += amount;
+
+    props.set(actor_value, value);
+    Ok(())
 }
 
 /// `MoveTo`
@@ -2541,10 +2607,33 @@ fn reset_keyword(
 fn restore_value(
     caller: Caller<'_, State>,
     self_ptr: Object,
-    ak_av: Object,
-    af_amount: f32,
+    actor_value: Object,
+    amount: f32,
 ) -> Result<(), Exception> {
-    todo!()
+    let entity = caller.data().entity(self_ptr).ok_or(Exception::Error)?;
+    let actor_value = caller
+        .data()
+        .objects
+        .get_by_addr(actor_value)
+        .and_then(|s| s.record())
+        .ok_or(Exception::Error)?;
+
+    let Ok(mut props) = caller
+        .data()
+        .world()
+        .get::<&mut ActorValueProperties>(entity)
+    else {
+        return Ok(());
+    };
+
+    let Some(mut value) = props.get(actor_value) else {
+        return Ok(());
+    };
+
+    value.damaged = f32::clamp(value.damaged + amount, 0.0, value.value);
+
+    props.set(actor_value, value);
+    Ok(())
 }
 
 /// `ResumeAudio`
@@ -3034,10 +3123,34 @@ fn set_scale(caller: Caller<'_, State>, self_ptr: Object, af_scale: f32) -> Resu
 fn set_value(
     caller: Caller<'_, State>,
     self_ptr: Object,
-    ak_av: Object,
-    af_value: f32,
+    actor_value: Object,
+    new_value: f32,
 ) -> Result<(), Exception> {
-    todo!()
+    let entity = caller.data().entity(self_ptr).ok_or(Exception::Error)?;
+    let actor_value = caller
+        .data()
+        .objects
+        .get_by_addr(self_ptr)
+        .and_then(|s| s.record())
+        .ok_or(Exception::Error)?;
+
+    let Ok(mut props) = caller
+        .data()
+        .world()
+        .get::<&mut ActorValueProperties>(entity)
+    else {
+        return Ok(());
+    };
+
+    // The current damage value is retained.
+    let mut value = props.get(actor_value).unwrap_or_default();
+    let damage = value.damage();
+
+    value.value = new_value;
+    value.damaged = new_value - damage;
+
+    props.set(actor_value, value);
+    Ok(())
 }
 
 /// `TranslateTo`
