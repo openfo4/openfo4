@@ -188,6 +188,7 @@ impl Actor {
                     ActorProperties {
                         protection: self.protection,
                         level: self.level,
+                        bleedout_recovery: true,
                     },
                 ),
             )

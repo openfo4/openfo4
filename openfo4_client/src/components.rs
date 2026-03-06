@@ -121,6 +121,11 @@ pub struct TriggerBox {
 #[derive(Clone, Debug)]
 pub struct ActorProperties {
     pub protection: ActorProtection,
+    /// Whether bleedout recovery is enabled.
+    ///
+    /// If `true` the actor will automatically recover when `Protected` or `Essential` and reach
+    /// zero health.
+    pub bleedout_recovery: bool,
     pub level: u32,
 }
 

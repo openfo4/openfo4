@@ -742,7 +742,13 @@ fn get_no_bleedout_recovery(
     caller: Caller<'_, State>,
     self_ptr: Object,
 ) -> Result<bool, Exception> {
-    todo!()
+    let entity = caller.data().entity(self_ptr).ok_or(Exception::Error)?;
+    let Ok(props) = caller.data().world().get::<&ActorProperties>(entity) else {
+        return Ok(false);
+    };
+
+    // Note that this function returns whether bleedout recovery is disabled.
+    Ok(!props.bleedout_recovery)
 }
 
 /// `GetPlayerControls`
@@ -1876,9 +1882,18 @@ fn set_look_at(
 fn set_no_bleedout_recovery(
     caller: Caller<'_, State>,
     self_ptr: Object,
-    ab_allowed: bool,
+    not_allowed: bool,
 ) -> Result<(), Exception> {
-    todo!()
+    // The function sets whether bleedout recovery is disabled.
+    let allowed = !not_allowed;
+
+    let entity = caller.data().entity(self_ptr).ok_or(Exception::Error)?;
+    let Ok(mut props) = caller.data().world().get::<&mut ActorProperties>(entity) else {
+        return Ok(());
+    };
+
+    props.bleedout_recovery = allowed;
+    Ok(())
 }
 
 /// `SetNotShowOnStealthMeter`
