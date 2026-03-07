@@ -4,7 +4,9 @@ use glam::Vec3;
 use petgraph::algo::astar;
 use petgraph::graph::NodeIndex;
 use petgraph::visit::EdgeRef;
-use petgraph::Graph;
+use petgraph::{Graph, Undirected};
+use rstar::primitives::{GeomWithData, Rectangle};
+use rstar::{RTree, AABB};
 
 use crate::navmesh::triangle::{closest_points_between_triangles, is_inside_triangle};
 
@@ -17,7 +19,8 @@ const NEIGHBOR_THRESHOLD: f32 = 0.001;
 pub struct NavMesh {
     triangles: Vec<[Vec3; 3]>,
     centers: Vec<Vec3>,
-    graph: Graph<usize, ()>,
+    graph: Graph<usize, (), Undirected>,
+    tree: RTree<GeomWithData<Rectangle<[f32; 3]>, usize>>,
 }
 
 impl NavMesh {
@@ -25,7 +28,8 @@ impl NavMesh {
         Self {
             triangles: Vec::new(),
             centers: Vec::new(),
-            graph: Graph::new(),
+            graph: Graph::new_undirected(),
+            tree: RTree::new(),
         }
     }
 
@@ -37,29 +41,39 @@ impl NavMesh {
                 mesh.triangles[i2 as usize],
             ];
 
-            let index = self.triangles.len();
-            self.triangles.push(triangle);
+            let new_index = self.triangles.len();
 
             let center = Vec3::new(
                 (triangle[0].x + triangle[1].x + triangle[2].x) / 3.0,
                 (triangle[0].y + triangle[1].y + triangle[2].y) / 3.0,
                 (triangle[0].z + triangle[1].z + triangle[2].z) / 3.0,
             );
-            self.centers.push(center);
 
-            self.graph.add_node(index);
+            self.graph.add_node(new_index);
 
-            for (i, tri) in self.triangles.iter().enumerate() {
-                if i == index {
+            let aabb = AABB::from_points([
+                &triangle[0].to_array(),
+                &triangle[1].to_array(),
+                &triangle[2].to_array(),
+            ]);
+
+            for rect in self.tree.locate_in_envelope_intersecting(&aabb) {
+                let index = rect.data;
+                let tri = self.triangles[index];
+
+                let (_, d) = closest_points_between_triangles(tri, triangle);
+                if d > NEIGHBOR_THRESHOLD {
                     continue;
                 }
 
-                let (_, d) = closest_points_between_triangles(*tri, triangle);
-                if d < NEIGHBOR_THRESHOLD {
-                    self.graph
-                        .add_edge(NodeIndex::new(i), NodeIndex::new(index), ());
-                }
+                self.graph
+                    .add_edge(NodeIndex::new(new_index), NodeIndex::new(index), ());
             }
+
+            self.triangles.push(triangle);
+            self.centers.push(center);
+            self.tree
+                .insert(GeomWithData::new(Rectangle::from_aabb(aabb), new_index));
         }
     }
 
@@ -129,7 +143,7 @@ pub struct Agent {
 mod tests {
     use glam::Vec3;
 
-    use crate::navmesh::{Agent, Mesh, NavMesh, HEIGHT};
+    use crate::navmesh::{Agent, Mesh, NavMesh};
 
     #[test]
     fn navmesh_search_single_tri() {
@@ -143,12 +157,16 @@ mod tests {
             indices: vec![0, 1, 2],
         });
 
-        mesh.search(
-            &Agent {
-                position: Vec3::new(-1.0, 0.0, -1.0),
-            },
-            Vec3::Z,
-        );
+        let path = mesh
+            .search(
+                &Agent {
+                    position: Vec3::new(-1.0, 0.0, -1.0),
+                },
+                Vec3::Z,
+            )
+            .unwrap();
+
+        assert_eq!(path.triangles, [0]);
     }
 
     #[test]
@@ -164,14 +182,15 @@ mod tests {
             indices: vec![0, 1, 2, 2, 1, 3],
         });
 
-        mesh.search(
-            &Agent {
-                position: Vec3::new(-1.0, 0.0, -1.0),
-            },
-            Vec3::new(1.0, 0.0, 1.0),
-        );
-    }
+        let path = mesh
+            .search(
+                &Agent {
+                    position: Vec3::new(-1.0, 0.0, -1.0),
+                },
+                Vec3::new(1.0, 0.0, 1.0),
+            )
+            .unwrap();
 
-    #[test]
-    fn navmesh_search_joined_tris() {}
+        assert_eq!(path.triangles, [0, 1]);
+    }
 }
