@@ -1,0 +1,257 @@
+//! Utility functions for triangle math
+
+use glam::Vec3;
+
+pub fn is_inside_triangle(triangle: [Vec3; 3], height: f32, point: Vec3) -> bool {
+    let normal = triangle[0].cross(triangle[1]);
+
+    let vertices = [
+        triangle[0],
+        triangle[1],
+        triangle[2],
+        triangle[0] + normal * height,
+        triangle[1] + normal * height,
+        triangle[2] + normal * height,
+    ];
+
+    // Counter-clockwise winding
+    let faces = [[2, 1, 0], [3, 4, 5], [0, 1, 4], [1, 2, 5], [2, 0, 3]];
+
+    for face in faces {
+        let v0 = vertices[face[0]];
+        let v1 = vertices[face[1]];
+        let v2 = vertices[face[2]];
+
+        let normal = Vec3::cross(v1 - v0, v2 - v0);
+        let dist = normal.dot(point - v0);
+
+        if dist > 0.0 {
+            return false;
+        }
+    }
+
+    true
+}
+
+pub fn closest_points_between_triangles(
+    lhs: [Vec3; 3],
+    rhs: [Vec3; 3],
+) -> (Option<[Vec3; 2]>, f32) {
+    // https://stackoverflow.com/a/53622315
+
+    let mut min_d = f32::MAX;
+    let mut min_p = Vec3::ZERO;
+    let mut min_q = Vec3::ZERO;
+    let mut disjoint = false;
+
+    for i in 0..3 {
+        for j in 0..3 {
+            let p0 = lhs[i];
+            let p1 = lhs[(i + 1) % 3];
+            let q0 = rhs[j];
+            let q1 = rhs[(j + 1) % 3];
+
+            let [cp, cq] = closest_points_between_lines([p0, p1], [q0, q1]);
+            let v = cq - cp;
+            let dd = v.dot(v);
+
+            if dd > min_d {
+                continue;
+            }
+
+            min_p = cp;
+            min_q = cq;
+            min_d = dd;
+
+            // Off edges
+            let op = lhs[(i + 2) % 3];
+            let oq = rhs[(i + 2) % 3];
+
+            let zp = op - cp;
+            let zq = oq - cq;
+            let mut a = zp.dot(v);
+            let mut b = zq.dot(v);
+
+            // Same side
+            if a <= 0.0 && b >= 0.0 {
+                return (Some([cp, cq]), v.dot(v));
+            }
+
+            if a < 0.0 {
+                a = 0.0;
+            } else if b > 0.0 {
+                b = 0.0;
+            }
+
+            if min_d - a + b > 0.0 {
+                disjoint = true;
+            }
+        }
+    }
+
+    for [tri_a, tri_b] in [[lhs, rhs], [rhs, lhs]] {
+        let normal_a = (tri_a[0] - tri_a[1]).cross(tri_a[2] - tri_a[0]);
+
+        if normal_a.length_squared() <= f32::EPSILON {
+            continue;
+        }
+
+        let p0 = tri_a[0];
+        let p1 = tri_a[1];
+        let p2 = tri_a[2];
+        let q0 = tri_b[0];
+        let q1 = tri_b[1];
+        let q2 = tri_b[2];
+
+        let proj0 = (p0 - q0).dot(normal_a);
+        let proj1 = (p1 - q1).dot(normal_a);
+        let proj2 = (p2 - q2).dot(normal_a);
+        let proj = Vec3::new(proj0, proj1, proj2);
+
+        // All points have the same sign.
+        // Find the point with the shortest distance.
+        let index = if proj.cmpgt(Vec3::ZERO).all() {
+            Some(proj.min_position())
+        } else if proj.cmplt(Vec3::ZERO).all() {
+            Some(proj.max_position())
+        } else {
+            None
+        };
+
+        if let Some(index) = index {
+            disjoint = true;
+
+            let v = [
+                tri_b[index] - tri_b[0],
+                tri_b[index] - tri_b[1],
+                tri_b[index] - tri_b[2],
+            ];
+            let z = [
+                normal_a.cross(tri_a[1] - tri_a[0]),
+                normal_a.cross(tri_a[2] - tri_a[1]),
+                normal_a.cross(tri_a[0] - tri_a[2]),
+            ];
+
+            if v.iter().zip(z).all(|(v, z)| v.dot(z) > 0.0) {
+                let cp = rhs[index] + normal_a * proj[index] / normal_a.length_squared();
+                let cq = rhs[index];
+                return (Some([cp, cq]), (cp - cq).length_squared());
+            }
+        }
+    }
+
+    if disjoint {
+        (Some([min_p, min_q]), min_d)
+    } else {
+        // Triangles intersect
+        (None, 0.0)
+    }
+}
+
+fn closest_points_between_lines([p0, p1]: [Vec3; 2], [q0, q1]: [Vec3; 2]) -> [Vec3; 2] {
+    // https://math.stackexchange.com/a/4289668
+    let v1 = p1 - p0;
+    let v2 = q1 - q0;
+    let v21 = q0 - p0;
+
+    let d22 = v2.dot(v2);
+    let d11 = v1.dot(v1);
+    let d21 = v2.dot(v1);
+    let d21_1 = v21.dot(v1);
+    let d21_2 = v21.dot(v2);
+    let denom = d21 * d21 - d22 * d11;
+
+    let mut s;
+    let mut t;
+    if denom.abs() < f32::EPSILON {
+        s = 0.0;
+        t = d11 / d21;
+    } else {
+        s = (d21_2 * d21 - d22 * d21_1) / denom;
+        t = (-d21_1 * d21 + d11 * d21_2) / denom;
+    }
+
+    s = s.clamp(0.0, 1.0);
+    t = t.clamp(0.0, 1.0);
+
+    let p_a = p0 + s * v1;
+    let p_b = q0 + t * v2;
+
+    [p_a, p_b]
+}
+
+#[cfg(test)]
+mod tests {
+    use glam::Vec3;
+
+    use super::is_inside_triangle;
+
+    #[test]
+    fn test_is_inside_triangle() {
+        const HEIGHT: f32 = 2.0;
+
+        assert!(is_inside_triangle(
+            [
+                Vec3::new(-1.0, 0.0, -1.0),
+                Vec3::new(0.0, 0.0, 1.0),
+                Vec3::new(1.0, 0.0, -1.0),
+            ],
+            HEIGHT,
+            Vec3::ZERO,
+        ));
+        assert!(is_inside_triangle(
+            [
+                Vec3::new(-1.0, 0.0, -1.0),
+                Vec3::new(0.0, 0.0, 1.0),
+                Vec3::new(1.0, 0.0, -1.0),
+            ],
+            HEIGHT,
+            Vec3::Z,
+        ));
+        assert!(!is_inside_triangle(
+            [
+                Vec3::new(-1.0, 0.0, -1.0),
+                Vec3::new(0.0, 0.0, 1.0),
+                Vec3::new(1.0, 0.0, -1.0),
+            ],
+            HEIGHT,
+            Vec3::X,
+        ));
+        assert!(is_inside_triangle(
+            [
+                Vec3::new(-1.0, 0.0, -1.0),
+                Vec3::new(0.0, 0.0, 1.0),
+                Vec3::new(1.0, 0.0, -1.0),
+            ],
+            HEIGHT,
+            Vec3::Y
+        ));
+        assert!(!is_inside_triangle(
+            [
+                Vec3::new(-1.0, 0.0, -1.0),
+                Vec3::new(0.0, 0.0, 1.0),
+                Vec3::new(1.0, 0.0, -1.0),
+            ],
+            HEIGHT,
+            -Vec3::Y * f32::EPSILON
+        ));
+        assert!(is_inside_triangle(
+            [
+                Vec3::new(-1.0, 0.0, -1.0),
+                Vec3::new(0.0, 0.0, 1.0),
+                Vec3::new(1.0, 0.0, -1.0),
+            ],
+            HEIGHT,
+            Vec3::Y * HEIGHT
+        ));
+        assert!(!is_inside_triangle(
+            [
+                Vec3::new(-1.0, 0.0, -1.0),
+                Vec3::new(0.0, 0.0, 1.0),
+                Vec3::new(1.0, 0.0, -1.0),
+            ],
+            HEIGHT,
+            Vec3::Y * HEIGHT * 1.1
+        ));
+    }
+}
