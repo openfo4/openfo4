@@ -2398,8 +2398,8 @@ fn push_actor_away(
 /// ```text
 /// Function() native
 /// ```
-fn recalculate_resources(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Exception> {
-    todo!()
+fn recalculate_resources(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<(), Exception> {
+    Ok(())
 }
 
 /// `RemoveAllItems`

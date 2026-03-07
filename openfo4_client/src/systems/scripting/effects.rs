@@ -1,4 +1,5 @@
 use std::collections::VecDeque;
+use std::num::NonZeroU64;
 use std::sync::Arc;
 
 use game_common::collections::arena::{Arena, Key};
@@ -7,6 +8,7 @@ use hecs::{Entity, World};
 use openfo4_core::events::EventBus;
 use openfo4_core::record::RecordId;
 
+use crate::events::inventory::RemoveItemEvent;
 use crate::events::quest::{StartQuestScene, StopQuestScene};
 use crate::state::equipment::load_item;
 use crate::state::esp::EspLoader;
@@ -149,6 +151,46 @@ impl Effect for AddItemsImmediate {
                 item: item.clone(),
             });
         }
+
+        EffectResult::Done
+    }
+}
+
+#[derive(Copy, Clone, Debug)]
+pub struct RemoveItemEffect {
+    pub entity: Entity,
+    pub item: InventoryKey,
+    pub count: NonZeroU64,
+}
+
+impl Effect for RemoveItemEffect {
+    fn run(&self, ctx: Context<'_>) -> EffectResult {
+        ctx.events.send(RemoveItemEvent {
+            entity: self.entity,
+            slot: self.item,
+            count: self.count,
+        });
+
+        EffectResult::Done
+    }
+}
+
+#[derive(Copy, Clone, Debug)]
+pub struct TransferItemEffect {
+    pub source: Entity,
+    pub destination: Entity,
+    pub item: InventoryKey,
+    pub count: NonZeroU64,
+}
+
+impl Effect for TransferItemEffect {
+    fn run(&self, ctx: Context<'_>) -> EffectResult {
+        ctx.events.send(TransferItemEffect {
+            source: self.source,
+            destination: self.destination,
+            item: self.item,
+            count: self.count,
+        });
 
         EffectResult::Done
     }

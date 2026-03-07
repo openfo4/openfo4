@@ -15,7 +15,9 @@ use openfo4_core::record::RecordId;
 use slab::Slab;
 
 use crate::components::PlacedItem;
-use crate::events::inventory::{ItemAddedEvent, ItemEquippedEvent, ItemUnequippedEvent};
+use crate::events::inventory::{
+    ItemAddedEvent, ItemEquippedEvent, ItemUnequippedEvent, RemoveItemEvent,
+};
 use crate::state::equipment::{EquipmentItemModels, load_equipment_item_models, load_item};
 use crate::state::esp::EspLoader;
 use crate::state::hardcoded::KEYWORD_FEMALE;
@@ -321,7 +323,15 @@ impl InventorySystem {
                 item: e.item,
             })
             .collect::<Vec<_>>();
+        let unequip_remove_events = events
+            .read::<RemoveItemEvent>()
+            .map(|e| UnequipItemEvent {
+                actor: e.entity,
+                item: e.slot,
+            })
+            .collect::<Vec<_>>();
         events.extend(unequip_transfer_events);
+        events.extend(unequip_remove_events);
 
         let mut items_added = Vec::new();
         for event in events.read::<AddItemEvent>() {
@@ -557,7 +567,7 @@ impl InventorySystem {
         }
 
         // Transfering items must come after all unequip events have been processed.
-        // This ensures that any items to transfer are not unequipped.
+        // This ensures that any items to transfer are not equipped.
         for event in events.read::<TransferItemEvent>() {
             // Transfering in the same container is a noop.
             if event.source == event.destination {
@@ -584,6 +594,25 @@ impl InventorySystem {
 
             if stack.count == 0 {
                 src_inventory.remove(event.item);
+            }
+        }
+
+        // Remove items must come after all unequip events have been processed.
+        // This ensures that any items to remove are not equipped.
+        for event in events.read::<RemoveItemEvent>() {
+            let Ok(mut inventory) = world.get::<&mut Inventory>(event.entity) else {
+                continue;
+            };
+
+            let Some(stack) = inventory.get_mut(event.slot) else {
+                continue;
+            };
+
+            let count = u64::min(event.count.get(), stack.count);
+            stack.count -= count;
+
+            if stack.count == 0 {
+                inventory.remove(event.slot);
             }
         }
 

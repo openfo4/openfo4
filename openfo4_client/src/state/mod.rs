@@ -59,6 +59,7 @@ use crate::state::animation::update_actor_animation_graphs;
 use crate::state::esp::EspLoaderBuilder;
 use crate::state::hardcoded::HARDCODED_MODULE_ID;
 use crate::systems::activation::update_player_looking_at_target;
+use crate::systems::ai::AiSystem;
 use crate::systems::animation_sync::{bounce_animation_events, update_animation_parameters};
 use crate::systems::camera::CameraMode;
 use crate::systems::controller::apply_player_movements;
@@ -103,6 +104,7 @@ pub struct GameState {
     quests: QuestManager,
     globals: GlobalProperties,
     script_entities: ScriptEntities,
+    pub ai: AiSystem,
 }
 
 impl GameState {
@@ -229,6 +231,7 @@ impl GameState {
                 },
             },
             script_entities: ScriptEntities::default(),
+            ai: AiSystem::default(),
         }
     }
 
@@ -277,6 +280,7 @@ impl GameState {
             &mut self.object_ref_set,
             &mut self.script_entities,
         );
+        self.ai.update(&mut self.world);
 
         animation_test::animation_test(
             &mut self.event_bus,

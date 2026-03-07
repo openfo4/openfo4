@@ -213,7 +213,7 @@ impl game_window::App for App {
         }
 
         if self.ui_state.debug.draw_navmesh {
-            draw_navmesh(&self.game.world, &self.state.gizmos);
+            draw_navmesh(&self.game.world, &self.game.ai, &self.state.gizmos);
         }
 
         self.egui_ctx.draw(|ctx| {

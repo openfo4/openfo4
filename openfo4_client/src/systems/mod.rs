@@ -8,6 +8,7 @@ use crate::systems::inventory::InventoryKey;
 
 pub mod activation;
 pub mod actor_value;
+pub mod ai;
 pub mod aim;
 pub mod animation_sync;
 pub mod camera;

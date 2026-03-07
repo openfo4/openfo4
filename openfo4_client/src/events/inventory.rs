@@ -4,6 +4,17 @@ use hecs::Entity;
 
 use crate::systems::inventory::InventoryKey;
 
+/// Request an item to be removed from an inventory.
+#[derive(Copy, Clone, Debug)]
+pub struct RemoveItemEvent {
+    /// The entity with the [`Inventory`] component.
+    pub entity: Entity,
+    /// The slot where items are to be removed.
+    pub slot: InventoryKey,
+    /// The number of items to be removed.
+    pub count: NonZeroU64,
+}
+
 /// Event sent after an item was added to an inventory.
 #[derive(Copy, Clone, Debug)]
 pub struct ItemAddedEvent {

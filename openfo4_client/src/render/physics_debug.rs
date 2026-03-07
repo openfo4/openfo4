@@ -11,10 +11,10 @@ use openfo4_core::hierarchy::Children;
 use openfo4_physics::components::{Collider, ColliderShape};
 
 use crate::cell::CellId;
-use crate::components::{Camera, NiTransform, TriggerBox};
+use crate::components::{Camera, NiTransform, Player, TriggerBox, WorldSpace};
 use crate::state::npc::BodyPartBone;
+use crate::systems::ai::AiSystem;
 use crate::systems::door::{AUTOLOAD_DOOR_RADIUS, Door};
-use crate::systems::pathing::NavMesh;
 
 const COLOR: Color = Color::RED;
 
@@ -300,16 +300,31 @@ pub fn draw_trigger_boxes(world: &World, gizmos: &Gizmos) {
     }
 }
 
-pub fn draw_navmesh(world: &World, gizmos: &Gizmos) {
-    for (_, mesh) in world.query::<&NavMesh>().iter() {
-        for indices in mesh.indices.chunks(3) {
-            let a = mesh.vertices[indices[0] as usize];
-            let b = mesh.vertices[indices[1] as usize];
-            let c = mesh.vertices[indices[2] as usize];
+pub fn draw_navmesh(world: &World, ai: &AiSystem, gizmos: &Gizmos) {
+    let Some(worldspace) = camera_worldspace(world) else {
+        return;
+    };
 
-            gizmos.line(a, b, NAVMESH_TRIANGLE_COLOR);
-            gizmos.line(b, c, NAVMESH_TRIANGLE_COLOR);
-            gizmos.line(c, a, NAVMESH_TRIANGLE_COLOR);
-        }
+    let Some(navmesh) = ai.navmeshes.get(&worldspace) else {
+        return;
+    };
+
+    for [a, b, c] in navmesh.triangles() {
+        let a = a.to_array().into();
+        let b = b.to_array().into();
+        let c = c.to_array().into();
+
+        gizmos.line(a, b, NAVMESH_TRIANGLE_COLOR);
+        gizmos.line(b, c, NAVMESH_TRIANGLE_COLOR);
+        gizmos.line(c, a, NAVMESH_TRIANGLE_COLOR);
     }
+}
+
+fn camera_worldspace(world: &World) -> Option<WorldSpace> {
+    // FIXME: We should look at the camera, not the player.
+    for (_, (ws, _)) in world.query::<(&WorldSpace, &Player)>().iter() {
+        return Some(*ws);
+    }
+
+    None
 }
