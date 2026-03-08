@@ -36,7 +36,7 @@ serde = { version = "1.0.204", features = ["derive"] }
 tracing = "0.1.40"
 tokio = { version = "1.38.0", features = ["full"] }
 clap = { version = "4.5.8", features = ["derive"] }
-glam = "0.28.0"
+glam = { workspace = true }
 toml = "0.8.14"
 thiserror = "1.0.61"
 parking_lot = "0.12.3"

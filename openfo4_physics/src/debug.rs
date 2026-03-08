@@ -3,6 +3,8 @@ use game_gizmos::Gizmos;
 use rapier3d::math::Point;
 use rapier3d::pipeline::{DebugColor, DebugRenderBackend, DebugRenderObject};
 
+use crate::convert::vec3;
+
 #[derive(Copy, Clone, Debug)]
 pub struct GizmoRenderBackend<'a>(pub &'a Gizmos);
 
@@ -14,6 +16,6 @@ impl DebugRenderBackend for GizmoRenderBackend<'_> {
         b: Point<f32>,
         color: DebugColor,
     ) {
-        self.0.line(a.into(), b.into(), Color(color));
+        self.0.line(vec3(a.coords), vec3(b.coords), Color(color));
     }
 }

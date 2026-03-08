@@ -8,6 +8,7 @@ use rapier3d::parry::query::DefaultQueryDispatcher;
 use rapier3d::prelude::QueryFilter;
 
 use crate::components::ColliderShape;
+use crate::convert::{rotation, vec3, vector};
 use crate::{GRAVITY, PhysicsPipeline, build_shape};
 
 #[derive(Clone, Debug)]
@@ -39,8 +40,8 @@ impl CharacterController {
         let shape = build_shape(shape, transform.scale);
 
         let position = Isometry {
-            translation: transform.translation.into(),
-            rotation: transform.rotation.into(),
+            translation: vector(transform.translation).into(),
+            rotation: rotation(transform.rotation),
         };
 
         let mut events = Vec::new();
@@ -62,7 +63,7 @@ impl CharacterController {
             &query_pl.as_ref(),
             &*shape,
             &position,
-            direction.into(),
+            vector(direction),
             |event| events.push(event),
         );
 
@@ -75,7 +76,7 @@ impl CharacterController {
         );
 
         Movement {
-            translation: movement.translation.into(),
+            translation: vec3(movement.translation),
             grounded: movement.grounded,
         }
     }
@@ -91,7 +92,7 @@ impl CharacterController {
             pipeline,
             transform,
             shape,
-            (GRAVITY * pipeline.integration_parameters.dt).into(),
+            vec3(GRAVITY * pipeline.integration_parameters.dt),
             exclude_body,
         )
     }

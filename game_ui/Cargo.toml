@@ -19,7 +19,7 @@ game_tracing = { version = "0.1.0", path = "../game_tracing" }
 game_common = { version = "0.1.0", path = "../game_common" }
 game_tasks = { version = "0.1.0", path = "../game_tasks" }
 
-glam = "0.28.0"
+glam = { workspace = true }
 ab_glyph = "0.2.28"
 image = "0.25.1"
 bytemuck = "1.16.1"

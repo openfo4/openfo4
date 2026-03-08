@@ -9,7 +9,7 @@ game_render = { version = "0.1.0", path = "../game_render" }
 
 tracing = "0.1.43"
 bytemuck = "1.24.0"
-glam = "0.28.0"
+glam = { workspace = true }
 crossbeam-channel = "0.5.15"
 
 [lints]

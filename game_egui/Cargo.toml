@@ -12,7 +12,7 @@ game_tasks = { version = "0.1.0", path = "../game_tasks" }
 game_input = { version = "0.1.0", path = "../game_input" }
 
 egui = "0.33.3"
-glam = "0.28.0"
+glam = { workspace = true }
 
 pretty_env_logger = "0.5.0"
 

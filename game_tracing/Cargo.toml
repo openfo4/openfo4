@@ -13,7 +13,7 @@ tracy = ["tracy-client", "tracy-client-sys"]
 workspace = true
 
 [dependencies]
-glam = "0.28.0"
+glam = { workspace = true }
 tracing = "0.1.40"
 
 tracing-subscriber = "0.3.18"
@@ -35,4 +35,5 @@ features = [
     "broadcast",
     "ondemand",
     "sampling",
+    "demangle",
 ]

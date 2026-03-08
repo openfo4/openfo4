@@ -13,7 +13,7 @@ game_tracing = { version = "0.1.0", path = "../game_tracing" }
 petgraph = "0.8.1"
 hecs = "0.10.5"
 slab = "0.4.9"
-glam = { version = "0.28.0", features = ["bytemuck"] }
+glam = { workspace = true, features = ["bytemuck"] }
 thiserror = "2.0.12"
 bitflags = "2.9.1"
 

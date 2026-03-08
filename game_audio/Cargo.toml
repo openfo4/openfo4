@@ -16,7 +16,7 @@ game_common = { version = "0.1.0", path = "../game_common" }
 game_tracing = { version = "0.1.0", path = "../game_tracing" }
 
 tracing = "0.1.40"
-glam = "0.28.0"
+glam = { workspace = true }
 cpal = "0.15.3"
 symphonia = "0.5.4"
 parking_lot = "0.12.3"

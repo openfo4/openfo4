@@ -25,7 +25,7 @@ parking_lot = "0.12.3"
 tokio = { version = "1.38.0", features = ["full"] }
 thiserror = "1.0.61"
 slotmap = "1.0.7"
-glam = "0.28.0"
+glam = { workspace = true }
 async-io = "2.3.3"
 
 tracing-subscriber = "0.3.18"

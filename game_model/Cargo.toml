@@ -11,5 +11,5 @@ workspace = true
 [dependencies]
 game_common = { version = "0.1.0", path = "../game_common" }
 bytes = "1.6.0"
-glam = { version = "0.28.0", features = ["bytemuck"] }
+glam = { workspace = true, features = ["bytemuck"] }
 bytemuck = "1.16.1"

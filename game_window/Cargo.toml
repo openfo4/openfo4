@@ -13,7 +13,7 @@ game_common = { version = "0.1.0", path = "../game_common" }
 game_input = { version = "0.1.0", path = "../game_input" }
 game_tracing = { version = "0.1.0", path = "../game_tracing" }
 
-glam = "0.28.0"
+glam = { workspace = true }
 winit = "0.29.4"
 tracing = "0.1.40"
 raw-window-handle = "0.6.0"

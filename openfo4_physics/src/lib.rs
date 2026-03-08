@@ -2,6 +2,8 @@ pub mod components;
 pub mod controller;
 pub mod debug;
 
+mod convert;
+
 use std::cell::Cell;
 use std::collections::{HashMap, VecDeque};
 
@@ -11,10 +13,11 @@ use game_common::components::{Axis, GlobalTransform, Transform};
 use game_common::math::Ray;
 use game_gizmos::Gizmos;
 use game_tracing::trace_span;
-use glam::{Quat, Vec3};
+use glam::Vec3;
 use hecs::{Entity, World};
+use openfo4_core::Frozen;
 use openfo4_core::hierarchy::Children;
-use rapier3d::math::{Isometry, Rotation};
+use rapier3d::math::Isometry;
 use rapier3d::parry::query::{DefaultQueryDispatcher, ShapeCastOptions};
 use rapier3d::prelude::{
     CCDSolver, ColliderBuilder, ColliderHandle, ColliderSet, DebugRenderMode, DebugRenderPipeline,
@@ -25,6 +28,7 @@ use rapier3d::prelude::{
 use tracing::instrument;
 
 use crate::components::CollisionLayer;
+use crate::convert::{quat, rotation, vec3, vector};
 use crate::debug::GizmoRenderBackend;
 
 const DT: f32 = 1.0 / 60.0;
@@ -122,18 +126,23 @@ impl PhysicsPipeline {
     fn update_rigid_bodies(&mut self, world: &World) {
         let mut despawned_bodies = self.body_handles.clone();
 
-        for (entity, (global_transform, rigid_body)) in
-            world.query::<(&GlobalTransform, &RigidBody)>().iter()
+        for (entity, (global_transform, rigid_body, frozen)) in world
+            .query::<(&GlobalTransform, &RigidBody, Option<&Frozen>)>()
+            .iter()
         {
-            let translation = Vector::from(global_transform.0.translation);
-            let rotation = Rotation::from(global_transform.0.rotation);
+            if frozen.is_some_and(|v| v.physics) {
+                continue;
+            }
+
+            let translation = vector(global_transform.0.translation);
+            let rotation = rotation(global_transform.0.rotation);
 
             let kind = match rigid_body.kind {
                 RigidBodyKind::Fixed => RigidBodyType::Fixed,
                 RigidBodyKind::Dynamic => RigidBodyType::Dynamic,
             };
-            let linvel = Vector::from(rigid_body.linvel);
-            let angvel = Vector::from(rigid_body.angvel);
+            let linvel = vector(rigid_body.linvel);
+            let angvel = vector(rigid_body.angvel);
 
             if !self.body_handles.contains_left(&entity) {
                 let builder = RigidBodyBuilder::new(kind);
@@ -188,7 +197,7 @@ impl PhysicsPipeline {
         }
     }
 
-    #[instrument(name = "PhysicsPipeline::update_colliders", skip_all)]
+    // #[instrument(name = "PhysicsPipeline::update_colliders", skip_all)]
     fn update_colliders(&mut self, world: &World) {
         let mut despawned_colliders = self.collider_handles.clone();
 
@@ -268,8 +277,8 @@ impl PhysicsPipeline {
                 // is probably just weird...).
                 let state = self.colliders.get_mut(spawned_collider.handle).unwrap();
                 state.set_position_wrt_parent(Isometry {
-                    translation: Vector::from(translation).into(),
-                    rotation: rotation.into(),
+                    translation: vector(translation).into(),
+                    rotation: convert::rotation(rotation),
                 });
             }
         }
@@ -287,8 +296,8 @@ impl PhysicsPipeline {
             let entity = *self.body_handles.get_right(&handle).unwrap();
 
             let mut rigid_body = world.get::<&mut RigidBody>(entity).unwrap();
-            rigid_body.linvel = Vec3::from(*body.linvel());
-            rigid_body.angvel = Vec3::from(*body.angvel());
+            rigid_body.linvel = vec3(*body.linvel());
+            rigid_body.angvel = vec3(*body.angvel());
 
             // We source the position of the rigid body from the `GlobalTransform` component,
             // but we cannot write back directly to the `GlobalTransform` component since
@@ -304,8 +313,8 @@ impl PhysicsPipeline {
             let mut transform = world.get::<&mut Transform>(entity).unwrap();
             let global_transform = world.get::<&GlobalTransform>(entity).unwrap();
 
-            let new_translation = Vec3::from(*body.translation());
-            let new_rotation = Quat::from(*body.rotation());
+            let new_translation = vec3(*body.translation());
+            let new_rotation = quat(*body.rotation());
 
             let delta_translation = new_translation - global_transform.0.translation;
             // Note that `delta_rotation` is applied from left.
@@ -354,8 +363,8 @@ impl PhysicsPipeline {
         let _span = trace_span!("PhysicsPipeline::cast_ray").entered();
 
         let ray = rapier3d::geometry::Ray {
-            origin: ray.origin.into(),
-            dir: ray.direction.into(),
+            origin: vector(ray.origin).into(),
+            dir: vector(ray.direction).into(),
         };
 
         let predicate = |handle: ColliderHandle, _: &rapier3d::prelude::Collider| -> bool {
@@ -386,14 +395,14 @@ impl PhysicsPipeline {
     ) -> Option<QueryHit> {
         let shape = build_shape(shape, origin.scale);
         let origin = Isometry {
-            translation: origin.translation.into(),
-            rotation: origin.rotation.into(),
+            translation: vector(origin.translation).into(),
+            rotation: rotation(origin.rotation),
         };
 
         self.query_pipeline()
             .cast_shape(
                 &origin,
-                &direction.into(),
+                &vector(direction).into(),
                 &*shape,
                 ShapeCastOptions::default(),
             )
@@ -515,7 +524,7 @@ fn build_shape(shape: &ColliderShape, scale: Vec3) -> SharedShape {
                 .iter()
                 .map(|vertex| {
                     let point = *vertex * scale;
-                    Vector::from(point).into()
+                    vector(point).into()
                 })
                 .collect();
             let indices = mesh
