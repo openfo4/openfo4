@@ -1,3 +1,4 @@
+mod ssf;
 mod triangle;
 
 use glam::Vec3;
@@ -8,7 +9,7 @@ use petgraph::{Graph, Undirected};
 use rstar::primitives::{GeomWithData, Rectangle};
 use rstar::{RTree, AABB};
 
-use crate::navmesh::triangle::{closest_points_between_triangles, is_inside_triangle};
+use crate::navmesh::triangle::{closest_points_between_triangles, is_inside_triangle, Triangle};
 
 const HEIGHT: f32 = 2.0;
 const UP: Vec3 = Vec3::Y;
@@ -78,16 +79,15 @@ impl NavMesh {
     }
 
     pub fn search(&self, agent: &Agent, target: Vec3) -> Option<Path> {
+        // TODO: We can also use the RTree here, but we need to consider triangle height.
         let start = self
             .triangles
             .iter()
-            .position(|tri| is_inside_triangle(*tri, HEIGHT, agent.position))
-            .unwrap();
+            .position(|tri| is_inside_triangle(*tri, HEIGHT, agent.position))?;
         let end = self
             .triangles
             .iter()
-            .position(|tri| is_inside_triangle(*tri, HEIGHT, target))
-            .unwrap();
+            .position(|tri| is_inside_triangle(*tri, HEIGHT, target))?;
 
         let res = astar(
             &self.graph,
@@ -107,20 +107,33 @@ impl NavMesh {
 
         let triangles: Vec<_> = res.1.iter().map(|v| v.index()).collect();
 
-        Some(Path { triangles })
+        let tris: Vec<_> = triangles
+            .iter()
+            .map(|index| Triangle::from_vertices(self.triangles[*index], UP))
+            .collect();
+
+        let mut waypoints = ssf::ssf(&tris, agent.position);
+        waypoints.push(target);
+
+        Some(Path {
+            triangles,
+            waypoints,
+        })
     }
 
     /// Returns an iterator over all triangles stored in the `NavMesh`.
     ///
     /// Primarily meant for debugging purposes.
-    pub fn triangles(&self) -> impl Iterator<Item = [Vec3; 3]> + '_ {
-        self.triangles.iter().copied()
+    pub fn triangles(&self) -> &[[Vec3; 3]] {
+        &self.triangles
     }
 }
 
 #[derive(Clone, Debug)]
 pub struct Path {
     pub triangles: Vec<usize>,
+    /// Points the actor should pass through to reach the target.
+    pub waypoints: Vec<Vec3>,
 }
 
 #[derive(Clone, Debug)]

@@ -2,6 +2,56 @@
 
 use glam::Vec3;
 
+/// A triangle with counter-clockwise winding.
+#[derive(Copy, Clone, Debug)]
+pub struct Triangle {
+    pub a: Vec3,
+    pub b: Vec3,
+    pub c: Vec3,
+}
+
+impl Triangle {
+    pub fn from_vertices(verts: [Vec3; 3], up: Vec3) -> Self {
+        debug_assert!(up.is_normalized());
+
+        let tri = Self {
+            a: verts[0],
+            b: verts[1],
+            c: verts[2],
+        };
+
+        if tri.normal().dot(up).is_sign_negative() {
+            tri.flipped()
+        } else {
+            tri
+        }
+    }
+
+    pub const fn centroid(&self) -> Vec3 {
+        Vec3 {
+            x: (self.a.x + self.b.x + self.c.x) / 3.0,
+            y: (self.a.y + self.b.y + self.c.y) / 3.0,
+            z: (self.a.z + self.b.z + self.c.z) / 3.0,
+        }
+    }
+
+    pub fn normal(&self) -> Vec3 {
+        -(self.b - self.a).cross(self.c - self.a).normalize_or_zero()
+    }
+
+    pub const fn flipped(self) -> Self {
+        Self {
+            a: self.a,
+            b: self.c,
+            c: self.b,
+        }
+    }
+
+    pub const fn edges(&self) -> [[Vec3; 2]; 3] {
+        [[self.a, self.b], [self.b, self.c], [self.c, self.a]]
+    }
+}
+
 pub fn is_inside_triangle(triangle: [Vec3; 3], height: f32, point: Vec3) -> bool {
     let normal = triangle[0].cross(triangle[1]);
 
@@ -182,7 +232,12 @@ fn closest_points_between_lines([p0, p1]: [Vec3; 2], [q0, q1]: [Vec3; 2]) -> [Ve
 
 #[cfg(test)]
 mod tests {
+    use std::f32::consts::PI;
+
+    use game_common::assert_approx_eq;
     use glam::Vec3;
+
+    use crate::navmesh::triangle::Triangle;
 
     use super::is_inside_triangle;
 
@@ -253,5 +308,74 @@ mod tests {
             HEIGHT,
             Vec3::Y * HEIGHT * 1.1
         ));
+    }
+
+    #[test]
+    fn triangle_normal() {
+        let triangle = Triangle::from_vertices(
+            [
+                Vec3::new(-1.0, 0.0, -1.0),
+                Vec3::new(1.0, 0.0, -1.0),
+                Vec3::new(0.0, 0.0, 1.0),
+            ],
+            Vec3::Y,
+        );
+
+        assert_eq!(triangle.normal(), Vec3::Y);
+
+        let triangle = Triangle::from_vertices(
+            [
+                Vec3::new(-1.0, 0.0, -1.0),
+                Vec3::new(0.0, 0.0, 1.0),
+                Vec3::new(1.0, 0.0, -1.0),
+            ],
+            Vec3::Y,
+        );
+
+        assert_eq!(triangle.normal(), Vec3::Y);
+    }
+
+    #[test]
+    fn triangle_normal_rotated() {
+        let triangle = Triangle::from_vertices(
+            [
+                Vec3::new(-1.0, 0.0, -1.0).rotate_x(PI / 4.0),
+                Vec3::new(1.0, 0.0, -1.0).rotate_x(PI / 4.0),
+                Vec3::new(0.0, 0.0, 1.0).rotate_x(PI / 4.0),
+            ],
+            Vec3::Y,
+        );
+
+        assert_approx_eq!(triangle.normal(), Vec3::Y.rotate_x(PI / 4.0));
+
+        let triangle = Triangle::from_vertices(
+            [
+                Vec3::new(-1.0, 0.0, -1.0).rotate_x(PI / 4.0),
+                Vec3::new(0.0, 0.0, 1.0).rotate_x(PI / 4.0),
+                Vec3::new(1.0, 0.0, -1.0).rotate_x(PI / 4.0),
+            ],
+            Vec3::Y,
+        );
+
+        assert_approx_eq!(triangle.normal(), Vec3::Y.rotate_x(PI / 4.0));
+    }
+
+    #[test]
+    fn triangle_normal_winding_order_independent() {
+        let a = Vec3::new(1.0, 0.0, 1.0);
+        let b = Vec3::new(0.0, 0.0, 1.0);
+        let c = Vec3::new(1.0, 0.0, 0.0);
+
+        let tri0 = Triangle::from_vertices([a, b, c], Vec3::Y);
+        let tri1 = Triangle::from_vertices([a, c, b], Vec3::Y);
+        let tri2 = Triangle::from_vertices([b, a, c], Vec3::Y);
+        let tri3 = Triangle::from_vertices([b, c, a], Vec3::Y);
+        let tri4 = Triangle::from_vertices([c, b, a], Vec3::Y);
+        let tri5 = Triangle::from_vertices([c, a, b], Vec3::Y);
+        assert_eq!(tri0.normal(), tri1.normal());
+        assert_eq!(tri0.normal(), tri2.normal());
+        assert_eq!(tri0.normal(), tri3.normal());
+        assert_eq!(tri0.normal(), tri4.normal());
+        assert_eq!(tri0.normal(), tri5.normal());
     }
 }
