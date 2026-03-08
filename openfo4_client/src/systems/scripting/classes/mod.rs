@@ -87,11 +87,7 @@ pub fn register_builtins(engine: &mut Engine) {
     topic_info::register(engine);
     faction::register(engine);
     image_space_modifier::register(engine);
-
-    engine.register_native_function("Message", "ResetHelpMessage", message::reset_help_message);
-    engine.register_native_function("Message", "Show", message::show);
-    engine.register_native_function("Message", "ShowAsHelpMessage", message::show_as_help_message);
-    engine.register_native_function("Message", "UnshowAsHelpMessage", message::unshow_as_help_message);
+    message::register(engine);
 
     script_object::register(engine);
 
