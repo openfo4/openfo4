@@ -1,5 +1,8 @@
 import types;
 
+[SpecializationConstant]
+const u32 NUM_THREADS;
+
 ConstantBuffer<u32> instance_count;
 
 StructuredBuffer<f32> positions_in;
@@ -34,13 +37,13 @@ struct BoneTransform {
     Mat3 rotation;
 }
 
-// FIXME: This workgroup layout is suboptimal, change to 32/64.
 [shader("compute")]
-[numthreads(1, 1, 1)]
+[numthreads(1, NUM_THREADS, 1)]
 func main(
     vector<u32, 2> gid: SV_GroupID,
+    vector<u32, 2> tid: SV_GroupThreadID,
 ) {
-    let xy = gid;
+    let xy = gid * vector<u32, 2>(1, NUM_THREADS) + tid;
     let instance_index = xy.x;
     let vertex_index = xy.y;
 

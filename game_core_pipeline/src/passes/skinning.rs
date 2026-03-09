@@ -15,6 +15,8 @@ const SHADER: &str = concat!(
     "/shaders/skinning/skinning.slang"
 );
 
+const WORKGROUP_SIZE: u32 = 64;
+
 pub struct SkinningPass {
     state: Arc<Mutex<State>>,
     pipeline: Mutex<Pipeline>,
@@ -30,10 +32,16 @@ impl SkinningPass {
                     language: ShaderLanguage::Slang,
                 }],
                 Box::new(|_queue, shaders| {
+                    let specs = shaders[0].spec_constants();
+                    let spec = specs
+                        .iter()
+                        .find(|v| v.name.as_ref().is_some_and(|v| v == "NUM_THREADS"))
+                        .unwrap();
+
                     vec![PipelineStage::Compute(ComputeStage {
                         shader: &shaders[0],
                         entry: "main",
-                        spec_consts: Default::default(),
+                        spec_consts: [(spec.id, WORKGROUP_SIZE.into())].into_iter().collect(),
                     })]
                 }),
                 &[
@@ -157,6 +165,7 @@ impl Node for SkinningPass {
             .max_by(|a, b| a.vertex_count.cmp(&b.vertex_count))
             .map(|v| v.vertex_count)
             .unwrap();
+        let vertex_count = vertex_count.div_ceil(WORKGROUP_SIZE);
 
         pass.dispatch(num_instances, vertex_count, 1);
     }
