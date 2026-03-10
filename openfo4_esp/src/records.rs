@@ -3822,6 +3822,12 @@ pub struct ClimateTime {
     pub minute: u8,
 }
 
+impl ClimateTime {
+    pub fn hours(&self) -> f32 {
+        self.hour as f32 + self.minute as f32 / 60.0
+    }
+}
+
 impl Decode for ClimateTime {
     type Error = Error;
 

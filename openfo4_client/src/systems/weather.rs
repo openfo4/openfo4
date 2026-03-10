@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use game_common::components::{AmbientLight, Color};
+use game_common::utils::vec_ext::VecExt;
 use game_core_pipeline::entities::Entities;
 use game_core_pipeline::sky::SkyMaterial;
 use game_render::mesh::{Indices, Mesh};
@@ -11,7 +12,7 @@ use hecs::{Entity, World};
 use openfo4_asset::AssetLoader;
 use openfo4_core::record::RecordId;
 use openfo4_core::transform::ConvertCoordinateSystem;
-use openfo4_esp::records::{ClimateTime, Rgba};
+use openfo4_esp::records::{ClimateTime, Rgba, TimeOfDaySetExtended};
 use openfo4_esp::{FormId, RecordData, RecordKind};
 use openfo4_nif::{Block, Nif};
 
@@ -65,7 +66,12 @@ impl WeatherSystem {
     }
 
     pub fn update(&mut self, world: &mut World) {
-        let Some((_, time)) = world.query::<&GameTime>().iter().next() else {
+        let Some(time) = world
+            .query::<&GameTime>()
+            .iter()
+            .map(|v| v.1.clone())
+            .next()
+        else {
             return;
         };
 
@@ -80,22 +86,26 @@ impl WeatherSystem {
         let Some(climate) = self.climates.get(&worldspace.record) else {
             return;
         };
+
         let weather = climate.weathers.first().unwrap();
-        let span = &weather.spans[0];
+
+        let Some(params) = weather.get_interpolated(&time) else {
+            return;
+        };
 
         if let Some(entity) = self.ambient_light {
             world.despawn(entity).unwrap();
         }
 
         self.entities.set_sky_material(SkyMaterial {
-            sky_lower: span.sky_lower,
-            sky_upper: span.sky_upper,
-            horizon: span.horizon,
+            sky_lower: params.sky_lower,
+            sky_upper: params.sky_upper,
+            horizon: params.horizon,
         });
 
         self.ambient_light = Some(world.spawn((
             AmbientLight {
-                color: span.ambient,
+                color: params.ambient,
                 brightness: 1.0,
             },
             worldspace,
@@ -113,35 +123,57 @@ struct WorldspaceClimate {
 
 #[derive(Clone, Debug)]
 struct Weather {
-    spans: Vec<WeatherSpan>,
+    params: Vec<WeatherParams>,
+    phases: Vec<WeatherPhase>,
 }
 
 impl Weather {
-    fn get_interpolated(&self, time: &GameTime) {
-        // let time = time.hour() * 60 + time.minute();
+    fn get_interpolated(&self, time: &GameTime) -> Option<WeatherParams> {
+        let hour = time.hour() as f32 + time.minute() as f32 / 60.0;
 
-        // for (index, span) in self.spans.iter().enumerate() {
-        //     let start = u64::from(span.start.hour) * 60 + u64::from(span.start.minute);
-        //     let end = u64::from(span.end.hour) * 60 + u64::from(span.end.minute);
+        let phase = self
+            .phases
+            .iter()
+            .find(|phase| hour >= phase.min_hour && hour <= phase.max_hour)?;
 
-        //     if time < start || time > end {
-        //         continue;
-        //     }
+        let s = (hour - phase.min_hour) / (phase.max_hour - phase.min_hour);
 
-        //     let next = self.spans.get(index + 1).unwrap_or(&self.spans[0]);
-
-        // }
+        let a = &self.params[phase.min_param];
+        let b = &self.params[phase.max_param];
+        Some(a.interpolate(b, s))
     }
 }
 
+#[derive(Copy, Clone, Debug)]
+struct WeatherPhase {
+    min_hour: f32,
+    max_hour: f32,
+    min_param: usize,
+    max_param: usize,
+}
+
 #[derive(Clone, Debug)]
-struct WeatherSpan {
-    start: ClimateTime,
-    end: ClimateTime,
+struct WeatherParams {
     ambient: Color,
     sky_lower: Color,
     sky_upper: Color,
     horizon: Color,
+}
+
+impl WeatherParams {
+    fn interpolate(&self, other: &Self, s: f32) -> Self {
+        let ambient = self.ambient.lerp(other.ambient, s);
+        let sky_lower = self.sky_lower.lerp(other.sky_lower, s);
+        let sky_upper = self.sky_upper.lerp(other.sky_upper, s);
+        let horizon = self.horizon.lerp(other.horizon, s);
+
+        Self {
+            ambient,
+            sky_lower,
+            sky_upper,
+            horizon,
+        }
+    }
 }
 
 async fn load_sky_mesh(loader: &AssetLoader) -> Mesh {
@@ -259,61 +291,79 @@ async fn load_worldspace_weather_props(
             todo!();
         };
 
-        // The interpoltion times between times of day don't seem to be anywhere,
-        // but based on observation they seem to follow a pattern close to following:
-        // Based on the 5:00 AM - 9:00 AM default climate times:
-        // 3:00 AM => 100% Night
-        // 4:00 AM => 100% Early Sunrise
-        // 5:00 AM => 50% Early Sunrise, 50% Sunrise
-        // 6:00 AM => 100% Sunrise
-        // 7:00 AM => 50% Sunrise, 50% Late Sunrise
-        // 8:00 AM => 50% Late Sunrise, 50% Day
-        // 9:00 AM => 100% Day
+        fn to_params<F>(weather: &openfo4_esp::records::Weather, f: F) -> WeatherParams
+        where
+            F: Fn(TimeOfDaySetExtended<Rgba<u8>>) -> Rgba<u8>,
+        {
+            WeatherParams {
+                ambient: rgb_to_color(f(weather.colors.ambient)),
+                sky_lower: rgb_to_color(f(weather.colors.sky_lower)),
+                sky_upper: rgb_to_color(f(weather.colors.sky_upper)),
+                horizon: rgb_to_color(f(weather.colors.horizon)),
+            }
+        }
 
-        weathers.push(Weather {
-            spans: vec![
-                WeatherSpan {
-                    start: climate.timing.sunrise_begin,
-                    end: climate.timing.sunrise_end,
-                    ambient: rgb_to_color(weather.colors.ambient.sunrise),
-                    sky_lower: rgb_to_color(weather.colors.sky_lower.sunrise),
-                    sky_upper: rgb_to_color(weather.colors.sky_upper.sunrise),
-                    horizon: rgb_to_color(weather.colors.horizon.sunrise),
-                },
-                WeatherSpan {
-                    start: climate.timing.sunrise_end,
-                    end: climate.timing.sunset_begin,
-                    ambient: rgb_to_color(weather.colors.ambient.day),
-                    sky_lower: rgb_to_color(weather.colors.sky_lower.day),
-                    sky_upper: rgb_to_color(weather.colors.sky_upper.day),
-                    horizon: rgb_to_color(weather.colors.horizon.day),
-                },
-                WeatherSpan {
-                    start: climate.timing.sunset_begin,
-                    end: climate.timing.sunset_end,
-                    ambient: rgb_to_color(weather.colors.ambient.sunset),
-                    sky_lower: rgb_to_color(weather.colors.sky_lower.sunset),
-                    sky_upper: rgb_to_color(weather.colors.sky_upper.sunset),
-                    horizon: rgb_to_color(weather.colors.horizon.sunset),
-                },
-                WeatherSpan {
-                    start: climate.timing.sunset_end,
-                    end: climate.timing.sunrise_begin,
-                    ambient: rgb_to_color(weather.colors.ambient.night),
-                    sky_lower: rgb_to_color(weather.colors.sky_lower.night),
-                    sky_upper: rgb_to_color(weather.colors.sky_upper.night),
-                    horizon: rgb_to_color(weather.colors.horizon.night),
-                },
-            ],
-        });
+        let mut params = Vec::new();
+        let p_night = params.push_and_index(to_params(&weather, |v| v.night));
+        let p_day = params.push_and_index(to_params(&weather, |v| v.day));
+        let p_early_sunrise = params.push_and_index(to_params(&weather, |v| v.early_sunrise));
+        let p_sunrise = params.push_and_index(to_params(&weather, |v| v.sunrise));
+        let p_late_sunrise = params.push_and_index(to_params(&weather, |v| v.late_sunrise));
+        let p_early_sunset = params.push_and_index(to_params(&weather, |v| v.early_sunset));
+        let p_sunset = params.push_and_index(to_params(&weather, |v| v.sunset));
+        let p_late_sunset = params.push_and_index(to_params(&weather, |v| v.late_sunset));
 
-        dbg!(&weather.id);
-        dbg!(&weather.colors);
+        let sunrise_begin = climate.timing.sunrise_begin.hours();
+        let sunrise_end = climate.timing.sunrise_end.hours();
+        let sunset_begin = climate.timing.sunset_begin.hours();
+        let sunset_end = climate.timing.sunset_end.hours();
 
-        weather.colors.ambient.sunset;
+        let sunrise_len = sunrise_end - sunrise_begin;
+        let sunset_len = sunset_end - sunset_begin;
+
+        let early_sunrise = (sunrise_begin - 1.5 + (0.25 * sunrise_len)).rem_euclid(24.0);
+        let sunrise = (sunrise_begin - 1.0 + (0.5 * sunrise_len)).rem_euclid(24.0);
+        let late_sunrise = (sunrise_end - 0.5 - (0.25 * sunrise_len)).rem_euclid(24.0);
+        let early_sunset = (sunset_begin + 0.5 + (0.25 * sunset_len)).rem_euclid(24.0);
+        let sunset = (sunset_begin + 1.0 + (0.5 * sunset_len)).rem_euclid(24.0);
+        let late_sunset = (sunset_end + 1.5 - (0.25 * sunset_len)).rem_euclid(24.0);
+
+        let sunrise_timestep = sunrise - early_sunrise;
+        let sunset_timestep = sunset - early_sunset;
+
+        // FIXME: Double check what happens if we go negative / over 24 here.
+        let full_night_end = early_sunrise - sunrise_timestep;
+        let full_day_start = late_sunrise + sunrise_timestep;
+        let full_day_end = early_sunset - sunset_timestep;
+        let full_night_start = late_sunset + sunset_timestep;
+
+        let mut phases = Vec::new();
+
+        for ([start, end], [p_start, p_end]) in [
+            ([0.0, full_night_end], [p_night, p_night]),
+            ([full_night_end, early_sunrise], [p_night, p_early_sunrise]),
+            ([early_sunrise, sunrise], [p_early_sunrise, p_sunrise]),
+            ([sunrise, late_sunrise], [p_sunrise, p_late_sunrise]),
+            ([late_sunrise, full_day_start], [p_late_sunrise, p_day]),
+            ([full_day_start, full_day_end], [p_day, p_day]),
+            ([full_day_end, early_sunset], [p_day, p_early_sunset]),
+            ([early_sunset, sunset], [p_early_sunset, p_sunset]),
+            ([sunset, late_sunset], [p_sunset, p_late_sunset]),
+            ([late_sunset, full_night_start], [p_late_sunset, p_night]),
+            ([full_night_start, 24.0], [p_night, p_night]),
+        ] {
+            if end - start > 0.0 {
+                phases.push(WeatherPhase {
+                    min_hour: start,
+                    max_hour: end,
+                    min_param: p_start,
+                    max_param: p_end,
+                });
+            }
+        }
+
+        weathers.push(Weather { params, phases });
     }
-
-    dbg!(climate.timing);
 
     WorldspaceClimate {
         weathers,
