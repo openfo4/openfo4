@@ -26,6 +26,9 @@ pub trait VecExt<T> {
     ///
     /// The `Vec` must have a spare capacity greater than zero.
     unsafe fn push_unchecked(&mut self, value: T);
+
+    /// Pushes a new value to the back of the `Vec` and returns the index where it was placed.
+    fn push_and_index(&mut self, value: T) -> usize;
 }
 
 impl<T> VecExt<T> for Vec<T> {
@@ -88,6 +91,12 @@ impl<T> VecExt<T> for Vec<T> {
             self.as_mut_ptr().add(self.len()).write(value);
             self.set_len(self.len().unchecked_add(1));
         }
+    }
+
+    fn push_and_index(&mut self, value: T) -> usize {
+        let index = self.len();
+        self.push(value);
+        index
     }
 }
 
@@ -154,6 +163,12 @@ where
             self.as_mut_ptr().add(self.len()).write(value);
             self.set_len(self.len().unchecked_add(1));
         }
+    }
+
+    fn push_and_index(&mut self, value: T) -> usize {
+        let index = self.len();
+        self.push(value);
+        index
     }
 }
 
