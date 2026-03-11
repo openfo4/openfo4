@@ -3615,7 +3615,7 @@ pub struct Weather {
     #[record("TNAM")]
     pub sky_statics: Vec<FormId>,
     #[record("IMSP")]
-    pub image_spaces: TimeOfDaySet<FormId>,
+    pub image_spaces: TimeOfDaySetExtended<FormId>,
     #[record("WGDR")]
     pub god_rays: Option<TimeOfDaySetExtended<FormId>>,
     /// Order:
@@ -3665,6 +3665,15 @@ pub struct TimeOfDaySet<T> {
     pub night: T,
 }
 
+impl<T> IntoIterator for TimeOfDaySet<T> {
+    type Item = T;
+    type IntoIter = std::array::IntoIter<T, 4>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        [self.sunrise, self.day, self.sunset, self.night].into_iter()
+    }
+}
+
 #[derive(Copy, Clone, Debug, BinaryStruct)]
 pub struct TimeOfDaySetExtended<T> {
     pub sunrise: T,
@@ -3675,6 +3684,25 @@ pub struct TimeOfDaySetExtended<T> {
     pub late_sunrise: T,
     pub early_sunset: T,
     pub late_sunset: T,
+}
+
+impl<T> IntoIterator for TimeOfDaySetExtended<T> {
+    type Item = T;
+    type IntoIter = std::array::IntoIter<T, 8>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        [
+            self.sunrise,
+            self.day,
+            self.sunset,
+            self.night,
+            self.early_sunrise,
+            self.late_sunrise,
+            self.early_sunset,
+            self.late_sunset,
+        ]
+        .into_iter()
+    }
 }
 
 #[derive(Copy, Clone, Debug, BinaryStruct)]
@@ -6407,6 +6435,73 @@ pub struct Debris {
 pub struct ImageSpace {
     #[record("EDID")]
     pub id: Option<ZString>,
+    #[record("ENAM")]
+    pub data: Option<ImageSpaceData>,
+    #[record("HNAM")]
+    pub hdr: Option<ImageSpaceHdrData>,
+    #[record("CNAM")]
+    pub cinematic: Option<ImageSpaceCinematicData>,
+    #[record("TNAM")]
+    pub tint: Option<ImageSpaceTint>,
+    #[record("DNAM")]
+    pub depth_of_field: Option<ImageSpaceDepthOfField>,
+    #[record("TX00")]
+    pub lut: Option<ZString>,
+}
+
+#[derive(Copy, Clone, Debug, BinaryStruct)]
+pub struct ImageSpaceData {
+    pub eye_adapt_speed: f32,
+    pub tonemap_e: f32,
+    pub bloom_threshold: f32,
+    pub bloom_scale: f32,
+    pub auto_exposure_min_max: f32,
+    pub sunlight_scale: f32,
+    pub sky_scale: f32,
+    pub saturation: f32,
+    pub brightness: f32,
+    pub contrast: f32,
+    pub tint_scale: f32,
+    pub tint_color: Rgb<f32>,
+}
+
+#[derive(Copy, Clone, Debug, BinaryStruct)]
+pub struct ImageSpaceHdrData {
+    pub eye_adapt_speed: f32,
+    pub tonemap_e: f32,
+    pub bloom_threshold: f32,
+    pub bloom_scale: f32,
+    pub auto_exposure_max: f32,
+    pub auto_exposure_min: f32,
+    pub sunlight_scale: f32,
+    pub sky_scale: f32,
+    pub middle_gray: f32,
+}
+
+#[derive(Copy, Clone, Debug, BinaryStruct)]
+pub struct ImageSpaceCinematicData {
+    pub saturation: f32,
+    pub brightness: f32,
+    pub contrast: f32,
+}
+
+#[derive(Copy, Clone, Debug, BinaryStruct)]
+pub struct ImageSpaceTint {
+    pub scale: f32,
+    pub color: Rgb<f32>,
+}
+
+#[derive(Copy, Clone, Debug, BinaryStruct)]
+pub struct ImageSpaceDepthOfField {
+    pub strength: f32,
+    pub distance: f32,
+    pub range: f32,
+    _pad0: u16,
+    pub blur_radius: u16,
+    #[default_value]
+    pub vignette_radius: f32,
+    #[default_value]
+    pub vignette_strength: f32,
 }
 
 #[derive(Clone, Debug, Record)]

@@ -191,7 +191,8 @@ impl SkyPass {
         let mut pipeline = self.sun_pipeline.lock();
 
         let position = *self.sun_position.lock();
-        let transform = Transform::from_translation(position).looking_at(Vec3::ZERO, Vec3::Y);
+        let mut transform = Transform::from_translation(position).looking_at(Vec3::ZERO, Vec3::Y);
+        transform.scale *= 0.5;
 
         let constants = ctx.queue.create_buffer_init(&BufferInitDescriptor {
             contents: bytemuck::bytes_of(&Constants {
@@ -285,7 +286,7 @@ impl SkyPass {
             *self.sky_material.lock() = Some(ctx.queue.create_buffer_init(&BufferInitDescriptor {
                 contents: bytemuck::bytes_of(&RawSkyMaterial {
                     sky_lower: material.sky_lower.as_rgb(),
-                    _pad0: 0,
+                    sky_scale: material.sky_scale,
                     sky_upper: material.sky_upper.as_rgb(),
                     _pad1: 0,
                     horizon: material.horizon.as_rgb(),
@@ -388,7 +389,7 @@ struct SkyMesh {
 #[repr(C)]
 struct RawSkyMaterial {
     sky_upper: [f32; 3],
-    _pad0: u32,
+    sky_scale: f32,
     sky_lower: [f32; 3],
     _pad1: u32,
     horizon: [f32; 3],

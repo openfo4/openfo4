@@ -9,7 +9,7 @@ use game_render::mesh::{Indices, Mesh};
 use game_render::texture::Image;
 use game_render::texture::image::MipImage;
 use game_tasks::TaskPool;
-use glam::{Quat, Vec3, Vec4};
+use glam::{FloatExt, Quat, Vec3, Vec4};
 use hashbrown::HashMap;
 use hecs::{Entity, World};
 use openfo4_asset::AssetLoader;
@@ -65,6 +65,7 @@ impl WeatherSystem {
             sun: Color::BLACK,
             sun_scale: 1.0,
             sun_position: Vec3::Y,
+            sky_scale: 1.0,
         });
 
         let mut climates = HashMap::new();
@@ -115,8 +116,9 @@ impl WeatherSystem {
             sky_upper: params.sky_upper,
             horizon: params.horizon,
             sun: params.sun,
-            sun_scale: 1.0,
             sun_position: compute_sun_position(&time),
+            sun_scale: params.sky_scale,
+            sky_scale: params.sky_scale,
         });
 
         self.ambient_light = Some(world.spawn((
@@ -176,6 +178,7 @@ struct WeatherParams {
     sky_upper: Color,
     horizon: Color,
     sun: Color,
+    sky_scale: f32,
 }
 
 impl WeatherParams {
@@ -185,6 +188,7 @@ impl WeatherParams {
         let sky_upper = self.sky_upper.lerp(other.sky_upper, s);
         let horizon = self.horizon.lerp(other.horizon, s);
         let sun = self.sun.lerp(other.sun, s);
+        let sky_scale = self.sky_scale.lerp(other.sky_scale, s);
 
         Self {
             ambient,
@@ -192,6 +196,7 @@ impl WeatherParams {
             sky_upper,
             horizon,
             sun,
+            sky_scale,
         }
     }
 }
@@ -349,6 +354,7 @@ async fn load_worldspace_weather_props(
                 sky_upper: rgb_to_color(f(weather.colors.sky_upper)),
                 horizon: rgb_to_color(f(weather.colors.horizon)),
                 sun: rgb_to_color(f(weather.colors.sun)),
+                sky_scale: 1.0,
             }
         }
 
@@ -361,6 +367,37 @@ async fn load_worldspace_weather_props(
         let p_early_sunset = params.push_and_index(to_params(&weather, |v| v.early_sunset));
         let p_sunset = params.push_and_index(to_params(&weather, |v| v.sunset));
         let p_late_sunset = params.push_and_index(to_params(&weather, |v| v.late_sunset));
+
+        for (index, id) in [
+            (p_night, weather.image_spaces.night),
+            (p_day, weather.image_spaces.day),
+            (p_early_sunrise, weather.image_spaces.early_sunrise),
+            (p_sunrise, weather.image_spaces.sunrise),
+            (p_late_sunrise, weather.image_spaces.late_sunrise),
+            (p_early_sunset, weather.image_spaces.early_sunset),
+            (p_sunset, weather.image_spaces.sunset),
+            (p_late_sunset, weather.image_spaces.late_sunset),
+        ] {
+            let params = &mut params[index];
+
+            let id = esp_loader.resolve_form(id, weather_id).unwrap();
+            let image_space = esp_loader
+                .lookup(Some(RecordKind::ImageSpace), id)
+                .await
+                .unwrap();
+
+            let RecordData::ImageSpace(data) = image_space.local.data else {
+                unreachable!();
+            };
+
+            if let Some(data) = data.data {
+                params.sky_scale = data.sky_scale;
+            }
+
+            if let Some(data) = data.hdr {
+                params.sky_scale = data.sky_scale;
+            }
+        }
 
         let sunrise_begin = climate.timing.sunrise_begin.hours();
         let sunrise_end = climate.timing.sunrise_end.hours();

@@ -7,6 +7,7 @@ struct SunMaterial {
 
 SamplerState sampler;
 Texture2D<Vec4> sun;
+ConstantBuffer<SunMaterial> material;
 
 struct Input {
     [[vk::location(0)]] Vec2 uv;
@@ -14,5 +15,7 @@ struct Input {
 
 [shader("fragment")]
 func main(input: Input) -> Vec4 {
-    return sun.Sample(sampler, input.uv) * 1.0;
+    let sampled = sun.Sample(sampler, input.uv);
+    let color = sampled.rgb * material.color * material.scale;
+    return Vec4(color, sampled.a);
 }

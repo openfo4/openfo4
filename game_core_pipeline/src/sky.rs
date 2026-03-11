@@ -9,4 +9,5 @@ pub struct SkyMaterial {
     pub sun: Color,
     pub sun_scale: f32,
     pub sun_position: Vec3,
+    pub sky_scale: f32,
 }
