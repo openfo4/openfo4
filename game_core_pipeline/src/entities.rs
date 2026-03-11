@@ -148,6 +148,13 @@ impl Entities {
         self.sky.lock().sky_colors = Some(material);
     }
 
+    pub fn set_sun_texture<T>(&self, img: T)
+    where
+        T: Into<MipImage>,
+    {
+        self.sky.lock().sun = Some(img.into());
+    }
+
     pub fn update_bone_transforms(&self, object: &ObjectHandle, transforms: Vec<Transform>) {
         self.inner
             .events

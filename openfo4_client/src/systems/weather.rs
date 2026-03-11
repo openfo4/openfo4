@@ -4,14 +4,19 @@ use game_common::components::{AmbientLight, Color};
 use game_common::utils::vec_ext::VecExt;
 use game_core_pipeline::entities::Entities;
 use game_core_pipeline::sky::SkyMaterial;
+use game_render::backend::TextureFormat;
 use game_render::mesh::{Indices, Mesh};
+use game_render::texture::Image;
+use game_render::texture::image::MipImage;
 use game_tasks::TaskPool;
-use glam::Vec4;
+use glam::{Quat, Vec3, Vec4};
 use hashbrown::HashMap;
 use hecs::{Entity, World};
 use openfo4_asset::AssetLoader;
+use openfo4_core::path::DataPathBuf;
 use openfo4_core::record::RecordId;
 use openfo4_core::transform::ConvertCoordinateSystem;
+use openfo4_dds::Format;
 use openfo4_esp::records::{ClimateTime, Rgba, TimeOfDaySetExtended};
 use openfo4_esp::{FormId, RecordData, RecordKind};
 use openfo4_nif::{Block, Nif};
@@ -37,7 +42,8 @@ impl WeatherSystem {
         asset_loader: &AssetLoader,
         shared: &SharedState,
     ) -> Self {
-        let climate = futures_lite::future::block_on(load_worldspace_weather_props(
+        let mut climate = futures_lite::future::block_on(load_worldspace_weather_props(
+            asset_loader,
             &esp_loader,
             WorldSpace {
                 record: RecordId::new(HARDCODED_MODULE_ID, FormId(0x3c)),
@@ -48,10 +54,17 @@ impl WeatherSystem {
         let mesh = futures_lite::future::block_on(load_sky_mesh(asset_loader));
         shared.entities.set_sky_mesh(mesh);
 
+        if let Some(sun) = climate.sun.take() {
+            shared.entities.set_sun_texture(sun);
+        }
+
         shared.entities.set_sky_material(SkyMaterial {
             sky_lower: Color::WHITE,
             sky_upper: Color::RED,
             horizon: Color::GREEN,
+            sun: Color::BLACK,
+            sun_scale: 1.0,
+            sun_position: Vec3::Y,
         });
 
         let mut climates = HashMap::new();
@@ -101,6 +114,9 @@ impl WeatherSystem {
             sky_lower: params.sky_lower,
             sky_upper: params.sky_upper,
             horizon: params.horizon,
+            sun: params.sun,
+            sun_scale: 1.0,
+            sun_position: compute_sun_position(&time),
         });
 
         self.ambient_light = Some(world.spawn((
@@ -114,6 +130,7 @@ impl WeatherSystem {
 }
 
 struct WorldspaceClimate {
+    sun: Option<MipImage>,
     weathers: Vec<Weather>,
     /// Time when the sun spawns in.
     sunrise: ClimateTime,
@@ -158,6 +175,7 @@ struct WeatherParams {
     sky_lower: Color,
     sky_upper: Color,
     horizon: Color,
+    sun: Color,
 }
 
 impl WeatherParams {
@@ -166,12 +184,14 @@ impl WeatherParams {
         let sky_lower = self.sky_lower.lerp(other.sky_lower, s);
         let sky_upper = self.sky_upper.lerp(other.sky_upper, s);
         let horizon = self.horizon.lerp(other.horizon, s);
+        let sun = self.sun.lerp(other.sun, s);
 
         Self {
             ambient,
             sky_lower,
             sky_upper,
             horizon,
+            sun,
         }
     }
 }
@@ -244,6 +264,7 @@ async fn load_sky_mesh(loader: &AssetLoader) -> Mesh {
 }
 
 async fn load_worldspace_weather_props(
+    loader: &AssetLoader,
     esp_loader: &EspLoader,
     worldspace: WorldSpace,
 ) -> WorldspaceClimate {
@@ -269,6 +290,33 @@ async fn load_worldspace_weather_props(
     let RecordData::Climate(climate) = climate_record.local.data else {
         todo!();
     };
+
+    let mut sun = None;
+    if let Some(path) = &climate.sun_texture {
+        let mut path = DataPathBuf::new(path.as_bytes());
+        path.push_front("textures");
+        let img = loader
+            .load::<DataFile<openfo4_dds::Image>, _>(&path)
+            .await
+            .unwrap();
+
+        let mips = img
+            .mips
+            .iter()
+            .map(|mip| {
+                let format = match img.format {
+                    Format::Rgba8Unorm => TextureFormat::Rgba8Unorm,
+                    Format::Rgba8UnormSrgb => TextureFormat::Rgba8UnormSrgb,
+                    Format::Bc3Unorm => TextureFormat::Bc3RgbaUnorm,
+                    _ => todo!(),
+                };
+
+                Image::new(mip.size, format, mip.bytes.clone())
+            })
+            .collect();
+
+        sun = Some(MipImage::new(mips));
+    }
 
     let mut weathers = Vec::new();
     for weather in &climate.weathers {
@@ -300,6 +348,7 @@ async fn load_worldspace_weather_props(
                 sky_lower: rgb_to_color(f(weather.colors.sky_lower)),
                 sky_upper: rgb_to_color(f(weather.colors.sky_upper)),
                 horizon: rgb_to_color(f(weather.colors.horizon)),
+                sun: rgb_to_color(f(weather.colors.sun)),
             }
         }
 
@@ -366,6 +415,7 @@ async fn load_worldspace_weather_props(
     }
 
     WorldspaceClimate {
+        sun,
         weathers,
         sunrise: climate.timing.sunrise_begin,
         sunset: climate.timing.sunset_begin,
@@ -378,4 +428,41 @@ fn rgb_to_color(input: Rgba<u8>) -> Color {
         input.g as f32 / 255.0,
         input.b as f32 / 255.0,
     ])
+}
+
+// It seems like the sun position is not affected by the climate times
+// and is always active from 7:00 AM to 7:00 PM.
+fn compute_sun_position(time: &GameTime) -> Vec3 {
+    // Somewhere in Boston
+    let lat: f64 = 42.35675_f64.to_radians();
+    // let long = -71.04111.to_radians();
+
+    let mut hour = time.hour() as f64 + time.minute() as f64 / 60.0;
+
+    // Tuned for sunrise at 7:00 AM and sunset at  7:00 PM.
+    // This seems to replicate the values in game relatively closely.
+    let day: f64 = 269.0;
+    hour = (hour - 1.0).rem_euclid(24.0);
+
+    let delta = 23.45_f64.to_radians() * (((360.0 / 365.0) * (day + 284.0)).to_radians()).sin();
+    let h = (15.0 * (hour - 12.0)).to_radians();
+
+    let altitude = (lat.sin() * delta.sin() + lat.cos() * delta.cos() * h.cos()).asin();
+    let azimuth =
+        ((delta.sin() - altitude.sin() * lat.sin()) / (altitude.cos() * lat.cos())).acos();
+
+    let azimuth = if h.is_sign_negative() {
+        azimuth
+    } else {
+        360f64.to_radians() - azimuth
+    };
+
+    // For our game world:
+    // +X is east, +Z is south
+    let mut dir = Quat::from_axis_angle(Vec3::Y, azimuth as f32)
+        * Quat::from_axis_angle(Vec3::X, altitude as f32)
+        * -Vec3::Z;
+    dir.x *= -1.0;
+
+    dir
 }

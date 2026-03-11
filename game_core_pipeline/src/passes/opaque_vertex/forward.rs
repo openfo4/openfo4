@@ -59,7 +59,7 @@ impl OpaqueVertexForwardPass {
         });
 
         Self {
-            sky: { SkyPass::new(state.lock().sky.clone()) },
+            sky: { SkyPass::new(state.lock().sky.clone(), queue) },
             state,
             linear_sampler,
             forward_opaque: Mutex::new(VisbufferForwardPipeline::new()),
