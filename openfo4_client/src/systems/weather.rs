@@ -1,6 +1,7 @@
+use std::panic::UnwindSafe;
 use std::sync::Arc;
 
-use game_common::components::{AmbientLight, Color};
+use game_common::components::{AmbientLight, Color, DirectionalLight, Transform};
 use game_common::utils::vec_ext::VecExt;
 use game_core_pipeline::entities::Entities;
 use game_core_pipeline::sky::SkyMaterial;
@@ -27,6 +28,9 @@ use crate::shared::SharedState;
 use crate::state::esp::EspLoader;
 use crate::state::hardcoded::{HARDCODED_MODULE_ID, PATH_SKY_ATMOSPHERE};
 use crate::systems::time::GameTime;
+
+// The clear weather image space uses a sunlight scale of 4.5 for the day sun.
+const SUNLIGHT_BASE_ILLUMINANCE: f32 = 40_000.0 / 4.5;
 
 pub struct WeatherSystem {
     climates: HashMap<RecordId, WorldspaceClimate>,
@@ -107,19 +111,23 @@ impl WeatherSystem {
             return;
         };
 
-        if let Some(entity) = self.ambient_light {
-            world.despawn(entity).unwrap();
-        }
+        let sun_position = compute_sun_position(&time);
 
+        // Update sky
         self.entities.set_sky_material(SkyMaterial {
             sky_lower: params.sky_lower,
             sky_upper: params.sky_upper,
             horizon: params.horizon,
             sun: params.sun,
-            sun_position: compute_sun_position(&time),
+            sun_position,
             sun_scale: params.sky_scale,
             sky_scale: params.sky_scale,
         });
+
+        // Update ambient lighting
+        if let Some(entity) = self.ambient_light {
+            world.despawn(entity).unwrap();
+        }
 
         self.ambient_light = Some(world.spawn((
             AmbientLight {
@@ -127,6 +135,20 @@ impl WeatherSystem {
                 brightness: 1.0,
             },
             worldspace,
+        )));
+
+        // Update sun light
+        if let Some(entity) = self.sun_light.take() {
+            world.despawn(entity).unwrap();
+        }
+
+        self.sun_light = Some(world.spawn((
+            Transform::from_translation(sun_position).looking_at(Vec3::ZERO, Vec3::Y),
+            worldspace,
+            DirectionalLight {
+                color: params.sunlight,
+                illuminance: SUNLIGHT_BASE_ILLUMINANCE * params.sunlight_scale,
+            },
         )));
     }
 }
@@ -177,8 +199,12 @@ struct WeatherParams {
     sky_lower: Color,
     sky_upper: Color,
     horizon: Color,
+    /// Color of the sun
     sun: Color,
     sky_scale: f32,
+    /// Color of the directional light of the sun.
+    sunlight: Color,
+    sunlight_scale: f32,
 }
 
 impl WeatherParams {
@@ -189,6 +215,8 @@ impl WeatherParams {
         let horizon = self.horizon.lerp(other.horizon, s);
         let sun = self.sun.lerp(other.sun, s);
         let sky_scale = self.sky_scale.lerp(other.sky_scale, s);
+        let sunlight = self.sunlight.lerp(other.sunlight, s);
+        let sunlight_scale = self.sunlight_scale.lerp(other.sunlight_scale, s);
 
         Self {
             ambient,
@@ -197,6 +225,8 @@ impl WeatherParams {
             horizon,
             sun,
             sky_scale,
+            sunlight,
+            sunlight_scale,
         }
     }
 }
@@ -355,6 +385,8 @@ async fn load_worldspace_weather_props(
                 horizon: rgb_to_color(f(weather.colors.horizon)),
                 sun: rgb_to_color(f(weather.colors.sun)),
                 sky_scale: 1.0,
+                sunlight: rgb_to_color(f(weather.colors.sunlight)),
+                sunlight_scale: 1.0,
             }
         }
 
@@ -392,10 +424,12 @@ async fn load_worldspace_weather_props(
 
             if let Some(data) = data.data {
                 params.sky_scale = data.sky_scale;
+                params.sunlight_scale = data.sunlight_scale;
             }
 
             if let Some(data) = data.hdr {
                 params.sky_scale = data.sky_scale;
+                params.sunlight_scale = data.sunlight_scale;
             }
         }
 

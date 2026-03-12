@@ -248,27 +248,6 @@ impl GameState {
         ));
     }
 
-    pub fn toggle_sun_light(&mut self) {
-        for (entity, _) in self.world.query_mut::<(&Transform, &DirectionalLight)>() {
-            self.world.despawn(entity).unwrap();
-            return;
-        }
-
-        self.world.spawn((
-            DirectionalLight {
-                color: Color::WHITE,
-                illuminance: 25_000.0,
-            },
-            // Transform::from_translation(Vec3::Y).looking_at(Vec3::ZERO, Vec3::Z),
-            Transform::from_translation(Vec3::new(10.0, 100.0, 10.0))
-                .looking_at(Vec3::ZERO, Vec3::Y),
-            WorldSpace {
-                record: RecordId::new(HARDCODED_MODULE_ID, FormId(0x3c)),
-                is_interior: false,
-            },
-        ));
-    }
-
     pub fn update(&mut self, time: &Time, gizmos: &Gizmos) {
         let _span = trace_span!("GameState::update").entered();
 
@@ -434,10 +413,6 @@ impl GameState {
 
                 if event.key_code == Some(KeyCode::F8) {
                     self.physics_debug ^= true;
-                }
-
-                if event.key_code == Some(KeyCode::F9) {
-                    self.toggle_sun_light();
                 }
 
                 if event.key_code == Some(KeyCode::T) {

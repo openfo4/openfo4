@@ -39,7 +39,8 @@ use shared::SharedState;
 use state::GameState;
 
 use crate::render::physics_debug::{
-    draw_doors, draw_hitscan_markers, draw_light_markers, draw_navmesh, draw_trigger_boxes,
+    draw_doors, draw_hitscan_markers, draw_light_markers, draw_navmesh,
+    draw_planned_ai_agent_paths, draw_trigger_boxes,
 };
 
 #[derive(Clone, Debug, Parser)]
@@ -84,7 +85,6 @@ fn main() {
     let ui = UiState::new(&mut renderer);
     let mut game = GameState::new(shared.clone(), pool, &data_dirs);
     game.init_camera();
-    game.toggle_sun_light();
     let state = RenderState::new(
         renderer,
         RenderTarget::Window(window),
@@ -214,6 +214,10 @@ impl game_window::App for App {
 
         if self.ui_state.debug.draw_navmesh {
             draw_navmesh(&self.game.world, &self.game.ai, &self.state.gizmos);
+        }
+
+        if self.ui_state.debug.draw_planned_ai_agent_paths {
+            draw_planned_ai_agent_paths(&self.game.world, &self.game.ai, &self.state.gizmos);
         }
 
         self.egui_ctx.draw(|ctx| {
