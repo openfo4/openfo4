@@ -25,6 +25,7 @@ const HITSCAN_RAYCAST_HIT_COLOR: Color = Color::GREEN;
 const AUTO_DOOR_COLOR: Color = Color::GREEN;
 
 const NAVMESH_TRIANGLE_COLOR: Color = Color::BLUE;
+const NAVMESH_PATH_COLOR: Color = Color::RED;
 
 #[derive(Copy, Clone, Debug)]
 pub struct HitscanRaycast {
@@ -309,14 +310,42 @@ pub fn draw_navmesh(world: &World, ai: &AiSystem, gizmos: &Gizmos) {
         return;
     };
 
-    for [a, b, c] in navmesh.triangles() {
-        let a = a.to_array().into();
-        let b = b.to_array().into();
-        let c = c.to_array().into();
-
+    for &[a, b, c] in navmesh.triangles() {
         gizmos.line(a, b, NAVMESH_TRIANGLE_COLOR);
         gizmos.line(b, c, NAVMESH_TRIANGLE_COLOR);
         gizmos.line(c, a, NAVMESH_TRIANGLE_COLOR);
+    }
+}
+
+pub fn draw_planned_ai_agent_paths(world: &World, ai: &AiSystem, gizmos: &Gizmos) {
+    let Some(worldspace) = camera_worldspace(world) else {
+        return;
+    };
+
+    let Some(navmesh) = ai.navmeshes.get(&worldspace) else {
+        return;
+    };
+
+    for (entity, path) in &ai.paths {
+        if world
+            .get::<&WorldSpace>(*entity)
+            .ok()
+            .is_none_or(|ws| *ws != worldspace)
+        {
+            continue;
+        }
+
+        for id in &path.triangles {
+            let [a, b, c] = navmesh.triangles()[*id];
+
+            gizmos.line(a, b, NAVMESH_PATH_COLOR);
+            gizmos.line(b, c, NAVMESH_PATH_COLOR);
+            gizmos.line(c, a, NAVMESH_PATH_COLOR);
+        }
+
+        for &[a, b] in path.waypoints.array_windows::<2>() {
+            gizmos.line(a, b, Color::FUCHSIA);
+        }
     }
 }
 

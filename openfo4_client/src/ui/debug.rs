@@ -11,6 +11,7 @@ pub struct DebugState {
     pub draw_doors: bool,
     pub draw_trigger_boxes: bool,
     pub draw_navmesh: bool,
+    pub draw_planned_ai_agent_paths: bool,
     pub draw_gpu_memory_visualizer: bool,
 }
 
@@ -29,5 +30,9 @@ pub fn draw_debug_ui(ctx: &Context, state: &mut DebugState) {
         ui.checkbox(&mut state.draw_doors, "Draw Door Markers");
         ui.checkbox(&mut state.draw_trigger_boxes, "Draw Trigger Boxes");
         ui.checkbox(&mut state.draw_navmesh, "Draw Navmesh");
+        ui.checkbox(
+            &mut state.draw_planned_ai_agent_paths,
+            "Draw Planned AI Agent Paths",
+        )
     });
 }
