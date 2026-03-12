@@ -423,10 +423,26 @@ async fn resolve_actor_props(
                     }
 
                     level = if data.base_stats.flags.contains(NpcBaseFlags::PC_LEVEL_MULT) {
-                        ActorLevel::PlayerScaled {
-                            factor: data.base_stats.level as u16,
-                            min: data.base_stats.calc_min_level,
-                            max: data.base_stats.calc_max_level,
+                        let min = data.base_stats.calc_min_level;
+                        let max = data.base_stats.calc_max_level;
+
+                        // max == 0 means no limit.
+                        let max = if max == 0 {
+                            u16::MAX
+                        } else {
+                            // min > max is probably a mistake when the record was created.
+                            // In this case we will use the min value and the level will become fixed.
+                            u16::max(min, max)
+                        };
+
+                        if min == max {
+                            ActorLevel::Fixed(min)
+                        } else {
+                            ActorLevel::PlayerScaled {
+                                factor: data.base_stats.level as u16,
+                                min,
+                                max,
+                            }
                         }
                     } else {
                         ActorLevel::Fixed(data.base_stats.level as u16)
