@@ -155,7 +155,7 @@ void main(
     var luminance = Vec3(0.0);
 
     // Ambient light
-    luminance += pbr_material.diffuse_color() * constants.scene.ambient;
+    luminance += eval_indirect_light(constants.scene.ambient, pbr_material, -view_dir);
 
     for (var i = 0; i < constants.num_directional_lights; i++) {
         let frag_light_space = mul(light_view_proj, Vec4(world_position, 1.0));
@@ -194,7 +194,6 @@ void main(
 
     output[coords] = Vec4(luminance, 1.0);
 }
-
 
 struct InputParams {
     Barycentrics barys;

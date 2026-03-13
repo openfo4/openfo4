@@ -7,7 +7,6 @@ import shared;
 import scene;
 
 struct PushConstants {
-    SceneData scene;
     Camera camera;
     u32 num_directional_lights;
     u32 num_point_lights;
@@ -22,6 +21,7 @@ struct PushConstants {
 [[vk::binding(3, 1)]] StructuredBuffer<Material> materials;
 [[vk::binding(4, 1)]] Texture2D<Vec4>[] textures;
 [[vk::binding(5, 1)]] SamplerState sampler;
+[[vk::binding(6, 1)]] ConstantBuffer<SceneData> scene;
 
 [[vk::binding(0, 2)]] RWStructuredBuffer<Element> elements;
 [[vk::binding(1, 2)]] RWTexture2D<u32> heads;
@@ -116,7 +116,7 @@ func shading(input: Input) -> Vec4 {
     var luminance = Vec3(0.0);
 
     // Ambient light
-    luminance += pbr_material.diffuse_color() * push_constants.scene.ambient;
+    luminance += eval_indirect_light(scene.ambient, pbr_material, -view_dir);
 
     for (var i = 0; i < push_constants.num_directional_lights; i++) {
         let light = directional_lights[i].eval();

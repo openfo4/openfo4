@@ -131,7 +131,12 @@ impl WeatherSystem {
 
         self.ambient_light = Some(world.spawn((
             AmbientLight {
-                color: params.ambient,
+                top: params.ambient_top,
+                bottom: params.ambient_bottom,
+                left: params.ambient_left,
+                right: params.ambient_right,
+                front: params.ambient_front,
+                back: params.ambient_right,
                 brightness: 1.0,
             },
             worldspace,
@@ -195,7 +200,14 @@ struct WeatherPhase {
 
 #[derive(Clone, Debug)]
 struct WeatherParams {
-    ambient: Color,
+    /// `+Z`
+    ambient_top: Color,
+    /// `-Z`
+    ambient_bottom: Color,
+    ambient_left: Color,
+    ambient_right: Color,
+    ambient_front: Color,
+    ambient_back: Color,
     sky_lower: Color,
     sky_upper: Color,
     horizon: Color,
@@ -209,7 +221,13 @@ struct WeatherParams {
 
 impl WeatherParams {
     fn interpolate(&self, other: &Self, s: f32) -> Self {
-        let ambient = self.ambient.lerp(other.ambient, s);
+        let ambient_top = self.ambient_top.lerp(other.ambient_top, s);
+        let ambient_bottom = self.ambient_bottom.lerp(other.ambient_bottom, s);
+        let ambient_left = self.ambient_left.lerp(other.ambient_left, s);
+        let ambient_right = self.ambient_right.lerp(other.ambient_right, s);
+        let ambient_front = self.ambient_front.lerp(other.ambient_front, s);
+        let ambient_back = self.ambient_back.lerp(other.ambient_back, s);
+
         let sky_lower = self.sky_lower.lerp(other.sky_lower, s);
         let sky_upper = self.sky_upper.lerp(other.sky_upper, s);
         let horizon = self.horizon.lerp(other.horizon, s);
@@ -219,7 +237,12 @@ impl WeatherParams {
         let sunlight_scale = self.sunlight_scale.lerp(other.sunlight_scale, s);
 
         Self {
-            ambient,
+            ambient_top,
+            ambient_bottom,
+            ambient_left,
+            ambient_right,
+            ambient_front,
+            ambient_back,
             sky_lower,
             sky_upper,
             horizon,
@@ -374,12 +397,23 @@ async fn load_worldspace_weather_props(
             todo!();
         };
 
-        fn to_params<F>(weather: &openfo4_esp::records::Weather, f: F) -> WeatherParams
+        fn to_params<F>(
+            weather: &openfo4_esp::records::Weather,
+            dir_light_index: usize,
+            f: F,
+        ) -> WeatherParams
         where
             F: Fn(TimeOfDaySetExtended<Rgba<u8>>) -> Rgba<u8>,
         {
+            let dir_light = weather.lighting_data[dir_light_index];
+
             WeatherParams {
-                ambient: rgb_to_color(f(weather.colors.ambient)),
+                ambient_top: rgb_to_color(dir_light.directional_ambient_z_up),
+                ambient_bottom: rgb_to_color(dir_light.directional_ambient_z_down),
+                ambient_right: rgb_to_color(dir_light.directional_ambient_y_up),
+                ambient_left: rgb_to_color(dir_light.directional_ambient_y_down),
+                ambient_front: rgb_to_color(dir_light.directional_ambient_x_down),
+                ambient_back: rgb_to_color(dir_light.directional_ambient_x_up),
                 sky_lower: rgb_to_color(f(weather.colors.sky_lower)),
                 sky_upper: rgb_to_color(f(weather.colors.sky_upper)),
                 horizon: rgb_to_color(f(weather.colors.horizon)),
@@ -390,15 +424,18 @@ async fn load_worldspace_weather_props(
             }
         }
 
+        // FIXME: The format for directional lights is unforunate here,
+        // can we get this into a similar form to the other colors to avoid
+        // indexing and potential out of bounds error?
         let mut params = Vec::new();
-        let p_night = params.push_and_index(to_params(&weather, |v| v.night));
-        let p_day = params.push_and_index(to_params(&weather, |v| v.day));
-        let p_early_sunrise = params.push_and_index(to_params(&weather, |v| v.early_sunrise));
-        let p_sunrise = params.push_and_index(to_params(&weather, |v| v.sunrise));
-        let p_late_sunrise = params.push_and_index(to_params(&weather, |v| v.late_sunrise));
-        let p_early_sunset = params.push_and_index(to_params(&weather, |v| v.early_sunset));
-        let p_sunset = params.push_and_index(to_params(&weather, |v| v.sunset));
-        let p_late_sunset = params.push_and_index(to_params(&weather, |v| v.late_sunset));
+        let p_night = params.push_and_index(to_params(&weather, 3, |v| v.night));
+        let p_day = params.push_and_index(to_params(&weather, 1, |v| v.day));
+        let p_early_sunrise = params.push_and_index(to_params(&weather, 4, |v| v.early_sunrise));
+        let p_sunrise = params.push_and_index(to_params(&weather, 0, |v| v.sunrise));
+        let p_late_sunrise = params.push_and_index(to_params(&weather, 5, |v| v.late_sunrise));
+        let p_early_sunset = params.push_and_index(to_params(&weather, 6, |v| v.early_sunset));
+        let p_sunset = params.push_and_index(to_params(&weather, 2, |v| v.sunset));
+        let p_late_sunset = params.push_and_index(to_params(&weather, 7, |v| v.late_sunset));
 
         for (index, id) in [
             (p_night, weather.image_spaces.night),

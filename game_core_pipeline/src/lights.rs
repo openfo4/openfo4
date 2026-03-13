@@ -44,7 +44,12 @@ pub struct SpotLight {
 #[derive(Clone, Debug)]
 pub struct AmbientLight {
     pub scene: SceneHandle,
-    pub color: Color,
+    pub top: Color,
+    pub bottom: Color,
+    pub left: Color,
+    pub right: Color,
+    pub front: Color,
+    pub back: Color,
     pub brightness: f32,
 }
 

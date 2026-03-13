@@ -469,6 +469,22 @@ impl From<Transform> for TransformUniform {
 #[derive(Copy, Clone, Debug, Zeroable, Pod)]
 #[repr(C)]
 pub struct RawSceneData {
-    pub ambient: [f32; 3],
+    pub ambient: RawAmbientLight,
+}
+
+#[derive(Copy, Clone, Debug, Zeroable, Pod)]
+#[repr(C)]
+pub struct RawAmbientLight {
+    pub top: [f32; 3],
     pub _pad0: u32,
+    pub bottom: [f32; 3],
+    pub _pad1: u32,
+    pub left: [f32; 3],
+    pub _pad2: u32,
+    pub right: [f32; 3],
+    pub _pad3: u32,
+    pub front: [f32; 3],
+    pub _pad4: u32,
+    pub back: [f32; 3],
+    pub _pad5: u32,
 }

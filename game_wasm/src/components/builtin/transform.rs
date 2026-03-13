@@ -50,7 +50,10 @@ impl Transform {
 
     pub fn looking_to(mut self, direction: Vec3, up: Vec3) -> Self {
         let forward = -direction.normalize();
-        let right = up.cross(forward).normalize();
+        let right = up
+            .cross(forward)
+            .try_normalize()
+            .unwrap_or_else(|| up.any_orthonormal_vector());
         let up = forward.cross(right);
         self.rotation = Quat::from_mat3(&Mat3::from_cols(right, up, forward));
         self

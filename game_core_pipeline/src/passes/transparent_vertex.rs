@@ -3,6 +3,7 @@
 use std::num::NonZeroU32;
 use std::sync::Arc;
 
+use bytemuck::Zeroable;
 use game_render::api::{
     BindingResource, BufferDescriptor, BufferInitDescriptor, CommandQueue, ComputePassDescriptor,
     ComputeStage, DepthStencilAttachment, DescriptorSetDescriptor, DescriptorSetEntry,
@@ -25,7 +26,7 @@ use parking_lot::Mutex;
 
 use crate::camera::CameraUniform;
 use crate::entities::{CameraId, SceneId};
-use crate::passes::update::RawSceneData;
+use crate::passes::update::{RawAmbientLight, RawSceneData};
 use crate::passes::{DEPTH_FORMAT, HDR_FORMAT, HDR_TEXTURE, MeshStateImpl, OPAQUE_DEPTH, State};
 
 const DRAWGEN_SHADER: &str = concat!(
@@ -183,6 +184,12 @@ impl TransparentVertexPass {
                                     binding: 5,
                                     visibility: ShaderStages::FRAGMENT,
                                     kind: DescriptorType::Sampler,
+                                    count: NonZeroU32::MIN,
+                                },
+                                DescriptorBinding {
+                                    binding: 6,
+                                    visibility: ShaderStages::FRAGMENT,
+                                    kind: DescriptorType::Uniform,
                                     count: NonZeroU32::MIN,
                                 },
                             ],
@@ -413,6 +420,22 @@ impl TransparentVertexPass {
             let point_lights = scene.point_lights_buffer.buffer(ctx.queue);
             let spot_lights = scene.spot_lights_buffer.buffer(ctx.queue);
 
+            let mut ambient = RawAmbientLight::zeroed();
+            for light in scene.ambient_lights.values() {
+                ambient.top = (light.top * light.brightness).as_rgb();
+                ambient.bottom = (light.bottom * light.brightness).as_rgb();
+                ambient.left = (light.left * light.brightness).as_rgb();
+                ambient.right = (light.right * light.brightness).as_rgb();
+                ambient.front = (light.front * light.brightness).as_rgb();
+                ambient.back = (light.back * light.brightness).as_rgb();
+            }
+
+            let ambient = ctx.queue.create_buffer_init(&BufferInitDescriptor {
+                contents: bytemuck::bytes_of(&RawSceneData { ambient }),
+                usage: BufferUsage::UNIFORM,
+                flags: UsageFlags::empty(),
+            });
+
             let material_descriptor = ctx.queue.create_descriptor_set(&DescriptorSetDescriptor {
                 layout: &self.color_pipeline.builder.material_descriptor,
                 entries: &[
@@ -439,6 +462,10 @@ impl TransparentVertexPass {
                     DescriptorSetEntry {
                         binding: 5,
                         resource: BindingResource::Sampler(&self.linear_sampler),
+                    },
+                    DescriptorSetEntry {
+                        binding: 6,
+                        resource: BindingResource::Buffer(&ambient),
                     },
                 ],
             });
@@ -501,26 +528,16 @@ impl TransparentVertexPass {
                 ],
             });
 
-            let mut ambient = [0.0; 3];
-            for light in scene.ambient_lights.values() {
-                ambient[0] += light.color.as_rgb()[0] * light.brightness;
-                ambient[1] += light.color.as_rgb()[1] * light.brightness;
-                ambient[2] += light.color.as_rgb()[2] * light.brightness;
-            }
-
             let mut push_constants = [0; 128];
-            push_constants[0..16]
-                .copy_from_slice(bytemuck::bytes_of(&RawSceneData { ambient, _pad0: 0 }));
-            push_constants[16..96].copy_from_slice(bytemuck::bytes_of(&CameraUniform::new(
+            push_constants[0..80].copy_from_slice(bytemuck::bytes_of(&CameraUniform::new(
                 camera.transform,
                 camera.projection,
             )));
-            push_constants[96..100]
+            push_constants[80..84]
                 .copy_from_slice(&(scene.directional_lights.len() as u32).to_ne_bytes());
-            push_constants[100..104]
+            push_constants[84..88]
                 .copy_from_slice(&(scene.point_lights.len() as u32).to_ne_bytes());
-            push_constants[104..108]
-                .copy_from_slice(&(scene.spot_lights.len() as u32).to_ne_bytes());
+            push_constants[88..92].copy_from_slice(&(scene.spot_lights.len() as u32).to_ne_bytes());
 
             // FIXME: We are attaching a dummy texture in the render pass.
             // This is currently a workaround so that the render pass gets the size

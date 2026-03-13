@@ -1,8 +1,10 @@
 mod transform;
 
+use core::ops::Mul;
+
 use alloc::vec::Vec;
 use bytemuck::{Pod, Zeroable};
-use glam::Vec3;
+use glam::{FloatExt, Vec3};
 
 use super::Component;
 use crate::encoding::{Decode, DecodeError, Encode, Reader, Writer};
@@ -90,7 +92,12 @@ impl Component for SpotLight {
 
 #[derive(Copy, Clone, Debug)]
 pub struct AmbientLight {
-    pub color: Color,
+    pub top: Color,
+    pub bottom: Color,
+    pub left: Color,
+    pub right: Color,
+    pub front: Color,
+    pub back: Color,
     pub brightness: f32,
 }
 
@@ -105,6 +112,10 @@ impl Color {
     pub const RED: Self = Self([1.0, 0.0, 0.0, 1.0]);
     pub const GREEN: Self = Self([0.0, 1.0, 0.0, 1.0]);
     pub const BLUE: Self = Self([0.0, 0.0, 1.0, 1.0]);
+
+    pub const YELLOW: Self = Self([1.0, 1.0, 0.0, 1.0]);
+    pub const AQUA: Self = Self([0.0, 1.0, 1.0, 1.0]);
+    pub const FUCHSIA: Self = Self([1.0, 0.0, 1.0, 1.0]);
 
     #[inline]
     pub const fn as_rgb(self) -> [f32; 3] {
@@ -124,6 +135,37 @@ impl Color {
     #[inline]
     pub const fn from_rgba(rgba: [f32; 4]) -> Self {
         Self(rgba)
+    }
+
+    pub fn lerp(self, other: Self, s: f32) -> Self {
+        let [a_r, a_g, a_b, a_a] = self.0;
+        let [b_r, b_g, b_b, b_a] = other.0;
+
+        Self([
+            f32::lerp(a_r, b_r, s),
+            f32::lerp(a_g, b_g, s),
+            f32::lerp(a_b, b_b, s),
+            f32::lerp(a_a, b_a, s),
+        ])
+    }
+}
+
+impl Mul for Color {
+    type Output = Self;
+
+    fn mul(self, rhs: Self) -> Self::Output {
+        let [a_r, a_g, a_b, a_a] = self.0;
+        let [b_r, b_g, b_b, b_a] = rhs.0;
+        Self([a_r * b_r, a_g * b_g, a_b * b_b, a_a * b_a])
+    }
+}
+
+impl Mul<f32> for Color {
+    type Output = Self;
+
+    fn mul(self, rhs: f32) -> Self::Output {
+        let [r, g, b, a] = self.0;
+        Self([r * rhs, g * rhs, b * rhs, a * rhs])
     }
 }
 

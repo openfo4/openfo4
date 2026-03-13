@@ -1,5 +1,6 @@
 import types;
 import pbr;
+import scene;
 
 public struct FragParams {
     public vector<f32, 3> world_position;
@@ -78,4 +79,12 @@ func get_distance_attenuation(distance_square: f32, inv_range_squared: f32) -> f
     let smooth_factor = saturate(1.0 - factor * factor);
     let attenuation = smooth_factor * smooth_factor;
     return attenuation / max(distance_square, 0.0001);
+}
+
+// FIXME: Instead of hardcoding all directions here,
+// we should use a cubemap here to make this more flexible.
+public func eval_indirect_light(light: Ambient, material: pbr::Material, view_dir: Vec3) -> Vec3 {
+    let reflected = reflect(view_dir, material.normal);
+    // return abs(reflected);
+    return material.diffuse_color() * light.sample(reflected);
 }

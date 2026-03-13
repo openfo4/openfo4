@@ -33,7 +33,7 @@ use crate::passes::opaque_vertex::pipelines::visbuffer_shading::{
 };
 use crate::passes::opaque_vertex::state::Instance;
 use crate::passes::sky::SkyPass;
-use crate::passes::update::RawSceneData;
+use crate::passes::update::{RawAmbientLight, RawSceneData};
 use crate::passes::{DEPTH_FORMAT, HDR_FORMAT, HDR_TEXTURE, MeshStateImpl, OPAQUE_DEPTH, State};
 
 pub struct OpaqueVertexForwardPass {
@@ -275,16 +275,19 @@ impl OpaqueVertexForwardPass {
         {
             let mut pipeline = self.shading_pipeline.lock();
 
-            let mut ambient = [0.0; 3];
+            let mut ambient = RawAmbientLight::zeroed();
             for light in scene.ambient_lights.values() {
-                ambient[0] += light.color.as_rgb()[0] * light.brightness;
-                ambient[1] += light.color.as_rgb()[1] * light.brightness;
-                ambient[2] += light.color.as_rgb()[2] * light.brightness;
+                ambient.top = (light.top * light.brightness).as_rgb();
+                ambient.bottom = (light.bottom * light.brightness).as_rgb();
+                ambient.left = (light.left * light.brightness).as_rgb();
+                ambient.right = (light.right * light.brightness).as_rgb();
+                ambient.front = (light.front * light.brightness).as_rgb();
+                ambient.back = (light.back * light.brightness).as_rgb();
             }
 
             let constants = ctx.queue.create_buffer_init(&BufferInitDescriptor {
                 contents: bytemuck::bytes_of(&ShadingPipelineConstants {
-                    scene: RawSceneData { ambient, _pad0: 0 },
+                    scene: RawSceneData { ambient },
                     camera: CameraUniform::new(camera.transform, camera.projection),
                     num_directional_lights: scene.directional_lights.len() as u32,
                     num_point_lights: scene.point_lights.len() as u32,

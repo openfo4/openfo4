@@ -110,8 +110,13 @@ impl RenderState {
 
             let handle = self.entities.create_light(Light::Ambient(AmbientLight {
                 scene: self.scene.clone(),
-                color: light.color,
                 brightness: light.brightness,
+                top: light.top,
+                bottom: light.bottom,
+                left: light.left,
+                right: light.right,
+                front: light.front,
+                back: light.back,
             }));
 
             self.lights.insert(entity, handle);
