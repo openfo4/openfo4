@@ -16,7 +16,7 @@ use openfo4_esp::records::{DoorFlags, LightDataFlags};
 use openfo4_esp::{RecordData, RecordHeaderFlags};
 use openfo4_physics::components::{Collider, RigidBody};
 
-use crate::assets::nif_v2::{Instantiate, LoadNifFlags, NIF_TO_METERS, NifKey, NifScene};
+use crate::assets::nif::{Instantiate, LoadNifFlags, NIF_TO_METERS, NifKey, NifScene};
 use crate::components::{
     ActorMarker, NiTransform, ObjectBounds, Persistent, PlacedItem, Root, RootParent, TriggerBox,
     WorldSpace,

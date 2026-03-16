@@ -16,7 +16,7 @@ use openfo4_hkx::{HkObject, HkxFile};
 use crate::assets::Error;
 use crate::assets::animation::FileAnimationClip;
 use crate::assets::data_file::DataFile;
-use crate::assets::nif_v2::{LoadNifFlags, NifKey, NifScene};
+use crate::assets::nif::{LoadNifFlags, NifKey, NifScene};
 use crate::state::anim_starter::ActiveBehaviorGraphs;
 use crate::state::animation_test::load_behavior_data;
 use crate::state::npc::{ActorAnimationGraphData, ObjectKeywords};

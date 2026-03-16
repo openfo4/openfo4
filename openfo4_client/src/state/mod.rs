@@ -46,7 +46,7 @@ use openfo4_physics::controller::CharacterController;
 use crate::assets::FileLoadContext;
 use crate::assets::animation::{AnimationSet, FileAnimationClip};
 use crate::assets::data_file::{DataFile, DataFileContext};
-use crate::assets::nif_v2::NifLoaderContext;
+use crate::assets::nif::NifLoaderContext;
 use crate::cell::CellId;
 use crate::components::{Camera, NiTransform, Player, WorldSpace};
 use crate::loader::FileLoader;
@@ -142,7 +142,7 @@ impl GameState {
         let loader = Arc::new(loader.finalize());
 
         let mut asset_loader = AssetLoader::new();
-        asset_loader.register::<crate::assets::nif_v2::NifScene>(NifLoaderContext::new(
+        asset_loader.register::<crate::assets::nif::NifScene>(NifLoaderContext::new(
             shared.entities.clone(),
         ));
         asset_loader.register::<crate::assets::gltf::GltfScene>(NifLoaderContext::new(

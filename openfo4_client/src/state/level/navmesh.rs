@@ -1,7 +1,7 @@
 use openfo4_core::transform::ConvertCoordinateSystem;
 use openfo4_esp::records::NavMesh;
 
-use crate::assets::nif_v2::NIF_TO_METERS;
+use crate::assets::nif::NIF_TO_METERS;
 use crate::components::NiTransform;
 use crate::state::level::LoadContext;
 use crate::state::level::record::SpawnEntity;

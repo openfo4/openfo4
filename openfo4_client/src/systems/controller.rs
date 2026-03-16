@@ -12,7 +12,7 @@ use openfo4_physics::PhysicsPipeline;
 use openfo4_physics::components::ColliderShape;
 use openfo4_physics::controller::CharacterController;
 
-use crate::assets::nif_v2::NIF_TO_METERS;
+use crate::assets::nif::NIF_TO_METERS;
 use crate::components::{Camera, Player};
 use crate::state::UPS;
 use crate::state::actions::{Action, Actions};

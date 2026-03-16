@@ -12,7 +12,7 @@ use openfo4_esp::records::{Class, NpcBaseFlags, NpcTemplateFlags, Race, Subgraph
 use openfo4_esp::{RecordData, RecordKind, ZString};
 use openfo4_physics::components::{Collider, CollisionLayer, RigidBody};
 
-use crate::assets::nif_v2::{LoadNifFlags, NifKey, NifScene};
+use crate::assets::nif::{LoadNifFlags, NifKey, NifScene};
 use crate::components::{ActorProperties, ActorProtection, DeadActor};
 use crate::state::animation_test::{ActorCharacter, BodyPartBoneProps, load_character};
 use crate::state::esp::EspLoader;

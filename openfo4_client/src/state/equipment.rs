@@ -15,7 +15,7 @@ use openfo4_esp::records::{
 };
 use openfo4_esp::{FormId, RecordData, RecordKind};
 
-use crate::assets::nif_v2::{LoadNifFlags, NifKey, NifScene};
+use crate::assets::nif::{LoadNifFlags, NifKey, NifScene};
 use crate::components::WorldSpace;
 use crate::state::esp::EspLoader;
 use crate::state::hardcoded::DAMAGE_TYPE_PHYSICAL;

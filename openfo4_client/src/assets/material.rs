@@ -6,7 +6,7 @@ use openfo4_core::path::DataPathBuf;
 use openfo4_nif::bgsm::Bgsm;
 
 use crate::assets::data_file::DataFile;
-use crate::assets::nif_v2::DECAL_DEPTH_BIAS;
+use crate::assets::nif::DECAL_DEPTH_BIAS;
 use crate::assets::texture::FileImageHandle;
 use crate::assets::{Error, FileLoadContext};
 

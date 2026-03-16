@@ -11,7 +11,7 @@ use openfo4_core::hierarchy::Children;
 use openfo4_physics::components::{Collider, CollisionLayer};
 use openfo4_physics::{PhysicsPipeline, QueryFilter};
 
-use crate::assets::nif_v2::NIF_TO_METERS;
+use crate::assets::nif::NIF_TO_METERS;
 use crate::components::{Camera, LookingAtTarget, Player};
 use crate::render::physics_debug::{DespawnAt, HitscanRaycast};
 use crate::systems::ActivationEvent;

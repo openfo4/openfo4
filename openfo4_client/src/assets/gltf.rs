@@ -14,7 +14,7 @@ use openfo4_core::hierarchy::Children;
 use tracing::instrument;
 
 use crate::assets::Error;
-use crate::assets::nif_v2::{Instantiate, NifLoaderContext};
+use crate::assets::nif::{Instantiate, NifLoaderContext};
 use crate::render::RenderObject;
 
 #[derive(Clone, Debug)]
@@ -30,7 +30,7 @@ impl Instantiate for Handle<GltfScene> {
         mut callback: F,
         transform: Transform,
         world: &mut hecs::World,
-        _flags: super::nif_v2::LoadNifFlags,
+        _flags: super::nif::LoadNifFlags,
     ) -> Entity
     where
         F: FnMut(&'a Node, Entity),

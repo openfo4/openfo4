@@ -8,7 +8,7 @@ use openfo4_core::WorldExt;
 use openfo4_core::hierarchy::Children;
 use slab::Slab;
 
-use crate::assets::nif_v2::NifScene;
+use crate::assets::nif::NifScene;
 use crate::components::RootParent;
 use crate::state::animation_test::SkinInstance;
 

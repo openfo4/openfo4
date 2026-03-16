@@ -12,7 +12,7 @@ use openfo4_animation::skeleton::SkeletonInstance;
 const CAMERA_DISTANCE_MIN: f32 = 150.0;
 const CAMERA_DISTANCE_MAX: f32 = 400.0;
 
-use crate::assets::nif_v2::NIF_TO_METERS;
+use crate::assets::nif::NIF_TO_METERS;
 use crate::components::Camera;
 use crate::state::actions::Actions;
 

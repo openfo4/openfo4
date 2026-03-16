@@ -2,7 +2,7 @@ pub mod animation;
 pub mod data_file;
 pub mod gltf;
 pub mod material;
-pub mod nif_v2;
+pub mod nif;
 pub mod texture;
 
 use std::fmt::{self, Debug, Display, Formatter};

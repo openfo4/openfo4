@@ -22,7 +22,7 @@ use openfo4_physics::components::{Capsule, ColliderShape};
 
 use crate::assets::animation::AnimationSet;
 use crate::assets::data_file::DataFile;
-use crate::assets::nif_v2::{Instantiate, LoadNifFlags, NIF_TO_METERS, NifScene};
+use crate::assets::nif::{Instantiate, LoadNifFlags, NIF_TO_METERS, NifScene};
 use crate::cell::CellId;
 use crate::components::{ActorMarker, NiTransform, Player, WorldSpace};
 use crate::state::anim_starter::AnimationEventQueue;
