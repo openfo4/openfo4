@@ -3,20 +3,20 @@ mod alloc;
 use std::alloc::Layout;
 use std::backtrace::Backtrace;
 use std::borrow::Cow;
-use std::ffi::{c_void, CStr, CString};
+use std::ffi::{CStr, CString, c_void};
 use std::fmt::{self, Debug, Display, Formatter};
 use std::marker::PhantomData;
 use std::num::{NonZeroU32, NonZeroU64};
 use std::ops::{Bound, Deref, Range, RangeBounds};
-use std::ptr::{null_mut, NonNull};
-use std::sync::atomic::{fence, AtomicU32, Ordering};
+use std::ptr::{NonNull, null_mut};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU32, Ordering, fence};
 use std::thread;
 use std::time::Duration;
 
 use allocator_api2::vec::Vec as VecWithAlloc;
 use ash::vk::Handle;
-use ash::{vk, Entry};
+use ash::{Entry, vk};
 use game_common::collections::scratch_buffer::ScratchBuffer;
 use game_common::utils::vec_ext::VecExt;
 use glam::UVec2;
@@ -27,7 +27,7 @@ use thiserror::Error;
 
 use crate::backend::vulkan::alloc::BumpAllocator;
 use crate::backend::{
-    mip_level_size_2d, DedicatedAllocation, DescriptorType, SurfaceFormat, TextureLayout,
+    DedicatedAllocation, DescriptorType, SurfaceFormat, TextureLayout, mip_level_size_2d,
 };
 use crate::shader::ShaderInstance;
 
@@ -2448,9 +2448,10 @@ impl SurfaceShared {
         assert!(config.image_count >= caps.min_images);
 
         // TODO: Handle case where `OPAQUE` is not supported.
-        assert!(caps
-            .supported_composite_alpha
-            .contains(vk::CompositeAlphaFlagsKHR::OPAQUE));
+        assert!(
+            caps.supported_composite_alpha
+                .contains(vk::CompositeAlphaFlagsKHR::OPAQUE)
+        );
 
         assert!(caps.present_modes.contains(&config.present_mode));
 
@@ -2611,9 +2612,10 @@ impl Surface {
         debug_assert!(caps.max_image_array_layers >= 1);
 
         // Vulkan spec requires that `VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT` must be included.
-        debug_assert!(caps
-            .supported_usage_flags
-            .contains(vk::ImageUsageFlags::COLOR_ATTACHMENT));
+        debug_assert!(
+            caps.supported_usage_flags
+                .contains(vk::ImageUsageFlags::COLOR_ATTACHMENT)
+        );
 
         // FIXME: This does not seem strictly required by the Vulkan spec?
         // See https://github.com/KhronosGroup/Vulkan-Docs/issues/2440
@@ -3532,7 +3534,9 @@ impl<'a> CommandEncoder<'a> {
 
             let clear_value = match attachment.load_op {
                 LoadOp::Clear(color) => vk::ClearValue {
-                    color: vk::ClearColorValue { float32: color.0 },
+                    color: vk::ClearColorValue {
+                        float32: color.as_rgba(),
+                    },
                 },
                 LoadOp::Load => vk::ClearValue::default(),
             };
@@ -3849,10 +3853,12 @@ impl<'encoder, 'resources> RenderPass<'encoder, 'resources> {
     }
 
     pub fn bind_index_buffer(&mut self, buffer: BufferView<'_>, format: IndexFormat) {
-        assert!(buffer
-            .buffer
-            .usages
-            .contains(vk::BufferUsageFlags::INDEX_BUFFER));
+        assert!(
+            buffer
+                .buffer
+                .usages
+                .contains(vk::BufferUsageFlags::INDEX_BUFFER)
+        );
 
         assert_eq!(buffer.len() % u64::from(format.size()), 0);
 
@@ -3922,9 +3928,11 @@ impl<'encoder, 'resources> RenderPass<'encoder, 'resources> {
     ///
     /// <https://registry.khronos.org/vulkan/specs/latest/man/html/vkCmdDrawIndirect.html>
     pub fn draw_indirect(&mut self, buffer: &Buffer, offset: u64, draw_count: u32, stride: u32) {
-        assert!(buffer
-            .usages
-            .contains(vk::BufferUsageFlags::INDIRECT_BUFFER));
+        assert!(
+            buffer
+                .usages
+                .contains(vk::BufferUsageFlags::INDIRECT_BUFFER)
+        );
 
         assert!(offset <= buffer.size);
         assert!(offset + u64::from(draw_count) * u64::from(stride) <= buffer.size);
@@ -3948,9 +3956,11 @@ impl<'encoder, 'resources> RenderPass<'encoder, 'resources> {
         draw_count: u32,
         stride: u32,
     ) {
-        assert!(buffer
-            .usages
-            .contains(vk::BufferUsageFlags::INDIRECT_BUFFER));
+        assert!(
+            buffer
+                .usages
+                .contains(vk::BufferUsageFlags::INDIRECT_BUFFER)
+        );
 
         assert!(offset <= buffer.size);
         assert!(offset + u64::from(draw_count) * u64::from(stride) <= buffer.size);

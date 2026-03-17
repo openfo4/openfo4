@@ -7,7 +7,7 @@ use glam::UVec2;
 
 const ALPHA_MODE: AlphaMode = AlphaMode::Opaque;
 
-const BASE_COLOR: Color = Color([1.0, 1.0, 1.0, 1.0]);
+const BASE_COLOR: Color = Color::from_rgba([1.0, 1.0, 1.0, 1.0]);
 const BASE_COLOR_TEXTURE: &[u8] = include_bytes!("test_texture.png");
 
 const METALLIC: f32 = 0.0;

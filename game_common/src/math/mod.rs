@@ -12,6 +12,10 @@ impl Ray {
         direction: Vec3::ZERO,
     };
 
+    pub fn new(origin: Vec3, direction: Vec3) -> Self {
+        Self { origin, direction }
+    }
+
     pub fn point(self, distance: f32) -> Vec3 {
         self.origin + self.direction * distance
     }
@@ -41,6 +45,56 @@ impl Ray {
         let denom = plane_normal.dot(self.direction);
         let distance = (plane_origin - self.origin).dot(plane_normal) / denom;
         self.origin + self.direction * distance
+    }
+}
+
+/// A bounded line between two points.
+#[derive(Copy, Clone, Debug, Default, PartialEq)]
+pub struct LineSegment {
+    pub a: Vec3,
+    pub b: Vec3,
+}
+
+impl LineSegment {
+    pub const ZERO: Self = Self {
+        a: Vec3::ZERO,
+        b: Vec3::ZERO,
+    };
+
+    pub const fn new(a: Vec3, b: Vec3) -> Self {
+        Self { a, b }
+    }
+
+    pub const fn from_array(array: [Vec3; 2]) -> Self {
+        let [a, b] = array;
+        Self::new(a, b)
+    }
+
+    pub fn length_squared(&self) -> f32 {
+        self.a.distance_squared(self.b)
+    }
+
+    pub fn length(&self) -> f32 {
+        self.a.distance(self.b)
+    }
+
+    /// Finds the nearest point to `pt` on the line segment.
+    pub fn nearest_point(&self, pt: Vec3) -> Vec3 {
+        // Don't divide by zero.
+        if self.length_squared() == 0.0 {
+            return self.a;
+        }
+
+        let toi = (pt - self.a).dot(self.b - self.a) / self.length_squared();
+        let toi = toi.clamp(0.0, 1.0);
+
+        self.a + toi * (self.b - self.a)
+    }
+}
+
+impl From<[Vec3; 2]> for LineSegment {
+    fn from(value: [Vec3; 2]) -> Self {
+        Self::from_array(value)
     }
 }
 

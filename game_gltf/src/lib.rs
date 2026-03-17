@@ -740,7 +740,7 @@ impl GltfStagingData {
             MaterialIndex(index),
             GltfMaterial {
                 alpha_mode,
-                base_color: Color(base_color),
+                base_color: Color::from_rgba(base_color),
                 base_color_texture,
                 normal_texture,
                 roughness,
@@ -997,7 +997,7 @@ fn default_material() -> GltfMaterial {
 
     GltfMaterial {
         alpha_mode: AlphaMode::Opaque,
-        base_color: Color([1.0, 1.0, 1.0, 1.0]),
+        base_color: Color::from_rgba([1.0, 1.0, 1.0, 1.0]),
         base_color_texture: None,
         metallic: 1.0,
         roughness: 1.0,

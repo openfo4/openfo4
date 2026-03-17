@@ -16,6 +16,7 @@ impl DebugRenderBackend for GizmoRenderBackend<'_> {
         b: Point<f32>,
         color: DebugColor,
     ) {
-        self.0.line(vec3(a.coords), vec3(b.coords), Color(color));
+        self.0
+            .line(vec3(a.coords), vec3(b.coords), Color::from_rgba(color));
     }
 }
