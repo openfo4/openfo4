@@ -221,6 +221,7 @@ impl Level {
                     // duplicating entities when the cell gets loaded again.
                     if !self.cells_loaded.contains_key(&(worldspace.record, cell))
                         && !entity.persistent
+                        && !make_ref
                     {
                         continue;
                     }
