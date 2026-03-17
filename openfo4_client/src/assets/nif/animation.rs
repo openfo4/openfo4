@@ -236,9 +236,9 @@ where
                 let p1 = k1.value;
 
                 let s0 = p0 * (2.0 * t3 - 3.0 * t2 + 1.0);
-                let s1 = (t3 - 2.0 * t2 + t) * m0;
+                let s1 = m0 * (t3 - 2.0 * t2 + t);
                 let s2 = p1 * (-2.0 * t3 + 3.0 * t2);
-                let s3 = (t3 - t2) * m1;
+                let s3 = m1 * (t3 - t2);
                 Some(s0 + s1 + s2 + s3)
             }
         }
@@ -275,6 +275,6 @@ struct LinearKey<T> {
 struct CubicKey<T> {
     time: Duration,
     value: T,
-    backward: f32,
-    forward: f32,
+    backward: T,
+    forward: T,
 }

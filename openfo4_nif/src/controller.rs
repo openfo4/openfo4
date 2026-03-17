@@ -421,8 +421,8 @@ nif_struct! {
     pub struct NiDataQuadraticKey<T> {
         pub time: f32,
         pub value: T,
-        pub forward: f32,
-        pub backward: f32,
+        pub forward: T,
+        pub backward: T,
     }
 }
 
