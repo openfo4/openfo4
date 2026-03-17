@@ -45,7 +45,7 @@ func main(input: Input) -> Output {
     Output output;
     output.clip_position = mul(mul(camera.view_proj, instance.transform), Vec4(position, 1.0));
     output.clip_position.z += material.depth_bias;
-    output.uv = uv;
+    output.uv = uv * material.uv_scale + material.uv_offset;
     output.alpha = color.a;
     output.instance_id = input.draw_id;
     output.vertex_id = input.index / 3;

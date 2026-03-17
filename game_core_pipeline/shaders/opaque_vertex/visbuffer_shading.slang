@@ -106,7 +106,7 @@ void main(
 
     let world_position = barys.interpolate(world_pos_a.xyz, world_pos_b.xyz, world_pos_c.xyz);
 
-    let uv = load_uv(barys, offsets, indices);
+    let uv = load_uv(barys, offsets, indices, material.uv_scale, material.uv_offset);
     let normal = load_normal(barys, offsets, indices, material, uv, instance);
 
     let vert_color_a = fetch<4>(colors, offsets.color, index0);
@@ -234,10 +234,10 @@ func fetch<let N: i32>(buffer: StructuredBuffer<f32>, offset: u32, index: u32) -
     return value;
 }
 
-Gradient load_uv(Barycentrics barys, MeshOffsets offsets, u32 indices[3]) {
-    let uv_a = fetch<2>(uvs, offsets.uv, indices[0]);
-    let uv_b = fetch<2>(uvs, offsets.uv, indices[1]);
-    let uv_c = fetch<2>(uvs, offsets.uv, indices[2]);
+Gradient load_uv(Barycentrics barys, MeshOffsets offsets, u32 indices[3], Vec2 scale, Vec2 offset) {
+    let uv_a = fetch<2>(uvs, offsets.uv, indices[0]) * scale + offset;
+    let uv_b = fetch<2>(uvs, offsets.uv, indices[1]) * scale + offset;
+    let uv_c = fetch<2>(uvs, offsets.uv, indices[2]) * scale + offset;
     return barys.interpolate_grad(uv_a, uv_b, uv_c);
 }
 
