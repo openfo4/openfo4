@@ -314,12 +314,26 @@ nif_struct! {
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub enum BSEffectShaderPropertyFloatVariable {
     EmissiveStrength,
+    Alpha,
+    VOffset,
+    UOffset,
+    VScale,
+    UScale,
+    FalloffStopAngle,
+    FalloffStartOpacity,
 }
 
 impl Decode for BSEffectShaderPropertyFloatVariable {
     fn decode(reader: &mut Reader<'_>) -> Result<Self, Error> {
         match reader.get_u8()? {
             0 => Ok(Self::EmissiveStrength),
+            2 => Ok(Self::FalloffStopAngle),
+            3 => Ok(Self::FalloffStartOpacity),
+            5 => Ok(Self::Alpha),
+            6 => Ok(Self::UOffset),
+            8 => Ok(Self::VOffset),
+            7 => Ok(Self::UScale),
+            9 => Ok(Self::VScale),
             v => Err(Error::UnknownEnumValue(
                 stringify!(BSEffectShaderPropertyFloatVariable),
                 v.into(),
@@ -451,6 +465,12 @@ pub struct XyzRotationKey {
 impl Decode for XyzRotationKey {
     fn decode(reader: &mut Reader<'_>) -> Result<Self, Error> {
         let num_keys = reader.get_u32()?;
+        if num_keys == 0 {
+            return Ok(Self {
+                keys: NiDataKey::Const(Vec::new()),
+            });
+        }
+
         let interpolation = InterpolationMode::decode(reader)?;
 
         let keys = match interpolation {
