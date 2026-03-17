@@ -52,7 +52,17 @@ pub fn load_controller(nif: &Nif, controller: BlockRef) -> Controller {
                     BSLightingShaderPropertyFloatVariable::VScale => {
                         ControlledValue::VScale(interpolator)
                     }
-                    _ => todo!(),
+                    BSLightingShaderPropertyFloatVariable::Alpha => {
+                        ControlledValue::Alpha(interpolator)
+                    }
+                    BSLightingShaderPropertyFloatVariable::EmissiveStrenth => {
+                        // FIXME: We don't support emission on our material yet.
+                        continue;
+                    }
+                    BSLightingShaderPropertyFloatVariable::RefractionStrength => {
+                        // FIXME: We don't support refraction on our material yet.
+                        continue;
+                    }
                 };
 
                 values.entry(target).or_default().push(value);
@@ -86,6 +96,7 @@ pub struct Controller {
 
 #[derive(Clone, Debug)]
 pub enum ControlledValue {
+    Alpha(Interpolator<f32>),
     UOffset(Interpolator<f32>),
     VOffset(Interpolator<f32>),
     UScale(Interpolator<f32>),

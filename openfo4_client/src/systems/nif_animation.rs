@@ -47,6 +47,11 @@ pub fn update_nif_animations(
                             material.uv_scale.y = value;
                         }
                     }
+                    ControlledValue::Alpha(interpolator) => {
+                        if let Some(value) = interpolator.sample(real_time) {
+                            material.base_color.a = value;
+                        }
+                    }
                 }
             }
 

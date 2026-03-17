@@ -878,7 +878,7 @@ async fn load_material(
             let mut textures = Vec::new();
             let mut material = StandardMaterial {
                 alpha_mode: alpha_mode.unwrap_or(AlphaMode::Opaque),
-                base_color: Color([
+                base_color: Color::from_rgba([
                     property.base_color.r * property.base_color_scale,
                     property.base_color.g * property.base_color_scale,
                     property.base_color.b * property.base_color_scale,
@@ -1041,7 +1041,7 @@ async fn load_material_plain(
             let mut textures = Vec::new();
             let mut material = StandardMaterial {
                 alpha_mode: alpha_mode.unwrap_or(AlphaMode::Opaque),
-                base_color: Color([
+                base_color: Color::from_rgba([
                     property.base_color.r * property.base_color_scale,
                     property.base_color.g * property.base_color_scale,
                     property.base_color.b * property.base_color_scale,
