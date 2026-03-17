@@ -1,4 +1,4 @@
-use glam::Vec3;
+use glam::{Quat, Vec3};
 
 use crate::{BlockRef, Decode, Error, Reader, nif_struct};
 
@@ -294,6 +294,41 @@ impl Decode for BSLightingShaderPropertyColorVariable {
 }
 
 nif_struct! {
+    /// Controller that animates variables of a [`BSEffectShaderProperty`].
+    ///
+    /// [`BSEffectShaderProperty`]: crate::material::BSEffectShaderProperty
+    #[derive(Clone, Debug)]
+    pub struct BSEffectShaderPropertyFloatController {
+        pub next_controller: Option<BlockRef>,
+        pub flags: TimeControllerFlags,
+        pub frequency: f32,
+        pub phase: f32,
+        pub start_time: f32,
+        pub end_time: f32,
+        pub target: BlockRef,
+        pub interpolator: BlockRef,
+        pub controlled_variable: BSEffectShaderPropertyFloatVariable,
+    }
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub enum BSEffectShaderPropertyFloatVariable {
+    EmissiveStrength,
+}
+
+impl Decode for BSEffectShaderPropertyFloatVariable {
+    fn decode(reader: &mut Reader<'_>) -> Result<Self, Error> {
+        match reader.get_u8()? {
+            0 => Ok(Self::EmissiveStrength),
+            v => Err(Error::UnknownEnumValue(
+                stringify!(BSEffectShaderPropertyFloatVariable),
+                v.into(),
+            )),
+        }
+    }
+}
+
+nif_struct! {
     #[derive(Clone, Debug)]
     pub struct NiFloatInterpolator {
         pub value: f32,
@@ -301,49 +336,17 @@ nif_struct! {
     }
 }
 
-#[derive(Clone, Debug)]
-pub struct NiFloatData {
-    pub data: NiDataKey<f32>,
+nif_struct! {
+    #[derive(Clone, Debug)]
+    pub struct NiFloatData {
+        pub data: NiDataKey<f32>,
+    }
 }
 
-impl Decode for NiFloatData {
-    fn decode(reader: &mut Reader<'_>) -> Result<Self, Error> {
-        let num_keys = reader.get_u32()?;
-        let interpolation = reader.get_u32()?;
-
-        let data = match interpolation {
-            1 => {
-                let keys = (0..num_keys)
-                    .map(|_| NiDataLinearKey::decode(reader))
-                    .collect::<Result<_, _>>()?;
-
-                NiDataKey::Linear(keys)
-            }
-            2 => {
-                let keys = (0..num_keys)
-                    .map(|_| NiDataQuadraticKey::decode(reader))
-                    .collect::<Result<_, _>>()?;
-
-                NiDataKey::Quadratic(keys)
-            }
-            3 => {
-                let keys = (0..num_keys)
-                    .map(|_| NiDataTbcKey::decode(reader))
-                    .collect::<Result<_, _>>()?;
-
-                NiDataKey::Tbc(keys)
-            }
-            5 => {
-                let keys = (0..num_keys)
-                    .map(|_| NiDataConstKey::decode(reader))
-                    .collect::<Result<_, _>>()?;
-
-                NiDataKey::Const(keys)
-            }
-            v => return Err(Error::UnknownEnumValue(stringify!(NiFloatData), v.into())),
-        };
-
-        Ok(Self { data })
+nif_struct! {
+    #[derive(Clone, Debug)]
+    pub struct NiBoolData {
+        pub data: NiDataKey<bool>,
     }
 }
 
@@ -353,6 +356,56 @@ pub enum NiDataKey<T> {
     Quadratic(Vec<NiDataQuadraticKey<T>>),
     Tbc(Vec<NiDataTbcKey<T>>),
     Const(Vec<NiDataConstKey<T>>),
+}
+
+impl<T> Decode for NiDataKey<T>
+where
+    T: Decode,
+{
+    fn decode(reader: &mut Reader<'_>) -> Result<Self, Error> {
+        let num_keys = reader.get_u32()?;
+        let interpolation = InterpolationMode::decode(reader)?;
+
+        match interpolation {
+            InterpolationMode::Linear => {
+                let keys = (0..num_keys)
+                    .map(|_| NiDataLinearKey::decode(reader))
+                    .collect::<Result<_, _>>()?;
+
+                Ok(Self::Linear(keys))
+            }
+            InterpolationMode::Quadratic => {
+                let keys = (0..num_keys)
+                    .map(|_| NiDataQuadraticKey::decode(reader))
+                    .collect::<Result<_, _>>()?;
+
+                Ok(Self::Quadratic(keys))
+            }
+            InterpolationMode::Tbc => {
+                let keys = (0..num_keys)
+                    .map(|_| NiDataTbcKey::decode(reader))
+                    .collect::<Result<_, _>>()?;
+
+                Ok(Self::Tbc(keys))
+            }
+            InterpolationMode::Const => {
+                let keys = (0..num_keys)
+                    .map(|_| NiDataConstKey::decode(reader))
+                    .collect::<Result<_, _>>()?;
+
+                Ok(Self::Const(keys))
+            }
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub enum NiDataKeyRotation<T> {
+    Linear(Vec<NiDataLinearKey<T>>),
+    Quadratic(Vec<NiDataQuadraticKey<T>>),
+    Tbc(Vec<NiDataTbcKey<T>>),
+    Const(Vec<NiDataConstKey<T>>),
+    XyzRotation(Vec<XyzRotationKey>),
 }
 
 nif_struct! {
@@ -391,6 +444,47 @@ nif_struct! {
 }
 
 #[derive(Clone, Debug)]
+pub struct XyzRotationKey {
+    pub keys: NiDataKey<f32>,
+}
+
+impl Decode for XyzRotationKey {
+    fn decode(reader: &mut Reader<'_>) -> Result<Self, Error> {
+        let num_keys = reader.get_u32()?;
+        let interpolation = InterpolationMode::decode(reader)?;
+
+        let keys = match interpolation {
+            InterpolationMode::Linear => {
+                let keys = (0..num_keys)
+                    .map(|_| NiDataLinearKey::decode(reader))
+                    .collect::<Result<_, _>>()?;
+                NiDataKey::Linear(keys)
+            }
+            InterpolationMode::Quadratic => {
+                let keys = (0..num_keys)
+                    .map(|_| NiDataQuadraticKey::decode(reader))
+                    .collect::<Result<_, _>>()?;
+                NiDataKey::Quadratic(keys)
+            }
+            InterpolationMode::Tbc => {
+                let keys = (0..num_keys)
+                    .map(|_| NiDataTbcKey::decode(reader))
+                    .collect::<Result<_, _>>()?;
+                NiDataKey::Tbc(keys)
+            }
+            InterpolationMode::Const => {
+                let keys = (0..num_keys)
+                    .map(|_| NiDataConstKey::decode(reader))
+                    .collect::<Result<_, _>>()?;
+                NiDataKey::Const(keys)
+            }
+        };
+
+        Ok(Self { keys })
+    }
+}
+
+#[derive(Clone, Debug)]
 pub struct NiTextKeyExtraData {
     pub name: String,
     pub keys: Vec<NiTextKey>,
@@ -421,5 +515,380 @@ impl Decode for NiTextKey {
         let value = reader.get_string()?.to_owned();
 
         Ok(Self { time, value })
+    }
+}
+
+nif_struct! {
+    #[derive(Clone, Debug)]
+    pub struct NiTransformInterpolator {
+        pub translation: Vec3,
+        pub rotation: Quat,
+        pub scale: f32,
+        pub data: BlockRef,
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct NiTransformData {
+    pub translations: Option<NiDataKey<Vec3>>,
+    pub rotations: Option<NiDataKeyRotation<Quat>>,
+    pub scales: Option<NiDataKey<f32>>,
+}
+
+impl Decode for NiTransformData {
+    fn decode(reader: &mut Reader<'_>) -> Result<Self, Error> {
+        let num_rotation_keys = reader.get_u32()?;
+
+        let rotations = if num_rotation_keys != 0 {
+            let interpolation = RotationInterpolationMode::decode(reader)?;
+            let keys = match interpolation {
+                RotationInterpolationMode::Linear => {
+                    let keys = (0..num_rotation_keys)
+                        .map(|_| NiDataLinearKey::decode(reader))
+                        .collect::<Result<_, _>>()?;
+                    NiDataKeyRotation::Linear(keys)
+                }
+                RotationInterpolationMode::Quadratic => {
+                    let keys = (0..num_rotation_keys)
+                        .map(|_| NiDataQuadraticKey::decode(reader))
+                        .collect::<Result<_, _>>()?;
+                    NiDataKeyRotation::Quadratic(keys)
+                }
+                RotationInterpolationMode::Tbc => {
+                    let keys = (0..num_rotation_keys)
+                        .map(|_| NiDataTbcKey::decode(reader))
+                        .collect::<Result<_, _>>()?;
+                    NiDataKeyRotation::Tbc(keys)
+                }
+                RotationInterpolationMode::Const => {
+                    let keys = (0..num_rotation_keys)
+                        .map(|_| NiDataConstKey::decode(reader))
+                        .collect::<Result<_, _>>()?;
+                    NiDataKeyRotation::Const(keys)
+                }
+                RotationInterpolationMode::XyzRotation => {
+                    assert_eq!(num_rotation_keys, 1);
+
+                    let keys = (0..num_rotation_keys * 3)
+                        .map(|_| XyzRotationKey::decode(reader))
+                        .collect::<Result<_, _>>()?;
+                    NiDataKeyRotation::XyzRotation(keys)
+                }
+            };
+
+            Some(keys)
+        } else {
+            None
+        };
+
+        let num_translation_keys = reader.get_u32()?;
+        let translations = if num_translation_keys != 0 {
+            let interpolation = InterpolationMode::decode(reader)?;
+            let keys = match interpolation {
+                InterpolationMode::Linear => {
+                    let keys = (0..num_translation_keys)
+                        .map(|_| NiDataLinearKey::decode(reader))
+                        .collect::<Result<_, _>>()?;
+                    NiDataKey::Linear(keys)
+                }
+                InterpolationMode::Quadratic => {
+                    let keys = (0..num_translation_keys)
+                        .map(|_| NiDataQuadraticKey::decode(reader))
+                        .collect::<Result<_, _>>()?;
+                    NiDataKey::Quadratic(keys)
+                }
+                InterpolationMode::Tbc => {
+                    let keys = (0..num_translation_keys)
+                        .map(|_| NiDataTbcKey::decode(reader))
+                        .collect::<Result<_, _>>()?;
+                    NiDataKey::Tbc(keys)
+                }
+                InterpolationMode::Const => {
+                    let keys = (0..num_translation_keys)
+                        .map(|_| NiDataConstKey::decode(reader))
+                        .collect::<Result<_, _>>()?;
+                    NiDataKey::Const(keys)
+                }
+            };
+
+            Some(keys)
+        } else {
+            None
+        };
+
+        let num_scale_keys = reader.get_u32()?;
+        let scales = if num_scale_keys != 0 {
+            let interpolation = InterpolationMode::decode(reader)?;
+            let keys = match interpolation {
+                InterpolationMode::Linear => {
+                    let keys = (0..num_scale_keys)
+                        .map(|_| NiDataLinearKey::decode(reader))
+                        .collect::<Result<_, _>>()?;
+                    NiDataKey::Linear(keys)
+                }
+                InterpolationMode::Quadratic => {
+                    let keys = (0..num_scale_keys)
+                        .map(|_| NiDataQuadraticKey::decode(reader))
+                        .collect::<Result<_, _>>()?;
+                    NiDataKey::Quadratic(keys)
+                }
+                InterpolationMode::Tbc => {
+                    let keys = (0..num_scale_keys)
+                        .map(|_| NiDataTbcKey::decode(reader))
+                        .collect::<Result<_, _>>()?;
+                    NiDataKey::Tbc(keys)
+                }
+                InterpolationMode::Const => {
+                    let keys = (0..num_scale_keys)
+                        .map(|_| NiDataConstKey::decode(reader))
+                        .collect::<Result<_, _>>()?;
+                    NiDataKey::Const(keys)
+                }
+            };
+
+            Some(keys)
+        } else {
+            None
+        };
+
+        Ok(Self {
+            translations,
+            rotations,
+            scales,
+        })
+    }
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+enum InterpolationMode {
+    Linear,
+    Quadratic,
+    Tbc,
+    Const,
+}
+
+impl Decode for InterpolationMode {
+    fn decode(reader: &mut Reader<'_>) -> Result<Self, Error> {
+        match reader.get_u32()? {
+            1 => Ok(Self::Linear),
+            2 => Ok(Self::Quadratic),
+            3 => Ok(Self::Tbc),
+            5 => Ok(Self::Const),
+            v => {
+                return Err(Error::UnknownEnumValue(
+                    stringify!(InterpolationMode),
+                    v.into(),
+                ));
+            }
+        }
+    }
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+enum RotationInterpolationMode {
+    Linear,
+    Quadratic,
+    Tbc,
+    XyzRotation,
+    Const,
+}
+
+impl Decode for RotationInterpolationMode {
+    fn decode(reader: &mut Reader<'_>) -> Result<Self, Error> {
+        match reader.get_u32()? {
+            1 => Ok(Self::Linear),
+            2 => Ok(Self::Quadratic),
+            3 => Ok(Self::Tbc),
+            4 => Ok(Self::XyzRotation),
+            5 => Ok(Self::Const),
+            v => {
+                return Err(Error::UnknownEnumValue(
+                    stringify!(InterpolationMode),
+                    v.into(),
+                ));
+            }
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct NiDefaultAVObjectPalette {
+    pub scene: BlockRef,
+    pub objects: Vec<NiDefaultAVObject>,
+}
+
+impl Decode for NiDefaultAVObjectPalette {
+    fn decode(reader: &mut Reader<'_>) -> Result<Self, Error> {
+        let scene = BlockRef::decode(reader)?;
+
+        let num_objects = reader.get_u32()?;
+        let objects = (0..num_objects)
+            .map(|_| NiDefaultAVObject::decode(reader))
+            .collect::<Result<_, _>>()?;
+
+        Ok(Self { scene, objects })
+    }
+}
+
+nif_struct! {
+    #[derive(Clone, Debug)]
+    pub struct NiDefaultAVObject {
+        pub name: String,
+        pub object: BlockRef,
+    }
+}
+
+nif_struct! {
+    #[derive(Clone, Debug)]
+    pub struct NiTransformController {
+        pub next_controller: Option<BlockRef>,
+        pub flags: TimeControllerFlags,
+        pub frequency: f32,
+        pub phase: f32,
+        pub start_time: f32,
+        pub end_time: f32,
+        pub target: BlockRef,
+        pub interpolator: BlockRef,
+    }
+}
+
+nif_struct! {
+    #[derive(Clone, Debug)]
+    pub struct BSNiAlphaPropertyTestRefController {
+        pub next_controller: Option<BlockRef>,
+        pub flags: TimeControllerFlags,
+        pub frequency: f32,
+        pub phase: f32,
+        pub start_time: f32,
+        pub end_time: f32,
+        pub target: BlockRef,
+        pub interpolator: BlockRef,
+    }
+}
+
+nif_struct! {
+    #[derive(Clone, Debug)]
+    pub struct NiBlendFloatInterpolator {
+        pub flags: u8,
+        pub array_size: u8,
+        pub weight_threshold: f32,
+        pub value: f32,
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct NiPSysEmitterSpeedCtlr {
+    pub next_controller: Option<BlockRef>,
+    pub flags: TimeControllerFlags,
+    pub frequency: f32,
+    pub phase: f32,
+    pub start_time: f32,
+    pub end_time: f32,
+    pub target: BlockRef,
+    pub interpolator: BlockRef,
+    pub modifier_name: String,
+}
+
+impl Decode for NiPSysEmitterSpeedCtlr {
+    fn decode(reader: &mut Reader<'_>) -> Result<Self, Error> {
+        let next_controller = <Option<BlockRef>>::decode(reader)?;
+        let flags = TimeControllerFlags::decode(reader)?;
+        let frequency = f32::decode(reader)?;
+        let phase = f32::decode(reader)?;
+        let start_time = f32::decode(reader)?;
+        let end_time = f32::decode(reader)?;
+        let target = BlockRef::decode(reader)?;
+        let interpolator = BlockRef::decode(reader)?;
+
+        let modifier_name = reader.get_u32()?;
+        let modifier_name = reader.string(modifier_name)?.to_owned();
+
+        Ok(Self {
+            next_controller,
+            flags,
+            frequency,
+            phase,
+            start_time,
+            end_time,
+            target,
+            interpolator,
+            modifier_name,
+        })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct NiPSysEmitterCtlr {
+    pub next_controller: Option<BlockRef>,
+    pub flags: TimeControllerFlags,
+    pub frequency: f32,
+    pub phase: f32,
+    pub start_time: f32,
+    pub end_time: f32,
+    pub target: BlockRef,
+    pub interpolator: BlockRef,
+    pub modifier_name: String,
+    pub visibility_interpolator: BlockRef,
+}
+
+impl Decode for NiPSysEmitterCtlr {
+    fn decode(reader: &mut Reader<'_>) -> Result<Self, Error> {
+        let next_controller = <Option<BlockRef>>::decode(reader)?;
+        let flags = TimeControllerFlags::decode(reader)?;
+        let frequency = f32::decode(reader)?;
+        let phase = f32::decode(reader)?;
+        let start_time = f32::decode(reader)?;
+        let end_time = f32::decode(reader)?;
+        let target = BlockRef::decode(reader)?;
+        let interpolator = BlockRef::decode(reader)?;
+
+        let modifier_name = reader.get_u32()?;
+        let modifier_name = reader.string(modifier_name)?.to_owned();
+
+        let visibility_interpolator = BlockRef::decode(reader)?;
+
+        Ok(Self {
+            next_controller,
+            flags,
+            frequency,
+            phase,
+            start_time,
+            end_time,
+            target,
+            interpolator,
+            modifier_name,
+            visibility_interpolator,
+        })
+    }
+}
+
+nif_struct! {
+    #[derive(Clone, Debug)]
+    pub struct NiPSysUpdateCtlr {
+        pub next_controller: Option<BlockRef>,
+        pub flags: TimeControllerFlags,
+        pub frequency: f32,
+        pub phase: f32,
+        pub start_time: f32,
+        pub end_time: f32,
+        pub target: BlockRef,
+    }
+}
+
+nif_struct! {
+    #[derive(Clone, Debug)]
+    pub struct NiBoolInterpolator {
+        pub value: bool,
+        pub data: Option<BlockRef>,
+    }
+}
+
+nif_struct! {
+    #[derive(Clone, Debug)]
+    pub struct NiBlendBoolInterpolator {
+        pub flags: u8,
+        pub array_size: u8,
+        pub weight_threshold: f32,
+        pub value: u8,
     }
 }

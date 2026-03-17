@@ -18,9 +18,13 @@ use thiserror::Error;
 
 use crate::connect_points::{BSConnectPointChildren, BSConnectPointParents};
 use crate::controller::{
-    BSLightingShaderPropertyColorController, BSLightingShaderPropertyFloatController,
-    NiControllerManager, NiControllerSequence, NiFloatData, NiFloatInterpolator,
-    NiMultiTargetTransformController, NiTextKeyExtraData,
+    BSEffectShaderPropertyFloatController, BSLightingShaderPropertyColorController,
+    BSLightingShaderPropertyFloatController, BSNiAlphaPropertyTestRefController,
+    NiBlendBoolInterpolator, NiBlendFloatInterpolator, NiBoolData, NiBoolInterpolator,
+    NiControllerManager, NiControllerSequence, NiDefaultAVObjectPalette, NiFloatData,
+    NiFloatInterpolator, NiMultiTargetTransformController, NiPSysEmitterCtlr,
+    NiPSysEmitterSpeedCtlr, NiPSysUpdateCtlr, NiTextKeyExtraData, NiTransformController,
+    NiTransformData, NiTransformInterpolator,
 };
 use crate::material::{BSEffectShaderProperty, BSSkyShaderProperty, NiAlphaProperty};
 
@@ -220,6 +224,47 @@ impl Nif {
                         BSLightingShaderPropertyColorController::decode(&mut reader)?,
                     )
                 }
+                BlockType::BSEffectShaderPropertyFloatController => {
+                    Block::BSEffectShaderPropertyFloatController(
+                        BSEffectShaderPropertyFloatController::decode(&mut reader)?,
+                    )
+                }
+                BlockType::NiTransformInterpolator => {
+                    Block::NiTransformInterpolator(NiTransformInterpolator::decode(&mut reader)?)
+                }
+                BlockType::NiTransformData => {
+                    Block::NiTransformData(NiTransformData::decode(&mut reader)?)
+                }
+                BlockType::NiDefaultAVObjectPalette => {
+                    Block::NiDefaultAVObjectPalette(NiDefaultAVObjectPalette::decode(&mut reader)?)
+                }
+                BlockType::NiTransformController => {
+                    Block::NiTransformController(NiTransformController::decode(&mut reader)?)
+                }
+                BlockType::BSNiAlphaPropertyTestRefController => {
+                    Block::BSNiAlphaPropertyTestRefController(
+                        BSNiAlphaPropertyTestRefController::decode(&mut reader)?,
+                    )
+                }
+                BlockType::NiBlendFloatInterpolator => {
+                    Block::NiBlendFloatInterpolator(NiBlendFloatInterpolator::decode(&mut reader)?)
+                }
+                BlockType::NiPSysEmitterSpeedCtlr => {
+                    Block::NiPSysEmitterSpeedCtlr(NiPSysEmitterSpeedCtlr::decode(&mut reader)?)
+                }
+                BlockType::NiPSysEmitterCtlr => {
+                    Block::NiPSysEmitterCtlr(NiPSysEmitterCtlr::decode(&mut reader)?)
+                }
+                BlockType::NiPSysUpdateCtlr => {
+                    Block::NiPSysUpdateCtlr(NiPSysUpdateCtlr::decode(&mut reader)?)
+                }
+                BlockType::NiBoolInterpolator => {
+                    Block::NiBoolInterpolator(NiBoolInterpolator::decode(&mut reader)?)
+                }
+                BlockType::NiBlendBoolInterpolator => {
+                    Block::NiBlendBoolInterpolator(NiBlendBoolInterpolator::decode(&mut reader)?)
+                }
+                BlockType::NiBoolData => Block::NiBoolData(NiBoolData::decode(&mut reader)?),
                 _ => Block::Skipped,
             };
 
@@ -522,12 +567,25 @@ pub enum Block {
     BSFadeNode(BSFadeNode),
     BSLightingShaderPropertyFloatController(BSLightingShaderPropertyFloatController),
     BSLightingShaderPropertyColorController(BSLightingShaderPropertyColorController),
+    BSEffectShaderPropertyFloatController(BSEffectShaderPropertyFloatController),
     NiFloatInterpolator(NiFloatInterpolator),
     NiFloatData(NiFloatData),
     NiControllerManager(NiControllerManager),
     NiMultiTargetTransformController(NiMultiTargetTransformController),
     NiControllerSequence(NiControllerSequence),
     NiTextKeyExtraData(NiTextKeyExtraData),
+    NiTransformInterpolator(NiTransformInterpolator),
+    NiTransformData(NiTransformData),
+    NiDefaultAVObjectPalette(NiDefaultAVObjectPalette),
+    NiTransformController(NiTransformController),
+    BSNiAlphaPropertyTestRefController(BSNiAlphaPropertyTestRefController),
+    NiBlendFloatInterpolator(NiBlendFloatInterpolator),
+    NiPSysEmitterSpeedCtlr(NiPSysEmitterSpeedCtlr),
+    NiPSysEmitterCtlr(NiPSysEmitterCtlr),
+    NiPSysUpdateCtlr(NiPSysUpdateCtlr),
+    NiBoolInterpolator(NiBoolInterpolator),
+    NiBlendBoolInterpolator(NiBlendBoolInterpolator),
+    NiBoolData(NiBoolData),
 }
 
 #[derive(Clone, Debug)]
@@ -1200,6 +1258,12 @@ impl Decode for u32 {
 impl Decode for f32 {
     fn decode(reader: &mut Reader<'_>) -> Result<Self, Error> {
         reader.get_f32()
+    }
+}
+
+impl Decode for bool {
+    fn decode(reader: &mut Reader<'_>) -> Result<Self, Error> {
+        reader.get_u8().map(|v| v != 0)
     }
 }
 
