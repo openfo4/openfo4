@@ -85,8 +85,10 @@ fn load_float_interpolator(
             Some(Block::NiFloatData(data)) => Some(Interpolator::new(&data.data, mode, duration)),
             _ => todo!(),
         },
+        // FIXME: Instructions unclear
+        Some(Block::NiBlendFloatInterpolator(_)) => None,
         Some(Block::Skipped) => None,
-        _ => todo!(),
+        x => todo!("{:?}", x),
     }
 }
 
@@ -121,13 +123,13 @@ where
             NiDataKey::Const(keys) => {
                 let keys = keys
                     .iter()
-                    .map(|v| ConstantKey {
+                    .map(|v| NearestKey {
                         time: Duration::from_secs_f32(v.time),
                         value: v.value,
                     })
                     .collect();
 
-                InterpolatorKeys::Constant(keys)
+                InterpolatorKeys::Nearest(keys)
             }
             NiDataKey::Linear(keys) => {
                 let keys = keys
@@ -179,7 +181,7 @@ where
             InterpolationMode::Clamp => {
                 if time >= self.duration {
                     return match &self.keys {
-                        InterpolatorKeys::Constant(keys) => keys.last().map(|v| v.value),
+                        InterpolatorKeys::Nearest(keys) => keys.last().map(|v| v.value),
                         InterpolatorKeys::Linear(keys) => keys.last().map(|v| v.value),
                         InterpolatorKeys::Cubic(keys) => keys.last().map(|v| v.value),
                     };
@@ -188,12 +190,14 @@ where
         }
 
         match &self.keys {
-            InterpolatorKeys::Constant(keys) => {
-                if keys.len() <= 1 {
-                    return keys.first().map(|v| v.value);
-                }
+            InterpolatorKeys::Nearest(keys) => {
+                let key = keys.iter().min_by(|a, b| {
+                    let a = a.time.abs_diff(time);
+                    let b = b.time.abs_diff(time);
+                    a.cmp(&b)
+                })?;
 
-                todo!()
+                Some(key.value)
             }
             InterpolatorKeys::Linear(keys) => {
                 if keys.len() <= 1 {
@@ -254,13 +258,13 @@ enum InterpolationMode {
 
 #[derive(Clone, Debug)]
 enum InterpolatorKeys<T> {
-    Constant(Vec<ConstantKey<T>>),
+    Nearest(Vec<NearestKey<T>>),
     Linear(Vec<LinearKey<T>>),
     Cubic(Vec<CubicKey<T>>),
 }
 
 #[derive(Copy, Clone, Debug)]
-struct ConstantKey<T> {
+struct NearestKey<T> {
     time: Duration,
     value: T,
 }
