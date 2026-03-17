@@ -105,6 +105,7 @@ pub struct GameState {
     globals: GlobalProperties,
     script_entities: ScriptEntities,
     pub ai: AiSystem,
+    real_time_elapsed: Duration,
 }
 
 impl GameState {
@@ -149,6 +150,9 @@ impl GameState {
             shared.entities.clone(),
         ));
         asset_loader.register::<crate::assets::texture::FileImageHandle>(FileLoadContext {
+            entities: shared.entities.clone(),
+        });
+        asset_loader.register::<crate::assets::material::BgsmStandardMaterial>(FileLoadContext {
             entities: shared.entities.clone(),
         });
         asset_loader.register::<crate::assets::material::BgsmMaterial>(FileLoadContext {
@@ -232,6 +236,7 @@ impl GameState {
             },
             script_entities: ScriptEntities::default(),
             ai: AiSystem::default(),
+            real_time_elapsed: Duration::ZERO,
         }
     }
 
@@ -252,6 +257,7 @@ impl GameState {
         let _span = trace_span!("GameState::update").entered();
 
         futures_lite::future::block_on(self.interval.wait(Instant::now()));
+        self.real_time_elapsed += self.interval.timestep();
 
         self.level.update(
             &mut self.world,
@@ -303,6 +309,13 @@ impl GameState {
             &mut self.event_bus,
         );
         bounce_animation_events(&mut self.event_bus);
+
+        systems::nif_animation::update_nif_animations(
+            &mut self.world,
+            &mut self.event_bus,
+            &self.shared.entities,
+            self.real_time_elapsed,
+        );
 
         systems::hierarchy::compute_global_transform(&mut self.world);
         self.physics.step(&mut self.world);

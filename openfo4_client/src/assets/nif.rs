@@ -1,13 +1,16 @@
-use std::collections::{HashMap, VecDeque};
+pub mod animation;
+pub mod animation_controller;
+
+use std::collections::VecDeque;
 
 use bitflags::bitflags;
 use game_common::components::{Color, Transform};
-use game_core::hierarchy::Hierarchy;
+use game_core::hierarchy::{Hierarchy, Key};
 use game_core_pipeline::entities::{Entities, MaterialHandle};
 use game_core_pipeline::material::{AlphaMode, StandardMaterial};
 use game_render::mesh::{Indices, Mesh};
 use glam::{Quat, Vec2, Vec3, Vec4};
-use hashbrown::HashSet;
+use hashbrown::{HashMap, HashSet};
 use hecs::{Entity, EntityBuilder, World};
 use openfo4_asset::{Asset, AssetLoader, Handle, HandleOrAsset};
 use openfo4_core::hierarchy::Children;
@@ -22,7 +25,10 @@ use thiserror::Error;
 
 use crate::assets::Error;
 use crate::assets::data_file::DataFile;
-use crate::assets::material::{BgsmMaterial, MaterialKey};
+use crate::assets::material::{BgsmMaterial, BgsmStandardMaterial, MaterialKey};
+use crate::assets::nif::animation_controller::{
+    AnimationController, AnimationControllerInstance, MaterialController,
+};
 use crate::assets::texture::FileImageHandle;
 use crate::render::RenderObject;
 
@@ -41,6 +47,8 @@ bitflags! {
         const RENDER_OBJECTS = 1 << 0;
         /// [`Collider`]s.
         const COLLIDERS = 1 << 1;
+        /// [`AnimationController`]s.
+        const ANIMATIONS = 1 << 2;
     }
 }
 
@@ -55,6 +63,7 @@ pub struct NifScene {
     pub nodes: Hierarchy<Node>,
     /// The name of the parent [`AttachmentPoint`] where this scene attaches.
     pub attaches: Option<String>,
+    controller: AnimationController,
     /// List of materials that are referenced by the scene.
     ///
     /// This exists to keep all the handles alive while this `NifScene` is alive.
@@ -154,6 +163,15 @@ impl Instantiate for Handle<NifScene> {
         let handle: Handle<NifScene> = self.clone();
         world.insert_one(root, handle.clone()).unwrap();
 
+        if self.controller.is_visible() && flags.contains(LoadNifFlags::ANIMATIONS) {
+            let controller = AnimationControllerInstance {
+                scene: self.clone(),
+                nodes: entities,
+            };
+
+            world.insert_one(root, controller).unwrap();
+        }
+
         root
     }
 }
@@ -243,6 +261,7 @@ impl Asset for NifScene {
             return Ok(Self {
                 nodes: Hierarchy::new(),
                 attaches: None,
+                controller: AnimationController::default(),
                 _materials: Vec::new(),
                 _textures: Vec::new(),
             });
@@ -255,6 +274,7 @@ impl Asset for NifScene {
             return Ok(Self {
                 nodes: Hierarchy::new(),
                 attaches: None,
+                controller: AnimationController::default(),
                 _materials: Vec::new(),
                 _textures: Vec::new(),
             });
@@ -303,8 +323,14 @@ impl Asset for NifScene {
         let mut material_handles = Vec::new();
         let mut texture_handles = Vec::new();
 
+        let mut controllers_to_load = Vec::new();
+
+        let mut state = LoadState::default();
+
         while let Some((parent, block)) = queue.pop_front() {
             let parent = parent.map(|parent| *block_to_node.get(&parent).unwrap());
+
+            let mut material_attached = None;
 
             let node = match nif.get(block) {
                 Some(Block::NiNode(node)) => {
@@ -405,6 +431,12 @@ impl Asset for NifScene {
 
                         let material = match node.shader_property {
                             Some(shader_property) => {
+                                if let Some(alpha_property) = alpha_property {
+                                    state
+                                        .material_alpha_properties
+                                        .insert(shader_property, alpha_property);
+                                }
+
                                 if materials.get(&shader_property).is_none() {
                                     let material = load_material(
                                         loader,
@@ -412,6 +444,7 @@ impl Asset for NifScene {
                                         &nif,
                                         shader_property,
                                         alpha_property,
+                                        &mut controllers_to_load,
                                     )
                                     .await
                                     .map_err(|err| {
@@ -433,6 +466,7 @@ impl Asset for NifScene {
                                     materials.insert(shader_property, material.material.clone());
                                 }
 
+                                material_attached = Some(shader_property);
                                 materials.get(&shader_property).unwrap()
                             }
                             None => &ctx.default_material,
@@ -572,6 +606,10 @@ impl Asset for NifScene {
 
             let key = nodes.append(parent, node);
             block_to_node.insert(block, key);
+
+            if let Some(material) = material_attached {
+                state.material_to_node.insert(material, key);
+            }
         }
 
         let mut attaches = None;
@@ -582,12 +620,69 @@ impl Asset for NifScene {
             }
         }
 
+        let mut controller = AnimationController::default();
+        if key.flags.contains(LoadNifFlags::ANIMATIONS) {
+            controller =
+                build_animation_controller(&nif, loader, controllers_to_load, &state).await;
+        };
+
         Ok(Self {
             nodes,
             attaches,
+            controller,
             _materials: material_handles,
             _textures: texture_handles,
         })
+    }
+}
+
+#[derive(Clone, Debug, Default)]
+struct LoadState<'a> {
+    /// Maps the [`BlockRef`] of a material to the [`Node`] where the material is attached.
+    material_to_node: HashMap<BlockRef, Key>,
+    /// Maps the [`BlockRef`] of a material to the [`NiAlphaProperty`] used for the material.
+    material_alpha_properties: HashMap<BlockRef, &'a NiAlphaProperty>,
+}
+
+async fn build_animation_controller(
+    nif: &Nif,
+    loader: &AssetLoader,
+    controllers_to_load: Vec<BlockRef>,
+    state: &LoadState<'_>,
+) -> AnimationController {
+    let mut material_controllers = HashMap::new();
+
+    for block in controllers_to_load {
+        let controller = animation::load_controller(&*nif, block);
+
+        for (target, values) in controller.values {
+            match nif.get(target) {
+                // Material
+                Some(Block::BSLightingShaderProperty(_) | Block::BSEffectShaderProperty(_)) => {
+                    let Some(node) = state.material_to_node.get(&target).copied() else {
+                        continue;
+                    };
+
+                    let alpha_property = state.material_alpha_properties.get(&target).copied();
+                    let material = load_material_plain(loader, nif, target, alpha_property)
+                        .await
+                        .unwrap();
+
+                    material_controllers.insert(
+                        node,
+                        MaterialController {
+                            material: material,
+                            values,
+                        },
+                    );
+                }
+                _ => todo!(),
+            }
+        }
+    }
+
+    AnimationController {
+        material: material_controllers,
     }
 }
 
@@ -648,6 +743,7 @@ async fn load_material(
     nif: &Nif,
     block: BlockRef,
     alpha_property: Option<&NiAlphaProperty>,
+    controllers_to_load: &mut Vec<BlockRef>,
 ) -> Result<HandleOrAsset<BgsmMaterial>, Error> {
     let mut alpha_mode = None;
     if let Some(alpha_property) = alpha_property {
@@ -674,20 +770,23 @@ async fn load_material(
     }
 
     match nif.get(block) {
-        // If the name field is not empty we need to load from BGSM file.
-        Some(Block::BSLightingShaderProperty(shader_property))
-            if !shader_property.name.is_empty() =>
-        {
-            let material = loader
-                .load::<BgsmMaterial, _>(&MaterialKey {
-                    alpha_mode,
-                    path: DataPathBuf::new(&*shader_property.name),
-                })
-                .await?;
-
-            Ok(HandleOrAsset::Handle(material))
-        }
         Some(Block::BSLightingShaderProperty(shader_property)) => {
+            if let Some(controller) = shader_property.controller {
+                controllers_to_load.push(controller);
+            }
+
+            // If the name field is not empty we need to load from BGSM file.
+            if !shader_property.name.is_empty() {
+                let material = loader
+                    .load::<BgsmMaterial, _>(&MaterialKey {
+                        alpha_mode,
+                        path: DataPathBuf::new(&*shader_property.name),
+                    })
+                    .await?;
+
+                return Ok(HandleOrAsset::Handle(material));
+            }
+
             let mut material = StandardMaterial {
                 alpha_mode: alpha_mode.unwrap_or(AlphaMode::Opaque),
                 base_color: Color::from_rgba([1.0, 1.0, 1.0, shader_property.alpha]),
@@ -772,6 +871,10 @@ async fn load_material(
             Ok(HandleOrAsset::Asset(BgsmMaterial { material, textures }))
         }
         Some(Block::BSEffectShaderProperty(property)) => {
+            if let Some(controller) = property.controller {
+                controllers_to_load.push(controller);
+            }
+
             let mut textures = Vec::new();
             let mut material = StandardMaterial {
                 alpha_mode: alpha_mode.unwrap_or(AlphaMode::Opaque),
@@ -800,6 +903,165 @@ async fn load_material(
             material: entities.create_material(StandardMaterial::default()),
             textures: Vec::new(),
         })),
+    }
+}
+
+/// Loads the [`StandardMaterial`] for the given [`BlockRef`].
+///
+/// Unlike [`load_material`], this function does not upload the material to GPU memory and does not
+/// deduplicate the same material across different nif scene instances.
+// FIXME: Contains a lot of duplication with load_material, can we not do this?
+async fn load_material_plain(
+    loader: &AssetLoader,
+    nif: &Nif,
+    block: BlockRef,
+    alpha_property: Option<&NiAlphaProperty>,
+) -> Result<StandardMaterial, Error> {
+    let mut alpha_mode = None;
+    if let Some(alpha_property) = alpha_property {
+        if let Some(alpha_test) = alpha_property.alpha_test {
+            let threshold = (alpha_test.threshold as f32) / 255.0;
+
+            match alpha_test.function {
+                AlphaTestFunction::Always => {
+                    alpha_mode = Some(AlphaMode::Opaque);
+                }
+                AlphaTestFunction::Greater => {
+                    alpha_mode = Some(AlphaMode::Mask(threshold));
+                }
+                AlphaTestFunction::GreaterEqual => {
+                    alpha_mode = Some(AlphaMode::Mask(threshold));
+                }
+                _ => todo!(),
+            }
+        }
+
+        if let Some(blend) = alpha_property.alpha_blend {
+            alpha_mode = Some(AlphaMode::Blend);
+        }
+    }
+
+    match nif.get(block) {
+        Some(Block::BSLightingShaderProperty(shader_property)) => {
+            // If the name field is not empty we need to load from BGSM file.
+            if !shader_property.name.is_empty() {
+                let material = loader
+                    .load::<BgsmStandardMaterial, _>(&MaterialKey {
+                        alpha_mode,
+                        path: DataPathBuf::new(&*shader_property.name),
+                    })
+                    .await?;
+
+                return Ok(material.material.clone());
+            }
+
+            let mut material = StandardMaterial {
+                alpha_mode: alpha_mode.unwrap_or(AlphaMode::Opaque),
+                base_color: Color::from_rgba([1.0, 1.0, 1.0, shader_property.alpha]),
+                flip_normal_y: true,
+                two_component_normal_encoding: true,
+                roughness: 1.0 - shader_property.smoothness,
+                specular_color: Color::from_rgb(shader_property.specular_color.to_array()),
+                specular_strength: shader_property.specular_strength,
+                depth_bias: if shader_property.shader_flags1.contains(ShaderFlags1::DECAL) {
+                    DECAL_DEPTH_BIAS
+                } else {
+                    0.0
+                },
+                grayscale_palette_scale: shader_property.grayscale_to_palette_scale,
+                ..Default::default()
+            };
+
+            let mut textures = Vec::new();
+
+            if let Some(texture_set) =
+                shader_property
+                    .texture_set
+                    .and_then(|set| match nif.get(set) {
+                        Some(Block::BSShaderTextureSet(set)) => Some(set),
+                        _ => None,
+                    })
+            {
+                // Texture order is as follows:
+                // 0. Diffuse
+                // 1. Normal
+                // 2. ?
+                // 3. Grayscale Palette LUT
+                // 4. Environment
+                // 5. ?
+                // 6. ?
+                // 7. Specular Glossiness
+                // 8. ?
+                // 9. ?
+
+                if let Some(path) = texture_set.textures.get(0) {
+                    if !path.is_empty() {
+                        let path = DataPathBuf::new(&**path);
+                        let handle = loader.load::<FileImageHandle, _>(&path).await?;
+
+                        material.base_color_texture = Some(handle.0.clone());
+                        textures.push(handle);
+                    }
+                }
+
+                if let Some(path) = texture_set.textures.get(1) {
+                    if !path.is_empty() {
+                        let path = DataPathBuf::new(&**path);
+                        let handle = loader.load::<FileImageHandle, _>(&path).await?;
+
+                        material.normal_texture = Some(handle.0.clone());
+                        textures.push(handle);
+                    }
+                }
+
+                if let Some(path) = texture_set.textures.get(3) {
+                    if !path.is_empty() {
+                        let path = DataPathBuf::new(&**path);
+                        let handle = loader.load::<FileImageHandle, _>(&path).await?;
+
+                        material.grayscale_palette = Some(handle.0.clone());
+                        textures.push(handle);
+                    }
+                }
+
+                if let Some(path) = texture_set.textures.get(7) {
+                    if !path.is_empty() {
+                        let path = DataPathBuf::new(&**path);
+                        let handle = loader.load::<FileImageHandle, _>(&path).await?;
+
+                        material.specular_glossiness_texture = Some(handle.0.clone());
+                        textures.push(handle);
+                    }
+                }
+            }
+
+            Ok(material)
+        }
+        Some(Block::BSEffectShaderProperty(property)) => {
+            let mut textures = Vec::new();
+            let mut material = StandardMaterial {
+                alpha_mode: alpha_mode.unwrap_or(AlphaMode::Opaque),
+                base_color: Color([
+                    property.base_color.r * property.base_color_scale,
+                    property.base_color.g * property.base_color_scale,
+                    property.base_color.b * property.base_color_scale,
+                    property.base_color.a * property.base_color_scale,
+                ]),
+                ..Default::default()
+            };
+
+            if !property.source_texture.is_empty() {
+                let handle = loader
+                    .load::<FileImageHandle, _>(&DataPathBuf::new(&*property.source_texture))
+                    .await?;
+
+                material.base_color_texture = Some(handle.0.clone());
+                textures.push(handle);
+            }
+
+            Ok(material)
+        }
+        _ => Ok(StandardMaterial::default()),
     }
 }
 

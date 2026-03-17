@@ -32,6 +32,32 @@ impl Asset for BgsmMaterial {
         key: &Self::Key,
         ctx: &Self::Context,
     ) -> Result<Self, Self::Error> {
+        let standard = loader.load::<BgsmStandardMaterial, _>(key).await?;
+        let material = ctx.entities.create_material(standard.material.clone());
+
+        Ok(Self {
+            material,
+            textures: standard.textures.clone(),
+        })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct BgsmStandardMaterial {
+    pub material: StandardMaterial,
+    pub textures: Vec<Handle<FileImageHandle>>,
+}
+
+impl Asset for BgsmStandardMaterial {
+    type Key = MaterialKey;
+    type Error = Error;
+    type Context = FileLoadContext;
+
+    async fn load(
+        loader: &AssetLoader,
+        key: &Self::Key,
+        _ctx: &Self::Context,
+    ) -> Result<Self, Self::Error> {
         let bgsm = loader
             .load::<DataFile<Bgsm>, _>(&key.path)
             .await
@@ -97,8 +123,6 @@ impl Asset for BgsmMaterial {
             material.grayscale_palette = Some(handle.0.clone());
             textures.push(handle);
         }
-
-        let material = ctx.entities.create_material(material);
 
         Ok(Self { material, textures })
     }

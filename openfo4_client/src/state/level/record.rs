@@ -457,6 +457,7 @@ impl SpawnEntity {
         let mut nif_flags = LoadNifFlags::empty();
         if flags.contains(PartialEntityFlags::GRAPHICS) {
             nif_flags |= LoadNifFlags::RENDER_OBJECTS;
+            nif_flags |= LoadNifFlags::ANIMATIONS;
         }
         if flags.contains(PartialEntityFlags::PHYSICS) {
             nif_flags |= LoadNifFlags::COLLIDERS;
