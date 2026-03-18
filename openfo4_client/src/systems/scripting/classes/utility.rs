@@ -1,6 +1,5 @@
 use std::time::Duration;
 
-use async_io::Timer;
 use openfo4_script::engine::Engine;
 use openfo4_script::runtime::{Caller, Exception};
 
@@ -136,8 +135,8 @@ fn random_float(_caller: Caller<'_, State>, min: f32, max: f32) -> Result<f32, E
 /// ```text
 /// Function(string ini, float value) native global
 /// ```
-fn set_ini_float(caller: Caller<'_, State>, ini: isize, value: f32) -> Result<(), Exception> {
-    todo!()
+fn set_ini_float(_caller: Caller<'_, State>, _ini: Object, _value: f32) -> Result<(), Exception> {
+    Ok(())
 }
 
 /// `SetINIInt`
@@ -145,8 +144,8 @@ fn set_ini_float(caller: Caller<'_, State>, ini: isize, value: f32) -> Result<()
 /// ```text
 /// Function(string ini, int value) native global
 /// ```
-fn set_ini_int(caller: Caller<'_, State>, ini: isize, value: i32) -> Result<(), Exception> {
-    todo!()
+fn set_ini_int(_caller: Caller<'_, State>, _ini: Object, _value: i32) -> Result<(), Exception> {
+    Ok(())
 }
 
 /// `SetINIBool`
@@ -154,8 +153,8 @@ fn set_ini_int(caller: Caller<'_, State>, ini: isize, value: i32) -> Result<(), 
 /// ```text
 /// Function(string ini, bool value) native global
 /// ```
-fn set_ini_bool(caller: Caller<'_, State>, ini: isize, value: bool) -> Result<(), Exception> {
-    todo!()
+fn set_ini_bool(_caller: Caller<'_, State>, _ini: Object, _value: bool) -> Result<(), Exception> {
+    Ok(())
 }
 
 /// `SetINIString`
@@ -163,8 +162,12 @@ fn set_ini_bool(caller: Caller<'_, State>, ini: isize, value: bool) -> Result<()
 /// ```text
 /// Function(string ini, string value) native global
 /// ```
-fn set_ini_string(caller: Caller<'_, State>, ini: isize, value: isize) -> Result<(), Exception> {
-    todo!()
+fn set_ini_string(
+    _caller: Caller<'_, State>,
+    _ini: Object,
+    _value: isize,
+) -> Result<(), Exception> {
+    Ok(())
 }
 
 /// `Wait`
