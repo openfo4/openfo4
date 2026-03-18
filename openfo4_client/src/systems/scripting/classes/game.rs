@@ -1,7 +1,7 @@
 use openfo4_script::engine::Engine;
 use openfo4_script::runtime::{Caller, Exception};
 
-use crate::systems::global::Difficulty;
+use crate::systems::controller::InputControllerMask;
 use crate::systems::scripting::classes::{Object, State};
 
 #[rustfmt::skip]
@@ -620,7 +620,7 @@ fn initialize_marker_distances(caller: Caller<'_, State>) -> Result<(), Exceptio
 /// bool Function() native global
 /// ```
 fn is_activate_controls_enabled(caller: Caller<'_, State>) -> Result<bool, Exception> {
-    todo!()
+    with_player_control_mask(caller, |mask| mask.activate())
 }
 
 /// `IsVATSControlsEnabled`
@@ -629,7 +629,7 @@ fn is_activate_controls_enabled(caller: Caller<'_, State>) -> Result<bool, Excep
 /// bool Function() native global
 /// ```
 fn is_vats_controls_enabled(caller: Caller<'_, State>) -> Result<bool, Exception> {
-    todo!()
+    with_player_control_mask(caller, |mask| mask.vats())
 }
 
 /// `IsVATSPlaybackActive`
@@ -647,7 +647,7 @@ fn is_vats_playback_active(caller: Caller<'_, State>) -> Result<bool, Exception>
 /// bool Function() native global
 /// ```
 fn is_cam_switch_controls_enabled(caller: Caller<'_, State>) -> Result<bool, Exception> {
-    todo!()
+    with_player_control_mask(caller, |mask| mask.camera_switch())
 }
 
 /// `IsFastTravelControlsEnabled`
@@ -656,7 +656,7 @@ fn is_cam_switch_controls_enabled(caller: Caller<'_, State>) -> Result<bool, Exc
 /// bool Function() native global
 /// ```
 fn is_fast_travel_controls_enabled(caller: Caller<'_, State>) -> Result<bool, Exception> {
-    todo!()
+    with_player_control_mask(caller, |mask| mask.fast_travel())
 }
 
 /// `IsFastTravelEnabled`
@@ -674,7 +674,7 @@ fn is_fast_travel_enabled(caller: Caller<'_, State>) -> Result<bool, Exception> 
 /// bool Function() native global
 /// ```
 fn is_favorites_controls_enabled(caller: Caller<'_, State>) -> Result<bool, Exception> {
-    todo!()
+    with_player_control_mask(caller, |mask| mask.favorites())
 }
 
 /// `IsFightingControlsEnabled`
@@ -683,7 +683,7 @@ fn is_favorites_controls_enabled(caller: Caller<'_, State>) -> Result<bool, Exce
 /// bool Function() native global
 /// ```
 fn is_fighting_controls_enabled(caller: Caller<'_, State>) -> Result<bool, Exception> {
-    todo!()
+    with_player_control_mask(caller, |mask| mask.fighting())
 }
 
 /// `IsJournalControlsEnabled`
@@ -692,7 +692,7 @@ fn is_fighting_controls_enabled(caller: Caller<'_, State>) -> Result<bool, Excep
 /// bool Function() native global
 /// ```
 fn is_journal_controls_enabled(caller: Caller<'_, State>) -> Result<bool, Exception> {
-    todo!()
+    with_player_control_mask(caller, |mask| mask.journal())
 }
 
 /// `IsJumpingControlsEnabled`
@@ -701,7 +701,7 @@ fn is_journal_controls_enabled(caller: Caller<'_, State>) -> Result<bool, Except
 /// bool Function() native global
 /// ```
 fn is_jumping_controls_enabled(caller: Caller<'_, State>) -> Result<bool, Exception> {
-    todo!()
+    with_player_control_mask(caller, |mask| mask.jumping())
 }
 
 /// `IsLookingControlsEnabled`
@@ -710,7 +710,7 @@ fn is_jumping_controls_enabled(caller: Caller<'_, State>) -> Result<bool, Except
 /// bool Function() native global
 /// ```
 fn is_looking_controls_enabled(caller: Caller<'_, State>) -> Result<bool, Exception> {
-    todo!()
+    with_player_control_mask(caller, |mask| mask.looking())
 }
 
 /// `IsMenuControlsEnabled`
@@ -719,7 +719,7 @@ fn is_looking_controls_enabled(caller: Caller<'_, State>) -> Result<bool, Except
 /// bool Function() native global
 /// ```
 fn is_menu_controls_enabled(caller: Caller<'_, State>) -> Result<bool, Exception> {
-    todo!()
+    with_player_control_mask(caller, |mask| mask.menu())
 }
 
 /// `IsMovementControlsEnabled`
@@ -728,7 +728,7 @@ fn is_menu_controls_enabled(caller: Caller<'_, State>) -> Result<bool, Exception
 /// bool Function() native global
 /// ```
 fn is_movement_controls_enabled(caller: Caller<'_, State>) -> Result<bool, Exception> {
-    todo!()
+    with_player_control_mask(caller, |mask| mask.movement())
 }
 
 /// `IsPluginInstalled`
@@ -776,7 +776,7 @@ fn is_player_radio_on(caller: Caller<'_, State>) -> Result<bool, Exception> {
 /// bool Function() native global
 /// ```
 fn is_sneaking_controls_enabled(caller: Caller<'_, State>) -> Result<bool, Exception> {
-    todo!()
+    with_player_control_mask(caller, |mask| mask.sneaking())
 }
 
 /// `PassTime`
@@ -1189,4 +1189,18 @@ fn warning(caller: Caller<'_, State>, msg: Object) -> Result<(), Exception> {
 /// ```
 fn update_third_person(caller: Caller<'_, State>) -> Result<(), Exception> {
     todo!()
+}
+
+fn with_player_control_mask<T, F>(caller: Caller<'_, State>, f: F) -> Result<T, Exception>
+where
+    F: FnOnce(&InputControllerMask) -> T,
+{
+    let actor = caller.data().core_objects.player.addr();
+    let entity = caller.data().entity(actor).ok_or(Exception::Error)?;
+
+    let Ok(mask) = caller.data().world().get::<&InputControllerMask>(entity) else {
+        return Err(Exception::Error);
+    };
+
+    Ok(f(&*mask))
 }

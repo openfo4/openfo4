@@ -3,11 +3,10 @@ use std::f32::consts::PI;
 use game_common::components::Transform;
 use game_input::keyboard::KeyCode;
 use game_window::events::WindowEvent;
-use glam::{Mat3, Quat, Vec3};
+use glam::{Quat, Vec3};
 use hecs::{CommandBuffer, World};
 use openfo4_core::Frozen;
 use openfo4_core::events::EventBus;
-use openfo4_core::transform::ConvertCoordinateSystem;
 use openfo4_physics::PhysicsPipeline;
 use openfo4_physics::components::ColliderShape;
 use openfo4_physics::controller::CharacterController;
@@ -287,6 +286,68 @@ pub struct ControllerShape {
 #[derive(Clone, Debug, Default)]
 pub struct InputControllerMask {
     pub layers: Slab<InputControllerLayer>,
+}
+
+impl InputControllerMask {
+    /// Returns whether activate controls are enabled.
+    pub fn activate(&self) -> bool {
+        self.layers.iter().all(|(_, l)| l.activate)
+    }
+
+    /// Returns whether camera switch controls are enabled.
+    pub fn camera_switch(&self) -> bool {
+        self.layers.iter().all(|(_, l)| l.camera_switch)
+    }
+
+    /// Returns whether fast travel controls are enabled.
+    pub fn fast_travel(&self) -> bool {
+        self.layers.iter().all(|(_, l)| l.fast_travel)
+    }
+
+    /// Returns whether favorites controls are enabled.
+    pub fn favorites(&self) -> bool {
+        self.layers.iter().all(|(_, l)| l.favorites)
+    }
+
+    /// Returns whether fighting controls are enabled.
+    pub fn fighting(&self) -> bool {
+        self.layers.iter().all(|(_, l)| l.fighting)
+    }
+
+    /// Returns whether journal controls are enabled.
+    pub fn journal(&self) -> bool {
+        self.layers.iter().all(|(_, l)| l.journal)
+    }
+
+    /// Returns whether jumping controls are enabled.
+    pub fn jumping(&self) -> bool {
+        self.layers.iter().all(|(_, l)| l.jumping)
+    }
+
+    /// Returns whether looking controls are enabled.
+    pub fn looking(&self) -> bool {
+        self.layers.iter().all(|(_, l)| l.looking)
+    }
+
+    /// Returns whether menu controls are enabled.
+    pub fn menu(&self) -> bool {
+        self.layers.iter().all(|(_, l)| l.menu)
+    }
+
+    /// Returns whether movement controls are enabled.
+    pub fn movement(&self) -> bool {
+        self.layers.iter().all(|(_, l)| l.movement)
+    }
+
+    /// Returns whether sneaking controls are enabled.
+    pub fn sneaking(&self) -> bool {
+        self.layers.iter().all(|(_, l)| l.sneaking)
+    }
+
+    /// Returns whether VATS controls are enabled.
+    pub fn vats(&self) -> bool {
+        self.layers.iter().all(|(_, l)| l.vats)
+    }
 }
 
 #[derive(Copy, Clone, Debug)]
