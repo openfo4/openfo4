@@ -1526,9 +1526,35 @@ fn get_value(
 fn get_value_percentage(
     caller: Caller<'_, State>,
     self_ptr: Object,
-    ak_av: Object,
+    actor_value: Object,
 ) -> Result<f32, Exception> {
-    todo!()
+    let entity = caller.data().entity(self_ptr).ok_or(Exception::Error)?;
+    let actor_value = caller
+        .data()
+        .objects
+        .get_by_addr(actor_value)
+        .and_then(|s| s.record())
+        .ok_or(Exception::Error)?;
+
+    let Ok(props) = caller.data().world().get::<&ActorValueProperties>(entity) else {
+        return Ok(0.0);
+    };
+
+    let Some(value) = props.get(actor_value) else {
+        return Ok(0.0);
+    };
+
+    let max = value.value;
+    let cur = value.damaged();
+    let percentage = cur / max;
+
+    if percentage.is_nan() {
+        // Probably divide by zero.
+        Ok(1.0)
+    } else {
+        // Clamp just in case.
+        Ok(f32::clamp(percentage, 0.0, 1.0))
+    }
 }
 
 /// `GetVoiceType`
