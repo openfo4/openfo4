@@ -51,7 +51,7 @@ use crate::components::Player;
 use crate::systems::global::GlobalProperties;
 use crate::systems::quests::QuestManager;
 use crate::systems::scripting::ScriptEntities;
-use crate::systems::scripting::effects::{Effect, EffectId, Effects};
+use crate::systems::scripting::effects::{DynamicEffect, Effect, EffectId, Effects};
 use crate::systems::scripting::loader::{ScriptObject, ScriptObjectId};
 use crate::systems::scripting::objects::ScriptObjects;
 use crate::systems::scripting::registration::RegistrationSet;
@@ -243,13 +243,22 @@ impl State {
         self.entities().0.get_left(&id).copied()
     }
 
-    pub fn run_effect_and_wait<T>(&mut self, effect: T) -> Result<(), Exception>
+    pub fn run_effect_and_wait<T>(&mut self, effect: T) -> Result<Option<T::Result>, Exception>
     where
         T: Effect,
     {
         // Previous effect complete, wake up.
-        if self.wait_on_effect.take().is_some() {
-            return Ok(());
+        if let Some(effect) = self.wait_on_effect.take() {
+            let value = self
+                .effects
+                .take_value(effect)
+                .map(|v| v.downcast().ok())
+                .flatten()
+                .map(|v| *v);
+
+            self.effects.discard(effect);
+
+            return Ok(value);
         }
 
         let id = self.effects.push(effect);
