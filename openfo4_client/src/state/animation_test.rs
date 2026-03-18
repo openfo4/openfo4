@@ -32,6 +32,7 @@ use crate::state::hardcoded::HARDCODED_MODULE_ID;
 use crate::state::level::Streamer;
 use crate::state::npc::{ActorInstanceProps, BodyPartBone, ObjectKeywords, spawn_actor};
 use crate::systems::PlayerControlState;
+use crate::systems::controller::InputControllerMask;
 use crate::systems::inventory::{AddItemEventAsync, EquipItemEvent, Inventory};
 
 #[derive(Clone, Debug)]
@@ -237,6 +238,7 @@ pub fn animation_test(
                             AnimationEventQueue::default(),
                             Streamer { distance },
                             ActorMarker,
+                            InputControllerMask::default(),
                         ),
                     )
                     .unwrap();

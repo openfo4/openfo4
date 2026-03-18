@@ -11,6 +11,7 @@ use openfo4_core::transform::ConvertCoordinateSystem;
 use openfo4_physics::PhysicsPipeline;
 use openfo4_physics::components::ColliderShape;
 use openfo4_physics::controller::CharacterController;
+use slab::Slab;
 
 use crate::assets::nif::NIF_TO_METERS;
 use crate::components::{Camera, Player};
@@ -280,4 +281,51 @@ pub fn apply_player_movements(world: &mut World, pipeline: &mut PhysicsPipeline)
 pub struct ControllerShape {
     pub offset: Transform,
     pub shape: ColliderShape,
+}
+
+/// Defines which inputs are possible for this controller.
+#[derive(Clone, Debug, Default)]
+pub struct InputControllerMask {
+    pub layers: Slab<InputControllerLayer>,
+}
+
+#[derive(Copy, Clone, Debug)]
+pub struct InputControllerLayer {
+    pub activate: bool,
+    pub camera_switch: bool,
+    pub fast_travel: bool,
+    pub favorites: bool,
+    pub fighting: bool,
+    pub journal: bool,
+    pub jumping: bool,
+    pub looking: bool,
+    pub menu: bool,
+    pub movement: bool,
+    pub running: bool,
+    pub sneaking: bool,
+    pub sprinting: bool,
+    pub vats: bool,
+    pub z_key: bool,
+}
+
+impl Default for InputControllerLayer {
+    fn default() -> Self {
+        Self {
+            activate: true,
+            camera_switch: true,
+            fast_travel: true,
+            favorites: true,
+            fighting: true,
+            journal: true,
+            jumping: true,
+            looking: true,
+            menu: true,
+            movement: true,
+            running: true,
+            sneaking: true,
+            sprinting: true,
+            vats: true,
+            z_key: true,
+        }
+    }
 }

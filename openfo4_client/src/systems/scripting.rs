@@ -502,6 +502,7 @@ fn core_actor_values(engine: &mut Engine) -> State {
         aliases: AliasSet::default(),
         effects: Effects::default(),
         wait_on_effect: None,
+        object_data: HashMap::new(),
     }
 }
 

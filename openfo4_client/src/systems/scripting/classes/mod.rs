@@ -150,6 +150,7 @@ pub struct State {
     pub globals: *mut GlobalProperties,
     pub registration: RegistrationSet,
     pub objects: ScriptObjects,
+    pub object_data: HashMap<ObjectAddr, ObjectData>,
     pub game_entities: HashMap<ObjectAddr, ScriptObjectId>,
     pub aliases: AliasSet,
     pub effects: Effects,
@@ -295,10 +296,6 @@ pub struct CoreObjects {
     pub suspicious: ObjectRef,
 }
 
-pub struct ObjectData {
-    timers: HashMap<Int, Vec<Timer>>,
-}
-
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct TimerId(pub Int);
 
@@ -387,3 +384,8 @@ pub struct TimerEntry {
 
 #[derive(Clone, Debug)]
 pub struct BaseObjects {}
+
+#[derive(Clone, Debug)]
+pub enum ObjectData {
+    InputEnableLayer { layer: usize },
+}
