@@ -1,6 +1,7 @@
 import types;
 import camera;
 import shared;
+import material;
 
 [[vk::push_constant]] Camera camera;
 
@@ -11,6 +12,7 @@ import shared;
 [[vk::binding(4, 0)]] StructuredBuffer<f32> colors;
 [[vk::binding(5, 0)]] StructuredBuffer<MeshOffsets> offsets;
 [[vk::binding(6, 0)]] StructuredBuffer<InstanceOut> instances;
+[[vk::binding(7, 0)]] StructuredBuffer<Material> materials;
 
 struct Input {
     u32 draw_id: SV_DrawIndex;
@@ -31,6 +33,7 @@ struct Output {
 Output main(Input input) {
     let instance = instances[input.draw_id];
     let offsets = offsets[instance.offsets_index];
+    let material = materials[instance.material_index];
 
     let position = fetch<3>(positions, offsets.position, input.vertex_index);
     let normal = fetch<3>(normals, offsets.normal, input.vertex_index);
@@ -40,6 +43,7 @@ Output main(Input input) {
 
     Output output;
     output.clip_position = mul(mul(camera.view_proj, instance.transform), Vec4(position, 1.0));
+    output.clip_position.z += material.depth_bias;
     output.world_position = mul(instance.transform, Vec4(position, 1.0)).xyz;
     output.world_normal = mul(instance.normal, normal);
     output.world_tangent = Vec4(mul(instance.normal, tangent.xyz), tangent.w);

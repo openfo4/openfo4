@@ -143,6 +143,12 @@ impl TransparentVertexPass {
                                     kind: DescriptorType::Storage,
                                     count: NonZeroU32::MIN,
                                 },
+                                DescriptorBinding {
+                                    binding: 7,
+                                    visibility: ShaderStages::VERTEX,
+                                    kind: DescriptorType::Storage,
+                                    count: NonZeroU32::MIN,
+                                },
                             ],
                         },
                     ),
@@ -378,6 +384,7 @@ impl TransparentVertexPass {
         // Color Pass
         {
             let offsets = mesh_state.mesh_offsets.buffer(ctx.queue);
+            let materials = state.material_slab.buffer(ctx.queue);
 
             let mesh_descriptor = ctx.queue.create_descriptor_set(&DescriptorSetDescriptor {
                 layout: &self.color_pipeline.builder.mesh_descriptor,
@@ -410,11 +417,14 @@ impl TransparentVertexPass {
                         binding: 6,
                         resource: BindingResource::Buffer(&instance_buffer),
                     },
+                    DescriptorSetEntry {
+                        binding: 7,
+                        resource: BindingResource::Buffer(&materials),
+                    },
                 ],
             });
 
             let textures = state.textures.views();
-            let materials = state.material_slab.buffer(ctx.queue);
 
             let directional_lights = scene.directional_lights_buffer.buffer(ctx.queue);
             let point_lights = scene.point_lights_buffer.buffer(ctx.queue);
