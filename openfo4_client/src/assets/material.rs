@@ -64,7 +64,9 @@ impl Asset for BgsmStandardMaterial {
             .map_err(|err| Error::Other(format!("failed to read file {}: {}", key.path, err)))?;
 
         let alpha_mode = key.alpha_mode.unwrap_or_else(|| {
-            if bgsm.alpha_test {
+            if bgsm.blending {
+                AlphaMode::Blend
+            } else if bgsm.alpha_test {
                 AlphaMode::Mask(bgsm.alpha_test_threshold as f32 / 255.0)
             } else {
                 AlphaMode::Opaque

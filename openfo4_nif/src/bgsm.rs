@@ -45,6 +45,8 @@ pub struct Bgsm {
     pub decal: bool,
     /// Whether this material is double sided.
     pub double_sided: bool,
+    /// Whether blending is enabled.
+    pub blending: bool,
 }
 
 impl Bgsm {
@@ -69,9 +71,11 @@ impl Bgsm {
         let uv_scale = Vec2::decode(&mut reader)?;
 
         let alpha = reader.get_f32()?;
-        let alpha_blend_mode0 = reader.get_u8()?;
+
+        let blending = reader.get_bool()?;
         let alpha_blend_mode1 = reader.get_u32()?;
         let alpha_blend_mode2 = reader.get_u32()?;
+
         let alpha_test_threshold = reader.get_u8()?;
         let alpha_test = reader.get_bool()?;
 
@@ -248,6 +252,7 @@ impl Bgsm {
             alpha_test_threshold,
             decal,
             double_sided,
+            blending,
         })
     }
 }
