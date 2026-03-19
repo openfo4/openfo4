@@ -7,6 +7,7 @@ use glam::{Quat, Vec3};
 use hecs::{CommandBuffer, World};
 use openfo4_core::Frozen;
 use openfo4_core::events::EventBus;
+use openfo4_core::transform::ConvertCoordinateSystem;
 use openfo4_physics::PhysicsPipeline;
 use openfo4_physics::components::ColliderShape;
 use openfo4_physics::controller::CharacterController;
@@ -35,13 +36,12 @@ pub fn handle_inputs(
         }
     }
 
-    for (entity, (transform, offset, _, queue, state, facing_dir)) in world.query_mut::<(
+    for (entity, (transform, offset, _, queue, state)) in world.query_mut::<(
         &mut Transform,
         &mut CameraOffset,
         &PlayerControlled,
         &mut AnimationEventQueue,
         &mut PlayerControlState,
-        &mut FacingDirection,
     )>() {
         match event {
             WindowEvent::MouseMotion(event) => {
@@ -51,13 +51,8 @@ pub fn handle_inputs(
                 let q1 = Quat::from_axis_angle(Vec3::Y, -yaw);
                 let q2 = Quat::from_axis_angle(Vec3::X, -pitch);
 
-                offset.rotation = q1 * offset.rotation;
-                offset.rotation = offset.rotation * q2;
-                offset.rotation = offset.rotation.normalize();
-
-                facing_dir.0 = ((q1 * facing_dir.0) * q2).normalize();
-
                 transform.rotation = (q1 * transform.rotation).normalize();
+                offset.rotation = (offset.rotation * q2).normalize();
             }
             WindowEvent::KeyboardInput(event) => {
                 let old_state = state.clone();
@@ -160,15 +155,24 @@ pub fn handle_inputs(
     }
 }
 
+pub fn update_facing_direction(world: &mut World) {
+    for (_, (facing_dir, transform, offset)) in world
+        .query::<(&mut FacingDirection, &Transform, &CameraOffset)>()
+        .iter()
+    {
+        facing_dir.0 = transform.rotation * Quat::IDENTITY.to_nif() * offset.rotation;
+    }
+}
+
 pub fn apply_player_movements(world: &mut World, pipeline: &mut PhysicsPipeline) {
     let mut buffer = CommandBuffer::new();
 
     for (
         entity,
-        (transform, offset, state, controller, collider, actor_keywords, player, frozen),
+        (transform, facing_dir, state, controller, collider, actor_keywords, player, frozen),
     ) in world.query_mut::<(
         &mut Transform,
-        &CameraOffset,
+        &FacingDirection,
         &mut PlayerControlState,
         Option<&mut CharacterController>,
         &ControllerShape,
@@ -193,7 +197,7 @@ pub fn apply_player_movements(world: &mut World, pipeline: &mut PhysicsPipeline)
 
         // Remove the Y component from the facing direction since
         // we don't want to move up.
-        let mut translation = offset.rotation * direction;
+        let mut translation = facing_dir.0 * direction;
         translation.y = 0.0;
         translation = translation.normalize_or_zero();
 
@@ -253,7 +257,7 @@ pub fn apply_player_movements(world: &mut World, pipeline: &mut PhysicsPipeline)
         // Both rotation are world-space, but we want entity-space, so
         // we must remove the entity rotation.
         // The result is in the NIF coordinate system.
-        let facing_direction = (transform.rotation.conjugate() * offset.rotation) * -Vec3::Z;
+        let facing_direction = (transform.rotation.conjugate() * facing_dir.0) * -Vec3::Z;
 
         buffer.insert_one(
             entity,

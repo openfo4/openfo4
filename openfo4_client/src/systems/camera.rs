@@ -1,7 +1,4 @@
-use std::f32::consts::PI;
-
 use game_common::components::{GlobalTransform, Transform};
-use game_common::math::RotationExt;
 use game_input::keyboard::KeyCode;
 use game_window::events::WindowEvent;
 use glam::{Quat, Vec3};
@@ -14,11 +11,10 @@ const CAMERA_DISTANCE_MAX: f32 = 400.0;
 
 use crate::assets::nif::NIF_TO_METERS;
 use crate::components::Camera;
-use crate::state::actions::Actions;
 
 #[derive(Copy, Clone, Debug)]
 pub struct CameraOffset {
-    pub transform: Transform,
+    /// Rotation applied on top of the actor entity rotation.
     pub rotation: Quat,
     pub entity: Entity,
 }
@@ -52,21 +48,12 @@ pub fn attach_camera(world: &mut World, entity: Entity) {
         .insert_one(
             entity,
             CameraOffset {
-                transform: Transform {
-                    translation: transform.translation,
-                    rotation: transform.rotation,
-                    scale: Vec3::ONE,
-                },
                 rotation: Quat::IDENTITY,
                 entity: camera_entity,
             },
         )
         .unwrap();
     world.insert_one(entity, PlayerControlled).unwrap();
-
-    // for (_, camera) in world.query_mut::<&mut Camera>() {
-    //     camera.mode = CameraMode::First { parent: entity };
-    // }
 }
 
 pub fn handle_free_camera(world: &mut World, event: &WindowEvent) {
@@ -159,8 +146,8 @@ pub fn update_camera_transform(world: &mut World) {
         if let Some(offset) = offset {
             transform = world.get::<&GlobalTransform>(offset.entity).unwrap().0;
 
+            transform.rotation *= offset.rotation;
             transform.translation += transform.rotation * Vec3::new(0.0, 0.0, dist * NIF_TO_METERS);
-            transform.rotation = offset.rotation;
         }
 
         buffer.insert(entity, (transform, GlobalTransform(transform)));

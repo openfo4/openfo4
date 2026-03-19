@@ -62,7 +62,7 @@ use crate::systems::activation::update_player_looking_at_target;
 use crate::systems::ai::AiSystem;
 use crate::systems::animation_sync::{bounce_animation_events, update_animation_parameters};
 use crate::systems::camera::CameraMode;
-use crate::systems::controller::apply_player_movements;
+use crate::systems::controller::{apply_player_movements, update_facing_direction};
 use crate::systems::door::{handle_automatic_doors, handle_door_activations};
 use crate::systems::global::{Difficulty, GameRules, GlobalProperties};
 use crate::systems::inventory::InventorySystem;
@@ -279,6 +279,7 @@ impl GameState {
 
         despawn_expired(&mut self.world);
 
+        update_facing_direction(&mut self.world);
         apply_player_movements(&mut self.world, &mut self.physics);
         update_animation_parameters(&mut self.world);
         update_trigger_box_contacts(&mut self.world, &mut self.event_bus);
