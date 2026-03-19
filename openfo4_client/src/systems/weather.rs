@@ -545,7 +545,7 @@ fn compute_sun_position(time: &GameTime) -> Vec3 {
     let lat: f64 = 42.35675_f64.to_radians();
     // let long = -71.04111.to_radians();
 
-    let mut hour = time.hour() as f64 + time.minute() as f64 / 60.0;
+    let mut hour = time.hour() as f64 + time.minute() as f64 / 60.0 + time.second() as f64 / 3600.0;
 
     // Tuned for sunrise at 7:00 AM and sunset at  7:00 PM.
     // This seems to replicate the values in game relatively closely.
