@@ -1,0 +1,72 @@
+use game_egui::egui::{Context, Key, TextBuffer, Window};
+use hecs::World;
+use openfo4_core::events::EventBus;
+
+use crate::systems::time::GameTime;
+
+#[derive(Clone, Debug, Default)]
+pub struct ConsoleState {
+    open: bool,
+    text: String,
+    response: String,
+}
+
+pub fn draw_console(ctx: &Context, state: &mut ConsoleState, world: &World, events: &mut EventBus) {
+    Window::new("Console").show(ctx, |ui| {
+        ui.text_edit_singleline(&mut state.text);
+
+        ui.label(&state.response);
+
+        if ui.input(|state| state.key_down(Key::Enter)) {
+            if let Some(resp) = execute_command(&state.text, world, events) {
+                state.response = resp;
+            }
+        }
+    });
+}
+
+fn execute_command(cmd: &str, world: &World, events: &mut EventBus) -> Option<String> {
+    let tokens: Vec<&str> = cmd.split(" ").filter(|v| !v.is_empty()).collect();
+
+    match tokens.get(0).copied()? {
+        "set" => {
+            let Some(global) = tokens.get(1).copied() else {
+                return Some("missing parameter: global".to_owned());
+            };
+
+            let Some(value) = tokens.get(2).copied() else {
+                return Some("missing parameter: value".to_owned());
+            };
+
+            let value = match value.parse::<f32>() {
+                Ok(value) => value,
+                Err(err) => return Some(format!("invalid value: {}", err)),
+            };
+
+            if global.eq_ignore_ascii_case("GameYear")
+                || global.eq_ignore_ascii_case("GameMonth")
+                || global.eq_ignore_ascii_case("GameDay")
+                || global.eq_ignore_ascii_case("GameHour")
+            {
+                for (_, time) in world.query::<&mut GameTime>().iter() {
+                    if global.eq_ignore_ascii_case("GameYear") {
+                        todo!()
+                    } else if global.eq_ignore_ascii_case("GameMonth") {
+                        todo!()
+                    } else if global.eq_ignore_ascii_case("GameDay") {
+                        todo!()
+                    } else {
+                        debug_assert!(global.eq_ignore_ascii_case("GameHour"));
+                        let hour = (value as u8).clamp(0, 23);
+                        time.set_hour(hour);
+                    }
+                }
+
+                return None;
+            }
+
+            Some(format!("unknown global: {}", global))
+        }
+        v => Some(format!("unknown command: {}", v)),
+    }
+}

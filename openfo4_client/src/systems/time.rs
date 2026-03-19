@@ -22,6 +22,17 @@ impl GameTime {
     pub fn hour(&self) -> u64 {
         (self.0.as_secs() / 60 / 60) % 24
     }
+
+    /// Sets the hour.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `hour` is greater than `23`.
+    pub fn set_hour(&mut self, hour: u8) {
+        assert!(hour < 24);
+        self.0 -= Duration::from_hours(self.hour());
+        self.0 += Duration::from_hours(hour.into());
+    }
 }
 
 pub fn init_time(world: &mut World) {
