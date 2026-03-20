@@ -44,7 +44,7 @@ use hashbrown::{HashMap, HashSet};
 use hecs::{Entity, World};
 use openfo4_core::record::RecordId;
 use openfo4_script::engine::Engine;
-use openfo4_script::runtime::{Exception, ObjectAddr, ObjectRef};
+use openfo4_script::runtime::{Exception, ObjectAddr, ObjectPool, ObjectRef};
 use slab::Slab;
 
 use crate::components::Player;
@@ -53,7 +53,7 @@ use crate::systems::quests::QuestManager;
 use crate::systems::scripting::ScriptEntities;
 use crate::systems::scripting::effects::{DynamicEffect, Effect, EffectId, Effects};
 use crate::systems::scripting::loader::{ScriptObject, ScriptObjectId};
-use crate::systems::scripting::objects::ScriptObjects;
+use crate::systems::scripting::objects::{ScriptObjects, ScriptsRef};
 use crate::systems::scripting::registration::RegistrationSet;
 
 pub type Int = i32;

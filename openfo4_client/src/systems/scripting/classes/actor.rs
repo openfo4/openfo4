@@ -1,7 +1,7 @@
 use openfo4_script::engine::Engine;
 use openfo4_script::runtime::{Caller, Exception};
 
-use crate::components::{ActorProperties, ActorProtection};
+use crate::components::{ActorProperties, ActorProtection, Player};
 use crate::systems::inventory::Inventory;
 use crate::systems::scripting::classes::{Object, State};
 use crate::systems::scripting::effects::{EquipItemEffect, UnequipItemEffect};
@@ -757,7 +757,13 @@ fn get_no_bleedout_recovery(
 /// bool Function() native
 /// ```
 fn get_player_controls(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Exception> {
-    todo!()
+    let entity = caller.data().entity(self_ptr).ok_or(Exception::Error)?;
+    let is_player = caller
+        .data()
+        .world()
+        .entity(entity)
+        .is_ok_and(|e| e.has::<Player>());
+    Ok(is_player)
 }
 
 /// `GetRace`

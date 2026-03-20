@@ -139,7 +139,7 @@ fn enable_menus(caller: Caller<'_, State>, ab_enable: bool) -> Result<(), Except
 /// ```text
 /// string Function() native global
 /// ```
-fn get_config_name(caller: Caller<'_, State>) -> Result<isize, Exception> {
+fn get_config_name(caller: Caller<'_, State>) -> Result<Object, Exception> {
     todo!()
 }
 
@@ -148,7 +148,7 @@ fn get_config_name(caller: Caller<'_, State>) -> Result<isize, Exception> {
 /// ```text
 /// string Function() native global
 /// ```
-fn get_platform_name(caller: Caller<'_, State>) -> Result<isize, Exception> {
+fn get_platform_name(caller: Caller<'_, State>) -> Result<Object, Exception> {
     todo!()
 }
 
