@@ -6,7 +6,6 @@ use hashbrown::HashSet;
 use hecs::Entity;
 use openfo4_core::record::RecordId;
 use openfo4_core::transform::ConvertCoordinateSystem;
-use openfo4_esp::FormId;
 
 use crate::systems::camera::CameraMode;
 use crate::systems::inventory::ItemStack;
@@ -153,4 +152,29 @@ pub struct ObjectBounds {
 #[derive(Copy, Clone, Debug)]
 pub struct BaseObject {
     pub record: RecordId,
+}
+
+/// Assorted object reference properties.
+#[derive(Clone, Debug)]
+pub struct ObjectProperties {
+    pub lock: Option<ObjectLockData>,
+}
+
+#[derive(Copy, Clone, Debug)]
+pub struct ObjectLockData {
+    pub level: Option<ObjectLockLevel>,
+    pub key: Option<RecordId>,
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub enum ObjectLockLevel {
+    Noivce,
+    Advanced,
+    Expert,
+    Master,
+    Barred,
+    Chained,
+    Inaccessible,
+    RequiresTerminal,
+    RequiresKey,
 }

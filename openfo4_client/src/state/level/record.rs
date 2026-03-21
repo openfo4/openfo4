@@ -12,14 +12,14 @@ use openfo4_core::path::DataPathBuf;
 use openfo4_core::record::RecordId;
 use openfo4_core::transform::ConvertCoordinateSystem;
 use openfo4_core::{Frozen, WorldExt};
-use openfo4_esp::records::{DoorFlags, LightDataFlags};
+use openfo4_esp::records::{DoorFlags, LightDataFlags, LockLevel};
 use openfo4_esp::{RecordData, RecordHeaderFlags};
 use openfo4_physics::components::{Collider, RigidBody};
 
 use crate::assets::nif::{Instantiate, LoadNifFlags, NIF_TO_METERS, NifKey, NifScene};
 use crate::components::{
-    ActorMarker, BaseObject, NiTransform, ObjectBounds, Persistent, PlacedItem, Root, RootParent,
-    TriggerBox, WorldSpace,
+    ActorMarker, BaseObject, NiTransform, ObjectBounds, ObjectLockData, ObjectLockLevel,
+    ObjectProperties, Persistent, PlacedItem, Root, RootParent, TriggerBox, WorldSpace,
 };
 use crate::render::RenderObject;
 use crate::state::esp::GlobalRecord;
@@ -61,6 +61,7 @@ pub struct SpawnEntity {
     pub trigger_box: Option<TriggerBox>,
     pub navmesh: Option<NavMesh>,
     pub object_bounds: Option<ObjectBounds>,
+    pub object_props: Option<ObjectProperties>,
 }
 
 impl SpawnEntity {
@@ -95,6 +96,7 @@ impl SpawnEntity {
             trigger_box,
             navmesh,
             object_bounds,
+            object_props,
         } = self;
 
         // If the object reference already exists we will overwrite it.
@@ -166,6 +168,10 @@ impl SpawnEntity {
             world.insert_one(entity, script).unwrap();
         }
 
+        if let Some(props) = object_props {
+            world.insert_one(entity, props).unwrap();
+        }
+
         if persistent {
             world.insert_one(entity, Persistent).unwrap();
         }
@@ -227,6 +233,7 @@ impl SpawnEntity {
         let mut light_mod = LightModification::default();
         let mut door = None;
         let mut trigger_box = None;
+        let mut lock_data = None;
 
         match &record.local.data {
             RecordData::PlacedObject(object) => {
@@ -271,6 +278,29 @@ impl SpawnEntity {
                         marker_color: Color::from_rgb(primitive.color),
                         entities_inside: HashSet::new(),
                     });
+                }
+
+                if let Some(lock) = object.lock_data {
+                    let level = match lock.level {
+                        LockLevel::None => None,
+                        LockLevel::Novice1 | LockLevel::Novice2 => Some(ObjectLockLevel::Noivce),
+                        LockLevel::Advanced => Some(ObjectLockLevel::Advanced),
+                        LockLevel::Expert => Some(ObjectLockLevel::Expert),
+                        LockLevel::Master => Some(ObjectLockLevel::Master),
+                        LockLevel::RequiresTerminal => Some(ObjectLockLevel::RequiresTerminal),
+                        LockLevel::RequiresKey => Some(ObjectLockLevel::RequiresKey),
+                        LockLevel::Barred => Some(ObjectLockLevel::Barred),
+                        LockLevel::Chained => Some(ObjectLockLevel::Chained),
+                        LockLevel::Inaccessible => Some(ObjectLockLevel::Inaccessible),
+                    };
+
+                    let key = if !lock.key.is_null() {
+                        Some(ctx.esp_loader.resolve_form(lock.key, record.id).unwrap())
+                    } else {
+                        None
+                    };
+
+                    lock_data = Some(ObjectLockData { level, key });
                 }
             }
             RecordData::PlacedNpc(npc) => {
@@ -525,6 +555,7 @@ impl SpawnEntity {
             trigger_box,
             script,
             object_bounds,
+            object_props: Some(ObjectProperties { lock: lock_data }),
             ..Default::default()
         })
     }

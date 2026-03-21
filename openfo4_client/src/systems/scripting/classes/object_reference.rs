@@ -8,7 +8,7 @@ use openfo4_core::transform::ConvertCoordinateSystem;
 use openfo4_script::engine::Engine;
 use openfo4_script::runtime::{Caller, Exception};
 
-use crate::components::{ObjectBounds, TriggerBox};
+use crate::components::{ObjectBounds, ObjectLockLevel, ObjectProperties, TriggerBox};
 use crate::state::npc::ObjectKeywords;
 use crate::systems::actor_value::ActorValueProperties;
 use crate::systems::inventory::Inventory;
@@ -1182,8 +1182,23 @@ fn get_item_health_percent(caller: Caller<'_, State>, self_ptr: Object) -> Resul
 /// ```text
 /// Key Function() native
 /// ```
-fn get_key(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Exception> {
-    todo!()
+fn get_key(mut caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Exception> {
+    let entity = caller.data().entity(self_ptr).ok_or(Exception::Error)?;
+
+    let Ok(props) = caller.data().world().get::<&ObjectProperties>(entity) else {
+        return Ok(Object::NULL);
+    };
+
+    let Some(key) = props.lock.and_then(|lock| lock.key) else {
+        return Ok(Object::NULL);
+    };
+
+    core::mem::drop(props);
+
+    let scripts = caller.data_mut().get_or_create_record(key)?;
+    let script = scripts.get("Key").ok_or(Exception::Error)?;
+
+    Ok(script.get().object.addr())
 }
 
 /// `GetLength`
@@ -1244,7 +1259,27 @@ fn get_linked_ref_children(
 /// int Function() native
 /// ```
 fn get_lock_level(caller: Caller<'_, State>, self_ptr: Object) -> Result<i32, Exception> {
-    todo!()
+    let entity = caller.data().entity(self_ptr).ok_or(Exception::Error)?;
+
+    let Ok(props) = caller.data().world().get::<&ObjectProperties>(entity) else {
+        return Ok(0);
+    };
+
+    let Some(level) = props.lock.and_then(|lock| lock.level) else {
+        return Ok(0);
+    };
+
+    match level {
+        ObjectLockLevel::Noivce => Ok(25),
+        ObjectLockLevel::Advanced => Ok(50),
+        ObjectLockLevel::Expert => Ok(75),
+        ObjectLockLevel::Master => Ok(100),
+        ObjectLockLevel::Barred => Ok(251),
+        ObjectLockLevel::Chained => Ok(252),
+        ObjectLockLevel::RequiresTerminal => Ok(253),
+        ObjectLockLevel::Inaccessible => Ok(254),
+        ObjectLockLevel::RequiresKey => Ok(255),
+    }
 }
 
 /// `GetLocRefTypes`
