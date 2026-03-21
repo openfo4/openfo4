@@ -39,19 +39,20 @@ mod weapon;
 use std::collections::BTreeMap;
 use std::time::{Duration, Instant};
 
-use futures::future::BoxFuture;
 use hashbrown::{HashMap, HashSet};
 use hecs::{Entity, World};
 use openfo4_core::record::RecordId;
 use openfo4_script::engine::Engine;
-use openfo4_script::runtime::{Exception, ObjectAddr, ObjectPool, ObjectRef};
+use openfo4_script::runtime::{Exception, ObjectAddr, ObjectRef};
 use slab::Slab;
 
-use crate::components::Player;
+use crate::components::{BaseObject, Player};
 use crate::systems::global::GlobalProperties;
 use crate::systems::quests::QuestManager;
 use crate::systems::scripting::ScriptEntities;
-use crate::systems::scripting::effects::{DynamicEffect, Effect, EffectId, Effects};
+use crate::systems::scripting::effects::{
+    Effect, EffectId, Effects, LoadEntityEffect, LoadRecordEffect,
+};
 use crate::systems::scripting::loader::{ScriptObject, ScriptObjectId};
 use crate::systems::scripting::objects::{ScriptObjects, ScriptsRef};
 use crate::systems::scripting::registration::RegistrationSet;
@@ -242,6 +243,53 @@ impl State {
 
         let id = *self.game_entities.get(&addr)?;
         self.entities().0.get_left(&id).copied()
+    }
+
+    /// Returns the scripts associated with the given [`RecordId`].
+    ///
+    /// If the object with the associated [`RecordId`] is already loaded, this function returns
+    /// immediately.
+    /// Otherwise it will suspend and resume once the object has been loaded asynchronously.
+    pub fn get_or_create_record(&mut self, id: RecordId) -> Result<ScriptsRef<'_>, Exception> {
+        if let Some(object) = self.objects.get_by_record(id) {
+            // The borrow checker is too conservative here and `self.objects` is
+            // borrowed for '_ if `None` is returned.
+            // We need to drop the lifetime here to keep using `self` mutable if this
+            // branch is not taken.
+            // This should not be necessary when the new borrow checker stabilizes:
+            // https://smallcultfollowing.com/babysteps/blog/2018/06/15/mir-based-borrow-check-nll-status-update/#polonius
+            let object = unsafe { core::mem::transmute::<ScriptsRef<'_>, ScriptsRef<'_>>(object) };
+            return Ok(object);
+        }
+
+        let object = self.run_effect_and_wait(LoadRecordEffect { record: id })?;
+        let object = object.unwrap();
+
+        let scripts = self.objects.get_by_id(object.id()).unwrap();
+        Ok(scripts)
+    }
+
+    pub fn get_or_create_entity(&mut self, entity: Entity) -> Result<ScriptsRef<'_>, Exception> {
+        let id = *self.entities().0.get_right(&entity).unwrap();
+
+        if let Some(object) = self.objects.get_by_id(id) {
+            // The borrow checker is too conservative here and `self.objects` is
+            // borrowed for '_ if `None` is returned.
+            // We need to drop the lifetime here to keep using `self` mutable if this
+            // branch is not taken.
+            // This should not be necessary when the new borrow checker stabilizes:
+            // https://smallcultfollowing.com/babysteps/blog/2018/06/15/mir-based-borrow-check-nll-status-update/#polonius
+            let object = unsafe { core::mem::transmute::<ScriptsRef<'_>, ScriptsRef<'_>>(object) };
+            return Ok(object);
+        }
+
+        let base = self.world().get::<&BaseObject>(entity).unwrap().record;
+
+        let object = self.run_effect_and_wait(LoadEntityEffect { base })?;
+        let object = object.unwrap();
+
+        let scripts = self.objects.get_by_id(object.id()).unwrap();
+        Ok(scripts)
     }
 
     pub fn run_effect_and_wait<T>(&mut self, effect: T) -> Result<Option<T::Result>, Exception>

@@ -8,6 +8,7 @@ use game_tasks::{Task, TaskPool};
 use hecs::{Entity, World};
 use openfo4_core::events::EventBus;
 use openfo4_core::record::RecordId;
+use openfo4_script::runtime::ObjectRef;
 
 use crate::events::inventory::RemoveItemEvent;
 use crate::events::quest::{StartQuestScene, StopQuestScene};
@@ -16,7 +17,7 @@ use crate::state::esp::EspLoader;
 use crate::systems::inventory::{
     AddItemEvent, EquipItemEvent, InventoryKey, ItemStack, UnequipItemEvent,
 };
-use crate::systems::scripting::loader::ScriptLoader;
+use crate::systems::scripting::loader::{ScriptLoader, ScriptObject};
 
 #[derive(Default)]
 pub struct Effects {
@@ -303,5 +304,81 @@ impl DynamicEffect for StopQuestSceneEffect {
     fn run(&self, ctx: Context<'_>) -> EffectResult {
         ctx.events.send(StopQuestScene { scene: self.scene });
         EffectResult::Done
+    }
+}
+
+pub struct LoadRecordEffect {
+    pub record: RecordId,
+}
+
+impl Effect for LoadRecordEffect {
+    type Result = ScriptObject;
+}
+
+impl DynamicEffect for LoadRecordEffect {
+    fn run(&self, ctx: Context<'_>) -> EffectResult {
+        let record = self.record;
+        let script_loader = ctx.script_loader.clone();
+
+        let task = ctx.pool.spawn(async move {
+            let obj = script_loader.load(record).await.unwrap().object;
+            Box::new(LoadRecordEffectDone { obj }) as Box<dyn DynamicEffect>
+        });
+
+        EffectResult::Forked(vec![task])
+    }
+}
+
+struct LoadRecordEffectDone {
+    obj: ScriptObject,
+}
+
+impl Effect for LoadRecordEffectDone {
+    type Result = ObjectRef;
+}
+
+impl DynamicEffect for LoadRecordEffectDone {
+    fn run(&self, _ctx: Context<'_>) -> EffectResult {
+        let obj: ScriptObject = self.obj.clone();
+        EffectResult::DoneWithValue(Box::new(obj))
+    }
+}
+
+pub struct LoadEntityEffect {
+    pub base: RecordId,
+}
+
+impl Effect for LoadEntityEffect {
+    type Result = ScriptObject;
+}
+
+impl DynamicEffect for LoadEntityEffect {
+    fn run(&self, ctx: Context<'_>) -> EffectResult {
+        let base = self.base;
+        let script_loader = ctx.script_loader.clone();
+
+        let task = ctx.pool.spawn(async move {
+            let obj = script_loader.load(base).await.unwrap().object;
+            let obj = script_loader.clone_object(&obj).await;
+
+            Box::new(LoadEntityEffectDone { obj }) as Box<dyn DynamicEffect>
+        });
+
+        EffectResult::Forked(vec![task])
+    }
+}
+
+struct LoadEntityEffectDone {
+    obj: ScriptObject,
+}
+
+impl Effect for LoadEntityEffectDone {
+    type Result = ObjectRef;
+}
+
+impl DynamicEffect for LoadEntityEffectDone {
+    fn run(&self, _ctx: Context<'_>) -> EffectResult {
+        let obj: ScriptObject = self.obj.clone();
+        EffectResult::DoneWithValue(Box::new(obj))
     }
 }

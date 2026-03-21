@@ -18,8 +18,8 @@ use openfo4_physics::components::{Collider, RigidBody};
 
 use crate::assets::nif::{Instantiate, LoadNifFlags, NIF_TO_METERS, NifKey, NifScene};
 use crate::components::{
-    ActorMarker, NiTransform, ObjectBounds, Persistent, PlacedItem, Root, RootParent, TriggerBox,
-    WorldSpace,
+    ActorMarker, BaseObject, NiTransform, ObjectBounds, Persistent, PlacedItem, Root, RootParent,
+    TriggerBox, WorldSpace,
 };
 use crate::render::RenderObject;
 use crate::state::esp::GlobalRecord;
@@ -176,6 +176,12 @@ impl SpawnEntity {
 
         world.insert_one(entity, LinkedRefs::default()).unwrap();
         world.insert_one(entity, keywords).unwrap();
+
+        if let Some(form) = form {
+            world
+                .insert_one(entity, BaseObject { record: form })
+                .unwrap();
+        }
 
         if is_actor {
             world.insert_one(entity, ActorMarker).unwrap();

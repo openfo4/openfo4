@@ -149,3 +149,8 @@ pub struct ObjectBounds {
     pub min: IVec3,
     pub max: IVec3,
 }
+
+#[derive(Copy, Clone, Debug)]
+pub struct BaseObject {
+    pub record: RecordId,
+}
