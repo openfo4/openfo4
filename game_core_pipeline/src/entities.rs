@@ -40,6 +40,7 @@ impl Entities {
         )
     }
 
+    #[must_use = "the entity will get destroyed immediately when the object is dropped"]
     pub fn create_scene(&self) -> SceneHandle {
         let mut scenes = self.inner.scenes.lock();
         let id = SceneId(scenes.insert(1));
@@ -51,6 +52,7 @@ impl Entities {
         }
     }
 
+    #[must_use = "the entity will get destroyed immediately when the object is dropped"]
     pub fn create_mesh(&self, mesh: Mesh) -> MeshHandle {
         let mut meshes = self.inner.meshes.lock();
         let id = MeshId(meshes.insert(1));
@@ -62,6 +64,7 @@ impl Entities {
         }
     }
 
+    #[must_use = "the entity will get destroyed immediately when the object is dropped"]
     pub fn create_image<T>(&self, image: T) -> ImageHandle
     where
         T: Into<MipImage>,
@@ -79,6 +82,7 @@ impl Entities {
         }
     }
 
+    #[must_use = "the entity will get destroyed immediately when the object is dropped"]
     pub fn create_material(&self, material: StandardMaterial) -> MaterialHandle {
         let mut materials = self.inner.materials.lock();
         let id = MaterialId(materials.insert(1));
@@ -94,6 +98,7 @@ impl Entities {
         }
     }
 
+    #[must_use = "the entity will get destroyed immediately when the object is dropped"]
     pub fn create_object(&self, object: Object) -> ObjectHandle {
         let mut objects = self.inner.objects.lock();
         let id = ObjectId(objects.insert(1));
@@ -110,6 +115,7 @@ impl Entities {
         }
     }
 
+    #[must_use = "the entity will get destroyed immediately when the object is dropped"]
     pub fn create_camera(&self, camera: Camera) -> CameraHandle {
         let mut cameras = self.inner.cameras.lock();
         let id = CameraId(cameras.insert(1));
@@ -121,6 +127,7 @@ impl Entities {
         }
     }
 
+    #[must_use = "the entity will get destroyed immediately when the object is dropped"]
     pub fn create_light(&self, light: Light) -> LightHandle {
         let mut lights = self.inner.lights.lock();
         let id = LightId(lights.insert(1));
