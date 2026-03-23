@@ -305,9 +305,7 @@ impl TransparentVertexPass {
         let scene = state.scenes.get_mut(&scene).unwrap();
         let camera = scene.cameras.get(&camera).unwrap();
 
-        let MeshStateImpl::Vertex(mesh_state) = &mut state.mesh else {
-            unreachable!();
-        };
+        let MeshStateImpl::Vertex(mesh_state) = &mut state.mesh;
 
         let depth_target = ctx.read::<Texture>(OPAQUE_DEPTH).unwrap();
         let color_target = ctx.read::<Texture>(HDR_TEXTURE).unwrap();

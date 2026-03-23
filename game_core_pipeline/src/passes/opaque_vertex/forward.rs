@@ -97,9 +97,7 @@ impl OpaqueVertexForwardPass {
         let point_lights = scene.point_lights_buffer.buffer(ctx.queue);
         let spot_lights = scene.spot_lights_buffer.buffer(ctx.queue);
 
-        let MeshStateImpl::Vertex(mesh_state) = &mut state.mesh else {
-            unreachable!();
-        };
+        let MeshStateImpl::Vertex(mesh_state) = &mut state.mesh;
 
         if mesh_state.num_opauqe_instances == 0 && mesh_state.num_transparent_mask_instances == 0 {
             self.clear_pass(ctx, size);

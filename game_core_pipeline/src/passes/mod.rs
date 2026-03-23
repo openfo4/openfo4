@@ -1,10 +1,8 @@
-mod forward;
 mod opaque_vertex;
 mod pipeline;
 mod post_process;
 mod skinning;
 pub mod sky;
-mod state;
 mod transparent_vertex;
 mod update;
 
@@ -31,7 +29,6 @@ use glam::{UVec2, Vec3};
 use opaque_vertex::state::VertexMeshState;
 use parking_lot::Mutex;
 use post_process::PostProcessPass;
-use state::mesh::MeshState;
 use update::{TransformUniform, UpdatePass};
 
 use crate::camera::Camera;
@@ -71,26 +68,7 @@ pub(crate) fn init(
     graph.add_node(SKINNING_PASS, skinning_pass);
     graph.add_node_dependency(SKINNING_PASS, UPDATE_PASS);
 
-    // if queue.features().mesh_shader {
-    //     let forward_pass = ForwardPass::new(queue, state.clone(), HDR_TEXTURE);
-    //     graph.add_node(FORWARD_PASS, forward_pass);
-    //     graph.add_node_dependency(FORWARD_PASS, UPDATE_PASS);
-
-    //     graph.add_slot_dependency(
-    //         FORWARD_PASS,
-    //         SlotLabel::SURFACE,
-    //         SlotKind::Texture,
-    //         SlotFlags::READ,
-    //     );
-    //     graph.add_slot_dependency(
-    //         FORWARD_PASS,
-    //         HDR_TEXTURE,
-    //         SlotKind::Texture,
-    //         SlotFlags::WRITE,
-    //     );
-    // } else {
     opaque_vertex::init(graph, queue, state.clone());
-    // }
 
     graph.add_node(
         TRANSPARENT_VERTEX_PASS,
@@ -384,30 +362,21 @@ struct RawObjectData {
 #[derive(Debug)]
 enum MeshStateImpl {
     Vertex(VertexMeshState),
-    Mesh(MeshState),
 }
 
 impl MeshStateImpl {
     fn new(queue: &CommandQueue<'_>) -> Self {
-        // if queue.features().mesh_shader {
-        //     Self::Mesh(MeshState::new(queue))
-        // } else {
-        //     Self::Vertex(VertexMeshState::new(queue))
-        // }
-
         Self::Vertex(VertexMeshState::new(queue))
     }
 
     fn create_mesh(&mut self, queue: &CommandQueue<'_>, mesh: &Mesh) -> MeshKey {
         match self {
-            Self::Mesh(state) => state.create_mesh(queue, mesh),
             Self::Vertex(state) => state.create_mesh(queue, mesh),
         }
     }
 
     fn remove_mesh(&mut self, key: MeshKey) {
         match self {
-            Self::Mesh(state) => state.remove_mesh(key),
             Self::Vertex(state) => state.remove_mesh(key),
         }
     }
@@ -420,14 +389,12 @@ impl MeshStateImpl {
         material: &MaterialState,
     ) -> InstanceKey {
         match self {
-            Self::Mesh(state) => state.create_instance(transform, mesh, material.index),
             Self::Vertex(state) => state.create_instance(queue, transform, mesh, material),
         }
     }
 
     fn remove_instance(&mut self, key: InstanceKey) {
         match self {
-            Self::Mesh(state) => state.remove_instance(key),
             Self::Vertex(state) => state.remove_instance(key),
         }
     }
@@ -440,7 +407,6 @@ impl MeshStateImpl {
     ) {
         match self {
             Self::Vertex(state) => state.set_skinned_bones_transforms(queue, key, transforms),
-            _ => todo!(),
         }
     }
 }
