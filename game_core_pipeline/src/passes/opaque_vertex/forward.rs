@@ -409,36 +409,39 @@ fn compute_dir_light_space_matrix(camera: &Camera, direction: Vec3) -> Mat4 {
     let corners = frustum_corners(camera.view_matrix(), camera_proj.projection_matrix());
 
     let center = corners.iter().sum::<Vec3>() / corners.len() as f32;
+    let radius = corners
+        .iter()
+        .max_by(|a, b| center.distance(**a).total_cmp(&center.distance(**b)))
+        .unwrap();
+    let radius = center.distance(*radius);
+
+    let texture_size = 4096.0;
+
+    let texels_per_unit = texture_size / (radius * 2.0);
+    let scale = Mat4::from_scale(Vec3::splat(texels_per_unit));
+
+    let look_at = Mat4::look_at_rh(Vec3::ZERO, -direction, direction.any_orthonormal_vector());
+    let look_at = scale * look_at;
+    let look_at_inv = look_at.inverse();
+
+    let mut aligned_center = look_at.transform_point3(center);
+    aligned_center.x = aligned_center.x.floor();
+    aligned_center.y = aligned_center.y.floor();
+    aligned_center = look_at_inv.transform_point3(aligned_center);
 
     let view = Mat4::look_at_rh(
-        center + direction,
-        center,
+        aligned_center + (direction * radius * 2.0),
+        aligned_center,
         direction.any_orthonormal_vector(),
     );
 
-    let mut min_x = f32::MAX;
-    let mut max_x = f32::MIN;
-    let mut min_y = f32::MAX;
-    let mut max_y = f32::MIN;
-    let mut min_z = f32::MAX;
-    let mut max_z = f32::MIN;
-    for corner in &corners {
-        let p = view * corner.extend(1.0);
-        min_x = f32::min(min_x, p.x);
-        max_x = f32::max(max_x, p.x);
-        min_y = f32::min(min_y, p.y);
-        max_y = f32::max(max_y, p.y);
-        min_z = f32::min(min_z, p.z);
-        max_z = f32::max(max_z, p.z);
-    }
-
     let proj = Mat4::orthographic_rh(
-        min_x,
-        max_x,
-        min_y,
-        max_y,
-        min_z - camera.projection.far,
-        max_z + camera.projection.far,
+        -radius,
+        radius,
+        -radius,
+        radius,
+        -radius - camera.projection.far,
+        radius + camera.projection.far,
     );
     proj * view
 }
