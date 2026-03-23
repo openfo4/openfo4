@@ -19,6 +19,5 @@ func main(input: Input) -> Vec4 {
     let sky_lower = input.color.g * sky_colors.sky_lower;
     let sky_upper = input.color.b * sky_colors.sky_upper;
 
-    return Vec4(horizon + sky_lower + sky_upper, 1.0) * sky_colors.sky_scale;
-    // return Vec4(input.color.rgb, 1.0);
+    return Vec4((horizon + sky_lower + sky_upper) * sky_colors.sky_scale, 1.0);
 }
