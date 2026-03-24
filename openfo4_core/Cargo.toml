@@ -7,9 +7,10 @@ edition = "2024"
 game_common = { version = "0.1.0", path = "../game_common" }
 openfo4_esp = { version = "0.1.0", path = "../openfo4_esp" }
 
-hecs = "0.10.5"
+hecs = { workspace = true }
 glam = { workspace = true, features = ["bytemuck"] }
 bstr = "1.12.1"
+parking_lot = "0.12.5"
 
 [lints]
 workspace = true
