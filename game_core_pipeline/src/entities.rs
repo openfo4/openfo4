@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use crossbeam::channel::{Receiver, Sender};
 use game_common::collections::arena::{Arena, Key};
-use game_common::components::Transform;
+use game_common::components::{Color, Transform};
 use game_render::mesh::Mesh;
 use game_render::texture::image::MipImage;
 use parking_lot::Mutex;
@@ -167,6 +167,18 @@ impl Entities {
             .events
             .send(Event::UpdateBoneTransforms(object.id, transforms))
             .ok();
+    }
+
+    pub fn set_clouds_meshes(&self, meshes: Vec<Mesh>) {
+        self.sky.lock().cloud_meshes = Some(meshes);
+    }
+
+    pub fn set_cloud_texture(&self, layer: usize, texture: Option<MipImage>) {
+        self.sky.lock().cloud_textures.push((layer, texture));
+    }
+
+    pub fn set_cloud_color(&self, layer: usize, color: Color) {
+        self.sky.lock().cloud_colors.push((layer, color));
     }
 }
 

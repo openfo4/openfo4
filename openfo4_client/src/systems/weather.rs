@@ -1,4 +1,3 @@
-use std::panic::UnwindSafe;
 use std::sync::Arc;
 
 use game_common::components::{AmbientLight, Color, DirectionalLight, Transform};
@@ -18,7 +17,7 @@ use openfo4_core::path::DataPathBuf;
 use openfo4_core::record::RecordId;
 use openfo4_core::transform::ConvertCoordinateSystem;
 use openfo4_dds::Format;
-use openfo4_esp::records::{ClimateTime, Rgba, TimeOfDaySetExtended};
+use openfo4_esp::records::{Rgba, TimeOfDaySetExtended};
 use openfo4_esp::{FormId, RecordData, RecordKind};
 use openfo4_nif::{Block, Nif};
 
@@ -26,7 +25,7 @@ use crate::assets::data_file::DataFile;
 use crate::components::{Player, WorldSpace};
 use crate::shared::SharedState;
 use crate::state::esp::EspLoader;
-use crate::state::hardcoded::{HARDCODED_MODULE_ID, PATH_SKY_ATMOSPHERE};
+use crate::state::hardcoded::{HARDCODED_MODULE_ID, PATH_SKY_ATMOSPHERE, PATH_SKY_CLOUDS};
 use crate::systems::time::GameTime;
 
 // The clear weather image space uses a sunlight scale of 4.5 for the day sun.
@@ -61,6 +60,9 @@ impl WeatherSystem {
         if let Some(sun) = climate.sun.take() {
             shared.entities.set_sun_texture(sun);
         }
+
+        let meshes = futures_lite::future::block_on(load_cloud_meshes(asset_loader));
+        shared.entities.set_clouds_meshes(meshes);
 
         shared.entities.set_sky_material(SkyMaterial {
             sky_lower: Color::WHITE,
@@ -101,11 +103,17 @@ impl WeatherSystem {
             return;
         };
 
-        let Some(climate) = self.climates.get(&worldspace.record) else {
+        let Some(climate) = self.climates.get_mut(&worldspace.record) else {
             return;
         };
 
-        let weather = climate.weathers.first().unwrap();
+        let mut weather_changed = false;
+        let active_weather = *climate.active_weather.get_or_insert_with(|| {
+            weather_changed = true;
+            0
+        });
+
+        let weather = &climate.weathers[active_weather];
 
         let Some(params) = weather.get_interpolated(&time) else {
             return;
@@ -155,22 +163,31 @@ impl WeatherSystem {
                 illuminance: SUNLIGHT_BASE_ILLUMINANCE * params.sunlight_scale,
             },
         )));
+
+        // Update Clouds
+        if weather_changed {
+            for (layer, image) in weather.clouds.iter().enumerate() {
+                self.entities.set_cloud_texture(layer, image.clone());
+            }
+        }
+
+        for (layer, color) in params.cloud_colors.iter().enumerate() {
+            self.entities.set_cloud_color(layer, *color);
+        }
     }
 }
 
 struct WorldspaceClimate {
     sun: Option<MipImage>,
     weathers: Vec<Weather>,
-    /// Time when the sun spawns in.
-    sunrise: ClimateTime,
-    /// Time when the sun despawns.
-    sunset: ClimateTime,
+    active_weather: Option<usize>,
 }
 
 #[derive(Clone, Debug)]
 struct Weather {
     params: Vec<WeatherParams>,
     phases: Vec<WeatherPhase>,
+    clouds: [Option<MipImage>; 32],
 }
 
 impl Weather {
@@ -217,6 +234,7 @@ struct WeatherParams {
     /// Color of the directional light of the sun.
     sunlight: Color,
     sunlight_scale: f32,
+    cloud_colors: [Color; 32],
 }
 
 impl WeatherParams {
@@ -236,6 +254,11 @@ impl WeatherParams {
         let sunlight = self.sunlight.lerp(other.sunlight, s);
         let sunlight_scale = self.sunlight_scale.lerp(other.sunlight_scale, s);
 
+        let mut cloud_colors = [Color::TRANSPARENT; 32];
+        for i in 0..32 {
+            cloud_colors[i] = self.cloud_colors[i].lerp(other.cloud_colors[i], s);
+        }
+
         Self {
             ambient_top,
             ambient_bottom,
@@ -250,6 +273,7 @@ impl WeatherParams {
             sky_scale,
             sunlight,
             sunlight_scale,
+            cloud_colors,
         }
     }
 }
@@ -319,6 +343,79 @@ async fn load_sky_mesh(loader: &AssetLoader) -> Mesh {
     }
 
     todo!("no BSTriShape in atmosphere.nif")
+}
+
+async fn load_cloud_meshes(loader: &AssetLoader) -> Vec<Mesh> {
+    let file = loader
+        .load::<DataFile<Nif>, _>(PATH_SKY_CLOUDS)
+        .await
+        .unwrap();
+
+    let mut meshes = Vec::new();
+    for block in file.iter() {
+        match block {
+            Block::BSTriShape(shape) => {
+                let transform = Transform {
+                    translation: shape.translation,
+                    rotation: Quat::from_mat3(&shape.rotation),
+                    scale: Vec3::splat(shape.scale),
+                };
+
+                let positions = shape
+                    .mesh
+                    .positions
+                    .as_ref()
+                    .unwrap()
+                    .iter()
+                    .map(|pos| transform.transform_point(*pos).to_opengl())
+                    .collect();
+                let colors = shape
+                    .mesh
+                    .colors
+                    .as_ref()
+                    .unwrap()
+                    .iter()
+                    .map(|v| {
+                        Vec4::from_array([
+                            v.r as f32 / 255.0,
+                            v.g as f32 / 255.0,
+                            v.b as f32 / 255.0,
+                            v.a as f32 / 255.0,
+                        ])
+                    })
+                    .collect();
+                let uvs = shape
+                    .mesh
+                    .tex_coords
+                    .as_ref()
+                    .unwrap()
+                    .iter()
+                    .map(|v| v.as_vec2())
+                    .collect();
+
+                let indices = Indices::U32(
+                    shape
+                        .mesh
+                        .indices
+                        .iter()
+                        .map(|v| v.map(|v| v as u32))
+                        .flatten()
+                        .collect(),
+                );
+
+                let mut mesh = Mesh::new();
+                mesh.set_positions(positions);
+                mesh.set_colors(colors);
+                mesh.set_uvs(uvs);
+                mesh.set_indices(indices);
+
+                meshes.push(mesh);
+            }
+            _ => {}
+        }
+    }
+
+    meshes
 }
 
 async fn load_worldspace_weather_props(
@@ -397,6 +494,84 @@ async fn load_worldspace_weather_props(
             todo!();
         };
 
+        let mut clouds = [const { None }; 32];
+        for (index, path) in [
+            &weather.cloud_texture_layer00,
+            &weather.cloud_texture_layer01,
+            &weather.cloud_texture_layer02,
+            &weather.cloud_texture_layer03,
+            &weather.cloud_texture_layer04,
+            &weather.cloud_texture_layer05,
+            &weather.cloud_texture_layer06,
+            &weather.cloud_texture_layer07,
+            &weather.cloud_texture_layer08,
+            &weather.cloud_texture_layer09,
+            &weather.cloud_texture_layer10,
+            &weather.cloud_texture_layer11,
+            &weather.cloud_texture_layer12,
+            &weather.cloud_texture_layer13,
+            &weather.cloud_texture_layer14,
+            &weather.cloud_texture_layer15,
+            &weather.cloud_texture_layer16,
+            &weather.cloud_texture_layer17,
+            &weather.cloud_texture_layer18,
+            &weather.cloud_texture_layer19,
+            &weather.cloud_texture_layer20,
+            &weather.cloud_texture_layer21,
+            &weather.cloud_texture_layer22,
+            &weather.cloud_texture_layer23,
+            &weather.cloud_texture_layer24,
+            &weather.cloud_texture_layer25,
+            &weather.cloud_texture_layer26,
+            &weather.cloud_texture_layer27,
+            &weather.cloud_texture_layer28,
+            &weather.cloud_texture_layer29,
+            &weather.cloud_texture_layer30,
+            &weather.cloud_texture_layer31,
+        ]
+        .iter()
+        .enumerate()
+        {
+            let Some(path) = path else {
+                continue;
+            };
+
+            let mut path = DataPathBuf::new(path.as_bytes());
+            path.push_front("textures");
+
+            let Ok(img) = loader
+                .load::<DataFile<openfo4_dds::Image>, _>(&path)
+                .await
+                .inspect_err(|err| {
+                    tracing::error!(
+                        "failed to load cloud texture for layer {} from {}: {}",
+                        index,
+                        path,
+                        err
+                    );
+                })
+            else {
+                continue;
+            };
+
+            let mips = img
+                .mips
+                .iter()
+                .map(|mip| {
+                    let format = match img.format {
+                        Format::Rgba8Unorm => TextureFormat::Rgba8Unorm,
+                        Format::Rgba8UnormSrgb => TextureFormat::Rgba8UnormSrgb,
+                        Format::Bc3Unorm => TextureFormat::Bc3RgbaUnorm,
+                        _ => todo!(),
+                    };
+
+                    Image::new(mip.size, format, mip.bytes.clone())
+                })
+                .collect();
+
+            clouds[index] = Some(MipImage::new(mips));
+        }
+
         fn to_params<F>(
             weather: &openfo4_esp::records::Weather,
             dir_light_index: usize,
@@ -421,6 +596,7 @@ async fn load_worldspace_weather_props(
                 sky_scale: 1.0,
                 sunlight: rgb_to_color(f(weather.colors.sunlight)),
                 sunlight_scale: 1.0,
+                cloud_colors: [Color::TRANSPARENT; 32],
             }
         }
 
@@ -467,6 +643,47 @@ async fn load_worldspace_weather_props(
             if let Some(data) = data.hdr {
                 params.sky_scale = data.sky_scale;
                 params.sunlight_scale = data.sunlight_scale;
+            }
+        }
+
+        for (layer, (color, alpha)) in weather
+            .cloud_texture_color
+            .iter()
+            .zip(weather.cloud_texture_alpha)
+            .enumerate()
+        {
+            params[p_night].cloud_colors[layer] = rgb_to_color(color.night);
+            params[p_night].cloud_colors[layer].a = alpha.night;
+
+            params[p_day].cloud_colors[layer] = rgb_to_color(color.day);
+            params[p_day].cloud_colors[layer].a = alpha.day;
+
+            params[p_early_sunrise].cloud_colors[layer] = rgb_to_color(color.early_sunrise);
+            params[p_early_sunrise].cloud_colors[layer].a = alpha.early_sunrise;
+
+            params[p_sunrise].cloud_colors[layer] = rgb_to_color(color.sunrise);
+            params[p_sunrise].cloud_colors[layer].a = alpha.sunrise;
+
+            params[p_late_sunrise].cloud_colors[layer] = rgb_to_color(color.late_sunrise);
+            params[p_late_sunrise].cloud_colors[layer].a = alpha.late_sunrise;
+
+            params[p_early_sunset].cloud_colors[layer] = rgb_to_color(color.early_sunset);
+            params[p_early_sunset].cloud_colors[layer].a = alpha.early_sunset;
+
+            params[p_sunset].cloud_colors[layer] = rgb_to_color(color.sunset);
+            params[p_sunset].cloud_colors[layer].a = alpha.sunset;
+
+            params[p_late_sunset].cloud_colors[layer] = rgb_to_color(color.late_sunset);
+            params[p_late_sunset].cloud_colors[layer].a = alpha.late_sunset;
+        }
+
+        let mut disabled_cloud_layers = weather.disabled_cloud_layers.unwrap_or_default();
+        while disabled_cloud_layers != 0 {
+            let index = disabled_cloud_layers.trailing_zeros();
+            disabled_cloud_layers ^= 1 << index;
+
+            for param in &mut params {
+                param.cloud_colors[index as usize].a = 0.0;
             }
         }
 
@@ -519,14 +736,17 @@ async fn load_worldspace_weather_props(
             }
         }
 
-        weathers.push(Weather { params, phases });
+        weathers.push(Weather {
+            params,
+            phases,
+            clouds,
+        });
     }
 
     WorldspaceClimate {
         sun,
         weathers,
-        sunrise: climate.timing.sunrise_begin,
-        sunset: climate.timing.sunset_begin,
+        active_weather: None,
     }
 }
 

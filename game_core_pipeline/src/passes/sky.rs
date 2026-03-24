@@ -1,3 +1,5 @@
+mod clouds;
+
 use std::sync::Arc;
 
 use bytemuck::{Pod, Zeroable};
@@ -23,6 +25,7 @@ use parking_lot::Mutex;
 use crate::camera::Camera;
 use crate::passes::HDR_FORMAT;
 use crate::passes::pipeline::{Pipeline, PipelineBinding};
+use crate::passes::sky::clouds::CloudsPass;
 use crate::sky::SkyMaterial;
 
 const VS_SHADER: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/shaders/sky/sky_vs.slang");
@@ -41,6 +44,7 @@ pub struct SkyPass {
     sun_sampler: Sampler,
     sun_material: Mutex<Option<Buffer>>,
     sun_position: Mutex<Vec3>,
+    clouds: Mutex<CloudsPass>,
 }
 
 impl SkyPass {
@@ -172,6 +176,7 @@ impl SkyPass {
             }),
             sun_material: Mutex::default(),
             sun_position: Mutex::default(),
+            clouds: Mutex::new(CloudsPass::new(queue)),
         }
     }
 
@@ -230,6 +235,23 @@ impl SkyPass {
         let new_sky_mesh = { self.state.lock().atomosphere.take() };
         let new_sky_material = { self.state.lock().sky_colors.take() };
         let new_sun_texture = { self.state.lock().sun.take() };
+        let new_cloud_meshes = { self.state.lock().cloud_meshes.take() };
+        let new_cloud_textures = { core::mem::take(&mut self.state.lock().cloud_textures) };
+        let new_cloud_colors = { core::mem::take(&mut self.state.lock().cloud_colors) };
+
+        if let Some(meshes) = new_cloud_meshes {
+            self.clouds.lock().update_meshes(ctx.queue, &meshes);
+        }
+
+        for (layer, image) in new_cloud_textures {
+            self.clouds
+                .lock()
+                .update_layer_texture(ctx.queue, layer, image.as_ref());
+        }
+
+        for (layer, color) in new_cloud_colors {
+            self.clouds.lock().update_layer_color(layer, color);
+        }
 
         if let Some(mesh) = new_sky_mesh {
             let positions = ctx.queue.create_buffer_init(&BufferInitDescriptor {
@@ -361,6 +383,10 @@ impl SkyPass {
         drop(pass);
 
         self.render_sun(ctx, &static_camera, &target_view);
+
+        self.clouds
+            .lock()
+            .render(ctx.queue, &static_camera, &target_view);
     }
 }
 
@@ -376,6 +402,9 @@ pub struct SkyState {
     pub atomosphere: Option<Mesh>,
     pub sky_colors: Option<SkyMaterial>,
     pub sun: Option<MipImage>,
+    pub cloud_meshes: Option<Vec<Mesh>>,
+    pub cloud_textures: Vec<(usize, Option<MipImage>)>,
+    pub cloud_colors: Vec<(usize, Color)>,
 }
 
 struct SkyMesh {
