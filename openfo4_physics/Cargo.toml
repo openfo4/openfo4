@@ -11,7 +11,7 @@ game_gizmos = { version = "0.1.0", path = "../game_gizmos" }
 
 nalgebra = { version = "0.33.0", features = ["convert-glam028"] }
 parking_lot = "0.12.3"
-rapier3d = { version = "0.27.0", features = ["simd-stable", "debug-render"] }
+rapier3d = { version = "0.27.0", git = "https://github.com/MrGunflame/rapier", branch = "custom-controller", features = ["simd-stable", "debug-render"] }
 tracing = "0.1.40"
 glam = { workspace = true }
 hecs = { workspace = true }

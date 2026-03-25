@@ -1,8 +1,10 @@
-use game_common::components::Transform;
+use std::f32::consts::PI;
+
+use game_common::components::{Axis, Transform};
 use game_tracing::trace_span;
 use glam::Vec3;
 use hecs::Entity;
-use rapier3d::control::{CharacterLength, KinematicCharacterController};
+use rapier3d::control::{CharacterAutostep, CharacterLength, KinematicCharacterController};
 use rapier3d::math::Isometry;
 use rapier3d::parry::query::DefaultQueryDispatcher;
 use rapier3d::prelude::QueryFilter;
@@ -21,6 +23,11 @@ impl CharacterController {
         Self {
             controller: KinematicCharacterController {
                 offset: CharacterLength::Relative(0.01),
+                autostep: Some(CharacterAutostep {
+                    max_height: CharacterLength::Relative(0.25),
+                    min_width: CharacterLength::Relative(0.1),
+                    include_dynamic_bodies: false,
+                }),
                 ..Default::default()
             },
         }
