@@ -1,11 +1,9 @@
-use std::f32::consts::PI;
-
-use game_common::components::{Axis, Transform};
+use game_common::components::Transform;
 use game_tracing::trace_span;
 use glam::Vec3;
 use hecs::Entity;
 use rapier3d::control::{CharacterAutostep, CharacterLength, KinematicCharacterController};
-use rapier3d::math::Isometry;
+use rapier3d::math::{Isometry, Vector};
 use rapier3d::parry::query::DefaultQueryDispatcher;
 use rapier3d::prelude::QueryFilter;
 
@@ -16,6 +14,7 @@ use crate::{GRAVITY, PhysicsPipeline, build_shape};
 #[derive(Clone, Debug)]
 pub struct CharacterController {
     controller: KinematicCharacterController,
+    gravity_velcotiy: Vector<f32>,
 }
 
 impl CharacterController {
@@ -30,6 +29,7 @@ impl CharacterController {
                 }),
                 ..Default::default()
             },
+            gravity_velcotiy: Vector::default(),
         }
     }
 
@@ -82,6 +82,10 @@ impl CharacterController {
             &events,
         );
 
+        if movement.grounded {
+            self.gravity_velcotiy = Vector::default();
+        }
+
         Movement {
             translation: vec3(movement.translation),
             grounded: movement.grounded,
@@ -95,13 +99,10 @@ impl CharacterController {
         shape: &ColliderShape,
         exclude_body: Entity,
     ) -> Movement {
-        self.move_shape(
-            pipeline,
-            transform,
-            shape,
-            vec3(GRAVITY * pipeline.integration_parameters.dt),
-            exclude_body,
-        )
+        self.gravity_velcotiy += GRAVITY * pipeline.integration_parameters.dt;
+        let delta = self.gravity_velcotiy * pipeline.integration_parameters.dt;
+
+        self.move_shape(pipeline, transform, shape, vec3(delta), exclude_body)
     }
 }
 
