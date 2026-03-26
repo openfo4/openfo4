@@ -35,7 +35,6 @@ fn test_latency() {
 
     manager.play(AudioSource::from_data(sound), Settings::default());
 
-    let mut ticks = 0;
     let now = Instant::now();
     loop {
         manager.update();
@@ -45,7 +44,6 @@ fn test_latency() {
         }
     }
 
-    println!("Sound played after {}", ticks);
     println!("Sound played after {:?}", now.elapsed());
 }
 
