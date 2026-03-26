@@ -7,7 +7,6 @@ use game_render::backend::{
     BufferUsage, CompareOp, DepthStencilState, DescriptorType, Face, FrontFace, LoadOp,
     PrimitiveTopology, ShaderStages, StoreOp, TextureFormat,
 };
-use game_render::camera::{Camera, CameraUniform};
 use game_render::shader::{ShaderConfig, ShaderLanguage, ShaderSource};
 use glam::Mat4;
 

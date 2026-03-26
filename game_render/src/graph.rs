@@ -28,12 +28,10 @@ pub(crate) mod scheduler;
 
 use std::collections::HashMap;
 
-use glam::UVec2;
 use thiserror::Error;
 
+use crate::RenderTarget;
 use crate::api::{Buffer, CommandQueue, Texture};
-use crate::backend::TextureFormat;
-use crate::camera::RenderTarget;
 
 pub trait Node: Send + Sync + 'static {
     /// Renders the node.
@@ -355,4 +353,12 @@ mod private {
         fn upcast(self) -> SlotValueInner<'static>;
         fn downcast<'a>(value: &'a SlotValueInner<'_>) -> Option<&'a Self>;
     }
+}
+
+pub(super) const SURFACE_INJECTOR: NodeLabel = NodeLabel::new("SURFACE_INJECTOR");
+
+pub(super) struct SurfaceInjector;
+
+impl Node for SurfaceInjector {
+    fn render<'a>(&self, _ctx: &'a mut RenderContext<'_, 'a>) {}
 }

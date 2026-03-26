@@ -11,7 +11,7 @@ pub mod runtime;
 pub mod style;
 pub mod widgets;
 
-use game_render::camera::RenderTarget;
+use game_render::RenderTarget;
 use game_render::Renderer;
 use game_tracing::trace_span;
 use game_window::cursor::Cursor;

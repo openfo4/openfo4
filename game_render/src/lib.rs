@@ -1,16 +1,10 @@
 pub mod aabb;
 pub mod api;
 pub mod buffer;
-pub mod camera;
-pub mod entities;
-pub mod forward;
 pub mod graph;
-pub mod light;
 pub mod mesh;
 pub mod metrics;
 pub mod mipmap;
-pub mod options;
-pub mod pbr;
 pub mod pipeline_cache;
 pub mod shader;
 pub mod shape;
@@ -21,39 +15,32 @@ pub mod texture;
 pub mod backend;
 mod debug;
 mod fps_limiter;
-mod passes;
 mod pipelined_rendering;
 
 use api::CommandQueue;
 use backend::vulkan::{Config, Instance};
 use backend::{AdapterKind, MemoryHeapFlags, QueueCapabilities};
-use entities::{Event, Resources, ResourcesMut};
 pub use fps_limiter::FpsLimit;
 use game_tasks::park::Parker;
 use statistics::Statistics;
 use surface::SurfaceConfig;
 
-use std::collections::{HashMap, VecDeque};
-use std::future::Future;
-use std::pin::Pin;
+use std::collections::HashMap;
 use std::sync::Arc;
-use std::task::{Context, Poll};
 
-use futures_lite::FutureExt;
 use game_tasks::TaskPool;
 use game_tracing::trace_span;
 
-use camera::RenderTarget;
-use forward::ForwardPipeline;
 use game_window::windows::{WindowId, WindowState};
 use glam::UVec2;
 use graph::RenderGraph;
 use pipelined_rendering::{Command, RenderThreadHandle};
-use texture::{RenderImageId, RenderTexture, RenderTextures};
 use thiserror::Error;
-use tokio::sync::oneshot;
 
-pub use passes::FINAL_RENDER_PASS;
+use crate::graph::{NodeLabel, SlotFlags, SlotKind, SlotLabel};
+
+// TODO: Remove
+pub const FINAL_RENDER_PASS: NodeLabel = NodeLabel::new("POST_PROCESS_PASS");
 
 #[derive(Debug, Error)]
 pub enum Error {
@@ -65,18 +52,8 @@ pub enum Error {
 
 pub struct Renderer {
     render_thread: RenderThreadHandle,
-
-    forward: Arc<ForwardPipeline>,
-    resources: Arc<Resources>,
-    events: Vec<Event>,
-
-    render_textures: RenderTextures,
-    jobs: VecDeque<Job>,
-
     parker: Option<Arc<Parker>>,
-
     surface_sizes: HashMap<WindowId, UVec2>,
-
     statistics: Arc<Statistics>,
 }
 
@@ -184,39 +161,24 @@ impl Renderer {
         let render_thread =
             RenderThreadHandle::new(instance, adapter, device, queue, statistics.clone());
 
-        let mut scheduler = unsafe { render_thread.shared.scheduler.borrow_mut() };
         let mut graph = unsafe { render_thread.shared.graph.borrow_mut() };
-        let mut queue = scheduler.queue();
 
-        let resources = Arc::new(Resources::default());
-
-        let forward = Arc::new(ForwardPipeline::new(&mut queue, resources.clone()));
-        passes::init(&mut graph, forward.clone(), &mut queue);
+        graph.add_node(graph::SURFACE_INJECTOR, graph::SurfaceInjector);
+        graph.add_slot_dependency(
+            graph::SURFACE_INJECTOR,
+            SlotLabel::SURFACE,
+            SlotKind::Texture,
+            SlotFlags::WRITE,
+        );
 
         drop(graph);
-        drop(scheduler);
 
         Ok(Self {
             render_thread,
-            render_textures: RenderTextures::new(),
-            jobs: VecDeque::new(),
-            forward,
-            resources,
-            events: Vec::new(),
             surface_sizes: HashMap::new(),
             parker: None,
             statistics,
         })
-    }
-
-    pub fn resources(&mut self) -> ResourcesMut<'_> {
-        unsafe { ResourcesMut::new(&self.resources, &mut self.events) }
-    }
-
-    pub fn read_gpu_texture(&mut self, id: RenderImageId) -> ReadTexture {
-        let (tx, rx) = oneshot::channel();
-        self.jobs.push_back(Job::TextureToBuffer(id, tx));
-        ReadTexture { rx }
     }
 
     pub fn with_command_queue_and_graph<F, R>(&mut self, f: F) -> R
@@ -235,13 +197,6 @@ impl Renderer {
         f(&mut graph, &queue)
     }
 
-    pub fn create_render_texture(&mut self, texture: RenderTexture) -> RenderImageId {
-        let id = self.render_textures.insert(texture);
-        id
-    }
-
-    pub fn destory_render_texture(&mut self, id: RenderImageId) {}
-
     /// Create a new renderer for the window.
     pub fn create(&mut self, id: WindowId, window: WindowState) {
         self.surface_sizes.insert(id, window.inner_size());
@@ -252,21 +207,6 @@ impl Renderer {
         self.surface_sizes.insert(id, size);
         self.render_thread
             .send(Command::UpdateSurface(id, SurfaceConfig { size }));
-
-        if let Some(parker) = self.parker.take() {
-            parker.park();
-        }
-
-        // Resize all cameras that are linked to the surface handle.
-        // Technically this will happend before the actual surface is resized,
-        // but this should be considered a rare case anyway, so we can afford
-        // the aspect ratio to be slightly off during that time.
-        let mut cameras = unsafe { self.resources.cameras.viewer() };
-        for camera in cameras.iter_mut() {
-            if camera.target == RenderTarget::Window(id) {
-                camera.update_aspect_ratio(size);
-            }
-        }
     }
 
     pub fn destroy(&mut self, id: WindowId) {
@@ -277,9 +217,6 @@ impl Renderer {
     pub fn get_surface_size(&self, target: RenderTarget) -> Option<UVec2> {
         match target {
             RenderTarget::Window(id) => self.surface_sizes.get(&id).copied(),
-            RenderTarget::Image(id) => {
-                todo!();
-            }
         }
     }
 
@@ -304,14 +241,6 @@ impl Renderer {
             parker.park();
         }
 
-        unsafe {
-            // Commit all new resources.
-            // This is safe since the renderer is idle.
-            self.resources.commit();
-            core::mem::swap(&mut *self.forward.events.borrow_mut(), &mut self.events);
-            self.events.clear();
-        }
-
         // Submit a new render command with the parker used in the next call.
         let parker = self.parker.get_or_insert_with(|| Arc::new(Parker::new()));
         self.render_thread.send(Command::Render(parker.clone()));
@@ -329,19 +258,14 @@ impl Renderer {
     }
 }
 
-#[derive(Debug)]
-enum Job {
-    TextureToBuffer(RenderImageId, tokio::sync::oneshot::Sender<Vec<u8>>),
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub enum RenderTarget {
+    /// Render to a window surface.
+    Window(WindowId),
 }
 
-pub struct ReadTexture {
-    rx: oneshot::Receiver<Vec<u8>>,
-}
-
-impl Future for ReadTexture {
-    type Output = Vec<u8>;
-
-    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        self.get_mut().rx.poll(cx).map(|res| res.unwrap())
+impl From<WindowId> for RenderTarget {
+    fn from(value: WindowId) -> Self {
+        Self::Window(value)
     }
 }

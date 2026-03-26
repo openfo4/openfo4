@@ -20,20 +20,15 @@ x11 = []
 [dependencies]
 game_window = { version = "0.1.0", path = "../game_window" }
 game_common = { version = "0.1.0", path = "../game_common" }
-game_asset = { version = "0.1.0", path = "../game_asset" }
 game_tracing = { version = "0.1.0", path = "../game_tracing" }
 game_tasks = { version = "0.1.0", path = "../game_tasks" }
 
 bytemuck = { version = "1.16.1", features = ["derive", "must_cast"] }
-futures-lite = "2.3.0"
 glam = { workspace = true, features = ["bytemuck"] }
 tracing = { version = "0.1.40", features = ["log-always"] }
-image = "0.25.1"
 parking_lot = "0.12.3"
 bitflags = { version = "2.6.0", features = ["bytemuck"] }
-slotmap = "1.0.7"
 mikktspace = "0.3.0"
-tokio = { version = "1.38.0", default-features = false, features = ["sync"] }
 thiserror = "1.0.61"
 bytes = "1.10.1"
 

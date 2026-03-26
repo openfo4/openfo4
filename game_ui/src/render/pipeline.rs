@@ -15,10 +15,10 @@ use game_render::backend::{
     FilterMode, FrontFace, ImageDataLayout, IndexFormat, LoadOp, PrimitiveTopology,
     SamplerDescriptor, ShaderStages, StoreOp, TextureDescriptor, TextureFormat, TextureUsage,
 };
-use game_render::camera::RenderTarget;
 use game_render::graph::{Node, RenderContext, SlotLabel};
 use game_render::pipeline_cache::{PipelineBuilder, PipelineCache};
 use game_render::shader::{Shader, ShaderConfig, ShaderLanguage, ShaderSource};
+use game_render::RenderTarget;
 use game_tracing::trace_span;
 use glam::UVec2;
 use parking_lot::{Mutex, RwLock};

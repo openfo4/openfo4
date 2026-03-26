@@ -3,7 +3,7 @@ use std::f32::consts::PI;
 use bytemuck::{Pod, Zeroable};
 use game_common::components::Transform;
 use game_common::math::Ray;
-use game_render::camera::RenderTarget;
+use game_render::RenderTarget;
 use glam::{Mat4, UVec2, Vec2, Vec3};
 
 use crate::entities::SceneHandle;

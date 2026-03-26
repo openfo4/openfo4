@@ -15,6 +15,7 @@ game_render = { version = "0.1.0", path = "../game_render" }
 game_common = { version = "0.1.0", path = "../game_common" }
 game_core = { version = "0.1.0", path = "../game_core" }
 game_tracing = { version = "0.1.0", path = "../game_tracing" }
+game_core_pipeline = { version = "0.1.0", path = "../game_core_pipeline" }
 glam = { workspace = true }
 
 gltf = "1.4.1"

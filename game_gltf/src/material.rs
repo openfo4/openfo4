@@ -1,5 +1,5 @@
 use game_common::components::Color;
-use game_render::pbr::AlphaMode;
+use game_core_pipeline::material::AlphaMode;
 
 #[derive(Clone, Debug)]
 pub struct GltfMaterial {

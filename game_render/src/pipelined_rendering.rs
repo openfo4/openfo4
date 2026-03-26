@@ -1,6 +1,6 @@
 use std::collections::{BTreeMap, HashMap};
 use std::marker::PhantomData;
-use std::sync::{mpsc, Arc};
+use std::sync::{Arc, mpsc};
 use std::time::Duration;
 
 use game_common::cell::UnsafeRefCell;
@@ -8,16 +8,16 @@ use game_tasks::park::Parker;
 use game_tracing::trace_span;
 use game_window::windows::{WindowId, WindowState};
 
+use crate::RenderTarget;
 use crate::api::queries::{ManagedQueryPool, QueryObject};
 use crate::api::{CommandExecutor, TextureRegion};
 use crate::backend::vulkan::{Adapter, Device, Instance, Queue};
 use crate::backend::{AccessFlags, QueuePresent, QueueSubmit, TextureDescriptor, TextureUsage};
-use crate::camera::RenderTarget;
 use crate::fps_limiter::{FpsLimit, FpsLimiter};
 use crate::graph::scheduler::RenderGraphScheduler;
 use crate::graph::{NodeLabel, RenderContext, RenderGraph, SlotLabel, SlotValueInner};
 use crate::statistics::{Pass, Statistics};
-use crate::surface::{RenderSurfaces, SurfaceConfig, MAX_FRAMES_IN_FLIGHT};
+use crate::surface::{MAX_FRAMES_IN_FLIGHT, RenderSurfaces, SurfaceConfig};
 
 #[derive(Clone, Debug)]
 pub enum Command {

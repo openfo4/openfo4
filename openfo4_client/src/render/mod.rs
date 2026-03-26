@@ -11,8 +11,8 @@ use game_core_pipeline::entities::{
 };
 use game_core_pipeline::lights::{AmbientLight, DirectionalLight, Light, PointLight};
 use game_gizmos::Gizmos;
+use game_render::RenderTarget;
 use game_render::Renderer;
-use game_render::camera::RenderTarget;
 use game_tasks::TaskPool;
 use game_tracing::trace_span;
 use glam::UVec2;

@@ -9,7 +9,7 @@ use std::sync::Arc;
 
 use events::{Event, EventHandlerId, EventHandlers, NodeDestroyed};
 use game_common::collections::arena::{Arena, Key};
-use game_render::camera::RenderTarget;
+use game_render::RenderTarget;
 use game_tasks::TaskPool;
 use game_tracing::trace_span;
 use game_window::cursor::Cursor;
@@ -253,8 +253,8 @@ impl<'a> RuntimeWindows<'a> {
     pub fn destroy(&self, target: RenderTarget) {
         let _span = trace_span!("RuntimeWindows::destroy").entered();
 
-        if let Some(window) = target.as_window() {
-            self.runtime.clipboard.lock().destroy(*window);
+        if let RenderTarget::Window(window) = target {
+            self.runtime.clipboard.lock().destroy(window);
         }
 
         let rt = self.runtime.inner.lock();
@@ -648,6 +648,9 @@ impl<'a> ClipboardRef<'a> {
         };
 
         // Images have no associated clipboard.
-        document.window.as_window().copied()
+        match document.window {
+            RenderTarget::Window(window) => Some(window),
+            _ => None,
+        }
     }
 }

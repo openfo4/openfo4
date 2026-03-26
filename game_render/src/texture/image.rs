@@ -133,27 +133,3 @@ impl PartialEq for &Image {
         self.bytes == other.bytes
     }
 }
-
-#[derive(Clone, Debug)]
-pub enum LoadImage {
-    Buffer(Vec<u8>),
-    File(PathBuf),
-}
-
-impl From<Vec<u8>> for LoadImage {
-    fn from(value: Vec<u8>) -> Self {
-        Self::Buffer(value)
-    }
-}
-
-impl From<PathBuf> for LoadImage {
-    fn from(value: PathBuf) -> Self {
-        Self::File(value)
-    }
-}
-
-impl<'a> From<&'a str> for LoadImage {
-    fn from(value: &'a str) -> Self {
-        Self::from(PathBuf::from(value))
-    }
-}

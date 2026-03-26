@@ -16,7 +16,6 @@ members = [
     "game_gltf",
     "game_tracing",
     "game_tasks",
-    "game_render_test",
     "game_core_pipeline",
     "openfo4_animation",
     "openfo4_client",

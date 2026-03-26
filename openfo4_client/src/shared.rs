@@ -1,11 +1,7 @@
 use std::collections::HashMap;
 use std::sync::RwLock;
 
-use game_common::collections::arena::Key;
-use game_core_pipeline::entities::{self, Entities, ImageHandle, MaterialHandle, MeshHandle};
-use game_render::entities::{ImageId, MaterialId, MeshId};
-use game_render::mesh::Mesh;
-use game_render::texture::Image;
+use game_core_pipeline::entities::{Entities, ImageHandle, MaterialHandle, MeshHandle};
 
 #[derive(Debug)]
 pub struct SharedState {
@@ -24,28 +20,4 @@ impl SharedState {
             meshes_map: RwLock::new(HashMap::new()),
         }
     }
-}
-
-#[derive(Clone, Debug)]
-pub enum MeshAsset {
-    Cpu(Mesh),
-    Gpu(MeshId),
-}
-
-#[derive(Clone, Debug)]
-pub enum MaterialAsset {
-    Cpu(Material),
-    Gpu(MaterialId),
-}
-
-#[derive(Clone, Debug)]
-pub enum ImageAsset {
-    Cpu(Image),
-    Gpu(ImageId),
-}
-
-#[derive(Copy, Clone, Debug, Default)]
-pub struct Material {
-    pub diffuse_texture: Option<Key>,
-    pub normal_texture: Option<Key>,
 }

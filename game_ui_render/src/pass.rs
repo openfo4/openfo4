@@ -4,6 +4,7 @@ use std::sync::Mutex;
 
 use bytemuck::{Pod, Zeroable};
 use crossbeam_channel::Receiver;
+use game_render::RenderTarget;
 use game_render::api::{
     BindingResource, CommandQueue, DescriptorSetDescriptor, DescriptorSetEntry,
     DescriptorSetLayout, DescriptorSetLayoutDescriptor, FragmentStage, Pipeline,
@@ -20,7 +21,6 @@ use game_render::buffer::GpuBuffer;
 use game_render::buffer::slab::{CompactSlabBuffer, SlabBuffer, SlabIndex};
 use game_render::buffer::suballocated::SubAllocatedGrowableBuffer;
 use game_render::buffer::texture_slab::{TextureSlab, TextureSlabIndex};
-use game_render::camera::RenderTarget;
 use game_render::graph::{Node, RenderContext, SlotLabel};
 use game_render::pipeline_cache::{PipelineBuilder, PipelineCache};
 use game_render::shader::{Shader, ShaderConfig, ShaderLanguage, ShaderSource};
