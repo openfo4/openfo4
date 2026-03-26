@@ -1,6 +1,5 @@
-use std::collections::HashMap;
-
 use game_common::string::Lowercase;
+use hashbrown::HashMap;
 use openfo4_jit::Type as JitType;
 
 use crate::compiler::codegen::{ClassDef, CodegenData, StructDef, Type};

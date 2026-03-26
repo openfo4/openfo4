@@ -1,6 +1,5 @@
-use std::collections::HashMap;
-
 use game_common::string::Lowercase;
+use hashbrown::HashMap;
 use openfo4_jit::Type as JitType;
 use openfo4_pex::{Instruction, Value};
 

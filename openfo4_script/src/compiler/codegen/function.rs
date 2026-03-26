@@ -1,7 +1,7 @@
-use std::collections::HashMap;
 use std::mem::offset_of;
 
 use game_common::string::Lowercase;
+use hashbrown::HashMap;
 use openfo4_jit::{
     Block, Compiler, FloatCompareOp, FuncId, FunctionBuilder, IntCompareOp, Signature,
     Type as JitType, Value as JitValue, Variable as JitVariable,
@@ -2186,7 +2186,7 @@ fn resumse_stack(
             // No next stage. `index` is guaranteed to be a valid stage index, so it must
             // be this stage.
             if stage.stages.get(i + 1).is_none() {
-                translator.builder.jump(resume_points[&stage_index], &[]);
+                translator.builder.jump(resume_points[stage_index], &[]);
                 continue;
             }
 
@@ -2199,7 +2199,7 @@ fn resumse_stack(
 
             translator
                 .builder
-                .brif(is_eq, resume_points[&stage_index], &[], next_block, &[]);
+                .brif(is_eq, resume_points[stage_index], &[], next_block, &[]);
 
             translator.builder.switch_to_block(next_block);
         }

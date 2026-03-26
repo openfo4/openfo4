@@ -1,8 +1,8 @@
 use std::alloc::Layout;
-use std::collections::HashMap;
 use std::sync::{Arc, LazyLock, Mutex};
 
 use game_common::string::Lowercase;
+use hashbrown::HashMap;
 
 use crate::compiler::{FieldType, ObjectField, ObjectProperty, TypeLayout};
 

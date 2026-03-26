@@ -1,9 +1,9 @@
-use std::collections::HashMap;
 use std::fmt::Debug;
 use std::mem::transmute;
 use std::sync::{Arc, RwLock};
 
 use game_common::string::Lowercase;
+use hashbrown::HashMap;
 use openfo4_jit::Type;
 use openfo4_pex::{Class, Module};
 

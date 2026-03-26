@@ -1,6 +1,5 @@
-use std::collections::{HashMap, HashSet};
-
 use game_tracing::trace_span;
+use hashbrown::{HashMap, HashSet};
 use indexmap::IndexSet;
 use openfo4_pex::{Class, Function, Instruction, Module, Property, Value};
 use thiserror::Error;

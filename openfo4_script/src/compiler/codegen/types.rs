@@ -1,6 +1,5 @@
-use std::collections::HashMap;
-
 use game_common::collections::arena::{Arena, Key};
+use hashbrown::HashMap;
 use indexmap::IndexMap;
 
 #[derive(Clone, Debug, Default)]

@@ -1,10 +1,10 @@
 mod codegen;
 mod validation;
 
-use std::collections::HashMap;
 use std::sync::Arc;
 
 use game_common::string::Lowercase;
+use hashbrown::HashMap;
 use openfo4_jit::{CompiledFunction, Signature};
 use openfo4_pex::Module;
 use thiserror::Error;

@@ -7,11 +7,11 @@ mod runtime;
 mod trampoline;
 mod types;
 
-use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 use game_common::string::Lowercase;
 use game_tracing::trace_span;
+use hashbrown::{HashMap, HashSet};
 use openfo4_jit::{Compiler, FuncId, Signature, Type as JitType};
 use openfo4_pex::{Class, Function, Instruction, Module, Struct, Value};
 use slab::Slab;
