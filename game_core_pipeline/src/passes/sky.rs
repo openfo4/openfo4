@@ -19,7 +19,7 @@ use game_render::graph::RenderContext;
 use game_render::mesh::Mesh;
 use game_render::shader::{ShaderConfig, ShaderLanguage, ShaderSource};
 use game_render::texture::image::MipImage;
-use glam::{Mat4, UVec2, Vec3};
+use glam::{Mat4, UVec2, Vec2, Vec3};
 use parking_lot::Mutex;
 
 use crate::camera::Camera;
@@ -238,6 +238,7 @@ impl SkyPass {
         let new_cloud_meshes = { self.state.lock().cloud_meshes.take() };
         let new_cloud_textures = { core::mem::take(&mut self.state.lock().cloud_textures) };
         let new_cloud_colors = { core::mem::take(&mut self.state.lock().cloud_colors) };
+        let new_cloud_uvs = { core::mem::take(&mut self.state.lock().cloud_uvs) };
 
         if let Some(meshes) = new_cloud_meshes {
             self.clouds.lock().update_meshes(ctx.queue, &meshes);
@@ -251,6 +252,10 @@ impl SkyPass {
 
         for (layer, color) in new_cloud_colors {
             self.clouds.lock().update_layer_color(layer, color);
+        }
+
+        for (layer, offset) in new_cloud_uvs {
+            self.clouds.lock().update_layer_uv_offset(layer, offset);
         }
 
         if let Some(mesh) = new_sky_mesh {
@@ -405,6 +410,7 @@ pub struct SkyState {
     pub cloud_meshes: Option<Vec<Mesh>>,
     pub cloud_textures: Vec<(usize, Option<MipImage>)>,
     pub cloud_colors: Vec<(usize, Color)>,
+    pub cloud_uvs: Vec<(usize, Vec2)>,
 }
 
 struct SkyMesh {

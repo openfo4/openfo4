@@ -5,6 +5,7 @@ use game_common::collections::arena::{Arena, Key};
 use game_common::components::{Color, Transform};
 use game_render::mesh::Mesh;
 use game_render::texture::image::MipImage;
+use glam::Vec2;
 use parking_lot::Mutex;
 
 use crate::StandardMaterial;
@@ -179,6 +180,10 @@ impl Entities {
 
     pub fn set_cloud_color(&self, layer: usize, color: Color) {
         self.sky.lock().cloud_colors.push((layer, color));
+    }
+
+    pub fn set_cloud_uv_offset(&self, layer: usize, offset: Vec2) {
+        self.sky.lock().cloud_uvs.push((layer, offset));
     }
 }
 

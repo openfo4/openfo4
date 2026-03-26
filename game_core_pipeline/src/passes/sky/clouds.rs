@@ -16,7 +16,7 @@ use game_render::buffer::texture_slab::{TextureSlab, TextureSlabIndex};
 use game_render::mesh::Mesh;
 use game_render::shader::{ShaderConfig, ShaderLanguage, ShaderSource};
 use game_render::texture::image::MipImage;
-use glam::{Mat4, UVec2};
+use glam::{Mat4, UVec2, Vec2};
 
 use crate::camera::Camera;
 use crate::passes::HDR_FORMAT;
@@ -224,8 +224,9 @@ impl CloudsPass {
 
         self.layers.resize_with(meshes.len(), || CloudLayer {
             color: [0.0; 4],
+            uv_offset: [0.0; 2],
             texture: TextureSlabIndex(u32::MAX),
-            _pad: [0; 3],
+            _pad: [0; 1],
         });
     }
 
@@ -280,6 +281,14 @@ impl CloudsPass {
         };
 
         layer.color = color.as_rgba();
+    }
+
+    pub fn update_layer_uv_offset(&mut self, layer: usize, offset: Vec2) {
+        let Some(layer) = self.layers.get_mut(layer) else {
+            return;
+        };
+
+        layer.uv_offset = offset.to_array();
     }
 
     pub fn render(&mut self, queue: &CommandQueue<'_>, camera: &Camera, target: &TextureView) {
@@ -363,6 +372,7 @@ struct Constants {
 #[repr(C)]
 struct CloudLayer {
     color: [f32; 4],
+    uv_offset: [f32; 2],
     texture: TextureSlabIndex,
-    _pad: [u32; 3],
+    _pad: [u32; 1],
 }

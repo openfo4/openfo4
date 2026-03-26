@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use std::time::Duration;
 
 use game_common::components::{AmbientLight, Color, DirectionalLight, Transform};
 use game_common::utils::vec_ext::VecExt;
@@ -9,7 +10,7 @@ use game_render::mesh::{Indices, Mesh};
 use game_render::texture::Image;
 use game_render::texture::image::MipImage;
 use game_tasks::TaskPool;
-use glam::{FloatExt, Quat, Vec3, Vec4};
+use glam::{FloatExt, Quat, Vec2, Vec3, Vec4};
 use hashbrown::HashMap;
 use hecs::{Entity, World};
 use openfo4_asset::AssetLoader;
@@ -36,6 +37,7 @@ pub struct WeatherSystem {
     ambient_light: Option<Entity>,
     sun_light: Option<Entity>,
     entities: Entities,
+    cloud_offsets: [Vec2; 32],
 }
 
 impl WeatherSystem {
@@ -82,10 +84,11 @@ impl WeatherSystem {
             ambient_light: None,
             sun_light: None,
             entities: shared.entities.clone(),
+            cloud_offsets: [Vec2::ZERO; 32],
         }
     }
 
-    pub fn update(&mut self, world: &mut World) {
+    pub fn update(&mut self, world: &mut World, delta: Duration) {
         let Some(time) = world
             .query::<&GameTime>()
             .iter()
@@ -174,6 +177,13 @@ impl WeatherSystem {
         for (layer, color) in params.cloud_colors.iter().enumerate() {
             self.entities.set_cloud_color(layer, *color);
         }
+
+        for (layer, speed) in weather.cloud_speed.iter().enumerate() {
+            let offset = &mut self.cloud_offsets[layer];
+            *offset = (*offset + speed * delta.as_secs_f32()) % 1.0;
+
+            self.entities.set_cloud_uv_offset(layer, *offset);
+        }
     }
 }
 
@@ -188,6 +198,7 @@ struct Weather {
     params: Vec<WeatherParams>,
     phases: Vec<WeatherPhase>,
     clouds: [Option<MipImage>; 32],
+    cloud_speed: [Vec2; 32],
 }
 
 impl Weather {
@@ -572,6 +583,20 @@ async fn load_worldspace_weather_props(
             clouds[index] = Some(MipImage::new(mips));
         }
 
+        let mut cloud_speed = [Vec2::ZERO; 32];
+        for (i, (x, y)) in weather
+            .cloud_speed_x
+            .0
+            .into_iter()
+            .zip(weather.cloud_speed_y.0)
+            .enumerate()
+        {
+            // The representable values are between -0.1 and 0.1.
+            // It seems that with factor 0.1 the textures repeates every 100 seconds,
+            // therefore we need the extra factor of 0.1 here.
+            cloud_speed[i] = Vec2::new(x, y) * 0.1;
+        }
+
         fn to_params<F>(
             weather: &openfo4_esp::records::Weather,
             dir_light_index: usize,
@@ -740,6 +765,7 @@ async fn load_worldspace_weather_props(
             params,
             phases,
             clouds,
+            cloud_speed,
         });
     }
 
