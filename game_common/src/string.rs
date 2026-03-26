@@ -40,6 +40,25 @@ impl Lowercase<String> {
 }
 
 impl Lowercase<str> {
+    /// Creates a `&Lowercase<str>` from a static `str`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the given `str` is not fully lowercase.
+    pub const fn from_static(s: &'static str) -> &'static Self {
+        let mut i = 0;
+        while i < s.as_bytes().len() {
+            if !s.as_bytes()[i].is_ascii_lowercase() {
+                panic!("string passed to Lowercase::<str>::from_static is not ASCII lowercase (non-ascii is not yet supported)");
+            }
+
+            i += 1;
+        }
+
+        // SAFETY: We have validated that all chars are lowercase.
+        unsafe { Self::from_str(s) }
+    }
+
     /// Returns a string slice with the prefix removed.
     pub fn strip_prefix(&self, prefix: &str) -> Option<&Self> {
         let s = self.0.strip_prefix(prefix)?;
@@ -57,7 +76,7 @@ impl Lowercase<str> {
     /// # Safety
     ///
     /// The string must represent an all-lowercase string.
-    unsafe fn from_str(s: &str) -> &Lowercase<str> {
+    const unsafe fn from_str(s: &str) -> &Lowercase<str> {
         // SAFETY: Lowercase<T> is repr(transparent) with contents T.
         unsafe { core::mem::transmute::<&str, &Lowercase<str>>(s) }
     }
