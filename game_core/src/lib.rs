@@ -1,6 +1,5 @@
 //! The core game systems.
 
-pub mod command;
 pub mod counter;
 pub mod debug;
 pub mod dirs;

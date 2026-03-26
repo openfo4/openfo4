@@ -14,16 +14,10 @@ workspace = true
 [dependencies]
 ahash = "0.8.11"
 glam = { workspace = true }
-tracing = "0.1.40"
 
-serde = { version = "1.0.204", features = ["derive"] }
 thiserror = "1.0.38"
-uuid = { version = "1.9.1", features = ["serde", "fast-rng", "v4"] }
-image = "0.25.1"
-bytemuck = { version = "1.16.1", features = ["derive"] }
 num-traits = "0.2.19"
 parking_lot = "0.12.3"
-bincode = "1.3.3"
 allocator-api2 = "0.2.21"
 
 game_wasm = { version = "0.1.0", path = "../game_wasm" }

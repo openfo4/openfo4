@@ -14,15 +14,11 @@ workspace = true
 
 [dependencies]
 game_common = { version = "0.1.0", path = "../game_common" }
-game_wasm = { version = "0.1.0", path = "../game_wasm" }
 game_tracing = { version = "0.1.0", path = "../game_tracing" }
 
 tracing = "0.1.40"
 chrono = "0.4.38"
 parking_lot = "0.12.3"
-tokio = { version = "1.38.0", features = ["full"] }
-thiserror = "1.0.61"
-slotmap = "1.0.7"
 glam = { workspace = true }
 async-io = "2.3.3"
 

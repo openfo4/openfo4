@@ -1,7 +1,6 @@
 use std::num::NonZeroU32;
 use std::time::Duration;
 
-use game_common::components::object;
 use openfo4_script::engine::Engine;
 use openfo4_script::runtime::{Caller, Exception};
 
