@@ -104,6 +104,8 @@ impl CommandExecutor {
     pub fn execute(&mut self, encoder: &mut CommandEncoder<'_>) -> TemporaryResources {
         let _span = trace_span!("CommandExecutor::execute").entered();
 
+        self.drain_cache();
+
         let allocator = self.allocator.get_mut();
 
         let cmd_stream = self.cmds.get_mut();
@@ -135,18 +137,18 @@ impl CommandExecutor {
         while let Some(cmd) = self.resources.deletion_queue.pop() {
             match cmd {
                 DeletionEvent::Buffer(id) => {
-                    self.resources.destroy_buffer(id);
+                    debug_assert_eq!(self.resources.with_buffer_rc(id, |rc| rc.external()), 0);
+                    debug_assert_eq!(self.resources.with_buffer_rc(id, |rc| rc.internal()), 0);
 
-                    self.cmds
-                        .lock()
-                        .push(&self.resources, Command::DestoryBuffer(id));
+                    let descriptor = self.resources.buffer_descriptor(id);
+                    self.resources.cache.lock().insert_buffer(descriptor, id);
                 }
                 DeletionEvent::Texture(id) => {
-                    self.resources.destroy_texture(id);
+                    debug_assert_eq!(self.resources.with_texture_rc(id, |rc| rc.external()), 0);
+                    debug_assert_eq!(self.resources.with_texture_rc(id, |rc| rc.internal()), 0);
 
-                    self.cmds
-                        .lock()
-                        .push(&self.resources, Command::DestroyTexture(id));
+                    let descriptor = self.resources.texture_descriptor(id);
+                    self.resources.cache.lock().insert_texture(descriptor, id);
                 }
                 DeletionEvent::DescriptorSetLayout(id) => {
                     self.resources.descriptor_set_layouts.remove(id.0);
@@ -214,6 +216,27 @@ impl CommandExecutor {
             }
         }
     }
+
+    fn drain_cache(&mut self) {
+        let mut cache = self.resources.cache.lock();
+        let mut cmds = self.cmds.lock();
+
+        for id in cache.drain_buffers() {
+            debug_assert_eq!(self.resources.with_buffer_rc(id, |rc| rc.external()), 0);
+            debug_assert_eq!(self.resources.with_buffer_rc(id, |rc| rc.internal()), 0);
+
+            self.resources.destroy_buffer(id);
+            cmds.push(&self.resources, Command::DestoryBuffer(id));
+        }
+
+        for id in cache.drain_textures() {
+            debug_assert_eq!(self.resources.with_texture_rc(id, |rc| rc.external()), 0);
+            debug_assert_eq!(self.resources.with_texture_rc(id, |rc| rc.internal()), 0);
+
+            self.resources.destroy_texture(id);
+            cmds.push(&self.resources, Command::DestroyTexture(id));
+        }
+    }
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
@@ -250,7 +273,25 @@ impl<'a> CommandQueue<'a> {
     pub fn create_buffer(&self, descriptor: &BufferDescriptor) -> Buffer {
         assert_ne!(descriptor.size, 0, "cannot create empty buffers");
 
-        let id = self.executor.resources.create_buffer();
+        let resources = &self.executor.resources;
+        if let Some(id) = resources.cache.lock().take_buffer(descriptor) {
+            debug_assert_eq!(resources.with_buffer_rc(id, |rc| rc.internal()), 0);
+            debug_assert_eq!(resources.with_buffer_rc(id, |rc| rc.internal()), 0);
+
+            resources.with_buffer_rc(id, |rc| {
+                rc.increment_external();
+            });
+
+            return Buffer {
+                id,
+                size: descriptor.size,
+                usage: descriptor.usage,
+                flags: descriptor.flags,
+                resources: resources.clone(),
+            };
+        }
+
+        let id = self.executor.resources.create_buffer(*descriptor);
 
         self.executor.cmds.lock().push(
             &self.executor.resources,
@@ -399,12 +440,32 @@ impl<'a> CommandQueue<'a> {
             .unwrap_or(TextureUsage::empty());
         if supported_usages.contains(descriptor.usage) {}
 
+        let resources = &self.executor.resources;
+        if let Some(id) = resources.cache.lock().take_texture(descriptor) {
+            debug_assert_eq!(resources.with_texture_rc(id, |rc| rc.external()), 0);
+            debug_assert_eq!(resources.with_texture_rc(id, |rc| rc.internal()), 0);
+
+            resources.with_texture_rc(id, |rc| {
+                rc.increment_external();
+            });
+
+            return Texture {
+                id,
+                size: descriptor.size,
+                format: descriptor.format,
+                usage: descriptor.usage,
+                mip_levels: descriptor.mip_levels,
+                manually_managed: false,
+                resources: resources.clone(),
+            };
+        }
+
         let mut mip_access = Vec::with_capacity(descriptor.mip_levels as usize);
         for _ in 0..descriptor.mip_levels {
             mip_access.push(UnsafeRefCell::new(AccessFlags::empty()));
         }
 
-        let id = self.executor.resources.create_texture(descriptor);
+        let id = self.executor.resources.create_texture(*descriptor);
 
         self.executor.cmds.lock().push(
             &self.executor.resources,
@@ -453,7 +514,7 @@ impl<'a> CommandQueue<'a> {
             mip_access.push(UnsafeRefCell::new(access));
         }
 
-        let id = self.executor.resources.create_texture(&descriptor);
+        let id = self.executor.resources.create_texture(descriptor);
 
         self.executor.cmds.lock().push(
             &self.executor.resources,
@@ -1355,7 +1416,9 @@ impl<'a> CommandQueue<'a> {
         // FIXME: Allow explicitly passing viewport size.
         if descriptor.color_attachments.is_empty() && descriptor.depth_stencil_attachment.is_none()
         {
-            panic!("Either a color target or depth target must be passed to run_render_pass.\nThis currently is a workaround for not being able to specify the render viewport size.");
+            panic!(
+                "Either a color target or depth target must be passed to run_render_pass.\nThis currently is a workaround for not being able to specify the render viewport size."
+            );
         }
 
         let color_attachments = descriptor
@@ -1770,7 +1833,7 @@ impl Drop for Buffer {
     }
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct BufferDescriptor {
     pub size: u64,
     pub usage: BufferUsage,

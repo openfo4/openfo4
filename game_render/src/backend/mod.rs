@@ -668,7 +668,7 @@ impl<'a> BufferView<'a> {
     }
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct TextureDescriptor {
     pub size: UVec2,
     pub mip_levels: u32,

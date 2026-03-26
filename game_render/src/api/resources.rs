@@ -1,5 +1,5 @@
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 use crossbeam_queue::SegQueue;
 use game_common::collections::slab;
@@ -8,9 +8,10 @@ use hashbrown::HashMap;
 use parking_lot::{Mutex, MutexGuard};
 use sharded_slab::Slab;
 
+use crate::api::BufferDescriptor;
 use crate::backend::descriptors::DescriptorSetAllocator;
 use crate::backend::vulkan::Device;
-use crate::backend::{vulkan, AccessFlags, DescriptorBinding, TextureDescriptor};
+use crate::backend::{AccessFlags, DescriptorBinding, TextureDescriptor, vulkan};
 
 use super::{BindingMap, DeletionEvent, RawTextureView, ResourceId, ResourceMap};
 
@@ -55,11 +56,14 @@ pub struct Resources {
     /// Staging memory used to `WriteBuffer` commands.
     pub staging_memory: Mutex<Vec<u8>>,
     // FIXME: These can go behind the same lock.
+    buffers: Mutex<slab::Slab<BufferDescriptor>>,
     buffer_rcs: Mutex<slab::Slab<RefCount>>,
+    textures: Mutex<slab::Slab<TextureDescriptor>>,
     buffer_access: Mutex<slab::Slab<AccessFlags>>,
     texture_rcs: Mutex<slab::Slab<RefCount>>,
     // FIXME: Can we flatten this array?
     texture_access: Mutex<slab::Slab<Vec<AccessFlags>>>,
+    pub cache: Mutex<CachePool>,
 }
 
 impl Resources {
@@ -72,22 +76,33 @@ impl Resources {
             samplers: Slab::new(),
             deletion_queue: SegQueue::new(),
             staging_memory: Mutex::new(Vec::new()),
+            buffers: Mutex::new(slab::Slab::new()),
             buffer_rcs: Mutex::new(slab::Slab::new()),
             buffer_access: Mutex::new(slab::Slab::new()),
+            textures: Mutex::new(slab::Slab::new()),
             texture_rcs: Mutex::new(slab::Slab::new()),
             texture_access: Mutex::new(slab::Slab::new()),
+            cache: Mutex::new(CachePool::default()),
         }
     }
 
-    pub fn create_buffer(&self) -> BufferId {
+    pub fn create_buffer(&self, descriptor: BufferDescriptor) -> BufferId {
+        let mut buffers = self.buffers.lock();
         let mut buffer_rcs = self.buffer_rcs.lock();
         let mut buffer_access = self.buffer_access.lock();
 
         let index0 = buffer_rcs.insert(RefCount::new());
         let index1 = buffer_access.insert(AccessFlags::empty());
+        let index2 = buffers.insert(descriptor);
         debug_assert_eq!(index0, index1);
+        debug_assert_eq!(index0, index2);
 
         BufferId(index0)
+    }
+
+    pub fn buffer_descriptor(&self, id: BufferId) -> BufferDescriptor {
+        let buffers = self.buffers.lock();
+        *buffers.get(id.0).unwrap()
     }
 
     pub fn with_buffer_rc<T, F>(&self, id: BufferId, f: F) -> T
@@ -100,23 +115,33 @@ impl Resources {
     }
 
     pub fn destroy_buffer(&self, id: BufferId) {
+        let mut buffers = self.buffers.lock();
         let mut buffer_rcs = self.buffer_rcs.lock();
         let mut buffer_access = self.buffer_access.lock();
 
+        buffers.remove(id.0);
         buffer_rcs.remove(id.0);
         buffer_access.remove(id.0);
     }
 
-    pub fn create_texture(&self, descriptor: &TextureDescriptor) -> TextureId {
+    pub fn create_texture(&self, descriptor: TextureDescriptor) -> TextureId {
+        let mut textures = self.textures.lock();
         let mut texture_rcs = self.texture_rcs.lock();
         let mut texture_access = self.texture_access.lock();
 
         let index0 = texture_rcs.insert(RefCount::new());
         let index1 =
             texture_access.insert(vec![AccessFlags::empty(); descriptor.mip_levels as usize]);
+        let index2 = textures.insert(descriptor);
         debug_assert_eq!(index0, index1);
+        debug_assert_eq!(index0, index2);
 
         TextureId(index0)
+    }
+
+    pub fn texture_descriptor(&self, id: TextureId) -> TextureDescriptor {
+        let textures = self.textures.lock();
+        *textures.get(id.0).unwrap()
     }
 
     pub fn with_texture_rc<T, F>(&self, id: TextureId, f: F) -> T
@@ -129,9 +154,11 @@ impl Resources {
     }
 
     pub fn destroy_texture(&self, id: TextureId) {
+        let mut textures = self.textures.lock();
         let mut texture_rcs = self.texture_rcs.lock();
         let mut texture_access = self.texture_access.lock();
 
+        textures.remove(id.0);
         texture_rcs.remove(id.0);
         texture_access.remove(id.0);
     }
@@ -246,6 +273,10 @@ impl RefCount {
         self.external.load(Ordering::Relaxed)
     }
 
+    pub fn internal(&self) -> usize {
+        self.internal.load(Ordering::Relaxed)
+    }
+
     pub fn increment_internal(&self) {
         self.internal.fetch_add(1, Ordering::Relaxed);
     }
@@ -278,5 +309,37 @@ impl RefCount {
         // update before the internal update.
         self.external.fetch_sub(1, Ordering::Relaxed);
         self.decrement_many_internal(1)
+    }
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct CachePool {
+    buffers: HashMap<BufferDescriptor, Vec<BufferId>>,
+    textures: HashMap<TextureDescriptor, Vec<TextureId>>,
+}
+
+impl CachePool {
+    pub fn insert_buffer(&mut self, descriptor: BufferDescriptor, id: BufferId) {
+        self.buffers.entry(descriptor).or_default().push(id);
+    }
+
+    pub fn take_buffer(&mut self, descriptor: &BufferDescriptor) -> Option<BufferId> {
+        self.buffers.get_mut(descriptor).and_then(|vec| vec.pop())
+    }
+
+    pub fn insert_texture(&mut self, descriptor: TextureDescriptor, id: TextureId) {
+        self.textures.entry(descriptor).or_default().push(id);
+    }
+
+    pub fn take_texture(&mut self, descriptor: &TextureDescriptor) -> Option<TextureId> {
+        self.textures.get_mut(descriptor).and_then(|vec| vec.pop())
+    }
+
+    pub fn drain_buffers(&mut self) -> impl Iterator<Item = BufferId> {
+        self.buffers.drain().map(|(_, v)| v.into_iter()).flatten()
+    }
+
+    pub fn drain_textures(&mut self) -> impl Iterator<Item = TextureId> {
+        self.textures.drain().map(|(_, v)| v.into_iter()).flatten()
     }
 }

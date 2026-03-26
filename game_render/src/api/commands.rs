@@ -7,7 +7,7 @@ use parking_lot::Mutex;
 
 use crate::api::BufferDescriptor;
 use crate::backend::{
-    vulkan, AccessFlags, ImageDataLayout, LoadOp, ShaderStages, StoreOp, TextureDescriptor,
+    AccessFlags, ImageDataLayout, LoadOp, ShaderStages, StoreOp, TextureDescriptor, vulkan,
 };
 
 use super::resources::{DescriptorSetId, DescriptorSetResource, PipelineId};
