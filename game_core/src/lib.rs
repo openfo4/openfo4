@@ -6,5 +6,4 @@ pub mod debug;
 pub mod dirs;
 pub mod hierarchy;
 pub mod logger;
-pub mod modules;
 pub mod time;
