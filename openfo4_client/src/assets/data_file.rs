@@ -1,4 +1,3 @@
-use std::io::Read;
 use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
 
@@ -50,13 +49,10 @@ where
         path: &Self::Key,
         ctx: &Self::Context,
     ) -> Result<Self, Self::Error> {
-        let mut reader = ctx.loader.open(path).await.map_err(|err| match err {
+        let buf = ctx.loader.read(path).await.map_err(|err| match err {
             crate::loader::Error::NotFound(_) => Error::NotFound,
             err => Error::from(err),
         })?;
-
-        let mut buf = Vec::new();
-        reader.read_to_end(&mut buf)?;
 
         let asset = T::decode(&buf)?;
         Ok(Self(asset))

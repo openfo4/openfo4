@@ -69,9 +69,7 @@ impl Executor {
             if path.components().next().is_some_and(|v| v == "scripts")
                 && path.extension().is_some_and(|v| v == "pex")
             {
-                let mut reader = file_loader.open(path).await.unwrap();
-                let mut buf = Vec::new();
-                reader.read_to_end(&mut buf).unwrap();
+                let buf = file_loader.read(path).await.unwrap();
 
                 let module = Module::decode(&buf[..]).unwrap();
                 engine.register(&module);

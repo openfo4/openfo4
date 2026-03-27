@@ -1,11 +1,11 @@
-use std::io::{self, Cursor, Read, Seek};
+use std::io;
 use std::path::{Path, PathBuf};
 
 use game_tracing::trace_span;
 use hashbrown::HashMap;
 use openfo4_ba2::Archive;
 use openfo4_core::path::{DataPath, DataPathBuf};
-use openfo4_io::fs::File;
+use openfo4_io::fs::{AsyncReadAt, File};
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -83,7 +83,7 @@ impl FileLoader {
         Self { sources, files }
     }
 
-    pub async fn open(&self, path: &DataPath) -> Result<Reader, Error> {
+    pub async fn read(&self, path: &DataPath) -> Result<Vec<u8>, Error> {
         tracing::debug!("loading {}", path);
 
         let Some(index) = self.files.get(path) else {
@@ -92,13 +92,17 @@ impl FileLoader {
 
         match &self.sources[*index] {
             Source::Directory(source) => {
-                let path = source.files.get(path).unwrap();
-                let file = std::fs::File::open(path).map_err(Error::Io)?;
-                Ok(Reader::File(file))
+                let entry = source.files.get(path).unwrap();
+                let file = File::open(&entry.path).map_err(Error::Io)?;
+
+                let mut buf = vec![0; entry.len as usize];
+                file.read_exact_at(&mut buf, 0).await.map_err(Error::Io)?;
+
+                Ok(buf)
             }
             Source::Archive(archive) => {
                 let buf = archive.read(&path).await.map_err(Error::Ba2)?;
-                Ok(Reader::Archive(Cursor::new(buf)))
+                Ok(buf)
             }
         }
     }
@@ -116,39 +120,8 @@ enum Source {
 }
 
 #[derive(Debug)]
-pub enum Reader {
-    File(std::fs::File),
-    Archive(Cursor<Vec<u8>>),
-}
-
-impl Read for Reader {
-    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
-        match self {
-            Self::File(f) => f.read(buf),
-            Self::Archive(v) => v.read(buf),
-        }
-    }
-
-    fn read_to_end(&mut self, buf: &mut Vec<u8>) -> io::Result<usize> {
-        match self {
-            Self::File(f) => f.read_to_end(buf),
-            Self::Archive(v) => v.read_to_end(buf),
-        }
-    }
-}
-
-impl Seek for Reader {
-    fn seek(&mut self, pos: io::SeekFrom) -> io::Result<u64> {
-        match self {
-            Self::File(f) => f.seek(pos),
-            Self::Archive(v) => v.seek(pos),
-        }
-    }
-}
-
-#[derive(Debug)]
 struct DirectorySource {
-    files: HashMap<DataPathBuf, PathBuf>,
+    files: HashMap<DataPathBuf, FileEntry>,
 }
 
 impl DirectorySource {
@@ -181,11 +154,23 @@ impl DirectorySource {
                     let name = file_path.strip_prefix(&root_dir).unwrap();
                     let name = DataPathBuf::new(name.to_str().unwrap());
 
-                    files.insert(name, file_path);
+                    files.insert(
+                        name,
+                        FileEntry {
+                            path: file_path,
+                            len: meta.len(),
+                        },
+                    );
                 }
             }
         }
 
         Ok(Self { files })
     }
+}
+
+#[derive(Clone, Debug)]
+struct FileEntry {
+    path: PathBuf,
+    len: u64,
 }
