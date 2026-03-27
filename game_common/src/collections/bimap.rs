@@ -1,9 +1,8 @@
 use std::borrow::Borrow;
-use std::collections::hash_map;
 use std::hash::Hash;
 use std::iter::FusedIterator;
 
-use ahash::HashMap;
+use hashbrown::{hash_map, HashMap};
 
 /// A bidirectional hashmap.
 ///

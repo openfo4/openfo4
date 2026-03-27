@@ -3,7 +3,7 @@ use std::cell::UnsafeCell;
 use std::hash::{Hash, Hasher};
 use std::ptr::NonNull;
 
-use ahash::{HashMap, HashMapExt};
+use hashbrown::HashMap;
 
 use crate::cell::UnsafeRefCell;
 

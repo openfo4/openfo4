@@ -12,12 +12,12 @@ default = []
 workspace = true
 
 [dependencies]
-ahash = "0.8.11"
 glam = { workspace = true }
 
 thiserror = "1.0.38"
 num-traits = "0.2.19"
 parking_lot = "0.12.3"
 allocator-api2 = "0.2.21"
+hashbrown = "0.16.1"
 
 game_wasm = { version = "0.1.0", path = "../game_wasm" }
