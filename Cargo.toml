@@ -36,6 +36,7 @@ resolver = "2"
 # Core
 glam = "0.32.1"
 hecs = "0.10.5"
+hashbrown = "0.16.1"
 
 [workspace.lints.rust]
 renamed_and_removed_lints = "forbid"

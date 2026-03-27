@@ -38,7 +38,7 @@ slab = { version = "0.4.9", git = "https://github.com/MrGunflame/slab", branch =
 crossbeam-queue = "0.3.12"
 nohash-hasher = "0.2.0"
 bumpalo = { version = "3.17.0", features = ["allocator-api2"] }
-hashbrown = { version = "0.15.2", features = ["allocator-api2"] }
+hashbrown = { workspace = true, features = ["allocator-api2"] }
 allocator-api2 = "0.2.21"
 sharded-slab = "0.1.7"
 
