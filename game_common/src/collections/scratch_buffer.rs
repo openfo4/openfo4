@@ -60,11 +60,16 @@ where
         self.len.get()
     }
 
+    // False positive, we return a different `&mut T` value on every call,
+    // similar to how allocator functions behave.
     pub fn insert(&self, value: T) -> &mut T {
         self.try_insert(value)
             .unwrap_or_else(|_| panic!("ScratchBuffer is full"))
     }
 
+    // False positive, we return a different `&mut T` value on every call,
+    // similar to how allocator functions behave.
+    #[expect(clippy::mut_from_ref)]
     pub fn try_insert(&self, value: T) -> Result<&mut T, T> {
         if self.len.get() == self.cap {
             Err(value)

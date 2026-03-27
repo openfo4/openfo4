@@ -47,7 +47,7 @@ impl Lowercase<str> {
     /// Panics if the given `str` is not fully lowercase.
     pub const fn from_static(s: &'static str) -> &'static Self {
         let mut i = 0;
-        while i < s.as_bytes().len() {
+        while i < s.len() {
             if !s.as_bytes()[i].is_ascii_lowercase() {
                 panic!("string passed to Lowercase::<str>::from_static is not ASCII lowercase (non-ascii is not yet supported)");
             }
@@ -88,7 +88,7 @@ pub trait ToLowercase {
     fn to_lowercase(&self) -> Self::Target;
 }
 
-impl<'a> ToLowercase for &'a str {
+impl ToLowercase for &str {
     type Target = String;
 
     fn to_lowercase(&self) -> Self::Target {

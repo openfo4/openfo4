@@ -85,7 +85,7 @@ impl<T> Queue<T> {
             // SAFETY: The `head != tail` indicates that the value at `tail`
             // has been initialized and the buffer is not currently borrowed.
             // at that index.
-            let value = unsafe { (&mut *self.buf.get_unchecked(tail).get()).assume_init_read() };
+            let value = unsafe { (&*self.buf.get_unchecked(tail).get()).assume_init_read() };
 
             let new_tail = (tail + 1) % self.buffer_capacity();
 
@@ -137,7 +137,7 @@ impl<T> Queue<T> {
 
 impl<T> Drop for Queue<T> {
     fn drop(&mut self) {
-        while let Some(_) = self.pop() {}
+        while self.pop().is_some() {}
     }
 }
 

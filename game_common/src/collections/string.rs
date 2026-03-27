@@ -27,7 +27,7 @@ impl SmallStr {
             Buffer::Inline(arr, len) => unsafe {
                 core::str::from_utf8_unchecked(arr.get_unchecked(..*len as usize))
             },
-            Buffer::Shared(s) => &s,
+            Buffer::Shared(s) => s,
         }
     }
 }
