@@ -6,7 +6,7 @@ use hashbrown::{HashMap, HashSet};
 use openfo4_core::record::RecordId;
 use openfo4_esp::vmad::{Property, Script, Value};
 use openfo4_esp::{FormId, RecordData, RecordKind};
-use openfo4_script::compiler::{FieldType, ObjectField, ObjectProperty, TypeLayout};
+use openfo4_script::compiler::resources::{PropertyType, TypeId};
 use openfo4_script::engine::{Engine, Instance};
 use openfo4_script::runtime::object::{IntoValue, ObjectArrayBuilder, ObjectBuilder};
 use openfo4_script::runtime::{ObjectAddr, ObjectRef};
@@ -100,7 +100,7 @@ impl ScriptLoader {
             })
             .collect();
 
-        let id = state.objects.insert(scripts, None);
+        let id = state.objects.insert(&engine, scripts, None);
 
         ScriptObject(Arc::new(ScriptObjectInner {
             base: object.0.base,
@@ -331,7 +331,7 @@ async fn instantiate_form(
         let instance = compiled_classes
             .entry(base_class_name.to_owned())
             .or_insert_with(|| engine.compile(base_class_name, &COMPILER_OPTIONS));
-        let layout = engine.get_class_layout(base_class_name).unwrap();
+        let layout = engine.get_type(base_class_name).unwrap();
         let builder = engine.object_pool().insert(layout.clone());
 
         scripts.insert(
@@ -347,7 +347,7 @@ async fn instantiate_form(
             let instance = compiled_classes
                 .entry(script.name.clone())
                 .or_insert_with(|| engine.compile(&script.name, &COMPILER_OPTIONS));
-            let layout = engine.get_class_layout(&script.name).unwrap();
+            let layout = engine.get_type(&script.name).unwrap();
             let builder = engine.object_pool().insert(layout.clone());
 
             scripts.insert(
@@ -370,7 +370,7 @@ async fn instantiate_form(
             let instance = compiled_classes
                 .entry(base_class_name.to_owned())
                 .or_insert_with(|| engine.compile(base_class_name, &COMPILER_OPTIONS));
-            let layout = engine.get_class_layout(base_class_name).unwrap();
+            let layout = engine.get_type(base_class_name).unwrap();
             let builder = engine.object_pool().insert(layout.clone());
 
             scripts.insert(
@@ -386,7 +386,7 @@ async fn instantiate_form(
                 let instance = compiled_classes
                     .entry(script.name.clone())
                     .or_insert_with(|| engine.compile(&script.name, &COMPILER_OPTIONS));
-                let layout = engine.get_class_layout(&script.name).unwrap();
+                let layout = engine.get_type(&script.name).unwrap();
                 let builder = engine.object_pool().insert(layout.clone());
 
                 scripts.insert(
@@ -449,7 +449,7 @@ async fn instantiate_form(
                 );
             }
 
-            let layout = engine.get_class_layout(&name).unwrap();
+            let layout = engine.get_type(&name).unwrap();
             final_instances.push(ScriptInstance {
                 instance: object.instance,
                 layout: layout.clone(),
@@ -459,7 +459,7 @@ async fn instantiate_form(
         }
 
         debug_assert!(state.objects.get_by_record(record).is_none());
-        let id = state.objects.insert(final_instances, Some(record));
+        let id = state.objects.insert(engine, final_instances, Some(record));
 
         if record == root {
             root_id = Some(id);
@@ -488,7 +488,7 @@ async fn instantiate_form(
                 );
             }
 
-            let layout = engine.get_class_layout(&name).unwrap();
+            let layout = engine.get_type(&name).unwrap();
             final_instances.push(ScriptInstance {
                 instance: object.instance,
                 layout: layout.clone(),
@@ -497,7 +497,7 @@ async fn instantiate_form(
             });
         }
 
-        let id = state.objects.insert(final_instances, None);
+        let id = state.objects.insert(engine, final_instances, None);
         compiled_aliases.insert(
             key,
             ScriptObject(Arc::new(ScriptObjectInner { base: None, id })),
@@ -693,7 +693,8 @@ fn build_script_object(
     builder: &mut ObjectBuilder,
     script_defined_in: RecordId,
 ) -> ObjectRef {
-    let layout = engine.get_class_layout(&script.name).unwrap();
+    let ty = engine.get_type(&script.name).unwrap();
+    let layout = engine.type_info(ty);
 
     #[derive(Copy, Clone, Debug)]
     struct Entry<'a> {
@@ -756,16 +757,16 @@ fn build_script_object(
                 // For classes we must resolve the property to a variable name,
                 // for structs we can diretly use the property name.
                 if entry.builder_index == 0 {
-                    let var = layout
+                    let ((_, name), _) = layout
                         .properties
                         .iter()
                         // We can also set property on parent classes.
                         // FIXME: Ensure that child properties are preferred when present on both child and
                         // parent classes.
-                        .find(|p| p.name == Lowercase::new(property.name.as_str()))
+                        .find(|((_, name), _)| *name == Lowercase::new(property.name.as_str()))
                         .unwrap();
 
-                    (script.name.as_str(), var.name.as_str().as_inner(), 0)
+                    (script.name.as_str(), name.as_str().as_inner(), 0)
                 } else {
                     ("", property.name.as_str(), 0)
                 }
@@ -778,6 +779,7 @@ fn build_script_object(
             EntryInner::Value(value, _) => value,
         };
 
+        dbg!(&value);
         match value {
             Value::Bool(value) => {
                 builder.set(class_name, var_name, array_index, *value);
@@ -794,6 +796,8 @@ fn build_script_object(
             }
             Value::Object(value) => {
                 let id = resolve_form(value.form);
+
+                dbg!(value);
 
                 let addr = if let Some(alias) = value.alias {
                     let scripts = aliases
@@ -826,6 +830,8 @@ fn build_script_object(
                     }
                 };
 
+                dbg!(&class_name, &var_name, array_index);
+
                 builder.set(class_name, var_name, array_index, addr);
             }
             Value::Struct(fields, _) => {
@@ -836,9 +842,16 @@ fn build_script_object(
                     let builder = &mut builders[entry.builder_index];
                     builder.set(class_name, var_name, array_index, object.addr());
                 } else {
-                    // First time we see this struct.
-                    let layout = build_struct_layout(&fields);
-                    let object = engine.object_pool().insert(layout);
+                    let prop = layout
+                        .properties
+                        .get(&(Lowercase::new(class_name), Lowercase::new(var_name)))
+                        .unwrap();
+
+                    let PropertyType::Pointer(ty) = prop.ty else {
+                        todo!();
+                    };
+
+                    let object = engine.object_pool().insert(ty);
 
                     let builder_index = builders.len();
                     builders.push(Builder::Object(object));
@@ -862,13 +875,30 @@ fn build_script_object(
                 if entry.pop_builder {
                     let object = builders.pop().unwrap().finalize();
 
+                    dbg!(object.addr());
+
                     // Reborrow after pop
                     let builder = &mut builders[entry.builder_index];
                     builder.set(class_name, var_name, array_index, object.addr());
                 } else {
                     // First time we see this array.
-                    let elem_layout = build_array_layout(values);
-                    let object = engine.object_pool().insert_array(elem_layout, values.len());
+                    let prop = layout
+                        .properties
+                        .get(&(Lowercase::new(class_name), Lowercase::new(var_name)))
+                        .unwrap();
+                    dbg!(&prop);
+
+                    let PropertyType::ArrayPointer(ty) = prop.ty else {
+                        todo!();
+                    };
+
+                    let elem_ty = if is_primitive(engine, ty) {
+                        ty
+                    } else {
+                        engine.ptr_type()
+                    };
+
+                    let object = engine.object_pool().insert_array(elem_ty, values.len());
 
                     let builder_index = builders.len();
                     builders.push(Builder::Array(object));
@@ -895,78 +925,11 @@ fn build_script_object(
     builders.pop().unwrap().finalize()
 }
 
-// FIXME: Can we expose this from the compiler instead?
-fn build_struct_layout(props: &[Property]) -> TypeLayout {
-    let mut fields = Vec::new();
-    let mut properties = Vec::new();
-
-    let mut offset = 0;
-    for prop in props {
-        let ty = match prop.value {
-            Value::Bool(_) => FieldType::I32,
-            Value::Int(_) => FieldType::I32,
-            Value::Float(_) => FieldType::F32,
-            Value::Array(_, _) => FieldType::Pointer,
-            Value::String(_) => FieldType::Pointer,
-            Value::Struct(_, _) => FieldType::Pointer,
-            Value::Object(_) => FieldType::Pointer,
-        };
-
-        offset = (offset + ty.align() - 1) & !(ty.align() - 1);
-        debug_assert_eq!(offset % ty.align(), 0);
-        offset += ty.size();
-
-        properties.push(ObjectProperty {
-            class: Lowercase::new(""),
-            name: Lowercase::new(prop.name.as_str()),
-            var: fields.len(),
-        });
-        fields.push(ObjectField {
-            class: Lowercase::new(""),
-            name: Lowercase::new(prop.name.as_str()),
-            offset,
-            ty,
-            ty_name: Lowercase::new(""),
-            default_value: None,
-        });
-    }
-
-    TypeLayout {
-        header: None,
-        fields,
-        properties,
-        classes: None,
-    }
-}
-
-fn build_array_layout(values: &[Value]) -> TypeLayout {
-    let ty = match &values[0] {
-        Value::Bool(_) => FieldType::Bool,
-        Value::Int(_) => FieldType::I32,
-        Value::Float(_) => FieldType::F32,
-        Value::String(_) => FieldType::Pointer,
-        Value::Array(_, _) => FieldType::Pointer,
-        Value::Struct(_, _) => FieldType::Pointer,
-        Value::Object(_) => FieldType::Pointer,
-    };
-
-    TypeLayout {
-        header: None,
-        fields: vec![ObjectField {
-            class: Lowercase::new(""),
-            name: Lowercase::new(""),
-            offset: 0,
-            ty,
-            ty_name: Lowercase::new(""),
-            default_value: None,
-        }],
-        properties: vec![ObjectProperty {
-            class: Lowercase::new(""),
-            name: Lowercase::new(""),
-            var: 0,
-        }],
-        classes: None,
-    }
+fn is_primitive(engine: &Engine, ty: TypeId) -> bool {
+    ty == engine.none_type()
+        || ty == engine.bool_type()
+        || ty == engine.int_type()
+        || ty == engine.float_type()
 }
 
 #[cfg(test)]
@@ -976,15 +939,15 @@ mod tests {
     use openfo4_esp::vmad::{Property, Script, Value};
     use openfo4_script::assembler::assemble;
     use openfo4_script::engine::{Engine, Options};
-    use openfo4_script::runtime::{ObjectAddr, ObjectRef};
+    use openfo4_script::runtime::{ArrayObject, ObjectAddr, ObjectRef};
 
     use crate::systems::scripting::objects::ScriptObjects;
 
     use super::build_script_object;
 
     fn build_direct(engine: &Engine, script: &Script) -> ObjectRef {
-        let layout = engine.get_class_layout(&script.name).unwrap();
-        let mut builder = engine.object_pool().insert(layout.clone());
+        let type_id = engine.get_type(&script.name).unwrap();
+        let mut builder = engine.object_pool().insert(type_id);
 
         let scripts = ScriptObjects::default();
         let partial_addrs = HashMap::new();
@@ -1017,23 +980,19 @@ mod tests {
             let ptr = ObjectAddr::from_raw(ptr.as_ptr().cast::<*mut u8>().read());
 
             let array = engine.object_pool().get(ptr);
-            // FIXME: This relies on undocumented ABI. We should expose the array ABI
-            // information from the Engine.
-            let a_ptr = array.get("", "ptr").unwrap();
-            let a_len = array.get("", "len").unwrap();
-            let a_len = usize::from_ne_bytes(a_len.try_into().unwrap());
+            let array = &*array.as_ptr().cast::<ArrayObject>();
 
-            assert_eq!(a_len, len);
+            assert_eq!(array.len, len);
 
             let mut mem = Vec::new();
 
-            let mut next_ptr = a_ptr.as_ptr().cast::<*mut u8>().read();
-            for _ in 0..a_len {
+            let mut next_ptr = array.ptr;
+            for _ in 0..array.len {
                 let addr = ObjectAddr::from_raw(next_ptr);
                 let elem = engine.object_pool().get(addr);
                 mem.extend_from_slice(elem.memory());
 
-                next_ptr = next_ptr.add(elem.layout().size_padded());
+                next_ptr = next_ptr.add(elem.size());
             }
 
             assert_eq!(mem, data);
@@ -1090,8 +1049,10 @@ mod tests {
             class test:
             global a: int[] = null
             global b: float[] = null
+            global c: bool[] = null
             property a: int[] -> a
             property b: float[] -> b
+            property c: bool[] -> c
             "#,
         );
 
@@ -1118,6 +1079,10 @@ mod tests {
                         0,
                     ),
                 },
+                Property {
+                    name: "c".to_owned(),
+                    value: Value::Array(Vec::new(), 0),
+                },
             ],
         };
 
@@ -1139,5 +1104,73 @@ mod tests {
             4,
             bytemuck::cast_slice(&[0.0_f32, 1.0_f32, 2.0_f32, 3.0_f32]),
         );
+        assert_array_contents_eq(&engine, &object, "test", "c", 0, &[]);
+    }
+
+    #[test]
+    fn build_script_object_struct() {
+        let mut engine = Engine::new();
+
+        let module = assemble(
+            r#"
+            class test:
+
+            struct MyStruct:
+                field x: int
+                field y: int
+
+            global a: int = 0
+            global b: test#MyStruct = null
+            property a: int -> a
+            property b: test#MyStruct -> b
+            "#,
+        );
+
+        engine.register(&module);
+        engine.compile("test", &Options::default());
+
+        let script = Script {
+            name: "test".to_owned(),
+            flags: 0,
+            properties: vec![
+                Property {
+                    name: "a".to_owned(),
+                    value: Value::Int(1),
+                },
+                Property {
+                    name: "b".to_owned(),
+                    value: Value::Struct(
+                        vec![
+                            Property {
+                                name: "x".to_owned(),
+                                value: Value::Int(2),
+                            },
+                            Property {
+                                name: "y".to_owned(),
+                                value: Value::Int(3),
+                            },
+                        ],
+                        0,
+                    ),
+                },
+            ],
+        };
+
+        let object = build_direct(&engine, &script);
+        let object = engine.object_pool().get(&object);
+
+        unsafe {
+            assert_eq!(object.get("test", "a").unwrap(), 1u32.to_ne_bytes());
+            let struct_addr = object
+                .get("test", "b")
+                .unwrap()
+                .as_ptr()
+                .cast::<ObjectAddr>()
+                .read();
+
+            let st = engine.object_pool().get(struct_addr);
+            assert_eq!(st.get("test#MyStruct", "x").unwrap(), 2u32.to_ne_bytes());
+            assert_eq!(st.get("test#MyStruct", "y").unwrap(), 3u32.to_ne_bytes());
+        }
     }
 }

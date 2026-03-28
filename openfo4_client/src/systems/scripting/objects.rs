@@ -1,5 +1,6 @@
 use hashbrown::HashMap;
 use openfo4_core::record::RecordId;
+use openfo4_script::engine::Engine;
 use openfo4_script::runtime::ObjectAddr;
 use slab::Slab;
 
@@ -9,13 +10,14 @@ use crate::systems::scripting::loader::ScriptObjectId;
 #[derive(Clone, Debug, Default)]
 pub struct ScriptObjects {
     instances: Slab<ObjectInfo>,
-    addrs: HashMap<ObjectAddr, (ScriptObjectId, usize)>,
+    addrs: HashMap<ObjectAddr, (ScriptObjectId, usize, String)>,
     records: HashMap<RecordId, ScriptObjectId>,
 }
 
 impl ScriptObjects {
     pub fn insert(
         &mut self,
+        engine: &Engine,
         scripts: Vec<ScriptInstance>,
         record: Option<RecordId>,
     ) -> ScriptObjectId {
@@ -28,15 +30,19 @@ impl ScriptObjects {
 
         let mut class_names = HashMap::new();
         for (index, script) in scripts.iter().enumerate() {
-            let Some(classes) = &script.layout.classes else {
-                continue;
-            };
+            let info = engine.type_info(script.layout);
 
-            for class in classes.iter() {
-                class_names.insert(class.to_owned(), index);
+            for class in &info.classes {
+                let info = engine.type_info(*class);
+                if let Some(name) = info.name {
+                    class_names.insert(name.into_inner(), index);
+                }
             }
 
-            self.addrs.insert(script.object.addr(), (id, index));
+            self.addrs.insert(
+                script.object.addr(),
+                (id, index, info.name.unwrap_or_default().into_inner()),
+            );
         }
 
         let id2 = self.instances.insert(ObjectInfo {
@@ -54,7 +60,7 @@ impl ScriptObjects {
     }
 
     pub fn get_by_addr(&self, addr: ObjectAddr) -> Option<ScriptRef<'_>> {
-        let (id, index) = self.addrs.get(&addr)?;
+        let (id, index, name) = self.addrs.get(&addr)?;
         let info = self.instances.get(id.0).unwrap();
         let instance = &info.scripts[*index];
 
@@ -62,6 +68,7 @@ impl ScriptObjects {
             instance,
             record: info.record,
             id: *id,
+            name,
         })
     }
 
@@ -91,13 +98,14 @@ impl<'a> ScriptsRef<'a> {
     }
 
     pub fn get(&self, name: &str) -> Option<ScriptRef<'a>> {
-        let index = self.info.class_names.get(&name.to_lowercase())?;
+        let (name, index) = self.info.class_names.get_key_value(&name.to_lowercase())?;
         let instance = &self.info.scripts[*index];
 
         Some(ScriptRef {
             instance: instance,
             record: self.info.record,
             id: self.id,
+            name,
         })
     }
 
@@ -106,13 +114,14 @@ impl<'a> ScriptsRef<'a> {
     }
 
     pub fn iter(&self) -> impl Iterator<Item = ScriptRef<'a>> + '_ {
-        self.info.class_names.values().map(|index| {
+        self.info.class_names.iter().map(|(name, index)| {
             let instance = &self.info.scripts[*index];
 
             ScriptRef {
                 instance,
                 record: self.info.record,
                 id: self.id,
+                name,
             }
         })
     }
@@ -123,6 +132,7 @@ pub struct ScriptRef<'a> {
     instance: &'a ScriptInstance,
     record: Option<RecordId>,
     id: ScriptObjectId,
+    name: &'a str,
 }
 
 impl<'a> ScriptRef<'a> {
@@ -138,13 +148,7 @@ impl<'a> ScriptRef<'a> {
     }
 
     pub fn name(&self) -> &str {
-        self.instance
-            .layout
-            .classes
-            .as_ref()
-            .unwrap()
-            .last()
-            .unwrap()
+        self.name
     }
 
     pub fn get(&self) -> &ScriptInstance {

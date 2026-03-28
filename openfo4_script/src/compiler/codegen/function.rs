@@ -8,26 +8,25 @@ use openfo4_jit::{
 };
 use openfo4_pex::{Function, Instruction, Value};
 
+use crate::compiler::NativeFunction;
 use crate::compiler::codegen::builtin::call_builtin;
 use crate::compiler::codegen::constant::{ConstantData, create_string_constant};
 use crate::compiler::codegen::function_props::{
     FunctionProps, StackFrame, Stage, StageVariable, function_properties,
 };
-use crate::compiler::codegen::layout::{compute_struct_type_layout, generate_type_layout};
 use crate::compiler::codegen::trampoline::generate_guest_to_host_trampoline;
 use crate::compiler::codegen::{
     ClassDef, CodegenData, Error, FunctionDef, Type, get_parent_class_with_property,
 };
-use crate::compiler::{NativeFunction, TypeLayout};
-use crate::runtime::object::{ARRAY_LAYOUT, BYTE_LAYOUT, VAR_LAYOUT, VarObject};
-use crate::runtime::{ArrayObject, ObjectTag, RESULT_ERROR, RESULT_OK};
+use crate::compiler::resources::TypeId;
+use crate::runtime::object::{ObjectTag, VarObject};
+use crate::runtime::{ArrayObject, RESULT_ERROR, RESULT_OK};
 
 #[derive(Debug)]
 pub struct FunctionResult {
     pub id: FuncId,
     pub signature: Signature,
     pub constants: Vec<ConstantData>,
-    pub layouts: Vec<Box<TypeLayout>>,
 }
 
 pub fn declare_function(
@@ -89,7 +88,6 @@ pub fn translate_function(
     let props = function_properties(data, function);
 
     let mut constants = Vec::new();
-    let mut layouts = Vec::new();
 
     let func_id = function.func_id.unwrap();
 
@@ -106,7 +104,6 @@ pub fn translate_function(
             &props,
             builder,
             &mut constants,
-            &mut layouts,
         );
 
         func_id
@@ -116,7 +113,6 @@ pub fn translate_function(
         id: func_id,
         signature,
         constants,
-        layouts,
     }
 }
 
@@ -155,7 +151,6 @@ fn translate_function_body(
     props: &FunctionProps,
     mut builder: FunctionBuilder<'_>,
     constants: &mut Vec<ConstantData>,
-    layouts: &mut Vec<Box<TypeLayout>>,
 ) {
     let entry_block = builder.create_entry_block();
     builder.switch_to_block(entry_block);
@@ -237,7 +232,6 @@ fn translate_function_body(
         self_ptr,
         self_ty: &class.name,
         constants,
-        layouts,
     };
 
     let start_block = translator.builder.create_block(&[]);
@@ -730,10 +724,12 @@ fn translate_function_body(
                             .unwrap();
 
                     let class = data.get_class(&class_name).unwrap();
-                    let layout = class.layout.as_ref().unwrap();
 
                     let prop = class.properties.get(&prop_name).unwrap();
-                    let offset = layout.offset(&prop.variable.as_ref().unwrap()).unwrap();
+                    let offset = *class
+                        .field_offsets
+                        .get(prop.variable.as_ref().unwrap())
+                        .unwrap();
 
                     let ty = translator
                         .data
@@ -781,10 +777,12 @@ fn translate_function_body(
                             .unwrap();
 
                     let class = data.get_class(&class_name).unwrap();
-                    let layout = class.layout.as_ref().unwrap();
 
                     let prop = class.properties.get(&prop_name).unwrap();
-                    let offset = layout.offset(&prop.variable.as_ref().unwrap()).unwrap();
+                    let offset = *class
+                        .field_offsets
+                        .get(prop.variable.as_ref().unwrap())
+                        .unwrap();
 
                     translator.builder.store(value, object, offset as u32);
                 }
@@ -826,22 +824,10 @@ fn translate_function_body(
                     unreachable!();
                 };
                 let st = translator.data.structs.get(name).unwrap();
+                let type_id = st.ty;
 
-                let layout = compute_struct_type_layout(translator.data, st);
                 let one = translator.builder.iconst(JitType::Pointer, 1);
-                let ptr = call_malloc(&mut translator, ctx_ptr, layout, one);
-
-                // Default-initialize all struct fields.
-                let layout = st.layout(translator.data);
-                for member in &st.s.members {
-                    let ty = Lowercase::new(&*member.ty);
-                    let name = Lowercase::new(&*member.name);
-
-                    let offset = layout.offset(&name).unwrap();
-                    let ty = translator.data.resolve_ty(&ty);
-                    let value = create_default_value(&mut translator, &ty);
-                    translator.builder.store(value, ptr, offset as u32);
-                }
+                let ptr = call_malloc(&mut translator, ctx_ptr, type_id, one);
 
                 translator.store(&op.return_assignment, ptr);
             }
@@ -932,14 +918,19 @@ fn translate_function_body(
                     unreachable!();
                 };
 
-                let layout = generate_type_layout(translator.data, &elem_ty);
+                let type_id = translator.get_type_id(&elem_ty);
+
                 let array_len = translator.load(&op.src);
                 let array_len = translator.builder.uextend(array_len, JitType::Pointer);
-                let array_ptr = call_malloc(&mut translator, ctx_ptr, layout, array_len);
+                let array_ptr = call_malloc(&mut translator, ctx_ptr, type_id, array_len);
 
                 let one_usize = translator.builder.iconst(JitType::Pointer, 1);
-                let array_object_ptr =
-                    call_malloc(&mut translator, ctx_ptr, ARRAY_LAYOUT.clone(), one_usize);
+                let array_object_ptr = call_malloc(
+                    &mut translator,
+                    ctx_ptr,
+                    data.resources.primitives.array,
+                    one_usize,
+                );
 
                 translator.builder.store(
                     array_ptr,
@@ -958,6 +949,9 @@ fn translate_function_body(
                 let Type::Array(elem_ty) = translator.get_type(&op.array) else {
                     unreachable!();
                 };
+
+                let type_id = translator.get_type_id(&elem_ty);
+                let ty = data.resources.types.get(type_id).unwrap();
 
                 let array = translator.load(&op.array);
                 let value = translator.load(&op.value);
@@ -989,9 +983,8 @@ fn translate_function_body(
                 let count_wide = translator.builder.uextend(count, JitType::Pointer);
                 let new_len = translator.builder.iadd(array_len, count_wide);
 
-                let layout = generate_type_layout(translator.data, &elem_ty);
-                let stride = layout.size();
-                let new_array_ptr = call_malloc(&mut translator, ctx_ptr, layout, new_len);
+                let stride = ty.size();
+                let new_array_ptr = call_malloc(&mut translator, ctx_ptr, type_id, new_len);
 
                 // Update array ptr and len.
                 translator
@@ -1060,6 +1053,9 @@ fn translate_function_body(
                     unreachable!();
                 };
 
+                let type_id = translator.get_type_id(&elem_ty);
+                let ty = data.resources.types.get(type_id).unwrap();
+
                 let array = translator.load(&op.array);
                 let value = translator.load(&op.value);
                 let index = translator.load(&op.index);
@@ -1084,9 +1080,8 @@ fn translate_function_body(
                 let index_wide = translator.builder.uextend(index, JitType::Pointer);
 
                 // Allocate new array.
-                let layout = generate_type_layout(data, &elem_ty);
-                let stride = layout.size();
-                let new_array_ptr = call_malloc(&mut translator, ctx_ptr, layout, new_len);
+                let stride = ty.size();
+                let new_array_ptr = call_malloc(&mut translator, ctx_ptr, type_id, new_len);
 
                 // Update array ptr and len.
                 translator
@@ -1132,6 +1127,9 @@ fn translate_function_body(
                     unreachable!();
                 };
 
+                let type_id = translator.get_type_id(&elem_ty);
+                let ty = data.resources.types.get(type_id).unwrap();
+
                 let array = translator.load(&op.array_value);
                 let index = translator.load(&op.index);
                 let count = translator.load(&op.count);
@@ -1154,9 +1152,8 @@ fn translate_function_body(
                 let new_len = translator.builder.isub(array_len, count_wide);
 
                 // Allocate new array.
-                let layout = generate_type_layout(translator.data, &elem_ty);
-                let stride = layout.size();
-                let new_array_ptr = call_malloc(&mut translator, ctx_ptr, layout, new_len);
+                let stride = ty.size();
+                let new_array_ptr = call_malloc(&mut translator, ctx_ptr, type_id, new_len);
 
                 // Copy regions from old array.
                 // Copy 0..index.
@@ -1388,19 +1385,18 @@ fn translate_function_body(
                     let (field_offset, field_ty) = match &*elem_ty {
                         Type::Struct(name) => {
                             let struct_def = translator.data.structs.get(name).unwrap();
-                            let layout = struct_def.layout(translator.data);
+
+                            let member_name = Lowercase::new(&**member_name);
+                            let offset =
+                                *struct_def.field_offsets.get(&member_name).unwrap() as u32;
 
                             let member = struct_def
                                 .s
                                 .members
                                 .iter()
-                                .find(|v| v.name.to_lowercase() == member_name.to_lowercase())
+                                .find(|v| Lowercase::new(&*v.name) == member_name)
                                 .unwrap();
 
-                            let offset = *layout
-                                .field_offsets
-                                .get(&Lowercase::new(member_name.as_str()))
-                                .unwrap();
                             let ty = translator
                                 .data
                                 .resolve_ty(&Lowercase::new(member.ty.as_str()));
@@ -1482,15 +1478,24 @@ fn translate_function_body(
                 let new_len = translator.builder.iadd(lhs_len, rhs_len);
 
                 // Allocate new string byte buffer and copy over bytes.
-                let new_ptr = call_malloc(&mut translator, ctx_ptr, BYTE_LAYOUT.clone(), new_len);
+                let new_ptr = call_malloc(
+                    &mut translator,
+                    ctx_ptr,
+                    data.resources.primitives.byte,
+                    new_len,
+                );
                 translator.builder.memcpy(lhs_ptr, new_ptr, lhs_len);
                 let rhs_dst_ptr = translator.builder.iadd(new_ptr, lhs_len);
                 translator.builder.memcpy(rhs_ptr, rhs_dst_ptr, rhs_len);
 
                 // Allocate new string object.
                 let one = translator.builder.iconst(JitType::Pointer, 1);
-                let new_string_ptr =
-                    call_malloc(&mut translator, ctx_ptr, ARRAY_LAYOUT.clone(), one);
+                let new_string_ptr = call_malloc(
+                    &mut translator,
+                    ctx_ptr,
+                    data.resources.primitives.string,
+                    one,
+                );
 
                 translator.builder.store(
                     new_ptr,
@@ -1557,7 +1562,6 @@ pub struct FunctionTranslator<'a> {
     self_ptr: Option<JitValue>,
     self_ty: &'a Lowercase<str>,
     constants: &'a mut Vec<ConstantData>,
-    layouts: &'a mut Vec<Box<TypeLayout>>,
 }
 
 impl<'a> FunctionTranslator<'a> {
@@ -1600,9 +1604,8 @@ impl<'a> FunctionTranslator<'a> {
         loop {
             if let Some(field_ty) = class.fields.get(name) {
                 let ty = self.data.resolve_ty_jit(&field_ty);
-                let layout = class.layout.as_ref().unwrap();
 
-                let offset = layout.offset(&name).unwrap();
+                let offset = *class.field_offsets.get(name).unwrap();
                 return self.builder.load(ty, self.self_ptr.unwrap(), offset as u32);
             }
 
@@ -1644,9 +1647,7 @@ impl<'a> FunctionTranslator<'a> {
         let mut class = self.data.get_class(&self.self_ty).unwrap();
         loop {
             if let Some(_) = class.fields.get(name) {
-                let layout = class.layout.as_ref().unwrap();
-
-                let offset = layout.offset(&name).unwrap();
+                let offset = *class.field_offsets.get(name).unwrap();
                 self.builder
                     .store(value, self.self_ptr.unwrap(), offset as u32);
                 return;
@@ -1664,6 +1665,26 @@ impl<'a> FunctionTranslator<'a> {
 
     pub fn get_type(&self, value: &Value) -> Type {
         self.data.resolve_ty(&self.get_ty_name(value))
+    }
+
+    pub fn get_type_id(&self, ty: &Type) -> TypeId {
+        match ty {
+            Type::None => self.data.resources.primitives.none,
+            Type::Bool => self.data.resources.primitives.bool,
+            Type::Int => self.data.resources.primitives.int,
+            Type::Float => self.data.resources.primitives.float,
+            Type::String => self.data.resources.primitives.string,
+            Type::Struct(name) => {
+                let s = self.data.structs.get(name).unwrap();
+                s.ty
+            }
+            Type::Class(name) => {
+                let c = self.data.classes.get(name).unwrap();
+                c.type_id
+            }
+            Type::Array(_) => self.data.resources.primitives.array,
+            Type::Var => self.data.resources.primitives.var,
+        }
     }
 
     pub fn get_ty_name(&self, value: &Value) -> Lowercase<String> {
@@ -1911,7 +1932,12 @@ fn create_var(
 ) -> JitValue {
     // Allocate var object
     let one = translator.builder.iconst(JitType::Pointer, 1);
-    let ptr = call_malloc(translator, ctx_ptr, VAR_LAYOUT.clone(), one);
+    let ptr = call_malloc(
+        translator,
+        ctx_ptr,
+        translator.data.resources.primitives.var,
+        one,
+    );
 
     // Store tag
     let tag = translator.builder.iconst(JitType::Pointer, tag as i64);
@@ -1951,7 +1977,9 @@ fn perform_class_typecheck(
     block: &mut Block,
 ) -> JitValue {
     let dst_id = translator.data.classes.get(dst_class).unwrap().type_id;
-    let dst_id = translator.builder.iconst(JitType::I64, dst_id as i64);
+    let dst_id = translator
+        .builder
+        .iconst(JitType::I64, dst_id.as_bits() as i64);
 
     let type_info_ptr = translator.builder.load(JitType::Pointer, src, 0);
 
@@ -2260,33 +2288,26 @@ fn struct_member_offset(
     let struct_name = translator.get_ty_name(&struct_value);
     let st = translator.data.structs.get(&struct_name).unwrap();
 
-    let layout = st.layout(translator.data);
-
-    let member_offset = layout
+    let offset = st
         .field_offsets
-        .get(&Lowercase::new(member_name.as_str()))
+        .get(&Lowercase::new(&**member_name))
         .unwrap();
-
-    *member_offset as u32
+    *offset as u32
 }
 
 fn call_malloc(
     translator: &mut FunctionTranslator<'_>,
     ctx_ptr: JitValue,
-    layout: TypeLayout,
+    type_id: TypeId,
     array_len: JitValue,
 ) -> JitValue {
-    let layout_boxed = Box::new(layout);
-    let layout_ptr = Box::as_ref(&layout_boxed) as *const TypeLayout;
-    translator.layouts.push(layout_boxed);
-
-    let layout_ptr = translator
+    let type_id = translator
         .builder
-        .iconst(JitType::Pointer, layout_ptr as i64);
+        .iconst(JitType::Pointer, type_id.as_bits() as i64);
 
     let res = translator.builder.call(
         translator.data.runtime_funcs.alloc_zeroed,
-        &[ctx_ptr, layout_ptr, array_len],
+        &[ctx_ptr, type_id, array_len],
     );
     res[0]
 }

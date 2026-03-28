@@ -1,10 +1,10 @@
 use std::alloc::Layout;
-use std::sync::{Arc, LazyLock, Mutex};
+use std::sync::{Arc, Mutex};
 
 use game_common::string::Lowercase;
 use hashbrown::HashMap;
 
-use crate::compiler::{FieldType, ObjectField, ObjectProperty, TypeLayout};
+use crate::compiler::resources::{Resources, Type, TypeId, TypeInfo};
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 #[repr(transparent)]
@@ -35,14 +35,32 @@ impl AsRef<ObjectAddr> for ObjectAddr {
 unsafe impl Send for ObjectAddr {}
 unsafe impl Sync for ObjectAddr {}
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct ObjectPool {
+    resources: Arc<Resources>,
     objects: Mutex<HashMap<ObjectAddr, Object>>,
     dropped_refs: Arc<Mutex<Vec<ObjectAddr>>>,
 }
 
 impl ObjectPool {
-    pub fn alloc(&self, layout: TypeLayout, array_len: usize) -> ObjectRef {
+    pub(crate) fn new(resources: Arc<Resources>) -> Self {
+        Self {
+            resources,
+            objects: Mutex::default(),
+            dropped_refs: Arc::default(),
+        }
+    }
+
+    pub fn alloc(&self, ty: TypeId, array_len: usize) -> ObjectRef {
+        let layout = self.resources.types.get(ty).unwrap();
+        let info = self
+            .resources
+            .infos
+            .lock()
+            .get(&ty)
+            .cloned()
+            .unwrap_or_default();
+
         let size = layout.size();
         let align = layout.align();
         let stride = (size + align - 1) & !(align - 1);
@@ -67,7 +85,7 @@ impl ObjectPool {
             let elem_ptr = unsafe { ptr.add(stride * i) };
             let addr = ObjectAddr::from_raw(elem_ptr);
 
-            let object = unsafe { Object::new_at(layout.clone(), elem_ptr) };
+            let object = unsafe { Object::new_at(ty, layout.clone(), info.clone(), elem_ptr) };
 
             objects.insert(addr, object);
         }
@@ -78,10 +96,18 @@ impl ObjectPool {
         }))
     }
 
-    pub fn insert(&self, layout: TypeLayout) -> ObjectBuilder {
-        let object_ref = self.alloc(layout.clone(), 1);
+    pub fn insert(&self, ty: TypeId) -> ObjectBuilder {
+        let object_ref = self.alloc(ty, 1);
+        let layout = self.resources.types.get(ty).unwrap();
+        let info = self
+            .resources
+            .infos
+            .lock()
+            .get(&ty)
+            .cloned()
+            .unwrap_or_default();
 
-        let object = unsafe { Object::new_at(layout, object_ref.addr().0 as *mut u8) };
+        let object = unsafe { Object::new_at(ty, layout, info, object_ref.addr().0 as *mut u8) };
 
         ObjectBuilder {
             obj: object,
@@ -90,21 +116,24 @@ impl ObjectPool {
     }
 
     pub fn insert_string(&self, s: &str) -> ObjectRef {
-        let bytes_ref = self.alloc(BYTE_LAYOUT.clone(), s.len());
+        let bytes_ref = self.alloc(self.resources.primitives.byte, s.len());
 
         unsafe {
             core::ptr::copy_nonoverlapping(s.as_ptr(), bytes_ref.as_ptr(), s.len());
         }
 
-        let mut string_object = self.insert(ARRAY_LAYOUT.clone());
-        string_object.set("", "ptr", bytes_ref.addr());
-        string_object.set("", "len", s.len());
+        let mut string_object = self.insert(self.resources.primitives.string);
+        let string = unsafe { string_object.as_mut::<StringObject>() };
+        string.ptr = bytes_ref.addr().to_raw();
+        string.len = s.len();
 
         string_object.finalize()
     }
 
-    pub fn insert_array(&self, elem_layout: TypeLayout, array_len: usize) -> ObjectArrayBuilder {
-        let array_ref = self.alloc(elem_layout.clone(), array_len);
+    pub fn insert_array(&self, elem_ty: TypeId, array_len: usize) -> ObjectArrayBuilder {
+        let array_ref = self.alloc(elem_ty, array_len);
+        let elem_layout = self.resources.types.get(elem_ty).unwrap();
+        let properties = self.resources.infos.lock().get(&elem_ty).unwrap().clone();
 
         let mut objects = Vec::new();
 
@@ -115,13 +144,16 @@ impl ObjectPool {
         for i in 0..array_len {
             let elem_ptr = unsafe { array_ref.as_ptr().add(stride * i) };
 
-            let object = unsafe { Object::new_at(elem_layout.clone(), elem_ptr) };
+            let object = unsafe {
+                Object::new_at(elem_ty, elem_layout.clone(), properties.clone(), elem_ptr)
+            };
             objects.push(object);
         }
 
-        let mut array_object = self.insert(ARRAY_LAYOUT.clone());
-        array_object.set("", "ptr", array_ref.addr());
-        array_object.set("", "len", array_len);
+        let mut array_object = self.insert(self.resources.primitives.array);
+        let array = unsafe { array_object.as_mut::<ArrayObject>() };
+        array.ptr = array_ref.addr().to_raw();
+        array.len = array_len;
 
         ObjectArrayBuilder {
             objects,
@@ -135,14 +167,14 @@ impl ObjectPool {
     ///
     /// No thread must currently access the given object referenced by the [`ObjectRef`].
     pub unsafe fn clone_object(&self, object: &ObjectRef) -> ObjectBuilder {
-        let layout = {
+        let ty_id = {
             let objects = self.objects.lock().unwrap();
 
             let object = objects.get(&object.addr()).unwrap();
-            object.layout.clone()
+            object.ty_id
         };
 
-        let builder = self.insert(layout);
+        let builder = self.insert(ty_id);
 
         let mut objects = self.objects.lock().unwrap();
         let object = objects.get_mut(&object.addr()).unwrap();
@@ -212,32 +244,26 @@ impl Drop for ObjectRefInner {
 #[derive(Clone, Debug)]
 pub struct Object {
     memory: *mut u8,
-    layout: TypeLayout,
+    ty: Type,
+    ty_id: TypeId,
+    info: TypeInfo,
 }
 
 impl Object {
-    unsafe fn new_at(layout: TypeLayout, ptr: *mut u8) -> Self {
-        if let Some(header) = &layout.header {
-            let header_ptr: *const usize = header.as_ptr();
+    unsafe fn new_at(ty_id: TypeId, ty: Type, info: TypeInfo, ptr: *mut u8) -> Self {
+        if let Type::Composite(ty) = &ty {
+            for member in &ty.members {
+                let Some(value) = &member.default_value else {
+                    continue;
+                };
 
-            // SAFETY:
-            // - The caller guarantees that `ptr` is valid.
-            // - The caller must align this pointer to `align_of<*const T>`
-            //   if layout.header is `Some(..)`.
-            unsafe {
-                ptr.cast::<*const usize>().write(header_ptr);
-            }
-        }
-
-        for field in &layout.fields {
-            if let Some(default_value) = &field.default_value {
-                assert!(default_value.len() <= field.ty.size());
+                debug_assert_eq!(value.len(), member.size);
 
                 unsafe {
                     core::ptr::copy_nonoverlapping(
-                        default_value.as_ptr(),
-                        ptr.add(field.offset),
-                        default_value.len(),
+                        value.as_ptr(),
+                        ptr.add(member.offset),
+                        member.size,
                     );
                 }
             }
@@ -245,17 +271,31 @@ impl Object {
 
         Self {
             memory: ptr,
-            layout,
+            ty,
+            ty_id,
+            info,
         }
     }
 
-    pub unsafe fn get(&self, class: &str, name: &str) -> Option<&[u8]> {
-        let prop = self.get_property_var(class, name);
-        let field = &self.layout.fields[prop.var];
+    fn get_prop_offset_and_size(&self, class: &str, name: &str) -> Option<(usize, usize)> {
+        let index = self.get_property_var(class, name);
 
-        let ptr = unsafe { self.memory.add(field.offset) };
-        let len = field.ty.size();
-        Some(unsafe { core::slice::from_raw_parts(ptr, len) })
+        let Type::Composite(ty) = &self.ty else {
+            return Some((0, self.size()));
+        };
+
+        let field = &ty.members[index];
+
+        Some((field.offset, field.size))
+    }
+
+    pub unsafe fn get(&self, class: &str, name: &str) -> Option<&[u8]> {
+        let (offset, size) = self.get_prop_offset_and_size(class, name)?;
+
+        unsafe {
+            let ptr = self.as_ptr().add(offset);
+            Some(core::slice::from_raw_parts(ptr, size))
+        }
     }
 
     /// # Safety
@@ -267,53 +307,49 @@ impl Object {
     where
         T: IntoValue,
     {
-        let prop = self.get_property_var(class, name);
-
-        let field = &self.layout.fields[prop.var];
+        let (offset, size) = self.get_prop_offset_and_size(class, name).unwrap();
 
         let bytes = value.as_bytes();
 
         assert_eq!(
             bytes.len(),
-            field.ty.size(),
-            "{:?}.{:?} (type {:?}) requires {} bytes, but {} were provided",
-            prop.class,
-            prop.name,
-            field.ty,
-            field.ty.size(),
+            size,
+            "{:?}.{:?} requires {} bytes, but {} were provided",
+            class,
+            name,
+            size,
             bytes.len(),
         );
 
         unsafe {
-            let dst = self.memory.add(field.offset);
+            let dst = self.memory.add(offset);
             core::ptr::copy_nonoverlapping(bytes.as_ptr(), dst, bytes.len());
         }
     }
 
     #[track_caller]
-    fn get_property_var(&self, class: &str, name: &str) -> &ObjectProperty {
+    fn get_property_var(&self, class: &str, name: &str) -> usize {
         let class = Lowercase::new(class);
         let name = Lowercase::new(name);
 
         // Always prefer properties that match the requested class.
-        if let Some(prop) = self
-            .layout
+        if let Some((_, prop)) = self
+            .info
             .properties
             .iter()
-            .find(|p| p.class == class && p.name == name)
+            .find(|((cl, fl), _)| *cl == class && *fl == name)
         {
-            return prop;
+            return prop.field;
         }
 
         // We may also access fields of parent classes.
         // FIXME: Ideally we would recursively walk up the class
         // hierarchy instead of selecting any other matching property,
         // this requires us to have access to the class names from here.
-        if let Some(prop) = self.layout.properties.iter().find(|p| p.name == name) {
-            return prop;
+        if let Some((_, prop)) = self.info.properties.iter().find(|((_, fl), _)| *fl == name) {
+            return prop.field;
         }
 
-        dbg!(&self.layout);
         panic!("no field {:?}.{:?}", class, name);
     }
 
@@ -329,11 +365,11 @@ impl Object {
     }
 
     pub fn size(&self) -> usize {
-        self.layout.size()
+        self.ty.size()
     }
 
-    pub fn layout(&self) -> &TypeLayout {
-        &self.layout
+    pub fn type_id(&self) -> TypeId {
+        self.ty_id
     }
 }
 
@@ -373,6 +409,10 @@ impl ObjectBuilder {
     /// Useful for building recursive objects.
     pub fn addr(&self) -> ObjectAddr {
         self.obj_ref.addr()
+    }
+
+    unsafe fn as_mut<T>(&mut self) -> &mut T {
+        unsafe { &mut *self.obj.as_ptr().cast() }
     }
 }
 
@@ -484,91 +524,3 @@ pub enum ObjectTag {
     Class = 4,
     String = 5,
 }
-
-pub(crate) static ARRAY_LAYOUT: LazyLock<TypeLayout> = LazyLock::new(|| TypeLayout {
-    header: None,
-    fields: vec![
-        ObjectField {
-            class: Lowercase::new(""),
-            name: Lowercase::new("ptr"),
-            offset: 0,
-            ty: FieldType::Pointer,
-            ty_name: Lowercase::new(""),
-            default_value: None,
-        },
-        ObjectField {
-            class: Lowercase::new(""),
-            name: Lowercase::new("len"),
-            offset: size_of::<*mut u8>(),
-            ty: FieldType::Isize,
-            ty_name: Lowercase::new(""),
-            default_value: None,
-        },
-    ],
-    properties: vec![
-        ObjectProperty {
-            class: Lowercase::new(""),
-            name: Lowercase::new("ptr"),
-            var: 0,
-        },
-        ObjectProperty {
-            class: Lowercase::new(""),
-            name: Lowercase::new("len"),
-            var: 1,
-        },
-    ],
-    classes: None,
-});
-
-pub(crate) const BYTE_LAYOUT: LazyLock<TypeLayout> = LazyLock::new(|| TypeLayout {
-    header: None,
-    fields: vec![ObjectField {
-        class: Lowercase::new(""),
-        name: Lowercase::new(""),
-        offset: 0,
-        ty: FieldType::I8,
-        ty_name: Lowercase::new(""),
-        default_value: None,
-    }],
-    properties: vec![ObjectProperty {
-        class: Lowercase::new(""),
-        name: Lowercase::new(""),
-        var: 0,
-    }],
-    classes: None,
-});
-
-pub(crate) const VAR_LAYOUT: LazyLock<TypeLayout> = LazyLock::new(|| TypeLayout {
-    header: None,
-    fields: vec![
-        ObjectField {
-            class: Lowercase::new(""),
-            name: Lowercase::new("tag"),
-            offset: 0,
-            ty: FieldType::Isize,
-            ty_name: Lowercase::new(""),
-            default_value: None,
-        },
-        ObjectField {
-            class: Lowercase::new(""),
-            name: Lowercase::new("data"),
-            offset: 0,
-            ty: FieldType::Pointer,
-            ty_name: Lowercase::new(""),
-            default_value: None,
-        },
-    ],
-    properties: vec![
-        ObjectProperty {
-            class: Lowercase::new(""),
-            name: Lowercase::new("tag"),
-            var: 0,
-        },
-        ObjectProperty {
-            class: Lowercase::new(""),
-            name: Lowercase::new("data"),
-            var: 1,
-        },
-    ],
-    classes: None,
-});

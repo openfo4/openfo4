@@ -2,14 +2,16 @@ use std::fmt::Debug;
 use std::mem::transmute;
 use std::sync::{Arc, RwLock};
 
+use game_common::cell::UnsafeRefCell;
 use game_common::string::Lowercase;
 use hashbrown::HashMap;
 use openfo4_jit::Type;
 use openfo4_pex::{Class, Module};
 
-use crate::compiler::{CompilationResult, Context, NativeFunction, TypeLayout};
+use crate::compiler::resources::{TypeId, TypeInfo};
+use crate::compiler::{CompilationResult, Context, NativeFunction};
 use crate::runtime::host_functions::call_host_trampoline;
-use crate::runtime::{Func, HostState, IntoFunc, NativeFnPtr, ObjectPool, RawVal};
+use crate::runtime::{CallTable, Func, HostState, IntoFunc, NativeFnPtr, ObjectPool};
 
 #[derive(Clone, Debug)]
 pub enum Error {
@@ -22,17 +24,24 @@ pub struct Engine {
     /// Compilation context.
     ctx: Context,
     pub(crate) shared: Arc<EngineShared>,
-    layouts: HashMap<Lowercase<String>, TypeLayout>,
     instances: HashMap<Lowercase<String>, Arc<InstanceShared>>,
     classes: HashMap<Lowercase<String>, Class>,
 }
 
 impl Engine {
     pub fn new() -> Self {
+        let ctx = Context::new();
+        let pool = ObjectPool::new(Arc::clone(ctx.resources()));
+
         Self {
-            ctx: Context::new(),
-            shared: Arc::new(EngineShared::default()),
-            layouts: HashMap::new(),
+            ctx,
+            shared: Arc::new(EngineShared {
+                state: HostState {
+                    call_table: UnsafeRefCell::new(CallTable::default()),
+                    pool,
+                },
+                call_table_lock: RwLock::default(),
+            }),
             instances: HashMap::new(),
             classes: HashMap::new(),
         }
@@ -83,6 +92,8 @@ impl Engine {
             };
         }
 
+        self.ctx.compute_type_layouts();
+
         let class = self.classes.get(&class_name).unwrap();
 
         let mut funcs = HashMap::new();
@@ -110,21 +121,48 @@ impl Engine {
             }
         }
 
-        let layouts = self.ctx.compute_class_layouts(&class.name).unwrap();
-        self.layouts.extend(layouts);
-
         let shared = Arc::new(InstanceShared { funcs });
 
         self.instances.insert(class_name, shared.clone());
         Instance { shared }
     }
 
-    pub fn get_class_layout(&self, class: &str) -> Option<&TypeLayout> {
-        self.layouts.get(&Lowercase::new(class))
-    }
-
     pub fn object_pool(&self) -> &ObjectPool {
         &self.shared.state.pool
+    }
+
+    pub fn get_type(&self, name: &str) -> Option<TypeId> {
+        let name = Lowercase::new(name);
+        self.ctx
+            .resources()
+            .string_to_type
+            .lock()
+            .get(&name)
+            .copied()
+    }
+
+    pub fn none_type(&self) -> TypeId {
+        self.ctx.resources().primitives.none
+    }
+
+    pub fn bool_type(&self) -> TypeId {
+        self.ctx.resources().primitives.bool
+    }
+
+    pub fn int_type(&self) -> TypeId {
+        self.ctx.resources().primitives.int
+    }
+
+    pub fn float_type(&self) -> TypeId {
+        self.ctx.resources().primitives.float
+    }
+
+    pub fn ptr_type(&self) -> TypeId {
+        self.ctx.resources().primitives.pointer
+    }
+
+    pub fn type_info(&self, id: TypeId) -> TypeInfo {
+        self.ctx.resources().infos.lock().get(&id).cloned().unwrap()
     }
 }
 
@@ -149,7 +187,6 @@ pub struct Options {
     pub use_native_stubs: bool,
 }
 
-#[derive(Default)]
 pub(crate) struct EngineShared {
     pub(crate) call_table_lock: RwLock<()>,
     pub(crate) state: HostState,

@@ -22,7 +22,7 @@ fn default_class_values() {
 
     engine.register(&module);
     engine.compile("MyClass", &Options::default());
-    let layout = engine.get_class_layout("MyClass").unwrap();
+    let layout = engine.get_type("MyClass").unwrap();
 
     let mut builder = engine.object_pool().insert(layout.clone());
     builder.set("MyClass", "d", 50);

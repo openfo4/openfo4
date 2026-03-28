@@ -4,7 +4,7 @@ use crate::runtime::host_functions;
 
 #[derive(Copy, Clone, Debug)]
 pub struct RuntimeFunctions {
-    /// (ctx: *mut RawContext, layout: *const TypeLayout, array_len: usize) -> *mut u8
+    /// (ctx: *mut RawContext, layout: TypeId, array_len: usize) -> *mut u8
     pub alloc_zeroed: FuncId,
     /// (ctx: *mut RawContext, size: usize) -> *mut u8
     pub stack_frame_alloc: FuncId,

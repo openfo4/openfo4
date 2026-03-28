@@ -2,11 +2,10 @@ mod builtin;
 mod constant;
 mod function;
 mod function_props;
-mod layout;
 mod runtime;
 mod trampoline;
-mod types;
 
+use std::collections::VecDeque;
 use std::sync::Arc;
 
 use game_common::string::Lowercase;
@@ -17,14 +16,15 @@ use openfo4_pex::{Class, Function, Instruction, Module, Struct, Value};
 use slab::Slab;
 use thiserror::Error;
 
-use crate::compiler::codegen::constant::{ConstantData, create_string_constant};
+use crate::compiler::codegen::constant::ConstantData;
 use crate::compiler::codegen::function_props::{FunctionProps, function_properties};
-use crate::compiler::codegen::layout::{ClassLayout, compute_struct_layout};
+// use crate::compiler::codegen::layout::{ClassLayout, compute_struct_layout};
 use crate::compiler::codegen::runtime::RuntimeFunctions;
-use crate::compiler::codegen::types::Types;
-use crate::compiler::{
-    CompilationResult, FieldType, NativeFunction, ObjectField, ObjectProperty, TypeLayout,
+use crate::compiler::resources::{
+    self, CompositeType, CompositeTypeMember, Name, PropertyType, Resources, TypeId, TypeInfo,
+    TypeProperty,
 };
+use crate::compiler::{CompilationResult, NativeFunction};
 use crate::engine::Options;
 
 pub const MAX_INSTRUCTIONS_BEFORE_PREEMPT: usize = 1024;
@@ -46,8 +46,8 @@ pub enum Error {
 
 pub struct CodegenPass {
     data: CodegenData,
-    next_type_id: usize,
     compiler: Compiler,
+    classes_updated: bool,
 }
 
 impl CodegenPass {
@@ -56,13 +56,19 @@ impl CodegenPass {
 
         Self {
             data: CodegenData::new(&mut compiler),
-            next_type_id: 0,
             compiler,
+            classes_updated: false,
         }
+    }
+
+    pub fn resources(&self) -> &Arc<Resources> {
+        &self.data.resources
     }
 
     pub fn register_module(&mut self, module: &Module) {
         for class in &module.classes {
+            self.classes_updated = true;
+
             let parent = if class.parent.is_empty() || class.parent.eq_ignore_ascii_case("none") {
                 None
             } else {
@@ -98,9 +104,14 @@ impl CodegenPass {
 
             for st in &class.structs {
                 let name = format!("{}#{}", class.name, st.name);
-                self.data
-                    .structs
-                    .insert(Lowercase::new(&*name), StructDef { s: st.clone() });
+                self.data.structs.insert(
+                    Lowercase::new(&*name),
+                    StructDef {
+                        s: st.clone(),
+                        field_offsets: HashMap::new(),
+                        ty: TypeId::DANGLING,
+                    },
+                );
             }
 
             let mut properties = HashMap::new();
@@ -150,14 +161,12 @@ impl CodegenPass {
                     functions,
                     parent,
                     fields,
-                    type_id: self.next_type_id,
-                    layout: None,
-                    header: None,
+                    type_id: TypeId::DANGLING,
                     properties,
                     class: Some(class.clone()),
+                    field_offsets: HashMap::new(),
                 },
             );
-            self.next_type_id += 1;
         }
     }
 
@@ -176,227 +185,339 @@ impl CodegenPass {
     }
 
     pub fn compute_type_layouts(&mut self) {
-        let mut queue = Vec::new();
-        let mut dependencies = HashMap::<_, Vec<_>>::new();
-
-        for class in self.data.classes.values() {
-            let Some(parent) = &class.parent else {
-                queue.push(class.name.clone());
-                continue;
-            };
-
-            dependencies
-                .entry(parent.clone())
-                .or_default()
-                .push(class.name.clone());
+        if !self.classes_updated {
+            return;
         }
 
-        while let Some(class_name) = queue.pop() {
-            let class = self.data.classes.get(&class_name).unwrap();
-            let layout = layout::compute_class_layout(&self.data, &class);
-            let class = self.data.classes.get_mut(&class_name).unwrap();
-            class.layout = Some(layout);
-
-            if let Some(children) = dependencies.remove(&class_name) {
-                queue.extend(children);
+        let resolve_ty_and_default_value = |ty: &Type| -> (TypeId, Option<Vec<u8>>) {
+            match ty {
+                Type::None => (self.data.resources.primitives.none, None),
+                Type::Bool => (self.data.resources.primitives.bool, Some(vec![0; 4])),
+                Type::Int => (
+                    self.data.resources.primitives.int,
+                    Some(vec![0; size_of::<i32>()]),
+                ),
+                Type::Float => (
+                    self.data.resources.primitives.float,
+                    Some(vec![0; size_of::<f32>()]),
+                ),
+                Type::String | Type::Struct(_) | Type::Class(_) | Type::Var | Type::Array(_) => (
+                    self.data.resources.primitives.pointer,
+                    Some(vec![0; size_of::<usize>()]),
+                ),
             }
-        }
+        };
 
-        let mut class_headers = Vec::new();
-
-        // Create class header
-        for class in self.data.classes.values() {
-            if class.header.is_some() {
-                continue;
-            }
-
-            let mut type_ids = Vec::new();
-
-            let mut next_class = Some(&class.name);
-            while let Some(class_name) = next_class {
-                let class = self.data.get_class(class_name.as_str()).unwrap();
-                type_ids.push(class.type_id);
-                next_class = class.parent.as_ref();
-            }
-
-            type_ids.push(type_ids.len());
-            // Reverse such that the root class ID is at the start and the leaf is at the bottom.
-            type_ids.reverse();
-
-            let header: Arc<[usize]> = type_ids.into_boxed_slice().into();
-            class_headers.push((class.name.clone(), header));
-        }
-
-        for (class, header) in class_headers {
-            let class = self.data.classes.get_mut(&class).unwrap();
-            class.header = Some(header);
-        }
-    }
-
-    pub fn compute_class_layouts(
-        &mut self,
-        class: &str,
-    ) -> Result<HashMap<Lowercase<String>, TypeLayout>, Error> {
-        self.compute_type_layouts();
-
-        let mut class_layouts = HashMap::new();
-        for class in self.data.classes.values() {
-            let mut class_fields = Vec::new();
-            let mut properties = Vec::new();
-
-            let mut class_names = Vec::new();
-
-            let mut next_class = Some(&class.name);
-            while let Some(class_name) = next_class.take() {
-                class_names.push(class_name.to_owned().into_inner());
-
-                let class = self.data.get_class(class_name).unwrap();
-                let layout = class.layout.as_ref().unwrap();
-
-                for (field_name, field_offset) in &layout.field_offsets {
-                    let field_ty_name = class.fields.get(field_name).unwrap();
-                    let field_ty = self.data.resolve_ty(&field_ty_name);
-
-                    let var = class
-                        .class
-                        .as_ref()
-                        .unwrap()
-                        .variables
-                        .iter()
-                        .find(|var| &Lowercase::new(&*var.definition.name) == field_name)
-                        .unwrap();
-
-                    let default_value =
-                        match Lowercase::new(&*var.definition.ty).as_str().as_inner() {
-                            "int" => match &var.value {
-                                Value::Int(v) => bytemuck::bytes_of(v).to_vec(),
-                                Value::Null => [0; 4].to_vec(),
-                                _ => todo!(),
-                            },
-                            "float" => match &var.value {
-                                Value::Float(v) => bytemuck::bytes_of(v).to_vec(),
-                                Value::Null => [0; 4].to_vec(),
-                                _ => todo!(),
-                            },
-                            "string" => match &var.value {
-                                Value::Null => [0; size_of::<usize>()].to_vec(),
-                                Value::String(v) => {
-                                    let mut constants = Vec::new();
-                                    let ptr = create_string_constant(&mut constants, &v);
-                                    // FIXME: Don't leak here either..
-                                    core::mem::forget(constants);
-
-                                    bytemuck::bytes_of(&ptr.expose_provenance()).to_vec()
-                                }
-                                _ => todo!(),
-                            },
-                            "bool" => match &var.value {
-                                Value::Bool(v) => bytemuck::bytes_of(&(*v as i32)).to_vec(),
-                                Value::Null => [0; 4].to_vec(),
-                                _ => todo!(),
-                            },
-                            _ => match &var.value {
-                                Value::Null => [0; size_of::<usize>()].to_vec(),
-                                _ => todo!(),
-                            },
-                        };
-
-                    class_fields.push(ObjectField {
-                        class: class_name.clone(),
-                        name: field_name.clone(),
-                        offset: *field_offset,
-                        ty: match field_ty {
-                            Type::Bool => FieldType::Bool,
-                            Type::Int => FieldType::I32,
-                            Type::Float => FieldType::F32,
-                            _ => FieldType::Pointer,
-                        },
-                        ty_name: field_ty_name.clone(),
-                        default_value: Some(default_value),
-                    });
+        let resolve_property_type = |ty: &Type| -> PropertyType {
+            match ty {
+                Type::None => PropertyType::Inline(self.data.resources.primitives.none),
+                Type::Bool => PropertyType::Inline(self.data.resources.primitives.bool),
+                Type::Int => PropertyType::Inline(self.data.resources.primitives.int),
+                Type::Float => PropertyType::Inline(self.data.resources.primitives.float),
+                Type::String => PropertyType::Pointer(self.data.resources.primitives.string),
+                Type::Class(name) | Type::Struct(name) => {
+                    let s = self.data.resources.string_to_type.lock();
+                    let id = s.get(name).unwrap();
+                    PropertyType::Pointer(*id)
                 }
-
-                for (name, prop) in &class.properties {
-                    let Some(field) = class_fields.iter().position(|v| {
-                        v.class == class.name
-                            && prop.variable.as_ref().is_some_and(|pv| pv == &v.name)
-                    }) else {
-                        // Properties without a backing variable cannot be accessed
-                        // externally.
-                        continue;
+                Type::Array(ty) => {
+                    // FIXME: For now we only support one level of nesting.
+                    // The game currently never supports instantiating nested arrays,
+                    // however we should still be able to implement that.
+                    let id = match &**ty {
+                        Type::None => self.data.resources.primitives.none,
+                        Type::Bool => self.data.resources.primitives.bool,
+                        Type::Int => self.data.resources.primitives.int,
+                        Type::Float => self.data.resources.primitives.float,
+                        Type::String => self.data.resources.primitives.string,
+                        Type::Class(name) | Type::Struct(name) => {
+                            let s = self.data.resources.string_to_type.lock();
+                            *s.get(name).unwrap()
+                        }
+                        Type::Var => todo!(),
+                        Type::Array(_) => todo!(),
                     };
 
-                    properties.push(ObjectProperty {
-                        class: class.name.clone(),
-                        name: name.clone(),
-                        var: field,
-                    });
+                    PropertyType::ArrayPointer(id)
                 }
-
-                next_class = class.parent.as_ref();
+                Type::Var => todo!(),
             }
+        };
 
-            class_names.reverse();
+        let get_size_align = |ty: &Type| -> (usize, usize) {
+            match ty {
+                Type::None => (0, 1),
+                Type::Bool => (4, 4),
+                Type::Int => (size_of::<i32>(), align_of::<i32>()),
+                Type::Float => (size_of::<f32>(), align_of::<f32>()),
+                Type::String | Type::Struct(_) | Type::Class(_) | Type::Var | Type::Array(_) => {
+                    (size_of::<usize>(), align_of::<usize>())
+                }
+            }
+        };
 
-            class_layouts.insert(
-                class.name.clone(),
-                TypeLayout {
-                    header: class.header.clone(),
-                    fields: class_fields,
-                    properties,
-                    classes: Some(Arc::from(class_names)),
-                },
-            );
+        let mut structs = HashMap::new();
+        let mut struct_field_offsets = HashMap::new();
+
+        for (name, st) in &mut self.data.structs {
+            let id = self.data.resources.types.declare();
+            structs.insert(name.to_owned(), id);
+            self.data
+                .resources
+                .string_to_type
+                .lock()
+                .insert(name.to_owned(), id);
+
+            st.ty = id;
+        }
+
+        let mut classes = HashMap::new();
+        for (name, class) in &mut self.data.classes {
+            let id = self.data.resources.types.declare();
+            classes.insert(name.clone(), id);
+            self.data
+                .resources
+                .string_to_type
+                .lock()
+                .insert(name.to_owned(), id);
+
+            class.type_id = id;
         }
 
         for (name, st) in &self.data.structs {
-            let layout = st.layout(&self.data);
+            let id = structs[name];
 
-            let mut fields = Vec::new();
-            let mut properties = Vec::new();
-            for (field_name, field_offset) in &layout.field_offsets {
-                let member =
-                    st.s.members
-                        .iter()
-                        .find(|f| &Lowercase::new(f.name.as_str()) == field_name)
-                        .unwrap();
-                let member_ty = Lowercase::new(member.ty.as_str());
-                let field_ty = self.data.resolve_ty(&member_ty);
+            let mut members = Vec::new();
+            let mut offset = 0;
+            let mut align = 1;
 
-                let var = fields.len();
-                fields.push(ObjectField {
-                    class: Lowercase::new(""),
-                    name: field_name.clone(),
-                    offset: *field_offset,
-                    ty: match field_ty {
-                        Type::Bool => FieldType::Bool,
-                        Type::Int => FieldType::I32,
-                        Type::Float => FieldType::F32,
-                        _ => FieldType::Pointer,
+            let mut field_offsets = HashMap::new();
+            let mut properties = HashMap::new();
+
+            for member in &st.s.members {
+                let ty_name = Lowercase::new(&*member.ty);
+                let ty = self.data.resolve_ty(&ty_name);
+                let (member_size, member_align) = get_size_align(&ty);
+                let (ty_id, default_value) = resolve_ty_and_default_value(&ty);
+
+                offset = (offset + member_align - 1) & !(member_align - 1);
+
+                let index = members.len();
+                properties.insert(
+                    (name.to_owned(), Lowercase::new(&*member.name)),
+                    TypeProperty {
+                        field: index,
+                        ty: resolve_property_type(&ty),
                     },
-                    ty_name: member_ty,
-                    default_value: None,
-                });
+                );
 
-                properties.push(ObjectProperty {
-                    class: Lowercase::new(""),
-                    name: field_name.clone(),
-                    var,
+                members.push(CompositeTypeMember {
+                    ty: ty_id,
+                    offset,
+                    name: Some(Name::Struct {
+                        field: Lowercase::new(&*member.name),
+                    }),
+                    default_value,
+                    size: member_size,
                 });
+                field_offsets.insert(Lowercase::new(&*member.name), offset);
+
+                offset += member_size;
+                align = align.max(member_align);
             }
 
-            class_layouts.insert(
-                name.clone(),
-                TypeLayout {
-                    header: None,
-                    fields,
+            self.data.resources.types.define(
+                id,
+                resources::Type::Composite(CompositeType {
+                    members,
+                    size: offset,
+                    align,
+                }),
+            );
+
+            self.data.resources.infos.lock().insert(
+                id,
+                TypeInfo {
+                    classes: Vec::new(),
                     properties,
-                    classes: None,
+                    name: Some(name.to_owned()),
+                },
+            );
+
+            struct_field_offsets.insert(name.to_owned(), field_offsets);
+        }
+
+        for (name, fields) in struct_field_offsets {
+            self.data.structs.get_mut(&name).unwrap().field_offsets = fields;
+        }
+
+        let mut class_field_offsets: HashMap<Lowercase<String>, HashMap<Lowercase<String>, usize>> =
+            HashMap::new();
+
+        let mut queue = self.data.classes.keys().collect::<VecDeque<_>>();
+        while let Some(name) = queue.pop_front() {
+            let class = &self.data.classes[name];
+            let id = classes[name];
+
+            let mut base = if let Some(parent) = &class.parent {
+                let parent = classes[parent];
+                let Some(parent) = self.data.resources.types.get(parent) else {
+                    queue.push_back(name);
+                    continue;
+                };
+
+                match parent {
+                    resources::Type::Composite(ty) => ty.clone(),
+                    _ => unreachable!(),
+                }
+            } else {
+                // First member is for RTTI.
+                CompositeType {
+                    members: vec![CompositeTypeMember {
+                        ty: self.data.resources.primitives.pointer,
+                        offset: 0,
+                        name: None,
+                        default_value: None,
+                        size: size_of::<usize>(),
+                    }],
+                    align: align_of::<usize>(),
+                    size: size_of::<usize>(),
+                }
+            };
+
+            let mut class_ids = vec![id];
+            let mut next_parent = &class.parent;
+            while let Some(parent) = next_parent {
+                let class = &self.data.classes[parent];
+                let id = classes[parent];
+
+                class_ids.push(id);
+                next_parent = &class.parent;
+            }
+
+            // TypeIds need to be sorted such that superclasses come before their subclasses.
+            class_ids.reverse();
+
+            let header_ptr = self
+                .data
+                .resources
+                .constants
+                .alloc(bytemuck::cast_slice(&class_ids), align_of::<usize>());
+
+            base.members[0].default_value =
+                Some(header_ptr.expose_provenance().to_ne_bytes().to_vec());
+
+            let mut field_offsets = if let Some(parent) = &class.parent {
+                class_field_offsets.get(parent).unwrap().clone()
+            } else {
+                HashMap::new()
+            };
+            // +1 because the first member is the TypeId header.
+            let first_field_index = field_offsets.len() + 1;
+
+            let class_raw = class.class.as_ref().unwrap();
+            for var in &class_raw.variables {
+                let ty = self.data.resolve_ty(&Lowercase::new(&*var.definition.ty));
+                let (member_size, member_align) = get_size_align(&ty);
+                let (ty, mut default_value) = resolve_ty_and_default_value(&ty);
+
+                match &var.value {
+                    Value::Bool(v) => {
+                        default_value = Some(u32::from(*v).to_ne_bytes().to_vec());
+                    }
+                    Value::Int(v) => {
+                        default_value = Some(v.to_ne_bytes().to_vec());
+                    }
+                    Value::Float(v) => {
+                        default_value = Some(v.to_ne_bytes().to_vec());
+                    }
+                    Value::String(v) => {
+                        let ptr = self.data.resources.constants.alloc(v.as_bytes(), 1);
+                        default_value = Some(ptr.expose_provenance().to_ne_bytes().to_vec());
+                    }
+                    Value::Null | Value::Ident(_) => {}
+                };
+
+                base.size = (base.size + member_align - 1) & !(member_align - 1);
+
+                base.members.push(CompositeTypeMember {
+                    ty,
+                    offset: base.size,
+                    name: Some(Name::Class {
+                        class: Lowercase::new(&*class_raw.name),
+                        field: Lowercase::new(&*var.definition.name),
+                    }),
+                    default_value,
+                    size: member_size,
+                });
+                field_offsets.insert(Lowercase::new(&*var.definition.name), base.size);
+
+                base.size += member_size;
+                base.align = base.align.max(member_align);
+            }
+
+            self.data
+                .resources
+                .types
+                .define(id, resources::Type::Composite(base));
+
+            class_field_offsets.insert(name.to_owned(), field_offsets);
+
+            // Properties
+            let mut properties = if let Some(parent) = &class.parent {
+                let parent_id = self.data.classes[parent].type_id;
+
+                self.data
+                    .resources
+                    .infos
+                    .lock()
+                    .get(&parent_id)
+                    .unwrap()
+                    .clone()
+                    .properties
+            } else {
+                HashMap::new()
+            };
+
+            for prop in &class_raw.properties {
+                // Properties without associated variable are not accessible externally.
+                let Some(variable) = &prop.variable else {
+                    continue;
+                };
+
+                let position = class_raw
+                    .variables
+                    .iter()
+                    .position(|v| v.definition.name.to_lowercase() == variable.to_lowercase())
+                    .unwrap();
+
+                let var = &class_raw.variables[position];
+                let ty = self.data.resolve_ty(&Lowercase::new(&*var.definition.ty));
+
+                properties.insert(
+                    (name.to_owned(), Lowercase::new(&*prop.name)),
+                    TypeProperty {
+                        field: position + first_field_index,
+                        ty: resolve_property_type(&ty),
+                    },
+                );
+            }
+
+            self.data.resources.infos.lock().insert(
+                id,
+                TypeInfo {
+                    classes: class_ids,
+                    properties,
+                    name: Some(name.to_owned()),
                 },
             );
         }
 
-        Ok(class_layouts)
+        for (class, _) in classes {
+            let fields = class_field_offsets.remove(&class).unwrap();
+            let class = self.data.classes.get_mut(&class).unwrap();
+            class.field_offsets = fields;
+        }
     }
 
     pub fn compile_fn(
@@ -457,7 +578,6 @@ impl CodegenPass {
             // Constants must be kept alive until all function instances are dropped.
             // NOTE THAT THIS MUST INCLUDE ALL CALLED FUNCTIONS RECURSIVELY.
             core::mem::forget(res.constants);
-            core::mem::forget(res.layouts);
 
             let func = &mut self.data.functions[func_id.0];
             func.signature = Some(res.signature.clone());
@@ -485,7 +605,7 @@ impl CodegenPass {
 
 #[derive(Clone, Debug)]
 struct CodegenData {
-    types: Types,
+    resources: Arc<Resources>,
     classes: HashMap<Lowercase<String>, ClassDef>,
     structs: HashMap<Lowercase<String>, StructDef>,
     functions: Slab<FunctionDef>,
@@ -495,7 +615,7 @@ struct CodegenData {
 impl CodegenData {
     fn new(compiler: &mut Compiler) -> Self {
         Self {
-            types: Types::default(),
+            resources: Arc::default(),
             classes: HashMap::new(),
             structs: HashMap::new(),
             functions: Slab::new(),
@@ -604,9 +724,8 @@ struct ClassDef {
     parent: Option<Lowercase<String>>,
     fields: HashMap<Lowercase<String>, Lowercase<String>>,
     /// Unique RTTI number stored in the header to identify objects of this class.
-    type_id: usize,
-    layout: Option<ClassLayout>,
-    header: Option<Arc<[usize]>>,
+    type_id: TypeId,
+    field_offsets: HashMap<Lowercase<String>, usize>,
     properties: HashMap<Lowercase<String>, ClassProperty>,
     class: Option<Class>,
 }
@@ -636,12 +755,8 @@ pub struct FunctionId(usize);
 #[derive(Clone, Debug)]
 struct StructDef {
     pub s: Struct,
-}
-
-impl StructDef {
-    fn layout(&self, data: &CodegenData) -> ClassLayout {
-        compute_struct_layout(data, self)
-    }
+    pub ty: TypeId,
+    pub field_offsets: HashMap<Lowercase<String>, usize>,
 }
 
 fn find_function_callees(data: &CodegenData, function: &FunctionDef) -> Vec<FunctionId> {

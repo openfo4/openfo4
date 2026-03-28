@@ -8,7 +8,6 @@ mod objects;
 mod registration;
 
 use std::collections::VecDeque;
-use std::io::Read;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -21,7 +20,7 @@ use hashbrown::HashMap;
 use hecs::{Entity, World};
 use openfo4_core::events::EventBus;
 use openfo4_pex::Module;
-use openfo4_script::compiler::TypeLayout;
+use openfo4_script::compiler::resources::TypeId;
 use openfo4_script::engine::{Engine, Instance, Options};
 use openfo4_script::runtime::{Context, Exception, ObjectAddr, ObjectRef, Stack, Val};
 
@@ -446,8 +445,8 @@ fn core_actor_values(engine: &mut Engine) -> State {
     let actor = engine.compile("Actor", &COMPILER_OPTIONS);
     engine.compile("ActorValue", &COMPILER_OPTIONS);
 
-    let actor_layout = engine.get_class_layout("Actor").unwrap();
-    let actor_value = engine.get_class_layout("ActorValue").unwrap();
+    let actor_layout = engine.get_type("Actor").unwrap();
+    let actor_value = engine.get_type("ActorValue").unwrap();
 
     let [
         health,
@@ -471,7 +470,7 @@ fn core_actor_values(engine: &mut Engine) -> State {
     };
 
     let mut objects = ScriptObjects::default();
-    objects.insert(vec![player.clone()], None);
+    objects.insert(engine, vec![player.clone()], None);
 
     State {
         core_objects: CoreObjects {
@@ -507,7 +506,7 @@ fn core_actor_values(engine: &mut Engine) -> State {
 #[derive(Clone, Debug)]
 struct ScriptInstance {
     instance: Instance,
-    layout: TypeLayout,
+    layout: TypeId,
     object: ObjectRef,
     stacks: HashMap<String, Stack>,
 }

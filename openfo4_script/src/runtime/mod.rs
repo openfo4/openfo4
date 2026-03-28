@@ -5,18 +5,16 @@ mod stack;
 use std::any::Any;
 use std::marker::PhantomData;
 use std::mem::{MaybeUninit, transmute};
-use std::panic::AssertUnwindSafe;
 use std::sync::Arc;
 
 use game_common::cell::UnsafeRefCell;
 use openfo4_jit::{Signature, Type};
-use parking_lot::WaitTimeoutResult;
 use thiserror::Error;
 
-pub use object::{ArrayObject, Object, ObjectAddr, ObjectPool, ObjectRef, ObjectTag, StringObject};
+pub use object::{ArrayObject, Object, ObjectAddr, ObjectPool, ObjectRef, StringObject};
 pub use stack::Stack;
 
-use crate::compiler::{CompilationResult, TypeLayout};
+use crate::compiler::CompilationResult;
 use crate::engine::{Engine, EngineShared};
 
 pub(crate) const RESULT_OK: i32 = 0;
@@ -407,7 +405,6 @@ impl<'a, T> Caller<'a, T> {
     }
 }
 
-#[derive(Default)]
 pub struct HostState {
     pub call_table: UnsafeRefCell<CallTable>,
     pub pool: ObjectPool,

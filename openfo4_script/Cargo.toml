@@ -35,3 +35,7 @@ path = "tests/string.rs"
 [[test]]
 name = "object_builder"
 path = "tests/object_builder.rs"
+
+[[test]]
+name = "reflection"
+path = "tests/reflection.rs"

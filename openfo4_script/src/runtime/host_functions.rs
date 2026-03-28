@@ -1,6 +1,6 @@
 use std::panic::AssertUnwindSafe;
 
-use crate::compiler::TypeLayout;
+use crate::compiler::resources::TypeId;
 use crate::runtime::{ObjectAddr, RawContext, RawVal};
 
 pub unsafe extern "C" fn call_host_trampoline(
@@ -18,14 +18,12 @@ pub unsafe extern "C" fn call_host_trampoline(
 
 pub unsafe extern "C" fn alloc_zeroed(
     ctx: *mut RawContext,
-    layout: *const TypeLayout,
+    ty: TypeId,
     array_len: usize,
 ) -> *mut u8 {
     abort_on_unwind(|| {
-        let layout = unsafe { &*layout };
-
         // FIXME: Don't clone, we can keep the TypeLayout for many objects.
-        let object_ref = unsafe { (*(*ctx).state).pool.alloc(layout.clone(), array_len) };
+        let object_ref = unsafe { (*(*ctx).state).pool.alloc(ty, array_len) };
         object_ref.addr().to_raw() as *mut u8
     })
 }

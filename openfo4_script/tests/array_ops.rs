@@ -1,6 +1,4 @@
-use game_common::string::Lowercase;
 use openfo4_script::assembler::assemble;
-use openfo4_script::compiler::{FieldType, ObjectField, ObjectProperty, TypeLayout};
 use openfo4_script::engine::{Engine, Options};
 use openfo4_script::runtime::{Caller, Context, Exception, ObjectAddr, Stack};
 
@@ -75,7 +73,7 @@ fn array_get() {
     engine.register(&module);
     engine.register_native_function("test", "assert_valid_result", assert_valid_result);
 
-    let mut builder = engine.object_pool().insert_array(int_layout(), 10);
+    let mut builder = engine.object_pool().insert_array(engine.int_type(), 10);
     for i in 0..10 {
         builder.set_at::<i32>(i, "", "", (i * i) as i32);
     }
@@ -119,7 +117,7 @@ fn array_add() {
     engine.register(&module);
     engine.register_native_function("test", "assert_valid_result", assert_valid_result);
 
-    let mut builder = engine.object_pool().insert_array(int_layout(), 10);
+    let mut builder = engine.object_pool().insert_array(engine.int_type(), 10);
     for i in 0..10 {
         builder.set_at::<i32>(i, "", "", i as i32);
     }
@@ -163,7 +161,7 @@ fn array_insert() {
     engine.register(&module);
     engine.register_native_function("test", "assert_valid_result", assert_valid_result);
 
-    let mut builder = engine.object_pool().insert_array(int_layout(), 10);
+    let mut builder = engine.object_pool().insert_array(engine.int_type(), 10);
     for i in 0..10 {
         builder.set_at::<i32>(i, "", "", i as i32);
     }
@@ -186,7 +184,6 @@ fn array_clear() {
 
     fn assert_valid_result(caller: Caller<'_, ()>, addr: ObjectAddr) -> Result<(), Exception> {
         let array = unsafe { caller.array::<i32>(addr) };
-        dbg!(&array);
         assert_eq!(array.len(), 0);
         Ok(())
     }
@@ -209,7 +206,7 @@ fn array_clear() {
     engine.register(&module);
     engine.register_native_function("test", "assert_valid_result", assert_valid_result);
 
-    let mut builder = engine.object_pool().insert_array(int_layout(), 5);
+    let mut builder = engine.object_pool().insert_array(engine.int_type(), 5);
     for i in 0..5 {
         builder.set_at::<i32>(i, "", "", i as i32);
     }
@@ -262,7 +259,7 @@ fn array_find_int() {
     engine.register(&module);
     engine.register_native_function("test", "assert_valid_result", assert_valid_result);
 
-    let mut builder = engine.object_pool().insert_array(int_layout(), 100);
+    let mut builder = engine.object_pool().insert_array(engine.int_type(), 100);
     for i in 0..100 {
         let value = if i < 10 { 42 } else { i as i32 };
         builder.set_at::<i32>(i, "", "", value);
@@ -317,7 +314,6 @@ fn array_find_struct() {
             field x: int
             field y: float
 
-
         function MyFunction(arr: MyClass#MyStruct[]) static:
         local res: int
         local nonevar: none
@@ -332,9 +328,9 @@ fn array_find_struct() {
     let instance = engine.compile("MyClass", &Options::default());
     let func = instance.get_func("MyFunction").unwrap();
 
-    let struct_layout = engine.get_class_layout("MyClass#MyStruct").unwrap();
+    let struct_layout = engine.get_type("MyClass#MyStruct").unwrap();
 
-    let mut array = engine.object_pool().insert_array(ptr_layout(), 100);
+    let mut array = engine.object_pool().insert_array(engine.ptr_type(), 100);
     for i in 0..100 {
         let mut object = engine.object_pool().insert(struct_layout.clone());
 
@@ -358,44 +354,4 @@ fn array_find_struct() {
 
     let func = func.typed::<ObjectAddr, ()>().unwrap();
     func.call(&mut ctx, array_ptr.addr()).unwrap();
-}
-
-fn int_layout() -> TypeLayout {
-    TypeLayout {
-        header: None,
-        fields: vec![ObjectField {
-            class: Lowercase::new(""),
-            name: Lowercase::new(""),
-            offset: 0,
-            ty: FieldType::I32,
-            ty_name: Lowercase::new(""),
-            default_value: None,
-        }],
-        properties: vec![ObjectProperty {
-            class: Lowercase::new(""),
-            name: Lowercase::new(""),
-            var: 0,
-        }],
-        classes: None,
-    }
-}
-
-fn ptr_layout() -> TypeLayout {
-    TypeLayout {
-        header: None,
-        fields: vec![ObjectField {
-            class: Lowercase::new(""),
-            name: Lowercase::new(""),
-            offset: 0,
-            ty: FieldType::Pointer,
-            ty_name: Lowercase::new(""),
-            default_value: None,
-        }],
-        properties: vec![ObjectProperty {
-            class: Lowercase::new(""),
-            name: Lowercase::new(""),
-            var: 0,
-        }],
-        classes: None,
-    }
 }

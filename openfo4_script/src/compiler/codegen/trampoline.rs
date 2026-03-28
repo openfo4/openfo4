@@ -4,7 +4,6 @@ use openfo4_jit::{Compiler, FuncId, Signature, Type};
 
 use crate::compiler::NativeFunction;
 use crate::runtime::RawVal;
-use crate::runtime::host_functions::alloc_zeroed;
 
 pub fn generate_host_to_guest_trampoline(
     compiler: &mut Compiler,
