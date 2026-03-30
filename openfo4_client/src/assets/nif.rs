@@ -832,7 +832,7 @@ async fn load_material(
                         let handle = loader
                             .load::<FileImageHandle, _>(&FileImageKey {
                                 path,
-                                force_srgb: None,
+                                force_srgb: Some(true),
                             })
                             .await?;
 
@@ -1025,7 +1025,7 @@ async fn load_material_plain(
                         let handle = loader
                             .load::<FileImageHandle, _>(&FileImageKey {
                                 path,
-                                force_srgb: None,
+                                force_srgb: Some(true),
                             })
                             .await?;
 

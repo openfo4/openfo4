@@ -92,7 +92,7 @@ impl Asset for BgsmStandardMaterial {
             let handle = loader
                 .load::<FileImageHandle, _>(&FileImageKey {
                     path,
-                    force_srgb: None,
+                    force_srgb: Some(true),
                 })
                 .await?;
 
