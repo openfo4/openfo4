@@ -1,7 +1,7 @@
 use std::iter::FusedIterator;
 
 use hashbrown::{HashMap, HashSet};
-use indexmap::{IndexMap, IndexSet};
+use indexmap::IndexSet;
 use openfo4_core::record::RecordId;
 
 /// Globals valid across the entire game state.

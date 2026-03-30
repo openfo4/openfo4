@@ -25,7 +25,6 @@ pub mod pathing;
 pub mod projectile;
 pub mod quests;
 pub mod scripting;
-pub mod skeleton;
 pub mod time;
 pub mod trigger_box;
 pub mod weapon;
