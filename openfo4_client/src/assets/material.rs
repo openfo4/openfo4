@@ -7,7 +7,7 @@ use openfo4_nif::bgsm::Bgsm;
 
 use crate::assets::data_file::DataFile;
 use crate::assets::nif::DECAL_DEPTH_BIAS;
-use crate::assets::texture::FileImageHandle;
+use crate::assets::texture::{FileImageHandle, FileImageKey};
 use crate::assets::{Error, FileLoadContext};
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -88,8 +88,12 @@ impl Asset for BgsmStandardMaterial {
         let mut textures = Vec::new();
 
         if !bgsm.diffuse_texture.is_empty() {
+            let path = DataPathBuf::new(&*bgsm.diffuse_texture);
             let handle = loader
-                .load::<FileImageHandle, _>(&DataPathBuf::new(&*bgsm.diffuse_texture))
+                .load::<FileImageHandle, _>(&FileImageKey {
+                    path,
+                    force_srgb: None,
+                })
                 .await?;
 
             material.base_color_texture = Some(handle.0.clone());
@@ -97,8 +101,12 @@ impl Asset for BgsmStandardMaterial {
         }
 
         if !bgsm.normal_texture.is_empty() {
+            let path = DataPathBuf::new(&*bgsm.normal_texture);
             let handle = loader
-                .load::<FileImageHandle, _>(&DataPathBuf::new(&*bgsm.normal_texture))
+                .load::<FileImageHandle, _>(&FileImageKey {
+                    path,
+                    force_srgb: None,
+                })
                 .await?;
 
             material.normal_texture = Some(handle.0.clone());
@@ -106,8 +114,12 @@ impl Asset for BgsmStandardMaterial {
         }
 
         if !bgsm.smooth_spec_texture.is_empty() {
+            let path = DataPathBuf::new(&*bgsm.smooth_spec_texture);
             let handle = loader
-                .load::<FileImageHandle, _>(&DataPathBuf::new(&*bgsm.smooth_spec_texture))
+                .load::<FileImageHandle, _>(&FileImageKey {
+                    path,
+                    force_srgb: None,
+                })
                 .await?;
 
             material.specular_glossiness_texture = Some(handle.0.clone());
@@ -115,10 +127,12 @@ impl Asset for BgsmStandardMaterial {
         }
 
         if let Some(grayscale_palette) = &bgsm.grayscale_palette {
+            let path = DataPathBuf::new(&*grayscale_palette.grayscale_texture);
             let handle = loader
-                .load::<FileImageHandle, _>(&DataPathBuf::new(
-                    &*grayscale_palette.grayscale_texture,
-                ))
+                .load::<FileImageHandle, _>(&FileImageKey {
+                    path,
+                    force_srgb: None,
+                })
                 .await?;
 
             material.grayscale_palette_scale = grayscale_palette.scale;

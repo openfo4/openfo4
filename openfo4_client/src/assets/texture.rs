@@ -9,21 +9,28 @@ use openfo4_dds::Format;
 use crate::assets::data_file::DataFile;
 use crate::assets::{Error, FileLoadContext};
 
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct FileImageKey {
+    pub path: DataPathBuf,
+    /// Whether the image is forced to SRGB or linear RGB.
+    pub force_srgb: Option<bool>,
+}
+
 /// An [`ImageHandle`] that was loaded by a file.
 #[derive(Clone, Debug)]
 pub struct FileImageHandle(pub ImageHandle);
 
 impl Asset for FileImageHandle {
-    type Key = DataPathBuf;
+    type Key = FileImageKey;
     type Error = Error;
     type Context = FileLoadContext;
 
     async fn load(
         loader: &AssetLoader,
-        path: &Self::Key,
+        key: &Self::Key,
         ctx: &Self::Context,
     ) -> Result<Self, Self::Error> {
-        let mut path = path.clone();
+        let mut path = key.path.clone();
         if !path.starts_with(DataPath::from_str("textures")) {
             path.push_front("textures");
         }
@@ -34,16 +41,12 @@ impl Asset for FileImageHandle {
                 .await
                 .map_err(|err| Error::Other(format!("failed to read file {}: {}", path, err)))?;
 
-            let format = match image.format {
-                Format::Bc1Unorm => TextureFormat::Bc1RgbaUnorm,
-                Format::Bc2Unorm => TextureFormat::Bc2RgbaUnorm,
-                Format::Bc3Unorm => TextureFormat::Bc3RgbaUnorm,
-                Format::Bc5Unorm => TextureFormat::Bc5RgUnorm,
-                Format::Rgba8Unorm => TextureFormat::Rgba8Unorm,
-                Format::Bgra8Unorm => TextureFormat::Bgra8Unorm,
-                Format::Bgra8UnormSrgb => TextureFormat::Bgra8UnormSrgb,
-                _ => todo!(),
-            };
+            let format = convert_dds_format(image.format, key.force_srgb).ok_or_else(|| {
+                Error::Other(format!(
+                    "unsupported DXGI format in {}: {:?}",
+                    path, image.format
+                ))
+            })?;
 
             let mips = image
                 .mips
@@ -57,5 +60,49 @@ impl Asset for FileImageHandle {
         } else {
             todo!("unknown file extension");
         }
+    }
+}
+
+fn convert_dds_format(mut format: Format, srgb: Option<bool>) -> Option<TextureFormat> {
+    match srgb {
+        Some(true) => match format {
+            Format::Bc1Unorm => format = Format::Bc1UnormSrgb,
+            Format::Bc2Unorm => format = Format::Bc2UnormSrgb,
+            Format::Bc3Unorm => format = Format::Bc3UnormSrgb,
+            Format::Bc7Unorm => format = Format::Bc7UnormSrgb,
+            Format::Rgba8Unorm => format = Format::Rgba8UnormSrgb,
+            Format::Bgra8Unorm => format = Format::Bgra8UnormSrgb,
+            _ => {}
+        },
+        Some(false) => match format {
+            Format::Bc1UnormSrgb => format = Format::Bc1Unorm,
+            Format::Bc2UnormSrgb => format = Format::Bc2Unorm,
+            Format::Bc3UnormSrgb => format = Format::Bc3Unorm,
+            Format::Bc7UnormSrgb => format = Format::Bc7Unorm,
+            Format::Rgba8UnormSrgb => format = Format::Rgba8Unorm,
+            Format::Bgra8UnormSrgb => format = Format::Bgra8UnormSrgb,
+            _ => {}
+        },
+        None => {}
+    }
+
+    match format {
+        Format::Rgba8Unorm => Some(TextureFormat::Rgba8Unorm),
+        Format::Rgba8UnormSrgb => Some(TextureFormat::Rgba8UnormSrgb),
+        Format::Bgra8Unorm => Some(TextureFormat::Bgra8Unorm),
+        Format::Bgra8UnormSrgb => Some(TextureFormat::Bgra8UnormSrgb),
+        Format::Bc1Unorm => Some(TextureFormat::Bc1RgbaUnorm),
+        Format::Bc1UnormSrgb => Some(TextureFormat::Bc1RgbaUnormSrgb),
+        Format::Bc2Unorm => Some(TextureFormat::Bc2RgbaUnorm),
+        Format::Bc2UnormSrgb => Some(TextureFormat::Bc2RgbaUnormSrgb),
+        Format::Bc3Unorm => Some(TextureFormat::Bc3RgbaUnorm),
+        Format::Bc3UnormSrgb => Some(TextureFormat::Bc3RgbaUnormSrgb),
+        Format::Bc4Unorm => Some(TextureFormat::Bc4RUnorm),
+        Format::Bc4Snorm => Some(TextureFormat::Bc4RSnorm),
+        Format::Bc5Unorm => Some(TextureFormat::Bc5RgUnorm),
+        Format::Bc5Snorm => Some(TextureFormat::Bc5RgSnorm),
+        Format::Bc7Unorm => Some(TextureFormat::Bc7RgbaUnorm),
+        Format::Bc7UnormSrgb => Some(TextureFormat::Bc7RgbaUnormSrgb),
+        _ => None,
     }
 }
