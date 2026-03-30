@@ -30,6 +30,25 @@ impl Asset for FileImageHandle {
         key: &Self::Key,
         ctx: &Self::Context,
     ) -> Result<Self, Self::Error> {
+        let image = loader.load::<FileImage, _>(key).await?;
+        let handle = ctx.entities.create_image(image.0.clone());
+        Ok(Self(handle))
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct FileImage(pub MipImage);
+
+impl Asset for FileImage {
+    type Key = FileImageKey;
+    type Error = Error;
+    type Context = ();
+
+    async fn load(
+        loader: &AssetLoader,
+        key: &Self::Key,
+        _ctx: &Self::Context,
+    ) -> Result<Self, Self::Error> {
         let mut path = key.path.clone();
         if !path.starts_with(DataPath::from_str("textures")) {
             path.push_front("textures");
@@ -54,9 +73,7 @@ impl Asset for FileImageHandle {
                 .map(|mip| Image::new(mip.size, format, mip.bytes.clone()))
                 .collect();
 
-            let handle = ctx.entities.create_image(MipImage::new(mips));
-
-            Ok(Self(handle))
+            Ok(Self(MipImage::new(mips)))
         } else {
             todo!("unknown file extension");
         }

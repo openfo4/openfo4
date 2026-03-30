@@ -23,6 +23,7 @@ use openfo4_esp::{FormId, RecordData, RecordKind};
 use openfo4_nif::{Block, Nif};
 
 use crate::assets::data_file::DataFile;
+use crate::assets::texture::{FileImage, FileImageKey};
 use crate::components::{Player, WorldSpace};
 use crate::shared::SharedState;
 use crate::state::esp::EspLoader;
@@ -459,29 +460,15 @@ async fn load_worldspace_weather_props(
 
     let mut sun = None;
     if let Some(path) = &climate.sun_texture {
-        let mut path = DataPathBuf::new(path.as_bytes());
-        path.push_front("textures");
         let img = loader
-            .load::<DataFile<openfo4_dds::Image>, _>(&path)
+            .load::<FileImage, _>(&FileImageKey {
+                path: DataPathBuf::new(path.as_bytes()),
+                force_srgb: None,
+            })
             .await
             .unwrap();
 
-        let mips = img
-            .mips
-            .iter()
-            .map(|mip| {
-                let format = match img.format {
-                    Format::Rgba8Unorm => TextureFormat::Rgba8Unorm,
-                    Format::Rgba8UnormSrgb => TextureFormat::Rgba8UnormSrgb,
-                    Format::Bc3Unorm => TextureFormat::Bc3RgbaUnorm,
-                    _ => todo!(),
-                };
-
-                Image::new(mip.size, format, mip.bytes.clone())
-            })
-            .collect();
-
-        sun = Some(MipImage::new(mips));
+        sun = Some(img.0.clone());
     }
 
     let mut weathers = Vec::new();
@@ -551,7 +538,10 @@ async fn load_worldspace_weather_props(
             path.push_front("textures");
 
             let Ok(img) = loader
-                .load::<DataFile<openfo4_dds::Image>, _>(&path)
+                .load::<FileImage, _>(&FileImageKey {
+                    path: path.clone(),
+                    force_srgb: Some(true),
+                })
                 .await
                 .inspect_err(|err| {
                     tracing::error!(
@@ -565,22 +555,7 @@ async fn load_worldspace_weather_props(
                 continue;
             };
 
-            let mips = img
-                .mips
-                .iter()
-                .map(|mip| {
-                    let format = match img.format {
-                        Format::Rgba8Unorm => TextureFormat::Rgba8Unorm,
-                        Format::Rgba8UnormSrgb => TextureFormat::Rgba8UnormSrgb,
-                        Format::Bc3Unorm => TextureFormat::Bc3RgbaUnorm,
-                        _ => todo!(),
-                    };
-
-                    Image::new(mip.size, format, mip.bytes.clone())
-                })
-                .collect();
-
-            clouds[index] = Some(MipImage::new(mips));
+            clouds[index] = Some(img.0.clone());
         }
 
         let mut cloud_speed = [Vec2::ZERO; 32];
