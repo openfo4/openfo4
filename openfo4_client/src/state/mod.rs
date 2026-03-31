@@ -19,7 +19,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use esp::EspLoader;
-use game_common::components::{Color, DirectionalLight, Transform};
+use game_common::components::{Color, Transform};
 use game_core::counter::Interval;
 use game_core::time::Time;
 use game_core_pipeline::material::StandardMaterial;
@@ -34,21 +34,14 @@ use level::Level;
 use openfo4_asset::AssetLoader;
 use openfo4_core::events::EventBus;
 use openfo4_core::object_ref_set::ObjectReferenceSet;
-use openfo4_core::record::RecordId;
-use openfo4_esp::FormId;
-use openfo4_hkx::HkxFile;
-use openfo4_nif::Nif;
-use openfo4_nif::bgsm::Bgsm;
 use openfo4_physics::PhysicsPipeline;
 use openfo4_physics::components::{CollisionLayer, RigidBody};
 use openfo4_physics::controller::CharacterController;
 
-use crate::assets::FileLoadContext;
-use crate::assets::animation::{AnimationSet, FileAnimationClip};
-use crate::assets::data_file::{DataFile, DataFileContext};
-use crate::assets::nif::NifLoaderContext;
+use crate::assets::animation::AnimationSet;
+use crate::assets::init_asset_loader;
 use crate::cell::CellId;
-use crate::components::{Camera, NiTransform, Player, WorldSpace};
+use crate::components::{Camera, NiTransform, Player};
 use crate::loader::FileLoader;
 use crate::render::RenderObject;
 use crate::render::physics_debug::despawn_expired;
@@ -57,7 +50,6 @@ use crate::state::actions::{Action, Actions};
 use crate::state::anim_starter::{AnimationEventQueue, AnimationSystem};
 use crate::state::animation::update_actor_animation_graphs;
 use crate::state::esp::EspLoaderBuilder;
-use crate::state::hardcoded::HARDCODED_MODULE_ID;
 use crate::systems::activation::update_player_looking_at_target;
 use crate::systems::ai::AiSystem;
 use crate::systems::animation_sync::{bounce_animation_events, update_animation_parameters};
@@ -142,40 +134,7 @@ impl GameState {
         let file_loader = Arc::new(FileLoader::new(sources));
         let loader = Arc::new(loader.finalize());
 
-        let mut asset_loader = AssetLoader::new();
-        asset_loader.register::<crate::assets::nif::NifScene>(NifLoaderContext::new(
-            shared.entities.clone(),
-        ));
-        asset_loader.register::<crate::assets::gltf::GltfScene>(NifLoaderContext::new(
-            shared.entities.clone(),
-        ));
-        asset_loader.register::<crate::assets::texture::FileImageHandle>(FileLoadContext {
-            entities: shared.entities.clone(),
-        });
-        asset_loader.register::<crate::assets::material::BgsmStandardMaterial>(FileLoadContext {
-            entities: shared.entities.clone(),
-        });
-        asset_loader.register::<crate::assets::material::BgsmMaterial>(FileLoadContext {
-            entities: shared.entities.clone(),
-        });
-        asset_loader.register::<DataFile<Nif>>(DataFileContext {
-            loader: file_loader.clone(),
-        });
-        asset_loader.register::<DataFile<HkxFile>>(DataFileContext {
-            loader: file_loader.clone(),
-        });
-        asset_loader.register::<DataFile<Bgsm>>(DataFileContext {
-            loader: file_loader.clone(),
-        });
-        asset_loader.register::<DataFile<openfo4_dds::Image>>(DataFileContext {
-            loader: file_loader.clone(),
-        });
-        asset_loader.register::<DataFile<image::ImageBuffer<image::Rgba<u8>, Vec<u8>>>>(
-            DataFileContext {
-                loader: file_loader.clone(),
-            },
-        );
-        asset_loader.register::<FileAnimationClip>(());
+        let asset_loader = init_asset_loader(&file_loader, &shared.entities);
 
         let actions = futures_lite::future::block_on(actions::Actions::load(&loader));
         dbg!(&actions);
@@ -275,7 +234,8 @@ impl GameState {
         );
 
         update_time(&mut self.world, Duration::from_secs_f32(1.0 / UPS as f32));
-        self.weather.update(&mut self.world);
+        self.weather
+            .update(&mut self.world, self.interval.timestep());
 
         despawn_expired(&mut self.world);
 
