@@ -22,6 +22,7 @@ use hashbrown::HashMap;
 use hecs::{CommandBuffer, Entity, World};
 use openfo4_asset::AssetLoader;
 use openfo4_core::events::EventBus;
+use openfo4_core::hierarchy::Children;
 use openfo4_core::object_ref_set::ObjectReferenceSet;
 use openfo4_core::record::RecordId;
 use openfo4_core::{Frozen, WorldExt};
@@ -341,8 +342,13 @@ impl Level {
     fn update_frozen_entities(&self, world: &mut World) {
         let _span = trace_span!("Level::update_frozen_entities").entered();
 
-        let mut commands = CommandBuffer::new();
-        for (entity, (transform, worldspace)) in world.query::<(&Transform, &WorldSpace)>().iter() {
+        let mut freeze = Vec::new();
+        let mut unfreeze = Vec::new();
+
+        for (entity, (transform, worldspace, frozen, _)) in world
+            .query::<(&Transform, &WorldSpace, &Frozen, &Root)>()
+            .iter()
+        {
             let cell = CellId::from(NiTransform::from(*transform));
 
             if self
@@ -351,20 +357,44 @@ impl Level {
                 .is_some_and(|v| *v)
             {
                 // Unfreeze
-                commands.insert_one(entity, Frozen::default());
+                if !frozen.is_any_frozen() {
+                    continue;
+                }
+
+                unfreeze.push(entity);
             } else {
                 // Freeze
-                commands.insert_one(
+                if frozen.is_all_frozen() {
+                    continue;
+                }
+
+                freeze.push(entity);
+            }
+        }
+
+        while let Some(entity) = unfreeze.pop() {
+            world.insert_one(entity, Frozen::default()).unwrap();
+
+            if let Ok(children) = world.get::<&Children>(entity) {
+                unfreeze.extend(&children.0);
+            }
+        }
+
+        while let Some(entity) = freeze.pop() {
+            world
+                .insert_one(
                     entity,
                     Frozen {
                         physics: true,
                         controls: true,
                     },
-                );
+                )
+                .unwrap();
+
+            if let Ok(children) = world.get::<&Children>(entity) {
+                freeze.extend(&children.0);
             }
         }
-
-        commands.run_on(world);
     }
 }
 
