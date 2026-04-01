@@ -12,6 +12,9 @@ pub use layer::TracyLayer;
 #[cfg(feature = "tracy")]
 pub use tracy_client::Client;
 
+// #[cfg(feature = "tracy")]
+// #[cfg_attr(all(not(miri), not(test)), global_allocator)]
+// static GLOBAL: ProfiledAllocator<std::alloc::System> = ProfiledAllocator::new(std::alloc::System);
+
 #[cfg(feature = "tracy")]
-#[cfg_attr(all(not(miri), not(test)), global_allocator)]
-static GLOBAL: ProfiledAllocator<std::alloc::System> = ProfiledAllocator::new(std::alloc::System);
+tracy_client::register_demangler!(tracy_client::demangle::default);

@@ -1,8 +1,7 @@
 use std::task::{Context, Poll, Waker};
 
-use futures::stream::FuturesUnordered;
-use futures::StreamExt;
 use futures_lite::FutureExt;
+use futures_util::stream::{FuturesUnordered, StreamExt};
 
 use crate::Task;
 
