@@ -5722,12 +5722,19 @@ fn convert_access_flags(mut flags: AccessFlags) -> vk::AccessFlags2 {
 
     map_flags(AccessFlags::PRESENT, vk::AccessFlags2::empty());
 
+    // Has no effect on execution dependencies.
+    flags &= !AccessFlags::DISCARD;
+
     debug_assert!(flags.is_empty(), "unhandled AccessFlags: {:?}", flags);
 
     access
 }
 
 fn access_flags_to_image_layout(flags: AccessFlags) -> vk::ImageLayout {
+    if flags.contains(AccessFlags::DISCARD) {
+        return vk::ImageLayout::UNDEFINED;
+    }
+
     // If the bitset is not empty the difference between contains
     // the bits that are set in the source bitset, but not set in
     // the target bitset.

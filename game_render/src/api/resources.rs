@@ -105,6 +105,14 @@ impl Resources {
         *buffers.get(id.0).unwrap()
     }
 
+    pub fn with_buffer_access_flags<T, F>(&self, id: BufferId, f: F) -> T
+    where
+        F: FnOnce(&mut AccessFlags) -> T,
+    {
+        let mut buffers = self.buffer_access.lock();
+        f(buffers.get_mut(id.0).unwrap())
+    }
+
     pub fn with_buffer_rc<T, F>(&self, id: BufferId, f: F) -> T
     where
         F: FnOnce(&RefCount) -> T,
@@ -142,6 +150,14 @@ impl Resources {
     pub fn texture_descriptor(&self, id: TextureId) -> TextureDescriptor {
         let textures = self.textures.lock();
         *textures.get(id.0).unwrap()
+    }
+
+    pub fn with_texture_access_flags<T, F>(&self, id: TextureId, f: F) -> T
+    where
+        F: FnOnce(&mut [AccessFlags]) -> T,
+    {
+        let mut textures = self.texture_access.lock();
+        f(textures.get_mut(id.0).unwrap())
     }
 
     pub fn with_texture_rc<T, F>(&self, id: TextureId, f: F) -> T

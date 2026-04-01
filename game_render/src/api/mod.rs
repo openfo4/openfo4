@@ -282,6 +282,11 @@ impl<'a> CommandQueue<'a> {
                 rc.increment_external();
             });
 
+            // We don't care about the previous buffer contents.
+            resources.with_buffer_access_flags(id, |flags| {
+                *flags |= AccessFlags::DISCARD;
+            });
+
             return Buffer {
                 id,
                 size: descriptor.size,
@@ -447,6 +452,13 @@ impl<'a> CommandQueue<'a> {
 
             resources.with_texture_rc(id, |rc| {
                 rc.increment_external();
+            });
+
+            // We don't care about the previous texture contents.
+            resources.with_texture_access_flags(id, |flags| {
+                for flags in flags {
+                    *flags |= AccessFlags::DISCARD;
+                }
             });
 
             return Texture {

@@ -737,6 +737,14 @@ bitflags! {
         const COMPUTE_SHADER_READ = 1 << 17;
         /// Resource can be written to in a compute shader.
         const COMPUTE_SHADER_WRITE = 1 << 18;
+        /// Mark the resource contents as undefined.
+        ///
+        /// This flag indicates that the contents of the resource are no longer needed and can be
+        /// discarded.
+        ///
+        /// If the resource was invalidated due to a write to an aliasing resource, this flag
+        /// **must** be set.
+        const DISCARD = 1 << 19;
     }
 }
 
@@ -797,6 +805,9 @@ impl AccessFlags {
                 _ => (),
             }
         }
+
+        // Always allowed.
+        flags &= !AccessFlags::DISCARD;
 
         flags.is_empty()
     }
