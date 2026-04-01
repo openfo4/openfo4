@@ -20,11 +20,11 @@ game_common = { version = "0.1.0", path = "../game_common" }
 game_tasks = { version = "0.1.0", path = "../game_tasks" }
 
 glam = { workspace = true }
+tracing = { workspace = true }
 ab_glyph = "0.2.28"
 image = "0.25.1"
 bytemuck = "1.16.1"
 parking_lot = "0.12.3"
-tracing = "0.1.40"
 thiserror = "1.0.61"
 async-io = "2.3.3"
 futures = "0.3.30"

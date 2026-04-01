@@ -11,9 +11,9 @@ game_render = { version = "0.1.0", path = "../game_render" }
 game_core_pipeline = { version = "0.1.0", path = "../game_core_pipeline" }
 game_tracing = { version = "0.1.0", path = "../game_tracing" }
 glam = { workspace = true }
+tracing = { workspace = true }
 bytemuck = "1.16.1"
 parking_lot = "0.12.3"
-tracing = "0.1.40"
 
 [lints]
 workspace = true

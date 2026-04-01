@@ -16,7 +16,7 @@ workspace = true
 game_common = { version = "0.1.0", path = "../game_common" }
 game_tracing = { version = "0.1.0", path = "../game_tracing" }
 
-tracing = "0.1.40"
+tracing = { workspace = true }
 chrono = "0.4.38"
 parking_lot = "0.12.3"
 glam = { workspace = true }

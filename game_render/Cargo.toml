@@ -25,7 +25,7 @@ game_tasks = { version = "0.1.0", path = "../game_tasks" }
 
 bytemuck = { version = "1.16.1", features = ["derive", "must_cast"] }
 glam = { workspace = true, features = ["bytemuck"] }
-tracing = { version = "0.1.40", features = ["log-always"] }
+tracing = { workspace = true }
 parking_lot = "0.12.3"
 bitflags = { version = "2.6.0", features = ["bytemuck"] }
 mikktspace = "0.3.0"

@@ -10,12 +10,12 @@ openfo4_pex = { version = "0.1.0", path = "../openfo4_pex" }
 openfo4_jit = { version = "0.1.0", path = "../openfo4_jit" }
 
 indexmap = "2.12.1"
-tracing = "0.1.41"
 thiserror = "2.0.17"
 bytemuck = "1.24.0"
 slab = "0.4.11"
 parking_lot = "0.12.5"
 hashbrown = { workspace = true }
+tracing = { workspace = true }
 
 [lints]
 workspace = true

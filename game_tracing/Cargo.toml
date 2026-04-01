@@ -14,7 +14,7 @@ workspace = true
 
 [dependencies]
 glam = { workspace = true }
-tracing = "0.1.40"
+tracing = { workspace = true }
 
 tracing-subscriber = "0.3.18"
 
