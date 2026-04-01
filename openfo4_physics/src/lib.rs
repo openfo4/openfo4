@@ -5,7 +5,7 @@ pub mod debug;
 mod convert;
 
 use std::cell::Cell;
-use std::collections::{HashMap, VecDeque};
+use std::collections::VecDeque;
 
 use components::{ColliderShape, RigidBody, RigidBodyKind};
 use game_common::collections::bimap::BiMap;
@@ -14,6 +14,7 @@ use game_common::math::Ray;
 use game_gizmos::Gizmos;
 use game_tracing::trace_span;
 use glam::Vec3;
+use hashbrown::HashMap;
 use hecs::{Entity, World};
 use openfo4_core::Frozen;
 use openfo4_core::hierarchy::Children;
@@ -48,11 +49,8 @@ pub struct PhysicsPipeline {
     multibody_joints: MultibodyJointSet,
     ccd_solver: CCDSolver,
     // Our stuff
+    rigid_bodies: HashMap<Entity, RigidBodyState>,
     body_handles: BiMap<Entity, RigidBodyHandle>,
-    /// Maps [`RigidBody`] entities to a list of [`Collider`] entities that are attached to the
-    /// [`RigidBody`]. The [`Transform`] represents the offset from the [`Collider`] to the
-    /// [`RigidBody`].
-    body_children: HashMap<Entity, BodyChildren>,
     collider_handles: HashMap<Entity, SpawnedCollider>,
     collider_handle_entities: HashMap<ColliderHandle, Entity>,
     debug: DebugRenderPipeline,
@@ -80,11 +78,11 @@ impl PhysicsPipeline {
             body_handles: BiMap::new(),
             collider_handles: HashMap::new(),
             collider_handle_entities: HashMap::new(),
-            body_children: HashMap::new(),
             debug: DebugRenderPipeline::new(
                 DebugRenderStyle::default(),
                 DebugRenderMode::default(),
             ),
+            rigid_bodies: HashMap::new(),
         }
     }
 
@@ -160,19 +158,20 @@ impl PhysicsPipeline {
             body.set_body_type(kind, true);
 
             let children = collect_collider_children(entity, world);
-            match self.body_children.get_mut(&entity) {
-                Some(c) => {
-                    if c.entities != children {
-                        c.entities = children;
-                        c.has_updated.set(true);
+            match self.rigid_bodies.get_mut(&entity) {
+                Some(body) => {
+                    if body.colliders != children {
+                        body.colliders = children;
+                        body.has_updated.set(true);
                     }
                 }
                 None => {
-                    self.body_children.insert(
+                    self.rigid_bodies.insert(
                         entity,
-                        BodyChildren {
+                        RigidBodyState {
+                            handle: *handle,
                             has_updated: Cell::new(true),
-                            entities: children,
+                            colliders: children,
                         },
                     );
                 }
@@ -182,7 +181,7 @@ impl PhysicsPipeline {
         }
 
         for (entity, handle) in despawned_bodies {
-            self.body_children.remove(&entity);
+            self.rigid_bodies.remove(&entity);
             self.body_handles.remove_left(&entity);
             self.bodies.remove(
                 handle,
@@ -197,34 +196,23 @@ impl PhysicsPipeline {
         }
     }
 
-    // #[instrument(name = "PhysicsPipeline::update_colliders", skip_all)]
     fn update_colliders(&mut self, world: &World) {
+        let _span = trace_span!("PhysicsPipeline::update_colliders").entered();
+
         let mut despawned_colliders = self.collider_handles.clone();
 
-        for children in self.body_children.values() {
-            for entity in children.entities.keys() {
+        for body in self.rigid_bodies.values() {
+            for entity in body.colliders.keys() {
                 despawned_colliders.remove(entity);
             }
 
-            if !children.has_updated.get() {
+            if !body.has_updated.replace(false) {
                 continue;
             }
 
-            children.has_updated.set(false);
-
-            for &entity in children.entities.keys() {
+            for (&entity, &transform_rel_to_parent) in &body.colliders {
                 let collider = world.get::<&components::Collider>(entity).unwrap();
                 let transform = world.get::<&GlobalTransform>(entity).unwrap().0;
-
-                // If a `Collider` is attached to a `RigidBody` entity,
-                // the transform of the `Collider` from the `RigidBody` is used.
-                // Otherwise the `Collider` will be attached to first parent
-                // that has a `RigidBody`, with the offset applied from the `Collider`s
-                // transform.
-                // `Collider` without any `RigidBody` parents are ignored.
-                let Some(collider_parent) = self.get_collider_parent(entity) else {
-                    continue;
-                };
 
                 let spawned_collider = self.collider_handles.entry(entity).or_insert_with(|| {
                     let builder =
@@ -258,9 +246,9 @@ impl PhysicsPipeline {
                 // Scale of the collider relative to the scale the parent expects us.
                 // We need to offset the collider in the coordinate of the parent,
                 // which we get when we scale from the collider to the parent sees us.
-                let scale_to_parent = transform.scale / collider_parent.transform.scale;
-                let translation = collider_parent.transform.translation * scale_to_parent;
-                let rotation = collider_parent.transform.rotation;
+                let scale_to_parent = transform.scale / transform_rel_to_parent.scale;
+                let translation = transform_rel_to_parent.translation * scale_to_parent;
+                let rotation = transform_rel_to_parent.rotation;
 
                 state.set_friction(collider.friction);
                 state.set_restitution(collider.restitution);
@@ -268,7 +256,7 @@ impl PhysicsPipeline {
 
                 self.colliders.set_parent(
                     spawned_collider.handle,
-                    Some(collider_parent.body),
+                    Some(body.handle),
                     &mut self.bodies,
                 );
 
@@ -322,31 +310,6 @@ impl PhysicsPipeline {
 
             transform.translation += delta_translation;
             transform.rotation = (delta_rotation * transform.rotation).normalize();
-        }
-    }
-
-    fn get_collider_parent(&self, entity: Entity) -> Option<ColliderParent> {
-        // Select a rigid body for the collider. If the entity has a rigid body
-        // it is preferred, otherwise we select the rigid body from the parent
-        // entity.
-        match self.body_handles.get_left(&entity) {
-            Some(handle) => Some(ColliderParent {
-                body: *handle,
-                transform: Transform::IDENTITY,
-            }),
-            None => {
-                for (parent, children) in self.body_children.iter() {
-                    if let Some(transform) = children.entities.get(&entity).copied() {
-                        let parent_handle = self.body_handles.get_left(parent).unwrap();
-                        return Some(ColliderParent {
-                            body: *parent_handle,
-                            transform,
-                        });
-                    }
-                }
-
-                None
-            }
         }
     }
 
@@ -418,9 +381,14 @@ impl PhysicsPipeline {
 }
 
 #[derive(Clone, Debug)]
-struct BodyChildren {
+struct RigidBodyState {
+    /// The handle of the [`RigidBody`].
+    handle: RigidBodyHandle,
     has_updated: Cell<bool>,
-    entities: HashMap<Entity, Transform>,
+    /// Colliders attached to the rigid body.
+    ///
+    /// The [`Transform`] value of the collider is relative to this [`RigidBody`].
+    colliders: HashMap<Entity, Transform>,
 }
 
 #[derive(Clone, Debug)]
@@ -428,15 +396,6 @@ struct SpawnedCollider {
     handle: ColliderHandle,
     scale: Vec3,
     layer: CollisionLayer,
-}
-
-/// A reference to a rigid body that a collider should attach to.
-#[derive(Copy, Clone, Debug)]
-struct ColliderParent {
-    /// The handle of the rigid body.
-    body: RigidBodyHandle,
-    /// The transform of the collider relative to the rigid body.
-    transform: Transform,
 }
 
 /// Collects and returns all entities with collider components that are children of `entity`.
@@ -449,14 +408,14 @@ struct ColliderParent {
 fn collect_collider_children(entity: Entity, world: &World) -> HashMap<Entity, Transform> {
     let mut entities = HashMap::new();
     let mut queue = VecDeque::new();
-    queue.push_back((entity, Transform::default()));
+    queue.push_back((entity, Transform::IDENTITY));
 
     // The root entity can also be a collider.
     if world
         .satisfies::<&components::Collider>(entity)
         .unwrap_or_default()
     {
-        entities.insert(entity, Transform::default());
+        entities.insert(entity, Transform::IDENTITY);
     }
 
     while let Some((entity, parent_transform)) = queue.pop_front() {
