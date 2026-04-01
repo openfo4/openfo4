@@ -50,7 +50,7 @@ async-io = "2.6.0"
 
 # DDS support for image crate
 # See https://github.com/image-rs/image/pull/225
-image = { git = "https://github.com/RunDevelopment/image.git", rev = "637cf43ad5195c1c9085c60102d5dafebb85f843" }
+image = { git = "https://github.com/RunDevelopment/image.git", rev = "637cf43ad5195c1c9085c60102d5dafebb85f843", default-features = false, features = ["jpeg", "png", "dds"] }
 
 futures-lite = "2.6.0"
 bitflags = "2.9.4"
