@@ -189,10 +189,6 @@ impl EventQueue {
             };
             let get_object = |object: &ScriptObject, name: &str| -> ObjectRef {
                 let object = objects.get_by_id(object.id()).unwrap();
-                dbg!(&name);
-                for x in object.iter() {
-                    dbg!(x.name());
-                }
                 object.get(name).unwrap().get().object.clone()
             };
 

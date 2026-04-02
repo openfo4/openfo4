@@ -67,12 +67,37 @@ impl ScriptLoader {
             record,
             &mut classes,
             state.as_mut().unwrap(),
+            RecordInstantiationKind::BaseObject,
         )
         .await?;
 
         tracing::trace!("script for {:?} is {:?}", record, res.object.id());
 
         Some(res)
+    }
+
+    /// Creates a new instance of the given base record.
+    #[tracing::instrument(name = "ScriptLoader::load_instance", skip_all)]
+    pub async fn load_instance(&self, record: RecordId) -> Option<ScriptObject> {
+        tracing::debug!("loading script for {:?}", record);
+
+        let mut engine = self.engine.lock().await;
+        let mut classes = self.classes.lock().await;
+        let mut state = self.state.lock().await;
+
+        let res = instantiate_form(
+            &mut engine,
+            &self.esp_loader,
+            record,
+            &mut classes,
+            state.as_mut().unwrap(),
+            RecordInstantiationKind::Instance,
+        )
+        .await?;
+
+        tracing::trace!("script for {:?} is {:?}", record, res.object.id());
+
+        Some(res.object)
     }
 
     /// Returns a deep clone of the [`ScriptObject`].
@@ -123,14 +148,33 @@ pub struct LoadResult {
     pub aliases: HashMap<AliasKey, ScriptObject>,
 }
 
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+enum RecordInstantiationKind {
+    /// The base object itself.
+    BaseObject,
+    /// A runtime instance of the base object.
+    Instance,
+}
+
+impl RecordInstantiationKind {
+    const fn is_base_object(&self) -> bool {
+        matches!(self, Self::BaseObject)
+    }
+}
+
 async fn instantiate_form(
     engine: &mut Engine,
     esp_loader: &EspLoader,
     root: RecordId,
     compiled_classes: &mut HashMap<String, Instance>,
     state: &mut State,
+    kind: RecordInstantiationKind,
 ) -> Option<LoadResult> {
-    if let Some(scripts) = state.objects.get_by_record(root) {
+    if let Some(scripts) = state.objects.get_by_record(root)
+        // FIXME: We should still cache default instances here
+        // and clone the object for each call.
+        && kind.is_base_object()
+    {
         return Some(LoadResult {
             object: ScriptObject(Arc::new(ScriptObjectInner {
                 base: Some(root),
@@ -327,7 +371,12 @@ async fn instantiate_form(
         let mut scripts = HashMap::new();
 
         // Can't attach scripts to objects with no base class.
-        let base_class_name = record_script_name(&record.local.data).unwrap();
+        let base_class_name = match kind {
+            RecordInstantiationKind::BaseObject => record_script_name(&record.local.data).unwrap(),
+            RecordInstantiationKind::Instance => {
+                record_instance_script_name(&record.local.data).unwrap()
+            }
+        };
         let instance = compiled_classes
             .entry(base_class_name.to_owned())
             .or_insert_with(|| engine.compile(base_class_name, &COMPILER_OPTIONS));
@@ -458,8 +507,18 @@ async fn instantiate_form(
             });
         }
 
-        debug_assert!(state.objects.get_by_record(record).is_none());
-        let id = state.objects.insert(engine, final_instances, Some(record));
+        let rid = match kind {
+            RecordInstantiationKind::BaseObject => Some(record),
+            // Always register dependencies as base objects.
+            RecordInstantiationKind::Instance if record != root => Some(record),
+            RecordInstantiationKind::Instance => None,
+        };
+
+        if rid.is_some() {
+            debug_assert!(state.objects.get_by_record(record).is_none());
+        }
+
+        let id = state.objects.insert(engine, final_instances, rid);
 
         if record == root {
             root_id = Some(id);
@@ -682,6 +741,27 @@ fn record_script_name(data: &RecordData) -> Option<&'static str> {
     }
 }
 
+fn record_instance_script_name(data: &RecordData) -> Option<&'static str> {
+    match data {
+        RecordData::Ammo(_) => Some("ObjectReference"),
+        RecordData::Armor(_) => Some("ObjectReference"),
+        RecordData::Book(_) => Some("ObjectReference"),
+        RecordData::Component(_) => Some("ObjectReference"),
+        RecordData::Container(_) => Some("ObjectReference"),
+        RecordData::Door(_) => Some("ObjectReference"),
+        RecordData::FLOR(_) => Some("ObjectReference"),
+        RecordData::Furniture(_) => Some("ObjectReference"),
+        RecordData::Ingestible(_) => Some("ObjectReference"),
+        RecordData::Key(_) => Some("ObjectReference"),
+        RecordData::MiscObject(_) => Some("ObjectReference"),
+        RecordData::MSTT(_) => Some("ObjectReference"),
+        RecordData::Note(_) => Some("ObjectReference"),
+        RecordData::Npc(_) => Some("Actor"),
+        RecordData::Weapon(_) => Some("ObjectReference"),
+        _ => todo!(),
+    }
+}
+
 // FIXME: Use script layout reflection to determine we're actually setting values of the correct type.
 fn build_script_object(
     resolve_form: impl Fn(FormId) -> RecordId,
@@ -779,7 +859,6 @@ fn build_script_object(
             EntryInner::Value(value, _) => value,
         };
 
-        dbg!(&value);
         match value {
             Value::Bool(value) => {
                 builder.set(class_name, var_name, array_index, *value);
@@ -796,8 +875,6 @@ fn build_script_object(
             }
             Value::Object(value) => {
                 let id = resolve_form(value.form);
-
-                dbg!(value);
 
                 let addr = if let Some(alias) = value.alias {
                     let scripts = aliases
@@ -829,8 +906,6 @@ fn build_script_object(
                         addr
                     }
                 };
-
-                dbg!(&class_name, &var_name, array_index);
 
                 builder.set(class_name, var_name, array_index, addr);
             }
@@ -875,8 +950,6 @@ fn build_script_object(
                 if entry.pop_builder {
                     let object = builders.pop().unwrap().finalize();
 
-                    dbg!(object.addr());
-
                     // Reborrow after pop
                     let builder = &mut builders[entry.builder_index];
                     builder.set(class_name, var_name, array_index, object.addr());
@@ -886,7 +959,6 @@ fn build_script_object(
                         .properties
                         .get(&(Lowercase::new(class_name), Lowercase::new(var_name)))
                         .unwrap();
-                    dbg!(&prop);
 
                     let PropertyType::ArrayPointer(ty) = prop.ty else {
                         todo!();

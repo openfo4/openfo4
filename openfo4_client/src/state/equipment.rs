@@ -750,6 +750,5 @@ fn extract_biped_object_flags(slots: BipedObjectFlags, dst: &mut HashSet<u32>) {
 }
 
 async fn load_item_script(record: RecordId, loader: &ScriptLoader) -> Option<ScriptObject> {
-    let base_object = loader.load(record).await?.object;
-    Some(loader.clone_object(&base_object).await)
+    loader.load_instance(record).await
 }
