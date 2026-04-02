@@ -31,6 +31,7 @@ mod reference_alias;
 mod scene;
 mod script_object;
 mod sound;
+mod sound_category_snapshot;
 mod spell;
 mod topic_info;
 mod utility;
@@ -105,6 +106,7 @@ pub fn register_builtins(engine: &mut Engine) {
     actor::register(engine);
     utility::register(engine);
     visual_effect::register(engine);
+    sound_category_snapshot::register(engine);
 
     engine.register_native_function("Sound", "SetInstanceVolume", sound::set_instance_volume);
     engine.register_native_function("Sound", "StopInstance", sound::stop_instance);
