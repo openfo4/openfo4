@@ -280,10 +280,15 @@ impl PhysicsPipeline {
     }
 
     fn write_back(&mut self, world: &mut World) {
+        let mut view = world.view_mut::<(&mut RigidBody, &mut Transform, &mut GlobalTransform)>();
+
         for (handle, body) in self.bodies.iter() {
             let entity = *self.body_handles.get_right(&handle).unwrap();
 
-            let mut rigid_body = world.get::<&mut RigidBody>(entity).unwrap();
+            let Some((rigid_body, transform, global_transform)) = view.get_mut(entity) else {
+                continue;
+            };
+
             rigid_body.linvel = vec3(*body.linvel());
             rigid_body.angvel = vec3(*body.angvel());
 
@@ -298,9 +303,6 @@ impl PhysicsPipeline {
             // The delta describes the changed transform in this physics tick and can be applied
             // to `Transform`.
 
-            let mut transform = world.get::<&mut Transform>(entity).unwrap();
-            let global_transform = world.get::<&GlobalTransform>(entity).unwrap();
-
             let new_translation = vec3(*body.translation());
             let new_rotation = quat(*body.rotation());
 
@@ -310,6 +312,12 @@ impl PhysicsPipeline {
 
             transform.translation += delta_translation;
             transform.rotation = (delta_rotation * transform.rotation).normalize();
+
+            // Keep `GlobalTransform` maintained.
+            // While this is not strictly necessary because the caller can recompute this
+            // after this call, this can be costly and we can already do it very cheaply here.
+            global_transform.0.translation = new_translation;
+            global_transform.0.rotation = new_rotation;
         }
     }
 

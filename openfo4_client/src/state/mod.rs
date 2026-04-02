@@ -281,8 +281,6 @@ impl GameState {
         systems::hierarchy::compute_global_transform(&mut self.world);
         self.physics.step(&mut self.world);
 
-        systems::hierarchy::compute_global_transform(&mut self.world);
-
         systems::camera::update_camera_transform(&mut self.world);
 
         systems::lights::update_flickering_lights(&mut self.world, time.delta());
