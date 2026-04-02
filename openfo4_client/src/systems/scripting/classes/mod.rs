@@ -34,6 +34,7 @@ mod sound;
 mod spell;
 mod topic_info;
 mod utility;
+mod visual_effect;
 mod weapon;
 
 use std::collections::BTreeMap;
@@ -103,6 +104,7 @@ pub fn register_builtins(engine: &mut Engine) {
 
     actor::register(engine);
     utility::register(engine);
+    visual_effect::register(engine);
 
     engine.register_native_function("Sound", "SetInstanceVolume", sound::set_instance_volume);
     engine.register_native_function("Sound", "StopInstance", sound::stop_instance);
