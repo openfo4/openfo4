@@ -302,6 +302,9 @@ impl GameState {
         handle_automatic_doors(&mut self.world, &self.object_ref_set);
         update_player_looking_at_target(&mut self.world, &self.physics);
 
+        self.executor
+            .pump_events(&mut self.world, &mut self.event_bus, &self.pool);
+
         if self.physics_debug {
             self.physics.render_debug(gizmos);
         }

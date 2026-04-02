@@ -33,6 +33,7 @@ use crate::systems::global::GlobalProperties;
 use crate::systems::quests::QuestManager;
 use crate::systems::scripting::classes::{AliasSet, CoreObjects};
 use crate::systems::scripting::effects::{EffectId, Effects};
+use crate::systems::scripting::events::queue::EventQueue;
 use crate::systems::scripting::invocations::{EventInvocation, Value};
 use crate::systems::scripting::loader::{ScriptLoader, ScriptObjectId};
 use crate::systems::scripting::objects::ScriptObjects;
@@ -52,6 +53,7 @@ pub struct Executor {
     suspended_calls: HashMap<EffectId, ScheduledTask>,
     queue: VecDeque<ScheduledTask>,
     stacks: HashMap<ObjectAddr, HashMap<String, Stack>>,
+    event_queue: EventQueue,
 }
 
 impl Executor {
@@ -94,6 +96,7 @@ impl Executor {
             suspended_calls: HashMap::new(),
             queue: VecDeque::new(),
             stacks: HashMap::new(),
+            event_queue: EventQueue::default(),
         }
     }
 
@@ -153,8 +156,6 @@ impl Executor {
         delta: Duration,
     ) {
         let _span = trace_span!("Executor::update").entered();
-
-        self.collect_game_events(world, events, script_entities);
 
         let engine = futures_lite::future::block_on(self.loader.engine.lock());
         let mut state = futures_lite::future::block_on(self.loader.state.lock());
@@ -234,38 +235,41 @@ impl Executor {
         // }
     }
 
-    fn collect_game_events(
-        &mut self,
-        world: &mut World,
-        events: &mut EventBus,
-        entities: &ScriptEntities,
-    ) {
-        let _span = trace_span!("Executor::collect_game_events").entered();
+    /// Gathers all scripting events into the `Executor`.
+    ///
+    /// This should be called late in the frame, after all gameplay systems have emitted their
+    /// events. The `Executor` will dispatch the events to scripts the next time [`update`] is
+    /// called in the next frame.
+    ///
+    /// [`update`]: Self::update
+    pub fn pump_events(&mut self, world: &mut World, events: &mut EventBus, pool: &TaskPool) {
+        let _span = trace_span!("Executor::pump_events").entered();
 
         let mut state = futures_lite::future::block_on(self.loader.state.lock());
         let state = state.as_mut().unwrap();
 
-        fn collect_event_dispatches<T: events::Event + openfo4_core::events::Event>(
-            dst: &mut Vec<events::DispatchEvent>,
+        fn collect_event_dispatches<T: events::ExtractEvent + openfo4_core::events::Event>(
+            queue: &mut EventQueue,
             events: &EventBus,
             ctx: events::Context<'_>,
         ) {
             for event in events.read::<T>() {
-                dst.extend(event.extract(ctx));
+                for event in event.extract(ctx) {
+                    queue.push(event);
+                }
             }
         }
 
-        let ctx = events::Context {
-            state: &state,
-            world: &world,
-            entities,
-        };
+        let ctx = events::Context { world: &world };
 
-        let mut dispatches = Vec::new();
-        collect_event_dispatches::<ItemAddedEvent>(&mut dispatches, events, ctx);
-        collect_event_dispatches::<ItemEquippedEvent>(&mut dispatches, events, ctx);
-        collect_event_dispatches::<TriggerEnter>(&mut dispatches, events, ctx);
-        collect_event_dispatches::<TriggerLeave>(&mut dispatches, events, ctx);
+        collect_event_dispatches::<ItemAddedEvent>(&mut self.event_queue, events, ctx);
+        collect_event_dispatches::<ItemEquippedEvent>(&mut self.event_queue, events, ctx);
+        collect_event_dispatches::<TriggerEnter>(&mut self.event_queue, events, ctx);
+        collect_event_dispatches::<TriggerLeave>(&mut self.event_queue, events, ctx);
+
+        let dispatches = self
+            .event_queue
+            .process(world, &state.objects, pool, &self.loader);
 
         for dispatch in dispatches {
             tracing::debug!(
