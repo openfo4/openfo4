@@ -22,7 +22,7 @@ use ops::{
     OpTypePointer, OpTypeRuntimeArray, OpTypeSampledImage, OpTypeSampler, OpTypeStruct,
     OpTypeVector, OpTypeVoid, OpVariable,
 };
-use spirv::{Capability, ExecutionModel, StorageClass, MAGIC_NUMBER};
+use spirv::{Capability, ExecutionModel, MAGIC_NUMBER, StorageClass};
 use thiserror::Error;
 
 use crate::backend::{DescriptorType, ShaderStage};
@@ -282,6 +282,9 @@ impl Module {
         self.bindings.values().cloned().collect()
     }
 
+    /// Returns a list of specialization constants defined in this module.
+    ///
+    /// The order of [`SpecConstant`]s it not defined.
     pub fn spec_constants(&self) -> Vec<SpecConstant> {
         let mut spec_constants = Vec::new();
 
@@ -2021,17 +2024,25 @@ mod tests {
         let spec_consts = module.spec_constants();
         assert_eq!(spec_consts.len(), 2);
 
-        assert_eq!(spec_consts[0].name.as_ref().unwrap(), "int_const");
+        let int_const = spec_consts
+            .iter()
+            .find(|sc| sc.name.as_ref().unwrap() == "int_const")
+            .unwrap();
+        assert_eq!(int_const.name.as_ref().unwrap(), "int_const");
         assert_eq!(
-            spec_consts[0].ty,
+            int_const.ty,
             SpecConstantType::Int {
                 bits: 32,
                 signed: false,
             }
         );
 
-        assert_eq!(spec_consts[1].name.as_ref().unwrap(), "bool_const");
-        assert_eq!(spec_consts[1].ty, SpecConstantType::Bool);
+        let bool_const = spec_consts
+            .iter()
+            .find(|sc| sc.name.as_ref().unwrap() == "bool_const")
+            .unwrap();
+        assert_eq!(bool_const.name.as_ref().unwrap(), "bool_const");
+        assert_eq!(bool_const.ty, SpecConstantType::Bool);
     }
 
     #[test]
