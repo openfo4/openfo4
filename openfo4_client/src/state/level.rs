@@ -202,6 +202,30 @@ impl Level {
             }
         }
 
+        self.instantiate_new_entities(world, event_bus, object_ref_set, script_entities);
+
+        for cell in prev_cells_loaded.into_keys() {
+            tracing::debug!("unloading cell {:?}", cell);
+
+            // Mark the cell for removal in the next tick.
+            // We cannot immediately unload the cell so that
+            // entities can be notified that they are about to be unloaded.
+            self.cells_to_unload_next_tick.insert(cell);
+        }
+
+        self.terrain_manager.update(world, event_bus);
+        self.update_frozen_entities(world);
+    }
+
+    fn instantiate_new_entities(
+        &mut self,
+        world: &mut World,
+        events: &mut EventBus,
+        object_ref_set: &mut ObjectReferenceSet,
+        script_entities: &mut ScriptEntities,
+    ) {
+        let _span = trace_span!("Level::instantiate_new_entities").entered();
+
         while let Some(event) = self.events.pop() {
             match event {
                 Event::SpawnEntity {
@@ -227,23 +251,51 @@ impl Level {
                         continue;
                     }
 
-                    let entity = entity.instantiate(
-                        world,
-                        event_bus,
-                        object_ref_set,
-                        &mut self.terrain_manager,
-                        script_entities,
-                    );
+                    {
+                        let mut entities = self.loader.entities.write();
 
-                    let mut entities = self.loader.entities.write();
-                    entities.entities.insert(record, entity);
-                    if make_ref {
-                        entities
-                            .ref_counts
-                            .insert(entity, Arc::new(EntityRefInner::new_with_one_rc()));
+                        // Since the EntityLoader and automatic cell loader are not synchronized
+                        // with each other, a race condition is possible where both of them think
+                        // the entity does not exist yet, and both start loading it at the same time.
+                        // Since the process order is total, there are two possible cases:
+                        // 1. The `EntityLoader` event comes before the cell loader event.
+                        //    In this case `make_ref` is set on the first event and the cell loader
+                        //    (second) event can be dropped.
+                        // 2. The cell loader event comes before the `EntityLoader` event.
+                        //    In this case `make_ref` is set of the second event and the `EntityLoader`
+                        //    expects a ref-count of one to exist on the entity, i.e. we must create
+                        //    the ref-count, but with the enity of the first event.
+                        if let Some(entity) = entities.entities.get(&record).copied() {
+                            if !make_ref {
+                                continue;
+                            }
+
+                            debug_assert!(!entities.ref_counts.contains_key(&entity));
+                            entities
+                                .ref_counts
+                                .insert(entity, Arc::new(EntityRefInner::new_with_one_rc()));
+
+                            continue;
+                        }
+
+                        // Entity creation cannot be undone, so this must happen in the critical section.
+                        let entity = entity.instantiate(
+                            world,
+                            events,
+                            object_ref_set,
+                            &mut self.terrain_manager,
+                            script_entities,
+                        );
+
+                        entities.entities.insert(record, entity);
+                        if make_ref {
+                            entities
+                                .ref_counts
+                                .insert(entity, Arc::new(EntityRefInner::new_with_one_rc()));
+                        }
+
+                        self.alive_entities.insert(entity);
                     }
-
-                    self.alive_entities.insert(entity);
                 }
                 Event::CellLoadDone { worldspace, cell } => {
                     if let Some(loaded) = self.cells_loaded.get_mut(&(worldspace, cell)) {
@@ -276,18 +328,6 @@ impl Level {
         // time `notify` is called, however in this case some listeners may
         // have to wait for an additional tick, which is valid.
         self.loader.tick.notify(self.loader.tick.total_listeners());
-
-        for cell in prev_cells_loaded.into_keys() {
-            tracing::debug!("unloading cell {:?}", cell);
-
-            // Mark the cell for removal in the next tick.
-            // We cannot immediately unload the cell so that
-            // entities can be notified that they are about to be unloaded.
-            self.cells_to_unload_next_tick.insert(cell);
-        }
-
-        self.terrain_manager.update(world, event_bus);
-        self.update_frozen_entities(world);
     }
 
     #[instrument(name = "Level::unload_cells", skip_all)]
