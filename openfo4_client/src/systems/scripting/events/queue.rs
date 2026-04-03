@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use game_tasks::{Task, TaskPool};
 use game_tracing::trace_span;
-use hashbrown::HashMap;
+use hashbrown::{HashMap, HashSet};
 use hecs::{Entity, World};
 use openfo4_core::record::RecordId;
 use openfo4_script::runtime::ObjectRef;
@@ -22,7 +22,8 @@ pub struct EventQueue {
     entities: HashMap<Entity, LoadEntry<LoadState>>,
     records_queued: VecDeque<(RecordId, usize)>,
     records: HashMap<RecordId, LoadEntry<LoadState>>,
-    ready_events: VecDeque<usize>,
+    ready_events: Vec<usize>,
+    dropped_events: Vec<usize>,
 }
 
 impl EventQueue {
@@ -39,8 +40,12 @@ impl EventQueue {
             if let Some(entry) = self.entities.get_mut(&entity) {
                 entry.events.insert(event);
 
-                if matches!(entry.state, LoadState::Ready(_)) {
+                if entry.state.is_ready() {
                     self.events[event].num_loading -= 1;
+
+                    if self.events[event].num_loading == 0 {
+                        self.ready_events.push(event);
+                    }
                 }
 
                 continue;
@@ -51,6 +56,8 @@ impl EventQueue {
                 Err(_) => {
                     let Ok(object) = world.get::<&BaseObject>(entity) else {
                         tracing::error!("failed to load base object type for {:?}", entity);
+
+                        self.dropped_events.push(event);
 
                         let event = &self.events[event];
                         tracing::error!("lost an event of type {:?}", event.event.kind);
@@ -70,14 +77,18 @@ impl EventQueue {
                         );
                     }
 
-                    LoadState::Load(pool.spawn(async move {
-                        loader.load(record).await.map(|res| res.object).unwrap()
-                    }))
+                    LoadState::Load(
+                        pool.spawn(async move { loader.load(record).await.map(|res| res.object) }),
+                    )
                 }
             };
 
-            if matches!(state, LoadState::Ready(_)) {
+            if state.is_ready() {
                 self.events[event].num_loading -= 1;
+
+                if self.events[event].num_loading == 0 {
+                    self.ready_events.push(event);
+                }
             }
 
             let mut events = EventSet::default();
@@ -86,12 +97,27 @@ impl EventQueue {
             self.entities.insert(entity, LoadEntry { events, state });
         }
 
-        for entry in self.entities.values_mut() {
+        for (entity, entry) in &mut self.entities {
             // FIXME: We should let the caller notify us if the script is ready,
             // not poll it every frame.
             if let LoadState::Load(task) = &mut entry.state
                 && let Some(object) = task.get_output()
             {
+                let Some(object) = object else {
+                    for index in entry.events.iter() {
+                        let event = &self.events[index];
+
+                        tracing::error!(
+                            "dropping event of type {:?}: could not resolve script for {:?}",
+                            event.event.kind,
+                            entity
+                        );
+                        self.dropped_events.push(index);
+                    }
+
+                    continue;
+                };
+
                 entry.state = LoadState::Ready(object);
 
                 for index in entry.events.iter() {
@@ -99,7 +125,7 @@ impl EventQueue {
                     event.num_loading -= 1;
 
                     if event.num_loading == 0 {
-                        self.ready_events.push_back(index);
+                        self.ready_events.push(index);
                     }
                 }
             }
@@ -109,8 +135,12 @@ impl EventQueue {
             if let Some(entry) = self.records.get_mut(&record) {
                 entry.events.insert(event);
 
-                if matches!(entry.state, LoadState::Ready(_)) {
+                if entry.state.is_ready() {
                     self.events[event].num_loading -= 1;
+
+                    if self.events[event].num_loading == 0 {
+                        self.ready_events.push(event);
+                    }
                 }
 
                 continue;
@@ -127,14 +157,9 @@ impl EventQueue {
 
             // FIXME: Check if record already exists in `objects`.
             let loader = Arc::clone(loader);
-            let state =
-                LoadState::Load(pool.spawn(async move {
-                    loader.load(record).await.map(|res| res.object).unwrap()
-                }));
-
-            if matches!(state, LoadState::Ready(_)) {
-                self.events[event].num_loading -= 1;
-            }
+            let state = LoadState::Load(
+                pool.spawn(async move { loader.load(record).await.map(|res| res.object) }),
+            );
 
             let mut events = EventSet::default();
             events.insert(event);
@@ -142,12 +167,28 @@ impl EventQueue {
             self.records.insert(record, LoadEntry { events, state });
         }
 
-        for entry in self.records.values_mut() {
+        for (record, entry) in &mut self.records {
             // FIXME: We should let the caller notify us if the script is ready,
             // not poll it every frame.
             if let LoadState::Load(task) = &mut entry.state
                 && let Some(object) = task.get_output()
             {
+                let Some(object) = object else {
+                    for index in entry.events.iter() {
+                        let event = &self.events[index];
+
+                        tracing::error!(
+                            "dropping event of type {:?}: could not resolve script for {:?}",
+                            event.event.kind,
+                            record
+                        );
+
+                        self.dropped_events.push(index);
+                    }
+
+                    continue;
+                };
+
                 entry.state = LoadState::Ready(object);
 
                 for index in entry.events.iter() {
@@ -155,7 +196,7 @@ impl EventQueue {
                     event.num_loading -= 1;
 
                     if event.num_loading == 0 {
-                        self.ready_events.push_back(index);
+                        self.ready_events.push(index);
                     }
                 }
             }
@@ -163,7 +204,7 @@ impl EventQueue {
 
         let mut events = Vec::new();
         for index in self.ready_events.drain(..) {
-            let event = self.events.remove(index);
+            let event = &self.events[index];
 
             debug_assert_eq!(event.num_loading, 0);
 
@@ -217,7 +258,7 @@ impl EventQueue {
                     QueuedEventValue::Object(ObjectValue::Script(object, _)) => object.id(),
                     _ => unreachable!(),
                 },
-                kind: event.event.kind,
+                kind: event.event.kind.clone(),
                 args: event
                     .event
                     .args
@@ -225,6 +266,15 @@ impl EventQueue {
                     .map(|val| val.to_raw(get_entity, get_record, get_object))
                     .collect(),
             });
+
+            self.dropped_events.push(index);
+        }
+
+        for index in self.dropped_events.drain(..) {
+            // The same event can be dropped multiple times.
+            let Some(event) = self.events.try_remove(index) else {
+                continue;
+            };
 
             for value in event
                 .event
@@ -237,19 +287,21 @@ impl EventQueue {
                     QueuedEventValue::Object(object) => match object {
                         ObjectValue::None | ObjectValue::Script(_, _) => {}
                         ObjectValue::Entity(entity, _) => {
-                            let entry = self.entities.get_mut(entity).unwrap();
-                            entry.events.remove(index);
+                            if let Some(entry) = self.entities.get_mut(entity) {
+                                entry.events.remove(index);
 
-                            if entry.events.is_empty() {
-                                self.entities.remove(entity);
+                                if entry.events.is_empty() {
+                                    self.entities.remove(entity);
+                                }
                             }
                         }
                         ObjectValue::Record(id, _) => {
-                            let entry = self.records.get_mut(id).unwrap();
-                            entry.events.remove(index);
+                            if let Some(entry) = self.records.get_mut(id) {
+                                entry.events.remove(index);
 
-                            if entry.events.is_empty() {
-                                self.records.remove(id);
+                                if entry.events.is_empty() {
+                                    self.records.remove(id);
+                                }
                             }
                         }
                     },
@@ -264,18 +316,25 @@ impl EventQueue {
         let index = self.events.vacant_key();
 
         let mut num_loading = 0;
+        let mut entities_visited = HashSet::new();
+        let mut records_visited = HashSet::new();
+
         for value in event.args.iter().chain(std::iter::once(&event.receiver)) {
             match value {
                 QueuedEventValue::Int(_) => {}
                 QueuedEventValue::Object(object) => match object {
                     ObjectValue::None | ObjectValue::Script(_, _) => {}
                     ObjectValue::Entity(entity, _) => {
-                        self.entities_queued.push_back((*entity, index));
-                        num_loading += 1;
+                        if entities_visited.insert(*entity) {
+                            self.entities_queued.push_back((*entity, index));
+                            num_loading += 1;
+                        }
                     }
                     ObjectValue::Record(id, _) => {
-                        self.records_queued.push_back((*id, index));
-                        num_loading += 1;
+                        if records_visited.insert(*id) {
+                            self.records_queued.push_back((*id, index));
+                            num_loading += 1;
+                        }
                     }
                 },
             }
@@ -283,6 +342,10 @@ impl EventQueue {
 
         let real_index = self.events.insert(EventEntry { event, num_loading });
         debug_assert_eq!(index, real_index);
+
+        if num_loading == 0 {
+            self.ready_events.push(index);
+        }
     }
 }
 
@@ -303,7 +366,13 @@ struct LoadEntry<T> {
 #[derive(Debug)]
 enum LoadState {
     Ready(ScriptObject),
-    Load(Task<ScriptObject>),
+    Load(Task<Option<ScriptObject>>),
+}
+
+impl LoadState {
+    fn is_ready(&self) -> bool {
+        matches!(self, Self::Ready(_))
+    }
 }
 
 #[derive(Clone, Debug, Default)]
