@@ -21,7 +21,7 @@ use crate::cell::{CELL_SIZE, CellId};
 use crate::components::{NiTransform, Player, WorldSpace};
 use crate::render::RenderObject;
 
-const UV_SCALE: Vec2 = Vec2::splat(8.0);
+const UV_SCALE: Vec2 = Vec2::splat(16.0);
 
 pub struct TerrainManager {
     pool: Arc<TaskPool>,
