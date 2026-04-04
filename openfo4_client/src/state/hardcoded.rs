@@ -29,6 +29,7 @@ pub const ACTOR_VALUE_LUCK: FormId = FormId(0x2c8);
 pub const ACTOR_VALUE_HEALTH: FormId = FormId(0x2d4);
 
 pub const PATH_SKY_ATMOSPHERE: &DataPath = DataPath::from_str("meshes/sky/atmosphere.nif");
+pub const PATH_SKY_CLOUDS: &DataPath = DataPath::from_str("meshes/sky/clouds.nif");
 
 pub const ACTOR_VALUE_FATIGUE: FormId = FormId(0x34f);
 pub const ACTOR_VALUE_POWER_ARMOR_HEAD_CONDITION: FormId = FormId(0x2ef);
