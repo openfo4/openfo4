@@ -160,6 +160,10 @@ impl RecordInstantiationKind {
     const fn is_base_object(&self) -> bool {
         matches!(self, Self::BaseObject)
     }
+
+    const fn is_instance(&self) -> bool {
+        matches!(self, Self::Instance)
+    }
 }
 
 async fn instantiate_form(
@@ -281,9 +285,9 @@ async fn instantiate_form(
                 if let Some(vmad) = data.virtual_machine_adapter {
                     let mut scripts = vmad.scripts;
 
-                    if let Some(frags) = vmad.fragments {
-                        let script = frags.script.unwrap();
-
+                    if let Some(frags) = vmad.fragments
+                        && let Some(script) = frags.script
+                    {
                         scripts.push(script);
                     }
 
@@ -370,13 +374,14 @@ async fn instantiate_form(
 
         let mut scripts = HashMap::new();
 
-        // Can't attach scripts to objects with no base class.
-        let base_class_name = match kind {
-            RecordInstantiationKind::BaseObject => record_script_name(&record.local.data).unwrap(),
-            RecordInstantiationKind::Instance => {
-                record_instance_script_name(&record.local.data).unwrap()
-            }
+        // We only want to create a new instance of the root object.
+        // The dependencies must remain regular base objects.
+        let base_class_name = if kind.is_instance() && record.id == root {
+            record_instance_script_name(&record.local.data).unwrap()
+        } else {
+            record_script_name(&record.local.data).unwrap()
         };
+
         let instance = compiled_classes
             .entry(base_class_name.to_owned())
             .or_insert_with(|| engine.compile(base_class_name, &COMPILER_OPTIONS));
