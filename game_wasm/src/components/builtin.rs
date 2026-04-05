@@ -102,51 +102,60 @@ pub struct AmbientLight {
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Zeroable, Pod, Encode, Decode)]
-#[repr(transparent)]
-pub struct Color(pub [f32; 4]);
+#[repr(C)]
+pub struct Color {
+    pub r: f32,
+    pub g: f32,
+    pub b: f32,
+    pub a: f32,
+}
 
 impl Color {
-    pub const WHITE: Self = Self([1.0, 1.0, 1.0, 1.0]);
-    pub const BLACK: Self = Self([0.0, 0.0, 0.0, 1.0]);
+    pub const WHITE: Self = Self::from_rgba([1.0, 1.0, 1.0, 1.0]);
+    pub const BLACK: Self = Self::from_rgba([0.0, 0.0, 0.0, 1.0]);
 
-    pub const RED: Self = Self([1.0, 0.0, 0.0, 1.0]);
-    pub const GREEN: Self = Self([0.0, 1.0, 0.0, 1.0]);
-    pub const BLUE: Self = Self([0.0, 0.0, 1.0, 1.0]);
+    pub const RED: Self = Self::from_rgba([1.0, 0.0, 0.0, 1.0]);
+    pub const GREEN: Self = Self::from_rgba([0.0, 1.0, 0.0, 1.0]);
+    pub const BLUE: Self = Self::from_rgba([0.0, 0.0, 1.0, 1.0]);
 
-    pub const YELLOW: Self = Self([1.0, 1.0, 0.0, 1.0]);
-    pub const AQUA: Self = Self([0.0, 1.0, 1.0, 1.0]);
-    pub const FUCHSIA: Self = Self([1.0, 0.0, 1.0, 1.0]);
+    pub const YELLOW: Self = Self::from_rgba([1.0, 1.0, 0.0, 1.0]);
+    pub const AQUA: Self = Self::from_rgba([0.0, 1.0, 1.0, 1.0]);
+    pub const FUCHSIA: Self = Self::from_rgba([1.0, 0.0, 1.0, 1.0]);
+
+    pub const TRANSPARENT: Self = Self::from_rgba([0.0; 4]);
 
     #[inline]
     pub const fn as_rgb(self) -> [f32; 3] {
-        [self.0[0], self.0[1], self.0[2]]
+        [self.r, self.g, self.b]
     }
 
     #[inline]
     pub const fn as_rgba(self) -> [f32; 4] {
-        self.0
+        [self.r, self.g, self.b, self.a]
     }
 
     #[inline]
     pub const fn from_rgb(rgb: [f32; 3]) -> Self {
-        Self([rgb[0], rgb[1], rgb[2], 1.0])
+        let [r, g, b] = rgb;
+        Self { r, g, b, a: 1.0 }
     }
 
     #[inline]
     pub const fn from_rgba(rgba: [f32; 4]) -> Self {
-        Self(rgba)
+        let [r, g, b, a] = rgba;
+        Self { r, g, b, a }
     }
 
     pub fn lerp(self, other: Self, s: f32) -> Self {
-        let [a_r, a_g, a_b, a_a] = self.0;
-        let [b_r, b_g, b_b, b_a] = other.0;
+        let a = self;
+        let b = other;
 
-        Self([
-            f32::lerp(a_r, b_r, s),
-            f32::lerp(a_g, b_g, s),
-            f32::lerp(a_b, b_b, s),
-            f32::lerp(a_a, b_a, s),
-        ])
+        Self {
+            r: f32::lerp(a.r, b.r, s),
+            g: f32::lerp(a.g, b.g, s),
+            b: f32::lerp(a.b, b.b, s),
+            a: f32::lerp(a.a, b.a, s),
+        }
     }
 }
 
@@ -154,9 +163,15 @@ impl Mul for Color {
     type Output = Self;
 
     fn mul(self, rhs: Self) -> Self::Output {
-        let [a_r, a_g, a_b, a_a] = self.0;
-        let [b_r, b_g, b_b, b_a] = rhs.0;
-        Self([a_r * b_r, a_g * b_g, a_b * b_b, a_a * b_a])
+        let a = self;
+        let b = rhs;
+
+        Self {
+            r: a.r * b.r,
+            g: a.g * b.g,
+            b: a.b * b.b,
+            a: a.a * b.a,
+        }
     }
 }
 
@@ -164,8 +179,12 @@ impl Mul<f32> for Color {
     type Output = Self;
 
     fn mul(self, rhs: f32) -> Self::Output {
-        let [r, g, b, a] = self.0;
-        Self([r * rhs, g * rhs, b * rhs, a * rhs])
+        Self {
+            r: self.r * rhs,
+            g: self.g * rhs,
+            b: self.b * rhs,
+            a: self.a * rhs,
+        }
     }
 }
 
