@@ -3,6 +3,7 @@ mod constant;
 mod function;
 mod function_props;
 mod runtime;
+mod trace;
 mod trampoline;
 
 use std::collections::VecDeque;
@@ -96,6 +97,7 @@ impl CodegenPass {
                         props: None,
                         constants: Arc::default(),
                         class: Lowercase::new(&*class.name),
+                        class_name_debug: class.name.clone(),
                     }));
 
                     functions.insert(Lowercase::new(&*func.name), id);
@@ -128,6 +130,7 @@ impl CodegenPass {
                         props: None,
                         constants: Arc::default(),
                         class: Lowercase::new(&*class.name),
+                        class_name_debug: class.name.clone(),
                     }))
                 });
 
@@ -141,6 +144,7 @@ impl CodegenPass {
                         props: None,
                         constants: Arc::default(),
                         class: Lowercase::new(&*class.name),
+                        class_name_debug: class.name.clone(),
                     }))
                 });
 
@@ -734,6 +738,7 @@ struct ClassDef {
 #[derive(Clone, Debug)]
 struct FunctionDef {
     class: Lowercase<String>,
+    class_name_debug: String,
     signature: Option<Signature>,
     func_id: Option<FuncId>,
     function: Function,

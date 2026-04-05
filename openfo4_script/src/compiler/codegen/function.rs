@@ -14,6 +14,7 @@ use crate::compiler::codegen::constant::{ConstantData, create_string_constant};
 use crate::compiler::codegen::function_props::{
     FunctionProps, StackFrame, Stage, StageVariable, function_properties,
 };
+use crate::compiler::codegen::trace::Span;
 use crate::compiler::codegen::trampoline::generate_guest_to_host_trampoline;
 use crate::compiler::codegen::{
     ClassDef, CodegenData, Error, FunctionDef, Type, get_parent_class_with_property,
@@ -70,7 +71,14 @@ pub fn declare_function(
             }
         };
 
-        let id = generate_guest_to_host_trampoline(compiler, &signature, &native);
+        let id = generate_guest_to_host_trampoline(
+            compiler,
+            data,
+            &signature,
+            &native,
+            &function.class_name_debug,
+            &function.function.name,
+        );
         Ok(id)
     } else {
         let id = compiler.declare_function(signature);
@@ -100,6 +108,7 @@ pub fn translate_function(
         translate_function_body(
             data,
             class,
+            &function.class_name_debug,
             &function.function,
             &props,
             builder,
@@ -147,6 +156,7 @@ fn translate_function_signature(data: &CodegenData, function: &Function) -> Sign
 fn translate_function_body(
     data: &CodegenData,
     class: &ClassDef,
+    class_name: &str,
     function: &Function,
     props: &FunctionProps,
     mut builder: FunctionBuilder<'_>,
@@ -156,6 +166,9 @@ fn translate_function_body(
     builder.switch_to_block(entry_block);
 
     let ctx_ptr = builder.block_params(entry_block)[0];
+
+    let mut span = Span::new(data, class_name, &function.name);
+    span.enter(data, &mut builder, ctx_ptr);
 
     let self_ptr = builder.block_params(entry_block).get(1).copied();
     let params_offset = if !function.is_static {
@@ -232,6 +245,8 @@ fn translate_function_body(
         self_ptr,
         self_ty: &class.name,
         constants,
+        span: &mut span,
+        ctx_ptr,
     };
 
     let start_block = translator.builder.create_block(&[]);
@@ -788,6 +803,8 @@ fn translate_function_body(
                 }
             }
             Instruction::Return(value) => {
+                translator.span.exit(data, &mut translator.builder, ctx_ptr);
+
                 if !function.return_ty.is_empty()
                     && !function.return_ty.eq_ignore_ascii_case("none")
                 {
@@ -1529,6 +1546,8 @@ fn translate_function_body(
         };
 
     if !translator.builder.is_current_block_full() {
+        translator.span.exit(data, &mut translator.builder, ctx_ptr);
+
         if let Some(return_ty) = return_ty {
             let rval = translator.builder.uninit(return_ty);
             translator.builder.return_(&[rval, result_ok]);
@@ -1540,6 +1559,8 @@ fn translate_function_body(
     if let Some(block) = blocks.get(&function.instructions.len()) {
         if !translator.builder.is_block_full(*block) {
             translator.builder.switch_to_block(*block);
+
+            translator.span.exit(data, &mut translator.builder, ctx_ptr);
 
             if let Some(return_ty) = return_ty {
                 let rval = translator.builder.uninit(return_ty);
@@ -1562,6 +1583,8 @@ pub struct FunctionTranslator<'a> {
     self_ptr: Option<JitValue>,
     self_ty: &'a Lowercase<str>,
     constants: &'a mut Vec<ConstantData>,
+    span: &'a mut Span,
+    ctx_ptr: JitValue,
 }
 
 impl<'a> FunctionTranslator<'a> {
@@ -2090,6 +2113,11 @@ fn perform_checked_call(
 
         translator.builder.switch_to_block(suspend_block);
         suspend_stack(translator, stack_base, stage);
+
+        translator
+            .span
+            .exit(translator.data, &mut translator.builder, ctx_ptr);
+
         translator.builder.return_(&rvals);
 
         translator.builder.switch_to_block(continue_block);
@@ -2272,6 +2300,10 @@ fn abort_function(translator: &mut FunctionTranslator<'_>) {
 
     let result = translator.builder.iconst(JitType::I32, RESULT_ERROR);
     rvals.push(result);
+
+    translator
+        .span
+        .exit(translator.data, &mut translator.builder, translator.ctx_ptr);
 
     translator.builder.return_(&rvals);
 }

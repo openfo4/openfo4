@@ -16,6 +16,10 @@ pub struct RuntimeFunctions {
     pub f32_to_string: FuncId,
     /// (ctx: *mut RawContext, value: *mut u8) -> *mut u8
     pub object_to_string: FuncId,
+    /// (ctx: *mut RawContext, ptr: *const u8, len: usize) -> usiez
+    pub enter_span: FuncId,
+    /// (ctx: *mut RawContext, span: usize)
+    pub exit_span: FuncId,
 }
 
 impl RuntimeFunctions {
@@ -68,6 +72,22 @@ impl RuntimeFunctions {
             },
             host_functions::object_to_string as *const u8,
         );
+        let enter_span = declare_and_define(
+            compiler,
+            Signature {
+                params: vec![Type::Pointer, Type::Pointer, Type::Pointer],
+                returns: vec![Type::Pointer],
+            },
+            host_functions::enter_span as *const u8,
+        );
+        let exit_span = declare_and_define(
+            compiler,
+            Signature {
+                params: vec![Type::Pointer, Type::Pointer],
+                returns: vec![],
+            },
+            host_functions::exit_span as *const u8,
+        );
 
         Self {
             alloc_zeroed,
@@ -76,6 +96,8 @@ impl RuntimeFunctions {
             i32_to_string,
             f32_to_string,
             object_to_string,
+            enter_span,
+            exit_span,
         }
     }
 }

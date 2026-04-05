@@ -1,8 +1,10 @@
 use std::cell::RefCell;
 use std::fmt::{Debug, Write};
 
+use hashbrown::HashMap;
+use parking_lot::Mutex;
 use tracing::field::{Field, Visit};
-use tracing::span::Id;
+use tracing::span::{Attributes, Id};
 use tracing::{Event, Subscriber};
 use tracing_subscriber::layer::{Context, Layer};
 use tracing_subscriber::registry::LookupSpan;
@@ -19,12 +21,14 @@ thread_local! {
 
 pub struct TracyLayer {
     client: Client,
+    dynamic_spans: Mutex<HashMap<Id, DynamicSpan>>,
 }
 
 impl TracyLayer {
     pub fn new() -> Self {
         Self {
             client: Client::start(),
+            dynamic_spans: Mutex::default(),
         }
     }
 }
@@ -50,19 +54,49 @@ where
         });
     }
 
+    fn on_new_span(&self, attrs: &Attributes<'_>, id: &Id, _ctx: Context<'_, S>) {
+        STRING_BUFFER.with_borrow_mut(|buf| {
+            let mut visitor = ExtractJitFunction {
+                buf,
+                func_name: false,
+            };
+            attrs.record(&mut visitor);
+
+            if visitor.func_name {
+                self.dynamic_spans.lock().insert(
+                    id.clone(),
+                    DynamicSpan {
+                        name: buf.to_owned(),
+                    },
+                );
+            }
+
+            buf.clear();
+        });
+    }
+
+    fn on_close(&self, id: Id, _ctx: Context<'_, S>) {
+        self.dynamic_spans.lock().remove(&id);
+    }
+
     fn on_enter(&self, id: &Id, ctx: Context<'_, S>) {
         let Some(span) = ctx.span(id) else {
             return;
         };
 
-        let file = span.metadata().file().unwrap_or("???");
-        let line = span.metadata().line().unwrap_or(0);
-        let name = span.name();
+        let span = if let Some(span) = self.dynamic_spans.lock().get(id) {
+            self.client
+                .clone()
+                .span_alloc(Some(&span.name), "", "", 0, 0)
+        } else {
+            let file = span.metadata().file().unwrap_or("???");
+            let line = span.metadata().line().unwrap_or(0);
+            let name = span.name();
 
-        let span = self
-            .client
-            .clone()
-            .span_alloc(Some(name), "", file, line, 0);
+            self.client
+                .clone()
+                .span_alloc(Some(name), "", file, line, 0)
+        };
 
         LOCAL_SPANS.with_borrow_mut(|spans| {
             spans.push((span, id.into_u64()));
@@ -103,4 +137,25 @@ impl<'a> Visit for Visitor<'a> {
             write!(self.buf, ", {} = {:?}", field.name(), value).ok();
         }
     }
+}
+
+struct ExtractJitFunction<'a> {
+    buf: &'a mut String,
+    func_name: bool,
+}
+
+impl<'a> Visit for ExtractJitFunction<'a> {
+    fn record_str(&mut self, field: &Field, value: &str) {
+        if field.name() == "jit_function_name" {
+            self.buf.push_str(value);
+            self.func_name = true;
+        }
+    }
+
+    fn record_debug(&mut self, _field: &Field, _value: &dyn Debug) {}
+}
+
+#[derive(Clone, Debug)]
+struct DynamicSpan {
+    name: String,
 }

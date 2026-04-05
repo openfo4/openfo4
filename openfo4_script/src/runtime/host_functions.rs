@@ -1,4 +1,8 @@
+use std::cell::RefCell;
 use std::panic::AssertUnwindSafe;
+
+use game_common::utils::vec_ext::VecExt;
+use tracing::span::EnteredSpan;
 
 use crate::compiler::resources::TypeId;
 use crate::runtime::{ObjectAddr, RawContext, RawVal};
@@ -69,6 +73,36 @@ pub unsafe extern "C" fn object_to_string(ctx: *mut RawContext, addr: *mut u8) -
         let s = format!("{:x}", addr.addr());
         unsafe { (*ctx.state).pool.insert_string(&s).addr() }
     })
+}
+
+thread_local! {
+    static SPANS: RefCell<Vec<EnteredSpan>> = RefCell::new(Vec::new());
+}
+
+pub unsafe extern "C" fn enter_span(_ctx: *mut RawContext, ptr: *const u8, len: usize) -> usize {
+    abort_on_unwind(|| unsafe {
+        let bytes = core::slice::from_raw_parts(ptr, len);
+        let s = core::str::from_utf8_unchecked(bytes);
+
+        let span = tracing::trace_span!("jit function", jit_function_name = s);
+        let span = span.entered();
+
+        let index = SPANS.with_borrow_mut(|spans| spans.push_and_index(span));
+
+        index
+    })
+}
+
+pub unsafe extern "C" fn exit_span(_ctx: *mut RawContext, index: usize) {
+    abort_on_unwind(|| {
+        SPANS.with_borrow_mut(|spans| {
+            if index >= spans.len() {
+                panic!("out of order span removal");
+            }
+
+            spans.pop();
+        })
+    });
 }
 
 fn abort_on_unwind<F, R>(f: F) -> R
