@@ -22,7 +22,6 @@ pub unsafe extern "C" fn alloc_zeroed(
     array_len: usize,
 ) -> *mut u8 {
     abort_on_unwind(|| {
-        // FIXME: Don't clone, we can keep the TypeLayout for many objects.
         let object_ref = unsafe { (*(*ctx).state).pool.alloc(ty, array_len) };
         object_ref.addr().to_raw() as *mut u8
     })
