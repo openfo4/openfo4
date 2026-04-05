@@ -151,6 +151,23 @@ impl game_window::App for App {
 
         self.egui_ctx.handle_event(&event);
 
+        if self.egui_ctx.context().wants_pointer_input()
+            && matches!(
+                event,
+                WindowEvent::MouseWheel(_)
+                    | WindowEvent::MouseButtonInput(_)
+                    | WindowEvent::MouseMotion(_)
+            )
+        {
+            return;
+        }
+
+        if self.egui_ctx.context().wants_keyboard_input()
+            && matches!(event, WindowEvent::KeyboardInput(_))
+        {
+            return;
+        }
+
         self.game.send_event(event);
     }
 
