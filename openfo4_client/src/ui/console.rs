@@ -1,7 +1,9 @@
-use game_egui::egui::{Context, Key, TextBuffer, Window};
-use hecs::World;
+use game_egui::egui::{Context, Key, Window};
+use hecs::{Entity, World};
 use openfo4_core::events::EventBus;
 
+use crate::components::Player;
+use crate::systems::inventory::AddItemEventAsync;
 use crate::systems::time::GameTime;
 
 #[derive(Clone, Debug, Default)]
@@ -67,6 +69,41 @@ fn execute_command(cmd: &str, world: &World, events: &mut EventBus) -> Option<St
 
             Some(format!("unknown global: {}", global))
         }
+        "player.additem" => {
+            let Some(item) = tokens.get(1).copied() else {
+                return Some("missing parameter: item".to_owned());
+            };
+
+            let item = match item.parse() {
+                Ok(item) => item,
+                Err(err) => {
+                    return Some(format!("invalid item: {}", err));
+                }
+            };
+
+            let Some(player) = get_player(world) else {
+                return None;
+            };
+
+            events.send(AddItemEventAsync {
+                actor: player,
+                item,
+                count: 1,
+                attachments: Vec::new(),
+                hidden: false,
+                equip: false,
+            });
+
+            None
+        }
         v => Some(format!("unknown command: {}", v)),
     }
+}
+
+fn get_player(world: &World) -> Option<Entity> {
+    world
+        .query::<&Player>()
+        .iter()
+        .next()
+        .map(|(entity, _)| entity)
 }
