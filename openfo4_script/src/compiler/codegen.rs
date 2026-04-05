@@ -188,6 +188,7 @@ impl CodegenPass {
         if !self.classes_updated {
             return;
         }
+        self.classes_updated = false;
 
         let resolve_ty_and_default_value = |ty: &Type| -> (TypeId, Option<Vec<u8>>) {
             match ty {
