@@ -1,7 +1,7 @@
-use openfo4_esp::FormId;
 use openfo4_script::engine::Engine;
 use openfo4_script::runtime::{Caller, Exception};
 
+use crate::components::Player;
 use crate::systems::controller::InputControllerMask;
 use crate::systems::scripting::classes::{Object, State};
 
@@ -513,8 +513,17 @@ fn get_perception_av(caller: Caller<'_, State>) -> Result<Object, Exception> {
 /// ```text
 /// Actor Function() native global
 /// ```
-fn get_player(caller: Caller<'_, State>) -> Result<Object, Exception> {
-    Ok(caller.data().core_objects.player.addr())
+fn get_player(mut caller: Caller<'_, State>) -> Result<Object, Exception> {
+    let Some((entity, _)) = caller.data().world().query::<&Player>().iter().next() else {
+        tracing::warn!("Game.GetPlayer found no player");
+        return Err(Exception::Error);
+    };
+
+    // We can assume here that the player always has a script attached here,
+    // so we never need to suspend.
+    let scripts = caller.data_mut().get_or_create_entity(entity)?;
+    let actor = scripts.get("Actor").unwrap();
+    Ok(actor.get().object.addr())
 }
 
 /// `GetPlayerFollowers`
@@ -1196,8 +1205,10 @@ fn with_player_control_mask<T, F>(caller: Caller<'_, State>, f: F) -> Result<T, 
 where
     F: FnOnce(&InputControllerMask) -> T,
 {
-    let actor = caller.data().core_objects.player.addr();
-    let entity = caller.data().entity(actor).ok_or(Exception::Error)?;
+    let Some((entity, _)) = caller.data().world().query::<&Player>().iter().next() else {
+        tracing::error!("found no player");
+        return Err(Exception::Error);
+    };
 
     let Ok(mask) = caller.data().world().get::<&InputControllerMask>(entity) else {
         return Err(Exception::Error);

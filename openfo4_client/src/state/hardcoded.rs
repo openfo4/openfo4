@@ -64,6 +64,8 @@ pub const ACTOR_VALUE_POWER_GENERATED: FormId = FormId(0x32e);
 pub const ACTOR_VALUE_POWER_RADIATION: FormId = FormId(0x32f);
 pub const ACTOR_VALUE_POWER_REQUIRED: FormId = FormId(0x330);
 
+pub const ACTOR_PLAYER: RecordId = RecordId::new(HARDCODED_MODULE_ID, FormId(0x7));
+
 pub fn load_hardcoded_forms() -> HashMap<FormId, Record> {
     fn actor_value(id: FormId, name: &str) -> (FormId, Record) {
         (

@@ -28,12 +28,14 @@ use crate::components::{ActorMarker, NiTransform, Player, WorldSpace};
 use crate::state::anim_starter::AnimationEventQueue;
 use crate::state::animation::{self, SkeletonConfig, load_anim};
 use crate::state::esp::EspLoader;
-use crate::state::hardcoded::HARDCODED_MODULE_ID;
+use crate::state::hardcoded::{ACTOR_PLAYER, HARDCODED_MODULE_ID};
 use crate::state::level::Streamer;
 use crate::state::npc::{ActorInstanceProps, BodyPartBone, ObjectKeywords, spawn_actor};
 use crate::systems::PlayerControlState;
 use crate::systems::controller::InputControllerMask;
 use crate::systems::inventory::{AddItemEventAsync, EquipItemEvent, Inventory};
+use crate::systems::scripting::ScriptEntities;
+use crate::systems::scripting::loader::ScriptLoader;
 
 #[derive(Clone, Debug)]
 pub struct SkinInstance {
@@ -46,6 +48,8 @@ pub fn animation_test(
     world: &mut World,
     asset_loader: &AssetLoader,
     esp_loader: &EspLoader,
+    script_loader: &ScriptLoader,
+    script_entities: &mut ScriptEntities,
 ) {
     static ONCE: OnceLock<()> = OnceLock::new();
 
@@ -112,6 +116,15 @@ pub fn animation_test(
                 .unwrap();
             world.insert_one(root, Frozen::default()).unwrap();
             world.insert_one(root, crate::components::Root).unwrap();
+
+            if let Some(script) =
+                futures_lite::future::block_on(script_loader.load_instance(ACTOR_PLAYER))
+            {
+                script_entities.0.insert(script.id(), root);
+                world.insert_one(root, script).unwrap();
+            } else {
+                tracing::warn!("cloud not load script for player");
+            }
 
             // let race = futures_lite::future::block_on(
             //     esp_loader.lookup(Some(RecordKind::Race), FormId(0x13746)),

@@ -240,11 +240,6 @@ impl State {
 
     /// Returns the game world entity associated with a script object, if any exists.
     pub fn entity(&self, addr: ObjectAddr) -> Option<Entity> {
-        if addr == self.core_objects.player.addr() {
-            let (entity, _) = self.world().query::<&Player>().iter().next().unwrap();
-            return Some(entity);
-        }
-
         let id = *self.game_entities.get(&addr)?;
         self.entities().0.get_left(&id).copied()
     }
@@ -274,9 +269,9 @@ impl State {
     }
 
     pub fn get_or_create_entity(&mut self, entity: Entity) -> Result<ScriptsRef<'_>, Exception> {
-        let id = *self.entities().0.get_right(&entity).unwrap();
-
-        if let Some(object) = self.objects.get_by_id(id) {
+        if let Some(id) = self.entities().0.get_right(&entity)
+            && let Some(object) = self.objects.get_by_id(*id)
+        {
             // The borrow checker is too conservative here and `self.objects` is
             // borrowed for '_ if `None` is returned.
             // We need to drop the lifetime here to keep using `self` mutable if this
@@ -287,7 +282,13 @@ impl State {
             return Ok(object);
         }
 
-        let base = self.world().get::<&BaseObject>(entity).unwrap().record;
+        let Ok(base) = self.world().get::<&BaseObject>(entity).map(|v| v.record) else {
+            tracing::error!(
+                "failed to load script for entity {:?}: unknown base object",
+                entity
+            );
+            return Err(Exception::Error);
+        };
 
         let object = self.run_effect_and_wait(LoadEntityEffect { base })?;
         let object = object.unwrap();
@@ -332,7 +333,6 @@ unsafe impl Sync for State {}
 /// Set of engine-builtin objects that are always loaded.
 #[derive(Clone, Debug)]
 pub struct CoreObjects {
-    pub player: ObjectRef,
     pub health: ObjectRef,
     // SPECIAL
     pub strength: ObjectRef,

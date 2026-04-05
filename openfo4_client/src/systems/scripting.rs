@@ -24,7 +24,6 @@ use openfo4_script::compiler::resources::TypeId;
 use openfo4_script::engine::{Engine, Instance, Options};
 use openfo4_script::runtime::{Context, Exception, ObjectAddr, ObjectRef, Stack, Val};
 
-use crate::components::Player;
 use crate::events::inventory::{ItemAddedEvent, ItemEquippedEvent};
 use crate::events::trigger::{TriggerEnter, TriggerLeave};
 use crate::loader::FileLoader;
@@ -159,12 +158,6 @@ impl Executor {
 
         let engine = futures_lite::future::block_on(self.loader.engine.lock());
         let mut state = futures_lite::future::block_on(self.loader.state.lock());
-
-        for (entity, _) in world.query::<&Player>().iter() {
-            let addr = state.as_mut().unwrap().core_objects.player.addr();
-            let script = state.as_mut().unwrap().objects.get_by_addr(addr).unwrap();
-            script_entities.0.insert(script.id(), entity);
-        }
 
         // FIXME: Don't recompute this every update.
         let mut entities = HashMap::new();
@@ -466,19 +459,10 @@ fn core_actor_values(engine: &mut Engine) -> State {
         suspicious,
     ] = std::array::from_fn(|_| engine.object_pool().insert(actor_value.clone()).finalize());
 
-    let player = ScriptInstance {
-        layout: actor_layout.clone(),
-        instance: actor,
-        object: engine.object_pool().insert(actor_layout.clone()).finalize(),
-        stacks: HashMap::new(),
-    };
-
     let mut objects = ScriptObjects::default();
-    objects.insert(engine, vec![player.clone()], None);
 
     State {
         core_objects: CoreObjects {
-            player: player.object.clone(),
             health,
             strength,
             perception,

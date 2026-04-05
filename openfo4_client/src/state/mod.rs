@@ -231,6 +231,8 @@ impl GameState {
             &mut self.world,
             &self.asset_loader,
             &self.esp_loader,
+            &self.executor.loader(),
+            &mut self.script_entities,
         );
 
         update_time(&mut self.world, Duration::from_secs_f32(1.0 / UPS as f32));
