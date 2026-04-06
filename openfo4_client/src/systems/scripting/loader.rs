@@ -720,6 +720,7 @@ fn record_script_name(data: &RecordData) -> Option<&'static str> {
         RecordData::Ammo(_) => Some("Ammo"),
         RecordData::Armor(_) => Some("Armor"),
         RecordData::AssocationType(_) => Some("AssociationType"),
+        RecordData::AudioCategorySnapshot(_) => Some("SoundCategorySnapshot"),
         RecordData::Book(_) => Some("Book"),
         RecordData::CameraShot(_) => Some("CameraShot"),
         RecordData::Cell(_) => Some("Cell"),
