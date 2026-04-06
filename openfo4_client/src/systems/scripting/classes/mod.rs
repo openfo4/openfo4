@@ -38,6 +38,7 @@ mod topic_info;
 mod utility;
 mod visual_effect;
 mod weapon;
+mod weather;
 
 use std::collections::BTreeMap;
 use std::time::{Duration, Instant};
@@ -109,6 +110,7 @@ pub fn register_builtins(engine: &mut Engine) {
     visual_effect::register(engine);
     sound_category_snapshot::register(engine);
     encounter_zone::register(engine);
+    weather::register(engine);
 
     engine.register_native_function("Sound", "SetInstanceVolume", sound::set_instance_volume);
     engine.register_native_function("Sound", "StopInstance", sound::stop_instance);
