@@ -10,6 +10,7 @@ use openfo4_script::compiler::resources::{PropertyType, TypeId};
 use openfo4_script::engine::{Engine, Instance};
 use openfo4_script::runtime::object::{IntoValue, ObjectArrayBuilder, ObjectBuilder};
 use openfo4_script::runtime::{ObjectAddr, ObjectRef};
+use thiserror::Error;
 
 use crate::state::esp::EspLoader;
 use crate::systems::scripting::classes::State;
@@ -200,8 +201,11 @@ async fn instantiate_form(
             continue;
         }
 
-        dbg!(record);
-        let record = esp_loader.lookup(None, record).await.unwrap();
+        let Ok(record) = esp_loader.lookup(None, record).await.inspect_err(|err| {
+            tracing::warn!("failed to load {:?}: {}", record, err);
+        }) else {
+            continue;
+        };
 
         let mut aliases = HashMap::new();
 
@@ -510,7 +514,7 @@ async fn instantiate_form(
             if let Some(script) = &object.script {
                 tracing::debug!("instantiating script {:?} (record {:?})", name, record);
 
-                build_script_object(
+                let (_, warnings) = build_script_object(
                     |form| esp_loader.resolve_form(form, record).unwrap(),
                     engine,
                     script,
@@ -520,6 +524,15 @@ async fn instantiate_form(
                     &mut object.builder,
                     record,
                 );
+
+                for warning in warnings {
+                    tracing::warn!(
+                        "warning while building script {} for object {:?}: {}",
+                        &script.name,
+                        record,
+                        warning,
+                    );
+                }
             }
 
             let layout = engine.get_type(&name).unwrap();
@@ -559,7 +572,7 @@ async fn instantiate_form(
             if let Some(script) = &object.script {
                 tracing::debug!("instantiating alias script {:?} for {:?}", name, key);
 
-                build_script_object(
+                let (_, warnings) = build_script_object(
                     |form| esp_loader.resolve_form(form, key.accessor).unwrap(),
                     engine,
                     script,
@@ -569,6 +582,15 @@ async fn instantiate_form(
                     &mut object.builder,
                     key.accessor,
                 );
+
+                for warning in warnings {
+                    tracing::warn!(
+                        "warning while building script {} for alias {:?}: {}",
+                        &script.name,
+                        key,
+                        warning,
+                    );
+                }
             }
 
             let layout = engine.get_type(&name).unwrap();
@@ -786,6 +808,14 @@ fn record_instance_script_name(data: &RecordData) -> Option<&'static str> {
     }
 }
 
+#[derive(Clone, Debug, Error)]
+enum BuildScriptObjectWarning {
+    #[error("unknown alias: {0:?}")]
+    UnknownAlias(AliasKey),
+    #[error("unknown object: {0:?}")]
+    UnknownObject(RecordId),
+}
+
 // FIXME: Use script layout reflection to determine we're actually setting values of the correct type.
 fn build_script_object(
     resolve_form: impl Fn(FormId) -> RecordId,
@@ -796,9 +826,11 @@ fn build_script_object(
     aliases: &HashMap<AliasKey, HashMap<String, ObjectAddr>>,
     builder: &mut ObjectBuilder,
     script_defined_in: RecordId,
-) -> ObjectRef {
+) -> (ObjectRef, Vec<BuildScriptObjectWarning>) {
     let ty = engine.get_type(&script.name).unwrap();
     let layout = engine.type_info(ty);
+
+    let mut warnings = Vec::new();
 
     #[derive(Copy, Clone, Debug)]
     struct Entry<'a> {
@@ -901,13 +933,16 @@ fn build_script_object(
                 let id = resolve_form(value.form);
 
                 let addr = if let Some(alias) = value.alias {
-                    let scripts = aliases
-                        .get(&AliasKey {
-                            accessor: script_defined_in,
-                            owner: id,
-                            id: alias.into(),
-                        })
-                        .unwrap();
+                    let key = AliasKey {
+                        accessor: script_defined_in,
+                        owner: id,
+                        id: alias.into(),
+                    };
+
+                    let Some(scripts) = aliases.get(&key) else {
+                        warnings.push(BuildScriptObjectWarning::UnknownAlias(key));
+                        continue;
+                    };
 
                     // FIXME: Which script to choose here?
                     // We need to inspect the actual class layout to get this.
@@ -921,13 +956,15 @@ fn build_script_object(
                         let script = scripts.iter().next().unwrap();
 
                         script.get().object.addr()
-                    } else {
-                        let scripts = partial_addrs.get(&id).unwrap();
+                    } else if let Some(scripts) = partial_addrs.get(&id) {
                         // FIXME: Which script to choose here?
                         // We need to inspect the actual class layout to get this.
                         let addr = *scripts.values().next().unwrap();
 
                         addr
+                    } else {
+                        warnings.push(BuildScriptObjectWarning::UnknownObject(id));
+                        continue;
                     }
                 };
 
@@ -1018,7 +1055,7 @@ fn build_script_object(
     }
 
     debug_assert_eq!(builders.len(), 1);
-    builders.pop().unwrap().finalize()
+    (builders.pop().unwrap().finalize(), warnings)
 }
 
 fn is_primitive(engine: &Engine, ty: TypeId) -> bool {
@@ -1049,7 +1086,7 @@ mod tests {
         let partial_addrs = HashMap::new();
         let aliases = HashMap::new();
 
-        build_script_object(
+        let (res, warnings) = build_script_object(
             |_| unreachable!(),
             &engine,
             &script,
@@ -1058,7 +1095,10 @@ mod tests {
             &aliases,
             &mut builder,
             RecordId::DANGLING,
-        )
+        );
+
+        assert!(warnings.is_empty());
+        res
     }
 
     fn assert_array_contents_eq(
