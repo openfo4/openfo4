@@ -400,14 +400,20 @@ impl CodegenPass {
                 next_parent = &class.parent;
             }
 
+            let mut class_ids_raw: Vec<_> = class_ids.iter().map(|v| v.as_bits()).collect();
+
+            // The first word contains the number of `TypeId`s following.
+            class_ids_raw.push(class_ids.len());
+
             // TypeIds need to be sorted such that superclasses come before their subclasses.
             class_ids.reverse();
+            class_ids_raw.reverse();
 
             let header_ptr = self
                 .data
                 .resources
                 .constants
-                .alloc(bytemuck::cast_slice(&class_ids), align_of::<usize>());
+                .alloc(bytemuck::cast_slice(&class_ids_raw), align_of::<usize>());
 
             base.members[0].default_value =
                 Some(header_ptr.expose_provenance().to_ne_bytes().to_vec());
