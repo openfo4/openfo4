@@ -3599,9 +3599,9 @@ pub struct Weather {
     #[record("QNAM")]
     pub cloud_speed_x: CloudSpeed,
     #[record("PNAM")]
-    pub cloud_texture_color: [TimeOfDaySet<Rgba<u8>>; 32],
+    pub cloud_texture_color: [TimeOfDaySetExtended<Rgba<u8>>; 32],
     #[record("JNAM")]
-    pub cloud_texture_alpha: [TimeOfDaySet<f32>; 32],
+    pub cloud_texture_alpha: [TimeOfDaySetExtended<f32>; 32],
     #[record("NAM0")]
     pub colors: WeatherColors,
     #[record("FNAM")]
@@ -5210,6 +5210,8 @@ pub struct QuestLocationAlias {
     pub external_alias_location: Option<SubField<QuestAliasExternalAlias>>,
     #[record("ALFE")]
     pub find_matching_location_from_event: Option<SubField<QuestAliasFindMatchingFromEvent>>,
+    #[record("CTDA")]
+    pub conditions: SubRecordArray<Condition>,
     #[record("ALCC")]
     pub closest_to_alias: Option<i32>,
     #[record("ALED")]
