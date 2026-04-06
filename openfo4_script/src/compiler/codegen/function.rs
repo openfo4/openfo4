@@ -2009,6 +2009,13 @@ fn perform_cast_inner(
             create_var(translator, translator.ctx_ptr, src, tag)
         }
         // String formatting conversions
+        (Type::Bool, Type::String) => {
+            let ptr = translator.builder.call(
+                translator.data.runtime_funcs.bool_to_string,
+                &[translator.ctx_ptr, src],
+            )[0];
+            ptr
+        }
         (Type::Int, Type::String) => {
             let ptr = translator.builder.call(
                 translator.data.runtime_funcs.i32_to_string,

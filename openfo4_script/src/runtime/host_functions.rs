@@ -48,6 +48,15 @@ pub unsafe extern "C" fn free_stack_frame(ctx: *mut RawContext, size: usize) {
     });
 }
 
+pub unsafe extern "C" fn bool_to_string(ctx: *mut RawContext, value: bool) -> ObjectAddr {
+    abort_on_unwind(|| {
+        let ctx = unsafe { &mut *ctx };
+
+        let s = value.to_string();
+        unsafe { (*ctx.state).pool.insert_string(&s).addr() }
+    })
+}
+
 pub unsafe extern "C" fn i32_to_string(ctx: *mut RawContext, value: i32) -> ObjectAddr {
     abort_on_unwind(|| {
         let ctx = unsafe { &mut *ctx };

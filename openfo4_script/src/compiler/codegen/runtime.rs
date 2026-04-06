@@ -10,6 +10,8 @@ pub struct RuntimeFunctions {
     pub stack_frame_alloc: FuncId,
     /// (ctx: *mut RawContext, size: usize)
     pub stack_frame_free: FuncId,
+    /// (ctx: *mut RawContext, value: bool) -> *mut u8
+    pub bool_to_string: FuncId,
     /// (ctx: *mut RawContext, value: i32) -> *mut u8
     pub i32_to_string: FuncId,
     /// (ctx: *mut RawContext, value: f32) -> *mut u8
@@ -47,6 +49,14 @@ impl RuntimeFunctions {
                 returns: vec![],
             },
             host_functions::free_stack_frame as *const u8,
+        );
+        let bool_to_string = declare_and_define(
+            compiler,
+            Signature {
+                params: vec![Type::Pointer, Type::I32],
+                returns: vec![Type::Pointer],
+            },
+            host_functions::bool_to_string as *const u8,
         );
         let i32_to_string = declare_and_define(
             compiler,
@@ -93,6 +103,7 @@ impl RuntimeFunctions {
             alloc_zeroed,
             stack_frame_alloc,
             stack_frame_free,
+            bool_to_string,
             i32_to_string,
             f32_to_string,
             object_to_string,
