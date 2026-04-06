@@ -958,3 +958,15 @@ enum Type {
     Class(Lowercase<String>),
     Struct(Lowercase<String>),
 }
+
+impl Type {
+    fn to_jit_type(&self) -> JitType {
+        match self {
+            Self::None => JitType::I32,
+            Self::Bool => JitType::I32,
+            Self::Int => JitType::I32,
+            Self::Float => JitType::F32,
+            _ => JitType::Pointer,
+        }
+    }
+}

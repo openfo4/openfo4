@@ -430,6 +430,8 @@ impl ObjectArrayBuilder {
     {
         let object = &mut self.objects[index];
 
+        dbg!(&object);
+
         unsafe {
             object.set(class, name, value);
         }
@@ -501,7 +503,8 @@ pub struct ArrayObject {
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct VarObject {
-    pub tag: ObjectTag,
+    /// Raw version of an [`ObjectTag`].
+    pub tag: usize,
     pub data: VarObjectData,
 }
 
@@ -515,12 +518,21 @@ pub union VarObjectData {
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
-#[repr(usize)]
 pub enum ObjectTag {
-    None = 0,
-    Bool = 1,
-    Int = 2,
-    Float = 3,
-    Class = 4,
-    String = 5,
+    /// A class pointer.
+    Class,
+    TypeId(TypeId),
+}
+
+impl ObjectTag {
+    pub fn to_bits(self) -> usize {
+        match self {
+            Self::Class => usize::MAX,
+            Self::TypeId(id) => {
+                let bits = id.as_bits();
+                debug_assert!(bits != usize::MAX);
+                bits
+            }
+        }
+    }
 }

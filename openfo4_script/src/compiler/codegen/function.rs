@@ -467,7 +467,6 @@ fn translate_function_body(
                 } else {
                     perform_cast(
                         &mut translator,
-                        ctx_ptr,
                         &op.src,
                         // Use `dst` as a "temporary" boolean variable.
                         // (Needed to provide a type for `perform_cast`)
@@ -815,13 +814,7 @@ fn translate_function_body(
                 }
             }
             Instruction::Cast(op) => {
-                let res = perform_cast(
-                    &mut translator,
-                    ctx_ptr,
-                    &op.src,
-                    &op.dst,
-                    &mut current_block,
-                );
+                let res = perform_cast(&mut translator, &op.src, &op.dst, &mut current_block);
                 translator.store(&op.dst, res);
             }
             Instruction::Is(op) => {
@@ -1763,7 +1756,6 @@ struct Local {
 /// Performs a runtime cast of `src` to `dst`.
 fn perform_cast(
     translator: &mut FunctionTranslator<'_>,
-    ctx_ptr: JitValue,
     src_val: &Value,
     dst_val: &Value,
     block: &mut Block,
@@ -1777,6 +1769,115 @@ fn perform_cast(
         return src;
     }
 
+    match (src_ty, dst_ty) {
+        // Cast each element individually.
+        (Type::Array(src_elem_ty), Type::Array(dst_elem_ty)) => {
+            let src_array_ptr =
+                translator
+                    .builder
+                    .load(JitType::Pointer, src, offset_of!(ArrayObject, ptr) as u32);
+            let src_array_len =
+                translator
+                    .builder
+                    .load(JitType::Pointer, src, offset_of!(ArrayObject, len) as u32);
+
+            let type_id = translator.get_type_id(&dst_elem_ty);
+            let dst_array_ptr = call_malloc(translator, translator.ctx_ptr, type_id, src_array_len);
+
+            let one = translator.builder.iconst(JitType::Pointer, 1);
+            let new_array_object_ptr = call_malloc(
+                translator,
+                translator.ctx_ptr,
+                translator.data.resources.primitives.array,
+                one,
+            );
+
+            translator.builder.store(
+                dst_array_ptr,
+                new_array_object_ptr,
+                offset_of!(ArrayObject, ptr) as u32,
+            );
+            translator.builder.store(
+                src_array_len,
+                new_array_object_ptr,
+                offset_of!(ArrayObject, len) as u32,
+            );
+
+            let src_ty = src_elem_ty.to_jit_type();
+            let src_stride = src_ty.size();
+
+            let dst_ty = dst_elem_ty.to_jit_type();
+            let dst_stride = dst_ty.size();
+
+            let loop_block = translator.builder.create_block(&[]);
+            let mut loop_body_block = translator.builder.create_block(&[]);
+            let final_block = translator.builder.create_block(&[]);
+
+            let start_index = translator.builder.iconst(JitType::Pointer, 0);
+            let index_var = translator.builder.def_var(JitType::Pointer, start_index);
+
+            translator.builder.jump(loop_block, &[]);
+
+            // Loop block
+            {
+                translator.builder.switch_to_block(loop_block);
+
+                // Continue if index < src_array_len
+                let index = translator.builder.get_var(index_var);
+                let should_continue =
+                    translator
+                        .builder
+                        .icmp(index, src_array_len, IntCompareOp::UnsignedLessThan);
+
+                translator
+                    .builder
+                    .brif(should_continue, loop_body_block, &[], final_block, &[]);
+            }
+
+            // Loop body block
+            {
+                translator.builder.switch_to_block(loop_body_block);
+
+                let index = translator.builder.get_var(index_var);
+                let src_offset = translator.builder.imul_imm(index, src_stride as i64);
+                let src_addr = translator.builder.iadd(src_array_ptr, src_offset);
+
+                let elem = translator.builder.load(src_ty, src_addr, 0);
+                let dst = perform_cast_inner(
+                    translator,
+                    &src_elem_ty,
+                    &dst_elem_ty,
+                    elem,
+                    &mut loop_body_block,
+                );
+
+                let dst_offset = translator.builder.imul_imm(index, dst_stride as i64);
+                let dst_addr = translator.builder.iadd(dst_array_ptr, dst_offset);
+
+                translator.builder.store(dst, dst_addr, 0);
+
+                let next_index = translator.builder.iadd_imm(index, 1);
+                translator.builder.set_var(index_var, next_index);
+
+                translator.builder.jump(loop_block, &[]);
+            }
+
+            translator.builder.switch_to_block(final_block);
+            *block = final_block;
+
+            new_array_object_ptr
+        }
+        (src_ty, dst_ty) => perform_cast_inner(translator, &src_ty, &dst_ty, src, block),
+    }
+}
+
+fn perform_cast_inner(
+    translator: &mut FunctionTranslator<'_>,
+    src_ty: &Type,
+    dst_ty: &Type,
+    src: JitValue,
+    block: &mut Block,
+) -> JitValue {
     match (src_ty, dst_ty) {
         // Integer <-> float conversions
         (Type::Int, Type::Float) => translator.builder.convert_sint_to_float(src, JitType::F32),
@@ -1797,9 +1898,9 @@ fn perform_cast(
         (Type::Bool, Type::Float) => translator.builder.convert_uint_to_float(src, JitType::F32),
         (Type::Class(src_class), Type::Class(dst_class)) => {
             // Try upcasting.
-            let mut class_name = &src_class;
+            let mut class_name = src_class;
             loop {
-                if class_name == &dst_class {
+                if class_name == dst_class {
                     return src;
                 }
 
@@ -1812,10 +1913,10 @@ fn perform_cast(
             }
 
             // Try downcasting.
-            let mut class_name = &dst_class;
+            let mut class_name = dst_class;
             loop {
-                if class_name == &src_class {
-                    let is_ok = perform_typecheck(translator, src_val, &class_name, block);
+                if class_name == src_class {
+                    let is_ok = perform_class_typecheck(translator, src, &class_name, block);
 
                     let continue_block = translator.builder.create_block(&[]);
                     let abort_block = translator.builder.create_block(&[]);
@@ -1880,7 +1981,7 @@ fn perform_cast(
             res
         }
         (Type::Var, Type::Struct(name)) => {
-            let id = translator.data.structs.get(&name).unwrap().ty;
+            let id = translator.data.structs.get(name).unwrap().ty;
             perform_var_downcast(translator, src, ObjectTag::TypeId(id), block)
         }
         (src_ty, Type::Var) => {
@@ -1892,32 +1993,34 @@ fn perform_cast(
                 Type::String => ObjectTag::TypeId(translator.data.resources.primitives.string),
                 Type::Class(_) => ObjectTag::Class,
                 Type::Struct(name) => {
-                    let id = translator.data.structs.get(&name).unwrap().ty;
+                    let id = translator.data.structs.get(name).unwrap().ty;
                     ObjectTag::TypeId(id)
                 }
                 Type::Var => unreachable!(),
                 x => todo!("{:?}", x),
             };
 
-            create_var(translator, ctx_ptr, src, tag)
+            create_var(translator, translator.ctx_ptr, src, tag)
         }
         // String formatting conversions
         (Type::Int, Type::String) => {
-            let ptr = translator
-                .builder
-                .call(translator.data.runtime_funcs.i32_to_string, &[ctx_ptr, src])[0];
+            let ptr = translator.builder.call(
+                translator.data.runtime_funcs.i32_to_string,
+                &[translator.ctx_ptr, src],
+            )[0];
             ptr
         }
         (Type::Float, Type::String) => {
-            let ptr = translator
-                .builder
-                .call(translator.data.runtime_funcs.f32_to_string, &[ctx_ptr, src])[0];
+            let ptr = translator.builder.call(
+                translator.data.runtime_funcs.f32_to_string,
+                &[translator.ctx_ptr, src],
+            )[0];
             ptr
         }
         (Type::Class(_), Type::String) => {
             let ptr = translator.builder.call(
                 translator.data.runtime_funcs.object_to_string,
-                &[ctx_ptr, src],
+                &[translator.ctx_ptr, src],
             )[0];
             ptr
         }
