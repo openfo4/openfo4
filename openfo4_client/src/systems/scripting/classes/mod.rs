@@ -7,6 +7,7 @@ mod actor_base;
 mod alias;
 mod cell;
 mod debug;
+mod encounter_zone;
 mod faction;
 mod form;
 mod form_list;
@@ -107,6 +108,7 @@ pub fn register_builtins(engine: &mut Engine) {
     utility::register(engine);
     visual_effect::register(engine);
     sound_category_snapshot::register(engine);
+    encounter_zone::register(engine);
 
     engine.register_native_function("Sound", "SetInstanceVolume", sound::set_instance_volume);
     engine.register_native_function("Sound", "StopInstance", sound::stop_instance);
