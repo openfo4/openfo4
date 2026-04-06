@@ -338,6 +338,10 @@ async fn instantiate_form(
             while let Some(value) = values_queue.pop() {
                 match value {
                     Value::Object(value) => {
+                        if value.form.is_null() {
+                            continue;
+                        }
+
                         let id = esp_loader.resolve_form(value.form, record.id).unwrap();
                         let is_loaded =
                             state.objects.get_by_record(id).is_some() || records.contains_key(&id);
@@ -951,6 +955,11 @@ fn build_script_object(
 
                     addr
                 } else {
+                    // The reference is already null by default.
+                    if value.form.is_null() {
+                        continue;
+                    }
+
                     if let Some(scripts) = scripts.get_by_record(id) {
                         // FIXME: Which script to choose here?
                         // We need to inspect the actual class layout to get this.
