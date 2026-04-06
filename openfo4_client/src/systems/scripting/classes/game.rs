@@ -73,6 +73,7 @@ pub fn register(engine: &mut Engine) {
     engine.register_native_function("Game", "IsPlayerRadioOn", is_player_radio_on);
     engine.register_native_function("Game", "IsSneakingControlsEnabled", is_sneaking_controls_enabled);
     engine.register_native_function("Game", "PassTime", pass_time);
+    engine.register_native_function("Game", "PlayBink", play_bink);
     engine.register_native_function("Game", "PrecacheCharGen", precache_char_gen);
     engine.register_native_function("Game", "PrecacheCharGenClear", precache_char_gen_clear);
     engine.register_native_function("Game", "QueryStat", query_stat);
@@ -795,6 +796,23 @@ fn is_sneaking_controls_enabled(caller: Caller<'_, State>) -> Result<bool, Excep
 /// Function(int aiHours) native global
 /// ```
 fn pass_time(caller: Caller<'_, State>, ai_hours: i32) -> Result<(), Exception> {
+    todo!()
+}
+
+/// `PlayBink`
+///
+/// ```text
+/// Function PlayBink(string asFileName, bool abInterruptible = false, bool abMuteAudio = true, bool abMuteMusic = true, bool abLetterbox = true, bool abIsNewGameBink = false) native global
+/// ```
+fn play_bink(
+    caller: Caller<'_, State>,
+    file_name: Object,
+    interruptible: bool,
+    mute_audio: bool,
+    mute_music: bool,
+    letterbox: bool,
+    is_new_game_bink: bool,
+) -> Result<(), Exception> {
     todo!()
 }
 
