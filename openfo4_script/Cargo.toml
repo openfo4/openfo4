@@ -39,3 +39,7 @@ path = "tests/object_builder.rs"
 [[test]]
 name = "reflection"
 path = "tests/reflection.rs"
+
+[[test]]
+name =  "var"
+path = "tests/var.rs"

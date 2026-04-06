@@ -8,7 +8,6 @@ use openfo4_jit::{
 };
 use openfo4_pex::{Function, Instruction, Value};
 
-use crate::compiler::NativeFunction;
 use crate::compiler::codegen::builtin::call_builtin;
 use crate::compiler::codegen::constant::{ConstantData, create_string_constant};
 use crate::compiler::codegen::function_props::{
@@ -20,6 +19,7 @@ use crate::compiler::codegen::{
     ClassDef, CodegenData, Error, FunctionDef, Type, get_parent_class_with_property,
 };
 use crate::compiler::resources::TypeId;
+use crate::compiler::{NativeFunction, resources};
 use crate::runtime::object::{ObjectTag, VarObject};
 use crate::runtime::{ArrayObject, RESULT_ERROR, RESULT_OK};
 
@@ -1841,9 +1841,24 @@ fn perform_cast(
 
             unreachable!("cannot cast unrelated classes")
         }
-        (Type::Var, Type::Bool) => perform_var_downcast(translator, src, ObjectTag::Bool, block),
-        (Type::Var, Type::Int) => perform_var_downcast(translator, src, ObjectTag::Int, block),
-        (Type::Var, Type::Float) => perform_var_downcast(translator, src, ObjectTag::Float, block),
+        (Type::Var, Type::Bool) => perform_var_downcast(
+            translator,
+            src,
+            ObjectTag::TypeId(translator.data.resources.primitives.bool),
+            block,
+        ),
+        (Type::Var, Type::Int) => perform_var_downcast(
+            translator,
+            src,
+            ObjectTag::TypeId(translator.data.resources.primitives.int),
+            block,
+        ),
+        (Type::Var, Type::Float) => perform_var_downcast(
+            translator,
+            src,
+            ObjectTag::TypeId(translator.data.resources.primitives.float),
+            block,
+        ),
         (Type::Var, Type::Class(class_name)) => {
             // Perform var to class cast, then attempt to downcast the class value.
             let res = perform_var_downcast(translator, src, ObjectTag::Class, block);
@@ -1864,14 +1879,22 @@ fn perform_cast(
 
             res
         }
+        (Type::Var, Type::Struct(name)) => {
+            let id = translator.data.structs.get(&name).unwrap().ty;
+            perform_var_downcast(translator, src, ObjectTag::TypeId(id), block)
+        }
         (src_ty, Type::Var) => {
             let tag = match src_ty {
-                Type::None => ObjectTag::None,
-                Type::Int => ObjectTag::Int,
-                Type::Bool => ObjectTag::Bool,
-                Type::Float => ObjectTag::Float,
-                Type::String => ObjectTag::String,
+                Type::None => ObjectTag::TypeId(translator.data.resources.primitives.none),
+                Type::Int => ObjectTag::TypeId(translator.data.resources.primitives.int),
+                Type::Bool => ObjectTag::TypeId(translator.data.resources.primitives.bool),
+                Type::Float => ObjectTag::TypeId(translator.data.resources.primitives.float),
+                Type::String => ObjectTag::TypeId(translator.data.resources.primitives.string),
                 Type::Class(_) => ObjectTag::Class,
+                Type::Struct(name) => {
+                    let id = translator.data.structs.get(&name).unwrap().ty;
+                    ObjectTag::TypeId(id)
+                }
                 Type::Var => unreachable!(),
                 x => todo!("{:?}", x),
             };
@@ -1918,7 +1941,7 @@ fn perform_var_downcast(
 
     let wanted_tag = translator
         .builder
-        .iconst(JitType::Pointer, dst as usize as i64);
+        .iconst(JitType::Pointer, dst.to_bits() as i64);
     let is_ok = translator
         .builder
         .icmp(tag, wanted_tag, IntCompareOp::Equal);
@@ -1933,17 +1956,30 @@ fn perform_var_downcast(
     *block = continue_block;
 
     let ty = match dst {
-        ObjectTag::None => JitType::I32,
-        ObjectTag::Bool => JitType::I32,
-        ObjectTag::Int => JitType::I32,
-        ObjectTag::Float => JitType::F32,
         ObjectTag::Class => JitType::Pointer,
-        ObjectTag::String => JitType::Pointer,
+        ObjectTag::TypeId(id) => match translator.data.resources.types.get(id).unwrap() {
+            resources::Type::Unit => JitType::I32,
+            resources::Type::Int { bits } => {
+                // FIXME: Relax
+                assert_eq!(bits, 32);
+                JitType::I32
+            }
+            resources::Type::Float { bits } => {
+                // FIXME: Relax
+                assert_eq!(bits, 32);
+                JitType::F32
+            }
+            resources::Type::Composite(_) => {
+                // FIXME: Currently all composite types are implemented as pointers
+                // to the type, but the `TypeId` still refers to the actual composite
+                // type. In the future we should add an extra `Pointer(TypeId)` type
+                // that indicates a pointer type specifically, then we can remove this hack.
+                JitType::Pointer
+            }
+        },
     };
 
-    translator
-        .builder
-        .load(ty, src, size_of::<ObjectTag>() as u32)
+    translator.builder.load(ty, src, size_of::<usize>() as u32)
 }
 
 /// Creates a new `Var`.
@@ -1963,7 +1999,9 @@ fn create_var(
     );
 
     // Store tag
-    let tag = translator.builder.iconst(JitType::Pointer, tag as i64);
+    let tag = translator
+        .builder
+        .iconst(JitType::Pointer, tag.to_bits() as i64);
     translator
         .builder
         .store(tag, ptr, offset_of!(VarObject, tag) as u32);
