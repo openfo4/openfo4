@@ -200,6 +200,7 @@ async fn instantiate_form(
             continue;
         }
 
+        dbg!(record);
         let record = esp_loader.lookup(None, record).await.unwrap();
 
         let mut aliases = HashMap::new();
@@ -267,7 +268,16 @@ async fn instantiate_form(
                                     a.scripts.extend(alias.scripts.clone());
                                 }
                                 None => {
-                                    let ty = load_alias_type(esp_loader, id, alias_id as u32).await;
+                                    let Some(ty) =
+                                        load_alias_type(esp_loader, id, alias_id as u32).await
+                                    else {
+                                        tracing::warn!(
+                                            "cannot found alias {} in quest {}, skipping",
+                                            alias_id,
+                                            id,
+                                        );
+                                        continue;
+                                    };
 
                                     aliases.insert(
                                         (id, alias_id as u32),
@@ -336,7 +346,16 @@ async fn instantiate_form(
                         // locally, right?
                         if let Some(alias) = &value.alias {
                             if !aliases.contains_key(&(id, *alias as u32)) {
-                                let ty = load_alias_type(esp_loader, id, *alias as u32).await;
+                                let Some(ty) = load_alias_type(esp_loader, id, *alias as u32).await
+                                else {
+                                    tracing::warn!(
+                                        "cannot found alias {} in quest {}, skipping",
+                                        alias,
+                                        id,
+                                    );
+                                    continue;
+                                };
+
                                 aliases.insert(
                                     (id, *alias as u32),
                                     AliasInfo {
@@ -579,7 +598,7 @@ async fn instantiate_form(
     })
 }
 
-async fn load_alias_type(esp_loader: &EspLoader, id: RecordId, alias_id: u32) -> AliasType {
+async fn load_alias_type(esp_loader: &EspLoader, id: RecordId, alias_id: u32) -> Option<AliasType> {
     let RecordData::Quest(data) = esp_loader
         .lookup(Some(RecordKind::Quest), id)
         .await
@@ -592,23 +611,23 @@ async fn load_alias_type(esp_loader: &EspLoader, id: RecordId, alias_id: u32) ->
 
     for alias in &data.aliases.references {
         if alias.id == alias_id {
-            return AliasType::Reference;
+            return Some(AliasType::Reference);
         }
     }
 
     for alias in &data.aliases.locations {
         if alias.id == alias_id {
-            return AliasType::Location;
+            return Some(AliasType::Location);
         }
     }
 
     for alias in &data.aliases.ref_collections {
         if alias.id == alias_id {
-            return AliasType::RefCollection;
+            return Some(AliasType::RefCollection);
         }
     }
 
-    todo!("alias {} not defined in quest {:?}", alias_id, id)
+    None
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
