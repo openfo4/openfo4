@@ -45,6 +45,38 @@ fn int_var() {
 }
 
 #[test]
+fn string_var() {
+    let mut engine = Engine::new();
+
+    let module = assemble(
+        r#"
+        class MyClass:
+
+        function MyFunction(a: string) -> string static:
+        local b: var
+        local c: string
+        b = cast a
+        c = cast b
+        return c
+        "#,
+    );
+
+    engine.register(&module);
+
+    let instance = engine.compile("MyClass", &Options::default());
+    let func = instance.get_func("MyFunction").unwrap();
+
+    let mut stack = Stack::for_func(func);
+    let mut ctx = Context::new(&engine, &mut stack, ());
+
+    let input = engine.object_pool().insert_string("Hello World").addr();
+
+    let func = func.typed::<ObjectAddr, ObjectAddr>().unwrap();
+    let output = func.call(&mut ctx, input).unwrap();
+    assert_eq!(input, output);
+}
+
+#[test]
 fn class_var() {
     let mut engine = Engine::new();
 

@@ -1960,6 +1960,12 @@ fn perform_cast_inner(
             ObjectTag::TypeId(translator.data.resources.primitives.float),
             block,
         ),
+        (Type::Var, Type::String) => perform_var_downcast(
+            translator,
+            src,
+            ObjectTag::TypeId(translator.data.resources.primitives.string),
+            block,
+        ),
         (Type::Var, Type::Class(class_name)) => {
             // Perform var to class cast, then attempt to downcast the class value.
             let res = perform_var_downcast(translator, src, ObjectTag::Class, block);
