@@ -342,6 +342,7 @@ async fn instantiate_form(
                             continue;
                         }
 
+                        dbg!(&value);
                         let id = esp_loader.resolve_form(value.form, record.id).unwrap();
                         let is_loaded =
                             state.objects.get_by_record(id).is_some() || records.contains_key(&id);
@@ -774,6 +775,7 @@ fn record_script_name(data: &RecordData) -> Option<&'static str> {
         RecordData::ShaderParticleGeometry(_) => Some("ShaderParticleGeometry"),
         RecordData::SoundDescriptor(_) => Some("Sound"),
         RecordData::SoundCategory(_) => Some("SoundCategory"),
+        RecordData::SoundOutputModel(_) => Some("OutputModel"),
         RecordData::SPEL(_) => Some("Spell"),
         RecordData::STAT(_) => Some("Static"),
         RecordData::TACT(_) => Some("TalkingActivator"),
@@ -786,8 +788,12 @@ fn record_script_name(data: &RecordData) -> Option<&'static str> {
         RecordData::Worldspace(_) => Some("WorldSpace"),
         RecordData::PlacedObject(_) => Some("ObjectReference"),
         RecordData::PlacedNpc(_) => Some("Actor"),
+        RecordData::PlacedHazard(_) => Some("ObjectReference"),
+        RecordData::PlacedMissile(_) => Some("ObjectReference"),
+        RecordData::PlacedGrenade(_) => Some("ObjectReference"),
         RecordData::DialogueTopic(_) => Some("Topic"),
         RecordData::Scene(_) => Some("Scene"),
+        RecordData::ReferenceGroup(_) => Some("Form"),
         x => todo!("{:?}", x),
     }
 }
@@ -819,6 +825,8 @@ enum BuildScriptObjectWarning {
     UnknownAlias(AliasKey),
     #[error("unknown object: {0:?}")]
     UnknownObject(RecordId),
+    #[error("unknown field {0}.{1}")]
+    UnknownField(String, String),
 }
 
 // FIXME: Use script layout reflection to determine we're actually setting values of the correct type.
@@ -988,10 +996,16 @@ fn build_script_object(
                     let builder = &mut builders[entry.builder_index];
                     builder.set(class_name, var_name, array_index, object.addr());
                 } else {
-                    let prop = layout
+                    let Some(prop) = layout
                         .properties
                         .get(&(Lowercase::new(class_name), Lowercase::new(var_name)))
-                        .unwrap();
+                    else {
+                        warnings.push(BuildScriptObjectWarning::UnknownField(
+                            class_name.to_owned(),
+                            var_name.to_owned(),
+                        ));
+                        continue;
+                    };
 
                     let PropertyType::Pointer(ty) = prop.ty else {
                         todo!();
@@ -1026,10 +1040,16 @@ fn build_script_object(
                     builder.set(class_name, var_name, array_index, object.addr());
                 } else {
                     // First time we see this array.
-                    let prop = layout
+                    let Some(prop) = layout
                         .properties
                         .get(&(Lowercase::new(class_name), Lowercase::new(var_name)))
-                        .unwrap();
+                    else {
+                        warnings.push(BuildScriptObjectWarning::UnknownField(
+                            class_name.to_owned(),
+                            var_name.to_owned(),
+                        ));
+                        continue;
+                    };
 
                     let PropertyType::ArrayPointer(ty) = prop.ty else {
                         todo!();
