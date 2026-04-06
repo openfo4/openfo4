@@ -5,7 +5,7 @@ use std::num::NonZeroU32;
 use hashbrown::HashMap;
 use openfo4_core::path::DataPath;
 use openfo4_core::record::{ModuleId, RecordId};
-use openfo4_esp::records::ActorValueInfo;
+use openfo4_esp::records::{ActorValueInfo, PlacedNpc, PositionRotation};
 use openfo4_esp::{FormId, Record, RecordData, RecordHeaderFlags, ZString};
 
 pub const HARDCODED_MODULE_ID: ModuleId = ModuleId(NonZeroU32::MIN);
@@ -65,6 +65,8 @@ pub const ACTOR_VALUE_POWER_RADIATION: FormId = FormId(0x32f);
 pub const ACTOR_VALUE_POWER_REQUIRED: FormId = FormId(0x330);
 
 pub const ACTOR_PLAYER: RecordId = RecordId::new(HARDCODED_MODULE_ID, FormId(0x7));
+
+pub const PLACED_ACTOR_PLAYER_REF: RecordId = RecordId::new(HARDCODED_MODULE_ID, FormId(0x14));
 
 pub fn load_hardcoded_forms() -> HashMap<FormId, Record> {
     fn actor_value(id: FormId, name: &str) -> (FormId, Record) {
@@ -133,6 +135,34 @@ pub fn load_hardcoded_forms() -> HashMap<FormId, Record> {
         actor_value(ACTOR_VALUE_POWER_RADIATION, "PowerRadiation"),
         actor_value(ACTOR_VALUE_POWER_REQUIRED, "PowerRequired"),
         actor_value(ACTOR_VALUE_WORKSHOP_MAX_DRAWS, "WorkshopMaxDraws"),
+        (
+            PLACED_ACTOR_PLAYER_REF.form,
+            Record {
+                id: PLACED_ACTOR_PLAYER_REF.form,
+                flags: RecordHeaderFlags::empty(),
+                data: RecordData::PlacedNpc(PlacedNpc {
+                    id: Some(ZString::new(b"PlayerRef".to_vec())),
+                    virtual_machine_adapter: None,
+                    base_npc: ACTOR_PLAYER.form,
+                    encounter_zone: None,
+                    level_modifier: None,
+                    count: None,
+                    radius: None,
+                    health: None,
+                    linked_references: Vec::new(),
+                    activate_parent: Vec::new(),
+                    activation_parent_flags: None,
+                    position: PositionRotation {
+                        position_x: 0.0,
+                        position_y: 0.0,
+                        position_z: 0.0,
+                        rotation_x: 0.0,
+                        rotation_y: 0.0,
+                        rotation_z: 0.0,
+                    },
+                }),
+            },
+        ),
     ]
     .into_iter()
     .collect()
