@@ -1,5 +1,4 @@
 mod builtin;
-mod constant;
 mod function;
 mod function_props;
 mod runtime;
@@ -17,7 +16,6 @@ use openfo4_pex::{Class, Function, Instruction, Module, Struct, Value};
 use slab::Slab;
 use thiserror::Error;
 
-use crate::compiler::codegen::constant::ConstantData;
 use crate::compiler::codegen::function_props::{FunctionProps, function_properties};
 // use crate::compiler::codegen::layout::{ClassLayout, compute_struct_layout};
 use crate::compiler::codegen::runtime::RuntimeFunctions;
@@ -95,7 +93,6 @@ impl CodegenPass {
                         native: None,
                         trampoline_func_id: None,
                         props: None,
-                        constants: Arc::default(),
                         class: Lowercase::new(&*class.name),
                         class_name_debug: class.name.clone(),
                     }));
@@ -128,7 +125,6 @@ impl CodegenPass {
                         native: None,
                         trampoline_func_id: None,
                         props: None,
-                        constants: Arc::default(),
                         class: Lowercase::new(&*class.name),
                         class_name_debug: class.name.clone(),
                     }))
@@ -142,7 +138,6 @@ impl CodegenPass {
                         native: None,
                         trampoline_func_id: None,
                         props: None,
-                        constants: Arc::default(),
                         class: Lowercase::new(&*class.name),
                         class_name_debug: class.name.clone(),
                     }))
@@ -585,11 +580,6 @@ impl CodegenPass {
             let class = &self.data.classes.get(&func.class).unwrap();
             let res = function::translate_function(&self.data, class, func, &mut self.compiler);
 
-            // TODO: FIXME: Don't leak this here.
-            // Constants must be kept alive until all function instances are dropped.
-            // NOTE THAT THIS MUST INCLUDE ALL CALLED FUNCTIONS RECURSIVELY.
-            core::mem::forget(res.constants);
-
             let func = &mut self.data.functions[func_id.0];
             func.signature = Some(res.signature.clone());
         }
@@ -751,7 +741,6 @@ struct FunctionDef {
     native: Option<NativeFunction>,
     trampoline_func_id: Option<FuncId>,
     props: Option<FunctionProps>,
-    constants: Arc<Vec<ConstantData>>,
 }
 
 #[derive(Clone, Debug)]

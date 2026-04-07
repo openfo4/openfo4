@@ -1,3 +1,5 @@
+mod string;
+
 use std::mem::offset_of;
 
 use game_common::string::Lowercase;
@@ -9,7 +11,6 @@ use openfo4_jit::{
 use openfo4_pex::{Function, Instruction, Value};
 
 use crate::compiler::codegen::builtin::call_builtin;
-use crate::compiler::codegen::constant::{ConstantData, create_string_constant};
 use crate::compiler::codegen::function_props::{
     FunctionProps, StackFrame, Stage, StageVariable, function_properties,
 };
@@ -27,7 +28,6 @@ use crate::runtime::{ArrayObject, RESULT_ERROR, RESULT_OK};
 pub struct FunctionResult {
     pub id: FuncId,
     pub signature: Signature,
-    pub constants: Vec<ConstantData>,
 }
 
 pub fn declare_function(
@@ -95,8 +95,6 @@ pub fn translate_function(
     let signature = translate_function_signature(data, &function.function);
     let props = function_properties(data, function);
 
-    let mut constants = Vec::new();
-
     let func_id = function.func_id.unwrap();
 
     let func_id = if function.function.is_native {
@@ -112,7 +110,6 @@ pub fn translate_function(
             &function.function,
             &props,
             builder,
-            &mut constants,
         );
 
         func_id
@@ -121,7 +118,6 @@ pub fn translate_function(
     FunctionResult {
         id: func_id,
         signature,
-        constants,
     }
 }
 
@@ -160,7 +156,6 @@ fn translate_function_body(
     function: &Function,
     props: &FunctionProps,
     mut builder: FunctionBuilder<'_>,
-    constants: &mut Vec<ConstantData>,
 ) {
     let entry_block = builder.create_entry_block();
     builder.switch_to_block(entry_block);
@@ -244,7 +239,6 @@ fn translate_function_body(
         fields,
         self_ptr,
         self_ty: &class.name,
-        constants,
         span: &mut span,
         ctx_ptr,
     };
@@ -1446,55 +1440,11 @@ fn translate_function_body(
                 }
             }
             Instruction::StringConcat(op) => {
-                let array_lhs = translator.load(&op.lhs);
-                let array_rhs = translator.load(&op.rhs);
+                let lhs = translator.load(&op.lhs);
+                let rhs = translator.load(&op.rhs);
 
-                let lhs_ptr = translator.builder.load(
-                    JitType::Pointer,
-                    array_lhs,
-                    offset_of!(ArrayObject, ptr) as u32,
-                );
-                let rhs_ptr = translator.builder.load(
-                    JitType::Pointer,
-                    array_rhs,
-                    offset_of!(ArrayObject, ptr) as u32,
-                );
-
-                let lhs_len = translator.builder.load(
-                    JitType::Pointer,
-                    array_lhs,
-                    offset_of!(ArrayObject, len) as u32,
-                );
-                let rhs_len = translator.builder.load(
-                    JitType::Pointer,
-                    array_rhs,
-                    offset_of!(ArrayObject, len) as u32,
-                );
-                let new_len = translator.builder.iadd(lhs_len, rhs_len);
-
-                // Allocate new string byte buffer and copy over bytes.
-                let new_ptr = call_malloc(&mut translator, data.resources.primitives.byte, new_len);
-                translator.builder.memcpy(lhs_ptr, new_ptr, lhs_len);
-                let rhs_dst_ptr = translator.builder.iadd(new_ptr, lhs_len);
-                translator.builder.memcpy(rhs_ptr, rhs_dst_ptr, rhs_len);
-
-                // Allocate new string object.
-                let one = translator.builder.iconst(JitType::Pointer, 1);
-                let new_string_ptr =
-                    call_malloc(&mut translator, data.resources.primitives.string, one);
-
-                translator.builder.store(
-                    new_ptr,
-                    new_string_ptr,
-                    offset_of!(ArrayObject, ptr) as u32,
-                );
-                translator.builder.store(
-                    new_len,
-                    new_string_ptr,
-                    offset_of!(ArrayObject, len) as u32,
-                );
-
-                translator.store(&op.dst, new_string_ptr);
+                let res = string::string_concat(&mut translator, lhs, rhs);
+                translator.store(&op.dst, res);
             }
             op => todo!("{:?}", op),
         }
@@ -1551,7 +1501,6 @@ pub struct FunctionTranslator<'a> {
     fields: HashMap<&'a Lowercase<str>, Field>,
     self_ptr: Option<JitValue>,
     self_ty: &'a Lowercase<str>,
-    constants: &'a mut Vec<ConstantData>,
     span: &'a mut Span,
     ctx_ptr: JitValue,
 }
@@ -1563,17 +1512,7 @@ impl<'a> FunctionTranslator<'a> {
             Value::Bool(value) => self.builder.iconst(JitType::I32, u8::from(*value)),
             Value::Int(value) => self.builder.iconst(JitType::I32, *value),
             Value::Float(value) => self.builder.fconst(JitType::F32, *value),
-            Value::String(value) => {
-                // Empty strings must be represented as a zero pointer.
-                if value.is_empty() {
-                    self.builder.iconst(JitType::Pointer, 0)
-                } else {
-                    // TODO: We can deduplicate strings here, even across functions calls.
-                    self.builder.iconst(JitType::Pointer, 0);
-                    let ptr = create_string_constant(self.constants, &value);
-                    self.builder.iconst(JitType::Pointer, ptr.addr() as i64)
-                }
-            }
+            Value::String(value) => string::string_create(self, &value),
             Value::Ident(name) => self.load_var(&Lowercase::new(name.as_str())),
         }
     }

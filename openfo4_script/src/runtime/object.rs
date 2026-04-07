@@ -123,7 +123,7 @@ impl ObjectPool {
         }
 
         let mut string_object = self.insert(self.resources.primitives.string);
-        let string = unsafe { string_object.as_mut::<StringObject>() };
+        let string = unsafe { string_object.as_mut::<ArrayObject>() };
         string.ptr = bytes_ref.addr().to_raw();
         string.len = s.len();
 
@@ -484,13 +484,6 @@ impl IntoValue for ObjectAddr {
         let addr = unsafe { core::mem::transmute::<&*mut u8, &usize>(&self.0) };
         bytemuck::bytes_of(addr)
     }
-}
-
-#[derive(Copy, Clone, Debug)]
-#[repr(C)]
-pub struct StringObject {
-    pub ptr: *mut u8,
-    pub len: usize,
 }
 
 #[derive(Copy, Clone, Debug)]

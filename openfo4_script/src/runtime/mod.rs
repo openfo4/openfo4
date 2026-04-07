@@ -11,7 +11,7 @@ use game_common::cell::UnsafeRefCell;
 use openfo4_jit::{Signature, Type};
 use thiserror::Error;
 
-pub use object::{ArrayObject, Object, ObjectAddr, ObjectPool, ObjectRef, StringObject};
+pub use object::{ArrayObject, Object, ObjectAddr, ObjectPool, ObjectRef};
 pub use stack::Stack;
 
 use crate::compiler::CompilationResult;
