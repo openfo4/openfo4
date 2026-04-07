@@ -8,7 +8,6 @@ use flate2::read::ZlibDecoder;
 use glam::Vec3;
 use hashbrown::HashMap;
 use openfo4_io::fs::{AsyncReadAt, Cursor};
-use parking_lot::RwLock;
 use thiserror::Error;
 
 use std::fmt::Debug;
@@ -41,8 +40,6 @@ use crate::records::{
     StoryManagerBranchNode, StoryManagerEventNode, StoryManagerQuestNode, Terminal, Tree,
     VoiceType, Water, Weapon, Zoom,
 };
-
-const MAX_INDEX_CAP: usize = 2 * 1024 * 1024;
 
 #[derive(Debug, Error)]
 #[error("error reading field {field:?}: {error}")]
@@ -88,22 +85,7 @@ pub struct EspFile<R> {
     ///
     /// It may seem that `GRUP` records are useful, however this still requires us to scan the
     /// entire file to find all `GRUP`s, which is still be too costly for good load times.
-    ///
-    /// Instead on every lookup we test if this table contains the offset for a record and on a
-    /// hit directly seek to that location. On a miss we will start from the starting postion
-    /// and scan all record headers until we find the record that we are looking for, while
-    /// recording all records we find until then in the table.
-    ///
-    /// To prevent the table from becoming too large we exclude several types of [`RecordKind`]s
-    /// that are known to not be accessed individually. In case the file is very very very large
-    /// we also have a upper limit of [`MAX_INDEX_CAP`] on the table.
-    //
-    // Use a `u32` instead of a `u64` here, because hashbrown will store the entries
-    // as `(K, V)` internally, meaning we only need 8 bytes per tuple instead of 16 bytes.
-    //
-    // It is unrealisitc for a file be larger than 4GiB, but in case that happens we
-    // will simply not cache the records anymore, however the lookup still works correctly.
-    index: RwLock<HashMap<FormId, u32>>,
+    index: IndexTable,
 }
 
 impl<R> EspFile<R>
@@ -111,9 +93,9 @@ where
     R: AsyncReadAt,
 {
     pub async fn new(reader: R) -> Result<Self, Error> {
-        let file = Self {
+        let mut file = Self {
             reader,
-            index: RwLock::new(HashMap::new()),
+            index: IndexTable::default(),
         };
 
         let mut reader = Reader::new(&file.reader, &file.index);
@@ -122,6 +104,9 @@ where
         if header.typ != Text::TES4 {
             return Err(Error::BadMagic);
         }
+
+        let entries = reader.scan_headers().await?;
+        file.index = IndexTable { entries };
 
         Ok(file)
     }
@@ -152,17 +137,44 @@ where
 #[derive(Debug)]
 struct Reader<'a, R> {
     cursor: Cursor<R>,
-    index: &'a RwLock<HashMap<FormId, u32>>,
+    index: &'a IndexTable,
 }
 
 impl<'a, R> Reader<'a, R>
 where
     R: AsyncReadAt,
 {
-    fn new(reader: R, index: &'a RwLock<HashMap<FormId, u32>>) -> Self {
+    fn new(reader: R, index: &'a IndexTable) -> Self {
         Self {
             cursor: Cursor::new(reader),
             index,
+        }
+    }
+
+    async fn scan_headers(&mut self) -> Result<HashMap<FormId, u32>, Error> {
+        let mut map = HashMap::new();
+
+        self.cursor.set_position(0);
+
+        loop {
+            let offset = self.cursor.position();
+
+            let header = match self.read_record_header().await {
+                Ok(header) => header,
+                Err(Error::EndOfFile) => return Ok(map),
+                Err(err) => return Err(err),
+            };
+
+            if header.typ == Text::GRUP {
+                continue;
+            }
+
+            // FIXME: We should have a fallback here.
+            let offset = offset.try_into().unwrap();
+            map.insert(header.form_id, offset);
+
+            self.cursor
+                .set_position(self.cursor.position() + u64::from(header.size));
         }
     }
 
@@ -181,7 +193,10 @@ where
     ///
     /// A [`RecordKind`] can be provided optionally and may increase seeking performance.
     async fn lookup(&mut self, kind: Option<RecordKind>, id: FormId) -> Result<Record, Error> {
-        let position = self.index.read().get(&id).copied().unwrap_or_default();
+        let Some(position) = self.index.get(id) else {
+            return Err(Error::EndOfFile);
+        };
+
         self.cursor.set_position(position.into());
 
         self.lookup_next_from_position(kind, Some(id), &mut position.into())
@@ -230,17 +245,6 @@ where
                 continue;
             }
 
-            if RecordKind::from_label(header.typ).is_some_and(|v| v.is_cachable())
-                && let Ok(header_position) = u32::try_from(header_position)
-            {
-                let index = self.index.read();
-                if !index.contains_key(&header.form_id) && index.len() < MAX_INDEX_CAP {
-                    drop(index);
-                    let mut index = self.index.write();
-                    index.insert(header.form_id, header_position);
-                }
-            }
-
             if id.is_some_and(|id| header.form_id != id)
                 || kind.is_some_and(|kind| header.typ != kind.label())
             {
@@ -263,13 +267,11 @@ where
         // Lookup will scan exactly to the end of the record.
         // The next record will be a GRUP with the children if
         // the record has children.
-        let mut start_pos = self
-            .index
-            .read()
-            .get(&id)
-            .copied()
-            .unwrap_or_default()
-            .into();
+        let Some(start_pos) = self.index.get(id) else {
+            return Err(Error::EndOfFile);
+        };
+        let mut start_pos = start_pos.into();
+
         self.lookup_next_from_position(Some(kind.parent_kind()), Some(id), &mut start_pos)
             .await?;
         self.cursor.set_position(start_pos.into());
@@ -1113,49 +1115,6 @@ impl RecordKind {
             _ => &[],
         }
     }
-
-    fn possible_children(&self) -> &'static [Self] {
-        match self {
-            Self::Worldspace => &[
-                Self::Cell,
-                Self::PlacedNpc,
-                Self::PlacedObject,
-                Self::PlacedHazard,
-                Self::PlacedGrenade,
-                Self::Land,
-                Self::NavMesh,
-            ],
-            Self::Cell => &[
-                Self::PlacedNpc,
-                Self::PlacedObject,
-                Self::PlacedHazard,
-                Self::PlacedGrenade,
-                Self::Land,
-                Self::NavMesh,
-            ],
-            Self::Quest => &[Self::DialogueBranch, Self::DialogueTopic, Self::Scene],
-            Self::DialogueTopic => &[Self::DialogueInfo],
-            _ => &[],
-        }
-    }
-
-    /// Returns `true` if a record with the given key MAY be cached.
-    fn is_cachable(&self) -> bool {
-        match self {
-            // These records are most the majority of records
-            // in most big ESP files.
-            // In additional these records are children of CELL
-            // records, which are always loaded in batch.
-            // Placed records are usually not loaded individually,
-            // so not caching them has little effect on access time.
-            Self::PlacedNpc => false,
-            Self::PlacedObject => false,
-            Self::PlacedGrenade => false,
-            Self::PlacedHazard => false,
-            Self::PlacedMissile => false,
-            _ => true,
-        }
-    }
 }
 
 macro_rules! record_kind_label {
@@ -1953,5 +1912,21 @@ impl Decode for U16String {
         String::from_utf8(buf)
             .map(Self)
             .map_err(Error::InvalidString)
+    }
+}
+
+#[derive(Debug, Default)]
+struct IndexTable {
+    // Use a `u32` instead of a `u64` here, because hashbrown will store the entries
+    // as `(K, V)` internally, meaning we only need 8 bytes per tuple instead of 16 bytes.
+    //
+    // It is unrealisitc for a file be larger than 4GiB, but in case that happens we
+    // will simply not cache the records anymore, however the lookup still works correctly.
+    entries: HashMap<FormId, u32>,
+}
+
+impl IndexTable {
+    fn get(&self, form: FormId) -> Option<u32> {
+        self.entries.get(&form).copied()
     }
 }
