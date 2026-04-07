@@ -197,6 +197,8 @@ async fn instantiate_form(
 
     let mut queue = vec![root];
     while let Some(record) = queue.pop() {
+        tracing::debug!("loading script for {:?}", record);
+
         if state.objects.get_by_record(record).is_some() {
             continue;
         }
@@ -827,6 +829,8 @@ enum BuildScriptObjectWarning {
     UnknownObject(RecordId),
     #[error("unknown field {0}.{1}")]
     UnknownField(String, String),
+    #[error("unknown property: {0}")]
+    UnknownProperty(String),
 }
 
 // FIXME: Use script layout reflection to determine we're actually setting values of the correct type.
@@ -906,14 +910,19 @@ fn build_script_object(
                 // For classes we must resolve the property to a variable name,
                 // for structs we can diretly use the property name.
                 if entry.builder_index == 0 {
-                    let ((_, name), _) = layout
+                    let Some(((_, name), _)) = layout
                         .properties
                         .iter()
                         // We can also set property on parent classes.
                         // FIXME: Ensure that child properties are preferred when present on both child and
                         // parent classes.
                         .find(|((_, name), _)| *name == Lowercase::new(property.name.as_str()))
-                        .unwrap();
+                    else {
+                        warnings.push(BuildScriptObjectWarning::UnknownProperty(
+                            property.name.clone(),
+                        ));
+                        continue;
+                    };
 
                     (script.name.as_str(), name.as_str().as_inner(), 0)
                 } else {
