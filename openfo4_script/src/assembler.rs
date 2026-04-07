@@ -243,6 +243,7 @@ fn parse_instruction(cursor: &mut Cursor<'_>) -> Instruction {
             "cmpgt" => Instruction::CmpGt(parse_binop(cursor, dst)),
             "cmpge" => Instruction::CmpGe(parse_binop(cursor, dst)),
             "cast" => Instruction::Cast(parse_unop(cursor, dst)),
+            "store" => Instruction::Store(parse_unop(cursor, dst)),
             "string_concat" => Instruction::StringConcat(parse_binop(cursor, dst)),
             "call_static" => {
                 let class = parse_value(cursor);
