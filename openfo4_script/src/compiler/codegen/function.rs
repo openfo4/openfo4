@@ -362,13 +362,7 @@ fn translate_function_body(
         }
     }
 
-    resumse_stack(
-        &mut translator,
-        &props.stages,
-        &resume_points,
-        start_block,
-        ctx_ptr,
-    );
+    resumse_stack(&mut translator, &props.stages, &resume_points, start_block);
     translator.builder.switch_to_block(start_block);
 
     let mut next_stage = 0;
@@ -604,7 +598,6 @@ fn translate_function_body(
                     &args,
                     &mut current_block,
                     stage,
-                    ctx_ptr,
                 ) {
                     translator.store(&op.return_assignment, res);
                 }
@@ -644,7 +637,6 @@ fn translate_function_body(
                     &args,
                     &mut current_block,
                     stage,
-                    ctx_ptr,
                 ) {
                     translator.store(&op.return_assignment, res);
                 }
@@ -685,7 +677,6 @@ fn translate_function_body(
                                 &args,
                                 &mut current_block,
                                 stage,
-                                ctx_ptr,
                             ) {
                                 translator.store(&op.return_assignment, res);
                                 vec![res]
@@ -729,7 +720,6 @@ fn translate_function_body(
                         &[ctx_ptr, src],
                         &mut current_block,
                         stage,
-                        ctx_ptr,
                     )
                     .unwrap()
                 } else {
@@ -783,7 +773,6 @@ fn translate_function_body(
                         &[ctx_ptr, object, value],
                         &mut current_block,
                         stage,
-                        ctx_ptr,
                     );
                 } else {
                     let class_name =
@@ -837,7 +826,7 @@ fn translate_function_body(
                 let type_id = st.ty;
 
                 let one = translator.builder.iconst(JitType::Pointer, 1);
-                let ptr = call_malloc(&mut translator, ctx_ptr, type_id, one);
+                let ptr = call_malloc(&mut translator, type_id, one);
 
                 translator.store(&op.return_assignment, ptr);
             }
@@ -932,15 +921,11 @@ fn translate_function_body(
 
                 let array_len = translator.load(&op.src);
                 let array_len = translator.builder.uextend(array_len, JitType::Pointer);
-                let array_ptr = call_malloc(&mut translator, ctx_ptr, type_id, array_len);
+                let array_ptr = call_malloc(&mut translator, type_id, array_len);
 
                 let one_usize = translator.builder.iconst(JitType::Pointer, 1);
-                let array_object_ptr = call_malloc(
-                    &mut translator,
-                    ctx_ptr,
-                    data.resources.primitives.array,
-                    one_usize,
-                );
+                let array_object_ptr =
+                    call_malloc(&mut translator, data.resources.primitives.array, one_usize);
 
                 translator.builder.store(
                     array_ptr,
@@ -994,7 +979,7 @@ fn translate_function_body(
                 let new_len = translator.builder.iadd(array_len, count_wide);
 
                 let stride = ty.size();
-                let new_array_ptr = call_malloc(&mut translator, ctx_ptr, type_id, new_len);
+                let new_array_ptr = call_malloc(&mut translator, type_id, new_len);
 
                 // Update array ptr and len.
                 translator
@@ -1091,7 +1076,7 @@ fn translate_function_body(
 
                 // Allocate new array.
                 let stride = ty.size();
-                let new_array_ptr = call_malloc(&mut translator, ctx_ptr, type_id, new_len);
+                let new_array_ptr = call_malloc(&mut translator, type_id, new_len);
 
                 // Update array ptr and len.
                 translator
@@ -1163,7 +1148,7 @@ fn translate_function_body(
 
                 // Allocate new array.
                 let stride = ty.size();
-                let new_array_ptr = call_malloc(&mut translator, ctx_ptr, type_id, new_len);
+                let new_array_ptr = call_malloc(&mut translator, type_id, new_len);
 
                 // Copy regions from old array.
                 // Copy 0..index.
@@ -1488,24 +1473,15 @@ fn translate_function_body(
                 let new_len = translator.builder.iadd(lhs_len, rhs_len);
 
                 // Allocate new string byte buffer and copy over bytes.
-                let new_ptr = call_malloc(
-                    &mut translator,
-                    ctx_ptr,
-                    data.resources.primitives.byte,
-                    new_len,
-                );
+                let new_ptr = call_malloc(&mut translator, data.resources.primitives.byte, new_len);
                 translator.builder.memcpy(lhs_ptr, new_ptr, lhs_len);
                 let rhs_dst_ptr = translator.builder.iadd(new_ptr, lhs_len);
                 translator.builder.memcpy(rhs_ptr, rhs_dst_ptr, rhs_len);
 
                 // Allocate new string object.
                 let one = translator.builder.iconst(JitType::Pointer, 1);
-                let new_string_ptr = call_malloc(
-                    &mut translator,
-                    ctx_ptr,
-                    data.resources.primitives.string,
-                    one,
-                );
+                let new_string_ptr =
+                    call_malloc(&mut translator, data.resources.primitives.string, one);
 
                 translator.builder.store(
                     new_ptr,
@@ -1782,15 +1758,11 @@ fn perform_cast(
                     .load(JitType::Pointer, src, offset_of!(ArrayObject, len) as u32);
 
             let type_id = translator.get_type_id(&dst_elem_ty);
-            let dst_array_ptr = call_malloc(translator, translator.ctx_ptr, type_id, src_array_len);
+            let dst_array_ptr = call_malloc(translator, type_id, src_array_len);
 
             let one = translator.builder.iconst(JitType::Pointer, 1);
-            let new_array_object_ptr = call_malloc(
-                translator,
-                translator.ctx_ptr,
-                translator.data.resources.primitives.array,
-                one,
-            );
+            let new_array_object_ptr =
+                call_malloc(translator, translator.data.resources.primitives.array, one);
 
             translator.builder.store(
                 dst_array_ptr,
@@ -2006,7 +1978,7 @@ fn perform_cast_inner(
                 x => todo!("{:?}", x),
             };
 
-            create_var(translator, translator.ctx_ptr, src, tag)
+            create_var(translator, src, tag)
         }
         // String formatting conversions
         (Type::Bool, Type::String) => {
@@ -2101,18 +2073,12 @@ fn perform_var_downcast(
 /// Creates a new `Var`.
 fn create_var(
     translator: &mut FunctionTranslator<'_>,
-    ctx_ptr: JitValue,
     value: JitValue,
     tag: ObjectTag,
 ) -> JitValue {
     // Allocate var object
     let one = translator.builder.iconst(JitType::Pointer, 1);
-    let ptr = call_malloc(
-        translator,
-        ctx_ptr,
-        translator.data.resources.primitives.var,
-        one,
-    );
+    let ptr = call_malloc(translator, translator.data.resources.primitives.var, one);
 
     // Store tag
     let tag = translator
@@ -2215,7 +2181,6 @@ fn perform_checked_call(
     args: &[JitValue],
     block: &mut Block,
     stage: &Stage,
-    ctx_ptr: JitValue,
 ) -> Option<JitValue> {
     let func_id = callee.func_id.unwrap();
 
@@ -2227,7 +2192,7 @@ fn perform_checked_call(
 
     // Allocate stack space for the callee.
     let stack_frame = &callee.props.as_ref().unwrap().stack_frame;
-    push_stack_frame(translator, ctx_ptr, stack_frame);
+    push_stack_frame(translator, stack_frame);
 
     let res = translator.builder.call(func_id, args);
 
@@ -2260,7 +2225,9 @@ fn perform_checked_call(
         // push_stack_frame might move our current stack pointer, so we need
         // to reload it, but the current stack pointer points to the end of the stack
         // for the callee. We must go backwards to find our stack frame.
-        let stack_base = translator.builder.load(JitType::Pointer, ctx_ptr, 0);
+        let stack_base = translator
+            .builder
+            .load(JitType::Pointer, translator.ctx_ptr, 0);
         let stack_base = translator
             .builder
             .isub_imm(stack_base, stack_frame.size as i64);
@@ -2270,14 +2237,14 @@ fn perform_checked_call(
 
         translator
             .span
-            .exit(translator.data, &mut translator.builder, ctx_ptr);
+            .exit(translator.data, &mut translator.builder, translator.ctx_ptr);
 
         translator.builder.return_(&rvals);
 
         translator.builder.switch_to_block(continue_block);
 
         // Restore stack pointer.
-        pop_stack_frame(translator, ctx_ptr, stack_frame);
+        pop_stack_frame(translator, stack_frame);
 
         *block = continue_block;
     }
@@ -2318,9 +2285,10 @@ fn resumse_stack(
     stages: &[Stage],
     resume_points: &HashMap<usize, Block>,
     start_block: Block,
-    ctx_ptr: JitValue,
 ) {
-    let stack_base = translator.builder.load(JitType::Pointer, ctx_ptr, 0);
+    let stack_base = translator
+        .builder
+        .load(JitType::Pointer, translator.ctx_ptr, 0);
 
     if resume_points.is_empty() {
         translator.builder.jump(start_block, &[]);
@@ -2483,7 +2451,6 @@ fn struct_member_offset(
 
 fn call_malloc(
     translator: &mut FunctionTranslator<'_>,
-    ctx_ptr: JitValue,
     type_id: TypeId,
     array_len: JitValue,
 ) -> JitValue {
@@ -2493,7 +2460,7 @@ fn call_malloc(
 
     let res = translator.builder.call(
         translator.data.runtime_funcs.alloc_zeroed,
-        &[ctx_ptr, type_id, array_len],
+        &[translator.ctx_ptr, type_id, array_len],
     );
     res[0]
 }
@@ -2618,36 +2585,33 @@ fn check_equality(
             translator.builder.block_params(final_block)[0]
         }
         Type::Class(_) => translator.builder.icmp(lhs, rhs, IntCompareOp::Equal),
+        Type::Struct(_) => translator.builder.icmp(lhs, rhs, IntCompareOp::Equal),
         ty => todo!("{:?}", ty),
     }
 }
 
-fn push_stack_frame(
-    translator: &mut FunctionTranslator<'_>,
-    ctx_ptr: JitValue,
-    frame: &StackFrame,
-) -> JitValue {
+fn push_stack_frame(translator: &mut FunctionTranslator<'_>, frame: &StackFrame) -> JitValue {
     let size = translator
         .builder
         .iconst(JitType::Pointer, frame.size as i64);
 
     let stack_ptr = translator.builder.call(
         translator.data.runtime_funcs.stack_frame_alloc,
-        &[ctx_ptr, size],
+        &[translator.ctx_ptr, size],
     )[0];
 
-    translator.builder.store(stack_ptr, ctx_ptr, 0);
+    translator.builder.store(stack_ptr, translator.ctx_ptr, 0);
     stack_ptr
 }
 
-fn pop_stack_frame(translator: &mut FunctionTranslator<'_>, ctx_ptr: JitValue, frame: &StackFrame) {
+fn pop_stack_frame(translator: &mut FunctionTranslator<'_>, frame: &StackFrame) {
     let size = translator
         .builder
         .iconst(JitType::Pointer, frame.size as i64);
 
     translator.builder.call(
         translator.data.runtime_funcs.stack_frame_free,
-        &[ctx_ptr, size],
+        &[translator.ctx_ptr, size],
     );
 }
 
