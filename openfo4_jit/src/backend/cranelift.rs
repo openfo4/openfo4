@@ -359,8 +359,6 @@ impl CraneliftModule {
                             .collect::<Vec<_>>();
 
                         let func = &self.functions[func_id.0];
-                        let signature = convert_signature(&func.signature);
-                        let sig_ref = builder.import_signature(signature.clone());
 
                         let compile_func = match func.definition {
                             Some(FunctionDefinition::Host(_)) => false,
@@ -379,6 +377,9 @@ impl CraneliftModule {
                                 );
 
                                 refs_to_funcs.insert(name, *func_id);
+
+                                let signature = convert_signature(&func.signature);
+                                let sig_ref = builder.import_signature(signature);
 
                                 builder.import_function(ExtFuncData {
                                     name: ExternalName::User(name),
