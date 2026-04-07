@@ -478,28 +478,32 @@ fn translate_function_body(
                 let lhs = translator.load(&op.lhs);
                 let rhs = translator.load(&op.rhs);
 
-                let res = if translator.get_type(&op.lhs) == Type::Float {
-                    let cmp_op = match instruction {
-                        Instruction::CmpEq(_) => FloatCompareOp::Equal,
-                        Instruction::CmpLt(_) => FloatCompareOp::LessThan,
-                        Instruction::CmpLe(_) => FloatCompareOp::LessThanOrEqual,
-                        Instruction::CmpGt(_) => FloatCompareOp::GreaterThan,
-                        Instruction::CmpGe(_) => FloatCompareOp::GreaterThanOrEqual,
-                        _ => unreachable!(),
-                    };
+                let res = match translator.get_type(&op.lhs) {
+                    Type::Float => {
+                        let cmp_op = match instruction {
+                            Instruction::CmpEq(_) => FloatCompareOp::Equal,
+                            Instruction::CmpLt(_) => FloatCompareOp::LessThan,
+                            Instruction::CmpLe(_) => FloatCompareOp::LessThanOrEqual,
+                            Instruction::CmpGt(_) => FloatCompareOp::GreaterThan,
+                            Instruction::CmpGe(_) => FloatCompareOp::GreaterThanOrEqual,
+                            _ => unreachable!(),
+                        };
 
-                    translator.builder.fcmp(lhs, rhs, cmp_op)
-                } else {
-                    let cmp_op = match instruction {
-                        Instruction::CmpEq(_) => IntCompareOp::Equal,
-                        Instruction::CmpLt(_) => IntCompareOp::SignedLessThan,
-                        Instruction::CmpLe(_) => IntCompareOp::SignedLessThanOrEqual,
-                        Instruction::CmpGt(_) => IntCompareOp::SignedGreaterThan,
-                        Instruction::CmpGe(_) => IntCompareOp::SignedGreaterThanOrEqual,
-                        _ => unreachable!(),
-                    };
+                        translator.builder.fcmp(lhs, rhs, cmp_op)
+                    }
+                    Type::String => string::string_cmpeq(&mut translator, lhs, rhs),
+                    _ => {
+                        let cmp_op = match instruction {
+                            Instruction::CmpEq(_) => IntCompareOp::Equal,
+                            Instruction::CmpLt(_) => IntCompareOp::SignedLessThan,
+                            Instruction::CmpLe(_) => IntCompareOp::SignedLessThanOrEqual,
+                            Instruction::CmpGt(_) => IntCompareOp::SignedGreaterThan,
+                            Instruction::CmpGe(_) => IntCompareOp::SignedGreaterThanOrEqual,
+                            _ => unreachable!(),
+                        };
 
-                    translator.builder.icmp(lhs, rhs, cmp_op)
+                        translator.builder.icmp(lhs, rhs, cmp_op)
+                    }
                 };
 
                 let res = translator.builder.uextend(res, JitType::I32);
@@ -1520,10 +1524,6 @@ impl<'a> FunctionTranslator<'a> {
     pub fn load_var(&mut self, name: &Lowercase<str>) -> JitValue {
         match name.as_inner() {
             "self" => return self.self_ptr.unwrap(),
-            "::state" => {
-                // TODO
-                return self.builder.iconst(JitType::Pointer, 0);
-            }
             _ => {}
         }
 
@@ -1560,10 +1560,6 @@ impl<'a> FunctionTranslator<'a> {
 
     pub fn store_var(&mut self, name: &Lowercase<str>, value: JitValue) {
         match name.as_inner() {
-            "::state" => {
-                // TODO
-                return;
-            }
             // ::nonevar is a magic variable that always holds none.
             // Writing to it discards the value.
             "::nonevar" => return,

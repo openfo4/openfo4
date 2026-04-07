@@ -82,3 +82,37 @@ fn string_concat() {
     let func = func.typed::<(ObjectAddr, ObjectAddr), ()>().unwrap();
     func.call(&mut ctx, (a.addr(), b.addr())).unwrap();
 }
+
+#[test]
+fn string_cmpeq() {
+    let mut engine = Engine::new();
+
+    let module = assemble(
+        r#"
+        class MyClass:
+
+        function IsHello(lhs: string) -> bool static:
+        local res: bool
+        local rhs: string
+        rhs = store "Hello"
+        res = cmpeq lhs rhs
+        return res
+        "#,
+    );
+
+    engine.register(&module);
+
+    let instance = engine.compile("MyClass", &Options::default());
+    let func = instance.get_func("IsHello").unwrap();
+
+    let mut stack = Stack::for_func(func);
+    let mut ctx = Context::new(&engine, &mut stack, ());
+
+    let func = func.typed::<ObjectAddr, bool>().unwrap();
+
+    let input = engine.object_pool().insert_string("Hello").addr();
+    assert!(func.call(&mut ctx, input).unwrap());
+
+    let input = engine.object_pool().insert_string("NotHello").addr();
+    assert!(!func.call(&mut ctx, input).unwrap());
+}

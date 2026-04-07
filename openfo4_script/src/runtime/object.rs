@@ -493,6 +493,13 @@ pub struct ArrayObject {
     pub len: usize,
 }
 
+impl ArrayObject {
+    pub fn as_bytes(&self) -> &[u8; size_of::<Self>()] {
+        // SAFETY: We have no padding and all bit patterns are valid.
+        unsafe { core::mem::transmute::<&Self, &[u8; size_of::<Self>()]>(self) }
+    }
+}
+
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct VarObject {

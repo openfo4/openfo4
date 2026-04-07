@@ -2,6 +2,7 @@ mod builtin;
 mod function;
 mod function_props;
 mod runtime;
+mod state_folding;
 mod trace;
 mod trampoline;
 
@@ -25,6 +26,7 @@ use crate::compiler::resources::{
 };
 use crate::compiler::{CompilationResult, NativeFunction};
 use crate::engine::Options;
+use crate::runtime::ArrayObject;
 
 pub const MAX_INSTRUCTIONS_BEFORE_PREEMPT: usize = 1024;
 
@@ -67,6 +69,9 @@ impl CodegenPass {
     pub fn register_module(&mut self, module: &Module) {
         for class in &module.classes {
             self.classes_updated = true;
+
+            let mut class = class.clone();
+            state_folding::fold_states(&mut class);
 
             let parent = if class.parent.is_empty() || class.parent.eq_ignore_ascii_case("none") {
                 None
@@ -439,7 +444,17 @@ impl CodegenPass {
                     }
                     Value::String(v) => {
                         let ptr = self.data.resources.constants.alloc(v.as_bytes(), 1);
-                        default_value = Some(ptr.expose_provenance().to_ne_bytes().to_vec());
+
+                        let string_ptr = self.data.resources.constants.alloc(
+                            ArrayObject {
+                                ptr: ptr.cast_mut(),
+                                len: v.len(),
+                            }
+                            .as_bytes(),
+                            align_of::<ArrayObject>(),
+                        );
+
+                        default_value = Some(string_ptr.expose_provenance().to_ne_bytes().to_vec());
                     }
                     Value::Null | Value::Ident(_) => {}
                 };

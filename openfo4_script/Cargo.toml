@@ -47,3 +47,7 @@ path = "tests/var.rs"
 [[test]]
 name = "cast"
 path = "tests/cast.rs"
+
+[[test]]
+name = "state"
+path = "tests/state.rs"
