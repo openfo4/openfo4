@@ -1948,6 +1948,10 @@ fn perform_cast_inner(
             )[0];
             ptr
         }
+        (Type::Struct(_) | Type::Array(_), Type::String) => {
+            // FIXME: Implement
+            string::string_create(translator, "")
+        }
         // A null pointer.
         (Type::None, Type::Class(_)) => translator.builder.iconst(JitType::Pointer, 0),
         (src_ty, dst_ty) => todo!("{:?} {:?}", src_ty, dst_ty),
