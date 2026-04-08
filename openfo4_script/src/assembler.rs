@@ -63,6 +63,7 @@ fn parse_class(cursor: &mut Cursor<'_>) -> Class {
     }];
     let mut state_found = false;
     let mut default_state = "".to_owned();
+    let mut parent = "".to_owned();
 
     loop {
         match cursor.peek() {
@@ -144,10 +145,15 @@ fn parse_class(cursor: &mut Cursor<'_>) -> Class {
                         "default" => {
                             default_state = name.to_string();
                         }
-                        _ => todo!(),
+                        x => todo!("{:?}", x),
                     }
                 }
                 cursor.pop();
+            }
+            Some(Token::Ident("parent")) => {
+                cursor.pop();
+                cursor.consume(Token::Colon);
+                parent = cursor.consume_ident().to_owned();
             }
             Some(Token::Ident("class")) | None => break,
             Some(Token::Eol) => {
@@ -159,7 +165,7 @@ fn parse_class(cursor: &mut Cursor<'_>) -> Class {
 
     Class {
         name,
-        parent: "".to_owned(),
+        parent,
         structs,
         states,
         default_state,
