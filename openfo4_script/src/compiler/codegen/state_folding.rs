@@ -38,6 +38,11 @@ pub fn fold_states(class: &mut Class) {
 
     for state in &mut class.states {
         for func in &mut state.functions {
+            // Static functions cannot have state.
+            if func.is_static {
+                continue;
+            }
+
             let old_name = Lowercase::new(&*func.name);
             let new_name = format!("__OF4_renamed__state__{}__func__{}", state.name, func.name);
             func.name = new_name;
