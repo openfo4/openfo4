@@ -356,8 +356,10 @@ impl CodegenPass {
             self.data.structs.get_mut(&name).unwrap().field_offsets = fields;
         }
 
-        let mut class_field_offsets: HashMap<Lowercase<String>, HashMap<Lowercase<String>, usize>> =
-            HashMap::new();
+        let mut class_field_offsets: HashMap<
+            Lowercase<String>,
+            (usize, HashMap<Lowercase<String>, usize>),
+        > = HashMap::new();
 
         let mut queue = self.data.classes.keys().collect::<VecDeque<_>>();
         while let Some(name) = queue.pop_front() {
@@ -418,13 +420,12 @@ impl CodegenPass {
             base.members[0].default_value =
                 Some(header_ptr.expose_provenance().to_ne_bytes().to_vec());
 
-            let mut field_offsets = if let Some(parent) = &class.parent {
+            let (first_field_index, mut field_offsets) = if let Some(parent) = &class.parent {
                 class_field_offsets.get(parent).unwrap().clone()
             } else {
-                HashMap::new()
+                // +1 because the first member is the TypeId header.
+                (1, HashMap::new())
             };
-            // +1 because the first member is the TypeId header.
-            let first_field_index = field_offsets.len() + 1;
 
             let class_raw = class.class.as_ref().unwrap();
             for var in &class_raw.variables {
@@ -482,7 +483,10 @@ impl CodegenPass {
                 .types
                 .define(id, resources::Type::Composite(base));
 
-            class_field_offsets.insert(name.to_owned(), field_offsets);
+            class_field_offsets.insert(
+                name.to_owned(),
+                (first_field_index + field_offsets.len(), field_offsets),
+            );
 
             // Properties
             let mut properties = if let Some(parent) = &class.parent {
@@ -535,7 +539,7 @@ impl CodegenPass {
         }
 
         for (class, _) in classes {
-            let fields = class_field_offsets.remove(&class).unwrap();
+            let (_, fields) = class_field_offsets.remove(&class).unwrap();
             let class = self.data.classes.get_mut(&class).unwrap();
             class.field_offsets = fields;
         }

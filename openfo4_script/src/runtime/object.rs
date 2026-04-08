@@ -430,8 +430,6 @@ impl ObjectArrayBuilder {
     {
         let object = &mut self.objects[index];
 
-        dbg!(&object);
-
         unsafe {
             object.set(class, name, value);
         }

@@ -39,21 +39,21 @@ fn state() {
     let mut object = engine.object_pool().get(addr);
     unsafe {
         let b = engine.object_pool().insert_string("b");
-        object.set("MyClass", "::state", b.addr());
+        object.set("MyClass", "MyClass.::state", b.addr());
     }
 
     assert_eq!(func.call(&mut ctx, addr).unwrap(), 2);
 
     unsafe {
         let a = engine.object_pool().insert_string("a");
-        object.set("MyClass", "::state", a.addr());
+        object.set("MyClass", "MyClass.::state", a.addr());
     }
 
     assert_eq!(func.call(&mut ctx, addr).unwrap(), 1);
 
     unsafe {
         let a = engine.object_pool().insert_string("c");
-        object.set("MyClass", "::state", a.addr());
+        object.set("MyClass", "MyClass.::state", a.addr());
     }
 
     // Fallthrough, default value

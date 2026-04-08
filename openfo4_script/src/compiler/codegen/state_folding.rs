@@ -22,7 +22,7 @@ pub fn fold_states(class: &mut Class) {
     });
 
     class.properties.push(Property {
-        name: "::state".to_owned(),
+        name: format!("{}.::state", class.name),
         ty: "string".to_owned(),
         variable: Some("::state".to_owned()),
         // FIXME: This is where we should call OnBeginState / OnEndState
