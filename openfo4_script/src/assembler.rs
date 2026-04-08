@@ -53,16 +53,23 @@ fn parse_class(cursor: &mut Cursor<'_>) -> Class {
     cursor.consume(Token::Colon);
     cursor.consume(Token::Eol);
 
-    let mut functions = Vec::new();
     let mut globals = Vec::new();
     let mut properties = Vec::new();
     let mut structs = Vec::new();
+
+    let mut states = vec![State {
+        name: "".to_owned(),
+        functions: Vec::new(),
+    }];
+    let mut state_found = false;
+    let mut default_state = "".to_owned();
 
     loop {
         match cursor.peek() {
             Some(Token::Ident("function")) => {
                 let function = parse_function(cursor);
-                functions.push(function);
+
+                states.last_mut().unwrap().functions.push(function);
             }
             Some(Token::Ident("struct")) => {
                 cursor.pop();
@@ -113,6 +120,35 @@ fn parse_class(cursor: &mut Cursor<'_>) -> Class {
                     setter: None,
                 });
             }
+            Some(Token::Ident("state")) => {
+                cursor.pop();
+
+                if state_found {
+                    assert!(states[0].functions.is_empty());
+                    states.remove(0);
+                    state_found = true;
+                }
+
+                let name = cursor.pop().unwrap();
+                let Token::StrLit(name) = name else {
+                    todo!();
+                };
+
+                states.push(State {
+                    name: name.to_string(),
+                    functions: Vec::new(),
+                });
+
+                while cursor.peek() != Some(&Token::Colon) {
+                    match cursor.consume_ident() {
+                        "default" => {
+                            default_state = name.to_string();
+                        }
+                        _ => todo!(),
+                    }
+                }
+                cursor.pop();
+            }
             Some(Token::Ident("class")) | None => break,
             Some(Token::Eol) => {
                 cursor.pop();
@@ -125,11 +161,8 @@ fn parse_class(cursor: &mut Cursor<'_>) -> Class {
         name,
         parent: "".to_owned(),
         structs,
-        states: vec![State {
-            name: "".to_owned(),
-            functions,
-        }],
-        default_state: "".to_owned(),
+        states,
+        default_state,
         variables: globals,
         properties,
     }
@@ -182,7 +215,10 @@ fn parse_function(cursor: &mut Cursor<'_>) -> Function {
 
     loop {
         match cursor.peek() {
-            Some(Token::Ident("class")) | Some(Token::Ident("function")) | None => break,
+            Some(Token::Ident("class"))
+            | Some(Token::Ident("function"))
+            | Some(Token::Ident("state"))
+            | None => break,
             Some(Token::Ident("local")) => {
                 cursor.pop();
                 let name = cursor.consume_ident().to_owned();
@@ -389,11 +425,11 @@ impl<'a> Cursor<'a> {
         v
     }
 
-    fn peek(&self) -> Option<&Token<'_>> {
+    fn peek(&self) -> Option<&'a Token<'a>> {
         self.tokens.first()
     }
 
-    fn pop(&mut self) -> Option<&Token<'_>> {
+    fn pop(&mut self) -> Option<&'a Token<'a>> {
         self.tokens.split_off_first()
     }
 
