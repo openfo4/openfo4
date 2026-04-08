@@ -427,6 +427,8 @@ impl CodegenPass {
                 (1, HashMap::new())
             };
 
+            let mut new_fields = 0;
+
             let class_raw = class.class.as_ref().unwrap();
             for var in &class_raw.variables {
                 let ty = self.data.resolve_ty(&Lowercase::new(&*var.definition.ty));
@@ -473,6 +475,7 @@ impl CodegenPass {
                     size: member_size,
                 });
                 field_offsets.insert(Lowercase::new(&*var.definition.name), base.size);
+                new_fields += 1;
 
                 base.size += member_size;
                 base.align = base.align.max(member_align);
@@ -485,7 +488,7 @@ impl CodegenPass {
 
             class_field_offsets.insert(
                 name.to_owned(),
-                (first_field_index + field_offsets.len(), field_offsets),
+                (first_field_index + new_fields, field_offsets),
             );
 
             // Properties
