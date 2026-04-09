@@ -565,7 +565,6 @@ impl ValidationPass {
                     let dst = variable_type(&op.dst)?;
 
                     if !self.is_compatible(&src, &dst) {
-                        dbg!(&src, &dst);
                         todo!();
                     }
                 }

@@ -63,10 +63,17 @@ impl<'a, T> Context<'a, T> {
 #[derive(Clone, Debug)]
 #[repr(C)]
 pub struct RawContext {
-    pub stack_ptr: *mut u8,
+    pub stack_ptr: RawStack,
     pub state: *const HostState,
     pub data: *mut dyn Any,
     pub stack: *mut Stack,
+}
+
+#[derive(Clone, Debug)]
+#[repr(C)]
+pub struct RawStack {
+    pub ptr: *mut u8,
+    pub len: usize,
 }
 
 #[derive(Copy, Clone)]
@@ -227,13 +234,19 @@ impl Func {
     where
         T: 'static,
     {
-        assert!(ctx.stack.size() >= self.stack_size);
+        // Allocate enough stack space for the callee prologue.
+        if ctx.stack.size() == 0 {
+            ctx.stack.alloc(size_of::<usize>());
+        }
 
         // We must lock the call table before we call the guest function.
         let _lock = ctx.engine.call_table_lock.read();
 
         let ctx = RawContext {
-            stack_ptr: ctx.stack.as_ptr(),
+            stack_ptr: RawStack {
+                ptr: ctx.stack.as_ptr(),
+                len: ctx.stack.size(),
+            },
             state: &ctx.engine.state,
             data: &mut ctx.data as *mut dyn Any,
             stack: ctx.stack,

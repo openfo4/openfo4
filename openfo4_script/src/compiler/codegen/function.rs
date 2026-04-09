@@ -1,4 +1,6 @@
+mod stack;
 mod string;
+mod vtable;
 
 use std::mem::offset_of;
 
@@ -11,6 +13,9 @@ use openfo4_jit::{
 use openfo4_pex::{Function, Instruction, Value};
 
 use crate::compiler::codegen::builtin::call_builtin;
+use crate::compiler::codegen::function::stack::{
+    pop_stack_frame, prepare_stack_for_call, push_stack_frame,
+};
 use crate::compiler::codegen::function_props::{
     FunctionProps, StackFrame, Stage, StageVariable, function_properties,
 };
@@ -22,7 +27,7 @@ use crate::compiler::codegen::{
 use crate::compiler::resources::TypeId;
 use crate::compiler::{NativeFunction, resources};
 use crate::runtime::object::{ObjectTag, VarObject};
-use crate::runtime::{ArrayObject, RESULT_ERROR, RESULT_OK};
+use crate::runtime::{ArrayObject, RESULT_ERROR, RESULT_OK, RawStack};
 
 #[derive(Debug)]
 pub struct FunctionResult {
@@ -241,6 +246,7 @@ fn translate_function_body(
         self_ty: &class.name,
         span: &mut span,
         ctx_ptr,
+        stack_frame: &props.stack_frame,
     };
 
     let start_block = translator.builder.create_block(&[]);
@@ -358,6 +364,8 @@ fn translate_function_body(
 
     resumse_stack(&mut translator, &props.stages, &resume_points, start_block);
     translator.builder.switch_to_block(start_block);
+
+    push_stack_frame(&mut translator);
 
     let mut next_stage = 0;
 
@@ -596,6 +604,7 @@ fn translate_function_body(
                     &args,
                     &mut current_block,
                     stage,
+                    true,
                 ) {
                     translator.store(&op.return_assignment, res);
                 }
@@ -635,6 +644,7 @@ fn translate_function_body(
                     &args,
                     &mut current_block,
                     stage,
+                    false,
                 ) {
                     translator.store(&op.return_assignment, res);
                 }
@@ -675,6 +685,7 @@ fn translate_function_body(
                                 &args,
                                 &mut current_block,
                                 stage,
+                                false,
                             ) {
                                 translator.store(&op.return_assignment, res);
                                 vec![res]
@@ -718,6 +729,7 @@ fn translate_function_body(
                         &[ctx_ptr, src],
                         &mut current_block,
                         stage,
+                        false,
                     )
                     .unwrap()
                 } else {
@@ -771,6 +783,7 @@ fn translate_function_body(
                         &[ctx_ptr, object, value],
                         &mut current_block,
                         stage,
+                        false,
                     );
                 } else {
                     let class_name =
@@ -790,6 +803,7 @@ fn translate_function_body(
             }
             Instruction::Return(value) => {
                 translator.span.exit(data, &mut translator.builder, ctx_ptr);
+                pop_stack_frame(&mut translator);
 
                 if !function.return_ty.is_empty()
                     && !function.return_ty.eq_ignore_ascii_case("none")
@@ -1470,6 +1484,7 @@ fn translate_function_body(
 
     if !translator.builder.is_current_block_full() {
         translator.span.exit(data, &mut translator.builder, ctx_ptr);
+        pop_stack_frame(&mut translator);
 
         if let Some(return_ty) = return_ty {
             let rval = translator.builder.uninit(return_ty);
@@ -1484,6 +1499,7 @@ fn translate_function_body(
             translator.builder.switch_to_block(*block);
 
             translator.span.exit(data, &mut translator.builder, ctx_ptr);
+            pop_stack_frame(&mut translator);
 
             if let Some(return_ty) = return_ty {
                 let rval = translator.builder.uninit(return_ty);
@@ -1507,6 +1523,7 @@ pub struct FunctionTranslator<'a> {
     self_ty: &'a Lowercase<str>,
     span: &'a mut Span,
     ctx_ptr: JitValue,
+    stack_frame: &'a StackFrame,
 }
 
 impl<'a> FunctionTranslator<'a> {
@@ -2067,7 +2084,7 @@ fn perform_class_typecheck(
 
     // The first word of an object contains a constant pointer to the type
     // info. The type info starts with a single word containing the number
-    // of type ids that follow.
+    // of type ids + vtable pairs that follow.
     // If any type id matches we have a valid object of that class.
 
     let count = translator.builder.load(JitType::Pointer, type_info_ptr, 0);
@@ -2078,34 +2095,39 @@ fn perform_class_typecheck(
     // always >= 1.
     let iter_block = translator.builder.create_block(&[JitType::I64]);
 
-    translator.builder.jump(iter_block, &[count]);
+    let zero = translator.builder.iconst(JitType::Pointer, 0);
+    translator.builder.jump(iter_block, &[zero]);
+
     translator.builder.switch_to_block(iter_block);
-    let offset = translator.builder.block_params(iter_block)[0];
+    let index = translator.builder.block_params(iter_block)[0];
 
     // Load and check current offset.
-    let word_size = translator
+    let stride = size_of::<usize>() * 2;
+    let offset = translator.builder.imul_imm(index, stride as i64);
+    let offset = translator
         .builder
-        .iconst(JitType::I64, JitType::I64.size() as i64);
-    let byte_offset = translator.builder.imul(offset, word_size);
-    let addr = translator.builder.iadd(type_info_ptr, byte_offset);
-    let type_id = translator.builder.load(JitType::I64, addr, 0);
+        .iadd_imm(offset, size_of::<usize>() as i64);
 
-    // Decrement offset.
-    let one = translator.builder.iconst(JitType::I64, 1);
-    let next_offset = translator.builder.isub(offset, one);
+    let addr = translator.builder.iadd(type_info_ptr, offset);
+    let type_id = translator.builder.load(JitType::Pointer, addr, 0);
 
     let is_eq = translator
         .builder
         .icmp(type_id, dst_id, IntCompareOp::Equal);
 
-    // Equivalent to `next_offset != 0 && !is_eq`.
-    let is_eq_wide = translator.builder.uextend(is_eq, JitType::I64);
-    let is_neq = translator.builder.bnot(is_eq_wide);
-    let should_continue = translator.builder.band(next_offset, is_neq);
+    // Increment index.
+    let next_index = translator.builder.iadd_imm(offset, 1);
+    let next_index_valid = translator
+        .builder
+        .icmp(next_index, count, IntCompareOp::NotEqual);
+
+    // Equivalent to `next_offset_valid && !is_eq`.
+    let is_neq = translator.builder.bnot(is_eq);
+    let should_continue = translator.builder.band(next_index_valid, is_neq);
 
     translator
         .builder
-        .brif(should_continue, iter_block, &[next_offset], next_block, &[]);
+        .brif(should_continue, iter_block, &[next_index], next_block, &[]);
 
     translator.builder.switch_to_block(next_block);
     *block = next_block;
@@ -2120,20 +2142,39 @@ fn perform_checked_call(
     args: &[JitValue],
     block: &mut Block,
     stage: &Stage,
+    indirect: bool,
 ) -> Option<JitValue> {
-    let func_id = callee.func_id.unwrap();
-
     // We need to be able to jump straight to the function call
     // to resume a suspended call.
     let call_block = translator.builder.create_block(&[]);
     translator.builder.jump(call_block, &[]);
     translator.builder.switch_to_block(call_block);
 
-    // Allocate stack space for the callee.
-    let stack_frame = &callee.props.as_ref().unwrap().stack_frame;
-    push_stack_frame(translator, stack_frame);
+    let res = if indirect {
+        let signature = translate_function_signature(translator.data, &callee.function);
 
-    let res = translator.builder.call(func_id, args);
+        let fn_ptr = vtable::load_function_addr(translator, callee, args[1]);
+        translator.builder.call_indirect(signature, fn_ptr, args)
+    } else {
+        let func_id = callee.func_id.unwrap();
+
+        translator.builder.call(func_id, args)
+    };
+
+    // We need to remember the offset relative to the stack base for the function call.
+    // The loaded stack len already includes our stack frame, but we want the offset
+    // where we can start storing our stackframe.
+    let stack_len_before_call = translator.builder.load(
+        JitType::Pointer,
+        translator.ctx_ptr,
+        offset_of!(RawStack, len) as u32,
+    );
+    let local_stack_offset = translator
+        .builder
+        .isub_imm(stack_len_before_call, translator.stack_frame.size as i64);
+
+    // Allocate the minimal stack size required by the callee.
+    prepare_stack_for_call(translator);
 
     if let Some(result) = res.get(1) {
         let result_ok = translator.builder.iconst(JitType::I32, RESULT_OK);
@@ -2161,18 +2202,15 @@ fn perform_checked_call(
 
         rvals.push(*result);
 
-        // push_stack_frame might move our current stack pointer, so we need
-        // to reload it, but the current stack pointer points to the end of the stack
-        // for the callee. We must go backwards to find our stack frame.
+        // The callee might move our current stack pointer, so we need
+        // to reload it.
         let stack_base = translator
             .builder
             .load(JitType::Pointer, translator.ctx_ptr, 0);
-        let stack_base = translator
-            .builder
-            .isub_imm(stack_base, stack_frame.size as i64);
+        let stack_ptr = translator.builder.iadd(stack_base, local_stack_offset);
 
         translator.builder.switch_to_block(suspend_block);
-        suspend_stack(translator, stack_base, stage);
+        suspend_stack(translator, stack_ptr, stage);
 
         translator
             .span
@@ -2181,9 +2219,6 @@ fn perform_checked_call(
         translator.builder.return_(&rvals);
 
         translator.builder.switch_to_block(continue_block);
-
-        // Restore stack pointer.
-        pop_stack_frame(translator, stack_frame);
 
         *block = continue_block;
     }
@@ -2365,6 +2400,7 @@ fn abort_function(translator: &mut FunctionTranslator<'_>) {
     translator
         .span
         .exit(translator.data, &mut translator.builder, translator.ctx_ptr);
+    pop_stack_frame(translator);
 
     translator.builder.return_(&rvals);
 }
@@ -2527,31 +2563,6 @@ fn check_equality(
         Type::Struct(_) => translator.builder.icmp(lhs, rhs, IntCompareOp::Equal),
         ty => todo!("{:?}", ty),
     }
-}
-
-fn push_stack_frame(translator: &mut FunctionTranslator<'_>, frame: &StackFrame) -> JitValue {
-    let size = translator
-        .builder
-        .iconst(JitType::Pointer, frame.size as i64);
-
-    let stack_ptr = translator.builder.call(
-        translator.data.runtime_funcs.stack_frame_alloc,
-        &[translator.ctx_ptr, size],
-    )[0];
-
-    translator.builder.store(stack_ptr, translator.ctx_ptr, 0);
-    stack_ptr
-}
-
-fn pop_stack_frame(translator: &mut FunctionTranslator<'_>, frame: &StackFrame) {
-    let size = translator
-        .builder
-        .iconst(JitType::Pointer, frame.size as i64);
-
-    translator.builder.call(
-        translator.data.runtime_funcs.stack_frame_free,
-        &[translator.ctx_ptr, size],
-    );
 }
 
 fn create_default_value(translator: &mut FunctionTranslator<'_>, ty: &Type) -> JitValue {

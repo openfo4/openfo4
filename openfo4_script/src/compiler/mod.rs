@@ -5,6 +5,8 @@ pub mod resources;
 
 use std::sync::Arc;
 
+use game_common::string::Lowercase;
+use hashbrown::HashMap;
 use openfo4_jit::{CompiledFunction, Signature};
 use openfo4_pex::Module;
 use thiserror::Error;
@@ -49,18 +51,9 @@ impl Context {
         self.codegen.compute_type_layouts();
     }
 
-    pub fn compile(
-        &mut self,
-        class: &str,
-        func: &str,
-        options: &Options,
-    ) -> Result<CompilationResult, Error> {
+    pub fn compile(&mut self, class: &str, options: &Options) -> Result<CompiledClass, Error> {
         self.validation.validate().map_err(Error::Validation)?;
-        let res = self
-            .codegen
-            .compile_fn(class, func, options)
-            .map_err(Error::Codegen)?;
-        Ok(res)
+        self.codegen.compile(class, options).map_err(Error::Codegen)
     }
 
     pub(crate) fn resources(&self) -> &Arc<Resources> {
@@ -85,4 +78,9 @@ pub struct CompilationResult {
     pub function: CompiledFunction,
     pub stack_size: usize,
     pub signature: Signature,
+}
+
+#[derive(Clone, Debug)]
+pub struct CompiledClass {
+    pub functions: HashMap<Lowercase<String>, CompilationResult>,
 }

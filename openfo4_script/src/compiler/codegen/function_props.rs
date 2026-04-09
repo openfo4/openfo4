@@ -267,6 +267,8 @@ pub fn function_properties(data: &CodegenData, func: &FunctionDef) -> FunctionPr
         local_stack_size = local_stack_size.max(stage.size());
     }
 
+    local_stack_size += size_of::<usize>();
+
     FunctionProps {
         may_suspend,
         may_error,

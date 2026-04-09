@@ -12,6 +12,7 @@ use std::sync::Arc;
 use game_common::string::Lowercase;
 use game_tracing::trace_span;
 use hashbrown::{HashMap, HashSet};
+use indexmap::IndexMap;
 use openfo4_jit::{Compiler, FuncId, Signature, Type as JitType};
 use openfo4_pex::{Class, Function, Instruction, Module, Struct, Value};
 use slab::Slab;
@@ -24,7 +25,7 @@ use crate::compiler::resources::{
     self, CompositeType, CompositeTypeMember, Name, PropertyType, Resources, TypeId, TypeInfo,
     TypeProperty,
 };
-use crate::compiler::{CompilationResult, NativeFunction};
+use crate::compiler::{CompilationResult, CompiledClass, NativeFunction};
 use crate::engine::Options;
 use crate::runtime::ArrayObject;
 
@@ -87,8 +88,7 @@ impl CodegenPass {
                 );
             }
 
-            // FIXME: Handle multi states
-            let mut functions = HashMap::new();
+            let mut functions = IndexMap::new();
             for state in &class.states {
                 for func in &state.functions {
                     let id = FunctionId(self.data.functions.insert(FunctionDef {
@@ -100,6 +100,7 @@ impl CodegenPass {
                         props: None,
                         class: Lowercase::new(&*class.name),
                         class_name_debug: class.name.clone(),
+                        name: Lowercase::new(&*func.name),
                     }));
 
                     functions.insert(Lowercase::new(&*func.name), id);
@@ -132,6 +133,7 @@ impl CodegenPass {
                         props: None,
                         class: Lowercase::new(&*class.name),
                         class_name_debug: class.name.clone(),
+                        name: Lowercase::new(&*func.name),
                     }))
                 });
 
@@ -145,6 +147,7 @@ impl CodegenPass {
                         props: None,
                         class: Lowercase::new(&*class.name),
                         class_name_debug: class.name.clone(),
+                        name: Lowercase::new(&*func.name),
                     }))
                 });
 
@@ -402,23 +405,11 @@ impl CodegenPass {
                 next_parent = &class.parent;
             }
 
-            let mut class_ids_raw: Vec<_> = class_ids.iter().map(|v| v.as_bits()).collect();
-
-            // The first word contains the number of `TypeId`s following.
-            class_ids_raw.push(class_ids.len());
-
             // TypeIds need to be sorted such that superclasses come before their subclasses.
             class_ids.reverse();
-            class_ids_raw.reverse();
 
-            let header_ptr = self
-                .data
-                .resources
-                .constants
-                .alloc(bytemuck::cast_slice(&class_ids_raw), align_of::<usize>());
-
-            base.members[0].default_value =
-                Some(header_ptr.expose_provenance().to_ne_bytes().to_vec());
+            // This will be set after functions are compiled.
+            base.members[0].default_value = Some([0; size_of::<usize>()].to_vec());
 
             let (first_field_index, mut field_offsets) = if let Some(parent) = &class.parent {
                 class_field_offsets.get(parent).unwrap().clone()
@@ -548,20 +539,59 @@ impl CodegenPass {
         }
     }
 
-    pub fn compile_fn(
-        &mut self,
-        class: &str,
-        f: &str,
-        options: &Options,
-    ) -> Result<CompilationResult, Error> {
-        let _span = trace_span!("CodegenPass::compile_function").entered();
+    pub fn compile(&mut self, class: &str, options: &Options) -> Result<CompiledClass, Error> {
+        let _span = trace_span!("CodegenPass::compile").entered();
 
-        let class = Lowercase::new(class);
-        let f = Lowercase::new(f);
+        let class_name = Lowercase::new(class);
 
         self.compute_type_layouts();
 
-        let root_func_id = self.data.get_function_id(&class, &f).unwrap();
+        let class = self.data.classes.get(&class_name).unwrap();
+
+        let mut functions = HashMap::new();
+
+        let mut next_class_name = Some(&class.name);
+        while let Some(class_name) = next_class_name {
+            let class = self.data.get_class(&class_name).unwrap();
+
+            for name in class.functions.keys() {
+                // Function was overriden by subclass.
+                if functions.contains_key(name) {
+                    continue;
+                }
+
+                functions.insert(name.clone(), class_name.clone());
+            }
+
+            next_class_name = class.parent.as_ref();
+        }
+
+        let mut func_ptrs = HashMap::new();
+        let mut final_funcs = HashMap::new();
+
+        for (func, class) in functions {
+            let (res, ptr) = self.compile_function(&class, &func, options)?;
+
+            func_ptrs.insert(func.clone(), ptr);
+            final_funcs.insert(func, res);
+        }
+
+        self.build_class_header(&class_name, &func_ptrs);
+
+        Ok(CompiledClass {
+            functions: final_funcs,
+        })
+    }
+
+    fn compile_function(
+        &mut self,
+        class: &Lowercase<str>,
+        func: &Lowercase<str>,
+        options: &Options,
+    ) -> Result<(CompilationResult, *const u8), Error> {
+        let _span = trace_span!("CodegenPass::compile_function").entered();
+
+        let root_func_id = self.data.get_function_id(class, func).unwrap();
 
         let mut funcs_to_compile = HashSet::<FunctionId>::new();
         let mut queue = vec![root_func_id];
@@ -581,7 +611,7 @@ impl CodegenPass {
 
         for func_id in &funcs_to_compile {
             let func = &self.data.functions[func_id.0];
-            let class = &self.data.classes.get(&class).unwrap();
+            let class = &self.data.classes.get(class).unwrap();
             let id = function::declare_function(
                 &self.data,
                 class,
@@ -606,6 +636,9 @@ impl CodegenPass {
             func.signature = Some(res.signature.clone());
         }
 
+        let func = self.data.get_function(class, func).unwrap();
+        let compiled_func = self.compiler.compile_function(func.func_id.unwrap());
+
         let func = &mut self.data.functions[root_func_id.0];
         let trampoline = trampoline::generate_host_to_guest_trampoline(
             &mut self.compiler,
@@ -616,13 +649,70 @@ impl CodegenPass {
 
         let props = func.props.as_ref().unwrap();
 
-        let compiled = self.compiler.compile_function(trampoline);
+        let compiled_trampoline = self.compiler.compile_function(trampoline);
 
-        Ok(CompilationResult {
-            function: compiled,
-            stack_size: props.local_stack_size,
-            signature: func.signature.clone().unwrap(),
-        })
+        Ok((
+            CompilationResult {
+                function: compiled_trampoline,
+                stack_size: props.local_stack_size,
+                signature: func.signature.clone().unwrap(),
+            },
+            compiled_func.as_ptr(),
+        ))
+    }
+
+    fn build_class_header(
+        &mut self,
+        class: &Lowercase<String>,
+        ptrs: &HashMap<Lowercase<String>, *const u8>,
+    ) {
+        let mut words = Vec::new();
+
+        let mut class_count = 0;
+        let mut next_class_name = Some(class);
+        while let Some(class_name) = next_class_name {
+            let class = self.data.classes.get(class_name).unwrap();
+
+            let mut vtable = Vec::new();
+            for func in class.functions.keys() {
+                let ptr = ptrs.get(func).unwrap();
+                vtable.push(ptr.expose_provenance());
+            }
+
+            let vtable_ptr = self
+                .data
+                .resources
+                .constants
+                .alloc(bytemuck::cast_slice(&vtable), align_of::<*const u8>());
+
+            words.push(vtable_ptr.expose_provenance());
+            words.push(class.type_id.as_bits());
+
+            class_count += 1;
+            next_class_name = class.parent.as_ref();
+        }
+
+        words.push(class_count);
+        words.reverse();
+
+        let ptr = self
+            .data
+            .resources
+            .constants
+            .alloc(bytemuck::cast_slice(&words), align_of::<usize>());
+        let ptr = ptr.expose_provenance();
+
+        let class = self.data.classes.get(class).unwrap();
+
+        // Update the "default value" for the class header ptr.
+        let mut ty = self.data.resources.types.get(class.type_id).unwrap();
+        match &mut ty {
+            resources::Type::Composite(ty) => {
+                ty.members[0].default_value = Some(bytemuck::bytes_of(&ptr).to_vec());
+            }
+            _ => unreachable!(),
+        }
+        self.data.resources.types.define(class.type_id, ty);
     }
 }
 
@@ -743,7 +833,7 @@ impl CodegenData {
 #[derive(Clone, Debug, Default)]
 struct ClassDef {
     name: Lowercase<String>,
-    functions: HashMap<Lowercase<String>, FunctionId>,
+    functions: IndexMap<Lowercase<String>, FunctionId>,
     parent: Option<Lowercase<String>>,
     fields: HashMap<Lowercase<String>, Lowercase<String>>,
     /// Unique RTTI number stored in the header to identify objects of this class.
@@ -755,6 +845,7 @@ struct ClassDef {
 
 #[derive(Clone, Debug)]
 struct FunctionDef {
+    name: Lowercase<String>,
     class: Lowercase<String>,
     class_name_debug: String,
     signature: Option<Signature>,
@@ -826,24 +917,6 @@ fn find_function_callees(data: &CodegenData, function: &FunctionDef) -> Vec<Func
 
     for instruction in &function.function.instructions {
         match instruction {
-            Instruction::CallMethod(op) => {
-                let Value::Ident(object) = &op.object else {
-                    continue;
-                };
-
-                let object = Lowercase::new(object.as_str());
-                let class_name = find_var(&object);
-                let function_name = match &op.function_name {
-                    Value::Ident(v) => v,
-                    _ => unreachable!(),
-                };
-
-                let function_name = Lowercase::new(function_name.as_str());
-
-                let func = data.get_function_id(&class_name, &function_name).unwrap();
-
-                callees.push(func);
-            }
             Instruction::CallParent(op) => {
                 let parent = current_class.parent.as_ref().unwrap();
 

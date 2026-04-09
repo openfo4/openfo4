@@ -3,12 +3,14 @@ use crate::runtime::Func;
 #[derive(Clone, Debug)]
 pub struct Stack {
     memory: Vec<u8>,
+    len: usize,
 }
 
 impl Stack {
     pub fn new(size: usize) -> Self {
         Self {
             memory: vec![0; size],
+            len: 0,
         }
     }
 
@@ -17,7 +19,7 @@ impl Stack {
     }
 
     pub fn size(&self) -> usize {
-        self.memory.len()
+        self.len
     }
 
     pub fn as_ptr(&mut self) -> *mut u8 {
@@ -27,11 +29,12 @@ impl Stack {
     pub(crate) fn alloc(&mut self, size: usize) -> *mut u8 {
         let offset = self.memory.len();
         self.memory.resize(offset + size, 0);
+        self.len += size;
 
         unsafe { self.memory.as_mut_ptr().add(offset) }
     }
 
     pub(crate) fn free(&mut self, size: usize) {
-        // TODO
+        self.len -= size;
     }
 }

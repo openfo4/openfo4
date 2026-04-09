@@ -97,28 +97,11 @@ impl Engine {
         let class = self.classes.get(&class_name).unwrap();
 
         let mut funcs = HashMap::new();
-        for s in &class.states {
-            for f in &s.functions {
-                let func_name = Lowercase::new(f.name.as_str());
 
-                if funcs.contains_key(&func_name) {
-                    continue;
-                }
-
-                if options.skip_native && f.is_native {
-                    continue;
-                }
-
-                if options.skip_empty && f.instructions.is_empty() {
-                    continue;
-                }
-
-                let res = self.ctx.compile(&class.name, &f.name, options).unwrap();
-
-                let func = unsafe { Func::new(&res) };
-
-                funcs.insert(func_name, (res, func));
-            }
+        let res = self.ctx.compile(&class.name, options).unwrap();
+        for (name, res) in res.functions {
+            let func = unsafe { Func::new(&res) };
+            funcs.insert(name, (res, func));
         }
 
         let shared = Arc::new(InstanceShared { funcs });

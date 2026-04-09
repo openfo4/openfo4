@@ -19,9 +19,9 @@
 use std::fmt::Debug;
 
 use openfo4_pex::{
-    ArrayAdd, ArrayClear, ArrayFind, ArrayFindStruct, ArrayGet, ArrayInsert, Binop, CallStatic,
-    Class, ConditionalBranch, Function, Instruction, Module, Property, State, Struct, StructMember,
-    Unop, Value, Variable, VariableDefinition,
+    ArrayAdd, ArrayClear, ArrayFind, ArrayFindStruct, ArrayGet, ArrayInsert, Binop, CallMethod,
+    CallStatic, Class, ConditionalBranch, Function, Instruction, Module, Property, State, Struct,
+    StructMember, Unop, Value, Variable, VariableDefinition,
 };
 
 pub fn assemble(input: &str) -> Module {
@@ -298,6 +298,21 @@ fn parse_instruction(cursor: &mut Cursor<'_>) -> Instruction {
                 Instruction::CallStatic(CallStatic {
                     class,
                     function,
+                    return_assignment: dst,
+                    args,
+                })
+            }
+            "call_method" => {
+                let function_name = parse_value(cursor);
+                let object = parse_value(cursor);
+                let mut args = Vec::new();
+                while cursor.peek() != Some(&Token::Eol) {
+                    args.push(parse_value(cursor));
+                }
+
+                Instruction::CallMethod(CallMethod {
+                    function_name,
+                    object,
                     return_assignment: dst,
                     args,
                 })
