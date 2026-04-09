@@ -124,7 +124,7 @@ fn parse_class(cursor: &mut Cursor<'_>) -> Class {
             Some(Token::Ident("state")) => {
                 cursor.pop();
 
-                if state_found {
+                if !state_found {
                     assert!(states[0].functions.is_empty());
                     states.remove(0);
                     state_found = true;
@@ -482,7 +482,7 @@ fn tokenize(mut input: &str) -> Vec<Token<'_>> {
 
             let mut end = 0;
             loop {
-                end = end + 1 + input[end + 1..].find('"').unwrap();
+                end = end + input[end..].find('"').unwrap();
                 if end == 0 || input.as_bytes()[end - 1] != b'\\' {
                     break;
                 }
@@ -593,6 +593,14 @@ mod tests {
         assert_eq!(
             tokenize("\"Hello World\""),
             vec![Token::StrLit("Hello World")]
+        );
+    }
+
+    #[test]
+    fn tokenize_empty_str_lit() {
+        assert_eq!(
+            tokenize("a \"\" b"),
+            vec![Token::Ident("a"), Token::StrLit(""), Token::Ident("b")]
         );
     }
 
