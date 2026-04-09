@@ -344,7 +344,6 @@ async fn instantiate_form(
                             continue;
                         }
 
-                        dbg!(&value);
                         let id = esp_loader.resolve_form(value.form, record.id).unwrap();
                         let is_loaded =
                             state.objects.get_by_record(id).is_some() || records.contains_key(&id);
@@ -693,10 +692,42 @@ impl AliasType {
 }
 
 fn register_static_events(object: &PartialObject, state: &mut State) {
-    for (name, kind) in [
-        ("OnTriggerEnter", EventKind::TriggerEnter),
-        ("OnTriggerLeave", EventKind::TriggerLeave),
+    // FIXME: We should validate that the base object type is correct
+    // and the function signature matches what we expect before we
+    // register the event.
+    // We don't want to send OnTriggerEnter for Quests for example.
+    for kind in [
+        // Quest
+        EventKind::QuestInit,
+        EventKind::QuestShutdown,
+        EventKind::QuestStageSet,
+        // Alias
+        EventKind::AliasInit,
+        EventKind::AliasReset,
+        EventKind::AliasShutdown,
+        // Trigger
+        EventKind::TriggerEnter,
+        EventKind::TriggerLeave,
+        // Inventory
+        EventKind::ItemEquipped,
+        EventKind::ItemUnequipped,
+        EventKind::Equipped,
+        EventKind::Unequipped,
+        // Actor "Health"
+        EventKind::Cripple,
+        EventKind::Death,
+        EventKind::Dying,
+        EventKind::EnterBleedout,
+        // Cell
+        EventKind::CellAttach,
+        EventKind::CellDetach,
+        EventKind::CellLoad,
+        // Animations
+        EventKind::Open,
+        EventKind::Close,
     ] {
+        let name = kind.func_name();
+
         if object.instance.get_func(name).is_none() {
             continue;
         }

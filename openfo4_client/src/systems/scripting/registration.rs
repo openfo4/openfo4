@@ -58,9 +58,43 @@ pub struct Event {
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum EventKind {
+    /// The action of a scene is run.
+    SceneAction,
+    /// The object is activated.
+    Activate,
+    /// The alias of a quest has been selected.
+    AliasInit,
+    /// The alias of a quest has been reset.
+    AliasReset,
+    /// The alias of a quest is being destroyed.
+    AliasShutdown,
     Animation {
         event_name: String,
     },
+    /// A scene begins.
+    SceneBegin,
+    /// A topic info begins.
+    TopcInfoBegin,
+    /// The parent cell of the object attaches.
+    CellAttach,
+    /// The parent cell of the object deatches.
+    CellDetach,
+    /// The parent cell of the object loads.
+    CellLoad,
+    /// Called on package when it is ends.
+    PackageChange,
+    /// Called when an objects "close" animation has finished.
+    Close,
+    /// Called when an objects "open" animation has finished.
+    Open,
+    /// Called when an actor limb is crippled or "uncrippled".
+    Cripple,
+    /// Called when an actor stops dying.
+    Death,
+    /// Called when an actor starts dying.
+    Dying,
+    /// Called when the actor enters bleedout state.
+    EnterBleedout,
     Custom(String),
     DetectionLosGain {
         viewer: ObjectAddr,
@@ -126,13 +160,14 @@ pub enum EventKind {
     Kill,
     CombatStateChanged,
     ItemEquipped,
+    ItemUnequipped,
     PlayerSwimming,
     CompanionChange,
-    EnterBleedout,
     PlayerHealTeammate,
     PipboyMenu,
     LocationChange,
     ItemAdded,
+    ItemRemoved,
     TriggerEnter,
     TriggerLeave,
     /// `OnEquipped`
@@ -143,16 +178,52 @@ pub enum EventKind {
     ///
     /// An item was unequipped by an actor.
     Unequipped,
+    /// Called when a quest is started.
+    QuestInit,
+    /// Called when a quest is stopped.
+    QuestShutdown,
+    QuestStageSet,
 }
 
 impl EventKind {
     pub fn func_name(&self) -> &'static str {
         match self {
+            Self::Activate => "OnActivate",
+            // Alias
+            Self::AliasInit => "OnAliasInit",
+            Self::AliasReset => "OnAliasReset",
+            Self::AliasShutdown => "OnAliasShutdown",
+            Self::Animation { event_name: _ } => "OnAnimationEvent",
+            // Inventory
             Self::ItemAdded => "OnItemAdded",
-            Self::TriggerEnter => "OnTriggerEnter",
-            Self::TriggerLeave => "OnTriggerLeave",
+            Self::ItemRemoved => "OnItemRemoved",
+            Self::ItemEquipped => "OnItemEquipped",
+            Self::ItemUnequipped => "OnItemUnequipped",
             Self::Equipped => "OnEquipped",
             Self::Unequipped => "OnUnequipped",
+            // Trigger
+            Self::TriggerEnter => "OnTriggerEnter",
+            Self::TriggerLeave => "OnTriggerLeave",
+            // Scene
+            Self::SceneAction => "OnAction",
+            Self::SceneBegin => "OnBegin",
+            Self::TopcInfoBegin => "OnBegin",
+            // Cell
+            Self::CellAttach => "OnCellAttach",
+            Self::CellDetach => "OnCellDeatch",
+            Self::CellLoad => "OnCellLoad",
+            Self::PackageChange => "OnChange",
+            Self::Open => "OnOpen",
+            Self::Close => "OnClose",
+            // Quest
+            Self::QuestInit => "OnQuestInit",
+            Self::QuestShutdown => "OnQuestShutdown",
+            Self::QuestStageSet => "OnStageSet",
+            // Actor "Health"
+            Self::Cripple => "OnCripple",
+            Self::Death => "OnDeath",
+            Self::Dying => "OnDying",
+            Self::EnterBleedout => "OnEnterBleedout",
             _ => todo!(),
         }
     }
