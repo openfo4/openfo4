@@ -1,36 +1,62 @@
 use std::num::NonZeroU32;
 use std::str::FromStr;
 
+use hashbrown::HashMap;
+use hashbrown::hash_map::Entry;
 use openfo4_script::runtime::ObjectAddr;
+use slab::Slab;
 
 #[derive(Clone, Debug, Default)]
 pub struct RegistrationSet {
-    events: Vec<(ObjectAddr, Event)>,
-    // events: HashMap<EventKind, HashSet<ObjectAddr>>,
+    events: Slab<(ObjectAddr, Event)>,
+    by_object: HashMap<ObjectAddr, Vec<usize>>,
 }
 
 impl RegistrationSet {
     pub fn register(&mut self, object: ObjectAddr, event: Event) {
         // Only register for event once.
         self.unregister(object, event.clone());
-        self.events.push((object, event));
+
+        let index = self.events.insert((object, event));
+        self.by_object.entry(object).or_default().push(index);
     }
 
     pub fn unregister(&mut self, object: ObjectAddr, event: Event) {
-        self.events
-            .retain(|(k, v)| *k != object || v.kind == event.kind || v.sender == event.sender);
+        self.unregister_matching(object, |e| e.kind == event.kind && e.sender == event.sender);
     }
 
     pub fn unregister_all(&mut self, object: ObjectAddr) {
-        self.events.retain(|(v, _)| *v != object);
+        let Some(indices) = self.by_object.remove(&object) else {
+            return;
+        };
+
+        for index in indices {
+            self.events.remove(index);
+        }
     }
 
     pub fn unregister_matching<F>(&mut self, object: ObjectAddr, mut f: F)
     where
         F: FnMut(&Event) -> bool,
     {
-        self.events
-            .retain(|(k, v)| if *k == object { !f(v) } else { true });
+        let Entry::Occupied(mut indices) = self.by_object.entry(object) else {
+            return;
+        };
+
+        indices.get_mut().retain(|index| {
+            let e = &self.events[*index].1;
+
+            if f(e) {
+                self.events.remove(*index);
+                false
+            } else {
+                true
+            }
+        });
+
+        if indices.get().is_empty() {
+            indices.remove();
+        }
     }
 
     pub fn get(
@@ -40,7 +66,8 @@ impl RegistrationSet {
     ) -> impl Iterator<Item = &(ObjectAddr, Event)> {
         self.events
             .iter()
-            .filter(|v| &v.1.kind == kind && &v.1.sender == sender)
+            .filter(|(_, v)| &v.1.kind == kind && &v.1.sender == sender)
+            .map(|(_, v)| v)
             .collect::<Vec<_>>()
             .into_iter()
     }
