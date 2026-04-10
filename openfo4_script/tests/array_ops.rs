@@ -1,6 +1,6 @@
 use openfo4_script::assembler::assemble;
 use openfo4_script::engine::{Engine, Options};
-use openfo4_script::runtime::{Caller, Context, Exception, ObjectAddr, Stack};
+use openfo4_script::runtime::{Caller, Context, Exception, NativeTuple, ObjectAddr, Stack};
 
 #[test]
 fn array_create() {
@@ -354,4 +354,196 @@ fn array_find_struct() {
 
     let func = func.typed::<ObjectAddr, ()>().unwrap();
     func.call(&mut ctx, array_ptr.addr()).unwrap();
+}
+
+#[test]
+fn array_len_on_null() {
+    let mut engine = Engine::new();
+
+    let module = assemble(
+        r#"
+        class MyClass:
+
+        function MyFunction() -> int static:
+        local arr: int[]
+        local res: int
+        res = array_length arr
+        return res
+        "#,
+    );
+
+    engine.register(&module);
+
+    let instance = engine.compile("MyClass", &Options::default());
+    let func = instance.get_func("MyFunction").unwrap();
+
+    let mut stack = Stack::new(0);
+    let mut ctx = Context::new(&engine, &mut stack, ());
+
+    let func = func.typed::<(), i32>().unwrap();
+    assert_eq!(func.call(&mut ctx, ()).unwrap(), 0);
+}
+
+#[test]
+fn array_add_on_null() {
+    let res = run_test::<_, (), ()>(
+        r#"
+        class MyClass:
+
+        function MyFunc() static:
+        local array: int[]
+        local value: int
+        local count: int
+        local nonevar: none
+        array_add array value count
+        return nonevar
+        "#,
+        "MyClass",
+        "MyFunc",
+        |_| {},
+        (),
+    );
+    assert_eq!(res, Err(Exception::Error));
+}
+
+#[test]
+fn array_insert_on_null() {
+    let res = run_test::<_, (), ()>(
+        r#"
+        class MyClass:
+
+        function MyFunc() static:
+        local array: int[]
+        local value: int
+        local index: int
+        local nonevar: none
+        array_insert array value index
+        return nonevar
+        "#,
+        "MyClass",
+        "MyFunc",
+        |_| {},
+        (),
+    );
+    assert_eq!(res, Err(Exception::Error));
+}
+
+#[test]
+fn array_remove_on_null() {
+    let res = run_test::<_, (), ()>(
+        r#"
+        class MyClass:
+
+        function MyFunc() static:
+        local array: int[]
+        local index: int
+        local count: int
+        local nonevar: none
+        array_remove array index count
+        return nonevar
+        "#,
+        "MyClass",
+        "MyFunc",
+        |_| {},
+        (),
+    );
+    assert_eq!(res, Err(Exception::Error));
+}
+
+#[test]
+fn array_clear_on_null() {
+    let res = run_test::<_, (), ()>(
+        r#"
+        class MyClass:
+
+        function MyFunc() static:
+        local array: int[]
+        local nonevar: none
+        array_clear array
+        return nonevar
+        "#,
+        "MyClass",
+        "MyFunc",
+        |_| {},
+        (),
+    );
+    assert_eq!(res, Err(Exception::Error));
+}
+
+#[test]
+fn array_find_on_null() {
+    let res = run_test::<_, (), ()>(
+        r#"
+        class MyClass:
+
+        function MyFunc() static:
+        local array: int[]
+        local value: int
+        local start_index: int
+        local dst: int
+        local nonevar: none
+        dst = array_find array value start_index
+        return nonevar
+        "#,
+        "MyClass",
+        "MyFunc",
+        |_| {},
+        (),
+    );
+    assert_eq!(res, Err(Exception::Error));
+}
+
+#[test]
+fn array_find_struct_on_null() {
+    let res = run_test::<_, (), ()>(
+        r#"
+        class MyClass:
+
+        struct MyStruct:
+            field x: int
+
+        function MyFunc() static:
+        local array: MyClass#MyStruct[]
+        local value: int
+        local start_index: int
+        local dst: int
+        local nonevar: none
+        dst = array_find_struct array "x" value start_index
+        return nonevar
+        "#,
+        "MyClass",
+        "MyFunc",
+        |_| {},
+        (),
+    );
+    assert_eq!(res, Err(Exception::Error));
+}
+
+fn run_test<F, I, O>(
+    module: &str,
+    class: &str,
+    func: &str,
+    setup: F,
+    input: I,
+) -> Result<O, Exception>
+where
+    F: FnOnce(&mut Engine),
+    I: NativeTuple,
+    O: NativeTuple,
+{
+    let mut engine = Engine::new();
+
+    let module = assemble(module);
+    engine.register(&module);
+
+    let instance = engine.compile(class, &Options::default());
+    let func = instance.get_func(func).unwrap();
+
+    setup(&mut engine);
+
+    let mut stack = Stack::new(0);
+    let mut ctx = Context::new(&engine, &mut stack, ());
+
+    let func = func.typed::<I, O>().unwrap();
+    func.call(&mut ctx, input)
 }

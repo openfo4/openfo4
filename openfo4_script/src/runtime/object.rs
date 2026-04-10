@@ -77,7 +77,9 @@ impl ObjectPool {
             unsafe { std::alloc::alloc_zeroed(alloc_layout) }
         };
 
-        assert!(!ptr.is_null());
+        if ptr.is_null() {
+            std::alloc::handle_alloc_error(alloc_layout);
+        }
 
         let mut objects = self.objects.lock().unwrap();
 

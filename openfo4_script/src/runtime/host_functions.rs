@@ -114,6 +114,12 @@ pub unsafe extern "C" fn exit_span(_ctx: *mut RawContext, index: usize) {
     });
 }
 
+pub unsafe extern "C" fn stub() {
+    abort_on_unwind(|| {
+        panic!("Entered stub function");
+    })
+}
+
 fn abort_on_unwind<F, R>(f: F) -> R
 where
     F: FnOnce() -> R,

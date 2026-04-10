@@ -66,7 +66,7 @@ pub fn declare_function(
             None if use_native_stubs => NativeFunction {
                 signature: signature.clone(),
                 index: 0,
-                ptr: core::ptr::null(),
+                ptr: crate::runtime::host_functions::stub as *const u8,
             },
             None => {
                 return Err(Error::UndefNativeFunc(format!(
@@ -590,6 +590,20 @@ fn translate_function_body(
 
                 // In our ABI the first argument is the object pointer.
                 let object = translator.load(&op.object);
+
+                // Abort if object == null
+                let abort_block = translator.builder.create_block(&[]);
+                let continue_block = translator.builder.create_block(&[]);
+                translator
+                    .builder
+                    .brif(object, continue_block, &[], abort_block, &[]);
+
+                translator.builder.switch_to_block(abort_block);
+                abort_function(&mut translator);
+
+                translator.builder.switch_to_block(continue_block);
+                current_block = continue_block;
+
                 args.insert(0, object);
 
                 args.insert(0, ctx_ptr);
@@ -864,11 +878,28 @@ fn translate_function_body(
             Instruction::ArrayLength(op) => {
                 let src = translator.load(&op.src);
 
-                let array_len = translator.builder.load(
-                    JitType::Pointer,
-                    src,
-                    offset_of!(ArrayObject, len) as u32,
-                );
+                // If array == null the length is considered 0.
+                let end_block = translator.builder.create_block(&[JitType::Pointer]);
+                let fetch_len_block = translator.builder.create_block(&[]);
+
+                let zero = translator.builder.iconst(JitType::Pointer, 0);
+                translator
+                    .builder
+                    .brif(src, fetch_len_block, &[], end_block, &[zero]);
+
+                {
+                    translator.builder.switch_to_block(fetch_len_block);
+                    let array_len = translator.builder.load(
+                        JitType::Pointer,
+                        src,
+                        offset_of!(ArrayObject, len) as u32,
+                    );
+                    translator.builder.jump(end_block, &[array_len]);
+                }
+
+                translator.builder.switch_to_block(end_block);
+                let array_len = translator.builder.block_params(end_block)[0];
+                current_block = end_block;
 
                 // The array length is usize, but integers in payrus only i32.
                 let res = translator.builder.ireduce(array_len, JitType::I32);
@@ -963,6 +994,18 @@ fn translate_function_body(
                 let array = translator.load(&op.array);
                 let value = translator.load(&op.value);
                 let count = translator.load(&op.count);
+
+                let continue_block = translator.builder.create_block(&[]);
+                let abort_block = translator.builder.create_block(&[]);
+
+                translator
+                    .builder
+                    .brif(array, continue_block, &[], abort_block, &[]);
+
+                translator.builder.switch_to_block(abort_block);
+                abort_function(&mut translator);
+
+                translator.builder.switch_to_block(continue_block);
 
                 // Clamp count at 0, we cannot add a negative amount of elems.
                 let zero_i32 = translator.builder.iconst(JitType::I32, 0);
@@ -1190,6 +1233,19 @@ fn translate_function_body(
             Instruction::ArrayClear(op) => {
                 let array = translator.load(&op.array);
 
+                let continue_block = translator.builder.create_block(&[]);
+                let abort_block = translator.builder.create_block(&[]);
+
+                translator
+                    .builder
+                    .brif(array, continue_block, &[], abort_block, &[]);
+
+                translator.builder.switch_to_block(abort_block);
+                abort_function(&mut translator);
+
+                translator.builder.switch_to_block(continue_block);
+                current_block = continue_block;
+
                 let zero = translator.builder.iconst(JitType::Pointer, 0);
                 translator
                     .builder
@@ -1208,6 +1264,18 @@ fn translate_function_body(
                 let array = translator.load(&op.array_value);
                 let start_index = translator.load(&op.start_index);
                 let searched_value = translator.load(&op.value);
+
+                let continue_block = translator.builder.create_block(&[]);
+                let abort_block = translator.builder.create_block(&[]);
+
+                translator
+                    .builder
+                    .brif(array, continue_block, &[], abort_block, &[]);
+
+                translator.builder.switch_to_block(abort_block);
+                abort_function(&mut translator);
+
+                translator.builder.switch_to_block(continue_block);
 
                 let array_ptr = translator.builder.load(
                     JitType::Pointer,
@@ -1344,6 +1412,18 @@ fn translate_function_body(
                 let array = translator.load(&op.array_value);
                 let start_index = translator.load(&op.start_index);
                 let seached_value = translator.load(&op.value);
+
+                let continue_block = translator.builder.create_block(&[]);
+                let abort_block = translator.builder.create_block(&[]);
+
+                translator
+                    .builder
+                    .brif(array, continue_block, &[], abort_block, &[]);
+
+                translator.builder.switch_to_block(abort_block);
+                abort_function(&mut translator);
+
+                translator.builder.switch_to_block(continue_block);
 
                 let array_ptr = translator.builder.load(
                     JitType::Pointer,
@@ -2447,6 +2527,15 @@ fn emit_array_bounds_check(
     index: JitValue,
     count: JitValue,
 ) {
+    let abort_block = translator.builder.create_block(&[]);
+    let is_non_null_block = translator.builder.create_block(&[]);
+
+    translator
+        .builder
+        .brif(array, is_non_null_block, &[], abort_block, &[]);
+
+    translator.builder.switch_to_block(is_non_null_block);
+
     // Bounds check
     let array_len =
         translator
@@ -2476,7 +2565,6 @@ fn emit_array_bounds_check(
     let is_ok = translator.builder.band(is_not_negative, is_within_len);
 
     let continue_block = translator.builder.create_block(&[]);
-    let abort_block = translator.builder.create_block(&[]);
     translator
         .builder
         .brif(is_ok, continue_block, &[], abort_block, &[]);

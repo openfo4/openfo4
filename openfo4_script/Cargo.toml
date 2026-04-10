@@ -51,3 +51,15 @@ path = "tests/cast.rs"
 [[test]]
 name = "state"
 path = "tests/state.rs"
+
+[[test]]
+name = "shadowing"
+path = "tests/shadowing.rs"
+
+[[test]]
+name = "method_resolution"
+path = "tests/method_resolution.rs"
+
+[[test]]
+name = "exceptions"
+path = "tests/exceptions.rs"

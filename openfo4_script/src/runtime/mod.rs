@@ -89,7 +89,7 @@ pub union RawVal {
     pub ptr: *mut u8,
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub enum Val {
     I8(i8),
     I16(i16),
