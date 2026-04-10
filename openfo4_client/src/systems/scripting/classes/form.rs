@@ -1,13 +1,24 @@
+use openfo4_script::engine::Engine;
 use openfo4_script::runtime::{Caller, Exception};
 
 use super::{Bool, Int, Object, State};
+
+pub fn register(engine: &mut Engine) {
+    engine.register_native_function("Form", "GetFormID", get_form_id);
+    engine.register_native_function("Form", "GetGoldValue", get_gold_value);
+    engine.register_native_function("Form", "HasKeyword", has_keyword);
+    engine.register_native_function("Form", "HasKeywordInFormList", has_keyword_in_form_list);
+    engine.register_native_function("Form", "PlayerKnows", player_knows);
+    engine.register_native_function("Form", "StartObjectProfiling", start_object_profiling);
+    engine.register_native_function("Form", "StopObjectProfiling", stop_object_profiling);
+}
 
 /// `GetFormID`
 ///
 /// ```text
 /// int Function GetFormID() native
 /// ```
-pub fn get_form_id(caller: Caller<'_, State>, self_ptr: isize) -> Result<Int, Exception> {
+fn get_form_id(caller: Caller<'_, State>, self_ptr: isize) -> Result<Int, Exception> {
     todo!()
 }
 
@@ -16,7 +27,7 @@ pub fn get_form_id(caller: Caller<'_, State>, self_ptr: isize) -> Result<Int, Ex
 /// ```text
 /// int Function GetGoldValue() native
 /// ```
-pub fn get_gold_value(caller: Caller<'_, State>, self_ptr: isize) -> Result<Int, Exception> {
+fn get_gold_value(caller: Caller<'_, State>, self_ptr: isize) -> Result<Int, Exception> {
     todo!()
 }
 
@@ -25,7 +36,7 @@ pub fn get_gold_value(caller: Caller<'_, State>, self_ptr: isize) -> Result<Int,
 /// ```text
 /// bool Function HasKeyword(Keyword akKeyword) native
 /// ```
-pub fn has_keyword(
+fn has_keyword(
     caller: Caller<'_, State>,
     self_ptr: Object,
     keyword: Object,
@@ -38,7 +49,7 @@ pub fn has_keyword(
 /// ```text
 /// bool Function HasKeywordInFormList(FormList akKeywordList) native
 /// ```
-pub fn has_keyword_in_form_list(
+fn has_keyword_in_form_list(
     caller: Caller<'_, State>,
     self_ptr: Object,
     formlist: Object,
@@ -51,6 +62,24 @@ pub fn has_keyword_in_form_list(
 /// ```text
 /// bool Function PlayerKnows() native
 /// ```
-pub fn player_knows(caller: Caller<'_, State>) -> Result<Bool, Exception> {
+fn player_knows(caller: Caller<'_, State>, self_ptr: Object) -> Result<Bool, Exception> {
     todo!()
+}
+
+/// `StartObjectProfiling`
+///
+/// ```text
+/// Function StartObjectProfiling() native
+/// ```
+fn start_object_profiling(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<(), Exception> {
+    Ok(())
+}
+
+/// `StopObjectProfiling`
+///
+/// ```text
+/// Function StopObjectProfiling() native
+/// ```
+fn stop_object_profiling(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<(), Exception> {
+    Ok(())
 }

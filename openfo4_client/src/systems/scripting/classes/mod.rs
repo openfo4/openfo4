@@ -1,16 +1,19 @@
 mod f4se;
 mod mcm;
 
+mod activator;
 mod active_magic_effect;
 mod actor;
 mod actor_base;
 mod alias;
 mod cell;
 mod debug;
+mod effect_shader;
 mod encounter_zone;
 mod faction;
 mod form;
 mod form_list;
+mod furniture;
 mod game;
 mod global_variable;
 mod image_space_modifier;
@@ -23,8 +26,10 @@ mod location_alias;
 mod magic_effect;
 mod math;
 mod message;
+mod misc_object;
 mod music_type;
 mod object_reference;
+mod package;
 mod potion;
 mod quest;
 mod ref_collection_alias;
@@ -32,8 +37,11 @@ mod reference_alias;
 mod scene;
 mod script_object;
 mod sound;
+mod sound_category;
 mod sound_category_snapshot;
 mod spell;
+mod terminal;
+mod topic;
 mod topic_info;
 mod utility;
 mod visual_effect;
@@ -95,22 +103,22 @@ pub fn register_builtins(engine: &mut Engine) {
     message::register(engine);
 
     script_object::register(engine);
-
-    engine.register_native_function("Form", "GetFormID", form::get_form_id);
-    engine.register_native_function("Form", "GetGoldValue", form::get_gold_value);
-    engine.register_native_function("Form", "HasKeyword", form::has_keyword);
-    engine.register_native_function("Form", "HasKeywordInFormList", form::has_keyword_in_form_list);
-    engine.register_native_function("Form", "PlayerKnows", form::player_knows);
-
-    // engine.register_native_function("GlobalVariable", "GetValue", global_variable::get_value);
-    // engine.register_native_function("GlobalVariable", "SetValue", global_variable::set_value);
-
+    form::register(engine);
     actor::register(engine);
     utility::register(engine);
     visual_effect::register(engine);
     sound_category_snapshot::register(engine);
     encounter_zone::register(engine);
     weather::register(engine);
+    misc_object::register(engine);
+    topic::register(engine);
+    package::register(engine);
+    activator::register(engine);
+    furniture::register(engine);
+    sound_category::register(engine);
+    effect_shader::register(engine);
+    active_magic_effect::register(engine);
+    terminal::register(engine);
 
     engine.register_native_function("Sound", "SetInstanceVolume", sound::set_instance_volume);
     engine.register_native_function("Sound", "StopInstance", sound::stop_instance);
@@ -126,11 +134,6 @@ pub fn register_builtins(engine: &mut Engine) {
 
     engine.register_native_function("Keyword", "SendStoryEvent", keyword::send_story_event);
     engine.register_native_function("Keyword", "SendStoryEventAndWait", keyword::send_story_event_and_wait);
-
-    engine.register_native_function("ActiveMagicEffect", "Dispel", active_magic_effect::dispel);
-    engine.register_native_function("ActiveMagicEffect", "GetBaseObject", active_magic_effect::get_base_object);
-    engine.register_native_function("ActiveMagicEffect", "GetCasterActor", active_magic_effect::get_caster_actor);
-    engine.register_native_function("ActiveMagicEffect", "GetTargetActor", active_magic_effect::get_target_actor);
 
     engine.register_native_function("MagicEffect", "GetAssociatedSkill", magic_effect::get_assocaited_skill);
 

@@ -1,13 +1,24 @@
+use openfo4_script::engine::Engine;
 use openfo4_script::runtime::{Caller, Exception};
 
-use super::{Object, State};
+use crate::systems::scripting::classes::{Object, State};
+
+#[rustfmt::skip]
+pub fn register(engine: &mut Engine) {
+    engine.register_native_function("ActiveMagicEffect", "Dispel", dispel);
+    engine.register_native_function("ActiveMagicEffect", "GetBaseObject", get_base_object);
+    engine.register_native_function("ActiveMagicEffect", "GetCasterActor", get_caster_actor);
+    engine.register_native_function("ActiveMagicEffect", "GetTargetActor", get_target_actor);
+    engine.register_native_function("ActiveMagicEffect", "StartObjectProfiling", start_object_profiling);
+    engine.register_native_function("ActiveMagicEffect", "StopObjectProfiling", stop_object_profiling);
+}
 
 /// `Dispel`
 ///
 /// ```text
 /// Function Dispel() native
 /// ```
-pub fn dispel(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Exception> {
+fn dispel(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Exception> {
     todo!()
 }
 
@@ -16,7 +27,7 @@ pub fn dispel(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Excepti
 /// ```text
 /// MagicEffect Function GetBaseObject() native
 /// ```
-pub fn get_base_object(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Exception> {
+fn get_base_object(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Exception> {
     todo!()
 }
 
@@ -25,7 +36,7 @@ pub fn get_base_object(caller: Caller<'_, State>, self_ptr: Object) -> Result<Ob
 /// ```text
 /// Actor Function GetCasterActor() native
 /// ```
-pub fn get_caster_actor(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Exception> {
+fn get_caster_actor(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Exception> {
     todo!()
 }
 
@@ -34,6 +45,24 @@ pub fn get_caster_actor(caller: Caller<'_, State>, self_ptr: Object) -> Result<O
 /// ```text
 /// Actor Function GetTargetActor() native
 /// ```
-pub fn get_target_actor(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Exception> {
+fn get_target_actor(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Exception> {
+    todo!()
+}
+
+/// `StartObjectProfiling`
+///
+/// ```text
+/// Function StartObjectProfiling() native
+/// ```
+fn start_object_profiling(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Exception> {
+    todo!()
+}
+
+/// `StopObjectProfiling`
+///
+/// ```text
+/// Function StopObjectProfiling() native
+/// ```
+fn stop_object_profiling(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Exception> {
     todo!()
 }

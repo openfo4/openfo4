@@ -5,7 +5,6 @@ use openfo4_script::{
 
 use crate::systems::scripting::classes::{Object, State};
 
-#[rustfmt::skip]
 pub fn register(engine: &mut Engine) {
     engine.register_native_function("Cell", "EnableFastTravel", enable_fast_travel);
     engine.register_native_function("Cell", "GetActorOwner", get_actor_owner);
@@ -15,6 +14,7 @@ pub fn register(engine: &mut Engine) {
     engine.register_native_function("Cell", "IsLoaded", is_loaded);
     engine.register_native_function("Cell", "Reset", reset);
     engine.register_native_function("Cell", "SetActorOwner", set_actor_owner);
+    engine.register_native_function("Cell", "SetFogColor", set_fog_color);
     engine.register_native_function("Cell", "SetFactionOwner", set_faction_owner);
     engine.register_native_function("Cell", "SetFogPlanes", set_fog_planes);
     engine.register_native_function("Cell", "SetFogPower", set_fog_power);
@@ -110,6 +110,24 @@ fn set_faction_owner(
     caller: Caller<'_, State>,
     self_ptr: Object,
     ak_faction: Object,
+) -> Result<(), Exception> {
+    todo!()
+}
+
+/// `SetFogColor`
+///
+/// ```text
+/// Function SetFogColor(int aiNearRed, int aiNearGreen, int aiNearBlue, int aiFarRed, int aiFarGreen, int aiFarBlue) native
+/// ```
+fn set_fog_color(
+    caller: Caller<'_, State>,
+    self_ptr: Object,
+    near_red: i32,
+    near_green: i32,
+    near_blue: i32,
+    far_red: i32,
+    far_green: i32,
+    far_blue: i32,
 ) -> Result<(), Exception> {
     todo!()
 }
