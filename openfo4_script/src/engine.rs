@@ -116,6 +116,13 @@ impl Engine {
 
     pub fn get_type(&self, name: &str) -> Option<TypeId> {
         let name = Lowercase::new(name);
+
+        // Even if the class already has a TypeId, it is not
+        // safe to construct it before compiling the class first.
+        if self.instances.get(&name).is_none() {
+            return None;
+        }
+
         self.ctx
             .resources()
             .string_to_type
