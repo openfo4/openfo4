@@ -862,6 +862,8 @@ enum BuildScriptObjectWarning {
     UnknownField(String, String),
     #[error("unknown property: {0}")]
     UnknownProperty(String),
+    #[error("no applicable script found in {0:?}")]
+    NoApplicableScriptFound(RecordId),
 }
 
 // FIXME: Use script layout reflection to determine we're actually setting values of the correct type.
@@ -885,6 +887,8 @@ fn build_script_object(
         builder_index: usize,
         inner: EntryInner<'a>,
         pop_builder: bool,
+        /// The expected type for this location, reflected from the script.
+        expected_type: TypeId,
     }
 
     #[derive(Copy, Clone, Debug)]
@@ -925,10 +929,26 @@ fn build_script_object(
     let mut stack: Vec<Entry<'_>> = Vec::new();
     // Push root class properties
     for prop in &script.properties {
+        let Some((_, info)) = layout
+            .properties
+            .iter()
+            .find(|((_, name), _)| *name == Lowercase::new(&*prop.name))
+        else {
+            // TODO: Warning
+            continue;
+        };
+
+        let ty = match info.ty {
+            PropertyType::Inline(ty) => ty,
+            PropertyType::Pointer(ty) => ty,
+            PropertyType::ArrayPointer(ty) => ty,
+        };
+
         stack.push(Entry {
             builder_index: 0,
             inner: EntryInner::Property(prop),
             pop_builder: false,
+            expected_type: ty,
         });
     }
 
@@ -983,6 +1003,11 @@ fn build_script_object(
                 builder.set(class_name, var_name, array_index, object.addr());
             }
             Value::Object(value) => {
+                // The reference is already null by default.
+                if value.form.is_null() {
+                    continue;
+                }
+
                 let id = resolve_form(value.form);
 
                 let addr = if let Some(alias) = value.alias {
@@ -997,29 +1022,42 @@ fn build_script_object(
                         continue;
                     };
 
-                    // FIXME: Which script to choose here?
-                    // We need to inspect the actual class layout to get this.
-                    let addr = *scripts.values().next().unwrap();
-
-                    addr
-                } else {
-                    // The reference is already null by default.
-                    if value.form.is_null() {
+                    // FIXME: We should consider subclasses here aswell.
+                    let Some((_, addr)) = scripts.iter().find(|(name, _)| {
+                        engine
+                            .get_type(name)
+                            .is_some_and(|ty| ty == entry.expected_type)
+                    }) else {
+                        warnings.push(BuildScriptObjectWarning::NoApplicableScriptFound(id));
                         continue;
-                    }
+                    };
 
+                    *addr
+                } else {
                     if let Some(scripts) = scripts.get_by_record(id) {
-                        // FIXME: Which script to choose here?
-                        // We need to inspect the actual class layout to get this.
-                        let script = scripts.iter().next().unwrap();
+                        // FIXME: We should consider subclasses here aswell.
+                        let Some(script) = scripts.iter().find(|script| {
+                            engine
+                                .get_type(script.name())
+                                .is_some_and(|ty| ty == entry.expected_type)
+                        }) else {
+                            warnings.push(BuildScriptObjectWarning::NoApplicableScriptFound(id));
+                            continue;
+                        };
 
                         script.get().object.addr()
                     } else if let Some(scripts) = partial_addrs.get(&id) {
-                        // FIXME: Which script to choose here?
-                        // We need to inspect the actual class layout to get this.
-                        let addr = *scripts.values().next().unwrap();
+                        // FIXME: We should consider subclasses here aswell.
+                        let Some((_, addr)) = scripts.iter().find(|(name, _)| {
+                            engine
+                                .get_type(name)
+                                .is_some_and(|ty| ty == entry.expected_type)
+                        }) else {
+                            warnings.push(BuildScriptObjectWarning::NoApplicableScriptFound(id));
+                            continue;
+                        };
 
-                        addr
+                        *addr
                     } else {
                         warnings.push(BuildScriptObjectWarning::UnknownObject(id));
                         continue;
@@ -1050,6 +1088,7 @@ fn build_script_object(
                     let PropertyType::Pointer(ty) = prop.ty else {
                         todo!();
                     };
+                    let info = engine.type_info(ty);
 
                     let object = engine.object_pool().insert(ty);
 
@@ -1060,13 +1099,31 @@ fn build_script_object(
                         builder_index: entry.builder_index,
                         inner: entry.inner,
                         pop_builder: true,
+                        // Not used
+                        expected_type: ty,
                     });
 
                     for field in fields {
+                        let Some((_, info)) = info
+                            .properties
+                            .iter()
+                            .find(|((_, name), _)| *name == Lowercase::new(&*field.name))
+                        else {
+                            // TODO: Warning
+                            continue;
+                        };
+
+                        let ty = match info.ty {
+                            PropertyType::Inline(ty) => ty,
+                            PropertyType::Pointer(ty) => ty,
+                            PropertyType::ArrayPointer(ty) => ty,
+                        };
+
                         stack.push(Entry {
                             builder_index,
                             inner: EntryInner::Property(field),
                             pop_builder: false,
+                            expected_type: ty,
                         });
                     }
                 }
@@ -1110,6 +1167,8 @@ fn build_script_object(
                         builder_index: entry.builder_index,
                         inner: entry.inner,
                         pop_builder: true,
+                        // Not used
+                        expected_type: ty,
                     });
 
                     for (array_index, value) in values.iter().enumerate() {
@@ -1117,6 +1176,7 @@ fn build_script_object(
                             builder_index,
                             inner: EntryInner::Value(value, array_index),
                             pop_builder: false,
+                            expected_type: ty,
                         });
                     }
                 }
@@ -1137,9 +1197,12 @@ fn is_primitive(engine: &Engine, ty: TypeId) -> bool {
 
 #[cfg(test)]
 mod tests {
+    use std::num::NonZeroU32;
+
     use hashbrown::HashMap;
-    use openfo4_core::record::RecordId;
-    use openfo4_esp::vmad::{Property, Script, Value};
+    use openfo4_core::record::{ModuleId, RecordId};
+    use openfo4_esp::FormId;
+    use openfo4_esp::vmad::{Object, Property, Script, Value};
     use openfo4_script::assembler::assemble;
     use openfo4_script::engine::{Engine, Options};
     use openfo4_script::runtime::{ArrayObject, ObjectAddr, ObjectRef};
@@ -1377,6 +1440,116 @@ mod tests {
             let st = engine.object_pool().get(struct_addr);
             assert_eq!(st.get("test#MyStruct", "x").unwrap(), 2u32.to_ne_bytes());
             assert_eq!(st.get("test#MyStruct", "y").unwrap(), 3u32.to_ne_bytes());
+        }
+    }
+
+    #[test]
+    fn build_script_object_reflect_script_name() {
+        let mut engine = Engine::new();
+
+        let module = assemble(
+            r#"
+            class A:
+
+            class B:
+
+            class C:
+            global a: A = null
+            global b: B = null
+            global c: C = null
+            property a: A -> a
+            property b: B -> b
+            property c: C -> c
+            "#,
+        );
+
+        engine.register(&module);
+        engine.compile("A", &Options::default());
+        engine.compile("B", &Options::default());
+        engine.compile("C", &Options::default());
+
+        let script = Script {
+            name: "C".to_owned(),
+            flags: 0,
+            properties: vec![
+                Property {
+                    name: "a".to_owned(),
+                    value: Value::Object(Object {
+                        form: FormId(0x01),
+                        alias: None,
+                    }),
+                },
+                Property {
+                    name: "b".to_owned(),
+                    value: Value::Object(Object {
+                        form: FormId(0x01),
+                        alias: None,
+                    }),
+                },
+                Property {
+                    name: "c".to_owned(),
+                    value: Value::Object(Object {
+                        form: FormId(0x01),
+                        alias: None,
+                    }),
+                },
+            ],
+        };
+
+        let type_a = engine.get_type("A").unwrap();
+        let type_b = engine.get_type("B").unwrap();
+        let type_c = engine.get_type("C").unwrap();
+
+        let a = engine.object_pool().insert(type_a).finalize().addr();
+        let b = engine.object_pool().insert(type_b).finalize().addr();
+        let c = engine.object_pool().insert(type_c).finalize().addr();
+
+        let scripts = ScriptObjects::default();
+        let partial_addrs = [(
+            RecordId::new(ModuleId(NonZeroU32::MIN), FormId(0x01)),
+            [
+                ("A".to_owned(), a),
+                ("B".to_owned(), b),
+                ("C".to_owned(), c),
+            ]
+            .into_iter()
+            .collect(),
+        )]
+        .into_iter()
+        .collect();
+
+        let aliases = HashMap::new();
+
+        let mut builder = engine.object_pool().insert(type_c);
+
+        let (_, warnings) = build_script_object(
+            |form| RecordId::new(ModuleId(NonZeroU32::MIN), form),
+            &engine,
+            &script,
+            &scripts,
+            &partial_addrs,
+            &aliases,
+            &mut builder,
+            RecordId::DANGLING,
+        );
+        assert!(warnings.is_empty());
+
+        let object = engine.object_pool().get(builder.finalize());
+        unsafe {
+            assert_eq!(
+                object.get("C", "a").unwrap(),
+                a.to_raw().addr().to_ne_bytes()
+            );
+
+            assert_eq!(
+                object.get("C", "b").unwrap(),
+                b.to_raw().addr().to_ne_bytes()
+            );
+
+            assert_eq!(
+                object.get("C", "c").unwrap(),
+                c.to_raw().addr().to_ne_bytes()
+            );
         }
     }
 }
