@@ -585,12 +585,38 @@ impl<'a> FunctionBuilder<'a> {
             panic!("cannot call: function {:?} not declared", func);
         };
 
+        debug_assert_eq!(state.signature.params.len(), args.len());
+
         let returns: Vec<_> = (0..state.signature.returns.len())
             .map(|_| self.produce_value())
             .collect();
 
         self.instructions
             .push(Instruction::Call(func, args.to_vec(), returns.clone()));
+        returns
+    }
+
+    /// Indirect function call.
+    #[track_caller]
+    pub fn call_indirect(
+        &mut self,
+        signature: Signature,
+        callee: Value,
+        args: &[Value],
+    ) -> Vec<Value> {
+        self.assert_block_not_filled();
+        debug_assert_eq!(signature.params.len(), args.len());
+
+        let returns: Vec<_> = (0..signature.returns.len())
+            .map(|_| self.produce_value())
+            .collect();
+
+        self.instructions.push(Instruction::CallIndirect(
+            signature,
+            callee,
+            args.to_vec(),
+            returns.clone(),
+        ));
         returns
     }
 
@@ -1016,6 +1042,7 @@ enum Instruction {
     FMin(Binop),
     FMax(Binop),
     Call(FuncId, Vec<Value>, Vec<Value>),
+    CallIndirect(Signature, Value, Vec<Value>, Vec<Value>),
     Return(Vec<Value>),
     Jump(Block, Vec<Value>),
     Brif {

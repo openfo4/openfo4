@@ -9,8 +9,8 @@ use cranelift_codegen::control::ControlPlane;
 use cranelift_codegen::ir::condcodes::{FloatCC, IntCC};
 use cranelift_codegen::ir::{
     self, ArgumentExtension, ArgumentPurpose, BlockArg, ExtFuncData, ExternalName, Function,
-    InstBuilder, InstBuilderBase, MemFlags, StackSlotData, StackSlotKind, UserExternalName,
-    UserExternalNameRef, UserFuncName,
+    InstBuilder, InstBuilderBase, MemFlags, StackSlotData, StackSlotKind, TrapCode,
+    UserExternalName, UserExternalNameRef, UserFuncName,
 };
 use cranelift_codegen::isa::OwnedTargetIsa;
 use cranelift_codegen::settings::Configurable;
@@ -24,6 +24,8 @@ use crate::backend::cranelift::memory::{Allocation, MemoryAllocator};
 use crate::backend::cranelift::relocs::perform_relocations;
 use crate::backend::{FunctionDefinitionDesc, StackSlotDesc};
 use crate::{FloatCompareOp, FuncId, Instruction, IntCompareOp, Signature, Type, Value};
+
+const TRAP_CODE_UNALIGNED: TrapCode = TrapCode::user(0x01).unwrap();
 
 #[derive(Clone, Debug)]
 pub enum Error {}
@@ -351,6 +353,26 @@ impl CraneliftModule {
 
                         let res = builder.ins().ceil(src);
                         values[op.dst.0] = Some(res);
+                    }
+                    Instruction::CallIndirect(signature, callee, params, returns) => {
+                        let args = params
+                            .iter()
+                            .map(|v| values[v.0].unwrap())
+                            .collect::<Vec<_>>();
+
+                        let signature = convert_signature(signature);
+                        let sig_ref = builder.import_signature(signature);
+
+                        let callee = values[callee.0].unwrap();
+
+                        let inst = builder.ins().call_indirect(sig_ref, callee, &args);
+
+                        let return_values = builder.inst_results(inst);
+                        debug_assert_eq!(returns.len(), return_values.len());
+
+                        for (lhs, rhs) in returns.iter().zip(return_values) {
+                            values[lhs.0] = Some(*rhs);
+                        }
                     }
                     Instruction::Call(func_id, params, returns) => {
                         let args = params
@@ -741,11 +763,12 @@ impl CraneliftModule {
                 .unwrap();
             let code = self.ctx.take_compiled_code().unwrap();
 
+            let mut text = None;
             if debug {
                 let disasm = code.vcode.as_ref().unwrap();
 
-                let text = format!("CLIF:\n{}------------\nASM:\n{}------------", clif, disasm);
-                println!("{}", text);
+                let t = format!("CLIF:\n{}------------\nASM:\n{}------------", clif, disasm);
+                text = Some(t);
             }
 
             let layout =
@@ -759,6 +782,7 @@ impl CraneliftModule {
                 code,
                 allocation: Arc::new(allocation),
                 callees: refs_to_funcs,
+                text,
             });
 
             compiled_funcs.insert(id);
@@ -774,7 +798,7 @@ impl CraneliftModule {
         CompiledFunction {
             _allocation: compiled.allocation.clone(),
             fn_ptr: compiled.allocation.as_exec_ptr(),
-            text: None,
+            text: compiled.text.clone(),
         }
     }
 }
@@ -783,6 +807,7 @@ struct CompilationResult {
     code: CompiledCode,
     allocation: Arc<Allocation>,
     callees: HashMap<UserExternalNameRef, FuncId>,
+    text: Option<String>,
 }
 
 struct FuncState {
