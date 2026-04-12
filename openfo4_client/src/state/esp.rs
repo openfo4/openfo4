@@ -283,7 +283,15 @@ impl EspLoader {
     pub fn resolve_form(&self, form: FormId, origin: RecordId) -> Option<RecordId> {
         let index = *self.plugins.get(origin.module.0.get() as usize)?;
         let plugin = &self.files[index as usize];
-        let module = *plugin.dependencies.get(usize::from(form.plugin()))?;
+
+        // It seems that out of bounds plugin indices reference the plugin
+        // itself, i.e. clamped at the number of dependencies+1.
+        let plugin_index = usize::min(
+            usize::from(form.plugin()),
+            plugin.dependencies.len().saturating_sub(1),
+        );
+
+        let module = *plugin.dependencies.get(plugin_index)?;
         Some(RecordId { form, module })
     }
 }
