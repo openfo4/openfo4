@@ -2256,7 +2256,15 @@ fn perform_checked_call(
     // Allocate the minimal stack size required by the callee.
     prepare_stack_for_call(translator);
 
-    if let Some(result) = res.get(1) {
+    let result_pos = if callee.function.return_ty.is_empty()
+        || callee.function.return_ty.eq_ignore_ascii_case("none")
+    {
+        0
+    } else {
+        1
+    };
+
+    if let Some(result) = res.get(result_pos) {
         let result_ok = translator.builder.iconst(JitType::I32, RESULT_OK);
         let is_ok = translator
             .builder
