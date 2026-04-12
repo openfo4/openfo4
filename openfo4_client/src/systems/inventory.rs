@@ -286,13 +286,18 @@ impl InventorySystem {
                 )
                 .await;
 
-                let equip_events = items
-                    .iter()
-                    .map(|item| EquipItemEvent {
-                        actor: event.actor,
-                        item: item.item,
-                    })
-                    .collect();
+                let equip_events = if event.equip {
+                    items
+                        .iter()
+                        .map(|item| EquipItemEvent {
+                            actor: event.actor,
+                            item: item.item,
+                        })
+                        .collect()
+                } else {
+                    Vec::new()
+                };
+
                 let add_events = items
                     .into_iter()
                     .map(|item| AddItemEvent {
