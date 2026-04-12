@@ -1,10 +1,16 @@
 use openfo4_script::assembler::assemble;
+use openfo4_script::compiler::CompilerOptions;
 use openfo4_script::engine::{Engine, Options};
 use openfo4_script::runtime::{Caller, Context, Exception, ObjectAddr, Stack};
 
+const COMPILER_OPTIONS: CompilerOptions = CompilerOptions {
+    validation: true,
+    debug: true,
+};
+
 #[test]
 fn int_var() {
-    let mut engine = Engine::new();
+    let mut engine = Engine::new(COMPILER_OPTIONS);
 
     fn assert_valid_result(_caller: Caller<'_, ()>, v: i32) -> Result<(), Exception> {
         assert_eq!(v, 1);
@@ -46,7 +52,7 @@ fn int_var() {
 
 #[test]
 fn string_var() {
-    let mut engine = Engine::new();
+    let mut engine = Engine::new(COMPILER_OPTIONS);
 
     let module = assemble(
         r#"
@@ -78,7 +84,7 @@ fn string_var() {
 
 #[test]
 fn class_var() {
-    let mut engine = Engine::new();
+    let mut engine = Engine::new(COMPILER_OPTIONS);
 
     let module = assemble(
         r#"
@@ -111,7 +117,7 @@ fn class_var() {
 
 #[test]
 fn struct_var() {
-    let mut engine = Engine::new();
+    let mut engine = Engine::new(COMPILER_OPTIONS);
 
     let module = assemble(
         r#"

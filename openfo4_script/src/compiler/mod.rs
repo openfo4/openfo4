@@ -7,7 +7,7 @@ use std::sync::Arc;
 
 use game_common::string::Lowercase;
 use hashbrown::HashMap;
-use openfo4_jit::{CompiledFunction, Signature};
+use openfo4_jit::{CompiledFunction, CompilerConfig, Signature};
 use openfo4_pex::Module;
 use thiserror::Error;
 
@@ -30,10 +30,10 @@ pub struct Context {
 }
 
 impl Context {
-    pub fn new() -> Self {
+    pub fn new(config: CompilerConfig) -> Self {
         Self {
             validation: ValidationPass::default(),
-            codegen: CodegenPass::new(),
+            codegen: CodegenPass::new(config),
         }
     }
 
@@ -83,4 +83,10 @@ pub struct CompilationResult {
 #[derive(Clone, Debug)]
 pub struct CompiledClass {
     pub functions: HashMap<Lowercase<String>, CompilationResult>,
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct CompilerOptions {
+    pub validation: bool,
+    pub debug: bool,
 }

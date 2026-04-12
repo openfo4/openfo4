@@ -20,10 +20,12 @@ use hashbrown::HashMap;
 use hecs::{Entity, World};
 use openfo4_core::events::EventBus;
 use openfo4_pex::Module;
+use openfo4_script::compiler::CompilerOptions;
 use openfo4_script::compiler::resources::TypeId;
 use openfo4_script::engine::{Engine, Instance, Options};
 use openfo4_script::runtime::{Context, Exception, ObjectAddr, ObjectRef, Stack, Val};
 
+use crate::config;
 use crate::events::inventory::{ItemAddedEvent, ItemEquippedEvent};
 use crate::events::trigger::{TriggerEnter, TriggerLeave};
 use crate::loader::FileLoader;
@@ -60,10 +62,14 @@ impl Executor {
         esp_loader: Arc<EspLoader>,
         file_loader: Arc<FileLoader>,
         pool: Arc<TaskPool>,
+        config: config::Scripting,
     ) -> Self {
         let _span = trace_span!("Executor::new").entered();
 
-        let mut engine = Engine::new();
+        let mut engine = Engine::new(CompilerOptions {
+            validation: config.validation,
+            debug: config.debug,
+        });
 
         for path in file_loader.files() {
             if path.components().next().is_some_and(|v| v == "scripts")

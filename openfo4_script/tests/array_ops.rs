@@ -1,10 +1,16 @@
 use openfo4_script::assembler::assemble;
+use openfo4_script::compiler::CompilerOptions;
 use openfo4_script::engine::{Engine, Options};
 use openfo4_script::runtime::{Caller, Context, Exception, NativeTuple, ObjectAddr, Stack};
 
+const COMPILER_OPTIONS: CompilerOptions = CompilerOptions {
+    validation: true,
+    debug: true,
+};
+
 #[test]
 fn array_create() {
-    let mut engine = Engine::new();
+    let mut engine = Engine::new(COMPILER_OPTIONS);
 
     fn test_valid_array(caller: Caller<'_, ()>, addr: ObjectAddr) -> Result<(), Exception> {
         let array = unsafe { caller.array::<i32>(addr) };
@@ -47,7 +53,7 @@ fn array_create() {
 
 #[test]
 fn array_get() {
-    let mut engine = Engine::new();
+    let mut engine = Engine::new(COMPILER_OPTIONS);
 
     fn assert_valid_result(_caller: Caller<'_, ()>, value: i32) -> Result<(), Exception> {
         assert_eq!(value, 9);
@@ -92,7 +98,7 @@ fn array_get() {
 
 #[test]
 fn array_add() {
-    let mut engine = Engine::new();
+    let mut engine = Engine::new(COMPILER_OPTIONS);
 
     fn assert_valid_result(caller: Caller<'_, ()>, addr: ObjectAddr) -> Result<(), Exception> {
         let arr = unsafe { caller.array::<i32>(addr) };
@@ -136,7 +142,7 @@ fn array_add() {
 
 #[test]
 fn array_insert() {
-    let mut engine = Engine::new();
+    let mut engine = Engine::new(COMPILER_OPTIONS);
 
     fn assert_valid_result(caller: Caller<'_, ()>, addr: ObjectAddr) -> Result<(), Exception> {
         let arr = unsafe { caller.array::<i32>(addr) };
@@ -180,7 +186,7 @@ fn array_insert() {
 
 #[test]
 fn array_clear() {
-    let mut engine = Engine::new();
+    let mut engine = Engine::new(COMPILER_OPTIONS);
 
     fn assert_valid_result(caller: Caller<'_, ()>, addr: ObjectAddr) -> Result<(), Exception> {
         let array = unsafe { caller.array::<i32>(addr) };
@@ -225,7 +231,7 @@ fn array_clear() {
 
 #[test]
 fn array_find_int() {
-    let mut engine = Engine::new();
+    let mut engine = Engine::new(COMPILER_OPTIONS);
 
     fn assert_valid_result(
         caller: Caller<'_, ()>,
@@ -279,7 +285,7 @@ fn array_find_int() {
 
 #[test]
 fn array_find_struct() {
-    let mut engine = Engine::new();
+    let mut engine = Engine::new(COMPILER_OPTIONS);
 
     #[derive(Copy, Clone, Debug)]
     #[repr(C)]
@@ -358,7 +364,7 @@ fn array_find_struct() {
 
 #[test]
 fn array_len_on_null() {
-    let mut engine = Engine::new();
+    let mut engine = Engine::new(COMPILER_OPTIONS);
 
     let module = assemble(
         r#"
@@ -531,7 +537,7 @@ where
     I: NativeTuple,
     O: NativeTuple,
 {
-    let mut engine = Engine::new();
+    let mut engine = Engine::new(COMPILER_OPTIONS);
 
     let module = assemble(module);
     engine.register(&module);

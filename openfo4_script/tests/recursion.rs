@@ -1,10 +1,16 @@
 use openfo4_script::assembler::assemble;
+use openfo4_script::compiler::CompilerOptions;
 use openfo4_script::engine::{Engine, Options};
 use openfo4_script::runtime::{Context, Stack};
 
+const COMPILER_OPTIONS: CompilerOptions = CompilerOptions {
+    validation: true,
+    debug: true,
+};
+
 #[test]
 fn recursion() {
-    let mut engine = Engine::new();
+    let mut engine = Engine::new(COMPILER_OPTIONS);
 
     let module = assemble(
         r#"

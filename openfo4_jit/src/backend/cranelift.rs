@@ -9,8 +9,8 @@ use cranelift_codegen::control::ControlPlane;
 use cranelift_codegen::ir::condcodes::{FloatCC, IntCC};
 use cranelift_codegen::ir::{
     self, ArgumentExtension, ArgumentPurpose, BlockArg, ExtFuncData, ExternalName, Function,
-    InstBuilder, InstBuilderBase, MemFlags, StackSlotData, StackSlotKind, TrapCode,
-    UserExternalName, UserExternalNameRef, UserFuncName,
+    InstBuilder, InstBuilderBase, MemFlags, StackSlotData, StackSlotKind, UserExternalName,
+    UserExternalNameRef, UserFuncName,
 };
 use cranelift_codegen::isa::OwnedTargetIsa;
 use cranelift_codegen::settings::Configurable;
@@ -25,8 +25,6 @@ use crate::backend::cranelift::relocs::perform_relocations;
 use crate::backend::{FunctionDefinitionDesc, StackSlotDesc};
 use crate::{FloatCompareOp, FuncId, Instruction, IntCompareOp, Signature, Type, Value};
 
-const TRAP_CODE_UNALIGNED: TrapCode = TrapCode::user(0x01).unwrap();
-
 #[derive(Clone, Debug)]
 pub enum Error {}
 
@@ -37,17 +35,22 @@ pub struct CraneliftModule {
     isa: OwnedTargetIsa,
     ctx: Context,
     func_ctx: FunctionBuilderContext,
+    debug: bool,
 }
 
 impl CraneliftModule {
-    pub fn new() -> Self {
+    pub fn new(validation: bool, debug: bool) -> Self {
         let mut flags = settings::builder();
         flags.set("use_colocated_libcalls", "false").unwrap();
         flags.set("is_pic", "false").unwrap();
         flags.set("opt_level", "speed_and_size").unwrap();
         flags.set("regalloc_algorithm", "backtracking").unwrap();
-        // TODO: Add option to disable verifier. Verification is quite expensive.
-        flags.set("enable_verifier", "true").unwrap();
+
+        if validation {
+            flags.set("enable_verifier", "true").unwrap();
+        } else {
+            flags.set("enable_verifier", "false").unwrap();
+        }
 
         let builder = cranelift_native::builder().unwrap();
         let isa = builder.finish(settings::Flags::new(flags)).unwrap();
@@ -59,6 +62,7 @@ impl CraneliftModule {
             ctx: Context::new(),
             isa,
             func_ctx: FunctionBuilderContext::new(),
+            debug,
         }
     }
 
@@ -93,7 +97,7 @@ impl CraneliftModule {
         }));
     }
 
-    pub fn compile_function(&mut self, id: FuncId, debug: bool) -> CompiledFunction {
+    pub fn compile_function(&mut self, id: FuncId) -> CompiledFunction {
         let _span = trace_span!("CraneliftModule::compile_function").entered();
 
         if let Some(func) = self.compiled_functions.get(&id.0) {
@@ -748,7 +752,8 @@ impl CraneliftModule {
 
             builder.seal_all_blocks();
 
-            let clif = debug
+            let clif = self
+                .debug
                 .then(|| builder.func.display().to_string())
                 .unwrap_or_default();
 
@@ -756,7 +761,7 @@ impl CraneliftModule {
 
             self.ctx.clear();
             self.ctx.func = func;
-            self.ctx.want_disasm = debug;
+            self.ctx.want_disasm = self.debug;
 
             self.ctx
                 .compile(&*self.isa, &mut ControlPlane::default())
@@ -764,7 +769,7 @@ impl CraneliftModule {
             let code = self.ctx.take_compiled_code().unwrap();
 
             let mut text = None;
-            if debug {
+            if self.debug {
                 let disasm = code.vcode.as_ref().unwrap();
 
                 let t = format!("CLIF:\n{}------------\nASM:\n{}------------", clif, disasm);

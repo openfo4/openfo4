@@ -1204,12 +1204,18 @@ mod tests {
     use openfo4_esp::FormId;
     use openfo4_esp::vmad::{Object, Property, Script, Value};
     use openfo4_script::assembler::assemble;
+    use openfo4_script::compiler::CompilerOptions;
     use openfo4_script::engine::{Engine, Options};
     use openfo4_script::runtime::{ArrayObject, ObjectAddr, ObjectRef};
 
     use crate::systems::scripting::objects::ScriptObjects;
 
     use super::build_script_object;
+
+    const COMPILER_OPTIONS: CompilerOptions = CompilerOptions {
+        validation: true,
+        debug: true,
+    };
 
     fn build_direct(engine: &Engine, script: &Script) -> ObjectRef {
         let type_id = engine.get_type(&script.name).unwrap();
@@ -1270,7 +1276,7 @@ mod tests {
 
     #[test]
     fn build_script_object_basic() {
-        let mut engine = Engine::new();
+        let mut engine = Engine::new(COMPILER_OPTIONS);
 
         let module = assemble(
             r#"
@@ -1311,7 +1317,7 @@ mod tests {
 
     #[test]
     fn build_script_object_array() {
-        let mut engine = Engine::new();
+        let mut engine = Engine::new(COMPILER_OPTIONS);
 
         let module = assemble(
             r#"
@@ -1378,7 +1384,7 @@ mod tests {
 
     #[test]
     fn build_script_object_struct() {
-        let mut engine = Engine::new();
+        let mut engine = Engine::new(COMPILER_OPTIONS);
 
         let module = assemble(
             r#"
@@ -1445,7 +1451,7 @@ mod tests {
 
     #[test]
     fn build_script_object_reflect_script_name() {
-        let mut engine = Engine::new();
+        let mut engine = Engine::new(COMPILER_OPTIONS);
 
         let module = assemble(
             r#"

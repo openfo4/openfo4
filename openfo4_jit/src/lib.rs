@@ -17,9 +17,9 @@ pub struct Compiler {
 
 impl Compiler {
     /// Creates a new `Compiler`.
-    pub fn new() -> Self {
+    pub fn new(config: CompilerConfig) -> Self {
         Self {
-            inner: CraneliftModule::new(),
+            inner: CraneliftModule::new(config.validation, config.debug),
             functions: VecMap::new(),
             isa: Isa::new(),
         }
@@ -87,9 +87,15 @@ impl Compiler {
         let func = self.functions.get(id).unwrap();
 
         CompiledFunction {
-            inner: self.inner.compile_function(id, true),
+            inner: self.inner.compile_function(id),
             signature: func.signature.clone(),
         }
+    }
+}
+
+impl Default for Compiler {
+    fn default() -> Self {
+        Self::new(CompilerConfig::default())
     }
 }
 
@@ -1291,3 +1297,9 @@ impl Debug for CompiledFunction {
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct DataId(usize);
+
+#[derive(Clone, Debug, Default)]
+pub struct CompilerConfig {
+    pub validation: bool,
+    pub debug: bool,
+}

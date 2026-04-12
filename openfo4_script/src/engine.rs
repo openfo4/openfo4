@@ -5,11 +5,11 @@ use std::sync::{Arc, RwLock};
 use game_common::cell::UnsafeRefCell;
 use game_common::string::Lowercase;
 use hashbrown::HashMap;
-use openfo4_jit::Type;
+use openfo4_jit::{CompilerConfig, Type};
 use openfo4_pex::{Class, Module};
 
 use crate::compiler::resources::{TypeId, TypeInfo};
-use crate::compiler::{CompilationResult, Context, NativeFunction};
+use crate::compiler::{CompilationResult, CompilerOptions, Context, NativeFunction};
 use crate::runtime::host_functions::call_host_trampoline;
 use crate::runtime::{CallTable, Func, HostState, IntoFunc, NativeFnPtr, ObjectPool};
 
@@ -29,8 +29,11 @@ pub struct Engine {
 }
 
 impl Engine {
-    pub fn new() -> Self {
-        let ctx = Context::new();
+    pub fn new(options: CompilerOptions) -> Self {
+        let ctx = Context::new(CompilerConfig {
+            validation: options.validation,
+            debug: options.debug,
+        });
         let pool = ObjectPool::new(Arc::clone(ctx.resources()));
 
         Self {

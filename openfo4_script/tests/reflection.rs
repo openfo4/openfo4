@@ -1,11 +1,17 @@
 use game_common::string::Lowercase;
 use openfo4_script::assembler::assemble;
+use openfo4_script::compiler::CompilerOptions;
 use openfo4_script::compiler::resources::PropertyType;
 use openfo4_script::engine::{Engine, Options};
 
+const COMPILER_OPTIONS: CompilerOptions = CompilerOptions {
+    validation: true,
+    debug: true,
+};
+
 #[test]
 fn class_reflection() {
-    let mut engine = Engine::new();
+    let mut engine = Engine::new(COMPILER_OPTIONS);
 
     let module = assemble(
         r#"
@@ -60,7 +66,7 @@ fn class_reflection() {
 
 #[test]
 fn struct_reflection() {
-    let mut engine = Engine::new();
+    let mut engine = Engine::new(COMPILER_OPTIONS);
 
     let module = assemble(
         r#"

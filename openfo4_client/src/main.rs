@@ -101,7 +101,7 @@ fn main() -> ExitCode {
     let egui_ctx = EguiContext::new(ui_renderer);
 
     let ui = UiState::new(&mut renderer);
-    let mut game = GameState::new(shared.clone(), pool, &data_dirs);
+    let mut game = GameState::new(shared.clone(), pool, &data_dirs, config);
     game.init_camera();
     let state = RenderState::new(
         renderer,

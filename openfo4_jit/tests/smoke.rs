@@ -1,8 +1,8 @@
-use openfo4_jit::{Compiler, Signature, Type};
+use openfo4_jit::{Compiler, CompilerConfig, Signature, Type};
 
 #[test]
 fn call_return_value() {
-    let mut compiler = Compiler::new();
+    let mut compiler = Compiler::new(CompilerConfig::default());
     let guest_fn = compiler.declare_function(Signature {
         params: vec![],
         returns: vec![Type::I32],
@@ -33,7 +33,7 @@ fn call_native() {
         }
     }
 
-    let mut compiler = Compiler::new();
+    let mut compiler = Compiler::new(CompilerConfig::default());
     let host_fn = compiler.declare_function(Signature {
         params: vec![Type::Pointer],
         returns: vec![],

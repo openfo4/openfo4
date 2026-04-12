@@ -1,10 +1,16 @@
 use openfo4_script::assembler::assemble;
+use openfo4_script::compiler::CompilerOptions;
 use openfo4_script::engine::{Engine, Options};
 use openfo4_script::runtime::{Context, ObjectAddr, Stack};
 
+const COMPILER_OPTIONS: CompilerOptions = CompilerOptions {
+    validation: true,
+    debug: true,
+};
+
 #[test]
 fn method_resolution_external() {
-    let mut engine = Engine::new();
+    let mut engine = Engine::new(COMPILER_OPTIONS);
 
     let module = assemble(
         r#"
@@ -52,7 +58,7 @@ fn method_resolution_external() {
 
 #[test]
 fn method_resolution_internal() {
-    let mut engine = Engine::new();
+    let mut engine = Engine::new(COMPILER_OPTIONS);
 
     let module = assemble(
         r#"

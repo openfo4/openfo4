@@ -1,12 +1,18 @@
 use openfo4_script::{
     assembler::assemble,
+    compiler::CompilerOptions,
     engine::{Engine, Options},
     runtime::{Caller, Context, Exception, ObjectAddr, Stack},
 };
 
+const COMPILER_OPTIONS: CompilerOptions = CompilerOptions {
+    validation: true,
+    debug: true,
+};
+
 #[test]
 fn string_constant() {
-    let mut engine = Engine::new();
+    let mut engine = Engine::new(COMPILER_OPTIONS);
 
     fn assert_valid_result(caller: Caller<'_, ()>, addr: ObjectAddr) -> Result<(), Exception> {
         let s = unsafe { caller.string(addr) };
@@ -43,7 +49,7 @@ fn string_constant() {
 
 #[test]
 fn string_concat() {
-    let mut engine = Engine::new();
+    let mut engine = Engine::new(COMPILER_OPTIONS);
 
     fn assert_valid_result(caller: Caller<'_, ()>, addr: ObjectAddr) -> Result<(), Exception> {
         let s = unsafe { caller.string(addr) };
@@ -85,7 +91,7 @@ fn string_concat() {
 
 #[test]
 fn string_cmpeq() {
-    let mut engine = Engine::new();
+    let mut engine = Engine::new(COMPILER_OPTIONS);
 
     let module = assemble(
         r#"

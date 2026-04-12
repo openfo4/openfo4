@@ -1,10 +1,16 @@
 use openfo4_script::assembler::assemble;
+use openfo4_script::compiler::CompilerOptions;
 use openfo4_script::engine::{Engine, Options};
 use openfo4_script::runtime::{Context, ObjectAddr, Stack};
 
+const COMPILER_OPTIONS: CompilerOptions = CompilerOptions {
+    validation: true,
+    debug: true,
+};
+
 #[test]
 fn state() {
-    let mut engine = Engine::new();
+    let mut engine = Engine::new(COMPILER_OPTIONS);
 
     let module = assemble(
         r#"
@@ -58,4 +64,90 @@ fn state() {
 
     // Fallthrough, default value
     assert_eq!(func.call(&mut ctx, addr).unwrap(), 0);
+}
+
+#[test]
+fn state_override_order() {
+    let mut engine = Engine::new(COMPILER_OPTIONS);
+
+    let module = assemble(
+        r#"
+        class A:
+
+        state "" default:
+
+        function MyFunction() -> int:
+        return 1
+
+        state "X":
+
+        function MyFunction() -> int:
+        return 2
+
+        state "Y":
+        function MyFunction() -> int:
+        return 3
+
+        class B:
+        parent: A
+
+        state "" default:
+
+        state "X":
+
+        function MyFunction() -> int:
+        return 4
+
+        state "Z":
+        function MyFunction() -> int:
+        return 5
+        "#,
+    );
+
+    engine.register(&module);
+    let instance = engine.compile("A", &Options::default());
+    let func = instance.get_func("MyFunction").unwrap();
+    let type_id = engine.get_type("A").unwrap();
+
+    let addr = engine.object_pool().insert(type_id).finalize().addr();
+
+    let mut stack = Stack::for_func(&func);
+    let mut ctx = Context::new(&engine, &mut stack, ());
+
+    let func = func.typed::<ObjectAddr, i32>().unwrap();
+
+    // Default state for all classes.
+    // Calls A.MyFunction().
+    assert_eq!(func.call(&mut ctx, addr).unwrap(), 1);
+
+    let x = engine.object_pool().insert_string("X").addr();
+    let y = engine.object_pool().insert_string("Y").addr();
+    let z = engine.object_pool().insert_string("Z").addr();
+
+    unsafe {
+        let mut obj = engine.object_pool().get(addr);
+        obj.set("C", "::state", x);
+    }
+
+    // C is the subclass of {A, B} with state "X".
+    // Calls C.MyFunction().
+    assert_eq!(func.call(&mut ctx, addr).unwrap(), 4);
+
+    unsafe {
+        let mut obj = engine.object_pool().get(addr);
+        obj.set("C", "::state", y);
+    }
+
+    // C has no state "Y", so B is the subclass of A with state "Y".
+    // Calls B.MyFunction().
+    assert_eq!(func.call(&mut ctx, addr).unwrap(), 3);
+
+    unsafe {
+        let mut obj = engine.object_pool().get(addr);
+        obj.set("C", "::state", z);
+    }
+
+    // C is the subclass of {A, B} with state "Z".
+    // Calls C.MyFunction().
+    assert_eq!(func.call(&mut ctx, z).unwrap(), 5);
 }

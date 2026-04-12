@@ -42,6 +42,7 @@ use crate::assets::animation::AnimationSet;
 use crate::assets::init_asset_loader;
 use crate::cell::CellId;
 use crate::components::{Camera, NiTransform, Player};
+use crate::config::Config;
 use crate::loader::FileLoader;
 use crate::render::RenderObject;
 use crate::render::physics_debug::despawn_expired;
@@ -101,7 +102,12 @@ pub struct GameState {
 }
 
 impl GameState {
-    pub fn new(shared: Arc<SharedState>, pool: Arc<TaskPool>, data_dirs: &[PathBuf]) -> Self {
+    pub fn new(
+        shared: Arc<SharedState>,
+        pool: Arc<TaskPool>,
+        data_dirs: &[PathBuf],
+        config: Config,
+    ) -> Self {
         let mut loader = EspLoaderBuilder::new();
         let mut sources = Vec::new();
 
@@ -145,6 +151,7 @@ impl GameState {
             loader.clone(),
             file_loader.clone(),
             pool.clone(),
+            config.scripting,
         ));
 
         let level = Level::new(

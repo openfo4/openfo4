@@ -13,7 +13,7 @@ use game_common::string::Lowercase;
 use game_tracing::trace_span;
 use hashbrown::{HashMap, HashSet};
 use indexmap::IndexMap;
-use openfo4_jit::{Compiler, FuncId, Signature, Type as JitType};
+use openfo4_jit::{Compiler, CompilerConfig, FuncId, Signature, Type as JitType};
 use openfo4_pex::{Class, Function, Instruction, Module, Struct, Value};
 use slab::Slab;
 use thiserror::Error;
@@ -53,8 +53,8 @@ pub struct CodegenPass {
 }
 
 impl CodegenPass {
-    pub fn new() -> Self {
-        let mut compiler = Compiler::new();
+    pub fn new(config: CompilerConfig) -> Self {
+        let mut compiler = Compiler::new(config);
 
         Self {
             data: CodegenData::new(&mut compiler),
