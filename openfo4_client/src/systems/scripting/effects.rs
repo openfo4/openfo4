@@ -5,6 +5,7 @@ use std::sync::Arc;
 
 use game_common::collections::arena::{Arena, Key};
 use game_tasks::{Task, TaskPool};
+use game_tracing::trace_span;
 use hecs::{Entity, World};
 use openfo4_core::events::EventBus;
 use openfo4_core::record::RecordId;
@@ -56,6 +57,8 @@ impl Effects {
         esp_loader: &Arc<EspLoader>,
         script_loader: &Arc<ScriptLoader>,
     ) -> Vec<EffectId> {
+        let _span = trace_span!("Effects::run").entered();
+
         let mut effects_done = Vec::new();
 
         for (id, effect) in &mut self.effects {

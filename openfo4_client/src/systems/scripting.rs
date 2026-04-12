@@ -23,7 +23,8 @@ use openfo4_pex::Module;
 use openfo4_script::compiler::CompilerOptions;
 use openfo4_script::compiler::resources::TypeId;
 use openfo4_script::engine::{Engine, Instance, Options};
-use openfo4_script::runtime::{Context, Exception, ObjectAddr, ObjectRef, Stack, Val};
+use openfo4_script::runtime::{Context, Exception, ObjectRef, Stack, Val};
+use slab::Slab;
 
 use crate::config;
 use crate::events::inventory::{ItemAddedEvent, ItemEquippedEvent};
@@ -53,8 +54,8 @@ pub struct Executor {
     invocations: Arena<InvocationState>,
     suspended_calls: HashMap<EffectId, ScheduledTask>,
     queue: VecDeque<ScheduledTask>,
-    stacks: HashMap<ObjectAddr, HashMap<String, Stack>>,
     event_queue: EventQueue,
+    tasks: Slab<TaskState>,
 }
 
 impl Executor {
@@ -100,8 +101,8 @@ impl Executor {
             invocations: Arena::new(),
             suspended_calls: HashMap::new(),
             queue: VecDeque::new(),
-            stacks: HashMap::new(),
             event_queue: EventQueue::default(),
+            tasks: Slab::new(),
         }
     }
 
@@ -130,12 +131,15 @@ impl Executor {
         });
 
         for script in scripts.iter() {
+            let tid = TaskId(self.tasks.insert(TaskState::default()));
+
             self.queue.push_back(ScheduledTask {
                 object: invocation.receiver.id(),
                 script: script.name().to_owned(),
                 invocation_id: Some(InvocationId(id)),
                 func_name: invocation.name.to_string(),
                 args: invocation.args.clone(),
+                id: tid,
             });
         }
 
@@ -180,6 +184,9 @@ impl Executor {
         state.as_mut().unwrap().quests = quests;
 
         while let Some(task) = self.queue.pop_front() {
+            let task_state = &mut self.tasks[task.id.0];
+            state.as_mut().unwrap().wait_on_effect = task_state.suspended_on;
+
             let scripts = state
                 .as_mut()
                 .unwrap()
@@ -195,11 +202,14 @@ impl Executor {
                 &mut state,
                 &task.func_name,
                 &task.args,
-                &mut self.stacks,
+                task_state,
             ) {
+                task_state.suspended_on = Some(id);
                 self.suspended_calls.insert(id, task);
                 continue;
             }
+
+            self.tasks.remove(task.id.0);
 
             if let Some(invocation_id) = task.invocation_id {
                 let invocation = self.invocations.get_mut(invocation_id.0).unwrap();
@@ -287,16 +297,21 @@ impl Executor {
                     let receiver = state.objects.get_by_addr(*receiver).unwrap();
 
                     if receiver.get().object.addr() == script.get().object.addr() {
+                        let tid = TaskId(self.tasks.insert(TaskState::default()));
+
                         self.queue.push_back(ScheduledTask {
                             object: receiver.id(),
                             script: receiver.name().to_owned(),
                             invocation_id: None,
                             func_name: event.kind.func_name().to_owned(),
                             args: dispatch.args.to_vec(),
+                            id: tid,
                         });
                     } else {
                         let mut args = dispatch.args.to_vec();
                         args.insert(0, Value::ObjectRef(script.get().object.clone()));
+
+                        let tid = TaskId(self.tasks.insert(TaskState::default()));
 
                         self.queue.push_back(ScheduledTask {
                             object: receiver.id(),
@@ -304,6 +319,7 @@ impl Executor {
                             invocation_id: None,
                             func_name: event.kind.remote_func_name().to_owned(),
                             args,
+                            id: tid,
                         });
                     }
                 }
@@ -317,12 +333,15 @@ impl Executor {
                     let mut args = dispatch.args.to_vec();
                     args.insert(0, Value::ObjectRef(script.get().object.clone()));
 
+                    let tid = TaskId(self.tasks.insert(TaskState::default()));
+
                     self.queue.push_back(ScheduledTask {
                         object: alias.id(),
                         script: alias.name().to_owned(),
                         invocation_id: None,
                         func_name: dispatch.kind.remote_ref_alias_func_name().to_owned(),
                         args,
+                        id: tid,
                     });
                 }
             }
@@ -336,13 +355,24 @@ impl Executor {
     }
 }
 
+/// Unique identifier for each script call.
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+struct TaskId(usize);
+
 #[derive(Clone, Debug)]
 struct ScheduledTask {
+    id: TaskId,
     object: ScriptObjectId,
     script: String,
     invocation_id: Option<InvocationId>,
     func_name: String,
     args: Vec<Value>,
+}
+
+#[derive(Clone, Debug, Default)]
+struct TaskState {
+    stack: Option<Stack>,
+    suspended_on: Option<EffectId>,
 }
 
 #[derive(Clone, Debug)]
@@ -358,7 +388,7 @@ fn call_event_invocation_single(
     state: &mut Option<State>,
     func_name: &str,
     args: &[Value],
-    stacks: &mut HashMap<ObjectAddr, HashMap<String, Stack>>,
+    task_state: &mut TaskState,
 ) -> Option<EffectId> {
     let script = state
         .as_ref()
@@ -378,15 +408,10 @@ fn call_event_invocation_single(
     // FIXME: Can we avoid this clone?
     let func = func.clone();
 
-    let is_resumed = stacks
-        .get(&script.get().object.addr())
-        .is_some_and(|funcs| funcs.contains_key(func_name));
-
-    let stack = stacks
-        .entry(script.get().object.addr())
-        .or_default()
-        .entry(func_name.to_string())
-        .or_insert_with(|| Stack::for_func(&func));
+    let is_resumed = task_state.stack.is_some();
+    let stack = task_state
+        .stack
+        .get_or_insert_with(|| Stack::for_func(&func));
 
     let mut args = args
         .iter()
@@ -422,18 +447,21 @@ fn call_event_invocation_single(
                 tracing::error!("script returned with error");
             }
 
+            debug_assert!(
+                data.wait_on_effect.is_none(),
+                "set effect without suspending"
+            );
+
             // Execution is done, reset the stack.
-            let funcs = stacks.get_mut(&addr).unwrap();
-            funcs.remove(func_name);
-            if funcs.is_empty() {
-                stacks.remove(&addr);
-            }
+            task_state.stack = None;
         }
         Err(Exception::Suspend) => {
             debug_assert!(
                 data.wait_on_effect.is_some(),
                 "suspended script without waiting on effect"
             );
+
+            tracing::debug!("suspending {}.{} ({:?})", script_name, func_name, addr);
 
             wait_on_effect = data.wait_on_effect.take();
         }
