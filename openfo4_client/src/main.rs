@@ -1,6 +1,7 @@
 mod assets;
 mod cell;
 mod components;
+mod config;
 mod events;
 mod loader;
 mod render;
@@ -11,6 +12,7 @@ mod ui;
 
 use std::num::NonZeroUsize;
 use std::path::PathBuf;
+use std::process::ExitCode;
 use std::sync::Arc;
 
 use clap::Parser;
@@ -38,6 +40,7 @@ use render::physics_debug::{
 use shared::SharedState;
 use state::GameState;
 
+use crate::config::Config;
 use crate::render::physics_debug::{
     draw_doors, draw_hitscan_markers, draw_light_markers, draw_navmesh,
     draw_planned_ai_agent_paths, draw_trigger_boxes,
@@ -53,6 +56,9 @@ struct Args {
     // message.
     #[arg(long = "no-crash-handler")]
     _no_crash_handler: bool,
+    /// Path to the config file.
+    #[arg(long, default_value = "config.toml")]
+    config: PathBuf,
     /// Path to a data directory. This argument can be repeated. The data directories will be
     /// loaded in the exact order specified.
     #[arg(long)]
@@ -60,12 +66,24 @@ struct Args {
 }
 
 #[main]
-fn main() {
+fn main() -> ExitCode {
     let args = Args::parse();
 
-    let data_dirs = args.data.unwrap_or_else(|| vec![PathBuf::from(".")]);
-
     game_core::logger::init();
+
+    let config = match Config::from_file(&args.config) {
+        Ok(config) => config,
+        Err(err) => {
+            tracing::error!(
+                "failed to load config from {}: {}",
+                args.config.to_string_lossy(),
+                err
+            );
+            return ExitCode::FAILURE;
+        }
+    };
+
+    let data_dirs = args.data.unwrap_or_else(|| vec![PathBuf::from(".")]);
 
     let num_threads = std::thread::available_parallelism().unwrap_or(NonZeroUsize::MIN);
     let pool = Arc::new(TaskPool::new(num_threads.get()));
@@ -106,6 +124,7 @@ fn main() {
     };
 
     wm.run(app);
+    ExitCode::SUCCESS
 }
 
 struct App {
