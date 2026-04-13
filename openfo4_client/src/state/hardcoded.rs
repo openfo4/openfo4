@@ -1,5 +1,7 @@
 //! Hardcoded resources
 
+pub mod fallout4;
+
 use std::num::NonZeroU32;
 
 use hashbrown::HashMap;
@@ -18,15 +20,6 @@ pub const ACTOR_VALUE_CONFIDENCE: FormId = FormId(0x2bd);
 pub const ACTOR_VALUE_ENERGY: FormId = FormId(0x2be);
 pub const ACTOR_VALUE_MORALITY: FormId = FormId(0x2bf);
 pub const ACTOR_VALUE_ASSISTANCE: FormId = FormId(0x2c1);
-
-pub const ACTOR_VALUE_STRENGTH: FormId = FormId(0x2c2);
-pub const ACTOR_VALUE_PERCEPTION: FormId = FormId(0x2c3);
-pub const ACTOR_VALUE_ENDURANCE: FormId = FormId(0x2c4);
-pub const ACTOR_VALUE_CHARISMA: FormId = FormId(0x2c5);
-pub const ACTOR_VALUE_INTELLIGENCE: FormId = FormId(0x2c6);
-pub const ACTOR_VALUE_AGILITY: FormId = FormId(0x2c7);
-pub const ACTOR_VALUE_LUCK: FormId = FormId(0x2c8);
-pub const ACTOR_VALUE_HEALTH: FormId = FormId(0x2d4);
 
 pub const PATH_SKY_ATMOSPHERE: &DataPath = DataPath::from_str("meshes/sky/atmosphere.nif");
 pub const PATH_SKY_CLOUDS: &DataPath = DataPath::from_str("meshes/sky/clouds.nif");
