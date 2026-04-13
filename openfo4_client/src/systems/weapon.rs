@@ -11,6 +11,7 @@ use openfo4_core::record::RecordId;
 use openfo4_physics::components::{Collider, CollisionLayer};
 use openfo4_physics::{PhysicsPipeline, QueryFilter};
 
+use crate::components::Camera;
 use crate::render::physics_debug::{DespawnAt, HitscanRaycast};
 use crate::state::actions::{Action, Actions};
 use crate::state::anim_starter::AnimationEventQueue;
@@ -75,6 +76,15 @@ pub fn handle_weapon_fire_events(
         let facing_dir = entity.get::<&FacingDirection>().unwrap();
         let mut inventory = entity.get::<&mut Inventory>().unwrap();
 
+        let Some(camera_transform) = world
+            .query::<(&GlobalTransform, &Camera)>()
+            .iter()
+            .next()
+            .map(|v| *v.1.0)
+        else {
+            return;
+        };
+
         for (_, item) in inventory.items_mut() {
             let ItemData::Weapon(weapon) = &mut item.data else {
                 continue;
@@ -89,14 +99,6 @@ pub fn handle_weapon_fire_events(
             if weapon.current_ammo == 0 {
                 continue;
             }
-
-            let origin = weapon
-                .projectile_node
-                .map(|node| {
-                    let node_transform = world.get::<&GlobalTransform>(node.entity).unwrap();
-                    node_transform.0 * node.offset
-                })
-                .unwrap_or(transform.0);
 
             weapon.current_ammo -= 1;
 
@@ -131,7 +133,7 @@ pub fn handle_weapon_fire_events(
                 * -Vec3::Z;
 
             let ray = Ray {
-                origin: origin.translation,
+                origin: camera_transform.0.translation,
                 direction,
             };
             let max_toi = 1000.0;
