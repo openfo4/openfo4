@@ -1917,10 +1917,12 @@ fn perform_cast_inner(
             }
 
             // Try downcasting.
+            // Casting unrelated class will never be successful.
+            // We validate that `src_class` is a subtype of `dst_class` before checking.
             let mut class_name = dst_class;
             loop {
                 if class_name == src_class {
-                    let is_ok = perform_class_typecheck(translator, src, &class_name, block);
+                    let is_ok = perform_class_typecheck(translator, src, dst_class, block);
 
                     let continue_block = translator.builder.create_block(&[]);
                     let abort_block = translator.builder.create_block(&[]);
@@ -2196,7 +2198,7 @@ fn perform_class_typecheck(
         .icmp(type_id, dst_id, IntCompareOp::Equal);
 
     // Increment index.
-    let next_index = translator.builder.iadd_imm(offset, 1);
+    let next_index = translator.builder.iadd_imm(index, 1);
     let next_index_valid = translator
         .builder
         .icmp(next_index, count, IntCompareOp::NotEqual);

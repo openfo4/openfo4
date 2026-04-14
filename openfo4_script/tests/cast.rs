@@ -1,7 +1,7 @@
 use openfo4_script::assembler::assemble;
 use openfo4_script::compiler::CompilerOptions;
 use openfo4_script::engine::{Engine, Options};
-use openfo4_script::runtime::{ArrayObject, Context, ObjectAddr, Stack};
+use openfo4_script::runtime::{ArrayObject, Context, Exception, ObjectAddr, Stack};
 
 const COMPILER_OPTIONS: CompilerOptions = CompilerOptions {
     validation: true,
@@ -59,4 +59,113 @@ fn cast_array() {
         let elem = unsafe { output_array.ptr.cast::<ObjectAddr>().add(index).read() };
         assert_eq!(elem, *addr);
     }
+}
+
+#[test]
+fn class_upcast() {
+    let mut engine = Engine::new(COMPILER_OPTIONS);
+
+    let module = assemble(
+        r#"
+        class A:
+
+        class B:
+        parent: A
+
+        class C:
+        parent: B
+
+        function F(c: C) -> A static:
+        local a: A
+        a = cast c
+        return a
+        "#,
+    );
+
+    engine.register(&module);
+
+    let instance = engine.compile("C", &Options::default());
+    let func = instance.get_func("F").unwrap();
+    let type_id = engine.get_type("C").unwrap();
+
+    let mut stack = Stack::new(0);
+    let mut ctx = Context::new(&engine, &mut stack, ());
+
+    let addr = engine.object_pool().insert(type_id).finalize().addr();
+
+    let func = func.typed::<ObjectAddr, ObjectAddr>().unwrap();
+    assert_eq!(func.call(&mut ctx, addr).unwrap(), addr);
+}
+
+#[test]
+fn class_downcast() {
+    let mut engine = Engine::new(COMPILER_OPTIONS);
+
+    let module = assemble(
+        r#"
+        class A:
+
+        class B:
+        parent: A
+
+        class C:
+        parent: B
+
+        function F(a: A) -> C static:
+        local c: C
+        c = cast a
+        return c
+        "#,
+    );
+
+    engine.register(&module);
+
+    let instance = engine.compile("C", &Options::default());
+    let func = instance.get_func("F").unwrap();
+    let type_id = engine.get_type("C").unwrap();
+
+    let mut stack = Stack::new(0);
+    let mut ctx = Context::new(&engine, &mut stack, ());
+
+    let addr = engine.object_pool().insert(type_id).finalize().addr();
+
+    let func = func.typed::<ObjectAddr, ObjectAddr>().unwrap();
+    assert_eq!(func.call(&mut ctx, addr).unwrap(), addr);
+}
+
+#[test]
+fn class_downcast_fail() {
+    let mut engine = Engine::new(COMPILER_OPTIONS);
+
+    let module = assemble(
+        r#"
+        class A:
+
+        class B:
+        parent: A
+
+        class C:
+        parent: B
+
+        function F(a: A) -> C static:
+        local c: C
+        c = cast a
+        return c
+        "#,
+    );
+
+    engine.register(&module);
+
+    engine.compile("A", &Options::default());
+    let instance = engine.compile("C", &Options::default());
+    let func = instance.get_func("F").unwrap();
+    let type_id = engine.get_type("A").unwrap();
+
+    let mut stack = Stack::new(0);
+    let mut ctx = Context::new(&engine, &mut stack, ());
+
+    let addr = engine.object_pool().insert(type_id).finalize().addr();
+
+    let func = func.typed::<ObjectAddr, ObjectAddr>().unwrap();
+    assert_eq!(func.call(&mut ctx, addr), Err(Exception::Error));
 }
