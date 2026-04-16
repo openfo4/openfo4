@@ -15,7 +15,7 @@ use game_gizmos::Gizmos;
 use game_tracing::trace_span;
 use glam::Vec3;
 use hashbrown::HashMap;
-use hecs::{Entity, World};
+use hecs::{Entity, Satisfies, ViewBorrow, World};
 use openfo4_core::Frozen;
 use openfo4_core::hierarchy::Children;
 use rapier3d::math::Isometry;
@@ -28,7 +28,7 @@ use rapier3d::prelude::{
 };
 use tracing::instrument;
 
-use crate::components::CollisionLayer;
+use crate::components::{Collider, CollisionLayer};
 use crate::convert::{quat, rotation, vec3, vector};
 use crate::debug::GizmoRenderBackend;
 
@@ -124,6 +124,13 @@ impl PhysicsPipeline {
     fn update_rigid_bodies(&mut self, world: &World) {
         let mut despawned_bodies = self.body_handles.clone();
 
+        let view = world.view::<(
+            Satisfies<&RigidBody>,
+            Satisfies<&Collider>,
+            &Transform,
+            Option<&Children>,
+        )>();
+
         for (entity, (global_transform, rigid_body, frozen)) in world
             .query::<(&GlobalTransform, &RigidBody, Option<&Frozen>)>()
             .iter()
@@ -157,7 +164,7 @@ impl PhysicsPipeline {
             body.set_angvel(angvel, true);
             body.set_body_type(kind, true);
 
-            let children = collect_collider_children(entity, world);
+            let children = collect_collider_children(entity, &view);
             match self.rigid_bodies.get_mut(&entity) {
                 Some(body) => {
                     if body.colliders != children {
@@ -419,46 +426,58 @@ struct SpawnedCollider {
 ///
 /// The branch is interrupted if an entity contains no transform, or if it contains a rigid body
 /// component, signaling the start of a new rigid body.
-fn collect_collider_children(entity: Entity, world: &World) -> HashMap<Entity, Transform> {
+fn collect_collider_children(
+    root: Entity,
+    view: &ViewBorrow<
+        '_,
+        (
+            Satisfies<&RigidBody>,
+            Satisfies<&Collider>,
+            &Transform,
+            Option<&Children>,
+        ),
+    >,
+) -> HashMap<Entity, Transform> {
     let mut entities = HashMap::new();
     let mut queue = VecDeque::new();
-    queue.push_back((entity, Transform::IDENTITY));
+
+    let Some((_, is_collider, _, children)) = view.get(root) else {
+        return entities;
+    };
 
     // The root entity can also be a collider.
-    if world
-        .satisfies::<&components::Collider>(entity)
-        .unwrap_or_default()
-    {
-        entities.insert(entity, Transform::IDENTITY);
+    if is_collider {
+        entities.insert(root, Transform::IDENTITY);
+    }
+
+    if let Some(children) = children {
+        for &child in &children.0 {
+            queue.push_back((child, Transform::IDENTITY));
+        }
     }
 
     while let Some((entity, parent_transform)) = queue.pop_front() {
-        let Ok(children) = world.get::<&Children>(entity) else {
+        let Some((is_rigid_body, is_collider, transform, children)) = view.get(entity) else {
             continue;
         };
 
-        for &children in &children.0 {
-            let Ok(child_transform) = world.get::<&Transform>(children) else {
-                continue;
-            };
+        // If the child itself is a rigid body it should
+        // not be considered a child of this rigid body
+        // anymore and be detached.
+        if is_rigid_body {
+            continue;
+        }
 
-            // If the child itself is a rigid body it should
-            // not be considered a child of this rigid body
-            // anymore and be detached.
-            if world.satisfies::<&RigidBody>(children).unwrap_or_default() {
-                continue;
+        let local_transform = parent_transform * *transform;
+
+        if is_collider {
+            entities.insert(entity, local_transform);
+        }
+
+        if let Some(children) = children {
+            for &child in &children.0 {
+                queue.push_back((child, local_transform));
             }
-
-            let transform = parent_transform * *child_transform;
-
-            if world
-                .satisfies::<&components::Collider>(children)
-                .unwrap_or_default()
-            {
-                entities.insert(children, transform);
-            }
-
-            queue.push_back((children, transform));
         }
     }
 
@@ -544,7 +563,7 @@ pub struct QueryFilter<'a> {
 mod tests {
     use game_common::components::{Axis, Transform};
     use glam::Vec3;
-    use hecs::World;
+    use hecs::{Satisfies, World};
     use openfo4_core::hierarchy::Children;
 
     use crate::collect_collider_children;
@@ -577,8 +596,15 @@ mod tests {
         ));
         let root = world.spawn((Transform::default(), RigidBody::DYNAMIC, Children(vec![e1])));
 
+        let view = world.view::<(
+            Satisfies<&RigidBody>,
+            Satisfies<&Collider>,
+            &Transform,
+            Option<&Children>,
+        )>();
+
         assert_eq!(
-            collect_collider_children(root, &world),
+            collect_collider_children(root, &view),
             [
                 (e0, Transform::from_translation(Vec3::splat(3.0))),
                 (e1, Transform::from_translation(Vec3::splat(1.0)))
