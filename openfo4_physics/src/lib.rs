@@ -282,7 +282,13 @@ impl PhysicsPipeline {
     fn write_back(&mut self, world: &mut World) {
         let mut view = world.view_mut::<(&mut RigidBody, &mut Transform, &mut GlobalTransform)>();
 
-        for (handle, body) in self.bodies.iter() {
+        for handle in self
+            .islands
+            .active_dynamic_bodies()
+            .iter()
+            .chain(self.islands.active_kinematic_bodies())
+        {
+            let body = self.bodies.get(*handle).unwrap();
             let entity = *self.body_handles.get_right(&handle).unwrap();
 
             let Some((rigid_body, transform, global_transform)) = view.get_mut(entity) else {
