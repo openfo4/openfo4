@@ -1,7 +1,7 @@
 use game_common::components::Transform;
 use game_tracing::trace_span;
-use hecs::{Entity, World};
 use openfo4_core::WorldExt;
+use openfo4_core::ecs::{Entity, World};
 use openfo4_core::events::EventBus;
 use openfo4_core::object_ref_set::ObjectReferenceSet;
 use openfo4_core::record::RecordId;
@@ -73,7 +73,7 @@ pub fn handle_automatic_doors(world: &mut World, object_ref_set: &ObjectReferenc
         .query::<(Entity, &Transform, &Door, &WorldSpace)>()
         .iter()
     {
-        let Door::AutoPortal(door) = door else {
+        let Door::AutoPortal(door) = *door else {
             continue;
         };
 
@@ -81,7 +81,7 @@ pub fn handle_automatic_doors(world: &mut World, object_ref_set: &ObjectReferenc
             .query::<(Entity, &Transform, &ActorMarker, &WorldSpace)>()
             .iter()
         {
-            if door_worldspace != actor_worldspace {
+            if *door_worldspace != *actor_worldspace {
                 continue;
             }
 
@@ -92,7 +92,7 @@ pub fn handle_automatic_doors(world: &mut World, object_ref_set: &ObjectReferenc
                 continue;
             }
 
-            transitions.push((*door, actor));
+            transitions.push((door, actor));
         }
     }
 

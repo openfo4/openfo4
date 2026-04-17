@@ -1,8 +1,8 @@
 use std::collections::VecDeque;
 
 use hashbrown::HashMap;
-use hecs::World;
 use openfo4_animation::driver::AnimationDriver;
+use openfo4_core::ecs::World;
 use openfo4_core::path::DataPathBuf;
 use openfo4_core::record::RecordId;
 use openfo4_esp::{RecordData, RecordKind};
@@ -63,7 +63,7 @@ impl AnimationSystem {
     }
 
     pub fn update(&mut self, world: &mut World) {
-        for (active_graphs, events, driver) in world.query_mut::<(
+        for (active_graphs, mut events, mut driver) in world.query_mut::<(
             &ActiveBehaviorGraphs,
             &mut AnimationEventQueue,
             &mut AnimationDriver,

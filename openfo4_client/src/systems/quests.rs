@@ -6,8 +6,8 @@ use game_common::collections::vec_map::VecMap;
 use game_tasks::{Task, TaskPool};
 use game_tracing::trace_span;
 use hashbrown::{HashMap, HashSet};
-use hecs::World;
 use indexmap::IndexMap;
+use openfo4_core::ecs::World;
 use openfo4_core::events::EventBus;
 use openfo4_core::record::RecordId;
 use openfo4_esp::records::{

@@ -2,9 +2,9 @@ use std::collections::VecDeque;
 use std::hash::Hash;
 
 use hashbrown::{HashMap, HashSet};
-use hecs::{Entity, World};
 use openfo4_asset::{AssetLoader, Handle};
 use openfo4_core::WorldExt;
+use openfo4_core::ecs::{Entity, World};
 use openfo4_core::events::EventBus;
 use openfo4_core::path::DataPathBuf;
 use openfo4_core::record::RecordId;

@@ -5,8 +5,8 @@ use game_common::components::{Axis, Color, GlobalTransform, PointLight, Transfor
 use game_common::math::Ray;
 use game_gizmos::Gizmos;
 use glam::{Quat, Vec3};
-use hecs::{CommandBuffer, Entity, World};
 use openfo4_animation::skeleton::BoneMarker;
+use openfo4_core::ecs::{CommandBuffer, Entity, World};
 use openfo4_core::hierarchy::Children;
 use openfo4_physics::components::{Collider, ColliderShape};
 
@@ -233,7 +233,7 @@ pub fn draw_hitscan_markers(world: &World, gizmos: &Gizmos) {
 
 pub fn draw_doors(world: &World, gizmos: &Gizmos) {
     for (transform, door) in world.query::<(&Transform, &Door)>().iter() {
-        if !matches!(door, Door::AutoPortal(_)) {
+        if !matches!(*door, Door::AutoPortal(_)) {
             continue;
         }
 

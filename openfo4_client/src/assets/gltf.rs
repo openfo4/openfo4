@@ -8,8 +8,8 @@ use game_gltf::types::{GltfMaterial, GltfMesh, TextureIndex};
 use game_gltf::{GltfData, GltfDecoder};
 use game_render::mesh::{Indices, Mesh};
 use hashbrown::HashMap;
-use hecs::{Entity, EntityBuilder};
 use openfo4_asset::{Asset, AssetLoader, Handle};
+use openfo4_core::ecs::{Entity, EntityBuilder, World};
 use openfo4_core::hierarchy::Children;
 use tracing::instrument;
 
@@ -29,7 +29,7 @@ impl Instantiate for Handle<GltfScene> {
         &'a self,
         mut callback: F,
         transform: Transform,
-        world: &mut hecs::World,
+        world: &mut World,
         _flags: super::nif::LoadNifFlags,
     ) -> Entity
     where

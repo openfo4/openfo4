@@ -4,7 +4,7 @@ use std::sync::Arc;
 use game_tasks::{Task, TaskPool};
 use game_tracing::trace_span;
 use hashbrown::{HashMap, HashSet};
-use hecs::{Entity, World};
+use openfo4_core::ecs::{Entity, World};
 use openfo4_core::record::RecordId;
 use openfo4_script::runtime::ObjectRef;
 use slab::Slab;

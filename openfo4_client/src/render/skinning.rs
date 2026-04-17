@@ -5,8 +5,8 @@ use game_core_pipeline::entities::ObjectHandle;
 use game_tracing::trace_span;
 use glam::Vec3;
 use hashbrown::HashMap;
-use hecs::{Entity, World};
 use openfo4_animation::skeleton::SkeletonInstance;
+use openfo4_core::ecs::{Entity, World};
 use openfo4_core::hierarchy::Children;
 
 use crate::shared::SharedState;

@@ -1,7 +1,7 @@
 use game_common::components::{GlobalTransform, Transform};
 use hashbrown::HashMap;
-use hecs::{Entity, World};
 use nohash_hasher::BuildNoHashHasher;
+use openfo4_core::ecs::{Entity, World};
 use openfo4_core::hierarchy::Children;
 
 #[tracing::instrument(skip_all)]
@@ -99,7 +99,7 @@ pub fn compute_global_transform(world: &mut World) {
 mod tests {
     use game_common::components::{GlobalTransform, Transform};
     use glam::Vec3;
-    use hecs::World;
+    use openfo4_core::ecs::World;
     use openfo4_core::hierarchy::Children;
 
     use super::compute_global_transform;

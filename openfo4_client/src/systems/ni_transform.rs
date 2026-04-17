@@ -1,5 +1,5 @@
 use game_common::components::Transform;
-use hecs::{CommandBuffer, Entity, World};
+use openfo4_core::ecs::{CommandBuffer, Entity, World};
 
 use crate::cell::CellId;
 use crate::components::{NiTransform, Root};

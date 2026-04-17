@@ -3,9 +3,9 @@ use std::time::Duration;
 
 use game_tracing::trace_span;
 use hashbrown::{HashMap, HashSet};
-use hecs::{Entity, World};
 use openfo4_animation::skeleton::SkeletonInstance;
 use openfo4_asset::{AssetLoader, Handle};
+use openfo4_core::ecs::{Entity, World};
 use openfo4_core::hierarchy::Children;
 use openfo4_core::path::DataPathBuf;
 use openfo4_core::record::RecordId;

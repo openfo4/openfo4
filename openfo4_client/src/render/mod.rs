@@ -17,7 +17,7 @@ use game_tasks::TaskPool;
 use game_tracing::trace_span;
 use glam::UVec2;
 use hashbrown::{HashMap, HashSet};
-use hecs::{Entity, World};
+use openfo4_core::ecs::{Entity, World};
 use openfo4_core::events::{ComponentChanged, EventBus};
 
 use crate::components::{Camera as CameraComp, Player, WorldSpace};
@@ -72,8 +72,11 @@ impl RenderState {
     pub fn sync(&mut self, world: &World, events: &EventBus) {
         let _span = trace_span!("RenderState::sync").entered();
 
-        let Some((&player_worldspace, _)) =
-            world.query::<(&WorldSpace, &Player)>().into_iter().next()
+        let Some(player_worldspace) = world
+            .query::<(&WorldSpace, &Player)>()
+            .iter()
+            .map(|v| *v.0)
+            .next()
         else {
             return;
         };
@@ -81,7 +84,7 @@ impl RenderState {
         self.cameras.clear();
         self.lights.clear();
 
-        for (entity, transform, cam) in &mut world.query::<(Entity, &Transform, &CameraComp)>() {
+        for (entity, transform, cam) in world.query::<(Entity, &Transform, &CameraComp)>().iter() {
             let mut camera = Camera {
                 transform: *transform,
                 scene: self.scene.clone(),
@@ -99,8 +102,9 @@ impl RenderState {
 
         let mut lights_to_remove = self.lights.clone();
 
-        for (entity, light, worldspace) in
-            &mut world.query::<(Entity, &game_common::components::AmbientLight, &WorldSpace)>()
+        for (entity, light, worldspace) in world
+            .query::<(Entity, &game_common::components::AmbientLight, &WorldSpace)>()
+            .iter()
         {
             if *worldspace != player_worldspace {
                 continue;
@@ -122,12 +126,15 @@ impl RenderState {
             self.lights.insert(entity, handle);
         }
 
-        for (entity, transform, light, worldspace) in &mut world.query::<(
-            Entity,
-            &GlobalTransform,
-            &game_common::components::DirectionalLight,
-            &WorldSpace,
-        )>() {
+        for (entity, transform, light, worldspace) in world
+            .query::<(
+                Entity,
+                &GlobalTransform,
+                &game_common::components::DirectionalLight,
+                &WorldSpace,
+            )>()
+            .iter()
+        {
             if *worldspace != player_worldspace {
                 continue;
             }
@@ -146,12 +153,15 @@ impl RenderState {
             self.lights.insert(entity, handle);
         }
 
-        for (entity, transform, light, worldspace) in &mut world.query::<(
-            Entity,
-            &GlobalTransform,
-            &game_common::components::PointLight,
-            &WorldSpace,
-        )>() {
+        for (entity, transform, light, worldspace) in world
+            .query::<(
+                Entity,
+                &GlobalTransform,
+                &game_common::components::PointLight,
+                &WorldSpace,
+            )>()
+            .iter()
+        {
             if *worldspace != player_worldspace {
                 continue;
             }
@@ -179,8 +189,9 @@ impl RenderState {
             .collect();
 
         let mut objects_to_remove = self.objects.clone();
-        for (entity, transform, object, worldspace) in
-            &mut world.query::<(Entity, &GlobalTransform, &RenderObject, &WorldSpace)>()
+        for (entity, transform, object, worldspace) in world
+            .query::<(Entity, &GlobalTransform, &RenderObject, &WorldSpace)>()
+            .iter()
         {
             if *worldspace != player_worldspace {
                 continue;
@@ -189,7 +200,7 @@ impl RenderState {
             objects_to_remove.remove(&entity);
 
             if let Some(prev_transform) = self.prev_transforms.get(&entity) {
-                if prev_transform == transform && !objects_changed.contains(&entity) {
+                if *prev_transform == *transform && !objects_changed.contains(&entity) {
                     continue;
                 }
             }

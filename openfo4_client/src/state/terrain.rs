@@ -11,9 +11,9 @@ use game_tasks::TaskPool;
 use game_tracing::trace_span;
 use glam::{FloatExt, UVec2, Vec2, Vec3A, Vec3Swizzles, Vec4};
 use hashbrown::HashMap;
-use hecs::{Entity, World};
 use image::{ImageBuffer, Pixel, Rgba};
 use openfo4_asset::Handle;
+use openfo4_core::ecs::{Entity, World};
 use openfo4_core::events::{ComponentChanged, EventBus};
 
 use crate::assets::data_file::DataFile;

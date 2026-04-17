@@ -3,7 +3,7 @@ use std::ops::{Mul, MulAssign};
 use game_common::components::{Color, Transform};
 use glam::{IVec3, Quat, Vec3};
 use hashbrown::HashSet;
-use hecs::Entity;
+use openfo4_core::ecs::Entity;
 use openfo4_core::record::RecordId;
 use openfo4_core::transform::ConvertCoordinateSystem;
 

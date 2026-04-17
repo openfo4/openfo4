@@ -2,7 +2,7 @@ use std::f32::consts::PI;
 use std::time::Duration;
 
 use game_common::components::PointLight;
-use hecs::World;
+use openfo4_core::ecs::World;
 
 #[derive(Clone, Debug)]
 pub struct LightFlicker {
@@ -28,7 +28,7 @@ pub struct LightFlickerState {
 }
 
 pub fn update_flickering_lights(world: &mut World, delta: Duration) {
-    for (light, flicker) in world.query_mut::<(&mut PointLight, &mut LightFlicker)>() {
+    for (mut light, mut flicker) in world.query_mut::<(&mut PointLight, &mut LightFlicker)>() {
         flicker.state.time = Duration::from_secs_f32(
             (flicker.state.time.as_secs_f32() + delta.as_secs_f32()) % flicker.period.as_secs_f32(),
         );

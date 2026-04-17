@@ -1,6 +1,6 @@
 use game_common::components::Transform;
 use game_tracing::trace_span;
-use hecs::{Entity, World};
+use openfo4_core::ecs::{Entity, World};
 use openfo4_core::events::EventBus;
 
 use crate::components::{Root, TriggerBox};
@@ -9,7 +9,7 @@ use crate::events::trigger::{TriggerEnter, TriggerLeave};
 pub fn update_trigger_box_contacts(world: &mut World, events: &mut EventBus) {
     let _span = trace_span!("update_trigger_box_contacts").entered();
 
-    for (zone, tbox_transform, tbox) in world
+    for (zone, tbox_transform, mut tbox) in world
         .query::<(Entity, &Transform, &mut TriggerBox)>()
         .iter()
     {

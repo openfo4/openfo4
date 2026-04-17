@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use hecs::World;
+use openfo4_core::ecs::World;
 
 // FIXME: Unhardcode timescale into GLOB.
 const TIMESCALE: f32 = 20.0;
@@ -40,7 +40,7 @@ pub fn init_time(world: &mut World) {
 }
 
 pub fn update_time(world: &mut World, delta: Duration) {
-    for time in world.query_mut::<&mut GameTime>() {
+    for mut time in world.query_mut::<&mut GameTime>() {
         time.0 += delta.mul_f32(TIMESCALE);
     }
 }

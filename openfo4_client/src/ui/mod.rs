@@ -1,5 +1,5 @@
 use game_egui::egui::Context;
-use hecs::World;
+use openfo4_core::ecs::World;
 use openfo4_core::events::EventBus;
 
 use crate::ui::console::ConsoleState;

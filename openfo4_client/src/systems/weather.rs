@@ -10,8 +10,8 @@ use game_render::texture::image::MipImage;
 use game_tasks::TaskPool;
 use glam::{FloatExt, Quat, Vec2, Vec3, Vec4};
 use hashbrown::HashMap;
-use hecs::{Entity, World};
 use openfo4_asset::AssetLoader;
+use openfo4_core::ecs::{Entity, World};
 use openfo4_core::path::DataPathBuf;
 use openfo4_core::record::RecordId;
 use openfo4_core::transform::ConvertCoordinateSystem;
@@ -87,17 +87,23 @@ impl WeatherSystem {
     }
 
     pub fn update(&mut self, world: &mut World, delta: Duration) {
-        let Some(time) = world.query::<&GameTime>().iter().map(|v| v.clone()).next() else {
+        let Some(time) = world
+            .query_mut::<&GameTime>()
+            .into_iter()
+            .map(|v| v.clone())
+            .next()
+        else {
             return;
         };
 
-        let Some((_, &worldspace)) = world
+        let Some((_, worldspace)) = world
             .query_mut::<(&Player, &WorldSpace)>()
             .into_iter()
             .next()
         else {
             return;
         };
+        let worldspace = *worldspace;
 
         let Some(climate) = self.climates.get_mut(&worldspace.record) else {
             return;

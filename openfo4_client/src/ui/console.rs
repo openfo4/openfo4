@@ -1,5 +1,5 @@
 use game_egui::egui::{Context, Key, Window};
-use hecs::{Entity, World};
+use openfo4_core::ecs::{Entity, World};
 use openfo4_core::events::EventBus;
 
 use crate::components::Player;
@@ -50,7 +50,7 @@ fn execute_command(cmd: &str, world: &World, events: &mut EventBus) -> Option<St
                 || global.eq_ignore_ascii_case("GameDay")
                 || global.eq_ignore_ascii_case("GameHour")
             {
-                for time in world.query::<&mut GameTime>().iter() {
+                for mut time in world.query::<&mut GameTime>().iter() {
                     if global.eq_ignore_ascii_case("GameYear") {
                         todo!()
                     } else if global.eq_ignore_ascii_case("GameMonth") {

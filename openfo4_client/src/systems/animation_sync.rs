@@ -3,10 +3,10 @@ use std::sync::LazyLock;
 
 use glam::Vec3;
 use hashbrown::HashMap;
-use hecs::World;
 use openfo4_animation::Value;
 use openfo4_animation::driver::AnimationDriver;
 use openfo4_animation::systems::{GameAnimationEvent, GameEvent};
+use openfo4_core::ecs::World;
 use openfo4_core::events::EventBus;
 use openfo4_core::path::DataPathBuf;
 
@@ -29,7 +29,7 @@ pub struct AnimationParameters {
 }
 
 pub fn update_animation_parameters(world: &mut World) {
-    for (params, driver, graphs) in world.query_mut::<(
+    for (params, mut driver, graphs) in world.query_mut::<(
         &AnimationParameters,
         &mut AnimationDriver,
         &ActiveBehaviorGraphs,

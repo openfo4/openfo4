@@ -1,8 +1,8 @@
 use game_core::hierarchy::Key;
 use game_core_pipeline::material::StandardMaterial;
 use hashbrown::HashMap;
-use hecs::Entity;
 use openfo4_asset::Handle;
+use openfo4_core::ecs::Entity;
 
 use crate::assets::nif::{NifScene, animation::ControlledValue};
 

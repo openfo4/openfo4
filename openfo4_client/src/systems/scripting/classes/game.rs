@@ -1,4 +1,4 @@
-use hecs::Entity;
+use openfo4_core::ecs::Entity;
 use openfo4_script::engine::Engine;
 use openfo4_script::runtime::{Caller, Exception};
 

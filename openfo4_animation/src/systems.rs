@@ -2,8 +2,9 @@ use std::collections::HashMap;
 use std::time::Duration;
 
 use game_common::components::Transform;
+use game_core::hierarchy::Entity;
 use glam::{Quat, Vec3};
-use hecs::{CommandBuffer, Entity, World};
+use openfo4_core::ecs::{CommandBuffer, World};
 use openfo4_core::events::EventBus;
 
 use crate::animation::{AnimationClip, AnimationClipFlags, BlendMode};
@@ -24,8 +25,8 @@ pub fn drive_animations<T>(
 
     let mut rng = rand::rng();
 
-    for (entity, (skeleton, driver, set)) in
-        world.query_mut::<(&mut SkeletonInstance, &mut AnimationDriver, &T)>()
+    for (entity, skeleton, driver, set) in
+        world.query_mut::<(Entity, &mut SkeletonInstance, &mut AnimationDriver, &T)>()
     {
         let mut new_transforms = HashMap::new();
 

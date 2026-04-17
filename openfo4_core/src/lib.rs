@@ -1,7 +1,7 @@
-use hecs::{Entity, World};
-
+use crate::ecs::{Entity, World};
 use crate::hierarchy::Children;
 
+pub mod ecs;
 pub mod events;
 pub mod hierarchy;
 pub mod object_ref_set;
@@ -69,4 +69,18 @@ pub struct Frozen {
     pub physics: bool,
     /// Controls/Inputs are frozen.
     pub controls: bool,
+}
+
+impl Frozen {
+    /// Whether any behavior is frozen.
+    pub fn is_any_frozen(&self) -> bool {
+        let Self { physics, controls } = self;
+        *physics || *controls
+    }
+
+    /// Whether all behavior is frozen.
+    pub fn is_all_frozen(&self) -> bool {
+        let Self { physics, controls } = self;
+        *physics && *controls
+    }
 }

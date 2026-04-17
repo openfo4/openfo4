@@ -2,7 +2,7 @@ use game_ai::navmesh::{Agent, Mesh, NavMesh, Path};
 use game_common::components::Transform;
 use game_tracing::trace_span;
 use hashbrown::HashMap;
-use hecs::{Entity, World};
+use openfo4_core::ecs::{Entity, World};
 
 use crate::components::{Player, WorldSpace};
 use crate::systems::pathing;

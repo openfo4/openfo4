@@ -1,7 +1,7 @@
 use std::fmt::{Debug, Write};
 
 use game_egui::egui::{Context, RichText, Window};
-use hecs::{Entity, World};
+use openfo4_core::ecs::{Entity, World};
 use openfo4_core::events::EventBus;
 
 use crate::components::Player;

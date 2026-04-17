@@ -17,7 +17,7 @@ use game_common::collections::bimap::BiMap;
 use game_tasks::TaskPool;
 use game_tracing::trace_span;
 use hashbrown::HashMap;
-use hecs::{Entity, World};
+use openfo4_core::ecs::{Entity, World};
 use openfo4_core::events::EventBus;
 use openfo4_pex::Module;
 use openfo4_script::compiler::CompilerOptions;

@@ -4,8 +4,8 @@ use game_common::components::Transform;
 use game_input::keyboard::KeyCode;
 use game_window::events::WindowEvent;
 use glam::{Quat, Vec3};
-use hecs::{CommandBuffer, Entity, World};
 use openfo4_core::Frozen;
+use openfo4_core::ecs::{CommandBuffer, Entity, World};
 use openfo4_core::events::EventBus;
 use openfo4_core::transform::ConvertCoordinateSystem;
 use openfo4_physics::PhysicsPipeline;
@@ -36,7 +36,7 @@ pub fn handle_inputs(
         }
     }
 
-    for (entity, transform, offset, _, queue, state) in world.query_mut::<(
+    for (entity, mut transform, mut offset, _, mut queue, mut state) in world.query_mut::<(
         Entity,
         &mut Transform,
         &mut CameraOffset,
@@ -157,7 +157,7 @@ pub fn handle_inputs(
 }
 
 pub fn update_facing_direction(world: &mut World) {
-    for (_, facing_dir, transform, offset) in world
+    for (_, mut facing_dir, transform, offset) in world
         .query::<(Entity, &mut FacingDirection, &Transform, &CameraOffset)>()
         .iter()
     {
@@ -170,10 +170,10 @@ pub fn apply_player_movements(world: &mut World, pipeline: &mut PhysicsPipeline)
 
     for (
         entity,
-        transform,
+        mut transform,
         facing_dir,
         state,
-        controller,
+        mut controller,
         collider,
         actor_keywords,
         player,
@@ -220,8 +220,8 @@ pub fn apply_player_movements(world: &mut World, pipeline: &mut PhysicsPipeline)
         // We are on a fixed timestep of 60 updates per second.
         translation *= speed * NIF_TO_METERS / UPS as f32;
 
-        if let Some(controller) = controller {
-            if frozen.is_none_or(|v| !v.controls) {
+        if let Some(controller) = &mut controller {
+            if frozen.as_ref().is_none_or(|v| !v.controls) {
                 let movement = controller.move_shape(
                     pipeline,
                     *transform * collider.offset,
@@ -233,7 +233,7 @@ pub fn apply_player_movements(world: &mut World, pipeline: &mut PhysicsPipeline)
                 transform.translation += movement.translation;
             }
 
-            if frozen.is_none_or(|v| !v.physics) {
+            if frozen.as_ref().is_none_or(|v| !v.physics) {
                 let gravity_movement = controller.apply_gravity(
                     pipeline,
                     *transform * collider.offset,

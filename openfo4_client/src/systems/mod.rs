@@ -1,6 +1,6 @@
 use glam::Quat;
 use hashbrown::HashMap;
-use hecs::Entity;
+use openfo4_core::ecs::Entity;
 use openfo4_core::record::RecordId;
 
 use crate::systems::inventory::InventoryKey;

@@ -1,4 +1,4 @@
-use hecs::Entity;
+use openfo4_core::ecs::Entity;
 
 /// An entity has entered a trigger zone.
 #[derive(Copy, Clone, Debug)]

@@ -1,8 +1,8 @@
 use game_common::components::Transform;
 use hashbrown::HashSet;
-use hecs::Entity;
 use openfo4_animation::Value;
 use openfo4_animation::driver::AnimationDriver;
+use openfo4_core::ecs::Entity;
 use openfo4_core::record::RecordId;
 use openfo4_core::transform::ConvertCoordinateSystem;
 use openfo4_script::engine::Engine;

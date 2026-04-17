@@ -1,6 +1,6 @@
 pub mod queue;
 
-use hecs::{Entity, World};
+use openfo4_core::ecs::{Entity, World};
 use openfo4_core::record::RecordId;
 use openfo4_script::runtime::{ObjectAddr, ObjectRef};
 

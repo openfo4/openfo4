@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use game_core_pipeline::entities::Entities;
 use game_tracing::trace_span;
-use hecs::World;
+use openfo4_core::ecs::World;
 use openfo4_core::events::{ComponentChanged, EventBus};
 
 use crate::{

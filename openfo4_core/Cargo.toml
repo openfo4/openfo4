@@ -9,6 +9,7 @@ openfo4_esp = { version = "0.1.0", path = "../openfo4_esp" }
 
 hecs = { workspace = true }
 glam = { workspace = true, features = ["bytemuck"] }
+hashbrown = { workspace = true }
 bstr = "1.12.1"
 parking_lot = "0.12.5"
 thiserror = "2.0.17"

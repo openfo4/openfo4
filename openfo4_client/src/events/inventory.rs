@@ -1,6 +1,6 @@
 use std::num::NonZeroU64;
 
-use hecs::Entity;
+use openfo4_core::ecs::Entity;
 
 use crate::systems::inventory::InventoryKey;
 

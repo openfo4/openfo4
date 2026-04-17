@@ -52,13 +52,13 @@ use std::collections::BTreeMap;
 use std::time::{Duration, Instant};
 
 use hashbrown::{HashMap, HashSet};
-use hecs::{Entity, World};
+use openfo4_core::ecs::{Entity, World};
 use openfo4_core::record::RecordId;
 use openfo4_script::engine::Engine;
 use openfo4_script::runtime::{Exception, ObjectAddr, ObjectRef};
 use slab::Slab;
 
-use crate::components::{BaseObject, Player};
+use crate::components::BaseObject;
 use crate::systems::global::GlobalProperties;
 use crate::systems::quests::QuestManager;
 use crate::systems::scripting::ScriptEntities;

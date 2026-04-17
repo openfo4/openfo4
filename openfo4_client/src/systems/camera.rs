@@ -2,8 +2,8 @@ use game_common::components::{GlobalTransform, Transform};
 use game_input::keyboard::KeyCode;
 use game_window::events::WindowEvent;
 use glam::{Quat, Vec3};
-use hecs::{CommandBuffer, Entity, World};
 use openfo4_animation::skeleton::SkeletonInstance;
+use openfo4_core::ecs::{CommandBuffer, Entity, World};
 
 // Distances in CK units.
 const CAMERA_DISTANCE_MIN: f32 = 150.0;
@@ -62,10 +62,11 @@ pub fn handle_free_camera(world: &mut World, event: &WindowEvent) {
         .into_iter()
         .find_map(|(entity, _)| Some(entity));
 
-    for (transform, camera) in world.query_mut::<(&mut Transform, &mut Camera)>() {
+    for (mut transform, mut camera) in world.query_mut::<(&mut Transform, &mut Camera)>() {
         // if !matches!(camera.mode, CameraMode::Free) {
         //     continue;
         // }
+        let transform = &mut *transform;
 
         match &event {
             WindowEvent::MouseMotion(event) => {

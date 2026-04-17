@@ -4,7 +4,7 @@ use std::time::{Duration, Instant};
 use game_common::components::GlobalTransform;
 use game_common::math::Ray;
 use glam::{Quat, Vec2, Vec3};
-use hecs::{CommandBuffer, World};
+use openfo4_core::ecs::{CommandBuffer, World};
 use openfo4_core::events::EventBus;
 use openfo4_core::hierarchy::Children;
 use openfo4_physics::components::{Collider, CollisionLayer};

@@ -5,7 +5,7 @@ use game_common::math::Ray;
 use game_input::keyboard::KeyCode;
 use game_window::events::WindowEvent;
 use glam::Vec3;
-use hecs::{Entity, World};
+use openfo4_core::ecs::{Entity, World};
 use openfo4_core::events::EventBus;
 use openfo4_core::hierarchy::Children;
 use openfo4_physics::components::{Collider, CollisionLayer};
@@ -78,9 +78,10 @@ pub fn handle_activation_inputs(
     //     camera_transform = transform;
     // }
 
-    let Some((player, &transform, _)) = world
+    let Some((player, transform)) = world
         .query_mut::<(Entity, &Transform, &Player)>()
         .into_iter()
+        .map(|(player, transform, _)| (player, *transform))
         .next()
     else {
         return;
