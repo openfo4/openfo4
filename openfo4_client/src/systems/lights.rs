@@ -28,7 +28,7 @@ pub struct LightFlickerState {
 }
 
 pub fn update_flickering_lights(world: &mut World, delta: Duration) {
-    for (_, (light, flicker)) in world.query_mut::<(&mut PointLight, &mut LightFlicker)>() {
+    for (light, flicker) in world.query_mut::<(&mut PointLight, &mut LightFlicker)>() {
         flicker.state.time = Duration::from_secs_f32(
             (flicker.state.time.as_secs_f32() + delta.as_secs_f32()) % flicker.period.as_secs_f32(),
         );

@@ -1,3 +1,4 @@
+use hecs::Entity;
 use openfo4_script::engine::Engine;
 use openfo4_script::runtime::{Caller, Exception};
 
@@ -515,7 +516,13 @@ fn get_perception_av(caller: Caller<'_, State>) -> Result<Object, Exception> {
 /// Actor Function() native global
 /// ```
 fn get_player(mut caller: Caller<'_, State>) -> Result<Object, Exception> {
-    let Some((entity, _)) = caller.data().world().query::<&Player>().iter().next() else {
+    let Some((entity, _)) = caller
+        .data()
+        .world()
+        .query::<(Entity, &Player)>()
+        .iter()
+        .next()
+    else {
         tracing::warn!("Game.GetPlayer found no player");
         return Err(Exception::Error);
     };
@@ -1223,7 +1230,13 @@ fn with_player_control_mask<T, F>(caller: Caller<'_, State>, f: F) -> Result<T, 
 where
     F: FnOnce(&InputControllerMask) -> T,
 {
-    let Some((entity, _)) = caller.data().world().query::<&Player>().iter().next() else {
+    let Some((entity, _)) = caller
+        .data()
+        .world()
+        .query::<(Entity, &Player)>()
+        .iter()
+        .next()
+    else {
         tracing::error!("found no player");
         return Err(Exception::Error);
     };

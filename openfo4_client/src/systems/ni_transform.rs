@@ -1,5 +1,5 @@
 use game_common::components::Transform;
-use hecs::{CommandBuffer, World};
+use hecs::{CommandBuffer, Entity, World};
 
 use crate::cell::CellId;
 use crate::components::{NiTransform, Root};
@@ -7,7 +7,7 @@ use crate::components::{NiTransform, Root};
 #[tracing::instrument(skip_all)]
 pub fn compute_transform_from_ni_transform(world: &mut World) {
     let mut commands = CommandBuffer::new();
-    for (entity, ni_transform) in world.query_mut::<&NiTransform>() {
+    for (entity, ni_transform) in world.query_mut::<(Entity, &NiTransform)>() {
         commands.insert_one(entity, Transform::from(*ni_transform));
     }
     commands.run_on(world);
@@ -16,7 +16,7 @@ pub fn compute_transform_from_ni_transform(world: &mut World) {
 #[tracing::instrument(skip_all)]
 pub fn compute_cell_ids_from_ni_transform(world: &mut World) {
     let mut commands = CommandBuffer::new();
-    for (entity, (transform, _)) in world.query_mut::<(&Transform, &Root)>() {
+    for (entity, transform, _) in world.query_mut::<(Entity, &Transform, &Root)>() {
         let ni_transform = NiTransform::from(*transform);
         commands.insert_one(entity, CellId::from(ni_transform));
     }

@@ -29,7 +29,7 @@ pub struct AnimationParameters {
 }
 
 pub fn update_animation_parameters(world: &mut World) {
-    for (_, (params, driver, graphs)) in world.query_mut::<(
+    for (params, driver, graphs) in world.query_mut::<(
         &AnimationParameters,
         &mut AnimationDriver,
         &ActiveBehaviorGraphs,

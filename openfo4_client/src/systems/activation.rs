@@ -46,7 +46,7 @@ pub fn handle_activation_inputs(
     let Some(camera_transform) = world
         .query::<(&Transform, &Camera)>()
         .iter()
-        .map(|(_, (v, _))| *v)
+        .map(|(t, _)| *t)
         .next()
     else {
         return;
@@ -78,8 +78,8 @@ pub fn handle_activation_inputs(
     //     camera_transform = transform;
     // }
 
-    let Some((player, (&transform, _))) = world
-        .query_mut::<(&Transform, &Player)>()
+    let Some((player, &transform, _)) = world
+        .query_mut::<(Entity, &Transform, &Player)>()
         .into_iter()
         .next()
     else {
@@ -140,13 +140,13 @@ pub fn update_player_looking_at_target(world: &mut World, physics_pipeline: &Phy
     let Some(camera_transform) = world
         .query::<(&Transform, &Camera)>()
         .iter()
-        .map(|(_, (v, _))| *v)
+        .map(|(v, _)| *v)
         .next()
     else {
         return;
     };
 
-    let Some((player, _)) = world.query_mut::<&Player>().into_iter().next() else {
+    let Some((player, _)) = world.query_mut::<(Entity, &Player)>().into_iter().next() else {
         return;
     };
 

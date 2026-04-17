@@ -19,7 +19,7 @@ use game_tasks::TaskPool;
 use game_tracing::trace_span;
 use glam::Vec2;
 use hashbrown::HashMap;
-use hecs::{CommandBuffer, Entity, World};
+use hecs::{Entity, World};
 use openfo4_asset::AssetLoader;
 use openfo4_core::events::EventBus;
 use openfo4_core::hierarchy::Children;
@@ -165,7 +165,7 @@ impl Level {
         self.unload_cells(world);
 
         let mut prev_cells_loaded = core::mem::take(&mut self.cells_loaded);
-        for (_, (transform, streamer, worldspace)) in
+        for (transform, streamer, worldspace) in
             world.query_mut::<(&Transform, &Streamer, &WorldSpace)>()
         {
             let cells = if worldspace.is_interior {
@@ -340,8 +340,8 @@ impl Level {
 
         let loader_entities = self.loader.entities.read();
 
-        for (entity, (transform, worldspace, _, persistent)) in
-            world.query_mut::<(&Transform, &WorldSpace, &Root, Option<&Persistent>)>()
+        for (entity, transform, worldspace, _, persistent) in
+            world.query_mut::<(Entity, &Transform, &WorldSpace, &Root, Option<&Persistent>)>()
         {
             self.alive_entities.insert(entity);
 
@@ -385,8 +385,8 @@ impl Level {
         let mut freeze = Vec::new();
         let mut unfreeze = Vec::new();
 
-        for (entity, (transform, worldspace, frozen, _)) in world
-            .query::<(&Transform, &WorldSpace, &Frozen, &Root)>()
+        for (entity, transform, worldspace, frozen, _) in world
+            .query::<(Entity, &Transform, &WorldSpace, &Frozen, &Root)>()
             .iter()
         {
             let cell = CellId::from(NiTransform::from(*transform));

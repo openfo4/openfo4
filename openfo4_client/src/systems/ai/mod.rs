@@ -22,7 +22,9 @@ impl AiSystem {
         let _span = trace_span!("AiSystem::update").entered();
 
         let mut delete_entities = self.navmesh_entities.clone();
-        for (entity, (worldspace, mesh)) in world.query::<(&WorldSpace, &pathing::NavMesh)>().iter()
+        for (entity, worldspace, mesh) in world
+            .query::<(Entity, &WorldSpace, &pathing::NavMesh)>()
+            .iter()
         {
             // New navmesh
             if !self.navmesh_entities.contains_key(&entity) {
@@ -41,8 +43,9 @@ impl AiSystem {
     }
 
     pub fn test_player_path(&mut self, world: &World) {
-        for (entity, (_, transform, worldspace)) in
-            world.query::<(&Player, &Transform, &WorldSpace)>().iter()
+        for (entity, _, transform, worldspace) in world
+            .query::<(Entity, &Player, &Transform, &WorldSpace)>()
+            .iter()
         {
             let navmesh = self.navmeshes.get(&*worldspace).unwrap();
 

@@ -33,6 +33,6 @@ pub fn draw_debug_ui(ctx: &Context, state: &mut DebugState) {
         ui.checkbox(
             &mut state.draw_planned_ai_agent_paths,
             "Draw Planned AI Agent Paths",
-        )
+        );
     });
 }

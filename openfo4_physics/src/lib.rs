@@ -131,8 +131,8 @@ impl PhysicsPipeline {
             Option<&Children>,
         )>();
 
-        for (entity, (global_transform, rigid_body, frozen)) in world
-            .query::<(&GlobalTransform, &RigidBody, Option<&Frozen>)>()
+        for (entity, global_transform, rigid_body, frozen) in world
+            .query::<(Entity, &GlobalTransform, &RigidBody, Option<&Frozen>)>()
             .iter()
         {
             if frozen.is_some_and(|v| v.physics) {
@@ -218,7 +218,7 @@ impl PhysicsPipeline {
             }
 
             for (&entity, &transform_rel_to_parent) in &body.colliders {
-                let collider = world.get::<&components::Collider>(entity).unwrap();
+                let collider = world.get::<&Collider>(entity).unwrap();
                 let transform = world.get::<&GlobalTransform>(entity).unwrap().0;
 
                 let spawned_collider = self.collider_handles.entry(entity).or_insert_with(|| {

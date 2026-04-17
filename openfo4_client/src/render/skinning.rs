@@ -15,7 +15,7 @@ use crate::systems::equipment::Equipment;
 pub fn mesh_skinning(world: &World, objects: &HashMap<Entity, ObjectHandle>, shared: &SharedState) {
     let _span = trace_span!("mesh_skinning").entered();
 
-    for (_, (skeleton, equipment)) in world.query::<(&SkeletonInstance, &mut Equipment)>().iter() {
+    for (skeleton, equipment) in world.query::<(&SkeletonInstance, &mut Equipment)>().iter() {
         // Compute "global" transform relative the the entity with the SkeletonInstance
         // for each bone.
         let mut bone_transforms = HashMap::new();

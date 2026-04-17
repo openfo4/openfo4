@@ -79,7 +79,7 @@ pub fn handle_weapon_fire_events(
             .query::<(&GlobalTransform, &Camera)>()
             .iter()
             .next()
-            .map(|v| *v.1.0)
+            .map(|v| *v.0)
         else {
             return;
         };

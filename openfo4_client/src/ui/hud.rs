@@ -1,6 +1,5 @@
 use std::fmt::Write;
 
-use game_egui::egui::menu::context_menu_opened;
 use game_egui::egui::{
     Color32, Context, CornerRadius, Frame, Key, LayerId, Painter, Pos2, Rect, RichText, Window,
 };
@@ -244,9 +243,9 @@ fn draw_quickloot_menu(
     state: &mut QuicklootState,
 ) {
     let Some((player, target)) = world
-        .query::<(&LookingAtTarget, &Player)>()
+        .query::<(Entity, &LookingAtTarget, &Player)>()
         .iter()
-        .map(|(p, (v, _))| (p, *v))
+        .map(|(p, v, _)| (p, *v))
         .next()
     else {
         return;
@@ -340,9 +339,9 @@ fn draw_quickloot_menu(
 
 fn draw_pickup_menu(ctx: &Context, world: &World, events: &mut EventBus) {
     let Some((player, target)) = world
-        .query::<(&LookingAtTarget, &Player)>()
+        .query::<(Entity, &LookingAtTarget, &Player)>()
         .iter()
-        .map(|(p, (v, _))| (p, *v))
+        .map(|(p, v, _)| (p, *v))
         .next()
     else {
         return;

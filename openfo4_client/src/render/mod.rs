@@ -72,7 +72,7 @@ impl RenderState {
     pub fn sync(&mut self, world: &World, events: &EventBus) {
         let _span = trace_span!("RenderState::sync").entered();
 
-        let Some((_, (&player_worldspace, _))) =
+        let Some((&player_worldspace, _)) =
             world.query::<(&WorldSpace, &Player)>().into_iter().next()
         else {
             return;
@@ -81,7 +81,7 @@ impl RenderState {
         self.cameras.clear();
         self.lights.clear();
 
-        for (entity, (transform, cam)) in &mut world.query::<(&Transform, &CameraComp)>() {
+        for (entity, transform, cam) in &mut world.query::<(Entity, &Transform, &CameraComp)>() {
             let mut camera = Camera {
                 transform: *transform,
                 scene: self.scene.clone(),
@@ -99,8 +99,8 @@ impl RenderState {
 
         let mut lights_to_remove = self.lights.clone();
 
-        for (entity, (light, worldspace)) in
-            &mut world.query::<(&game_common::components::AmbientLight, &WorldSpace)>()
+        for (entity, light, worldspace) in
+            &mut world.query::<(Entity, &game_common::components::AmbientLight, &WorldSpace)>()
         {
             if *worldspace != player_worldspace {
                 continue;
@@ -122,7 +122,8 @@ impl RenderState {
             self.lights.insert(entity, handle);
         }
 
-        for (entity, (transform, light, worldspace)) in &mut world.query::<(
+        for (entity, transform, light, worldspace) in &mut world.query::<(
+            Entity,
             &GlobalTransform,
             &game_common::components::DirectionalLight,
             &WorldSpace,
@@ -145,7 +146,8 @@ impl RenderState {
             self.lights.insert(entity, handle);
         }
 
-        for (entity, (transform, light, worldspace)) in &mut world.query::<(
+        for (entity, transform, light, worldspace) in &mut world.query::<(
+            Entity,
             &GlobalTransform,
             &game_common::components::PointLight,
             &WorldSpace,
@@ -177,8 +179,8 @@ impl RenderState {
             .collect();
 
         let mut objects_to_remove = self.objects.clone();
-        for (entity, (transform, object, worldspace)) in
-            &mut world.query::<(&GlobalTransform, &RenderObject, &WorldSpace)>()
+        for (entity, transform, object, worldspace) in
+            &mut world.query::<(Entity, &GlobalTransform, &RenderObject, &WorldSpace)>()
         {
             if *worldspace != player_worldspace {
                 continue;

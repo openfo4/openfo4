@@ -516,7 +516,7 @@ where
         .data()
         .world()
         .query::<(&Player, &mut InputControllerMask)>();
-    let Some((_, (_, mask))) = q.iter().next() else {
+    let Some((_, mask)) = q.iter().next() else {
         // Player is not loaded yet.
         return Err(Exception::Error);
     };

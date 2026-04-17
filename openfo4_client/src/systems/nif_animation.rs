@@ -20,7 +20,7 @@ pub fn update_nif_animations(
 
     let mut material_updates = Vec::new();
 
-    for (_, controller) in world.query::<&AnimationControllerInstance>().iter() {
+    for controller in world.query::<&AnimationControllerInstance>().iter() {
         for (node, params) in &controller.controller().material {
             let mut material = params.material.clone();
 

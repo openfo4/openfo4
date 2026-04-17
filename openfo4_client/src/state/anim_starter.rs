@@ -63,7 +63,7 @@ impl AnimationSystem {
     }
 
     pub fn update(&mut self, world: &mut World) {
-        for (_, (active_graphs, events, driver)) in world.query_mut::<(
+        for (active_graphs, events, driver) in world.query_mut::<(
             &ActiveBehaviorGraphs,
             &mut AnimationEventQueue,
             &mut AnimationDriver,

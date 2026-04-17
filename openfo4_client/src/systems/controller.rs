@@ -4,7 +4,7 @@ use game_common::components::Transform;
 use game_input::keyboard::KeyCode;
 use game_window::events::WindowEvent;
 use glam::{Quat, Vec3};
-use hecs::{CommandBuffer, World};
+use hecs::{CommandBuffer, Entity, World};
 use openfo4_core::Frozen;
 use openfo4_core::events::EventBus;
 use openfo4_core::transform::ConvertCoordinateSystem;
@@ -30,13 +30,14 @@ pub fn handle_inputs(
     event: &WindowEvent,
     events: &mut EventBus,
 ) {
-    for (_, camera) in world.query_mut::<&Camera>() {
+    for camera in world.query_mut::<&Camera>() {
         if matches!(camera.mode, CameraMode::Free) {
             return;
         }
     }
 
-    for (entity, (transform, offset, _, queue, state)) in world.query_mut::<(
+    for (entity, transform, offset, _, queue, state) in world.query_mut::<(
+        Entity,
         &mut Transform,
         &mut CameraOffset,
         &PlayerControlled,
@@ -156,8 +157,8 @@ pub fn handle_inputs(
 }
 
 pub fn update_facing_direction(world: &mut World) {
-    for (_, (facing_dir, transform, offset)) in world
-        .query::<(&mut FacingDirection, &Transform, &CameraOffset)>()
+    for (_, facing_dir, transform, offset) in world
+        .query::<(Entity, &mut FacingDirection, &Transform, &CameraOffset)>()
         .iter()
     {
         facing_dir.0 = transform.rotation * Quat::IDENTITY.to_nif() * offset.rotation;
@@ -169,8 +170,16 @@ pub fn apply_player_movements(world: &mut World, pipeline: &mut PhysicsPipeline)
 
     for (
         entity,
-        (transform, facing_dir, state, controller, collider, actor_keywords, player, frozen),
+        transform,
+        facing_dir,
+        state,
+        controller,
+        collider,
+        actor_keywords,
+        player,
+        frozen,
     ) in world.query_mut::<(
+        Entity,
         &mut Transform,
         &FacingDirection,
         &mut PlayerControlState,

@@ -87,16 +87,11 @@ impl WeatherSystem {
     }
 
     pub fn update(&mut self, world: &mut World, delta: Duration) {
-        let Some(time) = world
-            .query::<&GameTime>()
-            .iter()
-            .map(|v| v.1.clone())
-            .next()
-        else {
+        let Some(time) = world.query::<&GameTime>().iter().map(|v| v.clone()).next() else {
             return;
         };
 
-        let Some((_, (_, &worldspace))) = world
+        let Some((_, &worldspace)) = world
             .query_mut::<(&Player, &WorldSpace)>()
             .into_iter()
             .next()

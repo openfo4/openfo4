@@ -5,7 +5,7 @@ use game_common::components::{Axis, Color, GlobalTransform, PointLight, Transfor
 use game_common::math::Ray;
 use game_gizmos::Gizmos;
 use glam::{Quat, Vec3};
-use hecs::{CommandBuffer, World};
+use hecs::{CommandBuffer, Entity, World};
 use openfo4_animation::skeleton::BoneMarker;
 use openfo4_core::hierarchy::Children;
 use openfo4_physics::components::{Collider, ColliderShape};
@@ -42,7 +42,7 @@ pub fn despawn_expired(world: &mut World) {
     let mut commands = CommandBuffer::new();
 
     let now = Instant::now();
-    for (entity, expires) in world.query::<&DespawnAt>().iter() {
+    for (entity, expires) in world.query::<(Entity, &DespawnAt)>().iter() {
         if now >= expires.0 {
             commands.despawn(entity);
         }
@@ -52,7 +52,7 @@ pub fn despawn_expired(world: &mut World) {
 }
 
 pub fn draw_colliers(world: &World, gizmos: &Gizmos) {
-    for (_, (transform, collider, body_part)) in world
+    for (transform, collider, body_part) in world
         .query::<(&GlobalTransform, &Collider, Option<&BodyPartBone>)>()
         .iter()
     {
@@ -123,7 +123,7 @@ pub fn draw_colliers(world: &World, gizmos: &Gizmos) {
 }
 
 pub fn draw_translations(world: &World, gizmos: &Gizmos) {
-    for (_, transform) in world.query::<&GlobalTransform>().iter() {
+    for transform in world.query::<&GlobalTransform>().iter() {
         gizmos.line(
             transform.0.translation,
             transform.0.translation + Vec3::X,
@@ -143,7 +143,7 @@ pub fn draw_translations(world: &World, gizmos: &Gizmos) {
 }
 
 pub fn draw_cell_boundaries(world: &World, gizmos: &Gizmos) {
-    for (_, (transform, _)) in world.query::<(&GlobalTransform, &Camera)>().iter() {
+    for (transform, _) in world.query::<(&GlobalTransform, &Camera)>().iter() {
         let transform = transform.0;
         let cell = CellId::from(NiTransform::from(transform));
 
@@ -178,7 +178,7 @@ pub fn draw_cell_boundaries(world: &World, gizmos: &Gizmos) {
 }
 
 pub fn draw_skeletons(world: &World, gizmos: &Gizmos) {
-    for (_, (transform, _, children)) in world
+    for (transform, _, children) in world
         .query::<(&GlobalTransform, &BoneMarker, Option<&Children>)>()
         .iter()
     {
@@ -201,13 +201,13 @@ pub fn draw_skeletons(world: &World, gizmos: &Gizmos) {
 }
 
 pub fn draw_light_markers(world: &World, gizmos: &Gizmos) {
-    for (_, (transform, light)) in world.query::<(&GlobalTransform, &PointLight)>().iter() {
+    for (transform, light) in world.query::<(&GlobalTransform, &PointLight)>().iter() {
         gizmos.sphere(transform.0.translation, light.radius, light.color);
     }
 }
 
 pub fn draw_hitscan_markers(world: &World, gizmos: &Gizmos) {
-    for (_, raycast) in world.query::<&HitscanRaycast>().iter() {
+    for raycast in world.query::<&HitscanRaycast>().iter() {
         let toi = raycast.impact_toi.unwrap_or(raycast.max_toi);
 
         let color = if raycast.impact_toi.is_some() {
@@ -232,7 +232,7 @@ pub fn draw_hitscan_markers(world: &World, gizmos: &Gizmos) {
 }
 
 pub fn draw_doors(world: &World, gizmos: &Gizmos) {
-    for (_, (transform, door)) in world.query::<(&Transform, &Door)>().iter() {
+    for (transform, door) in world.query::<(&Transform, &Door)>().iter() {
         if !matches!(door, Door::AutoPortal(_)) {
             continue;
         }
@@ -242,7 +242,7 @@ pub fn draw_doors(world: &World, gizmos: &Gizmos) {
 }
 
 pub fn draw_trigger_boxes(world: &World, gizmos: &Gizmos) {
-    for (_, (transform, trigger_box)) in world.query::<(&Transform, &TriggerBox)>().iter() {
+    for (transform, trigger_box) in world.query::<(&Transform, &TriggerBox)>().iter() {
         let min = transform.translation - trigger_box.half_extents;
         let max = transform.translation + trigger_box.half_extents;
 
@@ -351,7 +351,7 @@ pub fn draw_planned_ai_agent_paths(world: &World, ai: &AiSystem, gizmos: &Gizmos
 
 fn camera_worldspace(world: &World) -> Option<WorldSpace> {
     // FIXME: We should look at the camera, not the player.
-    for (_, (ws, _)) in world.query::<(&WorldSpace, &Player)>().iter() {
+    for (ws, _) in world.query::<(&WorldSpace, &Player)>().iter() {
         return Some(*ws);
     }
 

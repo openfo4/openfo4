@@ -1,7 +1,7 @@
 use std::fmt::{Debug, Write};
 
 use game_egui::egui::{Context, RichText, Window};
-use hecs::World;
+use hecs::{Entity, World};
 use openfo4_core::events::EventBus;
 
 use crate::components::Player;
@@ -16,8 +16,8 @@ pub fn draw_inventory(
     world: &World,
     events: &mut EventBus,
 ) {
-    let mut query = world.query::<(&Player, &Inventory)>();
-    let Some((player, (_, inventory))) = query.iter().next() else {
+    let mut query = world.query::<(Entity, &Player, &Inventory)>();
+    let Some((player, _, inventory)) = query.iter().next() else {
         return;
     };
 

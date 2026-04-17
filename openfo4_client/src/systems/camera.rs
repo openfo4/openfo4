@@ -58,11 +58,11 @@ pub fn attach_camera(world: &mut World, entity: Entity) {
 
 pub fn handle_free_camera(world: &mut World, event: &WindowEvent) {
     let entity = world
-        .query_mut::<&PlayerControlled>()
+        .query_mut::<(Entity, &PlayerControlled)>()
         .into_iter()
         .find_map(|(entity, _)| Some(entity));
 
-    for (_, (transform, camera)) in world.query_mut::<(&mut Transform, &mut Camera)>() {
+    for (transform, camera) in world.query_mut::<(&mut Transform, &mut Camera)>() {
         // if !matches!(camera.mode, CameraMode::Free) {
         //     continue;
         // }
@@ -127,7 +127,7 @@ pub fn handle_free_camera(world: &mut World, event: &WindowEvent) {
 pub fn update_camera_transform(world: &mut World) {
     let mut buffer = CommandBuffer::new();
 
-    for (entity, camera) in world.query::<&Camera>().iter() {
+    for (entity, camera) in world.query::<(Entity, &Camera)>().iter() {
         let mut dist = 0.0;
         let parent = match camera.mode {
             CameraMode::First { entity: parent } => parent,

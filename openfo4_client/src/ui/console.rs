@@ -50,7 +50,7 @@ fn execute_command(cmd: &str, world: &World, events: &mut EventBus) -> Option<St
                 || global.eq_ignore_ascii_case("GameDay")
                 || global.eq_ignore_ascii_case("GameHour")
             {
-                for (_, time) in world.query::<&mut GameTime>().iter() {
+                for time in world.query::<&mut GameTime>().iter() {
                     if global.eq_ignore_ascii_case("GameYear") {
                         todo!()
                     } else if global.eq_ignore_ascii_case("GameMonth") {
@@ -102,7 +102,7 @@ fn execute_command(cmd: &str, world: &World, events: &mut EventBus) -> Option<St
 
 fn get_player(world: &World) -> Option<Entity> {
     world
-        .query::<&Player>()
+        .query::<(Entity, &Player)>()
         .iter()
         .next()
         .map(|(entity, _)| entity)

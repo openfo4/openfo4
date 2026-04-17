@@ -29,7 +29,7 @@ use game_tasks::TaskPool;
 use game_tracing::trace_span;
 use game_window::events::WindowEvent;
 use glam::{IVec2, Vec3};
-use hecs::World;
+use hecs::{Entity, World};
 use level::Level;
 use openfo4_asset::AssetLoader;
 use openfo4_core::events::EventBus;
@@ -362,7 +362,7 @@ impl GameState {
                     );
 
                     let mut transform = Transform::default();
-                    for (_, (t, _)) in self.world.query::<(&Transform, &Camera)>().iter() {
+                    for (t, _) in self.world.query::<(&Transform, &Camera)>().iter() {
                         transform = *t;
                         break;
                     }
@@ -401,7 +401,7 @@ impl GameState {
 
                 if event.key_code == Some(KeyCode::T) {
                     if let Some(action) = self.actions.0.get(&Action::FireSingle) {
-                        for (_, events) in self.world.query_mut::<&mut AnimationEventQueue>() {
+                        for events in self.world.query_mut::<&mut AnimationEventQueue>() {
                             events.0.push_back(*action);
                         }
                     }
@@ -409,20 +409,20 @@ impl GameState {
 
                 if event.key_code == Some(KeyCode::Z) {
                     if let Some(action) = self.actions.0.get(&Action::FireAuto) {
-                        for (_, events) in self.world.query_mut::<&mut AnimationEventQueue>() {
+                        for events in self.world.query_mut::<&mut AnimationEventQueue>() {
                             events.0.push_back(*action);
                         }
                     }
                 }
 
                 if event.key_code == Some(KeyCode::R) {
-                    for (actor, _) in self.world.query_mut::<&Player>() {
+                    for (actor, _) in self.world.query_mut::<(Entity, &Player)>() {
                         self.event_bus.send(GunReloadRequest { actor });
                     }
                 }
 
                 if event.key_code == Some(KeyCode::Q) {
-                    for (actor, _) in self.world.query_mut::<&Player>() {
+                    for (actor, _) in self.world.query_mut::<(Entity, &Player)>() {
                         self.event_bus.send(WeaponDrawRequest { actor });
                     }
                 }
@@ -432,7 +432,7 @@ impl GameState {
                     // self.anim_event = Some("MoveStart");
 
                     if let Some(action) = self.actions.0.get(&Action::GunRelaxed) {
-                        for (_, events) in self.world.query_mut::<&mut AnimationEventQueue>() {
+                        for events in self.world.query_mut::<&mut AnimationEventQueue>() {
                             events.0.push_back(*action);
                         }
                     }
@@ -442,7 +442,7 @@ impl GameState {
                     // self.anim_event = Some("CameraSneakStart");
 
                     if let Some(action) = self.actions.0.get(&Action::GunReady) {
-                        for (_, events) in self.world.query_mut::<&mut AnimationEventQueue>() {
+                        for events in self.world.query_mut::<&mut AnimationEventQueue>() {
                             events.0.push_back(*action);
                         }
                     }
@@ -457,7 +457,7 @@ impl GameState {
                     // self.anim_event = Some("CameraMoveStartSlave");
 
                     if let Some(action) = self.actions.0.get(&Action::MoveStart) {
-                        for (_, events) in self.world.query_mut::<&mut AnimationEventQueue>() {
+                        for events in self.world.query_mut::<&mut AnimationEventQueue>() {
                             events.0.push_back(*action);
                         }
                     }
@@ -468,7 +468,7 @@ impl GameState {
                     // self.anim_event = Some("CameraMoveStopSlave");
 
                     if let Some(action) = self.actions.0.get(&Action::MoveStop) {
-                        for (_, events) in self.world.query_mut::<&mut AnimationEventQueue>() {
+                        for events in self.world.query_mut::<&mut AnimationEventQueue>() {
                             events.0.push_back(*action);
                         }
                     }
@@ -477,7 +477,7 @@ impl GameState {
                     // self.anim_event = Some("attackRelease");
                     // self.anim_event = Some("speedup");
                     if let Some(action) = self.actions.0.get(&Action::Jump) {
-                        for (_, events) in self.world.query_mut::<&mut AnimationEventQueue>() {
+                        for events in self.world.query_mut::<&mut AnimationEventQueue>() {
                             events.0.push_back(*action);
                         }
                     }
@@ -487,7 +487,7 @@ impl GameState {
                     // self.anim_event = Some("speeddown");
 
                     if let Some(action) = self.actions.0.get(&Action::PerkCannibal) {
-                        for (_, events) in self.world.query_mut::<&mut AnimationEventQueue>() {
+                        for events in self.world.query_mut::<&mut AnimationEventQueue>() {
                             events.0.push_back(*action);
                         }
                     }
@@ -496,7 +496,7 @@ impl GameState {
                     // self.anim_event = Some("EssentialDownStart");
 
                     if let Some(action) = self.actions.0.get(&Action::BleedoutStart) {
-                        for (_, events) in self.world.query_mut::<&mut AnimationEventQueue>() {
+                        for events in self.world.query_mut::<&mut AnimationEventQueue>() {
                             events.0.push_back(*action);
                         }
                     }
@@ -505,7 +505,7 @@ impl GameState {
                     // self.anim_event = Some("EssentialDownExit");
 
                     if let Some(action) = self.actions.0.get(&Action::BleedoutStop) {
-                        for (_, events) in self.world.query_mut::<&mut AnimationEventQueue>() {
+                        for events in self.world.query_mut::<&mut AnimationEventQueue>() {
                             events.0.push_back(*action);
                         }
                     }
@@ -515,10 +515,12 @@ impl GameState {
                 }
 
                 if event.key_code == Some(KeyCode::B) {
-                    for (e, (body, _, controller)) in
-                        self.world
-                            .query_mut::<(&mut RigidBody, &Player, Option<&CharacterController>)>()
-                    {
+                    for (e, body, _, controller) in self.world.query_mut::<(
+                        Entity,
+                        &mut RigidBody,
+                        &Player,
+                        Option<&CharacterController>,
+                    )>() {
                         if controller.is_none() {
                             self.world
                                 .insert_one(e, CharacterController::new())

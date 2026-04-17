@@ -43,7 +43,7 @@ impl TerrainManager {
     pub fn update(&mut self, world: &mut World, events: &mut EventBus) {
         let _span = trace_span!("TerrainManager::update").entered();
 
-        let Some((_, (transform, worldspace, _))) = world
+        let Some((transform, worldspace, _)) = world
             .query_mut::<(&Transform, &WorldSpace, &Player)>()
             .into_iter()
             .next()

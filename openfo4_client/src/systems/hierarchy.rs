@@ -1,6 +1,6 @@
 use game_common::components::{GlobalTransform, Transform};
 use hashbrown::HashMap;
-use hecs::World;
+use hecs::{Entity, World};
 use nohash_hasher::BuildNoHashHasher;
 use openfo4_core::hierarchy::Children;
 
@@ -21,7 +21,9 @@ pub fn compute_global_transform(world: &mut World) {
         BuildNoHashHasher::new(),
     );
 
-    for (entity, (transform, children)) in world.query_mut::<(&Transform, Option<&Children>)>() {
+    for (entity, transform, children) in
+        world.query_mut::<(Entity, &Transform, Option<&Children>)>()
+    {
         // SAFETY: The iterator will yield entity only once.
         unsafe {
             transforms.insert_unique_unchecked(entity.id(), *transform);

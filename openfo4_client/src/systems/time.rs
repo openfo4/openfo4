@@ -40,7 +40,7 @@ pub fn init_time(world: &mut World) {
 }
 
 pub fn update_time(world: &mut World, delta: Duration) {
-    for (_, time) in world.query_mut::<&mut GameTime>() {
+    for time in world.query_mut::<&mut GameTime>() {
         time.0 += delta.mul_f32(TIMESCALE);
     }
 }

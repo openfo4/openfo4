@@ -5,7 +5,7 @@ use game_common::components::Transform;
 use game_tasks::TaskPool;
 use game_tracing::trace_span;
 use hashbrown::HashSet;
-use hecs::{CommandBuffer, World};
+use hecs::{CommandBuffer, Entity, World};
 use openfo4_animation::driver::AnimationDriver;
 use openfo4_animation::skeleton::{Bone, Skeleton};
 use openfo4_asset::{AssetLoader, Handle};
@@ -228,7 +228,8 @@ pub fn update_actor_animation_graphs(world: &mut World, loader: &AssetLoader, po
 
     let mut buffer = CommandBuffer::new();
 
-    for (entity, (graphs, keywords, inventory, active_graph)) in world.query_mut::<(
+    for (entity, graphs, keywords, inventory, active_graph) in world.query_mut::<(
+        Entity,
         &ActorAnimationGraphData,
         &ObjectKeywords,
         &Inventory,
