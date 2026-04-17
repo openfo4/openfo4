@@ -556,6 +556,7 @@ impl SpawnEntity {
             script,
             object_bounds,
             object_props: Some(ObjectProperties { lock: lock_data }),
+            form: Some(record.id),
             ..Default::default()
         })
     }
