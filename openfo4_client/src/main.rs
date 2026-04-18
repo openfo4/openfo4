@@ -216,6 +216,21 @@ impl game_window::App for App {
             }
         }
 
+        self.egui_ctx.draw(|ctx| {
+            ui::draw_ui(
+                ctx,
+                &mut self.ui_state,
+                &self.game.world,
+                &mut self.game.event_bus,
+            )
+        });
+
+        self.time.update();
+
+        self.game.update(&self.time, &self.state.gizmos);
+        self.state.sync(self.game.world());
+        self.ui.update();
+
         if self.ui_state.debug.draw_colliders {
             draw_colliers(self.game.world(), &self.state.gizmos);
         }
@@ -256,20 +271,6 @@ impl game_window::App for App {
             draw_planned_ai_agent_paths(&self.game.world, &self.game.ai, &self.state.gizmos);
         }
 
-        self.egui_ctx.draw(|ctx| {
-            ui::draw_ui(
-                ctx,
-                &mut self.ui_state,
-                &self.game.world,
-                &mut self.game.event_bus,
-            )
-        });
-
-        self.time.update();
-
-        self.game.update(&self.time, &self.state.gizmos);
-        self.state.sync(self.game.world());
-        self.ui.update();
         self.state.render();
 
         // FIXME: Don't leak this into main.
