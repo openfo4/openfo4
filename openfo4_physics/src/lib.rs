@@ -15,8 +15,8 @@ use game_gizmos::Gizmos;
 use game_tracing::trace_span;
 use glam::Vec3;
 use hashbrown::HashMap;
-use hecs::{Entity, Satisfies, ViewBorrow, World};
 use openfo4_core::Frozen;
+use openfo4_core::ecs::{Entity, Satisfies, ViewBorrow, World};
 use openfo4_core::hierarchy::Children;
 use rapier3d::math::Isometry;
 use rapier3d::parry::query::{DefaultQueryDispatcher, ShapeCastOptions};
@@ -298,7 +298,8 @@ impl PhysicsPipeline {
             let body = self.bodies.get(*handle).unwrap();
             let entity = *self.body_handles.get_right(&handle).unwrap();
 
-            let Some((rigid_body, transform, global_transform)) = view.get_mut(entity) else {
+            let Some((mut rigid_body, mut transform, mut global_transform)) = view.get_mut(entity)
+            else {
                 continue;
             };
 
@@ -563,7 +564,7 @@ pub struct QueryFilter<'a> {
 mod tests {
     use game_common::components::{Axis, Transform};
     use glam::Vec3;
-    use hecs::{Satisfies, World};
+    use openfo4_core::ecs::{Satisfies, World};
     use openfo4_core::hierarchy::Children;
 
     use crate::collect_collider_children;

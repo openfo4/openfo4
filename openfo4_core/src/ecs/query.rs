@@ -1,11 +1,9 @@
 use std::any::TypeId;
 use std::ops::{Deref, DerefMut};
 
-use hecs::Entity;
-
 pub use hecs::Satisfies;
 
-use crate::ecs::{Component, LifecycleEvents};
+use crate::ecs::{Component, Entity, LifecycleEvents};
 
 #[expect(
     private_interfaces,
@@ -80,7 +78,7 @@ where
     T: Component,
 {
     type Item<'a> = Ref<'a, T>;
-    type RawQuery = (Entity, &'b T);
+    type RawQuery = (hecs::Entity, &'b T);
 
     #[expect(
         private_interfaces,
@@ -111,7 +109,7 @@ where
     T: Component,
 {
     type Item<'a> = RefMut<'a, T>;
-    type RawQuery = (Entity, &'b mut T);
+    type RawQuery = (hecs::Entity, &'b mut T);
 
     #[expect(
         private_interfaces,
@@ -124,7 +122,7 @@ where
         RefMut {
             value,
             events,
-            entity,
+            entity: Entity(entity),
             changed: false,
         }
     }
@@ -165,16 +163,19 @@ impl<T> Drop for RefMut<'_, T>
 where
     T: Component,
 {
+    #[track_caller]
     fn drop(&mut self) {
-        let id = TypeId::of::<T>();
-        let map = self.events.changed.get(&id).unwrap();
-        map.try_write().expect("Cannot create mutable reference to component while lifecycle event iterator exists").insert(self.entity);
+        if self.changed {
+            let id = TypeId::of::<T>();
+            let map = self.events.changed.get(&id).unwrap();
+            map.try_write().expect("Cannot create mutable reference to component while lifecycle event iterator exists").insert(self.entity);
+        }
     }
 }
 
 impl Query for Entity {
     type Item<'a> = Entity;
-    type RawQuery = Entity;
+    type RawQuery = hecs::Entity;
 
     #[expect(
         private_interfaces,
@@ -184,7 +185,7 @@ impl Query for Entity {
         raw: <Self::RawQuery as hecs::Query>::Item<'a>,
         _: &'a LifecycleEvents,
     ) -> Self::Item<'a> {
-        raw
+        Entity(raw)
     }
 }
 
@@ -319,17 +320,17 @@ where
         Q::RawQuery: hecs::QueryShared,
     {
         self.inner
-            .get(entity)
+            .get(entity.0)
             .map(|item| Q::from_raw(item, self.events))
     }
 
     pub fn get_mut(&mut self, entity: Entity) -> Option<Q::Item<'_>> {
         self.inner
-            .get_mut(entity)
+            .get_mut(entity.0)
             .map(|item| Q::from_raw(item, self.events))
     }
 
     pub fn contains(&self, entity: Entity) -> bool {
-        self.inner.contains(entity)
+        self.inner.contains(entity.0)
     }
 }

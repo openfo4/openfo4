@@ -3,6 +3,7 @@ mod builder;
 mod query;
 
 use std::any::TypeId;
+use std::hash::{Hash, Hasher};
 use std::iter::FusedIterator;
 use std::ops::{Deref, DerefMut};
 
@@ -11,7 +12,19 @@ use hecs::{ComponentError, NoSuchEntity, TypeIdMap};
 use parking_lot::RwLock;
 use parking_lot::lock_api::RawRwLock;
 
-pub type Entity = hecs::Entity;
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub struct Entity(hecs::Entity);
+
+impl Hash for Entity {
+    fn hash<H>(&self, state: &mut H)
+    where
+        H: Hasher,
+    {
+        self.0.to_bits().hash(state);
+    }
+}
+
+impl nohash_hasher::IsEnabled for Entity {}
 
 pub use buffer::CommandBuffer;
 pub use builder::{BuiltEntity, EntityBuilder};
@@ -33,20 +46,19 @@ impl World {
     }
 
     pub fn reserve_entity(&self) -> Entity {
-        self.world.reserve_entity()
+        Entity(self.world.reserve_entity())
     }
 
     pub unsafe fn find_entity_from_id(&self, id: u32) -> Entity {
-        unsafe { self.world.find_entity_from_id(id) }
+        Entity(unsafe { self.world.find_entity_from_id(id) })
     }
 
     pub fn spawn_one(&mut self, component: impl hecs::Component) -> Entity {
-        self.world.spawn((component,))
+        Entity(self.world.spawn((component,)))
     }
 
     pub fn spawn(&mut self, components: impl DynamicBundle) -> Entity {
-        let entity = self.world.reserve_entity();
-
+        let entity = self.reserve_entity();
         self.insert_unchecked(entity, components);
         entity
     }
@@ -60,7 +72,7 @@ impl World {
     where
         T: DynamicBundle,
     {
-        if !self.world.contains(entity) {
+        if !self.contains(entity) {
             return Err(NoSuchEntity);
         }
 
@@ -89,17 +101,17 @@ impl World {
 
         self.world.flush();
 
-        let e = self.world.entity(entity).unwrap();
+        let e = self.world.entity(entity.0).unwrap();
         components.mark_pre_insert(e, entity, &mut self.lifecycle);
 
-        self.world.insert(entity, components.into_raw()).unwrap();
+        self.world.insert(entity.0, components.into_raw()).unwrap();
     }
 
     pub fn remove<T>(&mut self, entity: Entity) -> Result<T, ComponentError>
     where
         T: Bundle + 'static,
     {
-        let components = self.world.remove::<T>(entity)?;
+        let components = self.world.remove::<T>(entity.0)?;
         T::mark_post_removal(entity, &mut self.lifecycle);
         Ok(components)
     }
@@ -113,14 +125,14 @@ impl World {
 
     /// Destroys the entity with all its components.
     pub fn despawn(&mut self, entity: Entity) -> Result<(), NoSuchEntity> {
-        let e = self.world.entity(entity)?;
+        let e = self.world.entity(entity.0)?;
 
         for id in e.component_types() {
             let map = self.lifecycle.removed.get_mut(&id).unwrap();
             map.get_mut().insert(entity);
         }
 
-        self.world.despawn(entity).unwrap();
+        self.world.despawn(entity.0).unwrap();
         Ok(())
     }
 
@@ -130,8 +142,12 @@ impl World {
     ///
     /// Returns an error if the given [`Entity`] does not exist in the current world.
     pub fn entity(&self, entity: Entity) -> Result<EntityRef<'_>, NoSuchEntity> {
-        let inner = self.world.entity(entity)?;
-        Ok(EntityRef { world: self, inner })
+        let inner = self.world.entity(entity.0)?;
+        Ok(EntityRef {
+            world: self,
+            inner,
+            entity,
+        })
     }
 
     /// Borrows the component of a single [`Entity`].
@@ -147,12 +163,12 @@ impl World {
     where
         T: ComponentRef<'a>,
     {
-        let r = self.world.get::<'a, T>(entity)?;
+        let r = self.world.get::<'a, T>(entity.0)?;
         Ok(<T as ComponentRef<'a>>::from_raw(r, self, entity))
     }
 
     pub fn contains(&self, entity: Entity) -> bool {
-        self.world.contains(entity)
+        self.world.contains(entity.0)
     }
 
     /// Returns all entities that got a new component added.
@@ -354,6 +370,7 @@ impl<'a> Drop for ComponentLifecycleIter<'a> {
 pub struct EntityRef<'a> {
     inner: hecs::EntityRef<'a>,
     world: &'a World,
+    entity: Entity,
 }
 
 impl<'a> EntityRef<'a> {
@@ -366,7 +383,7 @@ impl<'a> EntityRef<'a> {
         Some(<T as ComponentRef<'a>>::from_raw(
             raw,
             self.world,
-            self.inner.entity(),
+            self.entity,
         ))
     }
 
@@ -400,6 +417,7 @@ where
     r: hecs::RefMut<'a, T>,
     world: &'a World,
     entity: Entity,
+    changed: bool,
 }
 
 impl<'a, T> Deref for RefMut<'a, T> {
@@ -412,6 +430,7 @@ impl<'a, T> Deref for RefMut<'a, T> {
 
 impl<'a, T> DerefMut for RefMut<'a, T> {
     fn deref_mut(&mut self) -> &mut Self::Target {
+        self.changed = true;
         &mut *self.r
     }
 }
@@ -421,9 +440,11 @@ where
     T: 'static,
 {
     fn drop(&mut self) {
-        let id = TypeId::of::<T>();
-        let map = self.world.lifecycle.changed.get(&id).unwrap();
-        map.try_write().expect("Cannot create mutable reference to component while lifecycle event iterator exists").insert(self.entity);
+        if self.changed {
+            let id = TypeId::of::<T>();
+            let map = self.world.lifecycle.changed.get(&id).unwrap();
+            map.try_write().expect("Cannot create mutable reference to component while lifecycle event iterator exists").insert(self.entity);
+        }
     }
 }
 
@@ -463,7 +484,12 @@ where
         world: &'a World,
         entity: Entity,
     ) -> <Self as ComponentRef<'a>>::Ref {
-        RefMut { r, world, entity }
+        RefMut {
+            r,
+            world,
+            entity,
+            changed: false,
+        }
     }
 }
 
@@ -721,6 +747,27 @@ mod tests {
         assert_eq!(
             world.component_removed::<C>().collect::<HashSet<_>>(),
             [e1].into_iter().collect()
+        );
+    }
+
+    #[test]
+    fn world_lifecycle_query() {
+        let mut world = World::new();
+
+        let e0 = world.spawn((A, B));
+        let e1 = world.spawn((A, B, C));
+
+        for (_, mut b) in world.query_mut::<(&A, &mut B)>() {
+            *b = B;
+        }
+
+        assert_eq!(
+            world.component_changed::<A>().collect::<HashSet<_>>(),
+            [].into_iter().collect()
+        );
+        assert_eq!(
+            world.component_changed::<B>().collect::<HashSet<_>>(),
+            [e0, e1].into_iter().collect()
         );
     }
 }

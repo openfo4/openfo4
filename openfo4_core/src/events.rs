@@ -4,7 +4,7 @@ use std::hash::Hash;
 use std::iter::FusedIterator;
 use std::marker::PhantomData;
 
-use hecs::Entity;
+use crate::ecs::Entity;
 
 #[derive(Debug, Default)]
 pub struct EventBus {

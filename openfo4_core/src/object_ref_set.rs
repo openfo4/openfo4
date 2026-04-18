@@ -1,6 +1,6 @@
 use game_common::collections::bimap::BiMap;
-use hecs::Entity;
 
+use crate::ecs::Entity;
 use crate::record::RecordId;
 
 #[derive(Clone, Debug, Default)]

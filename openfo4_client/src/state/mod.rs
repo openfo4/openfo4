@@ -58,6 +58,7 @@ use crate::systems::camera::CameraMode;
 use crate::systems::controller::{apply_player_movements, update_facing_direction};
 use crate::systems::door::{handle_automatic_doors, handle_door_activations};
 use crate::systems::global::{Difficulty, GameRules, GlobalProperties};
+use crate::systems::hierarchy::TransformHierarchyCache;
 use crate::systems::inventory::InventorySystem;
 use crate::systems::quests::QuestManager;
 use crate::systems::scripting::{Executor, ScriptEntities};
@@ -99,6 +100,7 @@ pub struct GameState {
     script_entities: ScriptEntities,
     pub ai: AiSystem,
     real_time_elapsed: Duration,
+    transform_hierarchy_cache: TransformHierarchyCache,
 }
 
 impl GameState {
@@ -203,6 +205,7 @@ impl GameState {
             script_entities: ScriptEntities::default(),
             ai: AiSystem::default(),
             real_time_elapsed: Duration::ZERO,
+            transform_hierarchy_cache: TransformHierarchyCache::default(),
         }
     }
 
@@ -287,11 +290,6 @@ impl GameState {
             self.real_time_elapsed,
         );
 
-        systems::hierarchy::compute_global_transform(&mut self.world);
-        self.physics.step(&mut self.world);
-
-        systems::camera::update_camera_transform(&mut self.world);
-
         systems::lights::update_flickering_lights(&mut self.world, time.delta());
 
         self.inventory.handle_inventory_events(
@@ -310,6 +308,14 @@ impl GameState {
         handle_door_activations(&mut self.world, &mut self.event_bus, &self.object_ref_set);
         handle_automatic_doors(&mut self.world, &self.object_ref_set);
         update_player_looking_at_target(&mut self.world, &self.physics);
+
+        systems::hierarchy::compute_global_transform(
+            &mut self.world,
+            &mut self.transform_hierarchy_cache,
+        );
+        self.physics.step(&mut self.world);
+
+        systems::camera::update_camera_transform(&mut self.world);
 
         self.executor
             .pump_events(&mut self.world, &mut self.event_bus, &self.pool);

@@ -274,5 +274,6 @@ impl game_window::App for App {
 
         // FIXME: Don't leak this into main.
         self.game.event_bus.clear();
+        self.game.world.clear_trackers();
     }
 }

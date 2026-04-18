@@ -13,7 +13,6 @@ nalgebra = { version = "0.33.0", features = ["convert-glam028"] }
 parking_lot = "0.12.3"
 rapier3d = { version = "0.27.0", git = "https://github.com/MrGunflame/rapier", branch = "custom-controller", features = ["simd-stable", "debug-render"] }
 glam = { workspace = true }
-hecs = { workspace = true }
 tracing = { workspace = true }
 hashbrown = { workspace = true }
 

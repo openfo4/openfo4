@@ -34,7 +34,6 @@ openfo4_script = { version = "0.1.0", path = "../openfo4_script" }
 openfo4_pex = { version = "0.1.0", path = "../openfo4_pex" }
 
 glam = { workspace = true, features = ["bytemuck"] }
-hecs = { workspace = true }
 tracing = { workspace = true }
 bytes = "1.10.1"
 thiserror = "2.0.12"

@@ -1,7 +1,7 @@
 use game_common::components::Transform;
 use game_tracing::trace_span;
 use glam::Vec3;
-use hecs::Entity;
+use openfo4_core::ecs::Entity;
 use rapier3d::control::{CharacterAutostep, CharacterLength, KinematicCharacterController};
 use rapier3d::math::{Isometry, Vector};
 use rapier3d::parry::query::DefaultQueryDispatcher;

@@ -1,6 +1,4 @@
-use hecs::Entity;
-
-use crate::ecs::{Bundle, Component, DynamicBundle, World};
+use crate::ecs::{Bundle, Component, DynamicBundle, Entity, World};
 
 /// A buffer to record changes to a [`World`].
 pub struct CommandBuffer {
