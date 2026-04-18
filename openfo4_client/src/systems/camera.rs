@@ -10,7 +10,7 @@ const CAMERA_DISTANCE_MIN: f32 = 150.0;
 const CAMERA_DISTANCE_MAX: f32 = 400.0;
 
 use crate::assets::nif::NIF_TO_METERS;
-use crate::components::Camera;
+use crate::components::{Camera, WorldSpace};
 
 #[derive(Copy, Clone, Debug)]
 pub struct CameraOffset {
@@ -139,6 +139,7 @@ pub fn update_camera_transform(world: &mut World) {
             _ => continue,
         };
 
+        let worldspace = *world.get::<&WorldSpace>(parent).unwrap();
         let offset = world.get::<&CameraOffset>(parent).ok();
 
         let parent_transform = world.get::<&GlobalTransform>(parent).unwrap();
@@ -151,7 +152,7 @@ pub fn update_camera_transform(world: &mut World) {
             transform.translation += transform.rotation * Vec3::new(0.0, 0.0, dist * NIF_TO_METERS);
         }
 
-        buffer.insert(entity, (transform, GlobalTransform(transform)));
+        buffer.insert(entity, (transform, GlobalTransform(transform), worldspace));
     }
 
     buffer.run_on(world);

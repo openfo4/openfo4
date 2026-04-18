@@ -268,7 +268,7 @@ impl game_window::App for App {
         self.time.update();
 
         self.game.update(&self.time, &self.state.gizmos);
-        self.state.sync(self.game.world(), &self.game.event_bus);
+        self.state.sync(self.game.world());
         self.ui.update();
         self.state.render();
 

@@ -3,6 +3,9 @@ mod skinning;
 
 use std::sync::Arc;
 
+use game_common::components::AmbientLight as AmbientLightComp;
+use game_common::components::DirectionalLight as DirectionalLightComp;
+use game_common::components::PointLight as PointLightComp;
 use game_common::components::{GlobalTransform, Transform};
 use game_core_pipeline::camera::{Camera, Projection};
 use game_core_pipeline::entities::{
@@ -16,26 +19,29 @@ use game_render::Renderer;
 use game_tasks::TaskPool;
 use game_tracing::trace_span;
 use glam::UVec2;
-use hashbrown::{HashMap, HashSet};
+use hashbrown::HashMap;
 use openfo4_core::ecs::{Entity, World};
-use openfo4_core::events::{ComponentChanged, EventBus};
 
-use crate::components::{Camera as CameraComp, Player, WorldSpace};
+use crate::components::{Camera as CameraComp, WorldSpace};
 use crate::shared::SharedState;
 
 pub struct RenderState {
     entities: Entities,
     pub renderer: Renderer,
     cameras: HashMap<Entity, CameraHandle>,
-    scene: SceneHandle,
     target: RenderTarget,
     pub target_size: UVec2,
     task_pool: TaskPool,
-    pub objects: HashMap<Entity, ObjectHandle>,
     shared: Arc<SharedState>,
-    prev_transforms: HashMap<Entity, GlobalTransform>,
+    // FIXME: worldspace cleanup,
+    // for now we never destroy scenes when all entities are dropped.
+    worldspaces: HashMap<WorldSpace, SceneHandle>,
 
-    pub lights: HashMap<Entity, LightHandle>,
+    ambient_lights: HashMap<Entity, LightHandle>,
+    directional_lights: HashMap<Entity, LightHandle>,
+    point_lights: HashMap<Entity, LightHandle>,
+    objects: HashMap<Entity, ObjectHandle>,
+
     pub gizmos: Gizmos,
 }
 
@@ -47,20 +53,20 @@ impl RenderState {
         entities: Entities,
         gizmos: Gizmos,
     ) -> Self {
-        let scene = entities.create_scene();
         Self {
             entities,
             renderer,
             cameras: HashMap::new(),
-            scene,
             target,
             target_size: UVec2::ZERO,
             task_pool: TaskPool::new(1),
             objects: HashMap::new(),
             shared,
-            prev_transforms: HashMap::new(),
-            lights: HashMap::new(),
             gizmos,
+            worldspaces: HashMap::default(),
+            ambient_lights: HashMap::new(),
+            directional_lights: HashMap::new(),
+            point_lights: HashMap::new(),
         }
     }
 
@@ -69,27 +75,25 @@ impl RenderState {
         self.renderer.render(&self.task_pool);
     }
 
-    pub fn sync(&mut self, world: &World, events: &EventBus) {
+    pub fn sync(&mut self, world: &World) {
         let _span = trace_span!("RenderState::sync").entered();
 
-        let Some(player_worldspace) = world
-            .query::<(&WorldSpace, &Player)>()
-            .iter()
-            .map(|v| *v.0)
-            .next()
-        else {
-            return;
-        };
-
         self.cameras.clear();
-        self.lights.clear();
 
-        for (entity, transform, cam) in world.query::<(Entity, &Transform, &CameraComp)>().iter() {
+        for (entity, transform, cam, worldspace) in world
+            .query::<(Entity, &Transform, &CameraComp, &WorldSpace)>()
+            .iter()
+        {
+            let scene = self
+                .worldspaces
+                .entry(*worldspace)
+                .or_insert_with(|| self.entities.create_scene());
+
             let mut camera = Camera {
                 transform: *transform,
-                scene: self.scene.clone(),
                 projection: Projection::default(),
                 target: self.target,
+                scene: scene.clone(),
             };
             camera.projection.fov = cam.fov;
             camera.update_aspect_ratio(self.target_size);
@@ -100,124 +104,165 @@ impl RenderState {
             self.gizmos.update_camera(camera);
         }
 
-        let mut lights_to_remove = self.lights.clone();
-
-        for (entity, light, worldspace) in world
-            .query::<(Entity, &game_common::components::AmbientLight, &WorldSpace)>()
-            .iter()
-        {
-            if *worldspace != player_worldspace {
-                continue;
-            }
-
-            lights_to_remove.remove(&entity);
-
-            let handle = self.entities.create_light(Light::Ambient(AmbientLight {
-                scene: self.scene.clone(),
-                brightness: light.brightness,
-                top: light.top,
-                bottom: light.bottom,
-                left: light.left,
-                right: light.right,
-                front: light.front,
-                back: light.back,
-            }));
-
-            self.lights.insert(entity, handle);
+        for entity in world.component_removed::<GlobalTransform>() {
+            self.directional_lights.remove(&entity);
+            self.point_lights.remove(&entity);
+            self.objects.remove(&entity);
         }
 
-        for (entity, transform, light, worldspace) in world
-            .query::<(
-                Entity,
-                &GlobalTransform,
-                &game_common::components::DirectionalLight,
-                &WorldSpace,
-            )>()
-            .iter()
+        for entity in world.component_removed::<WorldSpace>() {
+            self.ambient_lights.remove(&entity);
+            self.directional_lights.remove(&entity);
+            self.point_lights.remove(&entity);
+            self.objects.remove(&entity);
+        }
+
+        for entity in world.component_removed::<AmbientLightComp>() {
+            self.ambient_lights.remove(&entity);
+        }
+
+        for entity in world.component_removed::<DirectionalLightComp>() {
+            self.directional_lights.remove(&entity);
+        }
+
+        for entity in world.component_removed::<PointLightComp>() {
+            self.point_lights.remove(&entity);
+        }
+
+        for entity in world.component_removed::<Object>() {
+            self.objects.remove(&entity);
+        }
+
+        // Ambient lights
         {
-            if *worldspace != player_worldspace {
-                continue;
-            }
+            let view = world.view::<(&WorldSpace, &AmbientLightComp)>();
 
-            lights_to_remove.remove(&entity);
+            for entity in world
+                .component_added::<WorldSpace>()
+                .chain(world.component_changed::<WorldSpace>())
+                .chain(world.component_added::<AmbientLightComp>())
+                .chain(world.component_changed::<AmbientLightComp>())
+            {
+                let Some((worldspace, light)) = view.get(entity) else {
+                    continue;
+                };
 
-            let handle = self
-                .entities
-                .create_light(Light::Directional(DirectionalLight {
-                    transform: transform.0,
-                    scene: self.scene.clone(),
-                    color: light.color,
-                    illuminance: light.illuminance,
+                let scene = self
+                    .worldspaces
+                    .entry(*worldspace)
+                    .or_insert_with(|| self.entities.create_scene());
+
+                let handle = self.entities.create_light(Light::Ambient(AmbientLight {
+                    scene: scene.clone(),
+                    brightness: light.brightness,
+                    top: light.top,
+                    bottom: light.bottom,
+                    left: light.left,
+                    right: light.right,
+                    front: light.front,
+                    back: light.back,
                 }));
 
-            self.lights.insert(entity, handle);
-        }
-
-        for (entity, transform, light, worldspace) in world
-            .query::<(
-                Entity,
-                &GlobalTransform,
-                &game_common::components::PointLight,
-                &WorldSpace,
-            )>()
-            .iter()
-        {
-            if *worldspace != player_worldspace {
-                continue;
+                self.ambient_lights.insert(entity, handle);
             }
-
-            lights_to_remove.remove(&entity);
-
-            let handle = self.entities.create_light(Light::Point(PointLight {
-                color: light.color,
-                intensity: light.intensity,
-                radius: light.radius,
-                transform: transform.0,
-                scene: self.scene.clone(),
-            }));
-
-            self.lights.insert(entity, handle);
         }
 
-        for (entity, _) in lights_to_remove {
-            self.lights.remove(&entity);
-        }
-
-        let objects_changed: HashSet<_> = events
-            .read::<ComponentChanged<RenderObject>>()
-            .map(|v| v.get())
-            .collect();
-
-        let mut objects_to_remove = self.objects.clone();
-        for (entity, transform, object, worldspace) in world
-            .query::<(Entity, &GlobalTransform, &RenderObject, &WorldSpace)>()
-            .iter()
+        // Directional lights
         {
-            if *worldspace != player_worldspace {
-                continue;
-            }
+            let view = world.view::<(&GlobalTransform, &WorldSpace, &DirectionalLightComp)>();
 
-            objects_to_remove.remove(&entity);
-
-            if let Some(prev_transform) = self.prev_transforms.get(&entity) {
-                if *prev_transform == *transform && !objects_changed.contains(&entity) {
+            for entity in world
+                .component_added::<GlobalTransform>()
+                .chain(world.component_changed::<GlobalTransform>())
+                .chain(world.component_added::<WorldSpace>())
+                .chain(world.component_changed::<WorldSpace>())
+                .chain(world.component_added::<DirectionalLightComp>())
+                .chain(world.component_changed::<DirectionalLightComp>())
+            {
+                let Some((transform, worldspace, light)) = view.get(entity) else {
                     continue;
-                }
-            }
-            self.prev_transforms.insert(entity, *transform);
+                };
 
-            let handle = self.entities.create_object(Object {
-                transform: transform.0,
-                mesh: object.mesh.clone(),
-                material: object.material.clone(),
-                scene: self.scene.clone(),
-            });
-            self.objects.insert(entity, handle);
+                let scene = self
+                    .worldspaces
+                    .entry(*worldspace)
+                    .or_insert_with(|| self.entities.create_scene());
+
+                let handle = self
+                    .entities
+                    .create_light(Light::Directional(DirectionalLight {
+                        transform: transform.0,
+                        scene: scene.clone(),
+                        color: light.color,
+                        illuminance: light.illuminance,
+                    }));
+
+                self.directional_lights.insert(entity, handle);
+            }
         }
 
-        for (entity, id) in objects_to_remove {
-            self.prev_transforms.remove(&entity);
-            self.objects.remove(&entity);
+        // Point lights
+        {
+            let view = world.view::<(&GlobalTransform, &WorldSpace, &PointLightComp)>();
+
+            for entity in world
+                .component_added::<GlobalTransform>()
+                .chain(world.component_changed::<GlobalTransform>())
+                .chain(world.component_added::<WorldSpace>())
+                .chain(world.component_changed::<WorldSpace>())
+                .chain(world.component_added::<PointLightComp>())
+                .chain(world.component_changed::<PointLightComp>())
+            {
+                let Some((transform, worldspace, light)) = view.get(entity) else {
+                    continue;
+                };
+
+                let scene = self
+                    .worldspaces
+                    .entry(*worldspace)
+                    .or_insert_with(|| self.entities.create_scene());
+
+                let handle = self.entities.create_light(Light::Point(PointLight {
+                    color: light.color,
+                    intensity: light.intensity,
+                    radius: light.radius,
+                    transform: transform.0,
+                    scene: scene.clone(),
+                }));
+
+                self.point_lights.insert(entity, handle);
+            }
+        }
+
+        // Objects
+        {
+            let view = world.view::<(&GlobalTransform, &WorldSpace, &RenderObject)>();
+
+            for entity in world
+                .component_added::<GlobalTransform>()
+                .chain(world.component_changed::<GlobalTransform>())
+                .chain(world.component_added::<WorldSpace>())
+                .chain(world.component_changed::<WorldSpace>())
+                .chain(world.component_added::<RenderObject>())
+                .chain(world.component_changed::<RenderObject>())
+            {
+                let Some((transform, worldspace, object)) = view.get(entity) else {
+                    continue;
+                };
+
+                let scene = self
+                    .worldspaces
+                    .entry(*worldspace)
+                    .or_insert_with(|| self.entities.create_scene());
+
+                let handle = self.entities.create_object(Object {
+                    transform: transform.0,
+                    mesh: object.mesh.clone(),
+                    material: object.material.clone(),
+                    scene: scene.clone(),
+                });
+                self.objects.insert(entity, handle);
+            }
         }
 
         skinning::mesh_skinning(world, &self.objects, &self.shared);
