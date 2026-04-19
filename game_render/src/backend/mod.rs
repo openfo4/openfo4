@@ -643,9 +643,9 @@ pub struct WriteDescriptorBinding<'a> {
 pub enum WriteDescriptorResource<'a> {
     UniformBuffer(&'a [BufferView<'a>]),
     StorageBuffer(&'a [BufferView<'a>]),
-    Texture(&'a [TextureView<'a>]),
+    Texture(&'a [&'a TextureView<'a>]),
     Sampler(&'a [Sampler]),
-    StorageTexture(&'a [TextureView<'a>]),
+    StorageTexture(&'a [&'a TextureView<'a>]),
 }
 
 #[derive(Clone, Debug)]

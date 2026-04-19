@@ -560,6 +560,11 @@ impl<'a> CommandQueue<'a> {
             });
 
         self.executor.resources.destroy_texture(texture.id);
+
+        self.executor.cmds.lock().push(
+            &self.executor.resources,
+            Command::DestroyTexture(texture.id),
+        );
     }
 
     /// Writes data into a texture.
@@ -1922,7 +1927,7 @@ enum DeletionEvent {
     DescriptorSetLayout(DescriptorSetLayoutId),
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 struct RawTextureView {
     texture: TextureId,
     base_mip_level: u32,

@@ -10,6 +10,7 @@ use game_common::collections::vec_map::VecMap;
 use game_tracing::trace_span;
 use hashbrown::HashMap;
 
+use crate::api::RawTextureView;
 use crate::api::executor::allocator::Allocation;
 use crate::backend::allocator::{MemoryManager, UsageFlags};
 use crate::backend::descriptors::AllocatedDescriptorSet;
@@ -39,6 +40,15 @@ pub(super) struct Executor {
     buffers: VecMap<BufferId, BufferAlloc>,
     textures: VecMap<TextureId, TextureData>,
     descriptor_sets: HashMap<DescriptorSetId, DescriptorSetInner>,
+    /// Cache for [`TextureView`] objects. The lifetime of the [`TextureView`]s is erased. The
+    /// views must not outlive the [`TextureData`] for the same [`TextureId`].
+    ///
+    /// FIXME: We currently only drop the texture view when when the complete texture is destroyed.
+    /// This works mostly fine, because textures are often reused in the same way each frame,
+    /// however for some uses like mip creation this causes the views to linger around for longer
+    /// than necessary.
+    /// We should clean them up when the usage does no longer happen.
+    texture_views: TextureViewCache,
 }
 
 impl Executor {
@@ -48,6 +58,7 @@ impl Executor {
             buffers: VecMap::new(),
             textures: VecMap::new(),
             descriptor_sets: HashMap::new(),
+            texture_views: TextureViewCache::default(),
         }
     }
 
@@ -113,6 +124,7 @@ impl Executor {
                     Command::CreateBuffer(cmd) => {
                         let buffer = self.allocator.create_buffer(&cmd.descriptor);
 
+                        debug_assert!(!self.buffers.contains_key(cmd.id));
                         self.buffers.insert(cmd.id, buffer);
                     }
                     Command::CreateTexture(cmd) => {
@@ -127,6 +139,7 @@ impl Executor {
                             }
                         };
 
+                        debug_assert!(!self.textures.contains_key(cmd.id));
                         self.textures.insert(cmd.id, texture);
                     }
                     Command::CreateDescriptorSet(id) => {
@@ -145,6 +158,9 @@ impl Executor {
                     }
                     Command::DestroyTexture(id) => {
                         debug_assert!(self.textures.contains_key(*id));
+
+                        // Destroy all texture views BEFORE destroying the texture.
+                        self.texture_views.remove(*id);
 
                         if let Some(texture) = self.textures.remove(*id) {
                             match texture {
@@ -308,26 +324,48 @@ fn run_render_pass(
     encoder: &mut CommandEncoder<'_>,
     query_pool: &mut ManagedQueryPool,
 ) {
-    let attachment_views = ScratchBuffer::new(
-        cmd.color_attachments.len() + usize::from(cmd.depth_stencil_attachment.is_some()),
-    );
+    for attachment in &cmd.color_attachments {
+        let view = attachment.target;
+        executor.texture_views.get_or_insert_with(view, || {
+            let texture = executor.textures.get(view.texture).unwrap();
+
+            let view = texture.texture().create_view(&TextureViewDescriptor {
+                base_mip_level: view.base_mip_level,
+                mip_levels: view.mip_levels,
+            });
+
+            // SAFETY: We guarantee that we drop the view before the underlying
+            // texture is dropped.
+            unsafe { view.make_static() }
+        });
+    }
+
+    if let Some(attachment) = &cmd.depth_stencil_attachment {
+        let view = RawTextureView {
+            texture: attachment.texture,
+            base_mip_level: 0,
+            mip_levels: 1,
+        };
+        executor.texture_views.get_or_insert_with(view, || {
+            let texture = executor.textures.get(view.texture).unwrap();
+
+            let view = texture.texture().create_view(&TextureViewDescriptor {
+                base_mip_level: view.base_mip_level,
+                mip_levels: view.mip_levels,
+            });
+
+            // SAFETY: We guarantee that we drop the view before the underlying
+            // texture is dropped.
+            unsafe { view.make_static() }
+        });
+    }
 
     let mut color_attachments = Vec::new();
     for attachment in &cmd.color_attachments {
-        let texture = executor.textures.get(attachment.target.texture).unwrap();
-
         // Attachment must be kept alive until the render pass completes.
         tmp.textures.insert(attachment.target.texture);
 
-        let view = attachment_views.insert(unsafe {
-            texture
-                .texture()
-                .create_view(&TextureViewDescriptor {
-                    base_mip_level: attachment.target.base_mip_level,
-                    mip_levels: attachment.target.mip_levels,
-                })
-                .make_static()
-        });
+        let view = executor.texture_views.get(&attachment.target).unwrap();
 
         color_attachments.push(RenderPassColorAttachment {
             view,
@@ -338,21 +376,18 @@ fn run_render_pass(
     }
 
     let depth_attachment = cmd.depth_stencil_attachment.as_ref().map(|attachment| {
-        let texture = executor.textures.get(attachment.texture).unwrap();
-
         // Attachment must be kept alive until the render pass completes.
         tmp.textures.insert(attachment.texture);
 
         // Depth stencil attachment can only be a single mip.
-        let view = attachment_views.insert(unsafe {
-            texture
-                .texture()
-                .create_view(&TextureViewDescriptor {
-                    base_mip_level: 0,
-                    mip_levels: 1,
-                })
-                .make_static()
-        });
+        let view = executor
+            .texture_views
+            .get(&RawTextureView {
+                texture: attachment.texture,
+                base_mip_level: 0,
+                mip_levels: 1,
+            })
+            .unwrap();
 
         RenderPassDepthStencilAttachment {
             depth_load_op: attachment.load_op,
@@ -462,8 +497,6 @@ fn run_render_pass(
         let index = query_pool.next_index(QueryObject::EndPass(cmd.name));
         encoder.write_timestamp_query(query_pool.pool(), index, TimestampPipelineStage::Graphics);
     }
-
-    tmp.texture_views.extend(attachment_views);
 }
 
 fn run_compute_pass(
@@ -527,7 +560,7 @@ fn run_compute_pass(
 }
 
 fn build_descriptor_set(
-    executor: &Executor,
+    executor: &mut Executor,
     resources: &Resources,
     id: DescriptorSetId,
 ) -> DescriptorSetInner {
@@ -539,13 +572,40 @@ fn build_descriptor_set(
         .get(descriptor_set.layout.0)
         .unwrap();
 
+    let buffer_views = ScratchBuffer::new(descriptor_set.num_buffers as usize);
+
+    let num_texture_arrays = descriptor_set.num_sampled_texture_arrays as usize
+        + descriptor_set.num_storage_texture_arrays as usize;
+    let texture_view_refs = ScratchBuffer::new(num_texture_arrays);
+
     let mut bindings = Vec::new();
 
-    let buffer_views = ScratchBuffer::new(descriptor_set.num_buffers as usize);
-    let texture_array_views = ScratchBuffer::new(
-        descriptor_set.num_sampled_texture_arrays as usize
-            + descriptor_set.num_storage_texture_arrays as usize,
-    );
+    // Ensure that each texture view has a raw backing `TextureView` object.
+    // We cannot easily do this while building the descriptor set, because
+    // all references from the hashmap must stay stable and must never create
+    // a `TextureView` object twice for the same descriptor.
+    for (_, resource) in descriptor_set.bindings.iter() {
+        let (DescriptorSetResource::SampledTexture(views)
+        | DescriptorSetResource::StorageTexture(views)) = resource
+        else {
+            continue;
+        };
+
+        for view in views {
+            executor.texture_views.get_or_insert_with(*view, || {
+                let texture = executor.textures.get(view.texture).unwrap();
+
+                let view = texture.texture().create_view(&TextureViewDescriptor {
+                    base_mip_level: view.base_mip_level,
+                    mip_levels: view.mip_levels,
+                });
+
+                // SAFETY: We guarantee that we drop the view before the underlying
+                // texture is dropped.
+                unsafe { view.make_static() }
+            });
+        }
+    }
 
     for (binding, resource) in descriptor_set.bindings.iter() {
         let resource = match resource {
@@ -563,43 +623,26 @@ fn build_descriptor_set(
 
                 WriteDescriptorResource::StorageBuffer(slice::from_ref(view))
             }
-            DescriptorSetResource::SampledTexture(views) => {
-                let texture_views = texture_array_views.insert(ScratchBuffer::new(views.len()));
+            DescriptorSetResource::SampledTexture(views)
+            | DescriptorSetResource::StorageTexture(views) => {
+                let raw_view_refs = texture_view_refs.insert(ScratchBuffer::new(views.len()));
 
                 for view in views {
-                    let texture = executor.textures.get(view.texture).unwrap();
-
-                    texture_views.insert(unsafe {
-                        texture
-                            .texture()
-                            .create_view(&TextureViewDescriptor {
-                                base_mip_level: view.base_mip_level,
-                                mip_levels: view.mip_levels,
-                            })
-                            .make_static()
-                    });
+                    // This cannot fail; We have created a `TextureView` object
+                    // for each descriptor in the previous loop.
+                    let view_ref = executor.texture_views.get(view).unwrap();
+                    raw_view_refs.insert(view_ref);
                 }
 
-                WriteDescriptorResource::Texture(texture_views.as_slice())
-            }
-            DescriptorSetResource::StorageTexture(views) => {
-                let texture_views = texture_array_views.insert(ScratchBuffer::new(views.len()));
-
-                for view in views {
-                    let texture = executor.textures.get(view.texture).unwrap();
-
-                    texture_views.insert(unsafe {
-                        texture
-                            .texture()
-                            .create_view(&TextureViewDescriptor {
-                                base_mip_level: view.base_mip_level,
-                                mip_levels: view.mip_levels,
-                            })
-                            .make_static()
-                    });
+                match resource {
+                    DescriptorSetResource::SampledTexture(_) => {
+                        WriteDescriptorResource::Texture(raw_view_refs.as_slice())
+                    }
+                    DescriptorSetResource::StorageTexture(_) => {
+                        WriteDescriptorResource::StorageTexture(raw_view_refs.as_slice())
+                    }
+                    _ => unreachable!(),
                 }
-
-                WriteDescriptorResource::StorageTexture(texture_views.as_slice())
             }
             DescriptorSetResource::Sampler(sampler) => {
                 let sampler = resources.samplers.get(sampler.0).unwrap();
@@ -619,12 +662,7 @@ fn build_descriptor_set(
         });
     }
 
-    let mut textures = Vec::new();
-    for views in texture_array_views {
-        textures.extend(views);
-    }
-
-    DescriptorSetInner { set, textures }
+    DescriptorSetInner { set }
 }
 
 fn insert_barriers(
@@ -693,7 +731,6 @@ fn insert_barriers(
 
 #[derive(Debug, Default)]
 pub struct TemporaryResources {
-    texture_views: Vec<TextureView<'static>>,
     descriptor_sets: CountingSet<DescriptorSetId>,
     buffers: CountingSet<BufferId>,
     textures: CountingSet<TextureId>,
@@ -704,8 +741,6 @@ pub struct TemporaryResources {
 
 impl TemporaryResources {
     pub(super) fn destroy(mut self, resources: &Resources) {
-        drop(self.texture_views.drain(..));
-
         for (id, count) in self.buffers.drain() {
             if resources.with_buffer_rc(id, |ref_count| ref_count.decrement_many_internal(count)) {
                 resources.deletion_queue.push(DeletionEvent::Buffer(id));
@@ -797,7 +832,6 @@ where
 #[derive(Debug)]
 struct DescriptorSetInner {
     set: AllocatedDescriptorSet,
-    textures: Vec<TextureView<'static>>,
 }
 
 #[derive(Debug)]
@@ -825,4 +859,34 @@ struct BufferAlloc {
 pub struct TextureAlloc {
     texture: Texture,
     allocation: Allocation,
+}
+
+#[derive(Debug, Default)]
+struct TextureViewCache {
+    textures: VecMap<TextureId, Vec<RawTextureView>>,
+    views: HashMap<RawTextureView, TextureView<'static>>,
+}
+
+impl TextureViewCache {
+    pub fn remove(&mut self, id: TextureId) {
+        if let Some(views) = self.textures.remove(id) {
+            for view in views {
+                self.views.remove(&view);
+            }
+        }
+    }
+
+    pub fn get_or_insert_with<F>(&mut self, view: RawTextureView, f: F) -> &TextureView<'static>
+    where
+        F: FnOnce() -> TextureView<'static>,
+    {
+        self.views.entry(view).or_insert_with(|| {
+            self.textures.entry(view.texture).or_default().push(view);
+            f()
+        })
+    }
+
+    pub fn get(&self, view: &RawTextureView) -> Option<&TextureView<'static>> {
+        self.views.get(view)
+    }
 }

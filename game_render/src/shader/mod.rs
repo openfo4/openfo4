@@ -7,7 +7,7 @@ use std::marker::PhantomData;
 use std::num::NonZeroU32;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{mpsc, Arc, OnceLock};
+use std::sync::{Arc, OnceLock, mpsc};
 
 use bitflags::bitflags;
 use hashbrown::HashMap;
@@ -22,6 +22,11 @@ pub struct Shader {
 }
 
 impl Shader {
+    pub fn from_spirv(bytes: &[u8]) -> Result<Self, Error> {
+        let module = spirv::Module::new(bytes).map_err(Error::Spirv)?;
+        Ok(Self { module })
+    }
+
     #[track_caller]
     pub fn instantiate(&self, options: &Options<'_>) -> ShaderInstance<'_> {
         let instance = self.module.instantiate(options).unwrap();
