@@ -664,14 +664,11 @@ impl ValidationPass {
 
                 assert_type_eq(OperandKey::Named("dst"), dst, Type::Bool)?;
             }
-            Instruction::Branch(offset) => {
-                assert!(matches!(offset, Value::Int(_)))
-            }
+            Instruction::Branch(_) => {}
             Instruction::BranchIfTrue(op) | Instruction::BranchIfFalse(op) => {
                 let condition = variable_type(&op.condition)?;
 
                 assert!(self.is_castable(condition, Type::Bool));
-                assert!(matches!(op.offset, Value::Int(_)));
             }
             Instruction::CallMethod(op) => {
                 let object = variable_type(&op.object)?;
@@ -681,11 +678,9 @@ impl ValidationPass {
                     todo!();
                 };
 
-                let Value::Ident(func) = &op.function_name else {
-                    todo!();
-                };
-
-                let sig = self.function_signature(&class, func, true).unwrap();
+                let sig = self
+                    .function_signature(&class, &op.function_name, true)
+                    .unwrap();
 
                 assert!(!sig.is_static);
 
@@ -700,11 +695,9 @@ impl ValidationPass {
             Instruction::CallParent(op) => {
                 let dst = variable_type(&op.return_assignment)?;
 
-                let Value::Ident(func) = &op.function else {
-                    todo!();
-                };
-
-                let sig = self.function_signature(&class.parent, func, true).unwrap();
+                let sig = self
+                    .function_signature(&class.parent, &op.function, true)
+                    .unwrap();
 
                 assert!(!sig.is_static);
 
@@ -717,12 +710,10 @@ impl ValidationPass {
                 assert!(self.is_compatible(&sig.returns, &dst));
             }
             Instruction::CallStatic(op) => {
-                let (Value::Ident(class), Value::Ident(func)) = (&op.class, &op.function) else {
-                    todo!();
-                };
-
                 // Static function do not recognise parent classes.
-                let sig = self.function_signature(class, func, false).unwrap();
+                let sig = self
+                    .function_signature(&op.class, &op.function, false)
+                    .unwrap();
 
                 assert!(sig.is_static);
 
@@ -760,11 +751,7 @@ impl ValidationPass {
                     todo!();
                 };
 
-                let Value::Ident(property) = &op.property else {
-                    todo!();
-                };
-
-                let prop = self.get_property(&class, &property).unwrap();
+                let prop = self.get_property(&class, &op.property).unwrap();
                 let ty = self.resolve_ty(&prop.ty).unwrap();
 
                 assert_eq!(ty, dst);
@@ -777,11 +764,7 @@ impl ValidationPass {
                     todo!();
                 };
 
-                let Value::Ident(property) = &op.property else {
-                    todo!();
-                };
-
-                let prop = self.get_property(&class, &property).unwrap();
+                let prop = self.get_property(&class, &op.property).unwrap();
                 let ty = self.resolve_ty(&prop.ty).unwrap();
 
                 assert_eq!(ty, value);
@@ -830,7 +813,7 @@ impl ValidationPass {
                     });
                 };
 
-                assert_type_eq(OperandKey::Named("value"), value, *element);
+                assert_type_eq(OperandKey::Named("value"), value, *element)?;
                 assert_type_eq(OperandKey::Named("index"), index, Type::Int)?;
             }
             Instruction::ArrayFind(op) | Instruction::ArrayRFind(op) => {

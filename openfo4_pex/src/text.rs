@@ -124,23 +124,23 @@ where
             let value = for_value(op);
             write!(text, "return {value}")?;
         }
-        Instruction::Branch(offset) => {
-            let offset = for_value(offset);
+        Instruction::Branch(op) => {
+            let offset = op.offset;
             write!(text, "branch {offset}")?;
         }
         Instruction::BranchIfTrue(op) => {
             let condition = for_value(&op.condition);
-            let offset = for_value(&op.offset);
+            let offset = op.offset;
             write!(text, "branch_if_true {condition} {offset}")?;
         }
         Instruction::BranchIfFalse(op) => {
             let condition = for_value(&op.condition);
-            let offset = for_value(&op.offset);
+            let offset = op.offset;
             write!(text, "branch_if_false {condition} {offset}")?;
         }
         Instruction::CallMethod(op) => {
             let object = for_value(&op.object);
-            let function_name = for_value(&op.function_name);
+            let function_name = &op.function_name;
             let return_assignment = for_value(&op.return_assignment);
             let args = op
                 .args
@@ -155,7 +155,7 @@ where
             )?;
         }
         Instruction::CallParent(op) => {
-            let func = for_value(&op.function);
+            let func = &op.function;
             let dst = for_value(&op.return_assignment);
             let args = op
                 .args
@@ -167,8 +167,8 @@ where
             write!(text, "{dst} = call_parent {func} {args}")?;
         }
         Instruction::CallStatic(op) => {
-            let object = for_value(&op.class);
-            let function_name = for_value(&op.function);
+            let object = &op.class;
+            let function_name = &op.function;
             let return_assignment = for_value(&op.return_assignment);
             let args = op
                 .args
@@ -223,7 +223,7 @@ where
             write!(text, "array_remove {array_value}[{index}..+{count}]")?;
         }
         Instruction::PropertyGet(op) => {
-            let property = for_value(&op.property);
+            let property = &op.property;
             let value = for_value(&op.value);
             let return_assignment = for_value(&op.return_assignment);
             write!(
@@ -232,7 +232,7 @@ where
             )?;
         }
         Instruction::PropertySet(op) => {
-            let property = for_value(&op.property);
+            let property = &op.property;
             let object = for_value(&op.object);
             let value = for_value(&op.value);
             write!(text, "property_set {property} {object} {value}")?;

@@ -110,10 +110,10 @@ fn generate_root_func(
             }),
             Instruction::BranchIfFalse(ConditionalBranch {
                 condition: Value::Ident("is_eq".to_owned()),
-                offset: Value::Int(3),
+                offset: 3,
             }),
             Instruction::CallMethod(CallMethod {
-                function_name: Value::Ident(func.to_string()),
+                function_name: func.to_string(),
                 object: Value::Ident("self".to_owned()),
                 args: params
                     .iter()

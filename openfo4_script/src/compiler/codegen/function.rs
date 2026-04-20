@@ -262,14 +262,9 @@ fn translate_function_body(
 
     for (index, instruction) in function.instructions.iter().enumerate() {
         match instruction {
-            Instruction::Branch(offset) => {
-                let offset = match offset {
-                    Value::Int(offset) => *offset,
-                    _ => unreachable!(),
-                };
-
+            Instruction::Branch(op) => {
                 let addr = usize::min(
-                    (index as i32 + offset) as usize,
+                    (index as i32 + op.offset) as usize,
                     function.instructions.len(),
                 );
 
@@ -279,13 +274,8 @@ fn translate_function_body(
                 }
             }
             Instruction::BranchIfTrue(op) | Instruction::BranchIfFalse(op) => {
-                let offset = match &op.offset {
-                    Value::Int(offset) => *offset,
-                    _ => unreachable!(),
-                };
-
                 let addr = usize::min(
-                    (index as i32 + offset) as usize,
+                    (index as i32 + op.offset) as usize,
                     function.instructions.len(),
                 );
 
@@ -313,12 +303,8 @@ fn translate_function_body(
                 resume_points.insert(stage.index, *block);
             }
             Instruction::PropertyGet(op) => {
-                let Value::Ident(prop_name) = &op.property else {
-                    unreachable!();
-                };
-
                 let class_name = translator.get_ty_name(&op.value);
-                let prop_name = Lowercase::new(prop_name.as_str());
+                let prop_name = Lowercase::new(op.property.as_str());
 
                 if translator
                     .data
@@ -336,12 +322,8 @@ fn translate_function_body(
                 }
             }
             Instruction::PropertySet(op) => {
-                let Value::Ident(prop_name) = &op.property else {
-                    unreachable!();
-                };
-
                 let class_name = translator.get_ty_name(&op.object);
-                let prop_name = Lowercase::new(prop_name.as_str());
+                let prop_name = Lowercase::new(op.property.as_str());
 
                 if translator
                     .data
@@ -517,14 +499,9 @@ fn translate_function_body(
                 let res = translator.builder.uextend(res, JitType::I32);
                 translator.store(&op.dst, res);
             }
-            Instruction::Branch(offset) => {
-                let offset = match offset {
-                    Value::Int(offset) => *offset,
-                    _ => unreachable!(),
-                };
-
+            Instruction::Branch(op) => {
                 let addr = usize::min(
-                    (index as i32 + offset) as usize,
+                    (index as i32 + op.offset) as usize,
                     function.instructions.len(),
                 );
 
@@ -532,13 +509,8 @@ fn translate_function_body(
                 translator.builder.jump(block, &[]);
             }
             Instruction::BranchIfTrue(op) => {
-                let offset = match &op.offset {
-                    Value::Int(offset) => *offset,
-                    _ => unreachable!(),
-                };
-
                 let addr = usize::min(
-                    (index as i32 + offset) as usize,
+                    (index as i32 + op.offset) as usize,
                     function.instructions.len(),
                 );
                 let then_block = *blocks.get(&addr).unwrap();
@@ -551,13 +523,8 @@ fn translate_function_body(
                     .brif(condition, then_block, &[], else_block, &[]);
             }
             Instruction::BranchIfFalse(op) => {
-                let offset = match &op.offset {
-                    Value::Int(offset) => *offset,
-                    _ => unreachable!(),
-                };
-
                 let addr = usize::min(
-                    (index as i32 + offset) as usize,
+                    (index as i32 + op.offset) as usize,
                     function.instructions.len(),
                 );
                 let else_block = *blocks.get(&addr).unwrap();
@@ -570,13 +537,8 @@ fn translate_function_body(
                     .brif(condition, then_block, &[], else_block, &[]);
             }
             Instruction::CallMethod(op) => {
-                let function_name = match &op.function_name {
-                    Value::Ident(v) => v,
-                    _ => unreachable!(),
-                };
-
                 let class_name = translator.get_ty_name(&op.object);
-                let function_name = Lowercase::new(function_name.as_str());
+                let function_name = Lowercase::new(op.function_name.as_str());
 
                 let func = data
                     .get_function(class_name.as_str(), function_name.as_str())
@@ -624,14 +586,10 @@ fn translate_function_body(
                 }
             }
             Instruction::CallParent(op) => {
-                let Value::Ident(function_name) = &op.function else {
-                    unreachable!();
-                };
-
                 let class_name = translator.get_ty_name(&Value::Ident("self".to_owned()));
                 let class = translator.data.classes.get(class_name.as_str()).unwrap();
                 let parent = class.parent.as_ref().unwrap();
-                let function_name = Lowercase::new(function_name.as_str());
+                let function_name = Lowercase::new(op.function.as_str());
 
                 let func = data
                     .get_function(parent.as_str(), function_name.as_str())
@@ -664,13 +622,8 @@ fn translate_function_body(
                 }
             }
             Instruction::CallStatic(op) => {
-                let (class_name, function_name) = match (&op.class, &op.function) {
-                    (Value::Ident(class), Value::Ident(func)) => (class, func),
-                    _ => unreachable!(),
-                };
-
-                let class_name = Lowercase::new(class_name.as_str());
-                let function_name = Lowercase::new(function_name.as_str());
+                let class_name = Lowercase::new(op.class.as_str());
+                let function_name = Lowercase::new(op.function.as_str());
 
                 let mut args = op
                     .args
@@ -716,12 +669,8 @@ fn translate_function_body(
                 }
             }
             Instruction::PropertyGet(op) => {
-                let Value::Ident(prop_name) = &op.property else {
-                    unreachable!();
-                };
-
                 let class_name = translator.get_ty_name(&op.value);
-                let prop_name = Lowercase::new(prop_name.as_str());
+                let prop_name = Lowercase::new(op.property.as_str());
 
                 let src = translator.load(&op.value);
 
@@ -769,12 +718,8 @@ fn translate_function_body(
                 translator.store(&op.return_assignment, res);
             }
             Instruction::PropertySet(op) => {
-                let Value::Ident(prop_name) = &op.property else {
-                    unreachable!();
-                };
-
                 let class_name = translator.get_ty_name(&op.object);
-                let prop_name = Lowercase::new(prop_name.as_str());
+                let prop_name = Lowercase::new(op.property.as_str());
 
                 let object = translator.load(&op.object);
                 let value = translator.load(&op.value);

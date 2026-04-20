@@ -920,21 +920,14 @@ fn find_function_callees(data: &CodegenData, function: &FunctionDef) -> Vec<Func
             Instruction::CallParent(op) => {
                 let parent = current_class.parent.as_ref().unwrap();
 
-                let Value::Ident(func_name) = &op.function else {
-                    unreachable!();
-                };
-                let func_name = Lowercase::new(func_name.as_str());
+                let func_name = Lowercase::new(op.function.as_str());
 
                 let func = data.get_function_id(parent, &func_name).unwrap();
                 callees.push(func);
             }
             Instruction::CallStatic(op) => {
-                let (class_name, function_name) = match (&op.class, &op.function) {
-                    (Value::Ident(a), Value::Ident(b)) => (a, b),
-                    _ => unreachable!(),
-                };
-                let class_name = Lowercase::new(class_name.as_str());
-                let function_name = Lowercase::new(function_name.as_str());
+                let class_name = Lowercase::new(op.class.as_str());
+                let function_name = Lowercase::new(op.function.as_str());
 
                 let func = data.get_function_id(&class_name, &function_name).unwrap();
 
@@ -945,13 +938,9 @@ fn find_function_callees(data: &CodegenData, function: &FunctionDef) -> Vec<Func
                     unreachable!()
                 };
 
-                let Value::Ident(prop_name) = &op.property else {
-                    unreachable!()
-                };
-
                 let object = Lowercase::new(object.as_str());
                 let class_name = find_var(&object);
-                let prop_name = Lowercase::new(prop_name.as_str());
+                let prop_name = Lowercase::new(op.property.as_str());
 
                 if let Some(func) = data.get_property_getter_id(&class_name, &prop_name) {
                     callees.push(func);
@@ -962,13 +951,9 @@ fn find_function_callees(data: &CodegenData, function: &FunctionDef) -> Vec<Func
                     unreachable!()
                 };
 
-                let Value::Ident(prop_name) = &op.property else {
-                    unreachable!()
-                };
-
                 let object = Lowercase::new(object.as_str());
                 let class_name = find_var(&object);
-                let prop_name = Lowercase::new(prop_name.as_str());
+                let prop_name = Lowercase::new(op.property.as_str());
 
                 if let Some(func) = data.get_property_setter_id(&class_name, &prop_name) {
                     callees.push(func);

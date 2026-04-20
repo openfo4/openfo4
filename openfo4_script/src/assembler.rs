@@ -20,8 +20,8 @@ use std::fmt::Debug;
 
 use openfo4_pex::{
     ArrayAdd, ArrayClear, ArrayFind, ArrayFindStruct, ArrayGet, ArrayInsert, ArrayRemove, Binop,
-    CallMethod, CallStatic, Class, ConditionalBranch, Function, Instruction, Module, Property,
-    State, Struct, StructMember, Unop, Value, Variable, VariableDefinition,
+    Branch, CallMethod, CallStatic, Class, ConditionalBranch, Function, Instruction, Module,
+    Property, State, Struct, StructMember, Unop, Value, Variable, VariableDefinition,
 };
 
 pub fn assemble(input: &str) -> Module {
@@ -288,8 +288,8 @@ fn parse_instruction(cursor: &mut Cursor<'_>) -> Instruction {
             "store" => Instruction::Store(parse_unop(cursor, dst)),
             "string_concat" => Instruction::StringConcat(parse_binop(cursor, dst)),
             "call_static" => {
-                let class = parse_value(cursor);
-                let function = parse_value(cursor);
+                let class = cursor.consume_ident().to_owned();
+                let function = cursor.consume_ident().to_owned();
                 let mut args = Vec::new();
                 while cursor.peek() != Some(&Token::Eol) {
                     args.push(parse_value(cursor));
@@ -303,7 +303,7 @@ fn parse_instruction(cursor: &mut Cursor<'_>) -> Instruction {
                 })
             }
             "call_method" => {
-                let function_name = parse_value(cursor);
+                let function_name = cursor.consume_ident().to_owned();
                 let object = parse_value(cursor);
                 let mut args = Vec::new();
                 while cursor.peek() != Some(&Token::Eol) {
@@ -361,18 +361,35 @@ fn parse_instruction(cursor: &mut Cursor<'_>) -> Instruction {
         match &*opcode {
             "nop" => Instruction::Nop,
             "branch" => {
-                let offset = parse_value(cursor);
-                Instruction::Branch(offset)
+                let Some(Token::IntLit(offset)) = cursor.pop() else {
+                    todo!();
+                };
+
+                Instruction::Branch(Branch { offset: *offset })
             }
             "branch_if_true" => {
                 let condition = parse_value(cursor);
-                let offset = parse_value(cursor);
-                Instruction::BranchIfTrue(ConditionalBranch { condition, offset })
+
+                let Some(Token::IntLit(offset)) = cursor.pop() else {
+                    todo!();
+                };
+
+                Instruction::BranchIfTrue(ConditionalBranch {
+                    condition,
+                    offset: *offset,
+                })
             }
             "branch_if_false" => {
                 let condition = parse_value(cursor);
-                let offset = parse_value(cursor);
-                Instruction::BranchIfFalse(ConditionalBranch { condition, offset })
+
+                let Some(Token::IntLit(offset)) = cursor.pop() else {
+                    todo!();
+                };
+
+                Instruction::BranchIfFalse(ConditionalBranch {
+                    condition,
+                    offset: *offset,
+                })
             }
             "return" => {
                 let args = parse_value(cursor);

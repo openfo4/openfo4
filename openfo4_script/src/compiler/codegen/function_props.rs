@@ -125,9 +125,6 @@ pub fn function_properties(data: &CodegenData, func: &FunctionDef) -> FunctionPr
             Instruction::CmpGe(_) => {}
             // Insert preemption point at backedges.
             Instruction::Branch(offset) => {
-                let Value::Int(offset) = *offset else {
-                    unreachable!();
-                };
 
                 // if offset < 0 {
                 //     preemption_points.push(index);
@@ -135,9 +132,6 @@ pub fn function_properties(data: &CodegenData, func: &FunctionDef) -> FunctionPr
                 // }
             }
             Instruction::BranchIfFalse(op) | Instruction::BranchIfTrue(op) => {
-                let Value::Int(offset) = op.offset else {
-                    unreachable!();
-                };
 
                 // if offset < 0 {
                 //     preemption_points.push(index);
@@ -153,10 +147,6 @@ pub fn function_properties(data: &CodegenData, func: &FunctionDef) -> FunctionPr
                     unreachable!();
                 };
 
-                let Value::Ident(func_name) = &op.function_name else {
-                    unreachable!();
-                };
-
                 let object = Lowercase::new(object.as_str());
                 let class_name = find_var(object.as_str());
 
@@ -164,21 +154,12 @@ pub fn function_properties(data: &CodegenData, func: &FunctionDef) -> FunctionPr
                 stages.push(variables.clone());
             }
             Instruction::CallParent(op) => {
-                let Value::Ident(func_name) = &op.function else {
-                    unreachable!();
-                };
-
                 may_error = true;
 
                 preemption_points.push(index);
                 stages.push(variables.clone());
             }
             Instruction::CallStatic(op) => {
-                let (Value::Ident(class_name), Value::Ident(func_name)) = (&op.class, &op.function)
-                else {
-                    unreachable!();
-                };
-
                 preemption_points.push(index);
                 stages.push(variables.clone());
             }
@@ -186,13 +167,10 @@ pub fn function_properties(data: &CodegenData, func: &FunctionDef) -> FunctionPr
                 let Value::Ident(object) = &op.value else {
                     unreachable!();
                 };
-                let Value::Ident(prop_name) = &op.property else {
-                    unreachable!();
-                };
 
                 let object = Lowercase::new(object.as_str());
                 let class_name = find_var(object.as_str());
-                let prop_name = Lowercase::new(prop_name.as_str());
+                let prop_name = Lowercase::new(op.property.as_str());
 
                 let Some(func_id) =
                     data.get_property_getter_id(class_name.as_str(), prop_name.as_str())
@@ -207,13 +185,10 @@ pub fn function_properties(data: &CodegenData, func: &FunctionDef) -> FunctionPr
                 let Value::Ident(object) = &op.object else {
                     unreachable!();
                 };
-                let Value::Ident(prop_name) = &op.property else {
-                    unreachable!();
-                };
 
                 let object = Lowercase::new(object.as_str());
                 let class_name = find_var(object.as_str());
-                let prop_name = Lowercase::new(prop_name.as_str());
+                let prop_name = Lowercase::new(op.property.as_str());
 
                 let Some(func_id) =
                     data.get_property_setter_id(class_name.as_str(), prop_name.as_str())

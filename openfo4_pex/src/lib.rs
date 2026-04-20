@@ -26,6 +26,11 @@ pub enum Error {
         expected: usize,
         found: usize,
     },
+    InvalidValue {
+        op: Opcode,
+        operand: &'static str,
+        value: Value,
+    },
 }
 
 #[derive(Clone, Debug)]
@@ -386,7 +391,7 @@ pub enum Instruction {
     CmpLe(Binop),
     CmpGt(Binop),
     CmpGe(Binop),
-    Branch(Value),
+    Branch(Branch),
     BranchIfTrue(ConditionalBranch),
     BranchIfFalse(ConditionalBranch),
     CallMethod(CallMethod),
@@ -455,21 +460,6 @@ impl Instruction {
             Ok(Binop { lhs, rhs, dst })
         };
 
-        let read_conditional_branch = || -> Result<ConditionalBranch, Error> {
-            if instruction.args.len() != 2 {
-                return Err(Error::InvalidInstructionArgCount {
-                    op: instruction.op,
-                    expected: 2,
-                    found: instruction.args.len(),
-                });
-            }
-
-            let condition = Value::convert(&instruction.args[0], strings)?;
-            let offset = Value::convert(&instruction.args[1], strings)?;
-
-            Ok(ConditionalBranch { condition, offset })
-        };
-
         match instruction.op {
             Opcode::Nop => Ok(Self::Nop),
             Opcode::IAdd => read_binop().map(Self::IAdd),
@@ -491,12 +481,13 @@ impl Instruction {
             Opcode::CmpLe => read_binop().map(Self::CmpLe),
             Opcode::CmpGt => read_binop().map(Self::CmpGt),
             Opcode::CmpGe => read_binop().map(Self::CmpGe),
-            Opcode::Branch => {
-                let offset = Value::convert(&instruction.args[0], strings)?;
-                Ok(Self::Branch(offset))
+            Opcode::Branch => Branch::from_raw(instruction, strings).map(Self::Branch),
+            Opcode::BranchIfTrue => {
+                ConditionalBranch::from_raw(instruction, strings).map(Self::BranchIfTrue)
             }
-            Opcode::BranchIfTrue => read_conditional_branch().map(Self::BranchIfTrue),
-            Opcode::BranchIfFalse => read_conditional_branch().map(Self::BranchIfFalse),
+            Opcode::BranchIfFalse => {
+                ConditionalBranch::from_raw(instruction, strings).map(Self::BranchIfFalse)
+            }
             Opcode::CallMethod => CallMethod::from_raw(instruction, strings).map(Self::CallMethod),
             Opcode::CallParent => CallParent::from_raw(instruction, strings).map(Self::CallParent),
             Opcode::CallStatic => CallStatic::from_raw(instruction, strings).map(Self::CallStatic),
@@ -553,14 +544,66 @@ pub struct Binop {
 }
 
 #[derive(Clone, Debug, PartialEq)]
+pub struct Branch {
+    pub offset: i32,
+}
+
+impl Branch {
+    fn from_raw(instruction: &raw::Instruction, strings: &[String]) -> Result<Self, Error> {
+        if instruction.args.len() != 1 {
+            return Err(Error::InvalidInstructionArgCount {
+                op: instruction.op,
+                expected: 1,
+                found: instruction.args.len(),
+            });
+        }
+
+        let offset = Value::convert(&instruction.args[0], strings)?;
+        let Value::Int(offset) = offset else {
+            return Err(Error::InvalidValue {
+                op: Opcode::Branch,
+                operand: "offset",
+                value: offset,
+            });
+        };
+
+        Ok(Self { offset })
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
 pub struct ConditionalBranch {
     pub condition: Value,
-    pub offset: Value,
+    pub offset: i32,
+}
+
+impl ConditionalBranch {
+    fn from_raw(instruction: &raw::Instruction, strings: &[String]) -> Result<Self, Error> {
+        if instruction.args.len() != 2 {
+            return Err(Error::InvalidInstructionArgCount {
+                op: instruction.op,
+                expected: 2,
+                found: instruction.args.len(),
+            });
+        }
+
+        let condition = Value::convert(&instruction.args[0], strings)?;
+        let offset = Value::convert(&instruction.args[1], strings)?;
+        let Value::Int(offset) = offset else {
+            return Err(Error::InvalidValue {
+                op: instruction.op,
+                operand: "offset",
+                value: offset,
+            });
+        };
+
+        Ok(ConditionalBranch { condition, offset })
+    }
 }
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct CallMethod {
-    pub function_name: Value,
+    pub function_name: String,
     /// The receiver object on which the function is called.
     pub object: Value,
     /// The variable that will store the return value.
@@ -571,6 +614,14 @@ pub struct CallMethod {
 impl CallMethod {
     fn from_raw(instruction: &raw::Instruction, strings: &[String]) -> Result<Self, Error> {
         let function_name = Value::convert(&instruction.args[0], strings)?;
+        let Value::Ident(function_name) = function_name else {
+            return Err(Error::InvalidValue {
+                op: Opcode::CallMethod,
+                operand: "function_name",
+                value: function_name,
+            });
+        };
+
         let object = Value::convert(&instruction.args[1], strings)?;
         let return_assignment = Value::convert(&instruction.args[2], strings)?;
 
@@ -591,7 +642,7 @@ impl CallMethod {
 #[derive(Clone, Debug, PartialEq)]
 pub struct CallParent {
     /// The name of the function to call.
-    pub function: Value,
+    pub function: String,
     pub return_assignment: Value,
     pub args: Vec<Value>,
 }
@@ -599,6 +650,14 @@ pub struct CallParent {
 impl CallParent {
     fn from_raw(instruction: &raw::Instruction, strings: &[String]) -> Result<Self, Error> {
         let function = Value::convert(&instruction.args[0], strings)?;
+        let Value::Ident(function) = function else {
+            return Err(Error::InvalidValue {
+                op: Opcode::CallParent,
+                operand: "function",
+                value: function,
+            });
+        };
+
         let return_assignment = Value::convert(&instruction.args[1], strings)?;
 
         let args = instruction.args[2..]
@@ -616,8 +675,8 @@ impl CallParent {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct CallStatic {
-    pub class: Value,
-    pub function: Value,
+    pub class: String,
+    pub function: String,
     pub return_assignment: Value,
     pub args: Vec<Value>,
 }
@@ -625,7 +684,23 @@ pub struct CallStatic {
 impl CallStatic {
     fn from_raw(instruction: &raw::Instruction, strings: &[String]) -> Result<Self, Error> {
         let class = Value::convert(&instruction.args[0], strings)?;
+        let Value::Ident(class) = class else {
+            return Err(Error::InvalidValue {
+                op: Opcode::CallStatic,
+                operand: "class",
+                value: class,
+            });
+        };
+
         let function = Value::convert(&instruction.args[1], strings)?;
+        let Value::Ident(function) = function else {
+            return Err(Error::InvalidValue {
+                op: Opcode::CallStatic,
+                operand: "function",
+                value: function,
+            });
+        };
+
         let return_assignment = Value::convert(&instruction.args[2], strings)?;
 
         let args = instruction.args[3..]
@@ -645,7 +720,7 @@ impl CallStatic {
 #[derive(Clone, Debug, PartialEq)]
 pub struct PropertyGet {
     /// The name of the property to load.
-    pub property: Value,
+    pub property: String,
     /// The value that contains the property to be loaded.
     pub value: Value,
     /// The variable where the loaded value should be stored.
@@ -655,6 +730,14 @@ pub struct PropertyGet {
 impl PropertyGet {
     fn from_raw(instruction: &raw::Instruction, strings: &[String]) -> Result<Self, Error> {
         let property = Value::convert(&instruction.args[0], strings)?;
+        let Value::Ident(property) = property else {
+            return Err(Error::InvalidValue {
+                op: Opcode::PropertyGet,
+                operand: "property",
+                value: property,
+            });
+        };
+
         // TODO: Double check that this is the correct order:
         let value = Value::convert(&instruction.args[1], strings)?;
         let return_assignment = Value::convert(&instruction.args[2], strings)?;
@@ -670,7 +753,7 @@ impl PropertyGet {
 #[derive(Clone, Debug, PartialEq)]
 pub struct PropertySet {
     /// The name of the property.
-    pub property: Value,
+    pub property: String,
     /// The object with the property.
     pub object: Value,
     /// The new value to store.
@@ -680,6 +763,14 @@ pub struct PropertySet {
 impl PropertySet {
     fn from_raw(instruction: &raw::Instruction, strings: &[String]) -> Result<Self, Error> {
         let property = Value::convert(&instruction.args[0], strings)?;
+        let Value::Ident(property) = property else {
+            return Err(Error::InvalidValue {
+                op: Opcode::PropertySet,
+                operand: "property",
+                value: property,
+            });
+        };
+
         let object = Value::convert(&instruction.args[1], strings)?;
         let value = Value::convert(&instruction.args[2], strings)?;
 
