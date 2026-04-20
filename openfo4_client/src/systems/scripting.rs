@@ -169,17 +169,8 @@ impl Executor {
         let engine = futures_lite::future::block_on(self.loader.engine.lock());
         let mut state = futures_lite::future::block_on(self.loader.state.lock());
 
-        // FIXME: Don't recompute this every update.
-        let mut entities = HashMap::new();
-        for scripts in state.as_ref().unwrap().objects.iter() {
-            for script in scripts.iter() {
-                entities.insert(script.get().object.addr(), scripts.id());
-            }
-        }
-
         state.as_mut().unwrap().world = world;
         state.as_mut().unwrap().globals = globals;
-        state.as_mut().unwrap().game_entities = entities;
         state.as_mut().unwrap().entities = script_entities;
         state.as_mut().unwrap().quests = quests;
 
@@ -517,7 +508,6 @@ fn core_actor_values(engine: &mut Engine) -> State {
         globals: core::ptr::null_mut(),
         registration: RegistrationSet::default(),
         entities: core::ptr::null(),
-        game_entities: HashMap::new(),
         aliases: AliasSet::default(),
         effects: Effects::default(),
         wait_on_effect: None,

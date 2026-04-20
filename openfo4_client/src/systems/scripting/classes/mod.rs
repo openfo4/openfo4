@@ -163,7 +163,6 @@ pub struct State {
     pub registration: RegistrationSet,
     pub objects: ScriptObjects,
     pub object_data: HashMap<ObjectAddr, ObjectData>,
-    pub game_entities: HashMap<ObjectAddr, ScriptObjectId>,
     pub aliases: AliasSet,
     pub effects: Effects,
     pub wait_on_effect: Option<EffectId>,
@@ -247,7 +246,7 @@ impl State {
 
     /// Returns the game world entity associated with a script object, if any exists.
     pub fn entity(&self, addr: ObjectAddr) -> Option<Entity> {
-        let id = *self.game_entities.get(&addr)?;
+        let id = self.objects.get_by_addr(addr)?.id();
         self.entities().0.get_left(&id).copied()
     }
 
