@@ -8,8 +8,6 @@ const MAGIC_BE: [u8; 4] = [0xfa, 0x57, 0xc0, 0xde];
 
 const MAJOR_VERSION: u8 = 3;
 
-use std::default;
-
 use bytes::Buf;
 
 use crate::raw::{DebugInfo, FunctionFlags, Header, Opcode, UserFlag};
@@ -418,6 +416,13 @@ pub enum Instruction {
 }
 
 impl Instruction {
+    /// Returns the textural representation of the `Instruction`.
+    pub fn text(&self) -> String {
+        let mut buf = String::new();
+        text::for_instruction(self, &mut buf).unwrap();
+        buf
+    }
+
     fn convert(instruction: &raw::Instruction, strings: &[String]) -> Result<Self, Error> {
         let read_unop = || -> Result<Unop, Error> {
             if instruction.args.len() != 2 {
