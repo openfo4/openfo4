@@ -285,7 +285,6 @@ impl GameState {
 
         systems::nif_animation::update_nif_animations(
             &mut self.world,
-            &mut self.event_bus,
             &self.shared.entities,
             self.real_time_elapsed,
         );

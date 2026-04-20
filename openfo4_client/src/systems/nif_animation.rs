@@ -3,19 +3,14 @@ use std::time::Duration;
 use game_core_pipeline::entities::Entities;
 use game_tracing::trace_span;
 use openfo4_core::ecs::World;
-use openfo4_core::events::{ComponentChanged, EventBus};
+use openfo4_core::events::EventBus;
 
 use crate::{
     assets::nif::{animation::ControlledValue, animation_controller::AnimationControllerInstance},
     render::RenderObject,
 };
 
-pub fn update_nif_animations(
-    world: &mut World,
-    events: &mut EventBus,
-    entities: &Entities,
-    real_time: Duration,
-) {
+pub fn update_nif_animations(world: &mut World, entities: &Entities, real_time: Duration) {
     let _span = trace_span!("update_nif_animations").entered();
 
     let mut material_updates = Vec::new();
@@ -65,8 +60,6 @@ pub fn update_nif_animations(
         if let Ok(mut object) = world.get::<&mut RenderObject>(entity) {
             let material = entities.create_material(material);
             object.material = material;
-
-            events.send(ComponentChanged::<RenderObject>::new(entity));
         }
     }
 }

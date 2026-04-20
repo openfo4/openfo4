@@ -14,7 +14,6 @@ use hashbrown::HashMap;
 use image::{ImageBuffer, Pixel, Rgba};
 use openfo4_asset::Handle;
 use openfo4_core::ecs::{Entity, World};
-use openfo4_core::events::{ComponentChanged, EventBus};
 
 use crate::assets::data_file::DataFile;
 use crate::cell::{CELL_SIZE, CellId};
@@ -40,7 +39,7 @@ impl TerrainManager {
         }
     }
 
-    pub fn update(&mut self, world: &mut World, events: &mut EventBus) {
+    pub fn update(&mut self, world: &mut World) {
         let _span = trace_span!("TerrainManager::update").entered();
 
         let Some((transform, worldspace, _)) = world
@@ -125,7 +124,6 @@ impl TerrainManager {
             let entity = region.entity.expect("terrain entity not set");
 
             world.insert_one(entity, object).unwrap();
-            events.send(ComponentChanged::<RenderObject>::new(entity));
         }
     }
 

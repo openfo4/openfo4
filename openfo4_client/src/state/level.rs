@@ -213,7 +213,7 @@ impl Level {
             self.cells_to_unload_next_tick.insert(cell);
         }
 
-        self.terrain_manager.update(world, event_bus);
+        self.terrain_manager.update(world);
         self.update_frozen_entities(world);
     }
 
