@@ -130,9 +130,9 @@ impl Val {
 
 #[derive(Clone, Debug)]
 pub struct Func {
-    pub(crate) ptr: NativeFnPtr,
-    pub(crate) signature: Signature,
-    pub(crate) stack_size: usize,
+    ptr: NativeFnPtr,
+    signature: Signature,
+    stack_size: usize,
 }
 
 impl Func {

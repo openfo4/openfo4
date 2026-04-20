@@ -1,5 +1,4 @@
 use std::fmt::Debug;
-use std::mem::transmute;
 use std::sync::{Arc, RwLock};
 
 use game_common::cell::UnsafeRefCell;
@@ -11,7 +10,7 @@ use openfo4_pex::{Class, Module};
 use crate::compiler::resources::{TypeId, TypeInfo};
 use crate::compiler::{CompilationResult, CompilerOptions, Context, NativeFunction};
 use crate::runtime::host_functions::call_host_trampoline;
-use crate::runtime::{CallTable, Func, HostState, IntoFunc, NativeFnPtr, ObjectPool};
+use crate::runtime::{CallTable, Func, HostState, IntoFunc, ObjectPool};
 
 #[derive(Clone, Debug)]
 pub enum Error {
@@ -220,12 +219,7 @@ pub struct ScriptInstance {
 impl ScriptInstance {
     pub fn get_func(&self, name: &str) -> Option<Func> {
         let res = self.functions.get(&name.to_lowercase())?;
-
-        Some(Func {
-            ptr: unsafe { transmute::<*const u8, NativeFnPtr>(res.function.as_ptr()) },
-            signature: res.function.signature().clone(),
-            stack_size: res.stack_size,
-        })
+        Some(unsafe { Func::new(res) })
     }
 }
 
