@@ -51,6 +51,7 @@ impl MipMapGenerator {
             address_mode_v: AddressMode::ClampToEdge,
             address_mode_w: AddressMode::ClampToEdge,
             mipmap_filter: FilterMode::Linear,
+            compare: None,
         });
 
         Self {

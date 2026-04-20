@@ -173,6 +173,7 @@ impl SkyPass {
                 address_mode_u: AddressMode::ClampToEdge,
                 address_mode_v: AddressMode::ClampToEdge,
                 address_mode_w: AddressMode::ClampToEdge,
+                compare: None,
             }),
             sun_material: Mutex::default(),
             sun_position: Mutex::default(),

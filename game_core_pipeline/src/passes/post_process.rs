@@ -53,6 +53,7 @@ impl PostProcessPass {
             mag_filter: FilterMode::Linear,
             min_filter: FilterMode::Linear,
             mipmap_filter: FilterMode::Linear,
+            compare: None,
         });
 
         let pipelines = PipelineCache::new(

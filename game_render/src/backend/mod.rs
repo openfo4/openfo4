@@ -884,6 +884,7 @@ pub struct SamplerDescriptor {
     pub address_mode_v: AddressMode,
     pub address_mode_w: AddressMode,
     pub mipmap_filter: FilterMode,
+    pub compare: Option<CompareOp>,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]

@@ -139,6 +139,7 @@ impl CloudsPass {
             address_mode_u: AddressMode::Repeat,
             address_mode_v: AddressMode::Repeat,
             address_mode_w: AddressMode::Repeat,
+            compare: None,
         });
 
         Self {

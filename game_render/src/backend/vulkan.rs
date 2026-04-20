@@ -2253,7 +2253,7 @@ impl Device {
 
     /// Creates a new [`Sampler`].
     pub fn create_sampler(&self, descriptor: &SamplerDescriptor) -> Result<Sampler, Error> {
-        let info = vk::SamplerCreateInfo::default()
+        let mut info = vk::SamplerCreateInfo::default()
             .min_filter(descriptor.min_filter.into())
             .mag_filter(descriptor.mag_filter.into())
             .address_mode_u(descriptor.address_mode_u.into())
@@ -2266,6 +2266,10 @@ impl Device {
             // TODO: Add API for this
             .anisotropy_enable(false)
             .max_anisotropy(1.0);
+
+        if let Some(op) = descriptor.compare {
+            info = info.compare_enable(true).compare_op(op.into());
+        }
 
         let sampler = unsafe { self.device.create_sampler(&info, ALLOC)? };
         Ok(Sampler {

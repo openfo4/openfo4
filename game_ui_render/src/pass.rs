@@ -85,6 +85,7 @@ impl UiPipeline {
             mag_filter: FilterMode::Linear,
             min_filter: FilterMode::Nearest,
             mipmap_filter: FilterMode::Nearest,
+            compare: None,
         });
 
         let pipeline = PipelineCache::new(

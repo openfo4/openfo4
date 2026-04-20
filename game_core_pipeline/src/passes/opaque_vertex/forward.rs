@@ -8,8 +8,8 @@ use game_render::api::{
 };
 use game_render::backend::allocator::UsageFlags;
 use game_render::backend::{
-    AddressMode, BufferUsage, DrawIndirectCommand, FilterMode, LoadOp, SamplerDescriptor, StoreOp,
-    TextureDescriptor, TextureFormat, TextureUsage,
+    AddressMode, BufferUsage, CompareOp, DrawIndirectCommand, FilterMode, LoadOp,
+    SamplerDescriptor, StoreOp, TextureDescriptor, TextureFormat, TextureUsage,
 };
 use game_render::graph::{Node, RenderContext, SlotLabel};
 use game_tracing::trace_span;
@@ -45,6 +45,7 @@ pub struct OpaqueVertexForwardPass {
     linear_sampler: Sampler,
     shadow_map: Mutex<ShadowMapPipeline>,
     sky: SkyPass,
+    shadow_sampler: Sampler,
 }
 
 impl OpaqueVertexForwardPass {
@@ -56,6 +57,7 @@ impl OpaqueVertexForwardPass {
             mag_filter: FilterMode::Linear,
             min_filter: FilterMode::Linear,
             mipmap_filter: FilterMode::Linear,
+            compare: None,
         });
 
         Self {
@@ -67,6 +69,15 @@ impl OpaqueVertexForwardPass {
             forward_alpha_mask: Mutex::new(VisbufferAlphaMaskPipeline::new()),
             drawcall_gen_pipeline: Mutex::new(DrawcallGenPipeline::new()),
             shadow_map: Mutex::new(ShadowMapPipeline::new()),
+            shadow_sampler: queue.create_sampler(&SamplerDescriptor {
+                address_mode_u: AddressMode::ClampToEdge,
+                address_mode_v: AddressMode::ClampToEdge,
+                address_mode_w: AddressMode::ClampToEdge,
+                min_filter: FilterMode::Linear,
+                mag_filter: FilterMode::Linear,
+                mipmap_filter: FilterMode::Nearest,
+                compare: Some(CompareOp::GreaterEqual),
+            }),
         }
     }
 
@@ -321,6 +332,7 @@ impl OpaqueVertexForwardPass {
                     output: &output_texture,
                     shadow: &shadow_depth,
                     light_view_proj,
+                    shadow_sampler: &self.shadow_sampler,
                 },
             );
         }
@@ -403,7 +415,7 @@ struct ShadingPipelineConstants {
 
 fn compute_dir_light_space_matrix(camera: &Camera, direction: Vec3) -> Mat4 {
     let mut camera_proj = camera.projection;
-    camera_proj.far = 20.0;
+    camera_proj.far = 10.0;
     let corners = frustum_corners(camera.view_matrix(), camera_proj.projection_matrix());
 
     let center = corners.iter().sum::<Vec3>() / corners.len() as f32;

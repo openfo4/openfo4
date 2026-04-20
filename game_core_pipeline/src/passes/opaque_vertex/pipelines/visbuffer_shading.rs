@@ -39,6 +39,7 @@ pub struct ShadingParameters<'a> {
     pub output: &'a Texture,
     pub shadow: &'a Texture,
     pub light_view_proj: Mat4,
+    pub shadow_sampler: &'a Sampler,
 }
 
 pub struct ShadingPipeline {
@@ -168,6 +169,11 @@ impl ShadingPipeline {
                         stages: ShaderStages::COMPUTE,
                         kind: DescriptorType::Uniform,
                     },
+                    PipelineBinding {
+                        name: "shadow_sampler",
+                        stages: ShaderStages::COMPUTE,
+                        kind: DescriptorType::Sampler,
+                    },
                 ],
             ),
         }
@@ -219,6 +225,12 @@ impl ShadingPipeline {
         });
 
         pass.set("light_view_proj", ShaderStages::COMPUTE, &light_view_proj);
+
+        pass.set(
+            "shadow_sampler",
+            ShaderStages::COMPUTE,
+            params.shadow_sampler,
+        );
 
         let mut pass = pass.run_compute_pass(&ComputePassDescriptor {
             name: "Visbuffer Shading",
