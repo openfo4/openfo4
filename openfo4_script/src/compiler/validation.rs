@@ -1,3 +1,5 @@
+use std::fmt::{self, Display, Formatter};
+
 use game_tracing::trace_span;
 use hashbrown::{HashMap, HashSet};
 use indexmap::IndexSet;
@@ -40,6 +42,86 @@ pub enum Error {
     BranchOffsetOutOfBounds,
     #[error("undefined function {class}.{function}")]
     UndefinedFunction { class: String, function: String },
+    #[error(transparent)]
+    InvalidInstruction(InvalidInstruction),
+}
+
+#[derive(Clone, Debug, Error)]
+#[error("invalid instruction in {class}.{function} at position {index}: {error}")]
+pub struct InvalidInstruction {
+    class: String,
+    function: String,
+    index: usize,
+    error: OperandError,
+}
+
+#[derive(Clone, Debug)]
+pub enum OperandError {
+    // #[error("expected {expected} operands, found {found}")]
+    // InvalidOperandCount { expected: usize, found: usize },
+    UnknownVariable {
+        // operand: OperandKey,
+        variable: String,
+    },
+    InvalidType {
+        operand: OperandKey,
+        expected: Vec<GenericType>,
+        found: Type,
+    },
+    InvalidCoersion {
+        operand: OperandKey,
+        src: Type,
+        dst: Type,
+    },
+}
+
+impl Display for OperandError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::UnknownVariable { variable } => {
+                write!(f, "unknown variable: {}", variable)
+            }
+            Self::InvalidType {
+                operand,
+                expected,
+                found,
+            } => {
+                write!(f, "operand {} expected one of: ", operand)?;
+
+                if !expected.is_empty() {
+                    write!(f, "{:?}", &expected[0])?;
+                    for ty in expected.iter().skip(1) {
+                        write!(f, ", {:?}", ty)?;
+                    }
+                }
+
+                write!(f, ", found: {:?}", found)?;
+                Ok(())
+            }
+            Self::InvalidCoersion { operand, src, dst } => {
+                write!(
+                    f,
+                    "operand {} is not coercible from {:?} to {:?}",
+                    operand, src, dst
+                )
+            }
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub enum OperandKey {
+    Named(&'static str),
+    Unnamed(usize),
+}
+
+impl Display for OperandKey {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Named(v) => Display::fmt(v, f),
+            Self::Unnamed(v) => Display::fmt(v, f),
+        }
+    }
 }
 
 #[derive(Clone, Debug, Default)]
@@ -438,7 +520,28 @@ impl ValidationPass {
             variables.insert("self".to_owned(), ty);
         }
 
-        let variable_type = |value: &Value| -> Result<Type, Error> {
+        for (index, instruction) in func.instructions.iter().enumerate() {
+            if let Err(error) = self.validate_instruction(class, func, instruction, &variables) {
+                return Err(Error::InvalidInstruction(InvalidInstruction {
+                    class: class.name.clone(),
+                    function: func.name.clone(),
+                    index,
+                    error,
+                }));
+            }
+        }
+
+        Ok(())
+    }
+
+    fn validate_instruction(
+        &self,
+        class: &Class,
+        func: &Function,
+        instruction: &Instruction,
+        variables: &HashMap<String, Type>,
+    ) -> Result<(), OperandError> {
+        let variable_type = |value: &Value| -> Result<Type, OperandError> {
             match value {
                 Value::Null => Ok(Type::None),
                 Value::Bool(_) => Ok(Type::Bool),
@@ -450,446 +553,473 @@ impl ValidationPass {
                     match &*name {
                         // Magic variable that holds the current state as a string.
                         "::state" => Ok(Type::String),
-                        _ => variables
-                            .get(&name)
-                            .cloned()
-                            .ok_or_else(|| Error::UnknownVariable {
-                                class: class.name.clone(),
-                                function: func.name.clone(),
+                        _ => variables.get(&name).cloned().ok_or_else(|| {
+                            OperandError::UnknownVariable {
                                 variable: name.clone(),
-                            }),
+                            }
+                        }),
                     }
                 }
             }
         };
 
-        let assert_types_eq = |types: &[Type], expect: Type| -> Result<(), Error> {
-            for ty in types {
-                if ty != &expect {
-                    return Err(Error::InvalidOperands {
-                        expected: std::iter::repeat_n(expect, types.len()).collect(),
-                        found: types.to_vec(),
+        fn assert_type_eq(
+            operand: OperandKey,
+            found: Type,
+            expected: Type,
+        ) -> Result<(), OperandError> {
+            if found != expected {
+                Err(OperandError::InvalidType {
+                    operand,
+                    expected: vec![GenericType::Concrete(expected)],
+                    found,
+                })
+            } else {
+                Ok(())
+            }
+        }
+
+        match instruction {
+            Instruction::Nop => {}
+            // - lhs, rhs and dst must be integers.
+            Instruction::IAdd(op)
+            | Instruction::ISub(op)
+            | Instruction::IMul(op)
+            | Instruction::IDiv(op)
+            | Instruction::IMod(op) => {
+                let lhs = variable_type(&op.lhs)?;
+                let rhs = variable_type(&op.rhs)?;
+                let dst = variable_type(&op.dst)?;
+
+                assert_type_eq(OperandKey::Named("lhs"), lhs, Type::Int)?;
+                assert_type_eq(OperandKey::Named("rhs"), rhs, Type::Int)?;
+                assert_type_eq(OperandKey::Named("dst"), dst, Type::Int)?;
+            }
+            Instruction::INeg(op) => {
+                let src = variable_type(&op.src)?;
+                let dst = variable_type(&op.dst)?;
+
+                assert_type_eq(OperandKey::Named("src"), src, Type::Int)?;
+                assert_type_eq(OperandKey::Named("dst"), dst, Type::Int)?;
+            }
+            Instruction::FAdd(op)
+            | Instruction::FSub(op)
+            | Instruction::FMul(op)
+            | Instruction::FDiv(op) => {
+                let lhs = variable_type(&op.lhs)?;
+                let rhs = variable_type(&op.rhs)?;
+                let dst = variable_type(&op.dst)?;
+
+                assert_type_eq(OperandKey::Named("lhs"), lhs, Type::Float)?;
+                assert_type_eq(OperandKey::Named("rhs"), rhs, Type::Float)?;
+                assert_type_eq(OperandKey::Named("dst"), dst, Type::Float)?;
+            }
+            Instruction::FNeg(op) => {
+                let src = variable_type(&op.src)?;
+                let dst = variable_type(&op.dst)?;
+
+                assert_type_eq(OperandKey::Named("src"), src, Type::Float)?;
+                assert_type_eq(OperandKey::Named("dst"), dst, Type::Float)?;
+            }
+            Instruction::Not(op) => {
+                let src = variable_type(&op.src)?;
+                let dst = variable_type(&op.dst)?;
+
+                match (&src, &dst) {
+                    (Type::Bool, Type::Bool) => {}
+                    (Type::Int, Type::Bool) => {}
+                    (Type::String, Type::Bool) => {}
+                    (Type::Class(_), Type::Bool) => {}
+                    (Type::Struct(_), Type::Bool) => {}
+                    (Type::Array(_), Type::Bool) => {}
+                    _ => {
+                        todo!();
+                    }
+                }
+            }
+            Instruction::Store(op) => {
+                let src = variable_type(&op.src)?;
+                let dst = variable_type(&op.dst)?;
+
+                if !self.is_compatible(&src, &dst) {
+                    return Err(OperandError::InvalidCoersion {
+                        operand: OperandKey::Named("dst"),
+                        src,
+                        dst,
                     });
                 }
             }
+            Instruction::CmpEq(op)
+            | Instruction::CmpLt(op)
+            | Instruction::CmpLe(op)
+            | Instruction::CmpGt(op)
+            | Instruction::CmpGe(op) => {
+                let lhs = variable_type(&op.lhs)?;
+                let rhs = variable_type(&op.rhs)?;
+                let dst = variable_type(&op.dst)?;
 
-            Ok(())
-        };
-
-        for instruction in &func.instructions {
-            match instruction {
-                Instruction::Nop => {}
-                // - lhs, rhs and dst must be integers.
-                Instruction::IAdd(op) => {
-                    let lhs = variable_type(&op.lhs)?;
-                    let rhs = variable_type(&op.rhs)?;
-                    let dst = variable_type(&op.dst)?;
-                    assert_types_eq(&[lhs, rhs, dst], Type::Int)?;
+                if !self.is_compatible(&lhs, &rhs) && !self.is_compatible(&rhs, &lhs) {
+                    todo!();
                 }
-                Instruction::ISub(op) => {
-                    let lhs = variable_type(&op.lhs)?;
-                    let rhs = variable_type(&op.rhs)?;
-                    let dst = variable_type(&op.dst)?;
-                    assert_types_eq(&[lhs, rhs, dst], Type::Int)?;
+
+                assert_type_eq(OperandKey::Named("dst"), dst, Type::Bool)?;
+            }
+            Instruction::Branch(offset) => {
+                assert!(matches!(offset, Value::Int(_)))
+            }
+            Instruction::BranchIfTrue(op) | Instruction::BranchIfFalse(op) => {
+                let condition = variable_type(&op.condition)?;
+
+                assert!(self.is_castable(condition, Type::Bool));
+                assert!(matches!(op.offset, Value::Int(_)));
+            }
+            Instruction::CallMethod(op) => {
+                let object = variable_type(&op.object)?;
+                let dst = variable_type(&op.return_assignment)?;
+
+                let Type::Class(class) = object else {
+                    todo!();
+                };
+
+                let Value::Ident(func) = &op.function_name else {
+                    todo!();
+                };
+
+                let sig = self.function_signature(&class, func, true).unwrap();
+
+                assert!(!sig.is_static);
+
+                assert_eq!(op.args.len(), sig.params.len());
+                for (param, arg) in sig.params.iter().zip(&op.args) {
+                    let arg = variable_type(&arg)?;
+                    assert!(self.is_compatible(&arg, param));
                 }
-                Instruction::IMul(op) => {
-                    let lhs = variable_type(&op.lhs)?;
-                    let rhs = variable_type(&op.rhs)?;
-                    let dst = variable_type(&op.dst)?;
-                    assert_types_eq(&[lhs, rhs, dst], Type::Int)?;
+
+                assert!(self.is_compatible(&sig.returns, &dst));
+            }
+            Instruction::CallParent(op) => {
+                let dst = variable_type(&op.return_assignment)?;
+
+                let Value::Ident(func) = &op.function else {
+                    todo!();
+                };
+
+                let sig = self.function_signature(&class.parent, func, true).unwrap();
+
+                assert!(!sig.is_static);
+
+                assert_eq!(op.args.len(), sig.params.len());
+                for (param, arg) in sig.params.iter().zip(&op.args) {
+                    let arg = variable_type(&arg)?;
+                    assert!(self.is_compatible(&arg, param));
                 }
-                Instruction::IDiv(op) => {
-                    let lhs = variable_type(&op.lhs)?;
-                    let rhs = variable_type(&op.rhs)?;
-                    let dst = variable_type(&op.dst)?;
-                    assert_types_eq(&[lhs, rhs, dst], Type::Int)?;
+
+                assert!(self.is_compatible(&sig.returns, &dst));
+            }
+            Instruction::CallStatic(op) => {
+                let (Value::Ident(class), Value::Ident(func)) = (&op.class, &op.function) else {
+                    todo!();
+                };
+
+                // Static function do not recognise parent classes.
+                let sig = self.function_signature(class, func, false).unwrap();
+
+                assert!(sig.is_static);
+
+                assert_eq!(op.args.len(), sig.params.len());
+                for (parm, arg) in sig.params.iter().zip(&op.args) {
+                    let arg = variable_type(&arg)?;
+                    assert!(self.is_compatible(&arg, parm));
                 }
-                Instruction::IMod(op) => {
-                    let lhs = variable_type(&op.lhs)?;
-                    let rhs = variable_type(&op.rhs)?;
-                    let dst = variable_type(&op.dst)?;
-                    assert_types_eq(&[lhs, rhs, dst], Type::Int)?;
+
+                let dst = variable_type(&op.return_assignment)?;
+                assert!(self.is_compatible(&sig.returns, &dst));
+            }
+            Instruction::Return(value) => {
+                let value = variable_type(value)?;
+                let return_ty = self.resolve_ty(&func.return_ty).unwrap();
+
+                if !self.is_compatible(&value, &return_ty) {
+                    todo!();
                 }
-                Instruction::INeg(op) => {
-                    let src = variable_type(&op.src)?;
-                    let dst = variable_type(&op.dst)?;
-                    assert_types_eq(&[src, dst], Type::Int)?;
+            }
+            Instruction::StringConcat(op) => {
+                let lhs = variable_type(&op.lhs)?;
+                let rhs = variable_type(&op.rhs)?;
+                let dst = variable_type(&op.dst)?;
+
+                assert_type_eq(OperandKey::Named("lhs"), lhs, Type::String)?;
+                assert_type_eq(OperandKey::Named("rhs"), rhs, Type::String)?;
+                assert_type_eq(OperandKey::Named("dst"), dst, Type::String)?
+            }
+            Instruction::PropertyGet(op) => {
+                let value = variable_type(&op.value)?;
+                let dst = variable_type(&op.return_assignment)?;
+
+                let Type::Class(class) = value else {
+                    todo!();
+                };
+
+                let Value::Ident(property) = &op.property else {
+                    todo!();
+                };
+
+                let prop = self.get_property(&class, &property).unwrap();
+                let ty = self.resolve_ty(&prop.ty).unwrap();
+
+                assert_eq!(ty, dst);
+            }
+            Instruction::PropertySet(op) => {
+                let object = variable_type(&op.object)?;
+                let value = variable_type(&op.value)?;
+
+                let Type::Class(class) = object else {
+                    todo!();
+                };
+
+                let Value::Ident(property) = &op.property else {
+                    todo!();
+                };
+
+                let prop = self.get_property(&class, &property).unwrap();
+                let ty = self.resolve_ty(&prop.ty).unwrap();
+
+                assert_eq!(ty, value);
+            }
+            Instruction::ArrayCreate(op) => {
+                let src = variable_type(&op.src)?;
+                let dst = variable_type(&op.dst)?;
+
+                // src is the array length.
+                assert!(matches!(src, Type::Int));
+                assert!(matches!(dst, Type::Array(_)));
+            }
+            Instruction::ArrayLength(op) => {
+                let src = variable_type(&op.src)?;
+                let dst = variable_type(&op.dst)?;
+
+                assert!(matches!(src, Type::Array(_)));
+                assert!(matches!(dst, Type::Int));
+            }
+            Instruction::ArrayGet(op) => {
+                let array = variable_type(&op.array)?;
+                let index = variable_type(&op.index)?;
+                let dst = variable_type(&op.return_assignment)?;
+
+                let Type::Array(element) = array else {
+                    return Err(OperandError::InvalidType {
+                        operand: OperandKey::Named("array"),
+                        expected: vec![GenericType::Array],
+                        found: array,
+                    });
+                };
+
+                assert_type_eq(OperandKey::Named("dst"), dst, *element)?;
+                assert_type_eq(OperandKey::Named("index"), index, Type::Int)?;
+            }
+            Instruction::ArraySet(op) => {
+                let index = variable_type(&op.index)?;
+                let value = variable_type(&op.value)?;
+                let array = variable_type(&op.array)?;
+
+                let Type::Array(element) = array else {
+                    return Err(OperandError::InvalidType {
+                        operand: OperandKey::Named("array"),
+                        expected: vec![GenericType::Array],
+                        found: array,
+                    });
+                };
+
+                assert_type_eq(OperandKey::Named("value"), value, *element);
+                assert_type_eq(OperandKey::Named("index"), index, Type::Int)?;
+            }
+            Instruction::ArrayFind(op) | Instruction::ArrayRFind(op) => {
+                let array = variable_type(&op.array_value)?;
+                let start_index = variable_type(&op.start_index)?;
+                let dst = variable_type(&op.return_index)?;
+                let value = variable_type(&op.value)?;
+
+                let Type::Array(element) = array else {
+                    return Err(OperandError::InvalidType {
+                        operand: OperandKey::Named("array"),
+                        expected: vec![GenericType::Array],
+                        found: array,
+                    });
+                };
+
+                assert_type_eq(OperandKey::Named("value"), value, *element)?;
+                assert_type_eq(OperandKey::Named("start_index"), start_index, Type::Int)?;
+                assert_type_eq(OperandKey::Named("dst"), dst, Type::Int)?;
+            }
+            Instruction::Is(op) => {
+                let object = variable_type(&op.object)?;
+                let dst = variable_type(&op.return_assignment)?;
+
+                let Value::Ident(class) = &op.class else {
+                    todo!();
+                };
+
+                assert!(self.classes.contains_key(&class.to_lowercase()));
+                assert!(matches!(object, Type::Class(_)));
+                assert!(matches!(dst, Type::Bool));
+            }
+            Instruction::Cast(op) => {
+                let src = variable_type(&op.src)?;
+                let dst = variable_type(&op.dst)?;
+
+                assert!(self.is_castable(src, dst));
+            }
+            Instruction::StructCreate(op) => {
+                let dst = variable_type(&op.return_assignment)?;
+
+                if !matches!(dst, Type::Struct(_)) {
+                    return Err(OperandError::InvalidType {
+                        operand: OperandKey::Named("dst"),
+                        expected: vec![GenericType::Struct],
+                        found: dst,
+                    });
                 }
-                Instruction::FAdd(op) => {
-                    let lhs = variable_type(&op.lhs)?;
-                    let rhs = variable_type(&op.rhs)?;
-                    let dst = variable_type(&op.dst)?;
-                    assert_types_eq(&[lhs, rhs, dst], Type::Float)?;
+            }
+            Instruction::StructGet(op) => {
+                let struct_value = variable_type(&op.struct_value)?;
+                let dst = variable_type(&op.return_assignment)?;
+
+                let Value::Ident(member_name) = &op.member_name else {
+                    todo!();
+                };
+
+                let Type::Struct(members) = struct_value else {
+                    todo!();
+                };
+
+                let Some((_, ty)) = members
+                    .iter()
+                    .find(|(name, _)| name.to_lowercase() == member_name.to_lowercase())
+                else {
+                    todo!();
+                };
+                let ty = self.resolve_ty(&ty).unwrap();
+
+                assert_eq!(ty, dst);
+            }
+            Instruction::StructSet(op) => {
+                let struct_value = variable_type(&op.struct_value)?;
+                let value = variable_type(&op.value)?;
+
+                let Value::Ident(member_name) = &op.member_name else {
+                    todo!();
+                };
+
+                let Type::Struct(members) = struct_value else {
+                    todo!();
+                };
+
+                let Some((_, ty)) = members
+                    .iter()
+                    .find(|(name, _)| name.to_lowercase() == member_name.to_lowercase())
+                else {
+                    todo!();
+                };
+                let ty = self.resolve_ty(&ty).unwrap();
+
+                assert_eq!(ty, value);
+            }
+            Instruction::ArrayFindStruct(op) | Instruction::ArrayRFindStruct(op) => {
+                let array = variable_type(&op.array_value)?;
+                let start_index = variable_type(&op.start_index)?;
+                let dst = variable_type(&op.return_index)?;
+                let value = variable_type(&op.value)?;
+
+                let Value::String(member_name) = &op.member_name else {
+                    todo!();
+                };
+
+                let Type::Array(element) = array else {
+                    todo!();
+                };
+                let Type::Struct(members) = *element else {
+                    todo!();
+                };
+
+                let Some((_, ty)) = members
+                    .iter()
+                    .find(|(name, _)| name.to_lowercase() == member_name.to_lowercase())
+                else {
+                    todo!();
+                };
+                let ty = self.resolve_ty(&ty).unwrap();
+                assert_eq!(ty, value);
+                assert!(matches!(start_index, Type::Int));
+                assert!(matches!(dst, Type::Int));
+            }
+            Instruction::ArrayAdd(op) => {
+                let array = variable_type(&op.array)?;
+                let value = variable_type(&op.value)?;
+                let count = variable_type(&op.count)?;
+
+                let Type::Array(element) = array else {
+                    return Err(OperandError::InvalidType {
+                        operand: OperandKey::Named("array"),
+                        expected: vec![GenericType::Array],
+                        found: array,
+                    });
+                };
+
+                assert_type_eq(OperandKey::Named("value"), value, *element)?;
+                assert_type_eq(OperandKey::Named("count"), count, Type::Int)?;
+            }
+            Instruction::ArrayInsert(op) => {
+                let array = variable_type(&op.array)?;
+                let index = variable_type(&op.index)?;
+                let value = variable_type(&op.value)?;
+
+                let Type::Array(element) = array else {
+                    return Err(OperandError::InvalidType {
+                        operand: OperandKey::Named("array"),
+                        expected: vec![GenericType::Array],
+                        found: array,
+                    });
+                };
+
+                assert_type_eq(OperandKey::Named("value"), value, *element)?;
+                assert_type_eq(OperandKey::Named("index"), index, Type::Int)?;
+            }
+            Instruction::ArrayPop(op) => {
+                let array = variable_type(&op.array)?;
+
+                if !matches!(array, Type::Array(_)) {
+                    return Err(OperandError::InvalidType {
+                        operand: OperandKey::Named("array"),
+                        expected: vec![GenericType::Array],
+                        found: array,
+                    });
                 }
-                Instruction::FSub(op) => {
-                    let lhs = variable_type(&op.lhs)?;
-                    let rhs = variable_type(&op.rhs)?;
-                    let dst = variable_type(&op.dst)?;
-                    assert_types_eq(&[lhs, rhs, dst], Type::Float)?;
+            }
+            Instruction::ArrayRemove(op) => {
+                let array = variable_type(&op.array_value)?;
+                let index = variable_type(&op.index)?;
+                let count = variable_type(&op.count)?;
+
+                if !matches!(array, Type::Array(_)) {
+                    return Err(OperandError::InvalidType {
+                        operand: OperandKey::Named("array"),
+                        expected: vec![GenericType::Array],
+                        found: array,
+                    });
                 }
-                Instruction::FMul(op) => {
-                    let lhs = variable_type(&op.lhs)?;
-                    let rhs = variable_type(&op.rhs)?;
-                    let dst = variable_type(&op.dst)?;
-                    assert_types_eq(&[lhs, rhs, dst], Type::Float)?;
-                }
-                Instruction::FDiv(op) => {
-                    let lhs = variable_type(&op.lhs)?;
-                    let rhs = variable_type(&op.rhs)?;
-                    let dst = variable_type(&op.dst)?;
-                    assert_types_eq(&[lhs, rhs, dst], Type::Float)?;
-                }
-                Instruction::FNeg(op) => {
-                    let src = variable_type(&op.src)?;
-                    let dst = variable_type(&op.dst)?;
-                    assert_types_eq(&[src, dst], Type::Float)?;
-                }
-                Instruction::Not(op) => {
-                    let src = variable_type(&op.src)?;
-                    let dst = variable_type(&op.dst)?;
 
-                    match (&src, &dst) {
-                        (Type::Bool, Type::Bool) => {}
-                        (Type::Int, Type::Bool) => {}
-                        (Type::String, Type::Bool) => {}
-                        (Type::Class(_), Type::Bool) => {}
-                        (Type::Struct(_), Type::Bool) => {}
-                        (Type::Array(_), Type::Bool) => {}
-                        _ => {
-                            todo!();
-                        }
-                    }
-                }
-                Instruction::Store(op) => {
-                    let src = variable_type(&op.src)?;
-                    let dst = variable_type(&op.dst)?;
+                assert_type_eq(OperandKey::Named("index"), index, Type::Int)?;
+                assert_type_eq(OperandKey::Named("count"), count, Type::Int)?;
+            }
+            Instruction::ArrayClear(op) => {
+                let array = variable_type(&op.array)?;
 
-                    if !self.is_compatible(&src, &dst) {
-                        todo!();
-                    }
-                }
-                Instruction::CmpEq(op)
-                | Instruction::CmpLt(op)
-                | Instruction::CmpLe(op)
-                | Instruction::CmpGt(op)
-                | Instruction::CmpGe(op) => {
-                    let lhs = variable_type(&op.lhs)?;
-                    let rhs = variable_type(&op.rhs)?;
-                    let dst = variable_type(&op.dst)?;
-
-                    if !self.is_compatible(&lhs, &rhs) && !self.is_compatible(&rhs, &lhs) {
-                        todo!();
-                    }
-
-                    assert_types_eq(&[dst], Type::Bool)?;
-                }
-                Instruction::Branch(offset) => {
-                    assert!(matches!(offset, Value::Int(_)))
-                }
-                Instruction::BranchIfTrue(op) | Instruction::BranchIfFalse(op) => {
-                    let condition = variable_type(&op.condition)?;
-
-                    assert!(self.is_castable(condition, Type::Bool));
-                    assert!(matches!(op.offset, Value::Int(_)));
-                }
-                Instruction::CallMethod(op) => {
-                    let object = variable_type(&op.object)?;
-                    let dst = variable_type(&op.return_assignment)?;
-
-                    let Type::Class(class) = object else {
-                        todo!();
-                    };
-
-                    let Value::Ident(func) = &op.function_name else {
-                        todo!();
-                    };
-
-                    let sig = self.function_signature(&class, func, true)?;
-
-                    assert!(!sig.is_static);
-
-                    assert_eq!(op.args.len(), sig.params.len());
-                    for (param, arg) in sig.params.iter().zip(&op.args) {
-                        let arg = variable_type(&arg)?;
-                        assert!(self.is_compatible(&arg, param));
-                    }
-
-                    assert!(self.is_compatible(&sig.returns, &dst));
-                }
-                Instruction::CallParent(op) => {
-                    let dst = variable_type(&op.return_assignment)?;
-
-                    let Value::Ident(func) = &op.function else {
-                        todo!();
-                    };
-
-                    let sig = self.function_signature(&class.parent, func, true)?;
-
-                    assert!(!sig.is_static);
-
-                    assert_eq!(op.args.len(), sig.params.len());
-                    for (param, arg) in sig.params.iter().zip(&op.args) {
-                        let arg = variable_type(&arg)?;
-                        assert!(self.is_compatible(&arg, param));
-                    }
-
-                    assert!(self.is_compatible(&sig.returns, &dst));
-                }
-                Instruction::CallStatic(op) => {
-                    let (Value::Ident(class), Value::Ident(func)) = (&op.class, &op.function)
-                    else {
-                        todo!();
-                    };
-
-                    // Static function do not recognise parent classes.
-                    let sig = self.function_signature(class, func, false)?;
-
-                    assert!(sig.is_static);
-
-                    assert_eq!(op.args.len(), sig.params.len());
-                    for (parm, arg) in sig.params.iter().zip(&op.args) {
-                        let arg = variable_type(&arg)?;
-                        assert!(self.is_compatible(&arg, parm));
-                    }
-
-                    let dst = variable_type(&op.return_assignment)?;
-                    assert!(self.is_compatible(&sig.returns, &dst));
-                }
-                Instruction::Return(value) => {
-                    let value = variable_type(value)?;
-                    let return_ty = self.resolve_ty(&func.return_ty)?;
-
-                    if !self.is_compatible(&value, &return_ty) {
-                        todo!();
-                    }
-                }
-                Instruction::StringConcat(op) => {
-                    let lhs = variable_type(&op.lhs)?;
-                    let rhs = variable_type(&op.rhs)?;
-                    let dst = variable_type(&op.dst)?;
-                    assert_types_eq(&[lhs, rhs, dst], Type::String)?;
-                }
-                Instruction::PropertyGet(op) => {
-                    let value = variable_type(&op.value)?;
-                    let dst = variable_type(&op.return_assignment)?;
-
-                    let Type::Class(class) = value else {
-                        todo!();
-                    };
-
-                    let Value::Ident(property) = &op.property else {
-                        todo!();
-                    };
-
-                    let prop = self.get_property(&class, &property)?;
-                    let ty = self.resolve_ty(&prop.ty)?;
-
-                    assert_eq!(ty, dst);
-                }
-                Instruction::PropertySet(op) => {
-                    let object = variable_type(&op.object)?;
-                    let value = variable_type(&op.value)?;
-
-                    let Type::Class(class) = object else {
-                        todo!();
-                    };
-
-                    let Value::Ident(property) = &op.property else {
-                        todo!();
-                    };
-
-                    let prop = self.get_property(&class, &property)?;
-                    let ty = self.resolve_ty(&prop.ty)?;
-
-                    assert_eq!(ty, value);
-                }
-                Instruction::ArrayCreate(op) => {
-                    let src = variable_type(&op.src)?;
-                    let dst = variable_type(&op.dst)?;
-
-                    // src is the array length.
-                    assert!(matches!(src, Type::Int));
-                    assert!(matches!(dst, Type::Array(_)));
-                }
-                Instruction::ArrayLength(op) => {
-                    let src = variable_type(&op.src)?;
-                    let dst = variable_type(&op.dst)?;
-
-                    assert!(matches!(src, Type::Array(_)));
-                    assert!(matches!(dst, Type::Int));
-                }
-                Instruction::ArrayGet(op) => {
-                    let array = variable_type(&op.array)?;
-                    let index = variable_type(&op.index)?;
-                    let dst = variable_type(&op.return_assignment)?;
-
-                    let Type::Array(element) = array else {
-                        todo!();
-                    };
-
-                    assert_eq!(*element, dst);
-                    assert!(matches!(index, Type::Int));
-                }
-                Instruction::ArraySet(op) => {
-                    let index = variable_type(&op.index)?;
-                    let value = variable_type(&op.value)?;
-                    let array = variable_type(&op.array)?;
-
-                    let Type::Array(element) = array else {
-                        todo!();
-                    };
-
-                    assert_eq!(*element, value);
-                    assert!(matches!(index, Type::Int));
-                }
-                Instruction::ArrayFind(op) | Instruction::ArrayRFind(op) => {
-                    let array = variable_type(&op.array_value)?;
-                    let start_index = variable_type(&op.start_index)?;
-                    let dst = variable_type(&op.return_index)?;
-                    let value = variable_type(&op.value)?;
-
-                    let Type::Array(element) = array else {
-                        todo!();
-                    };
-
-                    assert_eq!(*element, value);
-                    assert!(matches!(start_index, Type::Int));
-                    assert!(matches!(dst, Type::Int));
-                }
-                Instruction::Is(op) => {
-                    let object = variable_type(&op.object)?;
-                    let dst = variable_type(&op.return_assignment)?;
-
-                    let Value::Ident(class) = &op.class else {
-                        todo!();
-                    };
-
-                    assert!(self.classes.contains_key(&class.to_lowercase()));
-                    assert!(matches!(object, Type::Class(_)));
-                    assert!(matches!(dst, Type::Bool));
-                }
-                Instruction::Cast(op) => {
-                    let src = variable_type(&op.src)?;
-                    let dst = variable_type(&op.dst)?;
-
-                    assert!(self.is_castable(src, dst));
-                }
-                Instruction::StructCreate(op) => {
-                    let dst = variable_type(&op.return_assignment)?;
-                    assert!(matches!(dst, Type::Struct(_)));
-                }
-                Instruction::StructGet(op) => {
-                    let struct_value = variable_type(&op.struct_value)?;
-                    let dst = variable_type(&op.return_assignment)?;
-
-                    let Value::Ident(member_name) = &op.member_name else {
-                        todo!();
-                    };
-
-                    let Type::Struct(members) = struct_value else {
-                        todo!();
-                    };
-
-                    let Some((_, ty)) = members
-                        .iter()
-                        .find(|(name, _)| name.to_lowercase() == member_name.to_lowercase())
-                    else {
-                        todo!();
-                    };
-                    let ty = self.resolve_ty(&ty)?;
-
-                    assert_eq!(ty, dst);
-                }
-                Instruction::StructSet(op) => {
-                    let struct_value = variable_type(&op.struct_value)?;
-                    let value = variable_type(&op.value)?;
-
-                    let Value::Ident(member_name) = &op.member_name else {
-                        todo!();
-                    };
-
-                    let Type::Struct(members) = struct_value else {
-                        todo!();
-                    };
-
-                    let Some((_, ty)) = members
-                        .iter()
-                        .find(|(name, _)| name.to_lowercase() == member_name.to_lowercase())
-                    else {
-                        todo!();
-                    };
-                    let ty = self.resolve_ty(&ty)?;
-
-                    assert_eq!(ty, value);
-                }
-                Instruction::ArrayFindStruct(op) | Instruction::ArrayRFindStruct(op) => {
-                    let array = variable_type(&op.array_value)?;
-                    let start_index = variable_type(&op.start_index)?;
-                    let dst = variable_type(&op.return_index)?;
-                    let value = variable_type(&op.value)?;
-
-                    let Value::String(member_name) = &op.member_name else {
-                        todo!();
-                    };
-
-                    let Type::Array(element) = array else {
-                        todo!();
-                    };
-                    let Type::Struct(members) = *element else {
-                        todo!();
-                    };
-
-                    let Some((_, ty)) = members
-                        .iter()
-                        .find(|(name, _)| name.to_lowercase() == member_name.to_lowercase())
-                    else {
-                        todo!();
-                    };
-                    let ty = self.resolve_ty(&ty)?;
-                    assert_eq!(ty, value);
-                    assert!(matches!(start_index, Type::Int));
-                    assert!(matches!(dst, Type::Int));
-                }
-                Instruction::ArrayAdd(op) => {
-                    let array = variable_type(&op.array)?;
-                    let value = variable_type(&op.value)?;
-                    let count = variable_type(&op.count)?;
-
-                    let Type::Array(element) = array else {
-                        todo!();
-                    };
-
-                    assert_eq!(*element, value);
-                    assert!(matches!(count, Type::Int))
-                }
-                Instruction::ArrayInsert(op) => {
-                    let array = variable_type(&op.array)?;
-                    let index = variable_type(&op.index)?;
-                    let value = variable_type(&op.value)?;
-
-                    let Type::Array(element) = array else {
-                        todo!();
-                    };
-
-                    assert_eq!(&*element, &value);
-                    assert!(matches!(index, Type::Int));
-                }
-                Instruction::ArrayPop(op) => {
-                    let ty = variable_type(&op.array)?;
-                    assert!(matches!(ty, Type::Array(_)));
-                }
-                Instruction::ArrayRemove(op) => {
-                    let array = variable_type(&op.array_value)?;
-                    let index = variable_type(&op.index)?;
-                    let count = variable_type(&op.count)?;
-
-                    assert!(matches!(array, Type::Array(_)));
-                    assert!(matches!(index, Type::Int));
-                    assert!(matches!(count, Type::Int));
-                }
-                Instruction::ArrayClear(op) => {
-                    let ty = variable_type(&op.array)?;
-                    assert!(matches!(ty, Type::Array(_)));
+                if !matches!(array, Type::Array(_)) {
+                    return Err(OperandError::InvalidType {
+                        operand: OperandKey::Named("array"),
+                        expected: vec![GenericType::Array],
+                        found: array,
+                    });
                 }
             }
         }
@@ -934,4 +1064,13 @@ pub struct FuncSignature {
     pub is_native: bool,
     pub params: Vec<Type>,
     pub returns: Type,
+}
+
+#[derive(Clone, Debug)]
+pub enum GenericType {
+    Concrete(Type),
+    /// Any array type.
+    Array,
+    /// Any struct type.
+    Struct,
 }
