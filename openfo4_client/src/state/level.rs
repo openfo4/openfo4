@@ -265,7 +265,7 @@ impl Level {
                         //    In this case `make_ref` is set of the second event and the `EntityLoader`
                         //    expects a ref-count of one to exist on the entity, i.e. we must create
                         //    the ref-count, but with the enity of the first event.
-                        if let Some(entity) = entities.entities.get(&record).copied() {
+                        if let Some(entity) = entities.entities.get_left(&record).copied() {
                             if !make_ref {
                                 continue;
                             }
@@ -312,7 +312,7 @@ impl Level {
                 }
                 Event::DropLastRefByRecord(id) => {
                     let mut entities = self.loader.entities.write();
-                    let entity = entities.entities.remove(&id).unwrap();
+                    let entity = entities.entities.remove_left(&id).unwrap();
                     entities.ref_counts.remove(&entity);
                 }
                 Event::DropLastRefByEntity(entity) => {
@@ -338,7 +338,7 @@ impl Level {
 
         let mut entities = Vec::new();
 
-        let loader_entities = self.loader.entities.read();
+        let mut loader_entities = self.loader.entities.write();
 
         for (entity, transform, worldspace, _, persistent) in
             world.query_mut::<(Entity, &Transform, &WorldSpace, &Root, Option<&Persistent>)>()
@@ -367,6 +367,8 @@ impl Level {
             if loader_entities.ref_counts.contains_key(&entity) {
                 continue;
             }
+
+            loader_entities.entities.remove_right(&entity);
 
             entities.push(entity);
             self.alive_entities.remove(&entity);

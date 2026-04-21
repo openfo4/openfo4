@@ -6,6 +6,7 @@ use std::task::{Context, Poll};
 use crossbeam::queue::SegQueue;
 use event_listener::EventListener;
 use futures_lite::FutureExt;
+use game_common::collections::bimap::BiMap;
 use hashbrown::HashMap;
 use openfo4_asset::AssetLoader;
 use openfo4_core::ecs::Entity;
@@ -38,7 +39,7 @@ pub struct EntityLoader {
 
 #[derive(Clone, Debug)]
 pub(super) struct EntitySet {
-    pub entities: HashMap<RecordId, Entity>,
+    pub entities: BiMap<RecordId, Entity>,
     // Most entities are not tracked, hence we store the refcounts
     // separately to save on memory/cache.
     pub ref_counts: HashMap<Entity, Arc<EntityRefInner>>,
@@ -61,7 +62,7 @@ impl EntityLoader {
             script_loader,
             events,
             entities: RwLock::new(EntitySet {
-                entities: HashMap::new(),
+                entities: BiMap::new(),
                 ref_counts: HashMap::new(),
             }),
             tick: event_listener::Event::new(),
@@ -81,7 +82,7 @@ impl EntityLoader {
         loop {
             let entity = {
                 let entities = self.entities.read();
-                entities.entities.get(&id).copied()
+                entities.entities.get_left(&id).copied()
             };
 
             let Some(entity) = entity else {
@@ -243,7 +244,7 @@ impl EntityLoader {
         fut.drop_ref = false;
 
         let entities = self.entities.read();
-        let entity = *entities.entities.get(&record.id).unwrap();
+        let entity = *entities.entities.get_left(&record.id).unwrap();
         let ref_count = entities.ref_counts.get(&entity).unwrap();
 
         Ok(EntityRef {
