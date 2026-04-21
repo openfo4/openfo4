@@ -71,7 +71,6 @@ pub fn handle_weapon_fire_events(
             continue;
         };
 
-        let transform = entity.get::<&GlobalTransform>().unwrap();
         let facing_dir = entity.get::<&FacingDirection>().unwrap();
         let mut inventory = entity.get::<&mut Inventory>().unwrap();
 
@@ -126,6 +125,7 @@ pub fn handle_weapon_fire_events(
             let theta = rand::random::<f32>() * 2.0 * PI;
             let offset = Vec2::new(r * theta.cos(), r * theta.sin());
 
+            // Compute the projectile target point.
             let direction = facing_dir.0
                 * Quat::from_axis_angle(Vec3::X, offset.x)
                 * Quat::from_axis_angle(Vec3::Y, offset.y)
@@ -145,6 +145,9 @@ pub fn handle_weapon_fire_events(
                 },
             );
 
+            let toi = hit.map(|h| h.toi).unwrap_or(max_toi);
+            let target = ray.point(toi);
+
             commands.spawn((
                 HitscanRaycast {
                     ray,
@@ -154,19 +157,41 @@ pub fn handle_weapon_fire_events(
                 DespawnAt(Instant::now() + Duration::from_secs(5)),
             ));
 
+            // Compute worldspace point that we weapon will hit.
+            let weapon_translation = weapon
+                .projectile_node
+                .map(|node| {
+                    // FIXME: This is 1 frame delayed.
+                    let transform = world.get::<&GlobalTransform>(node.entity).unwrap();
+                    (transform.0 * node.offset).translation
+                })
+                .unwrap_or(camera_transform.0.translation);
+
+            let weapon_hit = physics.cast_ray(
+                Ray {
+                    origin: weapon_translation,
+                    direction: (target - weapon_translation).normalize_or_zero(),
+                },
+                max_toi,
+                QueryFilter {
+                    layers: &[CollisionLayer::STATIC],
+                    exclude_colliders: &exclude_colliders,
+                },
+            );
+
             commands.spawn((
                 HitscanRaycast {
                     ray: Ray {
-                        origin: transform.0.translation,
-                        direction: facing_dir.0 * -Vec3::Z,
+                        origin: weapon_translation,
+                        direction: (target - weapon_translation).normalize_or_zero(),
                     },
                     max_toi,
-                    impact_toi: None,
+                    impact_toi: weapon_hit.map(|v| v.toi),
                 },
                 DespawnAt(Instant::now() + Duration::from_secs(5)),
             ));
 
-            if let Some(hit) = hit {
+            if let Some(hit) = weapon_hit {
                 if let Ok(body_part) = world.get::<&BodyPartBone>(hit.entity) {
                     hit_events.push(ProjectileHitEvent {
                         target: body_part.actor,
