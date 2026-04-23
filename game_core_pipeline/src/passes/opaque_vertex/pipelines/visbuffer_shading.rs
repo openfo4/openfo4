@@ -1,11 +1,10 @@
 use game_render::api::{
-    BindingResource, Buffer, BufferInitDescriptor, CommandQueue, ComputePassDescriptor,
-    ComputeStage, PipelineStage, Sampler, Texture, TextureView, TextureViewDescriptor,
+    BindingResource, Buffer, CommandQueue, ComputePassDescriptor, ComputeStage, PipelineStage,
+    Sampler, Texture, TextureView, TextureViewDescriptor,
 };
-use game_render::backend::allocator::UsageFlags;
-use game_render::backend::{BufferUsage, DescriptorType, ShaderStages};
+use game_render::backend::{DescriptorType, ShaderStages};
 use game_render::shader::{ShaderConfig, ShaderLanguage, ShaderSource};
-use glam::{Mat4, UVec2};
+use glam::UVec2;
 
 use crate::passes::pipeline::{Pipeline, PipelineBinding};
 
@@ -37,9 +36,9 @@ pub struct ShadingParameters<'a> {
     pub sampler: &'a Sampler,
     pub visbuffer: &'a Texture,
     pub output: &'a Texture,
-    pub shadow: &'a Texture,
-    pub light_view_proj: Mat4,
     pub shadow_sampler: &'a Sampler,
+    pub shadow_light_vps: &'a Buffer,
+    pub shadow_maps: &'a [&'a TextureView],
 }
 
 pub struct ShadingPipeline {
@@ -160,14 +159,14 @@ impl ShadingPipeline {
                         kind: DescriptorType::Sampler,
                     },
                     PipelineBinding {
-                        name: "shadow_map",
+                        name: "shadow_maps",
                         stages: ShaderStages::COMPUTE,
                         kind: DescriptorType::Texture,
                     },
                     PipelineBinding {
-                        name: "light_view_proj",
+                        name: "shadow_light_vps",
                         stages: ShaderStages::COMPUTE,
-                        kind: DescriptorType::Uniform,
+                        kind: DescriptorType::Storage,
                     },
                     PipelineBinding {
                         name: "shadow_sampler",
@@ -215,17 +214,18 @@ impl ShadingPipeline {
         pass.set("visbuffer", ShaderStages::COMPUTE, &visbuffer_view);
         let output_view = params.output.create_view(&TextureViewDescriptor::default());
         pass.set("output", ShaderStages::COMPUTE, &output_view);
-        let shadow_view = params.shadow.create_view(&TextureViewDescriptor::default());
-        pass.set("shadow_map", ShaderStages::COMPUTE, &shadow_view);
 
-        let light_view_proj = queue.create_buffer_init(&BufferInitDescriptor {
-            contents: bytemuck::bytes_of(&params.light_view_proj),
-            flags: UsageFlags::empty(),
-            usage: BufferUsage::UNIFORM,
-        });
-
-        pass.set("light_view_proj", ShaderStages::COMPUTE, &light_view_proj);
-
+        // Shadow
+        pass.set(
+            "shadow_maps",
+            ShaderStages::COMPUTE,
+            BindingResource::TextureArray(params.shadow_maps),
+        );
+        pass.set(
+            "shadow_light_vps",
+            ShaderStages::COMPUTE,
+            BindingResource::Buffer(params.shadow_light_vps),
+        );
         pass.set(
             "shadow_sampler",
             ShaderStages::COMPUTE,

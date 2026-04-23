@@ -141,14 +141,8 @@ impl OpaqueVertexForwardPass {
             flags: UsageFlags::empty(),
         });
 
-        let shadow_depth = ctx.queue.create_texture(&TextureDescriptor {
-            size: UVec2::splat(4096),
-            mip_levels: 1,
-            format: TextureFormat::Depth32Float,
-            usage: TextureUsage::RENDER_ATTACHMENT | TextureUsage::TEXTURE_BINDING,
-        });
-
-        let mut light_view_proj = Mat4::IDENTITY;
+        let mut shadow_light_vps = Vec::new();
+        let mut shadow_maps = Vec::new();
 
         // Opaque Forward
         if mesh_state.num_opauqe_instances != 0 {
@@ -189,25 +183,37 @@ impl OpaqueVertexForwardPass {
                 },
             );
 
-            for light in scene.directional_lights.values() {
-                let pv = compute_dir_light_space_matrix(camera, light.direction);
-                light_view_proj = pv;
+            // FIXME: More than one light.
+            for light in scene.directional_lights.values().take(1) {
+                let cascades = compute_directional_csm_shadow_params(camera, light.direction);
 
-                let mut pipeline = self.shadow_map.lock();
+                for cascade in cascades {
+                    let shadow_depth = ctx.queue.create_texture(&TextureDescriptor {
+                        size: cascade.size,
+                        mip_levels: 1,
+                        format: TextureFormat::Depth32Float,
+                        usage: TextureUsage::RENDER_ATTACHMENT | TextureUsage::TEXTURE_BINDING,
+                    });
 
-                pipeline.run(
-                    ctx.queue,
-                    ShadowMapParams {
-                        positions,
-                        offsets,
-                        instances: &opauqe_instances,
-                        materials,
-                        index_buffer,
-                        indirect_buffer: &draws,
-                        light: pv,
-                        shadow_depth: &shadow_depth,
-                    },
-                );
+                    let mut pipeline = self.shadow_map.lock();
+
+                    pipeline.run(
+                        ctx.queue,
+                        ShadowMapParams {
+                            positions,
+                            offsets,
+                            instances: &opauqe_instances,
+                            materials,
+                            index_buffer,
+                            indirect_buffer: &draws,
+                            light: cascade.light_vp,
+                            shadow_depth: &shadow_depth,
+                        },
+                    );
+
+                    shadow_light_vps.push(cascade.light_vp);
+                    shadow_maps.push(shadow_depth.create_view(&TextureViewDescriptor::default()));
+                }
             }
         }
 
@@ -308,6 +314,13 @@ impl OpaqueVertexForwardPass {
                 flags: UsageFlags::empty(),
             });
 
+            let shadow_light_vps = ctx.queue.create_buffer_init(&BufferInitDescriptor {
+                contents: bytemuck::must_cast_slice(&shadow_light_vps),
+                usage: BufferUsage::STORAGE,
+                flags: UsageFlags::empty(),
+            });
+            let shadow_map_views = shadow_maps.iter().collect::<Vec<_>>();
+
             pipeline.run(
                 ctx.queue,
                 ShadingParameters {
@@ -330,9 +343,9 @@ impl OpaqueVertexForwardPass {
                     sampler: &self.linear_sampler,
                     visbuffer: &visbuffer,
                     output: &output_texture,
-                    shadow: &shadow_depth,
-                    light_view_proj,
+                    shadow_light_vps: &shadow_light_vps,
                     shadow_sampler: &self.shadow_sampler,
+                    shadow_maps: &shadow_map_views,
                 },
             );
         }
@@ -413,9 +426,49 @@ struct ShadingPipelineConstants {
     viewport_size: UVec2,
 }
 
-fn compute_dir_light_space_matrix(camera: &Camera, direction: Vec3) -> Mat4 {
+const CSM_SHADOW_TEXTURES_SIZES: [u32; 4] = [4096, 4096, 4096, 4096];
+const CSM_SHADOW_TEXTURES_FAR: [f32; 4] = [10.0, 50.0, 300.0, 500.0];
+
+#[derive(Copy, Clone, Debug)]
+struct ShadowCascade {
+    light_vp: Mat4,
+    size: UVec2,
+}
+
+fn compute_directional_csm_shadow_params(camera: &Camera, direction: Vec3) -> [ShadowCascade; 4] {
+    let mut cascades = [ShadowCascade {
+        light_vp: Mat4::default(),
+        size: UVec2::ZERO,
+    }; 4];
+
+    let mut near = camera.projection.near;
+
+    for ((texture_size, far), cascade) in CSM_SHADOW_TEXTURES_SIZES
+        .iter()
+        .zip(CSM_SHADOW_TEXTURES_FAR)
+        .zip(&mut cascades)
+    {
+        let light_vp = compute_dir_light_space_matrix(camera, direction, *texture_size, near, far);
+
+        cascade.light_vp = light_vp;
+        cascade.size = UVec2::splat(*texture_size);
+
+        near = far;
+    }
+
+    cascades
+}
+
+fn compute_dir_light_space_matrix(
+    camera: &Camera,
+    direction: Vec3,
+    texture_size: u32,
+    near: f32,
+    far: f32,
+) -> Mat4 {
     let mut camera_proj = camera.projection;
-    camera_proj.far = 10.0;
+    camera_proj.near = near;
+    camera_proj.far = far;
     let corners = frustum_corners(camera.view_matrix(), camera_proj.projection_matrix());
 
     let center = corners.iter().sum::<Vec3>() / corners.len() as f32;
@@ -425,9 +478,7 @@ fn compute_dir_light_space_matrix(camera: &Camera, direction: Vec3) -> Mat4 {
         .unwrap();
     let radius = center.distance(*radius);
 
-    let texture_size = 4096.0;
-
-    let texels_per_unit = texture_size / (radius * 2.0);
+    let texels_per_unit = (texture_size as f32) / (radius * 2.0);
     let scale = Mat4::from_scale(Vec3::splat(texels_per_unit));
 
     let look_at = Mat4::look_at_rh(Vec3::ZERO, -direction, direction.any_orthonormal_vector());
