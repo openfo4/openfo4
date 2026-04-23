@@ -90,6 +90,11 @@ pub enum Instruction {
     Image(OpImage),
     ImageQueryFormat(OpImageQueryFormat),
     ImageQueryOrder(OpImageQueryOrder),
+    ImageQuerySizeLod(OpImageQuerySizeLod),
+    ImageQuerySize(OpImageQuerySize),
+    ImageQueryLod(OpImageQueryLod),
+    ImageQueryLevels(OpImageQueryLevels),
+    ImageQuerySamples(OpImageQuerySamples),
     ConvertFToU(OpConvertFToU),
     ConvertFToS(OpConvertFToS),
     ConvertSToF(OpConvertSToF),
@@ -342,6 +347,11 @@ impl Instruction {
             Image => Image,
             ImageQueryFormat => ImageQueryFormat,
             ImageQueryOrder => ImageQueryOrder,
+            ImageQuerySizeLod => ImageQuerySizeLod,
+            ImageQuerySize => ImageQuerySize,
+            ImageQueryLod => ImageQueryLod,
+            ImageQueryLevels => ImageQueryLevels,
+            ImageQuerySamples => ImageQuerySamples,
             ConvertFToU => ConvertFToU,
             ConvertFToS => ConvertFToS,
             ConvertSToF => ConvertSToF,
@@ -582,6 +592,11 @@ impl Instruction {
             Image => Image,
             ImageQueryFormat => ImageQueryFormat,
             ImageQueryOrder => ImageQueryOrder,
+            ImageQuerySizeLod => ImageQuerySizeLod,
+            ImageQuerySize => ImageQuerySize,
+            ImageQueryLod => ImageQueryLod,
+            ImageQueryLevels => ImageQueryLevels,
+            ImageQuerySamples => ImageQuerySamples,
             ConvertFToU => ConvertFToU,
             ConvertFToS => ConvertFToS,
             ConvertSToF => ConvertSToF,
@@ -2009,6 +2024,53 @@ spirv_op! {
 spirv_op! {
     #[derive(Clone, Debug)]
     pub struct OpImageQueryOrder {
+        pub result_type: Id,
+        pub result: Id,
+        pub image: Id,
+    }
+}
+
+spirv_op! {
+    #[derive(Clone, Debug)]
+    pub struct OpImageQuerySizeLod {
+        pub result_type: Id,
+        pub result: Id,
+        pub image: Id,
+        pub lod: Id,
+    }
+}
+
+spirv_op! {
+    #[derive(Clone, Debug)]
+    pub struct OpImageQuerySize {
+        pub result_type: Id,
+        pub result: Id,
+        pub image: Id,
+    }
+}
+
+spirv_op! {
+    #[derive(Clone, Debug)]
+    pub struct OpImageQueryLod {
+        pub result_type: Id,
+        pub result: Id,
+        pub sampled_image: Id,
+        pub coordinate: Id,
+    }
+}
+
+spirv_op! {
+    #[derive(Clone, Debug)]
+    pub struct OpImageQueryLevels {
+        pub result_type: Id,
+        pub result: Id,
+        pub image: Id,
+    }
+}
+
+spirv_op! {
+    #[derive(Clone, Debug)]
+    pub struct OpImageQuerySamples {
         pub result_type: Id,
         pub result: Id,
         pub image: Id,
