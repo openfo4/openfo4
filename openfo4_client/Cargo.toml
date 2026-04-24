@@ -34,6 +34,7 @@ openfo4_script = { version = "0.1.0", path = "../openfo4_script" }
 openfo4_pex = { version = "0.1.0", path = "../openfo4_pex" }
 
 glam = { workspace = true, features = ["bytemuck"] }
+hecs = { workspace = true }
 tracing = { workspace = true }
 bytes = "1.10.1"
 thiserror = "2.0.12"
@@ -46,10 +47,6 @@ slab = "0.4.10"
 indexmap = "2.12.1"
 futures = "0.3.31"
 async-io = "2.6.0"
-
-# DDS support for image crate
-# See https://github.com/image-rs/image/pull/225
-image = { git = "https://github.com/RunDevelopment/image.git", rev = "637cf43ad5195c1c9085c60102d5dafebb85f843", default-features = false, features = ["jpeg", "png", "dds"] }
 
 futures-lite = "2.6.0"
 bitflags = "2.9.4"

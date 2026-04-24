@@ -3,6 +3,7 @@ pub mod entities;
 pub mod lights;
 pub mod material;
 pub mod sky;
+pub mod terrain;
 
 mod passes;
 

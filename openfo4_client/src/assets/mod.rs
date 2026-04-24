@@ -77,9 +77,6 @@ pub fn init_asset_loader(file_loader: &Arc<FileLoader>, entities: &Entities) -> 
     loader.register::<DataFile<openfo4_dds::Image>>(DataFileContext {
         loader: file_loader.clone(),
     });
-    loader.register::<DataFile<image::ImageBuffer<image::Rgba<u8>, Vec<u8>>>>(DataFileContext {
-        loader: file_loader.clone(),
-    });
     loader.register::<FileAnimationClip>(());
 
     loader

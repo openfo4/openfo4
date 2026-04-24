@@ -39,6 +39,7 @@ pub struct ShadingParameters<'a> {
     pub shadow_sampler: &'a Sampler,
     pub shadow_light_vps: &'a Buffer,
     pub shadow_maps: &'a [&'a TextureView],
+    pub terrain_layers: &'a Buffer,
 }
 
 pub struct ShadingPipeline {
@@ -173,6 +174,11 @@ impl ShadingPipeline {
                         stages: ShaderStages::COMPUTE,
                         kind: DescriptorType::Sampler,
                     },
+                    PipelineBinding {
+                        name: "terrain_layers",
+                        stages: ShaderStages::COMPUTE,
+                        kind: DescriptorType::Storage,
+                    },
                 ],
             ),
         }
@@ -230,6 +236,11 @@ impl ShadingPipeline {
             "shadow_sampler",
             ShaderStages::COMPUTE,
             params.shadow_sampler,
+        );
+        pass.set(
+            "terrain_layers",
+            ShaderStages::COMPUTE,
+            params.terrain_layers,
         );
 
         let mut pass = pass.run_compute_pass(&ComputePassDescriptor {

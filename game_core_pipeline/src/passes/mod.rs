@@ -22,6 +22,7 @@ use game_render::backend::{
 };
 use game_render::buffer::GpuBuffer;
 use game_render::buffer::slab::{CompactSlabBuffer, SlabBuffer, SlabIndex};
+use game_render::buffer::suballocated::SubAllocatedGrowableBuffer;
 use game_render::buffer::texture_slab::{TextureSlab, TextureSlabIndex};
 use game_render::graph::{NodeLabel, RenderGraph, SlotFlags, SlotKind, SlotLabel};
 use game_render::mesh::Mesh;
@@ -38,6 +39,7 @@ use crate::material::AlphaMode;
 use crate::passes::skinning::SkinningPass;
 use crate::passes::sky::SkyState;
 use crate::passes::transparent_vertex::TransparentVertexPass;
+use crate::passes::update::RawTerrainLayer;
 
 const DEPTH_FORMAT: TextureFormat = TextureFormat::Depth32Float;
 const HDR_FORMAT: TextureFormat = TextureFormat::Rgba16Float;
@@ -122,6 +124,8 @@ struct State {
     material_slab: SlabBuffer<RawMaterialData>,
 
     sky: Arc<Mutex<SkyState>>,
+    terrain_layers: SubAllocatedGrowableBuffer<RawTerrainLayer>,
+    terrain_material: HashMap<MaterialId, TerrainMaterialState>,
 }
 
 impl State {
@@ -210,6 +214,8 @@ impl State {
             material_slab: SlabBuffer::new(BufferUsage::STORAGE),
             mesh: MeshStateImpl::new(queue),
             sky,
+            terrain_layers: SubAllocatedGrowableBuffer::new(queue, BufferUsage::STORAGE),
+            terrain_material: HashMap::new(),
         }
     }
 }
@@ -330,6 +336,8 @@ struct RawMaterialData {
     grayscale_palette_scale: f32,
     uv_offset: [f32; 2],
     uv_scale: [f32; 2],
+    terrain_layers_index: u32,
+    terrain_layers_count: u32,
 }
 
 impl GpuBuffer for RawMaterialData {
@@ -347,6 +355,7 @@ bitflags! {
         const ROUGHNESS_FROM_GLOSSINESS = 1 << 3;
         const NORMAL_ENCODING_TWO_CHANNEL = 1 << 4;
         const GRAYSCALE_PALETTE = 1 << 5;
+        const TERRAIN = 1 << 6;
     }
 }
 
@@ -425,4 +434,11 @@ pub enum InstanceKey {
 pub struct MaterialState {
     pub index: SlabIndex,
     pub alpha_mode: AlphaMode,
+}
+
+#[derive(Clone, Debug)]
+pub struct TerrainMaterialState {
+    pub materials: Vec<SlabIndex>,
+    pub textures: Vec<TextureSlabIndex>,
+    pub layer_index: u64,
 }

@@ -6,6 +6,7 @@ public static const u32 MATERIAL_FLAGS_METALLIC_FROM_SPECULAR = 1 << 2;
 public static const u32 MATERIAL_FLAGS_ROUGHNESS_FROM_GLOSSINESS = 1 << 3;
 public static const u32 MATERIAL_FLAGS_NORMAL_ENCODING_TWO_COMPONENT = 1 << 4;
 public static const u32 MATERIAL_FLAGS_GRAYSCALE_PALETTE = 1 << 5;
+public static const u32 MATERIAL_FLAGS_TERRAIN = 1 << 6;
 
 public struct Material {
     public u32 flags;
@@ -25,4 +26,6 @@ public struct Material {
     public f32 grayscale_palette_scale;
     public Vec2 uv_offset;
     public Vec2 uv_scale;
+    public u32 terrain_layer_index;
+    public u32 terrain_layer_count;
 }

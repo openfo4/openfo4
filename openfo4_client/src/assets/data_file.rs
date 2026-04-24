@@ -1,7 +1,6 @@
 use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
 
-use image::{ImageBuffer, Rgba};
 use openfo4_asset::{Asset, AssetLoader};
 use openfo4_core::path::DataPathBuf;
 use openfo4_dds::Image;
@@ -98,14 +97,5 @@ impl DecodeAsset for Image {
     #[instrument(name = "Image::decode", skip_all)]
     fn decode(buf: &[u8]) -> Result<Self, Self::Error> {
         Image::parse(buf)
-    }
-}
-
-impl DecodeAsset for ImageBuffer<Rgba<u8>, Vec<u8>> {
-    type Error = image::ImageError;
-
-    #[instrument(name = "ImageBuffer::decode", skip_all)]
-    fn decode(buf: &[u8]) -> Result<Self, Self::Error> {
-        Ok(image::load_from_memory(buf)?.to_rgba8())
     }
 }

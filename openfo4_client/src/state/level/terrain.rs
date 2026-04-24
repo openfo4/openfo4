@@ -1,8 +1,6 @@
 use std::sync::Arc;
 
-use game_render::mesh::{Indices, Mesh};
-use glam::{UVec2, Vec2, Vec3};
-use image::{ImageBuffer, Rgba};
+use glam::{UVec2, Vec3};
 use openfo4_asset::AssetLoader;
 use openfo4_core::path::DataPathBuf;
 use openfo4_core::record::RecordId;
@@ -12,20 +10,21 @@ use openfo4_nif::bgsm::Bgsm;
 use openfo4_physics::components::{Collider, ColliderShape, CollisionLayer, RigidBody, TriMesh};
 
 use crate::assets::data_file::DataFile;
+use crate::assets::texture::{FileImageHandle, FileImageKey};
 use crate::cell::{CELL_SIZE, CellId};
 use crate::components::NiTransform;
 use crate::state::esp::EspLoader;
 use crate::state::level::LoadContext;
 use crate::state::level::record::SpawnEntity;
-use crate::state::terrain::{TerrainLayer, TerrainRegion};
+use crate::state::terrain::{TerrainLayer, TerrainQuadrant, TerrainRegion};
 
-const LAND_POINTS: UVec2 = UVec2::splat(33);
+pub const LAND_POINTS: UVec2 = UVec2::splat(33);
 
 /// Translation offset applied to terrain mesh entities.
 ///
 /// This is used to place the entity in the center of the cell. If we place it at the edge of cells
 /// it causes some numerical instabilities that cause terrains to get incorrectly assigned to cells.
-const LAND_OFFSET: Vec3 = Vec3::new(2048.0, 2048.0, 0.0);
+pub const LAND_OFFSET: Vec3 = Vec3::new(2048.0, 2048.0, 0.0);
 
 pub async fn load_land(ctx: &LoadContext<'_>, land_id: RecordId, land: &Land) -> SpawnEntity {
     let positions: Vec<Vec3> = land
@@ -47,21 +46,21 @@ pub async fn load_land(ctx: &LoadContext<'_>, land_id: RecordId, land: &Land) ->
             Vec3::new(x, y, z) - LAND_OFFSET
         })
         .collect();
-    let normals = land
-        .vertex_normals
-        .as_ref()
-        .unwrap()
-        .0
-        .iter()
-        .map(|[x, y, z]| {
-            (Vec3::new(*x as f32, *y as f32, *z as f32) / i8::MAX as f32).normalize_or_zero()
-        })
-        .collect();
 
-    let mut uvs = Vec::new();
-    for x in 0..33 {
-        for y in 0..33 {
-            uvs.push(Vec2::new(x as f32, y as f32) / 33.0);
+    let mut heights = Box::new([[0.0; 33]; 33]);
+    for a in 0..33 {
+        for b in 0..33 {
+            let height = land.vertex_height.as_ref().unwrap().heightmap[a][b];
+            heights[a][b] = height;
+        }
+    }
+
+    let mut normals = Box::new([[Vec3::ZERO; 33]; 33]);
+    for a in 0..33 {
+        for b in 0..33 {
+            let [x, y, z] = land.vertex_normals.as_ref().unwrap()[a * 33 + b];
+            normals[a][b] =
+                (Vec3::new(x as f32, y as f32, z as f32) / i8::MAX as f32).normalize_or_zero();
         }
     }
 
@@ -81,13 +80,6 @@ pub async fn load_land(ctx: &LoadContext<'_>, land_id: RecordId, land: &Land) ->
             ]);
         }
     }
-
-    let mut mesh = Mesh::new();
-    mesh.set_positions(positions.clone());
-    mesh.set_normals(normals);
-    mesh.set_uvs(uvs);
-    mesh.set_indices(Indices::U32(indices.clone()));
-    mesh.compute_tangents();
 
     let mut layers = Vec::new();
     for base_layer in &land.base_layer {
@@ -122,8 +114,6 @@ pub async fn load_land(ctx: &LoadContext<'_>, land_id: RecordId, land: &Land) ->
 
     layers.sort_by(|a, b| a.layer.cmp(&b.layer));
 
-    let mesh = ctx.shared.entities.create_mesh(mesh);
-
     let collider = Collider {
         friction: 1.0,
         restitution: 1.0,
@@ -137,10 +127,10 @@ pub async fn load_land(ctx: &LoadContext<'_>, land_id: RecordId, land: &Land) ->
         rigid_body: Some(RigidBody::FIXED),
         terrain: Some(TerrainRegion {
             cell: CellId::from(ctx.grid_offset()),
-            mesh,
+            heights,
+            normals,
             layers: Arc::new(layers),
-            res: 0,
-            entity: None,
+            entities: Vec::new(),
         }),
         persistent: true,
         ..Default::default()
@@ -182,10 +172,10 @@ async fn load_terrain_layer(
     };
 
     let position = match texture.quadrant {
-        Quadrant::BottomLeft => UVec2::ZERO,
-        Quadrant::BottomRight => UVec2::new(CELL_SIZE.x / 2, 0),
-        Quadrant::TopLeft => UVec2::new(0, CELL_SIZE.y / 2),
-        Quadrant::TopRight => CELL_SIZE / 2,
+        Quadrant::BottomLeft => TerrainQuadrant::LxLy,
+        Quadrant::BottomRight => TerrainQuadrant::HxLy,
+        Quadrant::TopLeft => TerrainQuadrant::LxHy,
+        Quadrant::TopRight => TerrainQuadrant::HxHy,
     };
 
     let bgsm = match &texture_set.material {
@@ -241,7 +231,10 @@ async fn load_terrain_layer(
     let diffuse_texture = match &diffuse_path {
         Some(path) => Some(
             loader
-                .load::<DataFile<ImageBuffer<Rgba<u8>, Vec<u8>>>, _>(path)
+                .load::<FileImageHandle, _>(&FileImageKey {
+                    path: path.clone(),
+                    force_srgb: Some(true),
+                })
                 .await
                 .unwrap(),
         ),
@@ -250,7 +243,10 @@ async fn load_terrain_layer(
     let normal_texture = match &normal_path {
         Some(path) => Some(
             loader
-                .load::<DataFile<ImageBuffer<Rgba<u8>, Vec<u8>>>, _>(path)
+                .load::<FileImageHandle, _>(&FileImageKey {
+                    path: path.clone(),
+                    force_srgb: None,
+                })
                 .await
                 .unwrap(),
         ),
@@ -259,7 +255,10 @@ async fn load_terrain_layer(
     let smooth_spec_texture = match &smooth_spec_path {
         Some(path) => Some(
             loader
-                .load::<DataFile<ImageBuffer<Rgba<u8>, Vec<u8>>>, _>(path)
+                .load::<FileImageHandle, _>(&FileImageKey {
+                    path: path.clone(),
+                    force_srgb: None,
+                })
                 .await
                 .unwrap(),
         ),
@@ -290,7 +289,6 @@ async fn load_terrain_layer(
         alpha,
         diffuse_texture,
         normal_texture,
-        size: CELL_SIZE / 2,
         smooth_spec_texture,
         smoothness,
         specular_strength,

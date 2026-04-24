@@ -40,9 +40,18 @@ StructuredBuffer<Material> materials;
 Texture2D<Vec4>[] textures;
 SamplerState sampler;
 
+// Shadows
 Texture2D<Vec4>[] shadow_maps;
 StructuredBuffer<Mat4> shadow_light_vps;
 SamplerComparisonState shadow_sampler;
+
+// Terrain
+StructuredBuffer<TerrainLayer> terrain_layers;
+
+struct TerrainLayer {
+    u32 material;
+    u32 alpha_texture;
+}
 
 static const u32 NUM_THREADS = 64;
 
@@ -119,7 +128,12 @@ void main(
     let vertex_normal = load_vertex_normal(barys, offsets, indices, instance);
 
     // BRDF parameters
-    let pbr_material = sample_material(material, uv, vert_color, vertex_normal);
+    var pbr_material: pbr::Material;
+    if ((material.flags & MATERIAL_FLAGS_TERRAIN) != 0) {
+        pbr_material = sample_terrain_material(material, uv, vert_color, vertex_normal);
+    } else {
+        pbr_material = sample_material(material, uv, vert_color, vertex_normal);
+    }
 
     let view_dir = normalize(constants.camera.position - world_position);
 
@@ -276,5 +290,33 @@ func sample_material(material: Material, uv: Gradient, vert_color: Vec4, normal:
     pbr_material.reflectance = material.reflectance;
     pbr_material.specular_color = specular_color;
     pbr_material.specular_strength = specular_strength;
+    return pbr_material;
+}
+
+func sample_terrain_material(material: Material, uv: Gradient, vertex_color: Vec4, normal: VertexNormal) -> pbr::Material {
+    let start = material.terrain_layer_index;
+    let end = material.terrain_layer_index + material.terrain_layer_count;
+
+    var pbr_material: pbr::Material;
+
+    static const f32 TERRAIN_UV_SCALE = 6.0;
+
+    for (int i = start; i < end; i++) {
+        let layer = terrain_layers[i];
+        let layer_material = sample_material(materials[layer.material], uv.mul(TERRAIN_UV_SCALE), vertex_color, normal);
+
+        // TODO: Transpose this value ahead of time.
+        let a_uv = Vec2(uv.value.y, uv.value.x);
+        let alpha = textures[NonUniformResourceIndex(layer.alpha_texture)].SampleLevel(sampler, a_uv, 0).r;
+
+        pbr_material.base_color = lerp(pbr_material.base_color, layer_material.base_color, alpha);
+        pbr_material.normal = lerp(pbr_material.normal, layer_material.normal, alpha);
+        pbr_material.roughness = lerp(pbr_material.roughness, layer_material.roughness, alpha);
+        pbr_material.metallic = lerp(pbr_material.metallic, layer_material.metallic, alpha);
+        pbr_material.specular_color = lerp(pbr_material.specular_color, layer_material.specular_color, alpha);
+        pbr_material.specular_strength = lerp(pbr_material.specular_strength, layer_material.specular_strength, alpha);
+        pbr_material.reflectance = lerp(pbr_material.reflectance, layer_material.reflectance, alpha);
+    }
+
     return pbr_material;
 }

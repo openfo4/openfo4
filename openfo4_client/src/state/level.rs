@@ -73,7 +73,7 @@ impl Level {
         shared: Arc<SharedState>,
         executor: &mut Executor,
     ) -> Self {
-        let terrain_manager = TerrainManager::new(pool.clone(), shared.entities.clone());
+        let terrain_manager = TerrainManager::new(shared.entities.clone());
 
         let (tx, rx) = async_channel::unbounded::<Request>();
         let events = Arc::new(SegQueue::new());

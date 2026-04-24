@@ -213,8 +213,7 @@ impl SpawnEntity {
             object_ref_set.insert(form, entity);
         }
 
-        if let Some(mut terrain) = terrain {
-            terrain.entity = Some(entity);
+        if let Some(terrain) = terrain {
             terrain_manager.insert(terrain);
         }
 

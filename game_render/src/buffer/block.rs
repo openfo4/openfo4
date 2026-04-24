@@ -97,10 +97,16 @@ impl BlockBuffer {
         }
     }
 
-    pub fn remove(&mut self, index: u32) {
-        assert!(self.occupied_blocks.contains(&index));
+    /// Removes the element with the given `index` from the buffer and returns whether an element
+    /// was removed at the given `index`.
+    pub fn remove(&mut self, index: u32) -> bool {
+        if !self.occupied_blocks.contains(&index) {
+            return false;
+        }
+
         self.occupied_blocks.remove(&index);
         self.free_blocks.push(Reverse(index));
+        true
     }
 
     /// Compact the buffer as much as possible by moving elements to the start of the buffer.

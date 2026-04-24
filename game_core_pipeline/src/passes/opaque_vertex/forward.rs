@@ -321,6 +321,8 @@ impl OpaqueVertexForwardPass {
             });
             let shadow_map_views = shadow_maps.iter().collect::<Vec<_>>();
 
+            let terrain_layers = state.terrain_layers.buffer();
+
             pipeline.run(
                 ctx.queue,
                 ShadingParameters {
@@ -346,6 +348,7 @@ impl OpaqueVertexForwardPass {
                     shadow_light_vps: &shadow_light_vps,
                     shadow_sampler: &self.shadow_sampler,
                     shadow_maps: &shadow_map_views,
+                    terrain_layers,
                 },
             );
         }

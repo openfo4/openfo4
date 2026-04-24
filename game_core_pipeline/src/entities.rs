@@ -13,6 +13,7 @@ use crate::camera::Camera;
 use crate::lights::Light;
 use crate::passes::sky::SkyState;
 use crate::sky::SkyMaterial;
+use crate::terrain::TerrainMaterial;
 
 #[derive(Clone, Debug)]
 pub struct Entities {
@@ -90,12 +91,15 @@ impl Entities {
 
         self.inner
             .events
-            .send(Event::CreateMaterial(id, material.clone()))
+            .send(Event::CreateMaterial(
+                id,
+                MaterialInner::Standard(material.clone()),
+            ))
             .ok();
         MaterialHandle {
             inner: self.inner.clone(),
             id,
-            material,
+            material: vec![material],
         }
     }
 
@@ -184,6 +188,24 @@ impl Entities {
 
     pub fn set_cloud_uv_offset(&self, layer: usize, offset: Vec2) {
         self.sky.lock().cloud_uvs.push((layer, offset));
+    }
+
+    pub fn create_terrain_material(&self, material: TerrainMaterial) -> MaterialHandle {
+        let mut materials = self.inner.materials.lock();
+        let id = MaterialId(materials.insert(1));
+
+        self.inner
+            .events
+            .send(Event::CreateMaterial(
+                id,
+                MaterialInner::Terrain(material.clone()),
+            ))
+            .ok();
+        MaterialHandle {
+            inner: self.inner.clone(),
+            id,
+            material: material.layers.into_iter().map(|v| v.material).collect(),
+        }
     }
 }
 
@@ -324,7 +346,7 @@ pub struct MaterialHandle {
     id: MaterialId,
     // Keep the original material, which contains handles to all images
     // and prevents them from being dropped.
-    material: StandardMaterial,
+    material: Vec<StandardMaterial>,
 }
 
 impl MaterialHandle {
@@ -502,7 +524,7 @@ pub(crate) enum Event {
     DestroyScene(SceneId),
     CreateMesh(MeshId, Mesh),
     DestroyMesh(MeshId),
-    CreateMaterial(MaterialId, StandardMaterial),
+    CreateMaterial(MaterialId, MaterialInner),
     DestroyMaterial(MaterialId),
     CreateImage(ImageId, MipImage),
     DestroyImage(ImageId),
@@ -513,4 +535,10 @@ pub(crate) enum Event {
     CreateLight(LightId, Light),
     DestroyLight(SceneId, LightId),
     UpdateBoneTransforms(ObjectId, Vec<Transform>),
+}
+
+#[derive(Clone, Debug)]
+pub(crate) enum MaterialInner {
+    Standard(StandardMaterial),
+    Terrain(TerrainMaterial),
 }

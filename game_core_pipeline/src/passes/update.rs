@@ -10,22 +10,25 @@ use game_render::api::{
 };
 use game_render::backend::allocator::UsageFlags;
 use game_render::backend::{
-    BufferUsage, ImageDataLayout, TextureDescriptor, TextureUsage, max_mips_2d,
+    BufferUsage, ImageDataLayout, TextureDescriptor, TextureFormat, TextureUsage, max_mips_2d,
 };
 use game_render::buffer::GpuBuffer;
 use game_render::buffer::slab::{SlabBuffer, SlabIndex};
+use game_render::buffer::suballocated::SubAllocatedGrowableBuffer;
 use game_render::graph::{Node, RenderContext};
 use game_render::mipmap::MipMapGenerator;
+use game_render::texture::Image;
 use game_render::texture::image::MipImage;
 use game_tracing::trace_span;
 use glam::{Mat3, Mat4, UVec2, Vec3, Vec4};
 use parking_lot::Mutex;
 
 use crate::StandardMaterial;
-use crate::entities::{Event, ImageId};
+use crate::entities::{Event, ImageId, MaterialInner};
 use crate::lights::{DirectionalLightUniform, Light, PointLightUniform, SpotLightUniform};
 use crate::material::AlphaMode;
-use crate::passes::{DirectionalLightState, MaterialState};
+use crate::passes::{DirectionalLightState, MaterialState, TerrainMaterialState};
+use crate::terrain::TerrainMaterial;
 
 use super::{
     DefaultTextures, MaterialFlags, ObjectState, RawMaterialData, RawObjectData, SceneData, State,
@@ -68,6 +71,8 @@ impl Node for UpdatePass {
                     state.scenes.remove(&id);
                 }
                 Event::CreateMesh(id, mesh) => {
+                    assert!(mesh.validate_indices().is_ok());
+
                     let key = state.mesh.create_mesh(ctx.queue, &mesh);
                     state.meshes.insert(id, key);
                 }
@@ -88,18 +93,60 @@ impl Node for UpdatePass {
                 }
                 Event::CreateMaterial(id, material) => {
                     let state = &mut *state;
-                    let material = create_material(
-                        &mut state.material_slab,
-                        &state.default_textures,
-                        &state.images,
-                        material,
-                    );
 
-                    state.materials.insert(id, material);
+                    match material {
+                        MaterialInner::Standard(material) => {
+                            let material = create_material(
+                                &mut state.material_slab,
+                                &state.default_textures,
+                                &state.images,
+                                material,
+                            );
+
+                            state.materials.insert(id, material);
+                        }
+                        MaterialInner::Terrain(material) => {
+                            let material = create_terrain_material(
+                                &ctx.queue,
+                                &mut state.material_slab,
+                                &state.default_textures,
+                                &state.images,
+                                &mut state.terrain_layers,
+                                &mut state.textures,
+                                &self.mipgen,
+                                material,
+                            );
+
+                            // We need to insert this material, such that instance creation can reference it.
+                            state.materials.insert(
+                                id,
+                                MaterialState {
+                                    // The last material contains the "terrain" material.
+                                    index: *material.materials.last().unwrap(),
+                                    // Terrain is always opaque.
+                                    alpha_mode: AlphaMode::Opaque,
+                                },
+                            );
+
+                            state.terrain_material.insert(id, material);
+                        }
+                    };
                 }
                 Event::DestroyMaterial(id) => {
                     if let Some(material) = state.materials.remove(&id) {
                         state.material_slab.remove(material.index);
+                    }
+
+                    if let Some(material) = state.terrain_material.remove(&id) {
+                        state.terrain_layers.remove(material.layer_index);
+
+                        for material in material.materials {
+                            state.material_slab.remove(material);
+                        }
+
+                        for texture in material.textures {
+                            state.textures.remove(texture);
+                        }
                     }
                 }
                 Event::CreateObject(id, object) => {
@@ -125,6 +172,7 @@ impl Node for UpdatePass {
                 }
                 Event::DestroyObject(id) => {
                     let state = &mut *state;
+
                     for scene in state.scenes.values_mut() {
                         if let Some(instance) = scene.objects.remove(&id) {
                             state.mesh.remove_instance(instance.id);
@@ -391,11 +439,80 @@ fn create_material(
         grayscale_palette_scale: material.grayscale_palette_scale,
         uv_offset: material.uv_offset.to_array(),
         uv_scale: material.uv_scale.to_array(),
+        terrain_layers_count: 0,
+        terrain_layers_index: 0,
     });
 
     MaterialState {
         index,
         alpha_mode: material.alpha_mode,
+    }
+}
+
+fn create_terrain_material(
+    queue: &CommandQueue<'_>,
+    materials: &mut SlabBuffer<RawMaterialData>,
+    default_textures: &DefaultTextures,
+    images: &HashMap<ImageId, TextureSlabIndex>,
+    terrain_material: &mut SubAllocatedGrowableBuffer<RawTerrainLayer>,
+    textures: &mut TextureSlab,
+    mipgen: &MipMapGenerator,
+    material: TerrainMaterial,
+) -> TerrainMaterialState {
+    let _span = trace_span!("create_terrain_material").entered();
+
+    let mut layers = Vec::new();
+    for layer in material.layers {
+        let material = create_material(materials, default_textures, images, layer.material);
+
+        let image = Image::new(
+            UVec2::splat(17),
+            TextureFormat::R32SFloat,
+            bytemuck::must_cast_slice(&layer.alpha).to_vec(),
+        );
+
+        let alpha = create_image(queue, textures, mipgen, &MipImage::new(vec![image]));
+
+        layers.push(RawTerrainLayer {
+            material: material.index,
+            alpha,
+        });
+    }
+
+    let index = terrain_material.insert(queue, &layers);
+
+    let material_index = materials.insert(&RawMaterialData {
+        flags: MaterialFlags::TERRAIN,
+        alpha_mask: 0.0,
+        depth_bias: 0.0,
+        _pad0: 0,
+        base_color: [0.0; 4],
+        roughness: 0.0,
+        metallic: 0.0,
+        reflectance: 0.0,
+        specular_strength: 0.0,
+        specular_color: [0.0; 4],
+        base_color_texture_index: default_textures.base_color,
+        normal_texture_index: default_textures.normal,
+        metallic_roughness_texture_index: default_textures.metallic_roughness,
+        specular_glossiness_texture_index: default_textures.specular_glossiness,
+        grayscale_palette_texture_index: default_textures.base_color,
+        grayscale_palette_scale: 0.0,
+        uv_offset: [0.0; 2],
+        uv_scale: [1.0; 2],
+        terrain_layers_index: index as u32,
+        terrain_layers_count: layers.len() as u32,
+    });
+
+    let mut materials: Vec<_> = layers.iter().map(|v| v.material).collect();
+    materials.push(material_index);
+
+    let textures = layers.iter().map(|v| v.alpha).collect();
+
+    TerrainMaterialState {
+        materials,
+        textures,
+        layer_index: index,
     }
 }
 
@@ -487,4 +604,11 @@ pub struct RawAmbientLight {
     pub _pad4: u32,
     pub back: [f32; 3],
     pub _pad5: u32,
+}
+
+#[derive(Copy, Clone, Debug, Zeroable, Pod)]
+#[repr(C)]
+pub struct RawTerrainLayer {
+    material: SlabIndex,
+    alpha: TextureSlabIndex,
 }

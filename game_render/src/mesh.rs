@@ -144,7 +144,70 @@ impl Mesh {
 
         Some(Aabb::from_min_max(min, max))
     }
+
+    pub fn validate_indices(&self) -> Result<(), InvalidIndices> {
+        let Some(indices) = &self.indices else {
+            return Ok(());
+        };
+
+        let has_normals = !self.normals.is_empty();
+        let has_uvs = !self.uvs.is_empty();
+        let has_tangents = !self.tangents.is_empty();
+        let has_colors = !self.colors.is_empty();
+        let has_skinning_indices = !self.skinning_joint_indices.is_empty();
+        let has_skinning_weights = !self.skinning_join_weights.is_empty();
+
+        fn assert_in_bounds<T>(arr: &[T], index: usize) -> Result<(), InvalidIndices> {
+            if arr.len() <= index {
+                Err(InvalidIndices)
+            } else {
+                Ok(())
+            }
+        }
+
+        let assert_in_bounds = |index| {
+            assert_in_bounds(&self.positions, index)?;
+            if has_normals {
+                assert_in_bounds(&self.normals, index)?;
+            }
+            if has_uvs {
+                assert_in_bounds(&self.uvs, index)?;
+            }
+            if has_tangents {
+                assert_in_bounds(&self.tangents, index)?;
+            }
+            if has_colors {
+                assert_in_bounds(&self.colors, index)?;
+            }
+            if has_skinning_indices {
+                assert_in_bounds(&self.skinning_joint_indices, index)?;
+            }
+            if has_skinning_weights {
+                assert_in_bounds(&self.skinning_join_weights, index)?;
+            }
+
+            Ok(())
+        };
+
+        match indices {
+            Indices::U16(indices) => {
+                for index in indices {
+                    assert_in_bounds(*index as usize)?;
+                }
+            }
+            Indices::U32(indices) => {
+                for index in indices {
+                    assert_in_bounds(*index as usize)?;
+                }
+            }
+        }
+
+        Ok(())
+    }
 }
+
+#[derive(Copy, Clone, Debug)]
+pub struct InvalidIndices;
 
 impl Default for Mesh {
     fn default() -> Self {

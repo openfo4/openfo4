@@ -92,4 +92,12 @@ public struct Gradient {
     public Vec2 value;
     public Vec2 dx;
     public Vec2 dy;
+
+    public func mul(factor: f32) -> Gradient {
+        var output: Gradient;
+        output.value = this.value * factor;
+        output.dx = this.dx * factor;
+        output.dy = this.dy * factor;
+        return output;
+    }
 }
