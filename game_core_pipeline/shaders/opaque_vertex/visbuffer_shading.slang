@@ -110,50 +110,18 @@ void main(
     let world_position = barys.interpolate(world_pos_a.xyz, world_pos_b.xyz, world_pos_c.xyz);
 
     let uv = load_uv(barys, offsets, indices, material.uv_scale, material.uv_offset);
-    let normal = load_normal(barys, offsets, indices, material, uv, instance);
 
     let vert_color_a = fetch<4>(colors, offsets.color, index0);
     let vert_color_b = fetch<4>(colors, offsets.color, index1);
     let vert_color_c = fetch<4>(colors, offsets.color, index2);
     let vert_color = barys.interpolate(vert_color_a, vert_color_b, vert_color_c);
 
-    let base_color_texture = material.base_color * sample_material_texture(material.base_color_texture, uv);
-    var base_color = base_color_texture * vert_color;
-    if ((material.flags & MATERIAL_FLAGS_GRAYSCALE_PALETTE) != 0) {
-        let x = clamp(base_color_texture.g, 0.0, 1.0);
-        let y = clamp(material.grayscale_palette_scale - (1.0 - vert_color.r), 0.0, 1.0);
-        base_color =  textures[NonUniformResourceIndex(material.grayscale_palette_texture)].SampleLevel(sampler, Vec2(x, y), 0.0);
-    }
-
-    if ((material.flags & MATERIAL_FLAGS_UNLIT) != 0) {
-        output[coords] = Vec4(base_color.rgb, 1.0);
-        return;
-    }
-
-    let specular_strength = material.specular_strength * sample_material_texture(material.specular_glossiness_texture, uv).r;
-    let specular_color = material.specular_color.rgb;
-
-    var roughness = material.roughness * sample_material_texture(material.metallic_roughness_texture, uv).g;
-    if ((material.flags & MATERIAL_FLAGS_ROUGHNESS_FROM_GLOSSINESS) != 0) {
-        let glossiness = (1.0 - material.roughness) * sample_material_texture(material.specular_glossiness_texture, uv).g;
-        roughness = 1.0 - glossiness;
-    }
-
-    var metallic = material.metallic * sample_material_texture(material.metallic_roughness_texture, uv).b;
-    if ((material.flags & MATERIAL_FLAGS_METALLIC_FROM_SPECULAR) != 0) {
-        metallic = compute_metallic_from_specular_color(specular_color * specular_strength);
-    }
+    let vertex_normal = load_vertex_normal(barys, offsets, indices, instance);
 
     // BRDF parameters
+    let pbr_material = sample_material(material, uv, vert_color, vertex_normal);
+
     let view_dir = normalize(constants.camera.position - world_position);
-    var pbr_material: pbr::Material;
-    pbr_material.base_color = base_color.rgb;
-    pbr_material.normal = normal;
-    pbr_material.metallic = metallic;
-    pbr_material.roughness = roughness;
-    pbr_material.reflectance = material.reflectance;
-    pbr_material.specular_color = specular_color;
-    pbr_material.specular_strength = specular_strength;
 
     var luminance = Vec3(0.0);
 
@@ -207,7 +175,18 @@ Gradient load_uv(Barycentrics barys, MeshOffsets offsets, u32 indices[3], Vec2 s
     return barys.interpolate_grad(uv_a, uv_b, uv_c);
 }
 
-Vec3 load_normal(Barycentrics barys, MeshOffsets offsets, u32 indices[3], Material material, Gradient uv, InstanceOut instance) {
+struct VertexNormal {
+    Vec3 normal;
+    Vec3 tangent;
+    Vec3 bitangent;
+    
+
+    func tbn() -> Mat3 {
+        return Mat3(this.tangent, this.bitangent, this.normal);
+    }
+}
+
+func load_vertex_normal(Barycentrics barys, MeshOffsets offsets, u32 indices[3], InstanceOut instance) -> VertexNormal {
     let normal_a = fetch<3>(normals, offsets.normal, indices[0]);
     let normal_b = fetch<3>(normals, offsets.normal, indices[1]);
     let normal_c = fetch<3>(normals, offsets.normal, indices[2]);
@@ -228,8 +207,11 @@ Vec3 load_normal(Barycentrics barys, MeshOffsets offsets, u32 indices[3], Materi
     var bitangent = barys.interpolate(bitan_a, bitan_b, bitan_c);
     bitangent = normalize(mul(instance.normal, bitangent));
 
-    let tbn = Mat3(tangent, bitangent, vert_normal);
+    return { vert_normal, tangent, bitangent };
+}
 
+func load_texture_normal(vertex_normal: VertexNormal, material: Material, uv: Gradient) -> Vec3 {
+    let tbn = vertex_normal.tbn();
 
     var normal = sample_material_texture(material.normal_texture, uv).xyz;
 
@@ -251,7 +233,6 @@ Vec3 load_normal(Barycentrics barys, MeshOffsets offsets, u32 indices[3], Materi
     return normal;
 }
 
-
 func compute_metallic_from_specular_color(specular_color: Vec3) -> f32 {
     return max(max(specular_color.r, specular_color.g), specular_color.b);
 }
@@ -260,4 +241,40 @@ func sample_material_texture(texture_index: u32, uv: Gradient) -> Vec4 {
     // We need to mark the index as non-uniform because a single
     // workgroup may access divergent textures here.
     return textures[NonUniformResourceIndex(texture_index)].SampleGrad(sampler, uv.value, uv.dx, uv.dy);
+}
+
+func sample_material(material: Material, uv: Gradient, vert_color: Vec4, normal: VertexNormal) -> pbr::Material {
+    let base_color_texture = material.base_color * sample_material_texture(material.base_color_texture, uv);
+    var base_color = base_color_texture * vert_color;
+    if ((material.flags & MATERIAL_FLAGS_GRAYSCALE_PALETTE) != 0) {
+        let x = clamp(base_color_texture.g, 0.0, 1.0);
+        let y = clamp(material.grayscale_palette_scale - (1.0 - vert_color.r), 0.0, 1.0);
+        base_color =  textures[NonUniformResourceIndex(material.grayscale_palette_texture)].SampleLevel(sampler, Vec2(x, y), 0.0);
+    }
+
+    let specular_strength = material.specular_strength * sample_material_texture(material.specular_glossiness_texture, uv).r;
+    let specular_color = material.specular_color.rgb;
+
+    var roughness = material.roughness * sample_material_texture(material.metallic_roughness_texture, uv).g;
+    if ((material.flags & MATERIAL_FLAGS_ROUGHNESS_FROM_GLOSSINESS) != 0) {
+        let glossiness = (1.0 - material.roughness) * sample_material_texture(material.specular_glossiness_texture, uv).g;
+        roughness = 1.0 - glossiness;
+    }
+
+    var metallic = material.metallic * sample_material_texture(material.metallic_roughness_texture, uv).b;
+    if ((material.flags & MATERIAL_FLAGS_METALLIC_FROM_SPECULAR) != 0) {
+        metallic = compute_metallic_from_specular_color(specular_color * specular_strength);
+    }
+
+    let normal = load_texture_normal(normal, material, uv);
+
+    var pbr_material: pbr::Material;
+    pbr_material.base_color = base_color.rgb;
+    pbr_material.normal = normal;
+    pbr_material.metallic = metallic;
+    pbr_material.roughness = roughness;
+    pbr_material.reflectance = material.reflectance;
+    pbr_material.specular_color = specular_color;
+    pbr_material.specular_strength = specular_strength;
+    return pbr_material;
 }
