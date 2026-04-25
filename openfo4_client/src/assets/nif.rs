@@ -19,7 +19,7 @@ use openfo4_hkx::mesh::ExtractCompressedMeshShapeError;
 use openfo4_hkx::{HkObject, HkxFile};
 use openfo4_nif::material::{AlphaTestFunction, NiAlphaProperty, ShaderFlags1};
 use openfo4_nif::mesh::{BSMeshLODTriShape, BSSubIndexTriShape, BSTriShape};
-use openfo4_nif::{BSXFlags, Block, BlockRef, Nif};
+use openfo4_nif::{BSLeafAnimNode, BSXFlags, Block, BlockRef, Nif};
 use openfo4_physics::components::{Collider, ColliderShape, CollisionLayer, TriMesh};
 use thiserror::Error;
 
@@ -289,7 +289,7 @@ impl Asset for NifScene {
         let mut connect_points_parents = None;
 
         match nif.get(root) {
-            Some(Block::NiNode(node)) => {
+            Some(Block::NiNode(node) | Block::BSLeafAnimNode(BSLeafAnimNode { node })) => {
                 for block in &node.extra_data {
                     match nif.get(*block) {
                         Some(Block::BSXFlags(flags)) => {
@@ -310,8 +310,7 @@ impl Asset for NifScene {
 
         let is_marker = |name: &str| -> bool {
             let name = name.to_lowercase();
-            // contains_editor_marker &&
-            (name.starts_with("marker") || name.starts_with("editormarker"))
+            name.contains("marker")
         };
 
         let mut meshes = HashMap::new();
@@ -333,7 +332,7 @@ impl Asset for NifScene {
             let mut material_attached = None;
 
             let node = match nif.get(block) {
-                Some(Block::NiNode(node)) => {
+                Some(Block::NiNode(node) | Block::BSLeafAnimNode(BSLeafAnimNode { node })) => {
                     if is_marker(&node.name) {
                         continue;
                     }

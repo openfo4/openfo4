@@ -265,6 +265,9 @@ impl Nif {
                     Block::NiBlendBoolInterpolator(NiBlendBoolInterpolator::decode(&mut reader)?)
                 }
                 BlockType::NiBoolData => Block::NiBoolData(NiBoolData::decode(&mut reader)?),
+                BlockType::BSLeafAnimNode => {
+                    Block::BSLeafAnimNode(BSLeafAnimNode::decode(&mut reader)?)
+                }
                 _ => Block::Skipped,
             };
 
@@ -586,6 +589,7 @@ pub enum Block {
     NiBoolInterpolator(NiBoolInterpolator),
     NiBlendBoolInterpolator(NiBlendBoolInterpolator),
     NiBoolData(NiBoolData),
+    BSLeafAnimNode(BSLeafAnimNode),
 }
 
 #[derive(Clone, Debug)]
@@ -1743,3 +1747,11 @@ macro_rules! nif_struct {
 }
 
 pub(crate) use nif_struct;
+
+nif_struct! {
+    /// Looks exactly like a [`NiNode`]?
+    #[derive(Clone, Debug)]
+    pub struct BSLeafAnimNode {
+        pub node: NiNode,
+    }
+}
