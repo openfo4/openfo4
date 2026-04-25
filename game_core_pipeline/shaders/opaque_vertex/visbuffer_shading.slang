@@ -48,6 +48,8 @@ SamplerComparisonState shadow_sampler;
 // Terrain
 StructuredBuffer<TerrainLayer> terrain_layers;
 
+SamplerState clamped_sampler;
+
 struct TerrainLayer {
     u32 material;
     u32 alpha_texture;
@@ -307,7 +309,7 @@ func sample_terrain_material(material: Material, uv: Gradient, vertex_color: Vec
 
         // TODO: Transpose this value ahead of time.
         let a_uv = Vec2(uv.value.y, uv.value.x);
-        let alpha = textures[NonUniformResourceIndex(layer.alpha_texture)].SampleLevel(sampler, a_uv, 0).r;
+        let alpha = textures[NonUniformResourceIndex(layer.alpha_texture)].SampleLevel(clamped_sampler, a_uv, 0).r;
 
         pbr_material.base_color = lerp(pbr_material.base_color, layer_material.base_color, alpha);
         pbr_material.normal = lerp(pbr_material.normal, layer_material.normal, alpha);

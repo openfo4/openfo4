@@ -46,6 +46,7 @@ pub struct OpaqueVertexForwardPass {
     shadow_map: Mutex<ShadowMapPipeline>,
     sky: SkyPass,
     shadow_sampler: Sampler,
+    clamped_sampler: Sampler,
 }
 
 impl OpaqueVertexForwardPass {
@@ -77,6 +78,15 @@ impl OpaqueVertexForwardPass {
                 mag_filter: FilterMode::Linear,
                 mipmap_filter: FilterMode::Nearest,
                 compare: Some(CompareOp::GreaterEqual),
+            }),
+            clamped_sampler: queue.create_sampler(&SamplerDescriptor {
+                min_filter: FilterMode::Linear,
+                mag_filter: FilterMode::Linear,
+                address_mode_u: AddressMode::ClampToEdge,
+                address_mode_v: AddressMode::ClampToEdge,
+                address_mode_w: AddressMode::ClampToEdge,
+                mipmap_filter: FilterMode::Linear,
+                compare: None,
             }),
         }
     }
@@ -349,6 +359,7 @@ impl OpaqueVertexForwardPass {
                     shadow_sampler: &self.shadow_sampler,
                     shadow_maps: &shadow_map_views,
                     terrain_layers,
+                    clamped_sampler: &self.clamped_sampler,
                 },
             );
         }
