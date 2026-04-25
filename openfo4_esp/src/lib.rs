@@ -4,7 +4,7 @@ pub mod vmad;
 mod fields;
 
 use fields::FieldMap;
-use flate2::read::ZlibDecoder;
+use flate2::bufread::ZlibDecoder;
 use glam::Vec3;
 use hashbrown::HashMap;
 use openfo4_io::fs::{AsyncReadAt, Cursor};

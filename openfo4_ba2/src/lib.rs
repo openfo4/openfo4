@@ -2,7 +2,7 @@ mod dds;
 
 use std::io::{self, Read};
 
-use flate2::read::ZlibDecoder;
+use flate2::bufread::ZlibDecoder;
 use hashbrown::HashMap;
 use openfo4_core::path::{DataPath, DataPathBuf};
 use openfo4_io::fs::{AsyncReadAt, Cursor};
