@@ -2,7 +2,7 @@ use openfo4_core::ecs::Entity;
 use openfo4_script::engine::Engine;
 use openfo4_script::runtime::{Caller, Exception};
 
-use crate::components::Player;
+use crate::components::{ActorProperties, Player};
 use crate::systems::controller::InputControllerMask;
 use crate::systems::scripting::classes::{Object, State};
 
@@ -129,8 +129,15 @@ fn add_achievement(_caller: Caller<'_, State>, _achievement_id: i32) -> Result<(
 /// ```text
 /// Function(int aiPerkPoints) native global
 /// ```
-fn add_perk_points(caller: Caller<'_, State>, ai_perk_points: i32) -> Result<(), Exception> {
-    todo!()
+fn add_perk_points(caller: Caller<'_, State>, perk_points: i32) -> Result<(), Exception> {
+    // Cannot reduce perk points.
+    let Ok(perk_points) = u32::try_from(perk_points) else {
+        return Ok(());
+    };
+
+    with_player_props_mut(caller, |props| {
+        props.perk_points = props.perk_points.saturating_add(perk_points);
+    })
 }
 
 /// `AdvanceSkill`
@@ -1246,4 +1253,20 @@ where
     };
 
     Ok(f(&*mask))
+}
+
+fn with_player_props_mut<T, F>(caller: Caller<'_, State>, f: F) -> Result<T, Exception>
+where
+    F: FnOnce(&mut ActorProperties) -> T,
+{
+    let mut query = caller
+        .data()
+        .world()
+        .query::<(&Player, &mut ActorProperties)>();
+    let Some((_, mut props)) = query.iter().next() else {
+        tracing::error!("found no player");
+        return Err(Exception::Error);
+    };
+
+    Ok(f(&mut *props))
 }

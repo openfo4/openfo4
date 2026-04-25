@@ -126,6 +126,8 @@ pub struct ActorProperties {
     /// zero health.
     pub bleedout_recovery: bool,
     pub level: u32,
+    /// The number of available perk points to spend.
+    pub perk_points: u32,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
