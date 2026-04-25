@@ -24,6 +24,13 @@ pub const ACTOR_VALUE_ASSISTANCE: FormId = FormId(0x2c1);
 pub const PATH_SKY_ATMOSPHERE: &DataPath = DataPath::from_str("meshes/sky/atmosphere.nif");
 pub const PATH_SKY_CLOUDS: &DataPath = DataPath::from_str("meshes/sky/clouds.nif");
 
+pub const PATH_LAND_TEXTURE_DEFAULT_DIFFUSE: &DataPath =
+    DataPath::from_str("textures/landscape/ground/commonwealthdefault01_d.dds");
+pub const PATH_LAND_TEXTURE_DEFAULT_NORMAL: &DataPath =
+    DataPath::from_str("textures/landscape/ground/commonwealthdefault01_n.dds");
+pub const PATH_LAND_TEXTURE_DEFAULT_SPEC_GLOSS: &DataPath =
+    DataPath::from_str("textures/landscape/ground/commonwealthdefault01_s.dds");
+
 pub const ACTOR_VALUE_FATIGUE: FormId = FormId(0x34f);
 pub const ACTOR_VALUE_POWER_ARMOR_HEAD_CONDITION: FormId = FormId(0x2ef);
 pub const ACTOR_VALUE_POWER_ARMOR_TORSO_CONDITION: FormId = FormId(0x2f0);

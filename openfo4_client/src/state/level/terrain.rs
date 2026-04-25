@@ -1,11 +1,11 @@
 use std::sync::Arc;
 
 use glam::{UVec2, Vec3};
-use openfo4_asset::AssetLoader;
+use openfo4_asset::{AssetLoader, Handle};
 use openfo4_core::path::DataPathBuf;
 use openfo4_core::record::RecordId;
 use openfo4_esp::records::{Land, LandLandTexture, LandTextureAlphaLayerPoint, Quadrant};
-use openfo4_esp::{FormId, RecordData, RecordKind};
+use openfo4_esp::{RecordData, RecordKind};
 use openfo4_nif::bgsm::Bgsm;
 use openfo4_physics::components::{Collider, ColliderShape, CollisionLayer, RigidBody, TriMesh};
 
@@ -14,6 +14,10 @@ use crate::assets::texture::{FileImageHandle, FileImageKey};
 use crate::cell::{CELL_SIZE, CellId};
 use crate::components::NiTransform;
 use crate::state::esp::EspLoader;
+use crate::state::hardcoded::{
+    PATH_LAND_TEXTURE_DEFAULT_DIFFUSE, PATH_LAND_TEXTURE_DEFAULT_NORMAL,
+    PATH_LAND_TEXTURE_DEFAULT_SPEC_GLOSS,
+};
 use crate::state::level::LoadContext;
 use crate::state::level::record::SpawnEntity;
 use crate::state::terrain::{TerrainLayer, TerrainQuadrant, TerrainRegion};
@@ -82,23 +86,52 @@ pub async fn load_land(ctx: &LoadContext<'_>, land_id: RecordId, land: &Land) ->
     }
 
     let mut layers = Vec::new();
-    for base_layer in &land.base_layer {
-        if base_layer.land_texture == FormId(0) {
-            continue;
-        }
 
+    let mut base_layer_loaded_bottom_left = false;
+    let mut base_layer_loaded_bottom_right = false;
+    let mut base_layer_loaded_top_left = false;
+    let mut base_layer_loaded_top_right = false;
+
+    for base_layer in &land.base_layer {
         if let Some(layer) =
             load_terrain_layer(land_id, base_layer, None, ctx.esp_loader, ctx.loader).await
         {
             layers.push(layer);
+
+            match base_layer.quadrant {
+                Quadrant::BottomLeft => base_layer_loaded_bottom_left = true,
+                Quadrant::BottomRight => base_layer_loaded_bottom_right = true,
+                Quadrant::TopLeft => base_layer_loaded_top_left = true,
+                Quadrant::TopRight => base_layer_loaded_top_right = true,
+            }
         }
     }
 
-    for alpha_layer in &land.alpha_layer.0 {
-        if alpha_layer.texture.land_texture == FormId(0) {
+    for (base_layer_loaded, position) in [
+        (base_layer_loaded_bottom_left, TerrainQuadrant::LxLy),
+        (base_layer_loaded_bottom_right, TerrainQuadrant::HxLy),
+        (base_layer_loaded_top_left, TerrainQuadrant::LxHy),
+        (base_layer_loaded_top_right, TerrainQuadrant::HxHy),
+    ] {
+        if base_layer_loaded {
             continue;
         }
 
+        let material = load_default_terrain_material(ctx.loader).await;
+
+        layers.push(TerrainLayer {
+            position,
+            layer: -1,
+            alpha: [[1.0; 17]; 17],
+            diffuse_texture: material.diffuse_texture,
+            normal_texture: material.normal_texture,
+            smooth_spec_texture: material.smooth_spec_texture,
+            smoothness: material.smoothness,
+            specular_strength: material.specular_strength,
+        });
+    }
+
+    for alpha_layer in &land.alpha_layer.0 {
         if let Some(layer) = load_terrain_layer(
             land_id,
             &alpha_layer.texture,
@@ -144,11 +177,65 @@ async fn load_terrain_layer(
     esp_loader: &EspLoader,
     loader: &AssetLoader,
 ) -> Option<TerrainLayer> {
-    let land_texture = esp_loader
-        .resolve_form(texture.land_texture, land_id)
-        .unwrap();
+    let material = if !texture.land_texture.is_null() {
+        let id = esp_loader
+            .resolve_form(texture.land_texture, land_id)
+            .unwrap();
+        load_terrain_material_from_form(esp_loader, loader, id).await
+    } else {
+        load_default_terrain_material(loader).await
+    };
+
+    let position = match texture.quadrant {
+        Quadrant::BottomLeft => TerrainQuadrant::LxLy,
+        Quadrant::BottomRight => TerrainQuadrant::HxLy,
+        Quadrant::TopLeft => TerrainQuadrant::LxHy,
+        Quadrant::TopRight => TerrainQuadrant::HxHy,
+    };
+
+    let alpha = if let Some(alpha_layer) = alpha_layer {
+        let mut alpha = [[0.0; 17]; 17];
+
+        for point in alpha_layer {
+            let x = point.position % 17;
+            let y = point.position / 17;
+            alpha[x as usize][y as usize] = point.alpha;
+        }
+
+        alpha
+    } else {
+        // If the alpha layer is missing it is considered fully opaque (1.0).
+        [[1.0; 17]; 17]
+    };
+
+    Some(TerrainLayer {
+        position,
+        layer: texture.texture_layer,
+        alpha,
+        diffuse_texture: material.diffuse_texture,
+        normal_texture: material.normal_texture,
+        smooth_spec_texture: material.smooth_spec_texture,
+        smoothness: material.smoothness,
+        specular_strength: material.specular_strength,
+    })
+}
+
+#[derive(Clone, Debug)]
+struct TerrainLayerMaterial {
+    smoothness: f32,
+    specular_strength: f32,
+    diffuse_texture: Option<Handle<FileImageHandle>>,
+    normal_texture: Option<Handle<FileImageHandle>>,
+    smooth_spec_texture: Option<Handle<FileImageHandle>>,
+}
+
+async fn load_terrain_material_from_form(
+    esp_loader: &EspLoader,
+    loader: &AssetLoader,
+    id: RecordId,
+) -> TerrainLayerMaterial {
     let land_texture_record = esp_loader
-        .lookup(Some(RecordKind::LandTexture), land_texture)
+        .lookup(Some(RecordKind::LandTexture), id)
         .await
         .unwrap();
 
@@ -169,13 +256,6 @@ async fn load_terrain_layer(
     let texture_set = match texture_set.local.data {
         RecordData::TextureSet(set) => set,
         _ => todo!(),
-    };
-
-    let position = match texture.quadrant {
-        Quadrant::BottomLeft => TerrainQuadrant::LxLy,
-        Quadrant::BottomRight => TerrainQuadrant::HxLy,
-        Quadrant::TopLeft => TerrainQuadrant::LxHy,
-        Quadrant::TopRight => TerrainQuadrant::HxHy,
     };
 
     let bgsm = match &texture_set.material {
@@ -268,29 +348,43 @@ async fn load_terrain_layer(
     let smoothness = bgsm.as_ref().map(|v| v.smoothness).unwrap_or(1.0);
     let specular_strength = bgsm.as_ref().map(|v| v.specular_strength).unwrap_or(1.0);
 
-    let alpha = if let Some(alpha_layer) = alpha_layer {
-        let mut alpha = [[0.0; 17]; 17];
-
-        for point in alpha_layer {
-            let x = point.position % 17;
-            let y = point.position / 17;
-            alpha[x as usize][y as usize] = point.alpha;
-        }
-
-        alpha
-    } else {
-        // If the alpha layer is missing it is considered fully opaque (1.0).
-        [[1.0; 17]; 17]
-    };
-
-    Some(TerrainLayer {
-        position,
-        layer: texture.texture_layer,
-        alpha,
+    TerrainLayerMaterial {
+        smoothness,
+        specular_strength,
         diffuse_texture,
         normal_texture,
         smooth_spec_texture,
-        smoothness,
-        specular_strength,
-    })
+    }
+}
+
+async fn load_default_terrain_material(loader: &AssetLoader) -> TerrainLayerMaterial {
+    let diffuse_texture = loader
+        .load::<FileImageHandle, _>(&FileImageKey {
+            path: PATH_LAND_TEXTURE_DEFAULT_DIFFUSE.to_owned(),
+            force_srgb: Some(true),
+        })
+        .await
+        .unwrap();
+    let normal_texture = loader
+        .load::<FileImageHandle, _>(&FileImageKey {
+            path: PATH_LAND_TEXTURE_DEFAULT_NORMAL.to_owned(),
+            force_srgb: None,
+        })
+        .await
+        .unwrap();
+    let smooth_spec_texture = loader
+        .load::<FileImageHandle, _>(&FileImageKey {
+            path: PATH_LAND_TEXTURE_DEFAULT_SPEC_GLOSS.to_owned(),
+            force_srgb: None,
+        })
+        .await
+        .unwrap();
+
+    TerrainLayerMaterial {
+        smoothness: 1.0,
+        specular_strength: 1.0,
+        diffuse_texture: Some(diffuse_texture),
+        normal_texture: Some(normal_texture),
+        smooth_spec_texture: Some(smooth_spec_texture),
+    }
 }
