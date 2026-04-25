@@ -167,3 +167,22 @@ pub fn load_hardcoded_forms() -> HashMap<FormId, Record> {
     .into_iter()
     .collect()
 }
+
+/// Returns the cumulative XP required to reach the given level.
+pub fn cumulative_xp_for_level(level: u32) -> u64 {
+    if level == 0 {
+        return 0;
+    }
+
+    let level = u64::from(level);
+
+    // From https://fallout.wiki/wiki/Level_%28Fallout_4%29
+    // XPn = 37.5 * (n^2) + 87.5 * n - 124
+    // Rewritten to avoid floats
+    let a = 37 * level * level;
+    let b = 87 * level;
+    let c = (level * level) / 2;
+    let d = level / 2;
+    let e = level % 2;
+    a + b + c + d + e - 124
+}

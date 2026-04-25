@@ -3,6 +3,7 @@ use openfo4_script::engine::Engine;
 use openfo4_script::runtime::{Caller, Exception};
 
 use crate::components::{ActorProperties, Player};
+use crate::state::hardcoded::cumulative_xp_for_level;
 use crate::systems::controller::InputControllerMask;
 use crate::systems::scripting::classes::{Object, State};
 
@@ -347,8 +348,10 @@ fn force_first_person(caller: Caller<'_, State>) -> Result<(), Exception> {
 /// ```text
 /// int Function(int auiLevel) native global
 /// ```
-fn get_xp_for_level(caller: Caller<'_, State>, aui_level: i32) -> Result<i32, Exception> {
-    todo!()
+fn get_xp_for_level(_caller: Caller<'_, State>, level: i32) -> Result<i32, Exception> {
+    let level = u32::try_from(level).unwrap_or_default();
+    let xp = cumulative_xp_for_level(level);
+    Ok(xp.try_into().unwrap_or(i32::MAX))
 }
 
 /// `ShowFirstPersonGeometry`
