@@ -883,8 +883,8 @@ fn request_auto_save(caller: Caller<'_, State>) -> Result<(), Exception> {
 /// ```text
 /// Function(string asModelName) native global
 /// ```
-fn request_model(caller: Caller<'_, State>, as_model_name: isize) -> Result<(), Exception> {
-    todo!()
+fn request_model(_caller: Caller<'_, State>, _model_name: Object) -> Result<(), Exception> {
+    Ok(())
 }
 
 /// `RequestSave`
