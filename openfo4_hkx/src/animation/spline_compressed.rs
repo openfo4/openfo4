@@ -602,12 +602,7 @@ fn decode_quantized_quat_threecomp40(mut buf: &mut Cursor<&[u8]>) -> Result<Quat
     // FRAC = (1 / sqrt(2) ) / POSITIVE_MASK
     const FRAC: f32 = 0.00034543566;
 
-    let val0 = u8::decode(&mut buf)?;
-    let val1 = u8::decode(&mut buf)?;
-    let val2 = u8::decode(&mut buf)?;
-    let val3 = u8::decode(&mut buf)?;
-    let val4 = u8::decode(&mut buf)?;
-
+    let [val0, val1, val2, val3, val4] = <[u8; 5]>::decode(&mut buf)?;
     let val = u64::from_le_bytes([val0, val1, val2, val3, val4, 0, 0, 0]);
 
     let mut x = (val & MASK) as i64;
@@ -799,6 +794,21 @@ trait Decode: Sized {
     fn decode<B>(buf: B) -> Result<Self, Error>
     where
         B: Buf;
+}
+
+impl<const N: usize> Decode for [u8; N] {
+    fn decode<B>(mut buf: B) -> Result<Self, Error>
+    where
+        B: Buf,
+    {
+        if buf.remaining() >= N {
+            let mut bytes = [0; N];
+            buf.copy_to_slice(&mut bytes);
+            Ok(bytes)
+        } else {
+            Err(Error::Eof)
+        }
+    }
 }
 
 impl Decode for u8 {
