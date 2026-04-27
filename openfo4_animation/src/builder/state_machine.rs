@@ -2,7 +2,9 @@ use std::collections::HashMap;
 use std::time::Duration;
 
 use openfo4_hkx::HkObject;
-use openfo4_hkx::behavior::{GeneratorTransitionEffect, StartStateMode};
+use openfo4_hkx::behavior::{
+    GeneratorTransitionEffect, StartStateMode, StateMachineSelfTransitionMode,
+};
 use openfo4_hkx::skeleton::BindingType;
 use slab::Slab;
 
@@ -289,6 +291,9 @@ impl BuildNode for openfo4_hkx::behavior::StateMachine {
             _ => todo!(),
         };
 
+        let reentrant = self.self_transition_mode
+            == StateMachineSelfTransitionMode::ForceTransitionToStartState;
+
         Ok(Some(Node {
             name: self.parent.node.name.clone(),
             inner: NodeInner::StateMachine(StateMachine {
@@ -299,6 +304,7 @@ impl BuildNode for openfo4_hkx::behavior::StateMachine {
                 state_variable,
                 active_state: None,
                 active_effect: None,
+                reentrant,
             }),
         }))
     }
@@ -417,6 +423,7 @@ fn find_leaf_nodes(nodes: &Slab<Node>, root: NodeId) -> Vec<NodeId> {
             NodeInner::IsActive(_) => true,
             NodeInner::EventsFromRange(_) => true,
             NodeInner::Twist(_) => true,
+            NodeInner::DirectAt(_) => true,
         };
 
         if is_leaf {

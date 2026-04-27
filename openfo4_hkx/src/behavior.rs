@@ -392,7 +392,7 @@ pub enum StartStateMode {
     Chooser = 3,
 }
 
-#[derive(Copy, Clone, Debug, HkEnum)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, HkEnum)]
 #[size(i8)]
 pub enum StateMachineSelfTransitionMode {
     NoTransition = 0,

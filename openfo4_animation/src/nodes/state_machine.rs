@@ -12,6 +12,10 @@ pub struct StateMachine {
     pub state_id_to_index: HashMap<i32, usize>,
     pub start_state: StartState,
     pub state_variable: Option<VariableId>,
+    /// Whether transitions to a state that is currently active are applied.
+    ///
+    /// If `false` such transitions are ignored.
+    pub reentrant: bool,
     // Runtime:
     pub active_state: Option<usize>,
     pub active_effect: Option<ActiveTransitionEffect>,
@@ -156,12 +160,26 @@ impl GraphNode for StateMachine {
             return;
         };
 
+        let state = &self.states[transition.to];
+
         // Don't trigger a transition if we already are in the correct state.
         if self.active_state == Some(transition.to) {
+            if !self.reentrant {
+                return;
+            }
+
+            // No need to start a transition effect if we remain in the same state.
+            if let Some(node) = state.node {
+                ctx.deactivate_node(node);
+                ctx.activate_node(node);
+            }
+
+            for event in &state.enter_events {
+                ctx.send_event(event.clone());
+            }
+
             return;
         }
-
-        let state = &self.states[transition.to];
 
         if let Some(id) = self.state_variable {
             ctx.set_variable(id, Value::I32(state.id));
