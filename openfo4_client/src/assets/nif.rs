@@ -343,7 +343,7 @@ impl Asset for NifScene {
 
                     let mut node_transform = Transform {
                         translation: node.translation,
-                        rotation: Quat::from_mat3(&node.rotation).normalize(),
+                        rotation: Quat::from_mat3(&node.rotation).normalize().conjugate(),
                         scale: Vec3::splat(node.scale),
                     };
 
@@ -410,7 +410,7 @@ impl Asset for NifScene {
 
                     let transform = Transform {
                         translation: node.translation,
-                        rotation: Quat::from_mat3(&node.rotation).normalize(),
+                        rotation: Quat::from_mat3(&node.rotation).normalize().conjugate(),
                         scale: Vec3::splat(node.scale),
                     };
 
