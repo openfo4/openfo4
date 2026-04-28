@@ -139,7 +139,7 @@ pub fn equip_item(
                     .skeleton
                     .bones
                     .iter()
-                    .find(|b| b.name.to_lowercase() == node.name.to_lowercase())
+                    .find(|b| b.name.to_lowercase() == node.attaches.to_lowercase())
                 {
                     Some(bone) => {
                         let bone_entity = *skeleton.bones.get(&bone.index).unwrap();

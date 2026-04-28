@@ -184,6 +184,8 @@ pub struct Node {
     pub collider: Option<Collider>,
     pub skin: Option<Skin>,
     pub attachments: Vec<AttachmentPoint>,
+    /// The name of the parent where this node attaches.
+    pub attaches: String,
 }
 
 impl Node {
@@ -390,10 +392,23 @@ impl Asset for NifScene {
                         }
                     }
 
+                    let mut attaches = node.name.clone();
+                    for block in &node.extra_data {
+                        match nif.get(*block) {
+                            Some(Block::NiStringExtraData(data))
+                                if data.name.eq_ignore_ascii_case("Prn") =>
+                            {
+                                attaches = data.data.clone();
+                            }
+                            _ => {}
+                        }
+                    }
+
                     Node {
                         name: node.name.clone(),
                         transform: node_transform,
                         attachments,
+                        attaches,
                         ..Default::default()
                     }
                 }
@@ -569,11 +584,24 @@ impl Asset for NifScene {
                         None
                     };
 
+                    let mut attaches = node.name.clone();
+                    for block in &node.extra_data {
+                        match nif.get(*block) {
+                            Some(Block::NiStringExtraData(data))
+                                if data.name.eq_ignore_ascii_case("Prn") =>
+                            {
+                                attaches = data.data.clone();
+                            }
+                            _ => {}
+                        }
+                    }
+
                     Node {
                         name: node.name.clone(),
                         transform,
                         renderable,
                         skin,
+                        attaches,
                         ..Default::default()
                     }
                 }
