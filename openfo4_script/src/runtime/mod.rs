@@ -28,7 +28,7 @@ pub enum Exception {
     Suspend = RESULT_SUSPEND,
 }
 
-pub type NativeFnPtr = unsafe extern "C" fn(*const RawContext, usize, *mut RawVal);
+type NativeFnPtr = unsafe extern "C" fn(*const RawContext, *const RawVal, *mut RawVal) -> i32;
 
 /// Context passed to guest functions.
 pub struct Context<'a, T> {
@@ -147,7 +147,7 @@ impl Func {
             res.function.signature(),
             &Signature {
                 params: vec![Type::Pointer, Type::Pointer, Type::Pointer],
-                returns: vec![]
+                returns: vec![Type::I32]
             }
         );
 
@@ -178,38 +178,35 @@ impl Func {
             values[index].write(param.into_raw());
         }
 
+        let mut r_params = vec![MaybeUninit::<RawVal>::uninit(); params.len()];
+        let mut r_returns = vec![MaybeUninit::<RawVal>::uninit(); self.signature.returns.len()];
+
+        // We don't need logic to drop written `MaybeUninit<RawVal>` values.
+        const {
+            assert!(!core::mem::needs_drop::<RawVal>());
+        }
+
+        for (index, param) in params.iter().enumerate() {
+            r_params[index].write(param.into_raw());
+        }
+
         // SAFETY:
-        // - We have validated that the given parameters are the same as the parameters
-        //   of the function signature.
-        // - We have filled the first N values with initialized values according to the
-        //   function signature.
+        // - When we have constructed this `TypedFunc` we have asserted that the signature
+        //   matches.
+        // - We have filled all params according to the function signature.
+        // - We have allocated enough capacity for all return values according to the function
+        //   signature.
         unsafe {
-            self.call_unchecked(ctx, values.as_mut_ptr().cast::<RawVal>());
+            self.call_unchecked(
+                ctx,
+                r_params.as_ptr().cast::<RawVal>(),
+                r_returns.as_mut_ptr().cast::<RawVal>(),
+            )?;
         }
 
-        let result = unsafe {
-            &*values
-                .as_ptr()
-                .add(params.len() + self.signature.returns.len() - 1)
-                .cast::<RawVal>()
-        };
-
-        let result = unsafe { <i32 as NativeType>::from_raw(result) };
-
-        if result != RESULT_OK {
-            // SAFETY: The result parameter is only created as RESULT_OK from inside
-            // compiled functions. All other values are only produced by host functions
-            // that return a Exception, so we are doing a type roundtrip.
-            let exception = unsafe { transmute::<i32, Exception>(result) };
-            return Err(exception);
-        }
-
-        let mut returns = Vec::with_capacity(self.signature.returns.len() - 1);
-        for (index, ty) in self.signature.returns[..self.signature.returns.len() - 1]
-            .iter()
-            .enumerate()
-        {
-            let raw = unsafe { values[self.signature.params.len() + index].assume_init_ref() };
+        let mut returns = Vec::with_capacity(self.signature.returns.len());
+        for (index, ty) in self.signature.returns.iter().enumerate() {
+            let raw = unsafe { r_returns[index].assume_init_ref() };
 
             unsafe {
                 returns.push(match ty {
@@ -228,7 +225,25 @@ impl Func {
     }
 
     /// Calls the guest function.
-    pub unsafe fn call_unchecked<T>(&self, ctx: &mut Context<'_, T>, values: *mut RawVal)
+    ///
+    /// # Panics
+    ///
+    /// - Panics if the provided [`Context`] was created from a different [`Engine`] than this
+    ///   `Func`.
+    /// - Panics if the [`Stack`] of the provided [`Context`] is not empty and contains contents
+    ///   for a different `Func`.
+    ///
+    /// # Safety
+    ///
+    /// - The values in `params` must match the function signature.
+    /// - The `returns` allocation must be large enough for the return parameters of the function
+    ///   signature.
+    pub unsafe fn call_unchecked<T>(
+        &self,
+        ctx: &mut Context<'_, T>,
+        params: *const RawVal,
+        returns: *mut RawVal,
+    ) -> Result<(), Exception>
     where
         T: 'static,
     {
@@ -249,7 +264,6 @@ impl Func {
             );
         }
 
-        // FIXME: Set this to None and free stack when a function returns without SUSPENDED.
         ctx.stack.func = Some(self.ptr as *const u8);
 
         // Allocate enough stack space for the callee prologue.
@@ -260,7 +274,7 @@ impl Func {
         // We must lock the call table before we call the guest function.
         let _lock = ctx.engine.call_table_lock.read();
 
-        let ctx = RawContext {
+        let raw_ctx = RawContext {
             stack_ptr: RawStack {
                 ptr: ctx.stack.as_ptr(),
                 len: 0,
@@ -270,8 +284,20 @@ impl Func {
             stack: ctx.stack,
         };
 
-        unsafe {
-            (self.ptr)(&ctx, 0, values);
+        let res = unsafe { (self.ptr)(&raw_ctx, params, returns) };
+
+        if res == RESULT_OK {
+            ctx.stack.free(size_of::<usize>());
+            debug_assert_eq!(ctx.stack.size(), 0);
+
+            ctx.stack.func = None;
+
+            Ok(())
+        } else {
+            // SAFETY: The result parameter is only created as RESULT_OK from inside
+            // compiled functions. All other values are only produced by host functions
+            // that return a Exception, so we are doing a type roundtrip.
+            Err(unsafe { transmute::<i32, Exception>(res) })
         }
     }
 
@@ -325,43 +351,34 @@ where
     {
         // TODO: When const_generics is stabilized we can avoid the heap allocation
         // and use a regular array.
-        let mut values = vec![MaybeUninit::<RawVal>::uninit(); Params::SIZE + Returns::SIZE + 1];
+        let mut r_params = vec![MaybeUninit::<RawVal>::uninit(); Params::SIZE];
+        let mut r_returns = vec![MaybeUninit::<RawVal>::uninit(); Returns::SIZE];
+
+        // We don't need logic to drop written `MaybeUninit<RawVal>` values.
+        const {
+            assert!(!core::mem::needs_drop::<RawVal>());
+        }
 
         unsafe {
-            params.write_raw(values.as_mut_ptr().cast::<RawVal>());
+            params.write_raw(r_params.as_mut_ptr().cast::<RawVal>());
         }
 
         // SAFETY:
         // - When we have constructed this `TypedFunc` we have asserted that the signature
         //   matches.
-        // - We have filled the first N values with initialized values according to the
-        //   function signature.
+        // - We have filled all params according to the function signature.
+        // - We have allocated enough capacity for all return values according to the function
+        //   signature.
         unsafe {
-            self.func
-                .call_unchecked(ctx, values.as_mut_ptr().cast::<RawVal>());
+            self.func.call_unchecked(
+                ctx,
+                r_params.as_ptr().cast::<RawVal>(),
+                r_returns.as_mut_ptr().cast::<RawVal>(),
+            )?;
         }
 
-        let result = unsafe {
-            &*values
-                .as_ptr()
-                .add(Params::SIZE + Returns::SIZE)
-                .cast::<RawVal>()
-        };
-
-        let result = unsafe { <i32 as NativeType>::from_raw(result) };
-
-        if result != RESULT_OK {
-            // SAFETY: The result parameter is only created as RESULT_OK from inside
-            // compiled functions. All other values are only produced by host functions
-            // that return a Exception, so we are doing a type roundtrip.
-            let exception = unsafe { transmute::<i32, Exception>(result) };
-            return Err(exception);
-        }
-
-        unsafe {
-            let returns = values.as_ptr().add(Params::SIZE).cast::<RawVal>();
-            Ok(Returns::from_raw(returns))
-        }
+        let returns = unsafe { Returns::from_raw(r_returns.as_ptr().cast::<RawVal>()) };
+        Ok(returns)
     }
 }
 
@@ -443,13 +460,13 @@ pub struct HostState {
 
 #[derive(Default)]
 pub struct CallTable {
-    functions: Vec<Box<dyn Fn(*const RawContext, *mut RawVal) + Send + Sync>>,
+    functions: Vec<Box<dyn Fn(*const RawContext, *const RawVal, *mut RawVal) -> i32 + Send + Sync>>,
 }
 
 impl CallTable {
     pub fn insert<F>(&mut self, func: F) -> usize
     where
-        F: Fn(*const RawContext, *mut RawVal) + Send + Sync + 'static,
+        F: Fn(*const RawContext, *const RawVal, *mut RawVal) -> i32 + Send + Sync + 'static,
     {
         let index = self.functions.len();
         self.functions.push(Box::new(func));
@@ -480,12 +497,12 @@ macro_rules! impl_into_func {
             )*
         {
             fn into_func(self, call_table: &mut CallTable) -> usize {
-                let callback = move |ctx: *const RawContext, args: *mut RawVal| {
+                let callback = move |ctx: *const RawContext, params: *const RawVal, returns: *mut RawVal| -> i32 {
                     let ctx = unsafe { &*ctx };
 
                     let mut index = 0;
                     $(
-                        let $params = unsafe { $params::from_raw(&*args.add(index)) };
+                        let $params = unsafe { $params::from_raw(&*params.add(index)) };
                         index += 1;
                     )*
 
@@ -494,36 +511,21 @@ macro_rules! impl_into_func {
                         _marker: PhantomData,
                     };
 
-
-                    let ($($returns),*) = match self(caller, $($params),*) {
+                    match self(caller, $($params),*) {
                         Ok(($($returns),*)) => {
                             $(
                                 unsafe {
-                                    args.add(index).write($returns.to_raw());
+                                    returns.add(index).write($returns.to_raw());
                                     index += 1;
                                 }
                             )*
 
-                            unsafe {
-                                args.add(index).write(RESULT_OK.to_raw());
-                            }
+                            RESULT_OK
                         },
-                        Err(err) => {
-                            // Count all return values.
-                            {
-                                $(
-                                    let $returns = 0;
-                                    index += 1;
-                                )*
-                            }
-
-                            // Write the error value.
-                            // The other return values are left uninitialized.
-                            unsafe {
-                                args.add(index).write((err as i32).to_raw());
-                            }
-                        }
-                    };
+                        // When returning without RESULT_OK we can leave all return
+                        // values uninitialized.
+                        Err(err) => err as i32,
+                    }
                 };
 
                 call_table.insert(callback)

@@ -265,6 +265,10 @@ pub fn lower_function(function: &Function, data: &CodegenData, mut builder: Func
             Instruction::Return(value) => {
                 let result = translator.builder.iconst(RESULT_TYPE, RESULT_OK);
 
+                // Release our stack.
+                // The `usize` tag is released by our caller.
+                translator.stack_free(stack_frame.size.saturating_sub(size_of::<usize>()));
+
                 if function.returns.is_some() {
                     let value = translator.load(value);
                     translator.builder.return_(&[value, result]);

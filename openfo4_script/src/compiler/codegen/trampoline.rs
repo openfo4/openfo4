@@ -12,10 +12,10 @@ pub fn generate_host_to_guest_trampoline(
     target: FuncId,
     target_signature: &Signature,
 ) -> FuncId {
-    // fn(*const Context, usize, *mut RawVal)
+    // fn(ctx: *const Context, params: *const RawVal, returns: *mut RawVal) -> Result
     let func_id = compiler.declare_function(Signature {
         params: vec![Type::Pointer, Type::Pointer, Type::Pointer],
-        returns: Vec::new(),
+        returns: vec![Type::I32],
     });
 
     let mut builder = compiler.define_function(func_id);
@@ -24,26 +24,28 @@ pub fn generate_host_to_guest_trampoline(
     builder.switch_to_block(entry_block);
 
     let ctx = builder.block_params(entry_block)[0];
-    let ptr = builder.block_params(entry_block)[2];
+    let params_ptr = builder.block_params(entry_block)[1];
+    let returns_ptr = builder.block_params(entry_block)[2];
 
     let mut args = vec![ctx];
-    let mut offset = 0;
-    for ty in target_signature.params.iter().skip(1) {
-        let value = builder.load(*ty, ptr, offset);
+    for (index, ty) in target_signature.params.iter().skip(1).enumerate() {
+        let offset = (size_of::<RawVal>() * index) as u32;
+        let value = builder.load(*ty, params_ptr, offset);
         args.push(value);
-
-        offset += size_of::<RawVal>() as u32;
     }
 
     let res = builder.call(target, &args);
 
+    let ret_value = (res.len() > 1).then(|| res[0]);
+    let result = if res.len() == 1 { res[0] } else { res[1] };
+
     debug_assert_eq!(res.len(), target_signature.returns.len());
-    for value in res {
-        builder.store(value, ptr, offset);
-        offset += size_of::<RawVal>() as u32;
+
+    if let Some(ret_value) = ret_value {
+        builder.store(ret_value, returns_ptr, 0);
     }
 
-    builder.return_(&[]);
+    builder.return_(&[result]);
     builder.finalize();
 
     func_id
@@ -57,10 +59,10 @@ pub fn generate_guest_to_host_trampoline(
     class_name: &str,
     func_name: &str,
 ) -> FuncId {
-    // fn(*const Context, usize, *mut RawVal)
+    // fn(ctx: *const Context, func_id: usize, params: *const RawVal, returns: *mut RawVal) -> Result
     let trampoline_func_id = compiler.declare_function(Signature {
-        params: vec![Type::Pointer, Type::Pointer, Type::Pointer],
-        returns: Vec::new(),
+        params: vec![Type::Pointer, Type::Pointer, Type::Pointer, Type::Pointer],
+        returns: vec![Type::I32],
     });
 
     compiler.define_native_function(trampoline_func_id, native.ptr);
@@ -77,28 +79,35 @@ pub fn generate_guest_to_host_trampoline(
     let mut span = Span::new(data, class_name, func_name);
     span.enter(data, &mut builder, ctx);
 
-    let stack_slots = params.len() + target_signature.returns.len();
-    let stack = builder.create_stack_slot(size_of::<RawVal>() * stack_slots, align_of::<RawVal>());
+    let stack_params =
+        builder.create_stack_slot(size_of::<RawVal>() * params.len(), align_of::<RawVal>());
+    let stack_returns = builder.create_stack_slot(
+        size_of::<RawVal>() * (target_signature.returns.len() - 1),
+        align_of::<RawVal>(),
+    );
 
-    let mut offset = 0;
-    for value in params {
-        builder.stack_store(stack, value, offset);
-        offset += size_of::<RawVal>() as u32;
+    for (index, value) in params.into_iter().enumerate() {
+        let offset = (size_of::<RawVal>() * index) as u32;
+        builder.stack_store(stack_params, value, offset);
     }
 
     let index = builder.iconst(Type::Pointer, i64::try_from(native.index).unwrap());
-    let addr = builder.stack_addr(stack, Type::Pointer, 0);
 
-    let args = vec![ctx, index, addr];
+    let stack_params_addr = builder.stack_addr(stack_params, Type::Pointer, 0);
+    let stack_returns_addr = builder.stack_addr(stack_returns, Type::Pointer, 0);
 
-    builder.call(trampoline_func_id, &args);
+    let args = vec![ctx, index, stack_params_addr, stack_returns_addr];
+
+    let result = builder.call(trampoline_func_id, &args)[0];
 
     let mut returns = Vec::new();
-    for ty in target_signature.returns.iter() {
-        let value = builder.stack_load(stack, *ty, offset);
+    if target_signature.returns.len() > 1 {
+        let ty = target_signature.returns[0];
+        let value = builder.stack_load(stack_returns, ty, 0);
         returns.push(value);
-        offset += size_of::<RawVal>() as u32;
     }
+
+    returns.push(result);
 
     span.exit(data, &mut builder, ctx);
 

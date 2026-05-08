@@ -10,13 +10,14 @@ use crate::runtime::{ObjectAddr, RawContext, RawVal};
 pub unsafe extern "C" fn call_host_trampoline(
     ctx: *const RawContext,
     index: usize,
-    args: *mut RawVal,
+    params: *const RawVal,
+    returns: *mut RawVal,
 ) {
     abort_on_unwind(|| {
         // SAFETY: We have locked the call table before any guest function is called.
         let call_table = unsafe { (*(*ctx).state).call_table.borrow() };
         let func = &call_table.functions[index];
-        func(ctx, args);
+        func(ctx, params, returns);
     })
 }
 
