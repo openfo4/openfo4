@@ -22,7 +22,7 @@ use thiserror::Error;
 // use crate::compiler::codegen::layout::{ClassLayout, compute_struct_layout};
 use crate::compiler::codegen::runtime::RuntimeFunctions;
 use crate::compiler::resources::{
-    self, CompositeType, CompositeTypeMember, Name, PropertyType, Resources, TypeId, TypeInfo,
+    self, CompositeType, CompositeTypeMember, PropertyType, Resources, TypeId, TypeInfo,
     TypeProperty,
 };
 use crate::compiler::{CompilationResult, CompiledClass, NativeFunction};
@@ -319,9 +319,6 @@ impl CodegenPass {
                 members.push(CompositeTypeMember {
                     ty: ty_id,
                     offset,
-                    name: Some(Name::Struct {
-                        field: Lowercase::new(&*member.name),
-                    }),
                     default_value,
                     size: member_size,
                 });
@@ -383,7 +380,6 @@ impl CodegenPass {
                     members: vec![CompositeTypeMember {
                         ty: self.data.resources.primitives.pointer,
                         offset: 0,
-                        name: None,
                         default_value: None,
                         size: size_of::<usize>(),
                     }],
@@ -455,10 +451,6 @@ impl CodegenPass {
                 base.members.push(CompositeTypeMember {
                     ty,
                     offset: base.size,
-                    name: Some(Name::Class {
-                        class: Lowercase::new(&*class_raw.name),
-                        field: Lowercase::new(&*var.definition.name),
-                    }),
                     default_value,
                     size: member_size,
                 });

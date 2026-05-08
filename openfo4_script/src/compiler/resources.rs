@@ -163,21 +163,8 @@ pub struct CompositeTypeMember {
     /// Offset in bytes from the start of the composite structure.
     pub offset: usize,
     pub size: usize,
-    /// Optional name of this member.
-    pub name: Option<Name>,
     /// Optional default value of this member.
     pub default_value: Option<Vec<u8>>,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub enum Name {
-    Struct {
-        field: Lowercase<String>,
-    },
-    Class {
-        class: Lowercase<String>,
-        field: Lowercase<String>,
-    },
 }
 
 /// Pool for constant memory allocation.
@@ -244,14 +231,12 @@ impl PrimitiveTypes {
                     CompositeTypeMember {
                         ty: pointer,
                         offset: 0,
-                        name: None,
                         default_value: None,
                         size: size_of::<usize>(),
                     },
                     CompositeTypeMember {
                         ty: pointer,
                         offset: size_of::<usize>(),
-                        name: None,
                         default_value: None,
                         size: size_of::<usize>(),
                     },
@@ -269,14 +254,12 @@ impl PrimitiveTypes {
                     CompositeTypeMember {
                         ty: pointer,
                         offset: 0,
-                        name: None,
                         default_value: None,
                         size: size_of::<usize>(),
                     },
                     CompositeTypeMember {
                         ty: pointer,
                         offset: size_of::<usize>(),
-                        name: None,
                         default_value: None,
                         size: size_of::<usize>(),
                     },
@@ -294,14 +277,12 @@ impl PrimitiveTypes {
                     CompositeTypeMember {
                         ty: pointer,
                         offset: 0,
-                        name: None,
                         default_value: None,
                         size: size_of::<usize>(),
                     },
                     CompositeTypeMember {
                         ty: pointer,
                         offset: size_of::<usize>(),
-                        name: None,
                         default_value: None,
                         size: size_of::<usize>(),
                     },
