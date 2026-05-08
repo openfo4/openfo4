@@ -537,7 +537,7 @@ impl ArrayObject {
 
 #[derive(Copy, Clone)]
 #[repr(C)]
-pub struct VarObject {
+pub(crate) struct VarObject {
     /// Raw version of an [`ObjectTag`].
     pub tag: usize,
     pub data: VarObjectData,
@@ -545,7 +545,7 @@ pub struct VarObject {
 
 #[derive(Copy, Clone)]
 #[repr(C)]
-pub union VarObjectData {
+pub(crate) union VarObjectData {
     pub bool: bool,
     pub int: i32,
     pub float: f32,
@@ -553,7 +553,7 @@ pub union VarObjectData {
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
-pub enum ObjectTag {
+pub(crate) enum ObjectTag {
     /// A class pointer.
     Class,
     TypeId(TypeId),

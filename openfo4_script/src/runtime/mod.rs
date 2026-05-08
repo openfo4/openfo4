@@ -1,6 +1,7 @@
-pub mod host_functions;
 pub mod object;
 mod stack;
+
+pub(crate) mod host_functions;
 
 use std::any::Any;
 use std::marker::PhantomData;
@@ -64,7 +65,7 @@ impl<'a, T> Context<'a, T> {
 // The stack pointer must be at offset 0.
 #[derive(Clone, Debug)]
 #[repr(C)]
-pub struct RawContext {
+pub(crate) struct RawContext {
     pub stack_ptr: RawStack,
     pub state: *const HostState,
     pub data: *mut dyn Any,
@@ -73,7 +74,7 @@ pub struct RawContext {
 
 #[derive(Clone, Debug)]
 #[repr(C)]
-pub struct RawStack {
+pub(crate) struct RawStack {
     pub ptr: *mut u8,
     pub len: usize,
 }
@@ -453,13 +454,13 @@ impl<'a, T> Caller<'a, T> {
     }
 }
 
-pub struct HostState {
+pub(crate) struct HostState {
     pub call_table: UnsafeRefCell<CallTable>,
     pub pool: ObjectPool,
 }
 
 #[derive(Default)]
-pub struct CallTable {
+pub(crate) struct CallTable {
     functions: Vec<Box<dyn Fn(*const RawContext, *const RawVal, *mut RawVal) -> i32 + Send + Sync>>,
 }
 
@@ -475,8 +476,11 @@ impl CallTable {
 }
 
 pub trait IntoFunc<T, Params, Returns> {
+    #[doc(hidden)]
+    #[expect(private_interfaces)]
     fn into_func(self, call_table: &mut CallTable) -> usize;
 
+    #[doc(hidden)]
     fn signature() -> Signature;
 }
 
@@ -496,6 +500,7 @@ macro_rules! impl_into_func {
                 $returns: NativeType,
             )*
         {
+            #[expect(private_interfaces)]
             fn into_func(self, call_table: &mut CallTable) -> usize {
                 let callback = move |ctx: *const RawContext, params: *const RawVal, returns: *mut RawVal| -> i32 {
                     let ctx = unsafe { &*ctx };
