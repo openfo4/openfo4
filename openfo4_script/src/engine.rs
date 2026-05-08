@@ -119,9 +119,19 @@ impl Engine {
     pub fn get_type(&self, name: &str) -> Option<TypeId> {
         let name = Lowercase::new(name);
 
+        // FIXME: This check is best-effort only;
+        // It is in theory possible for classes to contain an #.
+        // We should let the compiler expose which types are save
+        // to construct.
+        fn is_class(name: &Lowercase<str>) -> bool {
+            !matches!(name.as_inner(), "none" | "int" | "float" | "string" | "var")
+                // Structs 
+                && !name.as_inner().contains('#')
+        }
+
         // Even if the class already has a TypeId, it is not
         // safe to construct it before compiling the class first.
-        if self.instances.get(&name).is_none() {
+        if self.instances.get(&name).is_none() && is_class(&name) {
             return None;
         }
 

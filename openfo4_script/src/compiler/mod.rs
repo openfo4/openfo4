@@ -1,4 +1,4 @@
-pub mod codegen;
+mod codegen;
 mod validation;
 
 pub mod resources;
@@ -76,7 +76,6 @@ unsafe impl Sync for NativeFunction {}
 #[derive(Clone, Debug)]
 pub struct CompilationResult {
     pub function: CompiledFunction,
-    pub stack_size: usize,
     pub signature: Signature,
 }
 

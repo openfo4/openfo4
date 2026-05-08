@@ -209,6 +209,41 @@ impl ObjectPool {
 
         self.objects.lock().unwrap().get(&addr).unwrap().clone()
     }
+
+    pub unsafe fn array<U>(&self, addr: ObjectAddr) -> &[U] {
+        unsafe {
+            let object = &*addr.to_raw().cast::<ArrayObject>();
+
+            // Array with len 0 MAY have a zero pointer that we cannot use,
+            // even for a zero-sized slice.
+            if object.len == 0 {
+                &[]
+            } else {
+                core::slice::from_raw_parts(object.ptr.cast::<U>(), object.len)
+            }
+        }
+    }
+
+    pub unsafe fn array_mut<U>(&mut self, addr: ObjectAddr) -> &mut [U] {
+        unsafe {
+            let object = &*addr.to_raw().cast::<ArrayObject>();
+
+            // Array with len 0 MAY have a zero pointer that we cannot use,
+            // even for a zero-sized slice.
+            if object.len == 0 {
+                &mut []
+            } else {
+                core::slice::from_raw_parts_mut(object.ptr.cast::<U>(), object.len)
+            }
+        }
+    }
+
+    pub unsafe fn string(&self, addr: ObjectAddr) -> &str {
+        unsafe {
+            let data = self.array::<u8>(addr);
+            std::str::from_utf8_unchecked(data)
+        }
+    }
 }
 
 /// A reference handle to an [`Object`] in a pool.

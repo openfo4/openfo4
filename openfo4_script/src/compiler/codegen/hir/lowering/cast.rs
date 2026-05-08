@@ -1,0 +1,155 @@
+use std::mem::offset_of;
+
+use game_common::string::Lowercase;
+use openfo4_jit::{IntCompareOp, Value as JitValue};
+
+use crate::compiler::codegen::hir::lowering::malloc::call_malloc;
+use crate::compiler::codegen::hir::lowering::{
+    BOOL_TYPE, FLOAT_TYPE, INT_TYPE, PTR_TYPE, Translator,
+};
+use crate::compiler::resources::Type;
+use crate::runtime::object::{ObjectTag, VarObject};
+
+/// Returns `src` is of type `class` or a subtype of `class`.
+///
+/// - `src` must be of type [`PTR_TYPE`] and must point to a class object, or be null.
+pub fn is_class(
+    translator: &mut Translator<'_>,
+    src: JitValue,
+    class: &Lowercase<str>,
+) -> JitValue {
+    let dst_id = translator.data.classes.get(class).unwrap().type_id;
+    let dst_id = translator.builder.iconst(PTR_TYPE, dst_id.as_bits() as i64);
+
+    let type_info_ptr = translator.builder.load(PTR_TYPE, src, 0);
+
+    // The first word of an object contains a constant pointer to the type
+    // info. The type info starts with a single word containing the number
+    // of type ids + vtable pairs that follow.
+    // If any type id matches we have a valid object of that class.
+
+    let count = translator.builder.load(PTR_TYPE, type_info_ptr, 0);
+
+    let next_block = translator.builder.create_block(&[]);
+
+    // Note that every object has at least one typeid. This means count is
+    // always >= 1.
+    let iter_block = translator.builder.create_block(&[PTR_TYPE]);
+
+    let zero = translator.builder.iconst(PTR_TYPE, 0);
+    translator.builder.jump(iter_block, &[zero]);
+
+    translator.builder.switch_to_block(iter_block);
+    let index = translator.builder.block_params(iter_block)[0];
+
+    // Load and check current offset.
+    let stride = size_of::<usize>() * 2;
+    let offset = translator.builder.imul_imm(index, stride as i64);
+    let offset = translator
+        .builder
+        .iadd_imm(offset, size_of::<usize>() as i64);
+
+    let addr = translator.builder.iadd(type_info_ptr, offset);
+    let type_id = translator.builder.load(PTR_TYPE, addr, 0);
+
+    let is_eq = translator
+        .builder
+        .icmp(type_id, dst_id, IntCompareOp::Equal);
+
+    // Increment index.
+    let next_index = translator.builder.iadd_imm(index, 1);
+    let next_index_valid = translator
+        .builder
+        .icmp(next_index, count, IntCompareOp::NotEqual);
+
+    // Equivalent to `next_offset_valid && !is_eq`.
+    let is_neq = translator.builder.bnot(is_eq);
+    let should_continue = translator.builder.band(next_index_valid, is_neq);
+
+    translator
+        .builder
+        .brif(should_continue, iter_block, &[next_index], next_block, &[]);
+
+    translator.builder.switch_to_block(next_block);
+    translator.current_block = next_block;
+
+    is_eq
+}
+
+pub fn create_var(translator: &mut Translator<'_>, value: JitValue, tag: ObjectTag) -> JitValue {
+    // Allocate var object.
+    let one = translator.builder.iconst(PTR_TYPE, 1);
+    let ptr = call_malloc(translator, translator.data.resources.primitives.var, one);
+
+    let tag = translator.builder.iconst(PTR_TYPE, tag.to_bits() as i64);
+    translator
+        .builder
+        .store(tag, ptr, offset_of!(VarObject, tag) as u32);
+
+    translator
+        .builder
+        .store(value, ptr, offset_of!(VarObject, data) as u32);
+
+    ptr
+}
+
+pub fn extract_var(
+    translator: &mut Translator<'_>,
+    object: JitValue,
+    tag: ObjectTag,
+    class: Option<&Lowercase<str>>,
+) -> JitValue {
+    let wanted_tag = translator.builder.iconst(PTR_TYPE, tag.to_bits() as i64);
+
+    // Abort if object == null.
+    translator.assert_true(object);
+
+    let actual_tag = translator
+        .builder
+        .load(PTR_TYPE, object, offset_of!(VarObject, tag) as u32);
+    let is_eq = translator
+        .builder
+        .icmp(actual_tag, wanted_tag, IntCompareOp::Equal);
+
+    // Abort if the actual tag doesn't match the requested tag.
+    translator.assert_true(is_eq);
+
+    let data = match tag {
+        ObjectTag::Class => {
+            translator
+                .builder
+                .load(PTR_TYPE, object, offset_of!(VarObject, data) as u32)
+        }
+        ObjectTag::TypeId(id) => match translator.data.resources.types.get(id).unwrap() {
+            Type::Unit => translator.builder.iconst(PTR_TYPE, 0),
+            Type::Int { bits } if bits == 8 => {
+                translator
+                    .builder
+                    .load(BOOL_TYPE, object, offset_of!(VarObject, data) as u32)
+            }
+            Type::Int { bits } if bits == 32 => {
+                translator
+                    .builder
+                    .load(INT_TYPE, object, offset_of!(VarObject, data) as u32)
+            }
+            Type::Float { bits } if bits == 32 => {
+                translator
+                    .builder
+                    .load(FLOAT_TYPE, object, offset_of!(VarObject, data) as u32)
+            }
+            Type::Composite(_) => {
+                translator
+                    .builder
+                    .load(PTR_TYPE, object, offset_of!(VarObject, data) as u32)
+            }
+            _ => unreachable!(),
+        },
+    };
+
+    if let Some(class) = class {
+        let is_class = is_class(translator, data, &class);
+        translator.assert_true(is_class);
+    }
+
+    data
+}

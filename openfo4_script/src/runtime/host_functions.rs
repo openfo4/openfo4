@@ -39,13 +39,11 @@ pub unsafe extern "C" fn alloc_stack_frame(ctx: *mut RawContext, size: usize) ->
     })
 }
 
-pub unsafe extern "C" fn free_stack_frame(ctx: *mut RawContext, size: usize) {
+pub unsafe extern "C" fn free_stack_frame(ctx: *mut RawContext, size: usize) -> *mut u8 {
     abort_on_unwind(|| {
         let ctx = unsafe { &mut *ctx };
-        unsafe {
-            (*ctx.stack).free(size);
-        }
-    });
+        unsafe { (*ctx.stack).free(size) }
+    })
 }
 
 pub unsafe extern "C" fn bool_to_string(ctx: *mut RawContext, value: bool) -> ObjectAddr {

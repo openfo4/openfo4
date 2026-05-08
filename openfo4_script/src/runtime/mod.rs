@@ -132,7 +132,6 @@ impl Val {
 pub struct Func {
     ptr: NativeFnPtr,
     signature: Signature,
-    stack_size: usize,
 }
 
 impl Func {
@@ -154,13 +153,7 @@ impl Func {
             // function pointer of type `NativeFnPtr`.
             ptr: unsafe { transmute::<*const u8, NativeFnPtr>(res.function.as_ptr()) },
             signature: res.signature.clone(),
-            stack_size: res.stack_size,
         }
-    }
-
-    /// Returns the minimum stack size required to call this function.
-    pub fn stack_size(&self) -> usize {
-        self.stack_size
     }
 
     pub fn call<T>(&self, ctx: &mut Context<'_, T>, params: &[Val]) -> Result<Vec<Val>, Exception>
@@ -245,7 +238,7 @@ impl Func {
         let ctx = RawContext {
             stack_ptr: RawStack {
                 ptr: ctx.stack.as_ptr(),
-                len: ctx.stack.size(),
+                len: 0,
             },
             state: &ctx.engine.state,
             data: &mut ctx.data as *mut dyn Any,
@@ -624,15 +617,15 @@ unsafe impl NativeType for isize {
 }
 
 unsafe impl NativeType for bool {
-    const TYPE: Type = Type::I32;
+    const TYPE: Type = Type::I8;
 
     unsafe fn from_raw(val: &RawVal) -> Self {
-        let v = unsafe { <i32 as NativeType>::from_raw(val) };
+        let v = unsafe { val.i8 };
         v != 0
     }
 
     fn to_raw(self) -> RawVal {
-        (self as i32).to_raw()
+        RawVal { i8: i8::from(self) }
     }
 }
 

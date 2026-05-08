@@ -20,6 +20,7 @@ impl Resources {
     pub fn new() -> Self {
         let types = Types::default();
         let primitives = PrimitiveTypes::new(&types);
+        let mut string_to_type = HashMap::default();
 
         let mut infos = HashMap::new();
         for (id, name) in [
@@ -27,6 +28,8 @@ impl Resources {
             (primitives.bool, Some(Lowercase::from_static("bool"))),
             (primitives.int, Some(Lowercase::from_static("int"))),
             (primitives.float, Some(Lowercase::from_static("float"))),
+            (primitives.string, Some(Lowercase::from_static("string"))),
+            (primitives.var, Some(Lowercase::from_static("var"))),
             (primitives.pointer, None),
         ] {
             infos.insert(
@@ -43,13 +46,17 @@ impl Resources {
                     name: name.map(|v| v.to_owned()),
                 },
             );
+
+            if let Some(name) = name {
+                string_to_type.insert(name.to_owned(), id);
+            }
         }
 
         Self {
             types,
             primitives,
             constants: ConstantPool::default(),
-            string_to_type: Mutex::default(),
+            string_to_type: Mutex::new(string_to_type),
             infos: Mutex::new(infos),
         }
     }
@@ -214,9 +221,8 @@ impl PrimitiveTypes {
         let none = types.declare();
         types.define(none, Type::Unit);
 
-        // FIXME: Reduce this to i8.
         let bool = types.declare();
-        types.define(bool, Type::Int { bits: 32 });
+        types.define(bool, Type::Int { bits: 8 });
 
         let int = types.declare();
         types.define(int, Type::Int { bits: 32 });

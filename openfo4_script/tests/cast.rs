@@ -1,7 +1,9 @@
 use openfo4_script::assembler::assemble;
 use openfo4_script::compiler::CompilerOptions;
 use openfo4_script::engine::{Engine, Options};
-use openfo4_script::runtime::{ArrayObject, Context, Exception, ObjectAddr, Stack};
+use openfo4_script::runtime::{
+    ArrayObject, Context, Exception, NativeTuple, ObjectAddr, Stack, TypedFunc,
+};
 
 const COMPILER_OPTIONS: CompilerOptions = CompilerOptions {
     validation: true,
@@ -168,4 +170,122 @@ fn class_downcast_fail() {
 
     let func = func.typed::<ObjectAddr, ObjectAddr>().unwrap();
     assert_eq!(func.call(&mut ctx, addr), Err(Exception::Error));
+}
+
+#[test]
+fn cast_bool_to_int() {
+    cast_test_impl("bool", "int", |_, func, ctx| {
+        let res: i32 = func.call(ctx, false).unwrap();
+        assert_eq!(res, 0);
+
+        let res: i32 = func.call(ctx, true).unwrap();
+        assert_eq!(res, 1);
+    });
+}
+
+#[test]
+fn cast_bool_to_float() {
+    cast_test_impl("bool", "float", |_, func, ctx| {
+        let res: f32 = func.call(ctx, false).unwrap();
+        assert_eq!(res, 0.0);
+
+        let res: f32 = func.call(ctx, true).unwrap();
+        assert_eq!(res, 1.0);
+    });
+}
+
+#[test]
+fn cast_int_to_bool() {
+    cast_test_impl("int", "bool", |_, func, ctx| {
+        let res: bool = func.call(ctx, 0).unwrap();
+        assert!(!res);
+
+        let res: bool = func.call(ctx, 123).unwrap();
+        assert!(res);
+    });
+}
+
+#[test]
+fn cast_int_to_float() {
+    cast_test_impl("int", "float", |_, func, ctx| {
+        let res: f32 = func.call(ctx, 42).unwrap();
+        assert_eq!(res, 42.0);
+    });
+}
+
+#[test]
+fn cast_float_to_bool() {
+    cast_test_impl("float", "bool", |_, func, ctx| {
+        let res: bool = func.call(ctx, 0.0).unwrap();
+        assert!(!res);
+
+        let res: bool = func.call(ctx, 1.5).unwrap();
+        assert!(res);
+    });
+}
+
+#[test]
+fn cast_float_to_int() {
+    cast_test_impl("float", "int", |_, func, ctx| {
+        let res: i32 = func.call(ctx, -42.0).unwrap();
+        assert_eq!(res, -42);
+    });
+}
+
+#[test]
+fn cast_bool_to_string() {
+    cast_test_impl("bool", "string", |engine, func, ctx| {
+        let string = func.call(ctx, true).unwrap();
+        let string = unsafe { engine.object_pool().string(string) };
+        assert_eq!(string, "true");
+    });
+}
+
+#[test]
+fn cast_int_to_string() {
+    cast_test_impl("int", "string", |engine, func, ctx| {
+        let string = func.call(ctx, 32).unwrap();
+        let string = unsafe { engine.object_pool().string(string) };
+        assert_eq!(string, "32");
+    });
+}
+
+#[test]
+fn cast_float_to_string() {
+    cast_test_impl("float", "string", |engine, func, ctx| {
+        let string = func.call(ctx, -42.0).unwrap();
+        let string = unsafe { engine.object_pool().string(string) };
+        assert_eq!(string, "-42");
+    });
+}
+
+fn cast_test_impl<F, Params, Returns>(in_ty: &str, out_ty: &str, f: F)
+where
+    F: FnOnce(&mut Engine, &TypedFunc<'_, Params, Returns>, &mut Context<'_, ()>),
+    Params: NativeTuple,
+    Returns: NativeTuple,
+{
+    let mut engine = Engine::new(COMPILER_OPTIONS);
+
+    let module = assemble(&format!(
+        r#"
+        class MyClass:
+
+        function MyFunc(in: {in_ty}) -> {out_ty} static:
+        local out: {out_ty}
+        out = cast in
+        return out
+        "#,
+    ));
+
+    engine.register(&module);
+
+    let instance = engine.compile("MyClass", &Options::default());
+    let func = instance.get_func("MyFunc").unwrap();
+
+    let mut stack = Stack::new(0);
+    let mut ctx = Context::new(&engine, &mut stack, ());
+
+    let func = func.typed().unwrap();
+    f(&mut engine, &func, &mut ctx);
 }

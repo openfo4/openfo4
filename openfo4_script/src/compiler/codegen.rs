@@ -1,6 +1,7 @@
-mod builtin;
+// mod builtin;
+
 mod function;
-mod function_props;
+mod hir;
 mod runtime;
 mod state_folding;
 mod trace;
@@ -18,7 +19,6 @@ use openfo4_pex::{Class, Function, Instruction, Module, Struct, Value};
 use slab::Slab;
 use thiserror::Error;
 
-use crate::compiler::codegen::function_props::{FunctionProps, function_properties};
 // use crate::compiler::codegen::layout::{ClassLayout, compute_struct_layout};
 use crate::compiler::codegen::runtime::RuntimeFunctions;
 use crate::compiler::resources::{
@@ -97,7 +97,6 @@ impl CodegenPass {
                         function: func.clone(),
                         native: None,
                         trampoline_func_id: None,
-                        props: None,
                         class: Lowercase::new(&*class.name),
                         class_name_debug: class.name.clone(),
                         name: Lowercase::new(&*func.name),
@@ -130,7 +129,6 @@ impl CodegenPass {
                         function: func.clone(),
                         native: None,
                         trampoline_func_id: None,
-                        props: None,
                         class: Lowercase::new(&*class.name),
                         class_name_debug: class.name.clone(),
                         name: Lowercase::new(&*func.name),
@@ -144,7 +142,6 @@ impl CodegenPass {
                         function: func.clone(),
                         native: None,
                         trampoline_func_id: None,
-                        props: None,
                         class: Lowercase::new(&*class.name),
                         class_name_debug: class.name.clone(),
                         name: Lowercase::new(&*func.name),
@@ -620,11 +617,8 @@ impl CodegenPass {
                 options.use_native_stubs,
             )?;
 
-            let props = function_properties(&self.data, func);
-
             let func = &mut self.data.functions[func_id.0];
             func.func_id = Some(id);
-            func.props = Some(props);
         }
 
         for func_id in &funcs_to_compile {
@@ -647,14 +641,11 @@ impl CodegenPass {
         );
         func.trampoline_func_id = Some(trampoline);
 
-        let props = func.props.as_ref().unwrap();
-
         let compiled_trampoline = self.compiler.compile_function(trampoline);
 
         Ok((
             CompilationResult {
                 function: compiled_trampoline,
-                stack_size: props.local_stack_size,
                 signature: func.signature.clone().unwrap(),
             },
             compiled_func.as_ptr(),
@@ -765,7 +756,7 @@ impl CodegenData {
     fn resolve_ty_jit(&self, ty: &Lowercase<str>) -> JitType {
         match ty.as_inner() {
             "none" => JitType::I32,
-            "bool" => JitType::I32,
+            "bool" => JitType::I8,
             "int" => JitType::I32,
             "float" => JitType::F32,
             "string" => JitType::Pointer,
@@ -853,7 +844,6 @@ struct FunctionDef {
     function: Function,
     native: Option<NativeFunction>,
     trampoline_func_id: Option<FuncId>,
-    props: Option<FunctionProps>,
 }
 
 #[derive(Clone, Debug)]
@@ -1026,16 +1016,4 @@ enum Type {
     Array(Box<Type>),
     Class(Lowercase<String>),
     Struct(Lowercase<String>),
-}
-
-impl Type {
-    fn to_jit_type(&self) -> JitType {
-        match self {
-            Self::None => JitType::I32,
-            Self::Bool => JitType::I32,
-            Self::Int => JitType::I32,
-            Self::Float => JitType::F32,
-            _ => JitType::Pointer,
-        }
-    }
 }

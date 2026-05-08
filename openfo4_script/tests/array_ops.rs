@@ -44,7 +44,7 @@ fn array_create() {
     let instance = engine.compile("MyClass", &Options::default());
     let func = instance.get_func("MyFunction").unwrap();
 
-    let mut stack = Stack::new(func.stack_size());
+    let mut stack = Stack::new(0);
     let mut ctx = Context::new(&engine, &mut stack, ());
 
     let func = func.typed::<(), ()>().unwrap();
@@ -89,7 +89,7 @@ fn array_get() {
     let instance = engine.compile("MyClass", &Options::default());
     let func = instance.get_func("MyFunction").unwrap();
 
-    let mut stack = Stack::new(func.stack_size());
+    let mut stack = Stack::new(0);
     let mut ctx = Context::new(&engine, &mut stack, ());
 
     let func = func.typed::<ObjectAddr, ()>().unwrap();
@@ -276,7 +276,7 @@ fn array_find_int() {
     let instance = engine.compile("MyClass", &Options::default());
     let func = instance.get_func("MyFunction").unwrap();
 
-    let mut stack = Stack::new(func.stack_size());
+    let mut stack = Stack::new(0);
     let mut ctx = Context::new(&engine, &mut stack, ());
 
     let func = func.typed::<ObjectAddr, ()>().unwrap();
@@ -355,7 +355,7 @@ fn array_find_struct() {
 
     let array_ptr = array.finalize();
 
-    let mut stack = Stack::new(func.stack_size());
+    let mut stack = Stack::new(0);
     let mut ctx = Context::new(&engine, &mut stack, ());
 
     let func = func.typed::<ObjectAddr, ()>().unwrap();

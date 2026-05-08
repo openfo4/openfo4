@@ -15,7 +15,7 @@ impl Stack {
     }
 
     pub fn for_func(func: &Func) -> Self {
-        Self::new(func.stack_size())
+        Self::new(0)
     }
 
     pub fn size(&self) -> usize {
@@ -31,10 +31,11 @@ impl Stack {
         self.memory.resize(offset + size, 0);
         self.len += size;
 
-        unsafe { self.memory.as_mut_ptr().add(offset) }
+        self.memory.as_mut_ptr()
     }
 
-    pub(crate) fn free(&mut self, size: usize) {
+    pub(crate) fn free(&mut self, size: usize) -> *mut u8 {
         self.len -= size;
+        self.memory.as_mut_ptr()
     }
 }
