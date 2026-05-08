@@ -45,7 +45,7 @@ fn default_class_values() {
             object.get("MyClass", "b").unwrap(),
             bytemuck::bytes_of(&32.0_f32)
         );
-        assert_eq!(object.get("MyClass", "c").unwrap(), [1, 0, 0, 0]);
+        assert_eq!(object.get("MyClass", "c").unwrap(), [1]);
         assert_eq!(
             object.get("MyClass", "d").unwrap(),
             bytemuck::bytes_of(&50_i32)

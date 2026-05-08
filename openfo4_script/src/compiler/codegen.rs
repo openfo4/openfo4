@@ -197,7 +197,7 @@ impl CodegenPass {
         let resolve_ty_and_default_value = |ty: &Type| -> (TypeId, Option<Vec<u8>>) {
             match ty {
                 Type::None => (self.data.resources.primitives.none, None),
-                Type::Bool => (self.data.resources.primitives.bool, Some(vec![0; 4])),
+                Type::Bool => (self.data.resources.primitives.bool, Some(vec![0; 1])),
                 Type::Int => (
                     self.data.resources.primitives.int,
                     Some(vec![0; size_of::<i32>()]),
@@ -252,7 +252,7 @@ impl CodegenPass {
         let get_size_align = |ty: &Type| -> (usize, usize) {
             match ty {
                 Type::None => (0, 1),
-                Type::Bool => (4, 4),
+                Type::Bool => (1, 1),
                 Type::Int => (size_of::<i32>(), align_of::<i32>()),
                 Type::Float => (size_of::<f32>(), align_of::<f32>()),
                 Type::String | Type::Struct(_) | Type::Class(_) | Type::Var | Type::Array(_) => {
@@ -421,7 +421,7 @@ impl CodegenPass {
 
                 match &var.value {
                     Value::Bool(v) => {
-                        default_value = Some(u32::from(*v).to_ne_bytes().to_vec());
+                        default_value = Some(vec![u8::from(*v)]);
                     }
                     Value::Int(v) => {
                         default_value = Some(v.to_ne_bytes().to_vec());
