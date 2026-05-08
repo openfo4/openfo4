@@ -12,12 +12,12 @@ pub unsafe extern "C" fn call_host_trampoline(
     index: usize,
     params: *const RawVal,
     returns: *mut RawVal,
-) {
+) -> i32 {
     abort_on_unwind(|| {
         // SAFETY: We have locked the call table before any guest function is called.
         let call_table = unsafe { (*(*ctx).state).call_table.borrow() };
         let func = &call_table.functions[index];
-        func(ctx, params, returns);
+        func(ctx, params, returns)
     })
 }
 
