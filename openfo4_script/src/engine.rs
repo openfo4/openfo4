@@ -75,7 +75,7 @@ impl Engine {
             let class = Lowercase::new(class);
             let func = Lowercase::new(func);
 
-            if self
+            if !self
                 .registered_native_funcs
                 .insert((class.clone(), func.clone()))
             {
