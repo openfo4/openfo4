@@ -1,7 +1,7 @@
 use openfo4_script::assembler::assemble;
 use openfo4_script::compiler::CompilerOptions;
 use openfo4_script::engine::{Engine, Options};
-use openfo4_script::runtime::{Context, Exception, Stack};
+use openfo4_script::runtime::{Context, Exception};
 
 const COMPILER_OPTIONS: CompilerOptions = CompilerOptions {
     validation: true,
@@ -34,7 +34,7 @@ fn call_method_on_null() {
     let instance = engine.compile("MyClass", &Options::default());
     let func = instance.get_func("MyFunction").unwrap();
 
-    let mut stack = Stack::new(0);
+    let mut stack = engine.create_stack();
     let mut ctx = Context::new(&engine, &mut stack, ());
 
     let func = func.typed::<(), ()>().unwrap();
@@ -64,7 +64,7 @@ fn array_get_on_null() {
     let instance = engine.compile("MyClass", &Options::default());
     let func = instance.get_func("MyFunction").unwrap();
 
-    let mut stack = Stack::new(0);
+    let mut stack = engine.create_stack();
     let mut ctx = Context::new(&engine, &mut stack, ());
 
     let func = func.typed::<(), ()>().unwrap();
@@ -96,7 +96,7 @@ fn array_get_out_of_bounds() {
     let instance = engine.compile("MyClass", &Options::default());
     let func = instance.get_func("MyFunction").unwrap();
 
-    let mut stack = Stack::new(0);
+    let mut stack = engine.create_stack();
     let mut ctx = Context::new(&engine, &mut stack, ());
 
     let func = func.typed::<(), ()>().unwrap();

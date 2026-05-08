@@ -402,7 +402,7 @@ fn call_event_invocation_single(
     let is_resumed = task_state.stack.is_some();
     let stack = task_state
         .stack
-        .get_or_insert_with(|| Stack::for_func(&func));
+        .get_or_insert_with(|| engine.create_stack());
 
     let mut args = args
         .iter()

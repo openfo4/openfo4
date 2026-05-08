@@ -1,7 +1,7 @@
 use openfo4_script::assembler::assemble;
 use openfo4_script::compiler::CompilerOptions;
 use openfo4_script::engine::{Engine, Options};
-use openfo4_script::runtime::{Caller, Context, Exception, ObjectAddr, Stack};
+use openfo4_script::runtime::{Caller, Context, Exception, ObjectAddr};
 
 const COMPILER_OPTIONS: CompilerOptions = CompilerOptions {
     validation: true,
@@ -43,7 +43,7 @@ fn int_var() {
     let instance = engine.compile("MyClass", &Options::default());
     let func = instance.get_func("MyFunction").unwrap();
 
-    let mut stack = Stack::for_func(func);
+    let mut stack = engine.create_stack();
     let mut ctx = Context::new(&engine, &mut stack, ());
 
     let func = func.typed::<(), ()>().unwrap();
@@ -72,7 +72,7 @@ fn string_var() {
     let instance = engine.compile("MyClass", &Options::default());
     let func = instance.get_func("MyFunction").unwrap();
 
-    let mut stack = Stack::for_func(func);
+    let mut stack = engine.create_stack();
     let mut ctx = Context::new(&engine, &mut stack, ());
 
     let input = engine.object_pool().insert_string("Hello World").addr();
@@ -105,7 +105,7 @@ fn class_var() {
     let func = instance.get_func("MyFunction").unwrap();
     let layout = engine.get_type("MyClass").unwrap();
 
-    let mut stack = Stack::for_func(func);
+    let mut stack = engine.create_stack();
     let mut ctx = Context::new(&engine, &mut stack, ());
 
     let input = engine.object_pool().alloc(layout, 1).addr();
@@ -142,7 +142,7 @@ fn struct_var() {
     let func = instance.get_func("MyFunction").unwrap();
     let layout = engine.get_type("MyClass#MyStruct").unwrap();
 
-    let mut stack = Stack::for_func(func);
+    let mut stack = engine.create_stack();
     let mut ctx = Context::new(&engine, &mut stack, ());
 
     let input = engine.object_pool().alloc(layout, 1).addr();

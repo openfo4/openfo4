@@ -1,21 +1,26 @@
-use crate::runtime::Func;
+use std::sync::Arc;
+
+use crate::engine::EngineShared;
 
 #[derive(Clone, Debug)]
 pub struct Stack {
+    pub(crate) engine: Arc<EngineShared>,
+    /// The top-level guest function that created the callstack.
+    ///
+    /// If `None` the callstack is empty.
+    pub(crate) func: Option<*const u8>,
     memory: Vec<u8>,
     len: usize,
 }
 
 impl Stack {
-    pub fn new(size: usize) -> Self {
+    pub(crate) fn new_with_engine(engine: Arc<EngineShared>) -> Self {
         Self {
-            memory: vec![0; size],
+            engine,
+            func: None,
+            memory: Vec::new(),
             len: 0,
         }
-    }
-
-    pub fn for_func(func: &Func) -> Self {
-        Self::new(0)
     }
 
     pub fn size(&self) -> usize {
@@ -39,3 +44,10 @@ impl Stack {
         self.memory.as_mut_ptr()
     }
 }
+
+// SAFETY: All stack contents are plain-old-data types or pointers
+// to objects that are allowed to be accessed from any thread.
+unsafe impl Send for Stack {}
+
+// SAFETY: Any access that reads or writes the Stack requires mutable access.
+unsafe impl Sync for Stack {}

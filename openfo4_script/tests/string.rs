@@ -2,7 +2,7 @@ use openfo4_script::{
     assembler::assemble,
     compiler::CompilerOptions,
     engine::{Engine, Options},
-    runtime::{Caller, Context, Exception, ObjectAddr, Stack},
+    runtime::{Caller, Context, Exception, ObjectAddr},
 };
 
 const COMPILER_OPTIONS: CompilerOptions = CompilerOptions {
@@ -40,7 +40,7 @@ fn string_constant() {
     let instance = engine.compile("MyClass", &Options::default());
     let func = instance.get_func("MyFunction").unwrap();
 
-    let mut stack = Stack::for_func(func);
+    let mut stack = engine.create_stack();
     let mut ctx = Context::new(&engine, &mut stack, ());
 
     let func = func.typed::<(), ()>().unwrap();
@@ -82,7 +82,7 @@ fn string_concat() {
     let instance = engine.compile("MyClass", &Options::default());
     let func = instance.get_func("MyFunction").unwrap();
 
-    let mut stack = Stack::for_func(func);
+    let mut stack = engine.create_stack();
     let mut ctx = Context::new(&engine, &mut stack, ());
 
     let func = func.typed::<(ObjectAddr, ObjectAddr), ()>().unwrap();
@@ -111,7 +111,7 @@ fn string_cmpeq() {
     let instance = engine.compile("MyClass", &Options::default());
     let func = instance.get_func("IsHello").unwrap();
 
-    let mut stack = Stack::for_func(func);
+    let mut stack = engine.create_stack();
     let mut ctx = Context::new(&engine, &mut stack, ());
 
     let func = func.typed::<ObjectAddr, bool>().unwrap();

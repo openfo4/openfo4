@@ -1,7 +1,7 @@
 use openfo4_script::assembler::assemble;
 use openfo4_script::compiler::CompilerOptions;
 use openfo4_script::engine::{Engine, Options};
-use openfo4_script::runtime::{Context, Stack};
+use openfo4_script::runtime::Context;
 
 const COMPILER_OPTIONS: CompilerOptions = CompilerOptions {
     validation: true,
@@ -37,7 +37,7 @@ fn recursion() {
     let instance = engine.compile("MyClass", &Options::default());
     let func = instance.get_func("factorial").unwrap();
 
-    let mut stack = Stack::for_func(func);
+    let mut stack = engine.create_stack();
     let mut ctx = Context::new(&engine, &mut stack, ());
 
     let func = func.typed::<i32, i32>().unwrap();

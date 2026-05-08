@@ -10,7 +10,7 @@ use openfo4_pex::{Class, Module};
 use crate::compiler::resources::{TypeId, TypeInfo};
 use crate::compiler::{CompilationResult, CompilerOptions, Context, NativeFunction};
 use crate::runtime::host_functions::call_host_trampoline;
-use crate::runtime::{CallTable, Func, HostState, IntoFunc, ObjectPool};
+use crate::runtime::{CallTable, Func, HostState, IntoFunc, ObjectPool, Stack};
 
 #[derive(Clone, Debug)]
 pub enum Error {
@@ -123,7 +123,7 @@ impl Engine {
 
         let res = self.ctx.compile(&class.name, options).unwrap();
         for (name, res) in res.functions {
-            let func = unsafe { Func::new(&res) };
+            let func = unsafe { Func::new(&res, Arc::downgrade(&self.shared)) };
             funcs.insert(name, (res, func));
         }
 
@@ -187,6 +187,13 @@ impl Engine {
     pub fn type_info(&self, id: TypeId) -> TypeInfo {
         self.ctx.resources().infos.lock().get(&id).cloned().unwrap()
     }
+
+    /// Creates a new empty [`Stack`] for function suspension and resumption.
+    ///
+    /// The returned [`Stack`] is bound to this `Engine`.
+    pub fn create_stack(&self) -> Stack {
+        Stack::new_with_engine(Arc::clone(&self.shared))
+    }
 }
 
 impl Debug for Engine {
@@ -240,18 +247,6 @@ impl Instance {
 #[derive(Debug)]
 struct InstanceShared {
     funcs: HashMap<Lowercase<String>, (CompilationResult, Func)>,
-}
-
-#[derive(Clone, Debug)]
-pub struct ScriptInstance {
-    functions: HashMap<String, CompilationResult>,
-}
-
-impl ScriptInstance {
-    pub fn get_func(&self, name: &str) -> Option<Func> {
-        let res = self.functions.get(&name.to_lowercase())?;
-        Some(unsafe { Func::new(res) })
-    }
 }
 
 #[derive(Clone, Debug)]

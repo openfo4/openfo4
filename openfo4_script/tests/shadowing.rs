@@ -1,7 +1,7 @@
 use openfo4_script::assembler::assemble;
 use openfo4_script::compiler::CompilerOptions;
 use openfo4_script::engine::{Engine, Options};
-use openfo4_script::runtime::{Context, ObjectAddr, Stack};
+use openfo4_script::runtime::{Context, ObjectAddr};
 
 const COMPILER_OPTIONS: CompilerOptions = CompilerOptions {
     validation: true,
@@ -53,7 +53,7 @@ fn variable_shadowing() {
 
     let addr = builder.finalize().addr();
 
-    let mut stack = Stack::for_func(func);
+    let mut stack = engine.create_stack();
     let mut ctx = Context::new(&engine, &mut stack, ());
 
     let func = func.typed::<ObjectAddr, i32>().unwrap();

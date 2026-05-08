@@ -5,7 +5,7 @@ mod stack;
 use std::any::Any;
 use std::marker::PhantomData;
 use std::mem::{MaybeUninit, transmute};
-use std::sync::Arc;
+use std::sync::{Arc, Weak};
 
 use game_common::cell::UnsafeRefCell;
 use openfo4_jit::{Signature, Type};
@@ -39,6 +39,8 @@ pub struct Context<'a, T> {
 
 impl<'a, T> Context<'a, T> {
     pub fn new(engine: &Engine, stack: &'a mut Stack, data: T) -> Self {
+        assert!(Arc::ptr_eq(&engine.shared, &stack.engine));
+
         Self {
             engine: engine.shared.clone(),
             stack,
@@ -132,13 +134,14 @@ impl Val {
 pub struct Func {
     ptr: NativeFnPtr,
     signature: Signature,
+    engine: Weak<EngineShared>,
 }
 
 impl Func {
     /// # Safety
     ///
     /// - The function pointer must point to a [`NativeFnPtr`] function.
-    pub(crate) unsafe fn new(res: &CompilationResult) -> Self {
+    pub(crate) unsafe fn new(res: &CompilationResult, engine: Weak<EngineShared>) -> Self {
         // Should always match the ABI of `host_call_trampoline`.
         debug_assert_eq!(
             res.function.signature(),
@@ -153,6 +156,7 @@ impl Func {
             // function pointer of type `NativeFnPtr`.
             ptr: unsafe { transmute::<*const u8, NativeFnPtr>(res.function.as_ptr()) },
             signature: res.signature.clone(),
+            engine,
         }
     }
 
@@ -223,10 +227,31 @@ impl Func {
         Ok(returns)
     }
 
+    /// Calls the guest function.
     pub unsafe fn call_unchecked<T>(&self, ctx: &mut Context<'_, T>, values: *mut RawVal)
     where
         T: 'static,
     {
+        // The guest function will read from the stack and on suspension assume that
+        // current contents match the contents of the previous writes.
+        // We must ensure that we only resume using a stack that is compatible with
+        // function we are calling, otherwise the guest function will begin reading
+        // arbitrary memory and reinterpret memory incorrectly.
+        assert!(
+            core::ptr::addr_eq(Arc::as_ptr(&ctx.engine), Weak::as_ptr(&self.engine)),
+            "attempted to call func with context from another Engine"
+        );
+        if let Some(stack_fn_ptr) = ctx.stack.func {
+            let fn_ptr = self.ptr as *const u8;
+            assert!(
+                core::ptr::addr_eq(fn_ptr, stack_fn_ptr),
+                "attempted to reuse stack for incompatible func"
+            );
+        }
+
+        // FIXME: Set this to None and free stack when a function returns without SUSPENDED.
+        ctx.stack.func = Some(self.ptr as *const u8);
+
         // Allocate enough stack space for the callee prologue.
         if ctx.stack.size() == 0 {
             ctx.stack.alloc(size_of::<usize>());

@@ -2,7 +2,7 @@ use openfo4_script::assembler::assemble;
 use openfo4_script::compiler::CompilerOptions;
 use openfo4_script::engine::{Engine, Options};
 use openfo4_script::runtime::{
-    ArrayObject, Context, Exception, NativeTuple, ObjectAddr, Stack, TypedFunc,
+    ArrayObject, Context, Exception, NativeTuple, ObjectAddr, TypedFunc,
 };
 
 const COMPILER_OPTIONS: CompilerOptions = CompilerOptions {
@@ -33,7 +33,7 @@ fn cast_array() {
     let func = instance.get_func("MyFunction").unwrap();
     let layout = engine.get_type("MyClass").unwrap();
 
-    let mut stack = Stack::for_func(func);
+    let mut stack = engine.create_stack();
     let mut ctx = Context::new(&engine, &mut stack, ());
 
     let addrs: Vec<_> = (0..3)
@@ -90,7 +90,7 @@ fn class_upcast() {
     let func = instance.get_func("F").unwrap();
     let type_id = engine.get_type("C").unwrap();
 
-    let mut stack = Stack::new(0);
+    let mut stack = engine.create_stack();
     let mut ctx = Context::new(&engine, &mut stack, ());
 
     let addr = engine.object_pool().insert(type_id).finalize().addr();
@@ -126,7 +126,7 @@ fn class_downcast() {
     let func = instance.get_func("F").unwrap();
     let type_id = engine.get_type("C").unwrap();
 
-    let mut stack = Stack::new(0);
+    let mut stack = engine.create_stack();
     let mut ctx = Context::new(&engine, &mut stack, ());
 
     let addr = engine.object_pool().insert(type_id).finalize().addr();
@@ -163,7 +163,7 @@ fn class_downcast_fail() {
     let func = instance.get_func("F").unwrap();
     let type_id = engine.get_type("A").unwrap();
 
-    let mut stack = Stack::new(0);
+    let mut stack = engine.create_stack();
     let mut ctx = Context::new(&engine, &mut stack, ());
 
     let addr = engine.object_pool().insert(type_id).finalize().addr();
@@ -283,7 +283,7 @@ where
     let instance = engine.compile("MyClass", &Options::default());
     let func = instance.get_func("MyFunc").unwrap();
 
-    let mut stack = Stack::new(0);
+    let mut stack = engine.create_stack();
     let mut ctx = Context::new(&engine, &mut stack, ());
 
     let func = func.typed().unwrap();

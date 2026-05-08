@@ -1,7 +1,7 @@
 use openfo4_script::assembler::assemble;
 use openfo4_script::compiler::CompilerOptions;
 use openfo4_script::engine::{Engine, Options};
-use openfo4_script::runtime::{Caller, Context, Exception, Stack};
+use openfo4_script::runtime::{Caller, Context, Exception};
 
 const COMPILER_OPTIONS: CompilerOptions = CompilerOptions {
     validation: true,
@@ -42,7 +42,7 @@ fn suspend() {
     let instance = engine.compile("MyClass", &Options::default());
     let func = instance.get_func("MyFunc").unwrap();
 
-    let mut stack = Stack::for_func(func);
+    let mut stack = engine.create_stack();
     let mut ctx = Context::new(&engine, &mut stack, false);
 
     let func = func.typed::<(), ()>().unwrap();

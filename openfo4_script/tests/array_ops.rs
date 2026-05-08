@@ -1,7 +1,7 @@
 use openfo4_script::assembler::assemble;
 use openfo4_script::compiler::CompilerOptions;
 use openfo4_script::engine::{Engine, Options};
-use openfo4_script::runtime::{Caller, Context, Exception, NativeTuple, ObjectAddr, Stack};
+use openfo4_script::runtime::{Caller, Context, Exception, NativeTuple, ObjectAddr};
 
 const COMPILER_OPTIONS: CompilerOptions = CompilerOptions {
     validation: true,
@@ -44,7 +44,7 @@ fn array_create() {
     let instance = engine.compile("MyClass", &Options::default());
     let func = instance.get_func("MyFunction").unwrap();
 
-    let mut stack = Stack::new(0);
+    let mut stack = engine.create_stack();
     let mut ctx = Context::new(&engine, &mut stack, ());
 
     let func = func.typed::<(), ()>().unwrap();
@@ -89,7 +89,7 @@ fn array_get() {
     let instance = engine.compile("MyClass", &Options::default());
     let func = instance.get_func("MyFunction").unwrap();
 
-    let mut stack = Stack::new(0);
+    let mut stack = engine.create_stack();
     let mut ctx = Context::new(&engine, &mut stack, ());
 
     let func = func.typed::<ObjectAddr, ()>().unwrap();
@@ -133,7 +133,7 @@ fn array_add() {
     let instance = engine.compile("MyClass", &Options::default());
     let func = instance.get_func("MyFunction").unwrap();
 
-    let mut stack = Stack::for_func(func);
+    let mut stack = engine.create_stack();
     let mut ctx = Context::new(&engine, &mut stack, ());
 
     let func = func.typed::<ObjectAddr, ()>().unwrap();
@@ -177,7 +177,7 @@ fn array_insert() {
     let instance = engine.compile("MyClass", &Options::default());
     let func = instance.get_func("MyFunction").unwrap();
 
-    let mut stack = Stack::for_func(func);
+    let mut stack = engine.create_stack();
     let mut ctx = Context::new(&engine, &mut stack, ());
 
     let func = func.typed::<ObjectAddr, ()>().unwrap();
@@ -222,7 +222,7 @@ fn array_clear() {
     let instance = engine.compile("MyClass", &Options::default());
     let func = instance.get_func("MyFunction").unwrap();
 
-    let mut stack = Stack::for_func(func);
+    let mut stack = engine.create_stack();
     let mut ctx = Context::new(&engine, &mut stack, ());
 
     let func = func.typed::<ObjectAddr, ()>().unwrap();
@@ -276,7 +276,7 @@ fn array_find_int() {
     let instance = engine.compile("MyClass", &Options::default());
     let func = instance.get_func("MyFunction").unwrap();
 
-    let mut stack = Stack::new(0);
+    let mut stack = engine.create_stack();
     let mut ctx = Context::new(&engine, &mut stack, ());
 
     let func = func.typed::<ObjectAddr, ()>().unwrap();
@@ -355,7 +355,7 @@ fn array_find_struct() {
 
     let array_ptr = array.finalize();
 
-    let mut stack = Stack::new(0);
+    let mut stack = engine.create_stack();
     let mut ctx = Context::new(&engine, &mut stack, ());
 
     let func = func.typed::<ObjectAddr, ()>().unwrap();
@@ -383,7 +383,7 @@ fn array_len_on_null() {
     let instance = engine.compile("MyClass", &Options::default());
     let func = instance.get_func("MyFunction").unwrap();
 
-    let mut stack = Stack::new(0);
+    let mut stack = engine.create_stack();
     let mut ctx = Context::new(&engine, &mut stack, ());
 
     let func = func.typed::<(), i32>().unwrap();
@@ -547,7 +547,7 @@ where
 
     setup(&mut engine);
 
-    let mut stack = Stack::new(0);
+    let mut stack = engine.create_stack();
     let mut ctx = Context::new(&engine, &mut stack, ());
 
     let func = func.typed::<I, O>().unwrap();

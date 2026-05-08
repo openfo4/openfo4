@@ -1,7 +1,7 @@
 use openfo4_script::assembler::assemble;
 use openfo4_script::compiler::CompilerOptions;
 use openfo4_script::engine::{Engine, Options};
-use openfo4_script::runtime::{Context, ObjectAddr, Stack};
+use openfo4_script::runtime::{Context, ObjectAddr};
 
 const COMPILER_OPTIONS: CompilerOptions = CompilerOptions {
     validation: true,
@@ -40,7 +40,7 @@ fn method_resolution_external() {
 
     let addr = engine.object_pool().insert(type_id).finalize().addr();
 
-    let mut stack = Stack::new(0);
+    let mut stack = engine.create_stack();
     let mut ctx = Context::new(&engine, &mut stack, ());
 
     let f = instance.get_func("F").unwrap();
@@ -103,7 +103,7 @@ fn method_resolution_internal() {
 
     let addr = engine.object_pool().insert(type_id).finalize().addr();
 
-    let mut stack = Stack::new(0);
+    let mut stack = engine.create_stack();
     let mut ctx = Context::new(&engine, &mut stack, ());
 
     let f = instance.get_func("CallF").unwrap();
