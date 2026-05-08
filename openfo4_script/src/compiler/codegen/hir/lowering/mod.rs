@@ -17,6 +17,7 @@ use crate::compiler::codegen::CodegenData;
 use crate::compiler::codegen::hir::{
     AddrCompareOp, Function, Instruction, Literal, Null, ScalarCompareOp, Value,
 };
+use crate::compiler::codegen::trace::Span;
 use crate::compiler::resources::{Type, TypeId};
 use crate::runtime::object::ObjectTag;
 use crate::runtime::{RESULT_ERROR, RESULT_OK, RawContext, RawStack};
@@ -27,9 +28,17 @@ const FLOAT_TYPE: JitType = JitType::F32;
 const PTR_TYPE: JitType = JitType::Pointer;
 const RESULT_TYPE: JitType = JitType::I32;
 
-pub fn lower_function(function: &Function, data: &CodegenData, mut builder: FunctionBuilder<'_>) {
+pub fn lower_function(
+    function: &Function,
+    data: &CodegenData,
+    mut builder: FunctionBuilder<'_>,
+    mut span: Span,
+) {
     let entry_block = builder.create_entry_block();
     builder.switch_to_block(entry_block);
+    let ctx_ptr = builder.block_params(entry_block)[0];
+
+    span.enter(data, &mut builder, ctx_ptr);
 
     let mut variables = Vec::new();
     for ty in function.variables.iter() {
@@ -54,7 +63,6 @@ pub fn lower_function(function: &Function, data: &CodegenData, mut builder: Func
         variables.push(Local { var, ty });
     }
 
-    let ctx_ptr = builder.block_params(entry_block)[0];
     let func_args = &builder.block_params(entry_block)[1..].to_vec();
     for (var, value) in function.params.iter().zip(func_args) {
         let local = variables.get(*var).unwrap();
@@ -105,6 +113,7 @@ pub fn lower_function(function: &Function, data: &CodegenData, mut builder: Func
         data,
         ctx_ptr,
         stack_start_offset,
+        span,
     };
 
     // Resume from stack.
@@ -268,6 +277,10 @@ pub fn lower_function(function: &Function, data: &CodegenData, mut builder: Func
                 // Release our stack.
                 // The `usize` tag is released by our caller.
                 translator.stack_free(stack_frame.size.saturating_sub(size_of::<usize>()));
+
+                translator
+                    .span
+                    .exit(data, &mut translator.builder, translator.ctx_ptr);
 
                 if function.returns.is_some() {
                     let value = translator.load(value);
@@ -748,6 +761,8 @@ pub fn lower_function(function: &Function, data: &CodegenData, mut builder: Func
         data,
         &mut translator.builder,
         translator.abort_block,
+        &mut translator.span,
+        translator.ctx_ptr,
     );
 
     translator.builder.finalize();
@@ -762,6 +777,7 @@ struct Translator<'a> {
     ctx_ptr: JitValue,
     /// The starting offset where the stack for our current function starts.
     stack_start_offset: JitValue,
+    span: Span,
 }
 
 impl<'a> Translator<'a> {
@@ -1005,10 +1021,14 @@ fn generate_abort_block(
     data: &CodegenData,
     builder: &mut FunctionBuilder<'_>,
     block: Block,
+    span: &mut Span,
+    ctx_ptr: JitValue,
 ) {
     builder.switch_to_block(block);
 
     let result = builder.iconst(RESULT_TYPE, RESULT_ERROR);
+
+    span.exit(data, builder, ctx_ptr);
 
     if let Some(ty) = function.returns {
         let ty = data.resources.types.get(ty).unwrap();

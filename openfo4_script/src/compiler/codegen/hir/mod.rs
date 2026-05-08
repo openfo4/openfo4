@@ -7,6 +7,7 @@ use game_common::string::Lowercase;
 use game_common::utils::vec_ext::VecExt;
 use hashbrown::HashMap;
 
+use crate::compiler::codegen::trace::Span;
 use crate::compiler::codegen::{CodegenData, FunctionId};
 use crate::compiler::resources::TypeId;
 use crate::runtime::object::ObjectTag;
@@ -34,8 +35,8 @@ impl Function {
         buf
     }
 
-    pub fn lower(&self, data: &CodegenData, builder: openfo4_jit::FunctionBuilder<'_>) {
-        lowering::lower_function(self, data, builder);
+    pub fn lower(&self, data: &CodegenData, builder: openfo4_jit::FunctionBuilder<'_>, span: Span) {
+        lowering::lower_function(self, data, builder, span);
     }
 }
 

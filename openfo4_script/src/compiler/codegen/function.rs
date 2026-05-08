@@ -7,6 +7,7 @@ use crate::compiler::NativeFunction;
 use crate::compiler::codegen::hir::{
     self, AddrCompareOp, FunctionBuilder, Literal, Null, ScalarCompareOp, StringCompareOp, Variable,
 };
+use crate::compiler::codegen::trace::Span;
 use crate::compiler::codegen::trampoline::generate_guest_to_host_trampoline;
 use crate::compiler::codegen::{
     ClassDef, CodegenData, Error, FunctionDef, Type, get_parent_class_with_property,
@@ -105,8 +106,14 @@ pub fn translate_function(
         let func = builder.clone().finalize();
         println!("{}", func.debug_text(data));
 
+        let span = Span::new(
+            data,
+            &class.class.as_ref().unwrap().name,
+            &function.function.name,
+        );
+
         let builder = compiler.define_function(func_id);
-        func.lower(data, builder);
+        func.lower(data, builder, span);
 
         func_id
     };
