@@ -3,7 +3,7 @@ use std::sync::{Arc, RwLock};
 
 use game_common::cell::UnsafeRefCell;
 use game_common::string::Lowercase;
-use hashbrown::HashMap;
+use hashbrown::{HashMap, HashSet};
 use openfo4_jit::{CompilerConfig, Type};
 use openfo4_pex::{Class, Module};
 
@@ -25,6 +25,7 @@ pub struct Engine {
     pub(crate) shared: Arc<EngineShared>,
     instances: HashMap<Lowercase<String>, Arc<InstanceShared>>,
     classes: HashMap<Lowercase<String>, Class>,
+    registered_native_funcs: HashSet<(Lowercase<String>, Lowercase<String>)>,
 }
 
 impl Engine {
@@ -46,9 +47,11 @@ impl Engine {
             }),
             instances: HashMap::new(),
             classes: HashMap::new(),
+            registered_native_funcs: HashSet::new(),
         }
     }
 
+    /// Registers the given [`Module`] for the compiler of this `Engine`.
     pub fn register(&mut self, module: &Module) {
         self.ctx.register_module(module).unwrap();
 
@@ -58,10 +61,28 @@ impl Engine {
         }
     }
 
+    /// Registers a native host function that can be called from the guest.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the same a native function with the same `class` and `func` was already registered
+    /// with this `Engine`.
     pub fn register_native_function<F, T, Params, Returns>(&mut self, class: &str, func: &str, f: F)
     where
         F: IntoFunc<T, Params, Returns>,
     {
+        {
+            let class = Lowercase::new(class);
+            let func = Lowercase::new(func);
+
+            if self
+                .registered_native_funcs
+                .insert((class.clone(), func.clone()))
+            {
+                panic!("native function {}.{} already registered", class, func);
+            }
+        }
+
         let _lock = self.shared.call_table_lock.write();
         let mut call_table = unsafe { self.shared.state.call_table.borrow_mut() };
 
