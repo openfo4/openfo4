@@ -518,6 +518,7 @@ macro_rules! impl_into_func {
 
                     match self(caller, $($params),*) {
                         Ok(($($returns),*)) => {
+                            let mut index = 0;
                             $(
                                 unsafe {
                                     returns.add(index).write($returns.to_raw());
