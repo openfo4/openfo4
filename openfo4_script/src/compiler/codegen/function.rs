@@ -841,8 +841,17 @@ fn translate_function_body(
             translator.builder.set_label(label);
         }
 
-        let none = hir::Value::Const(Literal::Null);
-        translator.builder.return_(none);
+        let return_ty = Lowercase::new(&*function.return_ty);
+        let value = match translator.data.resolve_ty(&return_ty) {
+            Type::None => Literal::Null,
+            Type::Bool => Literal::Bool(false),
+            Type::Int => Literal::Int(0),
+            Type::Float => Literal::Float(0.0),
+            Type::String => Literal::String("".to_owned()),
+            Type::Class(_) | Type::Struct(_) | Type::Array(_) | Type::Var => Literal::Null,
+        };
+
+        translator.builder.return_(hir::Value::Const(value));
     }
 }
 
