@@ -102,9 +102,7 @@ pub fn translate_function(
             &mut builder,
         );
 
-        println!("{}", function.function.text());
         let func = builder.clone().finalize();
-        println!("{}", func.debug_text(data));
 
         let span = Span::new(
             data,
