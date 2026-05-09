@@ -1283,17 +1283,16 @@ fn perform_cast_inner(
             translator.builder.float_to_string(src, dst);
         }
         (Type::Class(_), Type::String) => {
-            // let ptr = translator.builder.call(
-            //     translator.data.runtime_funcs.object_to_string,
-            //     &[translator.ctx_ptr, src],
-            // )[0];
-            // ptr
-            todo!();
+            translator
+                .builder
+                .object_to_string(src_val, dst_val, conv_array);
         }
         (Type::Struct(_) | Type::Array(_), Type::String) => {
             // FIXME: Implement
-            // string::string_create(translator, "")
-            todo!();
+            assert!(!conv_array);
+            translator
+                .builder
+                .store(hir::Value::Const(Literal::String("".to_owned())), dst_val);
         }
         // A null pointer.
         (Type::None, Type::Class(_)) => {

@@ -385,6 +385,13 @@ where
             Instruction::FloatToString { src, dst } => {
                 writeln!(writer, "{} = float_to_string {}", dst, src)?;
             }
+            Instruction::ObjectToString {
+                src,
+                dst,
+                conv_array: _,
+            } => {
+                writeln!(writer, "{} = object_to_string {}", dst, src)?;
+            }
         }
     }
 

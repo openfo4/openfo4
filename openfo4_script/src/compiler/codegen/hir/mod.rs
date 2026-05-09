@@ -202,6 +202,11 @@ enum Instruction {
         src: Value<f32>,
         dst: Value<String>,
     },
+    ObjectToString {
+        src: Value<Literal>,
+        dst: Value<Literal>,
+        conv_array: bool,
+    },
 }
 
 #[derive(Clone, Debug)]
@@ -934,6 +939,14 @@ impl FunctionBuilder {
     pub fn float_to_string(&mut self, src: Value<f32>, dst: Value<String>) {
         self.instructions
             .push(Instruction::FloatToString { src, dst });
+    }
+
+    pub fn object_to_string(&mut self, src: Value<Literal>, dst: Value<Literal>, conv_array: bool) {
+        self.instructions.push(Instruction::ObjectToString {
+            src,
+            dst,
+            conv_array,
+        });
     }
 
     pub fn finalize(self) -> Function {

@@ -589,6 +589,39 @@ pub fn lower_function(
                 )[0];
                 translator.store(dst, res);
             }
+            Instruction::ObjectToString {
+                src,
+                dst,
+                conv_array,
+            } => {
+                if *conv_array {
+                    let src = src.clone().map(|v| v.to_null().unwrap());
+                    let dst = dst.clone().map(|v| v.to_null().unwrap());
+                    let src_ty = translator.data.resources.primitives.pointer;
+                    let dst_ty = translator.data.resources.primitives.string;
+
+                    array::array_cast(
+                        &mut translator,
+                        &src,
+                        &dst,
+                        src_ty,
+                        dst_ty,
+                        |translator, value| {
+                            translator.builder.call(
+                                translator.data.runtime_funcs.object_to_string,
+                                &[translator.ctx_ptr, value],
+                            )[0]
+                        },
+                    );
+                } else {
+                    let src = translator.load(src);
+                    let res = translator.builder.call(
+                        translator.data.runtime_funcs.object_to_string,
+                        &[translator.ctx_ptr, src],
+                    )[0];
+                    translator.store(dst, res);
+                }
+            }
             Instruction::ConvertBoolToInt {
                 src,
                 dst,
