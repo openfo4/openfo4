@@ -77,10 +77,11 @@ pub fn lower_function(
     // because we build instructions linearly.
     let mut blocks_by_position = HashMap::new();
     for (label, position) in &function.labels {
-        let block = builder.create_block(&[]);
-        blocks.insert(*label, block);
+        let block = *blocks_by_position
+            .entry(*position)
+            .or_insert_with(|| builder.create_block(&[]));
 
-        blocks_by_position.insert(*position, block);
+        blocks.insert(*label, block);
     }
 
     for (index, instruction) in function.instructions.iter().enumerate() {
@@ -90,8 +91,9 @@ pub fn lower_function(
                 invert_condition: _,
                 target: _,
             } => {
-                let fallthrough_block = builder.create_block(&[]);
-                blocks_by_position.insert(index + 1, fallthrough_block);
+                blocks_by_position
+                    .entry(index + 1)
+                    .or_insert_with(|| builder.create_block(&[]));
             }
             _ => {}
         }

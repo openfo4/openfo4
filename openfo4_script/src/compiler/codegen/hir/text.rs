@@ -53,12 +53,10 @@ where
     }
 
     for (index, instruction) in func.instructions.iter().enumerate() {
-        if let Some(label) = func
-            .labels
-            .iter()
-            .find_map(|(label, pos)| (*pos == index).then_some(*label))
-        {
-            writeln!(writer, "{}:", label)?;
+        for (label, label_pos) in &func.labels {
+            if *label_pos == index {
+                writeln!(writer, "{}:", label)?;
+            }
         }
 
         write!(writer, "  ")?;
