@@ -485,6 +485,11 @@ impl InventorySystem {
             }
 
             item.equipped = false;
+
+            if let ItemData::Weapon(weapon) = &mut item.data {
+                weapon.drawn = false;
+            }
+
             let keys = core::mem::take(&mut item.equipment_keys);
             items_unequipped.push(ItemUnequippedEvent {
                 actor: event.actor,
