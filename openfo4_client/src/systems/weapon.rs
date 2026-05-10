@@ -314,6 +314,10 @@ pub fn handle_weapon_draw_events(world: &mut World, events: &mut EventBus) {
         let mut inventory = entity.get::<&mut Inventory>().unwrap();
 
         for (_, item) in inventory.items_mut() {
+            if !item.equipped {
+                continue;
+            }
+
             match &mut item.data {
                 ItemData::Weapon(weapon) => {
                     if weapon.drawn {
