@@ -1,6 +1,6 @@
 //! Texture Slab
 //!
-//! Bindless-style pipelines usually need to be able to index into an array of textures form the
+//! Bindless-style pipelines usually need to be able to index into an array of textures from the
 //! shader. This requires a stable index to the textures for the duration of the shader invocation.
 //!
 //! These indices are usually inserted into other buffers and as such can't easily be updated after
