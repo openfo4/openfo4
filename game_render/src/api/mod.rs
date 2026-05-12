@@ -243,7 +243,7 @@ impl CommandExecutor {
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 enum ResourceId {
     Buffer(BufferId),
-    Texture(TextureMip),
+    Texture { id: TextureId, mip_level: u32 },
 }
 
 /// A queue for encoding rendering commands.

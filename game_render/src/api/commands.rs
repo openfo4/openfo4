@@ -148,24 +148,24 @@ impl Command {
         match self {
             Self::WriteBuffer(cmd) => {
                 accesses.push(Resource {
-                    id: ResourceId::Buffer(cmd.buffer),
+                    id: ResourceId::Buffer(cmd.buffer).into(),
                     access: AccessFlags::TRANSFER_WRITE,
                 });
             }
             Self::CopyBufferToBuffer(cmd) => {
                 if cmd.src == cmd.dst {
                     accesses.push(Resource {
-                        id: ResourceId::Buffer(cmd.src),
+                        id: ResourceId::Buffer(cmd.src).into(),
                         access: AccessFlags::TRANSFER_READ | AccessFlags::TRANSFER_WRITE,
                     });
                 } else {
                     accesses.extend([
                         Resource {
-                            id: ResourceId::Buffer(cmd.src),
+                            id: ResourceId::Buffer(cmd.src).into(),
                             access: AccessFlags::TRANSFER_READ,
                         },
                         Resource {
-                            id: ResourceId::Buffer(cmd.dst),
+                            id: ResourceId::Buffer(cmd.dst).into(),
                             access: AccessFlags::TRANSFER_WRITE,
                         },
                     ]);
@@ -174,14 +174,14 @@ impl Command {
             Self::CopyBufferToTexture(cmd) => {
                 accesses.extend([
                     Resource {
-                        id: ResourceId::Buffer(cmd.src),
+                        id: ResourceId::Buffer(cmd.src).into(),
                         access: AccessFlags::TRANSFER_READ,
                     },
                     Resource {
-                        id: ResourceId::Texture(TextureMip {
+                        id: ResourceId::Texture {
                             id: cmd.dst,
                             mip_level: cmd.dst_mip_level,
-                        }),
+                        },
                         access: AccessFlags::TRANSFER_WRITE,
                     },
                 ]);
@@ -189,26 +189,26 @@ impl Command {
             Self::CopyTextureToTexture(cmd) => {
                 if cmd.src == cmd.dst && cmd.src_mip_level == cmd.dst_mip_level {
                     accesses.push(Resource {
-                        id: ResourceId::Texture(TextureMip {
+                        id: ResourceId::Texture {
                             id: cmd.src,
                             mip_level: cmd.src_mip_level,
-                        }),
+                        },
                         access: AccessFlags::TRANSFER_READ | AccessFlags::TRANSFER_WRITE,
                     });
                 } else {
                     accesses.extend([
                         Resource {
-                            id: ResourceId::Texture(TextureMip {
+                            id: ResourceId::Texture {
                                 id: cmd.src,
                                 mip_level: cmd.src_mip_level,
-                            }),
+                            },
                             access: AccessFlags::TRANSFER_READ,
                         },
                         Resource {
-                            id: ResourceId::Texture(TextureMip {
+                            id: ResourceId::Texture {
                                 id: cmd.dst,
                                 mip_level: cmd.dst_mip_level,
-                            }),
+                            },
                             access: AccessFlags::TRANSFER_WRITE,
                         },
                     ]);
@@ -216,16 +216,19 @@ impl Command {
             }
             Self::TextureTransition(cmd) => {
                 accesses.push(Resource {
-                    id: ResourceId::Texture(cmd.texture),
+                    id: ResourceId::Texture {
+                        id: cmd.texture.id,
+                        mip_level: cmd.texture.mip_level,
+                    },
                     access: cmd.access,
                 });
             }
             Self::ClearTexture(cmd) => {
                 accesses.push(Resource {
-                    id: ResourceId::Texture(TextureMip {
+                    id: ResourceId::Texture {
                         id: cmd.id,
                         mip_level: cmd.mip_level,
-                    }),
+                    },
                     access: AccessFlags::TRANSFER_WRITE,
                 });
             }
@@ -245,8 +248,9 @@ impl Command {
                             pipeline = Some(resources.pipelines.get(id.0).unwrap());
                         }
                         DrawCmd::SetIndexBuffer(buffer, _) => {
-                            *access_flags.entry(ResourceId::Buffer(*buffer)).or_default() |=
-                                AccessFlags::INDEX;
+                            *access_flags
+                                .entry(ResourceId::Buffer(*buffer).into())
+                                .or_default() |= AccessFlags::INDEX;
                         }
                         DrawCmd::SetDescriptorSet(group, id) => {
                             let Some(pipeline) = &pipeline else {
@@ -267,7 +271,7 @@ impl Command {
                                         if let Some(access) = pipeline.bindings.get(*group, binding)
                                         {
                                             *access_flags
-                                                .entry(ResourceId::Buffer(*buffer))
+                                                .entry(ResourceId::Buffer(*buffer).into())
                                                 .or_default() |= access;
                                         }
                                     }
@@ -278,10 +282,10 @@ impl Command {
                                             for view in views {
                                                 for mip in view.mips() {
                                                     *access_flags
-                                                        .entry(ResourceId::Texture(TextureMip {
+                                                        .entry(ResourceId::Texture {
                                                             id: view.texture,
                                                             mip_level: mip,
-                                                        }))
+                                                        })
                                                         .or_default() |= access;
                                                 }
                                             }
@@ -296,12 +300,12 @@ impl Command {
                         DrawCmd::Draw(DrawCall::DrawIndexed(_)) => (),
                         DrawCmd::Draw(DrawCall::DrawIndirect(call)) => {
                             *access_flags
-                                .entry(ResourceId::Buffer(call.buffer))
+                                .entry(ResourceId::Buffer(call.buffer).into())
                                 .or_default() |= AccessFlags::INDIRECT;
                         }
                         DrawCmd::Draw(DrawCall::DrawIndexedIndirect(call)) => {
                             *access_flags
-                                .entry(ResourceId::Buffer(call.buffer))
+                                .entry(ResourceId::Buffer(call.buffer).into())
                                 .or_default() |= AccessFlags::INDIRECT;
                         }
                         DrawCmd::Draw(DrawCall::DrawMeshTasks(_)) => (),
@@ -321,20 +325,20 @@ impl Command {
 
                     for mip in attachment.target.mips() {
                         *access_flags
-                            .entry(ResourceId::Texture(TextureMip {
+                            .entry(ResourceId::Texture {
                                 id: attachment.target.texture,
                                 mip_level: mip,
-                            }))
+                            })
                             .or_default() |= attachment_flags;
                     }
                 }
 
                 if let Some(attachment) = &cmd.depth_stencil_attachment {
                     *access_flags
-                        .entry(ResourceId::Texture(TextureMip {
+                        .entry(ResourceId::Texture {
                             id: attachment.texture,
                             mip_level: 0,
-                        }))
+                        })
                         .or_default() |=
                         AccessFlags::DEPTH_ATTACHMENT_READ | AccessFlags::DEPTH_ATTACHMENT_WRITE;
                 }
@@ -382,7 +386,7 @@ impl Command {
                                         if let Some(access) = pipeline.bindings.get(*group, binding)
                                         {
                                             *access_flags
-                                                .entry(ResourceId::Buffer(*buffer))
+                                                .entry(ResourceId::Buffer(*buffer).into())
                                                 .or_default() |= access;
                                         }
                                     }
@@ -393,10 +397,10 @@ impl Command {
                                             for view in views {
                                                 for mip in view.mips() {
                                                     *access_flags
-                                                        .entry(ResourceId::Texture(TextureMip {
+                                                        .entry(ResourceId::Texture {
                                                             id: view.texture,
                                                             mip_level: mip,
-                                                        }))
+                                                        })
                                                         .or_default() |= access;
                                                 }
                                             }
@@ -424,7 +428,7 @@ impl Command {
             // that this command gets placed before any uses.
             Self::CreateBuffer(cmd) => {
                 accesses.push(Resource {
-                    id: ResourceId::Buffer(cmd.id),
+                    id: ResourceId::Buffer(cmd.id).into(),
                     access: AccessFlags::empty(),
                 });
             }
@@ -437,10 +441,10 @@ impl Command {
             Self::CreateTexture(cmd) => {
                 for mip_level in 0..cmd.descriptor.mip_levels {
                     accesses.push(Resource {
-                        id: ResourceId::Texture(TextureMip {
+                        id: ResourceId::Texture {
                             id: cmd.id,
                             mip_level,
-                        }),
+                        },
                         access: AccessFlags::empty(),
                     });
                 }

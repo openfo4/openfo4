@@ -199,11 +199,11 @@ impl<'a> ResourceMap for ResourceAccessViewMut<'a> {
     fn access(&self, id: Self::Id) -> AccessFlags {
         match id {
             ResourceId::Buffer(buffer) => unsafe { *self.buffers.get_unchecked(buffer.0) },
-            ResourceId::Texture(texture) => unsafe {
+            ResourceId::Texture { id, mip_level } => unsafe {
                 *self
                     .textures
-                    .get_unchecked(texture.id.0)
-                    .get_unchecked(texture.mip_level as usize)
+                    .get_unchecked(id.0)
+                    .get_unchecked(mip_level as usize)
             },
         }
     }
@@ -213,11 +213,11 @@ impl<'a> ResourceMap for ResourceAccessViewMut<'a> {
             ResourceId::Buffer(buffer) => unsafe {
                 *self.buffers.get_unchecked_mut(buffer.0) = access;
             },
-            ResourceId::Texture(texture) => unsafe {
+            ResourceId::Texture { id, mip_level } => unsafe {
                 *self
                     .textures
-                    .get_unchecked_mut(texture.id.0)
-                    .get_unchecked_mut(texture.mip_level as usize) = access;
+                    .get_unchecked_mut(id.0)
+                    .get_unchecked_mut(mip_level as usize) = access;
             },
         }
     }
