@@ -7,6 +7,7 @@ mod commands;
 mod resources;
 mod scheduler;
 
+use std::mem;
 use std::num::NonZeroU64;
 use std::ops::{Bound, Range, RangeBounds};
 use std::sync::Arc;
@@ -2269,9 +2270,9 @@ impl<'a, 'b> Drop for RenderPass<'a, 'b> {
             &self.ctx.executor.resources,
             Command::RenderPass(RenderPassCmd {
                 name: self.name,
-                color_attachments: self.color_attachments.clone(),
-                depth_stencil_attachment: self.depth_stencil_attachment.clone(),
-                cmds: core::mem::take(&mut self.cmds),
+                color_attachments: mem::take(&mut self.color_attachments),
+                depth_stencil_attachment: mem::take(&mut self.depth_stencil_attachment),
+                cmds: mem::take(&mut self.cmds),
             }),
         );
     }
@@ -2350,7 +2351,7 @@ impl<'a> Drop for ComputePass<'a> {
             &self.queue.executor.resources,
             Command::ComputePass(ComputePassCmd {
                 name: self.name,
-                cmds: core::mem::take(&mut self.cmds),
+                cmds: mem::take(&mut self.cmds),
             }),
         );
     }
