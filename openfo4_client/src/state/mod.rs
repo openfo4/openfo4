@@ -65,11 +65,11 @@ use crate::systems::scripting::{Executor, ScriptEntities};
 use crate::systems::time::{init_time, update_time};
 use crate::systems::trigger_box::update_trigger_box_contacts;
 use crate::systems::weapon::{
-    handle_weapon_draw_events, handle_weapon_fire_events, handle_weapon_hit_damage,
-    handle_weapon_reload_events, handle_weapon_reload_requests,
+    handle_weapon_draw_events, handle_weapon_fire_events, handle_weapon_fire_requests,
+    handle_weapon_hit_damage, handle_weapon_reload_events, handle_weapon_reload_requests,
 };
 use crate::systems::weather::WeatherSystem;
-use crate::systems::{self, GunReloadRequest, WeaponDrawRequest, combat};
+use crate::systems::{self, GunFireRequest, GunReloadRequest, WeaponDrawRequest, combat};
 
 pub const UPS: u32 = 60;
 
@@ -300,6 +300,7 @@ impl GameState {
         update_actor_animation_graphs(&mut self.world, &self.asset_loader, &self.pool);
         update_animation_parameters(&mut self.world);
 
+        handle_weapon_fire_requests(&mut self.world, &self.actions, &self.event_bus);
         handle_weapon_reload_requests(&mut self.world, &self.actions, &self.event_bus);
         handle_weapon_fire_events(&mut self.world, &self.physics, &mut self.event_bus);
         handle_weapon_reload_events(&mut self.world, &mut self.event_bus);
@@ -409,10 +410,8 @@ impl GameState {
                 }
 
                 if event.key_code == Some(KeyCode::T) {
-                    if let Some(action) = self.actions.0.get(&Action::FireSingle) {
-                        for mut events in self.world.query_mut::<&mut AnimationEventQueue>() {
-                            events.0.push_back(*action);
-                        }
+                    for (actor, _) in self.world.query_mut::<(Entity, &Player)>() {
+                        self.event_bus.send(GunFireRequest { actor });
                     }
                 }
 

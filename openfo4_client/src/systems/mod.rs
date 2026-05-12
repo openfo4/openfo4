@@ -73,6 +73,11 @@ pub struct GunReloadRequest {
     pub actor: Entity,
 }
 
+#[derive(Copy, Clone, Debug)]
+pub struct GunFireRequest {
+    pub actor: Entity,
+}
+
 #[derive(Clone, Debug)]
 pub struct DeathStartEvent {
     /// The actor that was killed.

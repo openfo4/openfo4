@@ -20,9 +20,38 @@ use crate::state::npc::{ActorBodyParts, BodyPartBone};
 use crate::systems::actor_value::ActorValueProperties;
 use crate::systems::inventory::{Inventory, ItemData};
 use crate::systems::{
-    DeathStartEvent, FacingDirection, GunFireEvent, GunReloadEvent, GunReloadRequest,
+    FacingDirection, GunFireEvent, GunFireRequest, GunReloadEvent, GunReloadRequest,
     ProjectileHitEvent, WeaponDrawRequest, WeaponDrawnEvent, WeaponSheathEvent,
 };
+
+pub fn handle_weapon_fire_requests(world: &mut World, actions: &Actions, events: &EventBus) {
+    for event in events.read::<GunFireRequest>() {
+        let Ok(entity) = world.entity(event.actor) else {
+            continue;
+        };
+
+        let inventory = entity.get::<&Inventory>().unwrap();
+        let mut animation_events = entity.get::<&mut AnimationEventQueue>().unwrap();
+
+        for (_, item) in inventory.items() {
+            let ItemData::Weapon(weapon) = &item.data else {
+                continue;
+            };
+
+            if !weapon.drawn {
+                continue;
+            }
+
+            if weapon.current_ammo > 0 {
+                if let Some(action) = actions.0.get(&Action::FireSingle) {
+                    animation_events.0.push_back(*action);
+                }
+            }
+
+            break;
+        }
+    }
+}
 
 pub fn handle_weapon_reload_requests(world: &mut World, actions: &Actions, events: &EventBus) {
     for event in events.read::<GunReloadRequest>() {
