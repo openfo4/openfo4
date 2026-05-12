@@ -34,9 +34,9 @@ use openfo4_asset::AssetLoader;
 use openfo4_core::ecs::{CommandBuffer, Entity, World};
 use openfo4_core::events::EventBus;
 use openfo4_core::object_ref_set::ObjectReferenceSet;
+use openfo4_physics::PhysicsPipeline;
 use openfo4_physics::components::{CollisionLayer, RigidBody};
 use openfo4_physics::controller::CharacterController;
-use openfo4_physics::PhysicsPipeline;
 
 use crate::assets::animation::AnimationSet;
 use crate::assets::init_asset_loader;
@@ -44,8 +44,8 @@ use crate::cell::CellId;
 use crate::components::{Camera, NiTransform, Player};
 use crate::config::Config;
 use crate::loader::FileLoader;
-use crate::render::physics_debug::despawn_expired;
 use crate::render::RenderObject;
+use crate::render::physics_debug::despawn_expired;
 use crate::shared::SharedState;
 use crate::state::actions::{Action, Actions};
 use crate::state::anim_starter::{AnimationEventQueue, AnimationSystem};
@@ -69,7 +69,7 @@ use crate::systems::weapon::{
     handle_weapon_reload_events, handle_weapon_reload_requests,
 };
 use crate::systems::weather::WeatherSystem;
-use crate::systems::{self, GunReloadRequest, WeaponDrawRequest};
+use crate::systems::{self, GunReloadRequest, WeaponDrawRequest, combat};
 
 pub const UPS: u32 = 60;
 
@@ -173,6 +173,7 @@ impl GameState {
         let global_variables =
             futures_lite::future::block_on(globals::load_global_variables(&loader));
         let form_lists = futures_lite::future::block_on(globals::load_form_lists(&loader));
+        let factions = futures_lite::future::block_on(globals::load_factions(&loader));
 
         Self {
             weather: WeatherSystem::new(loader.clone(), pool.clone(), &asset_loader, &shared),
@@ -201,6 +202,7 @@ impl GameState {
                     difficulty: Difficulty::Survival,
                     fast_travel_enabled: true,
                 },
+                factions,
             },
             script_entities: ScriptEntities::default(),
             ai: AiSystem::default(),
@@ -253,7 +255,6 @@ impl GameState {
 
         update_facing_direction(&mut self.world);
         apply_player_movements(&mut self.world, &mut self.physics);
-        update_animation_parameters(&mut self.world);
         update_trigger_box_contacts(&mut self.world, &mut self.event_bus);
 
         // systems::ni_transform::compute_transform_from_ni_transform(&mut self.world);
@@ -297,12 +298,15 @@ impl GameState {
             &mut self.executor,
         );
         update_actor_animation_graphs(&mut self.world, &self.asset_loader, &self.pool);
+        update_animation_parameters(&mut self.world);
 
         handle_weapon_reload_requests(&mut self.world, &self.actions, &self.event_bus);
         handle_weapon_fire_events(&mut self.world, &self.physics, &mut self.event_bus);
         handle_weapon_reload_events(&mut self.world, &mut self.event_bus);
         handle_weapon_hit_damage(&mut self.world, &mut self.event_bus);
         handle_weapon_draw_events(&mut self.world, &mut self.event_bus);
+
+        combat::handle_zero_health_events(&mut self.world, &mut self.event_bus);
 
         handle_door_activations(&mut self.world, &mut self.event_bus, &self.object_ref_set);
         handle_automatic_doors(&mut self.world, &self.object_ref_set);
@@ -436,7 +440,7 @@ impl GameState {
                     // self.anim_event = Some("g_weapForceEquip");
                     // self.anim_event = Some("MoveStart");
 
-                    if let Some(action) = self.actions.0.get(&Action::GunRelaxed) {
+                    if let Some(action) = self.actions.0.get(&Action::Draw) {
                         for mut events in self.world.query_mut::<&mut AnimationEventQueue>() {
                             events.0.push_back(*action);
                         }
@@ -446,7 +450,7 @@ impl GameState {
                     // self.anim_event = Some("weapUnequip");
                     // self.anim_event = Some("CameraSneakStart");
 
-                    if let Some(action) = self.actions.0.get(&Action::GunReady) {
+                    if let Some(action) = self.actions.0.get(&Action::Sheath) {
                         for mut events in self.world.query_mut::<&mut AnimationEventQueue>() {
                             events.0.push_back(*action);
                         }

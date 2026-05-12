@@ -11,6 +11,7 @@ pub mod ai;
 pub mod aim;
 pub mod animation_sync;
 pub mod camera;
+pub mod combat;
 pub mod controller;
 pub mod door;
 pub mod equipment;

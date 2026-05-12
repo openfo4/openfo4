@@ -11,6 +11,7 @@ use openfo4_physics::components::{Collider, CollisionLayer};
 use openfo4_physics::{PhysicsPipeline, QueryFilter};
 
 use crate::components::Camera;
+use crate::events::combat::ReachedZeroHealthEvent;
 use crate::render::physics_debug::{DespawnAt, HitscanRaycast};
 use crate::state::actions::{Action, Actions};
 use crate::state::anim_starter::AnimationEventQueue;
@@ -265,7 +266,7 @@ pub fn handle_weapon_reload_events(world: &mut World, events: &mut EventBus) {
 }
 
 pub fn handle_weapon_hit_damage(world: &mut World, events: &mut EventBus) {
-    let mut death_events = Vec::new();
+    let mut zero_health_events = Vec::new();
 
     for event in events.read::<ProjectileHitEvent>() {
         let Ok(entity) = world.entity(event.target) else {
@@ -291,7 +292,7 @@ pub fn handle_weapon_hit_damage(world: &mut World, events: &mut EventBus) {
 
         // If an actor gets hit twice this frame and the first
         // attack causes the actor to reach zero health we still
-        // only want to send one death event.
+        // only want to send one zero health event.
         if health.damaged <= 0.0 {
             continue;
         }
@@ -300,14 +301,14 @@ pub fn handle_weapon_hit_damage(world: &mut World, events: &mut EventBus) {
         properties.set(ACTOR_VALUE_HEALTH, health);
 
         if health.damaged <= 0.0 {
-            death_events.push(DeathStartEvent {
+            zero_health_events.push(ReachedZeroHealthEvent {
                 actor: event.target,
-                killer: event.shooter,
+                aggressor: event.shooter,
             });
         }
     }
 
-    for event in death_events {
+    for event in zero_health_events {
         events.send(event);
     }
 }

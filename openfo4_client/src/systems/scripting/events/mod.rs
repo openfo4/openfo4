@@ -4,6 +4,7 @@ use openfo4_core::ecs::{Entity, World};
 use openfo4_core::record::RecordId;
 use openfo4_script::runtime::{ObjectAddr, ObjectRef};
 
+use crate::events::combat::BleedoutStartEvent;
 use crate::events::inventory::{ItemAddedEvent, ItemEquippedEvent};
 use crate::events::trigger::{TriggerEnter, TriggerLeave};
 use crate::systems::DeathStartEvent;
@@ -219,5 +220,18 @@ impl ExtractEvent for DeathStartEvent {
         }
 
         events
+    }
+}
+
+impl ExtractEvent for BleedoutStartEvent {
+    fn extract(&self, _ctx: Context<'_>) -> Vec<QueuedEvent> {
+        vec![
+            // OnEnterBleedout
+            QueuedEvent {
+                receiver: QueuedEventValue::Object(ObjectValue::Entity(self.actor, "Actor")),
+                kind: EventKind::EnterBleedout,
+                args: Vec::new(),
+            },
+        ]
     }
 }

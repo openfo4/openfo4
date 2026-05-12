@@ -27,10 +27,12 @@ use openfo4_script::runtime::{Context, Exception, ObjectRef, Stack, Val};
 use slab::Slab;
 
 use crate::config;
+use crate::events::combat::BleedoutStartEvent;
 use crate::events::inventory::{ItemAddedEvent, ItemEquippedEvent};
 use crate::events::trigger::{TriggerEnter, TriggerLeave};
 use crate::loader::FileLoader;
 use crate::state::esp::EspLoader;
+use crate::systems::DeathStartEvent;
 use crate::systems::global::GlobalProperties;
 use crate::systems::quests::QuestManager;
 use crate::systems::scripting::classes::{AliasSet, CoreObjects};
@@ -266,6 +268,8 @@ impl Executor {
         collect_event_dispatches::<ItemEquippedEvent>(&mut self.event_queue, events, ctx);
         collect_event_dispatches::<TriggerEnter>(&mut self.event_queue, events, ctx);
         collect_event_dispatches::<TriggerLeave>(&mut self.event_queue, events, ctx);
+        collect_event_dispatches::<DeathStartEvent>(&mut self.event_queue, events, ctx);
+        collect_event_dispatches::<BleedoutStartEvent>(&mut self.event_queue, events, ctx);
 
         let dispatches = self
             .event_queue
