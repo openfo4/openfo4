@@ -616,9 +616,32 @@ fn get_equipped_spell(
 fn get_faction_rank(
     caller: Caller<'_, State>,
     self_ptr: Object,
-    ak_faction: Object,
+    faction: Object,
 ) -> Result<i32, Exception> {
-    todo!()
+    let Some(faction) = caller
+        .data()
+        .objects
+        .get_by_addr(faction)
+        .and_then(|s| s.record())
+    else {
+        debug_assert!(faction.is_null(),);
+
+        // Returns -2 if actor is not in faction.
+        return Ok(-2);
+    };
+
+    let entity = caller.data().entity(self_ptr).unwrap();
+    let props = caller
+        .data()
+        .world()
+        .get::<&ActorProperties>(entity)
+        .unwrap();
+
+    match props.factions.iter().find(|f| f.faction == faction) {
+        Some(faction) => Ok(faction.rank.into()),
+        // Returns -2 if actor is not in faction.
+        None => Ok(-2),
+    }
 }
 
 /// `GetFactionReaction`
@@ -1170,9 +1193,30 @@ fn is_in_combat(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Exc
 fn is_in_faction(
     caller: Caller<'_, State>,
     self_ptr: Object,
-    ak_faction: Object,
+    faction: Object,
 ) -> Result<bool, Exception> {
-    todo!()
+    let Some(faction) = caller
+        .data()
+        .objects
+        .get_by_addr(faction)
+        .and_then(|s| s.record())
+    else {
+        debug_assert!(faction.is_null());
+        return Ok(false);
+    };
+
+    let entity = caller.data().entity(self_ptr).unwrap();
+    let props = caller
+        .data()
+        .world()
+        .get::<&ActorProperties>(entity)
+        .unwrap();
+
+    Ok(props
+        .factions
+        .iter()
+        .find(|f| f.faction == faction)
+        .is_some())
 }
 
 /// `IsInIronSights`
@@ -1490,9 +1534,27 @@ fn play_sub_graph_animation(
 fn remove_from_faction(
     caller: Caller<'_, State>,
     self_ptr: Object,
-    ak_faction: Object,
+    faction: Object,
 ) -> Result<(), Exception> {
-    todo!()
+    let Some(faction) = caller
+        .data()
+        .objects
+        .get_by_addr(faction)
+        .and_then(|s| s.record())
+    else {
+        debug_assert!(faction.is_null(),);
+        return Ok(());
+    };
+
+    let entity = caller.data().entity(self_ptr).unwrap();
+    let mut props = caller
+        .data()
+        .world()
+        .get::<&mut ActorProperties>(entity)
+        .unwrap();
+
+    props.factions.retain(|v| v.faction != faction);
+    Ok(())
 }
 
 /// `RemoveFromAllFactions`
@@ -1501,7 +1563,15 @@ fn remove_from_faction(
 /// Function() native
 /// ```
 fn remove_from_all_factions(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Exception> {
-    todo!()
+    let entity = caller.data().entity(self_ptr).unwrap();
+    let mut props = caller
+        .data()
+        .world()
+        .get::<&mut ActorProperties>(entity)
+        .unwrap();
+
+    props.factions.clear();
+    Ok(())
 }
 
 /// `RemovePerk`
@@ -1795,7 +1865,7 @@ fn set_essential(
 fn set_faction_rank(
     caller: Caller<'_, State>,
     self_ptr: Object,
-    ak_faction: Object,
+    faction: Object,
     ai_rank: i32,
 ) -> Result<(), Exception> {
     todo!()

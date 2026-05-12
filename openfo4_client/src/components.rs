@@ -7,6 +7,7 @@ use openfo4_core::ecs::Entity;
 use openfo4_core::record::RecordId;
 use openfo4_core::transform::ConvertCoordinateSystem;
 
+use crate::state::npc::FactionMembership;
 use crate::systems::camera::CameraMode;
 use crate::systems::inventory::ItemStack;
 
@@ -128,6 +129,8 @@ pub struct ActorProperties {
     pub level: u32,
     /// The number of available perk points to spend.
     pub perk_points: u32,
+    /// Factions that the actor is a member of.
+    pub factions: Vec<FactionMembership>,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]

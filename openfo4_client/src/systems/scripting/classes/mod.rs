@@ -441,9 +441,6 @@ pub struct TimerEntry {
 }
 
 #[derive(Clone, Debug)]
-pub struct BaseObjects {}
-
-#[derive(Clone, Debug)]
 pub enum ObjectData {
     InputEnableLayer { layer: usize },
 }

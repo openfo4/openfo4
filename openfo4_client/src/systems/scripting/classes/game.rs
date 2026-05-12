@@ -113,7 +113,6 @@ pub fn register(engine: &mut Engine) {
     engine.register_native_function("Game", "TurnPlayerRadioOn", turn_player_radio_on);
     engine.register_native_function("Game", "UsingGamepad", using_gamepad);
     engine.register_native_function("Game", "Warning", warning);
-    engine.register_native_function("Game", "UpdateThirdPerson", update_third_person);
 }
 
 /// `AddAchievement`
@@ -1225,15 +1224,6 @@ fn warning(caller: Caller<'_, State>, msg: Object) -> Result<(), Exception> {
     let msg = unsafe { caller.string(msg) };
     tracing::warn!("script message: {}", msg);
     Ok(())
-}
-
-/// `UpdateThirdPerson`
-///
-/// ```text
-/// Function() native global
-/// ```
-fn update_third_person(caller: Caller<'_, State>) -> Result<(), Exception> {
-    todo!()
 }
 
 fn with_player_control_mask<T, F>(caller: Caller<'_, State>, f: F) -> Result<T, Exception>

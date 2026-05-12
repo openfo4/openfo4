@@ -126,6 +126,7 @@ pub struct Actor {
     outfit_items: Vec<RecordId>,
     protection: ActorProtection,
     level: u32,
+    factions: Vec<FactionMembership>,
 }
 
 impl Actor {
@@ -189,6 +190,8 @@ impl Actor {
                         protection: self.protection,
                         level: self.level,
                         bleedout_recovery: true,
+                        perk_points: 0,
+                        factions: self.factions,
                     },
                 ),
             )
@@ -352,6 +355,7 @@ pub async fn spawn_actor(
         outfit_items,
         protection: props.protection,
         level,
+        factions: props.factions,
     })
 }
 
@@ -461,7 +465,7 @@ async fn resolve_actor_props(
                             FactionMembership {
                                 faction,
                                 rank: membership.rank,
-                            };
+                            }
                         })
                         .collect();
                 }
@@ -581,6 +585,7 @@ async fn resolve_actor_props(
         outfit,
         protection,
         level,
+        factions,
     }
 }
 
@@ -596,10 +601,8 @@ struct ActorProps {
     outfit: Option<RecordId>,
     protection: ActorProtection,
     level: ActorLevel,
+    factions: Vec<FactionMembership>,
 }
-
-#[derive(Clone, Debug)]
-pub struct FactionMemberships(pub Vec<FactionMembership>);
 
 #[derive(Copy, Clone, Debug)]
 pub struct FactionMembership {
