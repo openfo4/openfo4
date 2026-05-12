@@ -6,6 +6,7 @@ use openfo4_script::runtime::{ObjectAddr, ObjectRef};
 
 use crate::events::inventory::{ItemAddedEvent, ItemEquippedEvent};
 use crate::events::trigger::{TriggerEnter, TriggerLeave};
+use crate::systems::DeathStartEvent;
 use crate::systems::inventory::Inventory;
 use crate::systems::scripting::invocations::Value;
 use crate::systems::scripting::loader::{ScriptObject, ScriptObjectId};
@@ -65,6 +66,15 @@ pub enum ObjectValue {
     Entity(Entity, &'static str),
     Record(RecordId, &'static str),
     Script(ScriptObject, &'static str),
+}
+
+impl ObjectValue {
+    fn entity_opt(entity: Option<Entity>, script: &'static str) -> Self {
+        match entity {
+            Some(entity) => Self::Entity(entity, script),
+            None => Self::None,
+        }
+    }
 }
 
 pub trait ExtractEvent {
@@ -179,5 +189,35 @@ impl ExtractEvent for TriggerLeave {
                 QueuedEventValue::Object(ObjectValue::Entity(self.entity, "ObjectReference")),
             ],
         }]
+    }
+}
+
+impl ExtractEvent for DeathStartEvent {
+    fn extract(&self, _ctx: Context<'_>) -> Vec<QueuedEvent> {
+        let mut events = Vec::new();
+
+        // OnDying
+        events.push(QueuedEvent {
+            receiver: QueuedEventValue::Object(ObjectValue::Entity(self.actor, "Actor")),
+            kind: EventKind::Dying,
+            args: vec![
+                // akKiller
+                QueuedEventValue::Object(ObjectValue::entity_opt(self.killer, "Actor")),
+            ],
+        });
+
+        // OnKill
+        if let Some(killer) = self.killer {
+            events.push(QueuedEvent {
+                receiver: QueuedEventValue::Object(ObjectValue::Entity(killer, "Actor")),
+                kind: EventKind::Kill,
+                args: vec![
+                    // akVictim
+                    QueuedEventValue::Object(ObjectValue::Entity(self.actor, "Actor")),
+                ],
+            });
+        }
+
+        events
     }
 }

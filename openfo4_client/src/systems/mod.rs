@@ -73,8 +73,11 @@ pub struct GunReloadRequest {
 }
 
 #[derive(Clone, Debug)]
-pub struct DeathEvent {
+pub struct DeathStartEvent {
+    /// The actor that was killed.
     pub actor: Entity,
+    /// The actor that caused the fatal damage to the actor.
+    pub killer: Option<Entity>,
 }
 
 /// Event sent when an actor wants to draw their equipped weapon.
