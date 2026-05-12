@@ -19,7 +19,7 @@ use crate::state::npc::{ActorBodyParts, BodyPartBone};
 use crate::systems::actor_value::ActorValueProperties;
 use crate::systems::inventory::{Inventory, ItemData};
 use crate::systems::{
-    DeathEvent, FacingDirection, GunFireEvent, GunReloadEvent, GunReloadRequest,
+    DeathStartEvent, FacingDirection, GunFireEvent, GunReloadEvent, GunReloadRequest,
     ProjectileHitEvent, WeaponDrawRequest, WeaponDrawnEvent, WeaponSheathEvent,
 };
 
@@ -289,12 +289,22 @@ pub fn handle_weapon_hit_damage(world: &mut World, events: &mut EventBus) {
             continue;
         };
 
+        // If an actor gets hit twice this frame and the first
+        // attack causes the actor to reach zero health we still
+        // only want to send one death event.
+        if health.damaged <= 0.0 {
+            continue;
+        }
+
         health.damaged = f32::max(health.damaged - damage, 0.0);
         properties.set(ACTOR_VALUE_HEALTH, health);
 
-        death_events.push(DeathEvent {
-            actor: event.target,
-        });
+        if health.damaged <= 0.0 {
+            death_events.push(DeathStartEvent {
+                actor: event.target,
+                killer: event.shooter,
+            });
+        }
     }
 
     for event in death_events {
