@@ -1,9 +1,10 @@
 use hashbrown::HashMap;
 use openfo4_core::record::RecordId;
+use openfo4_esp::records::FactionCombatReaction;
 use openfo4_esp::{RecordData, RecordKind};
 
 use crate::state::esp::EspLoader;
-use crate::systems::global::FormList;
+use crate::systems::global::{Faction, FactionReaction, FormList};
 
 pub async fn load_global_variables(esp_loader: &EspLoader) -> HashMap<RecordId, f32> {
     let mut globals = HashMap::new();
@@ -46,4 +47,45 @@ pub async fn load_form_lists(esp_loader: &EspLoader) -> HashMap<RecordId, FormLi
     }
 
     lists
+}
+
+pub async fn load_factions(esp_loader: &EspLoader) -> HashMap<RecordId, Faction> {
+    let mut factions = HashMap::new();
+
+    for record in esp_loader
+        .lookup_all(Some(RecordKind::Faction))
+        .await
+        .unwrap()
+    {
+        let RecordData::FACT(faction) = record.local.data else {
+            unreachable!();
+        };
+
+        let mut relations = HashMap::new();
+        for relation in faction.relations {
+            let faction = esp_loader
+                .resolve_form(relation.faction, record.id)
+                .unwrap();
+
+            let reaction = match relation.combat_reaction {
+                FactionCombatReaction::Neutral => FactionReaction::Neutral,
+                FactionCombatReaction::Ally => FactionReaction::Ally,
+                FactionCombatReaction::Enemy => FactionReaction::Enemy,
+                FactionCombatReaction::Friend => FactionReaction::Friend,
+            };
+
+            relations.insert(faction, reaction);
+        }
+
+        factions.insert(
+            record.id,
+            Faction {
+                relations,
+                player_enemy: false,
+                player_expelled: false,
+            },
+        );
+    }
+
+    factions
 }

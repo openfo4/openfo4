@@ -1,6 +1,7 @@
 use openfo4_script::engine::Engine;
 use openfo4_script::runtime::{Caller, Exception};
 
+use crate::systems::global::{Faction, FactionReaction};
 use crate::systems::scripting::classes::{Object, State};
 
 #[rustfmt::skip]
@@ -152,7 +153,7 @@ fn is_faction_in_crime_group(
 /// bool Function IsPlayerEnemy() native
 /// ```
 fn is_player_enemy(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Exception> {
-    todo!()
+    Ok(with_faction(&caller, self_ptr, |faction| faction.player_enemy).unwrap_or(false))
 }
 
 /// `IsPlayerExpelled`
@@ -161,7 +162,7 @@ fn is_player_enemy(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, 
 /// bool Function IsPlayerExpelled() native
 /// ```
 fn is_player_expelled(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Exception> {
-    todo!()
+    Ok(with_faction(&caller, self_ptr, |faction| faction.player_expelled).unwrap_or(false))
 }
 
 /// `ModCrimeGold`
@@ -221,13 +222,52 @@ fn send_player_to_jail(
 /// Function SetAlly(Faction akOther, bool abSelfIsFriendToOther, bool abOtherIsFriendToSelf) native
 /// ```
 fn set_ally(
-    caller: Caller<'_, State>,
+    mut caller: Caller<'_, State>,
     self_ptr: Object,
-    ak_other: Object,
-    ab_self_is_friend_to_other: bool,
-    ab_other_is_friend_to_self: bool,
+    other: Object,
+    self_is_friend_to_other: bool,
+    other_is_friend_to_self: bool,
 ) -> Result<(), Exception> {
-    todo!()
+    let Some(self_faction) = caller
+        .data()
+        .objects
+        .get_by_addr(self_ptr)
+        .and_then(|s| s.record())
+    else {
+        debug_assert!(self_ptr.is_null());
+        return Ok(());
+    };
+    let Some(other_faction) = caller
+        .data()
+        .objects
+        .get_by_addr(other)
+        .and_then(|s| s.record())
+    else {
+        debug_assert!(other.is_null());
+        return Ok(());
+    };
+
+    with_faction_mut(&mut caller, self_ptr, |faction| {
+        let reaction = if self_is_friend_to_other {
+            FactionReaction::Friend
+        } else {
+            FactionReaction::Ally
+        };
+
+        faction.relations.insert(other_faction, reaction);
+    });
+
+    with_faction_mut(&mut caller, other, |faction| {
+        let reaction = if other_is_friend_to_self {
+            FactionReaction::Friend
+        } else {
+            FactionReaction::Ally
+        };
+
+        faction.relations.insert(self_faction, reaction);
+    });
+
+    Ok(())
 }
 
 /// `SetCrimeGold`
@@ -262,13 +302,52 @@ fn set_crime_gold_violent(
 /// Function SetEnemy(Faction akOther, bool abSelfIsNeutralToOther, bool abOtherIsNeutralToSelf) native
 /// ```
 fn set_enemy(
-    caller: Caller<'_, State>,
+    mut caller: Caller<'_, State>,
     self_ptr: Object,
-    ak_other: Object,
-    ab_self_is_neutral_to_other: bool,
-    ab_other_is_neutral_to_self: bool,
+    other: Object,
+    self_is_neutral_to_other: bool,
+    other_is_neutral_to_self: bool,
 ) -> Result<(), Exception> {
-    todo!()
+    let Some(self_faction) = caller
+        .data()
+        .objects
+        .get_by_addr(self_ptr)
+        .and_then(|s| s.record())
+    else {
+        debug_assert!(self_ptr.is_null());
+        return Ok(());
+    };
+    let Some(other_faction) = caller
+        .data()
+        .objects
+        .get_by_addr(other)
+        .and_then(|s| s.record())
+    else {
+        debug_assert!(other.is_null());
+        return Ok(());
+    };
+
+    with_faction_mut(&mut caller, self_ptr, |faction| {
+        let reaction = if self_is_neutral_to_other {
+            FactionReaction::Neutral
+        } else {
+            FactionReaction::Enemy
+        };
+
+        faction.relations.insert(other_faction, reaction);
+    });
+
+    with_faction_mut(&mut caller, other, |faction| {
+        let reaction = if other_is_neutral_to_self {
+            FactionReaction::Neutral
+        } else {
+            FactionReaction::Enemy
+        };
+
+        faction.relations.insert(self_faction, reaction);
+    });
+
+    Ok(())
 }
 
 /// `SetPlayerEnemy`
@@ -277,11 +356,14 @@ fn set_enemy(
 /// Function SetPlayerEnemy(bool abIsEnemy) native
 /// ```
 fn set_player_enemy(
-    caller: Caller<'_, State>,
+    mut caller: Caller<'_, State>,
     self_ptr: Object,
-    ab_is_enemy: bool,
+    is_enemy: bool,
 ) -> Result<(), Exception> {
-    todo!()
+    with_faction_mut(&mut caller, self_ptr, |faction| {
+        faction.player_enemy = is_enemy;
+    });
+    Ok(())
 }
 
 /// `SetPlayerExpelled`
@@ -290,9 +372,38 @@ fn set_player_enemy(
 /// Function SetPlayerExpelled(bool abIsExpelled) native
 /// ```
 fn set_player_expelled(
-    caller: Caller<'_, State>,
+    mut caller: Caller<'_, State>,
     self_ptr: Object,
-    ab_is_expelled: bool,
+    is_expelled: bool,
 ) -> Result<(), Exception> {
-    todo!()
+    with_faction_mut(&mut caller, self_ptr, |faction| {
+        faction.player_expelled = is_expelled;
+    });
+    Ok(())
+}
+
+fn with_faction<T, F>(caller: &Caller<'_, State>, faction: Object, f: F) -> Option<T>
+where
+    F: FnOnce(&Faction) -> T,
+{
+    let faction = caller
+        .data()
+        .objects
+        .get_by_addr(faction)
+        .and_then(|s| s.record())?;
+    let faction = caller.data().globals().factions.get(&faction)?;
+    Some(f(faction))
+}
+
+fn with_faction_mut<T, F>(caller: &mut Caller<'_, State>, faction: Object, f: F) -> Option<T>
+where
+    F: FnOnce(&mut Faction) -> T,
+{
+    let faction = caller
+        .data()
+        .objects
+        .get_by_addr(faction)
+        .and_then(|s| s.record())?;
+    let faction = caller.data_mut().globals_mut().factions.get_mut(&faction)?;
+    Some(f(faction))
 }

@@ -11,6 +11,7 @@ pub struct GlobalProperties {
     /// Global variables / Globals / `GLOB`
     pub variables: HashMap<RecordId, f32>,
     pub form_lists: HashMap<RecordId, FormList>,
+    pub factions: HashMap<RecordId, Faction>,
 }
 
 /// Set of game rules.
@@ -134,3 +135,20 @@ impl<'a> ExactSizeIterator for FormListIter<'a> {
 }
 
 impl<'a> FusedIterator for FormListIter<'a> {}
+
+#[derive(Clone, Debug)]
+pub struct Faction {
+    pub relations: HashMap<RecordId, FactionReaction>,
+    /// Whether the player is considered an temporary enemy of this faction.
+    pub player_enemy: bool,
+    /// Whether the player is considered expelled from this faction.
+    pub player_expelled: bool,
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub enum FactionReaction {
+    Neutral,
+    Ally,
+    Friend,
+    Enemy,
+}

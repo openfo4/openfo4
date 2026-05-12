@@ -312,30 +312,31 @@ pub struct Class {
 
 #[derive(Clone, Debug, Record)]
 pub struct FACT {
+    /// Editor ID
     #[record("EDID")]
-    pub edid: ZString,
+    pub id: Option<ZString>,
     #[record("FULL")]
-    pub full: Option<LString>,
+    pub full_name: Option<LString>,
     #[record("XNAM")]
-    pub xnam: Vec<InterfactionRelation>,
+    pub relations: Vec<FactionRelation>,
     #[record("DATA")]
-    pub data: u32,
+    pub flags: u32,
     #[record("JAIL")]
-    pub jail: Option<FormId>,
+    pub jail_marker: Option<FormId>,
     #[record("WAIT")]
-    pub wait: Option<FormId>,
+    pub follower_wait_marker: Option<FormId>,
     #[record("STOL")]
-    pub stol: Option<FormId>,
+    pub stolen_items_container: Option<FormId>,
     #[record("PLCN")]
-    pub plcn: Option<FormId>,
+    pub player_inventory_container: Option<FormId>,
     #[record("CRGR")]
-    pub crgr: Option<FormId>,
+    pub shared_crime_faction_list: Option<FormId>,
     #[record("JOUT")]
-    pub jout: Option<FormId>,
+    pub jail_outfit: Option<FormId>,
     #[record("CRVA")]
-    pub crva: Option<FACT_CRVA>,
+    pub crime_values: Option<FactionCrimeValues>,
     #[record("RNAM")]
-    pub rnam: Vec<u32>,
+    pub ranks: Vec<u32>,
     #[record("MNAM")]
     pub mnam: Vec<LString>,
     #[record("FNAM")]
@@ -350,30 +351,24 @@ pub struct FACT {
     pub plvd: Option<FACT_PLVD>,
 }
 
-#[derive(Copy, Clone, Debug)]
-pub struct InterfactionRelation {
-    faction: FormId,
+#[derive(Copy, Clone, Debug, BinaryStruct)]
+pub struct FactionRelation {
+    pub faction: FormId,
     _unknown0: i32,
-    combat: i32,
+    pub combat_reaction: FactionCombatReaction,
 }
 
-impl Decode for InterfactionRelation {
-    type Error = Error;
-
-    fn decode<B>(mut buf: B) -> Result<Self, Self::Error>
-    where
-        B: bytes::Buf,
-    {
-        Ok(Self {
-            faction: FormId::decode(&mut buf)?,
-            _unknown0: i32::decode(&mut buf)?,
-            combat: i32::decode(&mut buf)?,
-        })
-    }
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, BinaryStruct)]
+#[primitive(u32)]
+pub enum FactionCombatReaction {
+    Neutral = 0,
+    Enemy = 1,
+    Ally = 2,
+    Friend = 3,
 }
 
 #[derive(Copy, Clone, Debug, BinaryStruct)]
-pub struct FACT_CRVA {
+pub struct FactionCrimeValues {
     arrest: u8,
     attack_on_sight: u8,
     murder: u16,
@@ -5995,7 +5990,9 @@ pub struct Package {
     pub data_inputs: SubRecordArray<PackageDataInput>,
     #[record("XNAM")]
     _marker: Option<()>,
-    // PROC TREE
+    #[record("ANAM")]
+    pub procedure_tree: Option<SubField<PackageProcedureTree>>,
+    // TODO: DATA INPUTS
 }
 
 #[derive(Copy, Clone, Debug, BinaryStruct)]
@@ -6386,6 +6383,60 @@ bitflags! {
 }
 
 impl_decode_bitflags!(PackageDataInputFlags: u32);
+
+#[derive(Clone, Debug, Record)]
+pub struct PackageProcedureTree {
+    #[record("ANAM")]
+    pub branches: SubRecordArray<PackageProcedureNode>,
+}
+
+#[derive(Clone, Debug, Record)]
+pub struct PackageProcedureNode {
+    #[record("ANAM")]
+    pub ty: ZString,
+    #[record("CITC")]
+    _condition_count: u32,
+    #[record("CTDA")]
+    pub conditions: SubRecordArray<Condition>,
+    #[record("PRCB")]
+    pub children: Option<PackageProcedureNodeChildren>,
+    #[record("PNAM")]
+    pub procedure: Option<ZString>,
+    #[record("FNAM")]
+    pub flags: Option<PackageProcedureNodeFlags>,
+    #[record("PKC2")]
+    pub data_inputs: Vec<u8>,
+    #[record("PFO2")]
+    pub flags_override: Option<PackageProcedureNodeOverride>,
+    #[record("PFOR")]
+    _unknown0: Option<()>,
+}
+
+#[derive(Copy, Clone, Debug, BinaryStruct)]
+pub struct PackageProcedureNodeChildren {
+    /// The number of child nodes following this node.
+    pub count: u32,
+    pub flags: u32,
+}
+
+bitflags! {
+    #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+    pub struct PackageProcedureNodeFlags: u32 {
+        const SUCCESS_COMPLETES_PACKAGE = 1;
+    }
+}
+
+impl_decode_bitflags!(PackageProcedureNodeFlags: u32);
+
+#[derive(Copy, Clone, Debug, BinaryStruct)]
+pub struct PackageProcedureNodeOverride {
+    pub set_general_flags: u32,
+    pub clear_general_flags: u32,
+    pub set_interrupt_flags: u32,
+    pub clear_interrupt_flags: u32,
+    pub preferred_speed_override: u8,
+    _pad0: [u8; 3],
+}
 
 #[derive(Clone, Debug, Record)]
 pub struct CombatStyle {
