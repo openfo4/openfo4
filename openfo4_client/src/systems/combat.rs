@@ -1,8 +1,8 @@
 use game_tracing::trace_span;
-use openfo4_core::ecs::World;
+use openfo4_core::ecs::{CommandBuffer, World};
 use openfo4_core::events::EventBus;
 
-use crate::components::{ActorProperties, ActorProtection, Player};
+use crate::components::{ActorProperties, ActorProtection, DeadActor, Player};
 use crate::events::combat::{BleedoutStartEvent, ReachedZeroHealthEvent};
 use crate::systems::DeathStartEvent;
 
@@ -11,6 +11,7 @@ pub fn handle_zero_health_events(world: &mut World, events: &mut EventBus) {
 
     let mut death_events = Vec::new();
     let mut bleedout_events = Vec::new();
+    let mut commands = CommandBuffer::new();
 
     for event in events.read::<ReachedZeroHealthEvent>() {
         let Ok(props) = world.get::<&ActorProperties>(event.actor) else {
@@ -33,6 +34,8 @@ pub fn handle_zero_health_events(world: &mut World, events: &mut EventBus) {
                 actor: event.actor,
                 killer: event.aggressor,
             });
+
+            commands.insert_one(event.actor, DeadActor);
         } else {
             bleedout_events.push(BleedoutStartEvent { actor: event.actor });
         }
@@ -40,4 +43,6 @@ pub fn handle_zero_health_events(world: &mut World, events: &mut EventBus) {
 
     events.extend(death_events);
     events.extend(bleedout_events);
+
+    commands.run_on(world);
 }
