@@ -1,3 +1,4 @@
+mod conditions;
 mod record;
 
 use proc_macro::TokenStream;
@@ -56,6 +57,11 @@ pub fn derive_binary_struct(input: TokenStream) -> TokenStream {
         }
         .into(),
     }
+}
+
+#[proc_macro_derive(ConditionFunction, attributes(tag))]
+pub fn derive_condition_function(input: TokenStream) -> TokenStream {
+    conditions::derive_condition_function(input)
 }
 
 fn derive_binary_struct_struct(
