@@ -20,7 +20,7 @@ pub fn register(engine: &mut Engine) {
 /// ```text
 /// Form[] Function GetTaggedForms() native global
 /// ```
-fn get_tagged_forms(caller: Caller<'_, State>) -> Result<isize, Exception> {
+fn get_tagged_forms(caller: Caller<'_, State>) -> Result<Object, Exception> {
     todo!()
 }
 
@@ -29,7 +29,7 @@ fn get_tagged_forms(caller: Caller<'_, State>) -> Result<isize, Exception> {
 /// ```text
 /// Function AddTaggedForms(Form[] forms) native global
 /// ```
-fn add_tagged_forms(caller: Caller<'_, State>, forms: isize) -> Result<(), Exception> {
+fn add_tagged_forms(caller: Caller<'_, State>, forms: Object) -> Result<(), Exception> {
     todo!()
 }
 
@@ -38,7 +38,7 @@ fn add_tagged_forms(caller: Caller<'_, State>, forms: isize) -> Result<(), Excep
 /// ```text
 /// Function RemoveTaggedForms(Form[] forms) native global
 /// ```
-fn remove_tagged_forms(caller: Caller<'_, State>, forms: isize) -> Result<(), Exception> {
+fn remove_tagged_forms(caller: Caller<'_, State>, forms: Object) -> Result<(), Exception> {
     todo!()
 }
 
@@ -56,7 +56,7 @@ fn is_tagged_form(caller: Caller<'_, State>, ak_form: Object) -> Result<bool, Ex
 /// ```text
 /// Form[] Function GetFavorites() native global
 /// ```
-fn get_favorites(caller: Caller<'_, State>) -> Result<isize, Exception> {
+fn get_favorites(caller: Caller<'_, State>) -> Result<Object, Exception> {
     todo!()
 }
 
@@ -65,6 +65,6 @@ fn get_favorites(caller: Caller<'_, State>) -> Result<isize, Exception> {
 /// ```text
 /// Function SetFavorites(Form[] favorites) native global
 /// ```
-fn set_favorites(caller: Caller<'_, State>, favorites: isize) -> Result<(), Exception> {
+fn set_favorites(caller: Caller<'_, State>, favorites: Object) -> Result<(), Exception> {
     todo!()
 }

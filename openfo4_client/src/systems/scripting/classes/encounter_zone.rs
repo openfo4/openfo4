@@ -34,7 +34,7 @@ fn get_actors(
     self_ptr: Object,
     ap_required_linked_ref_keyword: Object,
     ap_exclude_linked_ref_keyword: Object,
-) -> Result<isize, Exception> {
+) -> Result<Object, Exception> {
     todo!()
 }
 

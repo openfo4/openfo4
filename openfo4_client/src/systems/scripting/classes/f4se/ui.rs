@@ -21,7 +21,7 @@ pub fn register(engine: &mut Engine) {
 /// ```text
 /// bool Function(string menu) native global
 /// ```
-fn is_menu_open(caller: Caller<'_, State>, menu: isize) -> Result<bool, Exception> {
+fn is_menu_open(caller: Caller<'_, State>, menu: Object) -> Result<bool, Exception> {
     todo!()
 }
 
@@ -30,7 +30,7 @@ fn is_menu_open(caller: Caller<'_, State>, menu: isize) -> Result<bool, Exceptio
 /// ```text
 /// bool Function(string menu) native global
 /// ```
-fn is_menu_registered(caller: Caller<'_, State>, menu: isize) -> Result<bool, Exception> {
+fn is_menu_registered(caller: Caller<'_, State>, menu: Object) -> Result<bool, Exception> {
     todo!()
 }
 
@@ -41,9 +41,9 @@ fn is_menu_registered(caller: Caller<'_, State>, menu: isize) -> Result<bool, Ex
 /// ```
 fn register_custom_menu(
     caller: Caller<'_, State>,
-    menu_name: isize,
-    menu_path: isize,
-    root_path: isize,
+    menu_name: Object,
+    menu_path: Object,
+    root_path: Object,
     m_data: Object,
 ) -> Result<bool, Exception> {
     todo!()
@@ -54,7 +54,7 @@ fn register_custom_menu(
 /// ```text
 /// bool Function(string menuName) native global
 /// ```
-fn open_menu(caller: Caller<'_, State>, menu_name: isize) -> Result<bool, Exception> {
+fn open_menu(caller: Caller<'_, State>, menu_name: Object) -> Result<bool, Exception> {
     todo!()
 }
 
@@ -63,7 +63,7 @@ fn open_menu(caller: Caller<'_, State>, menu_name: isize) -> Result<bool, Except
 /// ```text
 /// bool Function(string menuName) native global
 /// ```
-fn close_menu(caller: Caller<'_, State>, menu_name: isize) -> Result<bool, Exception> {
+fn close_menu(caller: Caller<'_, State>, menu_name: Object) -> Result<bool, Exception> {
     todo!()
 }
 
@@ -74,8 +74,8 @@ fn close_menu(caller: Caller<'_, State>, menu_name: isize) -> Result<bool, Excep
 /// ```
 fn set(
     caller: Caller<'_, State>,
-    menu: isize,
-    path: isize,
+    menu: Object,
+    path: Object,
     arg: Object,
 ) -> Result<bool, Exception> {
     todo!()
@@ -86,7 +86,7 @@ fn set(
 /// ```text
 /// Var Function(string menu, string path) native global
 /// ```
-fn get(caller: Caller<'_, State>, menu: isize, path: isize) -> Result<Object, Exception> {
+fn get(caller: Caller<'_, State>, menu: Object, path: Object) -> Result<Object, Exception> {
     todo!()
 }
 
@@ -97,9 +97,9 @@ fn get(caller: Caller<'_, State>, menu: isize, path: isize) -> Result<Object, Ex
 /// ```
 fn invoke(
     caller: Caller<'_, State>,
-    menu: isize,
-    path: isize,
-    args: isize,
+    menu: Object,
+    path: Object,
+    args: Object,
 ) -> Result<Object, Exception> {
     todo!()
 }
@@ -111,11 +111,11 @@ fn invoke(
 /// ```
 fn load(
     caller: Caller<'_, State>,
-    menu: isize,
-    source_var: isize,
-    asset_path: isize,
+    menu: Object,
+    source_var: Object,
+    asset_path: Object,
     receiver: Object,
-    callback: isize,
+    callback: Object,
 ) -> Result<bool, Exception> {
     todo!()
 }

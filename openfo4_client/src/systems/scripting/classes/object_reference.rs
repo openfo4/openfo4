@@ -336,7 +336,7 @@ fn add_keyword(
 fn add_text_replacement_data(
     caller: Caller<'_, State>,
     self_ptr: Object,
-    as_token_label: isize,
+    as_token_label: Object,
     ak_form: Object,
 ) -> Result<(), Exception> {
     todo!()
@@ -363,7 +363,7 @@ fn add_to_map(
 fn apply_conveyor_belt(
     caller: Caller<'_, State>,
     self_ptr: Object,
-    a_target: isize,
+    a_target: Object,
     a_lin_vel_x: f32,
     a_lin_vel_y: f32,
     a_lin_vel_z: f32,
@@ -397,7 +397,7 @@ fn apply_havok_impulse(
 fn apply_fan_motor(
     caller: Caller<'_, State>,
     self_ptr: Object,
-    a_target: isize,
+    a_target: Object,
     a_axis_x: f32,
     a_axis_y: f32,
     a_axis_z: f32,
@@ -804,7 +804,7 @@ fn find_all_references_of_type(
     self_ptr: Object,
     ak_object_or_list: Object,
     af_radius: f32,
-) -> Result<isize, Exception> {
+) -> Result<Object, Exception> {
     todo!()
 }
 
@@ -818,7 +818,7 @@ fn find_all_references_with_keyword(
     self_ptr: Object,
     ak_keyword_or_list: Object,
     af_radius: f32,
-) -> Result<isize, Exception> {
+) -> Result<Object, Exception> {
     todo!()
 }
 
@@ -874,7 +874,7 @@ fn get_actors_linked_to_me(
     self_ptr: Object,
     ap_link_keyword: Object,
     ap_exclude_keyword: Object,
-) -> Result<isize, Exception> {
+) -> Result<Object, Exception> {
     todo!()
 }
 
@@ -1249,7 +1249,7 @@ fn get_linked_ref_children(
     caller: Caller<'_, State>,
     self_ptr: Object,
     ap_keyword: Object,
-) -> Result<isize, Exception> {
+) -> Result<Object, Exception> {
     todo!()
 }
 
@@ -1287,7 +1287,7 @@ fn get_lock_level(caller: Caller<'_, State>, self_ptr: Object) -> Result<i32, Ex
 /// ```text
 /// LocationRefType[] Function() native
 /// ```
-fn get_loc_ref_types(caller: Caller<'_, State>, self_ptr: Object) -> Result<isize, Exception> {
+fn get_loc_ref_types(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Exception> {
     todo!()
 }
 
@@ -1407,7 +1407,7 @@ fn get_safe_position(
     self_ptr: Object,
     a_search_radius: f32,
     a_safe_radius: f32,
-) -> Result<isize, Exception> {
+) -> Result<Object, Exception> {
     todo!()
 }
 
@@ -1421,7 +1421,7 @@ fn get_refs_linked_to_me(
     self_ptr: Object,
     ap_link_keyword: Object,
     ap_exclude_keyword: Object,
-) -> Result<isize, Exception> {
+) -> Result<Object, Exception> {
     todo!()
 }
 
@@ -1434,7 +1434,7 @@ fn get_workshop_owned_objects(
     caller: Caller<'_, State>,
     self_ptr: Object,
     ak_actor: Object,
-) -> Result<isize, Exception> {
+) -> Result<Object, Exception> {
     todo!()
 }
 
@@ -1461,7 +1461,7 @@ fn get_workshop_resource_objects(
     self_ptr: Object,
     ak_av: Object,
     ai_option: i32,
-) -> Result<isize, Exception> {
+) -> Result<Object, Exception> {
     todo!()
 }
 
@@ -1638,8 +1638,8 @@ fn has_direct_los(
     caller: Caller<'_, State>,
     self_ptr: Object,
     ak_target: Object,
-    as_source_node: isize,
-    as_target_node: isize,
+    as_source_node: Object,
+    as_target_node: Object,
 ) -> Result<bool, Exception> {
     todo!()
 }
@@ -1743,7 +1743,7 @@ fn has_loc_ref_type(
 fn has_node(
     caller: Caller<'_, State>,
     self_ptr: Object,
-    as_node_name: isize,
+    as_node_name: Object,
 ) -> Result<bool, Exception> {
     todo!()
 }
@@ -2166,8 +2166,8 @@ fn move_to_node(
     caller: Caller<'_, State>,
     self_ptr: Object,
     ak_target: Object,
-    as_node_name: isize,
-    as_match_node_name: isize,
+    as_node_name: Object,
+    as_match_node_name: Object,
 ) -> Result<(), Exception> {
     todo!()
 }
@@ -2271,7 +2271,7 @@ fn place_actor_at_me(
 fn place_at_node(
     caller: Caller<'_, State>,
     self_ptr: Object,
-    as_node_name: isize,
+    as_node_name: Object,
     ak_form_to_place: Object,
     ai_count: i32,
     ab_force_persist: bool,
@@ -2290,7 +2290,7 @@ fn place_at_node(
 fn play_animation(
     caller: Caller<'_, State>,
     self_ptr: Object,
-    as_animation: isize,
+    as_animation: Object,
 ) -> Result<bool, Exception> {
     todo!()
 }
@@ -2303,8 +2303,8 @@ fn play_animation(
 fn play_animation_and_wait(
     caller: Caller<'_, State>,
     self_ptr: Object,
-    as_animation: isize,
-    as_event_name: isize,
+    as_animation: Object,
+    as_event_name: Object,
 ) -> Result<bool, Exception> {
     todo!()
 }
@@ -2317,7 +2317,7 @@ fn play_animation_and_wait(
 fn play_gamebryo_animation(
     caller: Caller<'_, State>,
     self_ptr: Object,
-    as_animation: isize,
+    as_animation: Object,
     ab_start_over: bool,
     af_ease_in_time: f32,
 ) -> Result<bool, Exception> {
@@ -2333,7 +2333,7 @@ fn play_impact_effect(
     caller: Caller<'_, State>,
     self_ptr: Object,
     ak_impact_effect: Object,
-    as_node_name: isize,
+    as_node_name: Object,
     af_pick_dir_x: f32,
     af_pick_dir_y: f32,
     af_pick_dir_z: f32,
@@ -2352,9 +2352,9 @@ fn play_impact_effect(
 fn play_synced_animation_ss(
     caller: Caller<'_, State>,
     self_ptr: Object,
-    as_animation1: isize,
+    as_animation1: Object,
     ak_obj2: Object,
-    as_animation2: isize,
+    as_animation2: Object,
 ) -> Result<bool, Exception> {
     todo!()
 }
@@ -2367,11 +2367,11 @@ fn play_synced_animation_ss(
 fn play_synced_animation_and_wait_ss(
     caller: Caller<'_, State>,
     self_ptr: Object,
-    as_animation1: isize,
-    as_event1: isize,
+    as_animation1: Object,
+    as_event1: Object,
     ak_obj2: Object,
-    as_animation2: isize,
-    as_event2: isize,
+    as_animation2: Object,
+    as_event2: Object,
 ) -> Result<bool, Exception> {
     todo!()
 }
@@ -2384,8 +2384,8 @@ fn play_synced_animation_and_wait_ss(
 fn play_terrain_effect(
     caller: Caller<'_, State>,
     self_ptr: Object,
-    as_effect_model_name: isize,
-    as_attach_bone_name: isize,
+    as_effect_model_name: Object,
+    as_attach_bone_name: Object,
 ) -> Result<(), Exception> {
     todo!()
 }
@@ -3264,7 +3264,7 @@ fn spline_translate_to_ref_node(
     caller: Caller<'_, State>,
     self_ptr: Object,
     ar_target: Object,
-    ar_node_name: isize,
+    ar_node_name: Object,
     af_tangent_magnitude: f32,
     af_speed: f32,
     af_max_rotation_speed: f32,
@@ -3329,7 +3329,7 @@ fn tether_to_horse(
 fn wait_for_animation_event(
     caller: Caller<'_, State>,
     self_ptr: Object,
-    as_event_name: isize,
+    as_event_name: Object,
 ) -> Result<bool, Exception> {
     todo!()
 }

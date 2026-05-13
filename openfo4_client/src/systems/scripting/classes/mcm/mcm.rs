@@ -1,4 +1,4 @@
-use openfo4_script::runtime::{Caller, Exception};
+use openfo4_script::runtime::{Caller, Exception, ObjectAddr};
 
 use crate::systems::scripting::classes::State;
 
@@ -36,8 +36,8 @@ pub fn refresh_menu(caller: Caller<'_, State>) -> Result<(), Exception> {
 /// ```
 pub fn get_mod_setting_int(
     caller: Caller<'_, State>,
-    mod_name: isize,
-    setting: isize,
+    mod_name: ObjectAddr,
+    setting: ObjectAddr,
 ) -> Result<i32, Exception> {
     todo!()
 }
@@ -49,8 +49,8 @@ pub fn get_mod_setting_int(
 /// ```
 pub fn get_mod_setting_bool(
     caller: Caller<'_, State>,
-    mod_name: isize,
-    setting: isize,
+    mod_name: ObjectAddr,
+    setting: ObjectAddr,
 ) -> Result<bool, Exception> {
     todo!()
 }
@@ -62,8 +62,8 @@ pub fn get_mod_setting_bool(
 /// ```
 pub fn get_mod_setting_float(
     caller: Caller<'_, State>,
-    mod_name: isize,
-    setting: isize,
+    mod_name: ObjectAddr,
+    setting: ObjectAddr,
 ) -> Result<f32, Exception> {
     todo!()
 }
@@ -75,9 +75,9 @@ pub fn get_mod_setting_float(
 /// ```
 pub fn get_mod_setting_string(
     caller: Caller<'_, State>,
-    mod_name: isize,
-    setting: isize,
-) -> Result<isize, Exception> {
+    mod_name: ObjectAddr,
+    setting: ObjectAddr,
+) -> Result<ObjectAddr, Exception> {
     todo!()
 }
 
@@ -88,8 +88,8 @@ pub fn get_mod_setting_string(
 /// ```
 pub fn set_mod_setting_int(
     caller: Caller<'_, State>,
-    mod_name: isize,
-    setting: isize,
+    mod_name: ObjectAddr,
+    setting: ObjectAddr,
     value: i32,
 ) -> Result<(), Exception> {
     todo!()
@@ -102,8 +102,8 @@ pub fn set_mod_setting_int(
 /// ```
 pub fn set_mod_setting_bool(
     caller: Caller<'_, State>,
-    mod_name: isize,
-    setting: isize,
+    mod_name: ObjectAddr,
+    setting: ObjectAddr,
     value: bool,
 ) -> Result<(), Exception> {
     todo!()
@@ -116,8 +116,8 @@ pub fn set_mod_setting_bool(
 /// ```
 pub fn set_mod_setting_float(
     caller: Caller<'_, State>,
-    mod_name: isize,
-    setting: isize,
+    mod_name: ObjectAddr,
+    setting: ObjectAddr,
     value: f32,
 ) -> Result<(), Exception> {
     todo!()
@@ -130,9 +130,9 @@ pub fn set_mod_setting_float(
 /// ```
 pub fn set_mod_setting_string(
     caller: Caller<'_, State>,
-    mod_name: isize,
-    setting: isize,
-    value: isize,
+    mod_name: ObjectAddr,
+    setting: ObjectAddr,
+    value: ObjectAddr,
 ) -> Result<(), Exception> {
     todo!()
 }

@@ -43,7 +43,7 @@ fn get_head_parts(
     caller: Caller<'_, State>,
     self_ptr: Object,
     b_overlays: bool,
-) -> Result<isize, Exception> {
+) -> Result<Object, Exception> {
     todo!()
 }
 

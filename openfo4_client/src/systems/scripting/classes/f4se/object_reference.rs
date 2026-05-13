@@ -12,7 +12,7 @@ pub fn apply_material_swap(
     self_ptr: Object,
     material_swap: Object,
     rename_material: bool,
-) -> Result<isize, Exception> {
+) -> Result<Object, Exception> {
     todo!()
 }
 
@@ -35,7 +35,7 @@ pub fn attach_wire(
 /// ```text
 /// ObjectMod[] Function GetAllMods() Native
 /// ```
-pub fn get_all_mods(caller: Caller<'_, State>, self_ptr: Object) -> Result<isize, Exception> {
+pub fn get_all_mods(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Exception> {
     todo!()
 }
 
@@ -44,7 +44,10 @@ pub fn get_all_mods(caller: Caller<'_, State>, self_ptr: Object) -> Result<isize
 /// ```text
 /// ConnectPoint[] Function GetConnectPoints() Native
 /// ```
-pub fn get_connect_points(caller: Caller<'_, State>, self_ptr: Object) -> Result<isize, Exception> {
+pub fn get_connect_points(
+    caller: Caller<'_, State>,
+    self_ptr: Object,
+) -> Result<Object, Exception> {
     todo!()
 }
 
@@ -56,7 +59,7 @@ pub fn get_connect_points(caller: Caller<'_, State>, self_ptr: Object) -> Result
 pub fn get_connected_objects(
     caller: Caller<'_, State>,
     self_ptr: Object,
-) -> Result<isize, Exception> {
+) -> Result<Object, Exception> {
     todo!()
 }
 
@@ -65,7 +68,7 @@ pub fn get_connected_objects(
 /// ```text
 /// string Function GetDisplayName() Native
 /// ```
-pub fn get_display_name(caller: Caller<'_, State>, self_ptr: Object) -> Result<isize, Exception> {
+pub fn get_display_name(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Exception> {
     todo!()
 }
 
@@ -77,7 +80,7 @@ pub fn get_display_name(caller: Caller<'_, State>, self_ptr: Object) -> Result<i
 pub fn get_inventory_items(
     caller: Caller<'_, State>,
     self_ptr: Object,
-) -> Result<isize, Exception> {
+) -> Result<Object, Exception> {
     todo!()
 }
 

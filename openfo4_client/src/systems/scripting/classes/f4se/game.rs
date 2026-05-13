@@ -31,7 +31,7 @@ fn get_current_console_ref(caller: Caller<'_, State>) -> Result<Object, Exceptio
 /// ```text
 /// PluginInfo[] Function GetInstalledPlugins() native global
 /// ```
-fn get_installed_plugins(caller: Caller<'_, State>) -> Result<isize, Exception> {
+fn get_installed_plugins(caller: Caller<'_, State>) -> Result<Object, Exception> {
     todo!()
 }
 
@@ -40,7 +40,7 @@ fn get_installed_plugins(caller: Caller<'_, State>) -> Result<isize, Exception> 
 /// ```text
 /// PluginInfo[] Function GetInstalledLightPlugins() native global
 /// ```
-fn get_installed_light_plugins(caller: Caller<'_, State>) -> Result<isize, Exception> {
+fn get_installed_light_plugins(caller: Caller<'_, State>) -> Result<Object, Exception> {
     todo!()
 }
 
@@ -49,7 +49,7 @@ fn get_installed_light_plugins(caller: Caller<'_, State>) -> Result<isize, Excep
 /// ```text
 /// string[] Function GetPluginDependencies(string plugin) native global
 /// ```
-fn get_plugin_dependencies(caller: Caller<'_, State>, plugin: isize) -> Result<isize, Exception> {
+fn get_plugin_dependencies(caller: Caller<'_, State>, plugin: Object) -> Result<Object, Exception> {
     todo!()
 }
 
@@ -60,7 +60,7 @@ fn get_plugin_dependencies(caller: Caller<'_, State>, plugin: isize) -> Result<i
 /// ```
 fn set_game_setting_float(
     caller: Caller<'_, State>,
-    setting: isize,
+    setting: Object,
     value: f32,
 ) -> Result<(), Exception> {
     todo!()
@@ -73,7 +73,7 @@ fn set_game_setting_float(
 /// ```
 fn set_game_setting_int(
     caller: Caller<'_, State>,
-    setting: isize,
+    setting: Object,
     value: i32,
 ) -> Result<(), Exception> {
     todo!()
@@ -86,7 +86,7 @@ fn set_game_setting_int(
 /// ```
 fn set_game_setting_bool(
     caller: Caller<'_, State>,
-    setting: isize,
+    setting: Object,
     value: bool,
 ) -> Result<(), Exception> {
     todo!()
@@ -99,8 +99,8 @@ fn set_game_setting_bool(
 /// ```
 fn set_game_setting_string(
     caller: Caller<'_, State>,
-    setting: isize,
-    value: isize,
+    setting: Object,
+    value: Object,
 ) -> Result<(), Exception> {
     todo!()
 }

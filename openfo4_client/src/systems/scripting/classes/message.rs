@@ -29,13 +29,13 @@ pub fn clear_help_messages(caller: Caller<'_, State>) -> Result<(), Exception> {
 /// ```text
 /// Function ResetHelpMessage(string asEvent) native global
 /// ```
-pub fn reset_help_message(caller: Caller<'_, State>, event: isize) -> Result<(), Exception> {
+pub fn reset_help_message(caller: Caller<'_, State>, event: Object) -> Result<(), Exception> {
     todo!()
 }
 
 pub fn show(
     caller: Caller<'_, State>,
-    self_ptr: isize,
+    self_ptr: Object,
     arg1: Float,
     arg2: Float,
     arg3: Float,
@@ -63,11 +63,11 @@ pub fn show(
 pub fn show_as_help_message(
     caller: Caller<'_, State>,
     self_ptr: Object,
-    event: isize,
+    event: Object,
     duration: Float,
     interval: Float,
     max_times: Int,
-    context: isize,
+    context: Object,
     priority: Int,
 ) -> Result<(), Exception> {
     todo!()

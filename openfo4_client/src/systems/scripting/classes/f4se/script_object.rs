@@ -53,7 +53,7 @@ fn unregister_for_key(
 fn register_for_control(
     caller: Caller<'_, State>,
     self_ptr: Object,
-    control: isize,
+    control: Object,
 ) -> Result<(), Exception> {
     todo!()
 }
@@ -66,7 +66,7 @@ fn register_for_control(
 fn unregister_for_control(
     caller: Caller<'_, State>,
     self_ptr: Object,
-    control: isize,
+    control: Object,
 ) -> Result<(), Exception> {
     todo!()
 }
@@ -79,8 +79,8 @@ fn unregister_for_control(
 fn register_for_external_event(
     caller: Caller<'_, State>,
     self_ptr: Object,
-    event_name: isize,
-    callback: isize,
+    event_name: Object,
+    callback: Object,
 ) -> Result<(), Exception> {
     todo!()
 }
@@ -93,7 +93,7 @@ fn register_for_external_event(
 fn unregister_for_external_event(
     caller: Caller<'_, State>,
     self_ptr: Object,
-    event_name: isize,
+    event_name: Object,
 ) -> Result<(), Exception> {
     todo!()
 }

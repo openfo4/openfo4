@@ -10,6 +10,6 @@ use super::{Object, State};
 pub fn get_assocaited_skill(
     caller: Caller<'_, State>,
     self_ptr: Object,
-) -> Result<isize, Exception> {
+) -> Result<Object, Exception> {
     todo!()
 }

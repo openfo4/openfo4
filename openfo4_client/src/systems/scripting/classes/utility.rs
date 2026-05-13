@@ -46,9 +46,9 @@ pub fn register(engine: &mut Engine) {
 /// ```
 fn call_global_function(
     caller: Caller<'_, State>,
-    as_script_name: isize,
-    as_func_name: isize,
-    a_params: isize,
+    as_script_name: Object,
+    as_func_name: Object,
+    a_params: Object,
 ) -> Result<Object, Exception> {
     todo!()
 }
@@ -60,9 +60,9 @@ fn call_global_function(
 /// ```
 fn call_global_function_no_wait(
     caller: Caller<'_, State>,
-    as_script_name: isize,
-    as_func_name: isize,
-    a_params: isize,
+    as_script_name: Object,
+    as_func_name: Object,
+    a_params: Object,
 ) -> Result<(), Exception> {
     todo!()
 }
@@ -72,7 +72,7 @@ fn call_global_function_no_wait(
 /// ```text
 /// string Function(float afGameTime) native global
 /// ```
-fn game_time_to_string(caller: Caller<'_, State>, af_game_time: f32) -> Result<isize, Exception> {
+fn game_time_to_string(caller: Caller<'_, State>, af_game_time: f32) -> Result<Object, Exception> {
     todo!()
 }
 
@@ -165,7 +165,7 @@ fn set_ini_bool(_caller: Caller<'_, State>, _ini: Object, _value: bool) -> Resul
 fn set_ini_string(
     _caller: Caller<'_, State>,
     _ini: Object,
-    _value: isize,
+    _value: Object,
 ) -> Result<(), Exception> {
     Ok(())
 }

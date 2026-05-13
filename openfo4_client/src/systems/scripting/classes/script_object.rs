@@ -89,8 +89,8 @@ fn add_inventory_event_filter(
 fn call_function(
     caller: Caller<'_, State>,
     self_ptr: Object,
-    as_func_name: isize,
-    a_params: isize,
+    as_func_name: Object,
+    a_params: Object,
 ) -> Result<Object, Exception> {
     todo!()
 }
@@ -103,8 +103,8 @@ fn call_function(
 fn call_function_no_wait(
     caller: Caller<'_, State>,
     self_ptr: Object,
-    as_func_name: isize,
-    a_params: isize,
+    as_func_name: Object,
+    a_params: Object,
 ) -> Result<(), Exception> {
     todo!()
 }
@@ -147,7 +147,7 @@ fn cancel_timer_game_time(
 fn get_property_value(
     caller: Caller<'_, State>,
     self_ptr: Object,
-    as_property_name: isize,
+    as_property_name: Object,
 ) -> Result<Object, Exception> {
     todo!()
 }
@@ -160,7 +160,7 @@ fn get_property_value(
 fn cast_as(
     caller: Caller<'_, State>,
     self_ptr: Object,
-    as_script_name: isize,
+    as_script_name: Object,
 ) -> Result<Object, Exception> {
     todo!()
 }
@@ -771,7 +771,7 @@ fn send_custom_event(
     caller: Caller<'_, State>,
     self_ptr: Object,
     as_event: Object,
-    ak_args: isize,
+    ak_args: Object,
 ) -> Result<(), Exception> {
     todo!()
 }
@@ -784,7 +784,7 @@ fn send_custom_event(
 fn set_property_value(
     caller: Caller<'_, State>,
     self_ptr: Object,
-    as_property_name: isize,
+    as_property_name: Object,
     a_value: Object,
 ) -> Result<(), Exception> {
     todo!()
@@ -798,7 +798,7 @@ fn set_property_value(
 fn set_property_value_no_wait(
     caller: Caller<'_, State>,
     self_ptr: Object,
-    as_property_name: isize,
+    as_property_name: Object,
     a_value: Object,
 ) -> Result<(), Exception> {
     todo!()

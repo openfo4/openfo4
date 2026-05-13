@@ -147,7 +147,7 @@ fn add_perk_points(caller: Caller<'_, State>, perk_points: i32) -> Result<(), Ex
 /// ```
 fn advance_skill(
     caller: Caller<'_, State>,
-    as_skill_name: isize,
+    as_skill_name: Object,
     af_magnitude: f32,
 ) -> Result<(), Exception> {
     todo!()
@@ -442,7 +442,7 @@ fn get_form(caller: Caller<'_, State>, ai_form_id: i32) -> Result<Object, Except
 fn get_form_from_file(
     caller: Caller<'_, State>,
     ai_form_id: i32,
-    as_filename: isize,
+    as_filename: Object,
 ) -> Result<Object, Exception> {
     todo!()
 }
@@ -454,7 +454,7 @@ fn get_form_from_file(
 /// ```
 fn get_game_setting_float(
     caller: Caller<'_, State>,
-    as_game_setting: isize,
+    as_game_setting: Object,
 ) -> Result<f32, Exception> {
     todo!()
 }
@@ -466,7 +466,7 @@ fn get_game_setting_float(
 /// ```
 fn get_game_setting_int(
     caller: Caller<'_, State>,
-    as_game_setting: isize,
+    as_game_setting: Object,
 ) -> Result<i32, Exception> {
     todo!()
 }
@@ -478,8 +478,8 @@ fn get_game_setting_int(
 /// ```
 fn get_game_setting_string(
     caller: Caller<'_, State>,
-    as_game_setting: isize,
-) -> Result<isize, Exception> {
+    as_game_setting: Object,
+) -> Result<Object, Exception> {
     todo!()
 }
 
@@ -548,7 +548,7 @@ fn get_player(mut caller: Caller<'_, State>) -> Result<Object, Exception> {
 /// ```text
 /// Actor[] Function() native global
 /// ```
-fn get_player_followers(caller: Caller<'_, State>) -> Result<isize, Exception> {
+fn get_player_followers(caller: Caller<'_, State>) -> Result<Object, Exception> {
     todo!()
 }
 
@@ -626,7 +626,7 @@ fn increment_skill(
 /// ```
 fn increment_stat(
     caller: Caller<'_, State>,
-    as_stat_name: isize,
+    as_stat_name: Object,
     ai_mod_amount: i32,
 ) -> Result<(), Exception> {
     todo!()
@@ -763,7 +763,7 @@ fn is_movement_controls_enabled(caller: Caller<'_, State>) -> Result<bool, Excep
 /// ```text
 /// bool Function(string asName) native global
 /// ```
-fn is_plugin_installed(caller: Caller<'_, State>, as_name: isize) -> Result<bool, Exception> {
+fn is_plugin_installed(caller: Caller<'_, State>, as_name: Object) -> Result<bool, Exception> {
     todo!()
 }
 
@@ -855,7 +855,7 @@ fn precache_char_gen_clear(_caller: Caller<'_, State>) -> Result<(), Exception> 
 /// ```text
 /// int Function(string asStat) native global
 /// ```
-fn query_stat(caller: Caller<'_, State>, as_stat: isize) -> Result<i32, Exception> {
+fn query_stat(caller: Caller<'_, State>, as_stat: Object) -> Result<i32, Exception> {
     todo!()
 }
 
@@ -954,7 +954,7 @@ fn set_inside_memory_hud_mode(
 /// ```
 fn show_perk_vault_boy_on_hud(
     caller: Caller<'_, State>,
-    a_vault_boy_swf: isize,
+    a_vault_boy_swf: Object,
     a_sound_descriptor: Object,
 ) -> Result<(), Exception> {
     todo!()
@@ -1115,7 +1115,7 @@ fn hide_title_sequence_menu(caller: Caller<'_, State>) -> Result<(), Exception> 
 /// ```
 fn start_title_sequence(
     caller: Caller<'_, State>,
-    as_sequence_name: isize,
+    as_sequence_name: Object,
 ) -> Result<(), Exception> {
     todo!()
 }
@@ -1127,7 +1127,7 @@ fn start_title_sequence(
 /// ```
 fn show_pipboy_boot_sequence(
     caller: Caller<'_, State>,
-    as_animation_name: isize,
+    as_animation_name: Object,
 ) -> Result<(), Exception> {
     todo!()
 }

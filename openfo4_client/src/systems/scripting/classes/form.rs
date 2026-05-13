@@ -18,7 +18,7 @@ pub fn register(engine: &mut Engine) {
 /// ```text
 /// int Function GetFormID() native
 /// ```
-fn get_form_id(caller: Caller<'_, State>, self_ptr: isize) -> Result<Int, Exception> {
+fn get_form_id(caller: Caller<'_, State>, self_ptr: Object) -> Result<Int, Exception> {
     todo!()
 }
 
@@ -27,7 +27,7 @@ fn get_form_id(caller: Caller<'_, State>, self_ptr: isize) -> Result<Int, Except
 /// ```text
 /// int Function GetGoldValue() native
 /// ```
-fn get_gold_value(caller: Caller<'_, State>, self_ptr: isize) -> Result<Int, Exception> {
+fn get_gold_value(caller: Caller<'_, State>, self_ptr: Object) -> Result<Int, Exception> {
     todo!()
 }
 

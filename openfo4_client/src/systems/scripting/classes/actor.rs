@@ -511,7 +511,10 @@ fn get_bribe_amount(caller: Caller<'_, State>, self_ptr: Object) -> Result<i32, 
 /// ```text
 /// Actor[] Function() native
 /// ```
-fn get_all_combat_targets(caller: Caller<'_, State>, self_ptr: Object) -> Result<isize, Exception> {
+fn get_all_combat_targets(
+    caller: Caller<'_, State>,
+    self_ptr: Object,
+) -> Result<Object, Exception> {
     todo!()
 }
 
@@ -1076,7 +1079,7 @@ fn is_detected_by(
 fn is_dismembered(
     caller: Caller<'_, State>,
     self_ptr: Object,
-    as_body_part: isize,
+    as_body_part: Object,
 ) -> Result<bool, Exception> {
     todo!()
 }
@@ -1400,7 +1403,7 @@ fn kill_silent(
 fn dismember(
     caller: Caller<'_, State>,
     self_ptr: Object,
-    as_body_part: isize,
+    as_body_part: Object,
     ab_force_explode: bool,
     ab_force_dismember: bool,
     ab_force_bloody_mess: bool,
@@ -1521,7 +1524,7 @@ fn play_idle_with_target(
 fn play_sub_graph_animation(
     caller: Caller<'_, State>,
     self_ptr: Object,
-    as_event_name: isize,
+    as_event_name: Object,
 ) -> Result<(), Exception> {
     todo!()
 }
@@ -2109,7 +2112,7 @@ fn set_restrained(
 fn set_sub_graph_float_variable(
     caller: Caller<'_, State>,
     self_ptr: Object,
-    as_variable_name: isize,
+    as_variable_name: Object,
     af_value: f32,
 ) -> Result<(), Exception> {
     todo!()
@@ -2625,7 +2628,7 @@ fn get_worn_item_mods(
     caller: Caller<'_, State>,
     self_ptr: Object,
     slot_index: i32,
-) -> Result<isize, Exception> {
+) -> Result<Object, Exception> {
     todo!()
 }
 

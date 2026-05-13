@@ -41,7 +41,7 @@ pub fn register(engine: &mut Engine) {
 /// ```text
 /// string Function() native
 /// ```
-fn get_name(caller: Caller<'_, State>, self_ptr: Object) -> Result<isize, Exception> {
+fn get_name(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Exception> {
     todo!()
 }
 
@@ -50,7 +50,7 @@ fn get_name(caller: Caller<'_, State>, self_ptr: Object) -> Result<isize, Except
 /// ```text
 /// Function(string name) native
 /// ```
-fn set_name(caller: Caller<'_, State>, self_ptr: Object, name: isize) -> Result<(), Exception> {
+fn set_name(caller: Caller<'_, State>, self_ptr: Object, name: Object) -> Result<(), Exception> {
     todo!()
 }
 
@@ -59,7 +59,7 @@ fn set_name(caller: Caller<'_, State>, self_ptr: Object, name: isize) -> Result<
 /// ```text
 /// string Function() native
 /// ```
-fn get_description(caller: Caller<'_, State>, self_ptr: Object) -> Result<isize, Exception> {
+fn get_description(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Exception> {
     todo!()
 }
 
@@ -99,7 +99,7 @@ fn set_gold_value(
 /// ```text
 /// Keyword[] Function() native
 /// ```
-fn get_keywords(caller: Caller<'_, State>, self_ptr: Object) -> Result<isize, Exception> {
+fn get_keywords(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Exception> {
     todo!()
 }
 
@@ -117,7 +117,7 @@ fn has_world_model(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, 
 /// ```text
 /// string Function() native
 /// ```
-fn get_world_model_path(caller: Caller<'_, State>, self_ptr: Object) -> Result<isize, Exception> {
+fn get_world_model_path(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Exception> {
     todo!()
 }
 
@@ -129,7 +129,7 @@ fn get_world_model_path(caller: Caller<'_, State>, self_ptr: Object) -> Result<i
 fn set_world_model_path(
     caller: Caller<'_, State>,
     self_ptr: Object,
-    path: isize,
+    path: Object,
 ) -> Result<(), Exception> {
     todo!()
 }
@@ -139,7 +139,7 @@ fn set_world_model_path(
 /// ```text
 /// string Function() native
 /// ```
-fn get_icon_path(caller: Caller<'_, State>, self_ptr: Object) -> Result<isize, Exception> {
+fn get_icon_path(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Exception> {
     todo!()
 }
 
@@ -151,7 +151,7 @@ fn get_icon_path(caller: Caller<'_, State>, self_ptr: Object) -> Result<isize, E
 fn set_icon_path(
     caller: Caller<'_, State>,
     self_ptr: Object,
-    path: isize,
+    path: Object,
 ) -> Result<(), Exception> {
     todo!()
 }
@@ -161,7 +161,7 @@ fn set_icon_path(
 /// ```text
 /// string Function() native
 /// ```
-fn get_message_icon_path(caller: Caller<'_, State>, self_ptr: Object) -> Result<isize, Exception> {
+fn get_message_icon_path(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Exception> {
     todo!()
 }
 
@@ -173,7 +173,7 @@ fn get_message_icon_path(caller: Caller<'_, State>, self_ptr: Object) -> Result<
 fn set_message_icon_path(
     caller: Caller<'_, State>,
     self_ptr: Object,
-    path: isize,
+    path: Object,
 ) -> Result<(), Exception> {
     todo!()
 }

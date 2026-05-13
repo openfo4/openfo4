@@ -79,54 +79,67 @@ pub(crate) struct RawStack {
     pub len: usize,
 }
 
+/// A union over all values that can be used in Papyrus functions.
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub union RawVal {
-    pub i8: i8,
-    pub i16: i16,
+    /// A boolean type.
+    ///
+    /// This is the equivalent of the builtin `bool` type.
+    pub bool: bool,
+    /// An integer type.
+    ///
+    /// This is the equivalent of the builtin `int` type.
     pub i32: i32,
-    pub i64: i64,
-    pub isize: isize,
+    /// A floating-point type.
+    ///
+    /// This is the equivalent of the builtin `float` type.
     pub f32: f32,
-    pub f64: f64,
-    pub ptr: *mut u8,
+    /// An object pointer.
+    ///
+    /// This is the equivalent of class objects, structs, arrays and the builtin types `string`
+    /// and `var`.
+    pub object: ObjectAddr,
 }
 
+/// A value can be used in Papyrus functions.
 #[derive(Copy, Clone, Debug)]
 pub enum Val {
-    I8(i8),
-    I16(i16),
+    /// A boolean type.
+    ///
+    /// This is the equivalent of the builtin `bool` type.
+    Bool(bool),
+    /// An integer type.
+    ///
+    /// This is the equivalent of the builtin `int` type.
     I32(i32),
-    I64(i64),
-    Isize(isize),
+    /// A floating-point type.
+    ///
+    /// This is the equivalent of the builtin `float` type.
     F32(f32),
-    F64(f64),
-    Ptr(*mut u8),
+    /// An object pointer.
+    ///
+    /// This is the equivalent of class objects, structs, arrays and the builtin types `string`
+    /// and `var`.
+    Object(ObjectAddr),
 }
 
 impl Val {
-    fn ty(&self) -> Type {
+    const fn ty(&self) -> Type {
         match self {
-            Self::I8(_) => Type::I8,
-            Self::I16(_) => Type::I16,
+            Self::Bool(_) => Type::I8,
             Self::I32(_) => Type::I32,
-            Self::I64(_) => Type::I64,
             Self::F32(_) => Type::F32,
-            Self::F64(_) => Type::F64,
-            Self::Isize(_) | Self::Ptr(_) => Type::Pointer,
+            Self::Object(_) => Type::Pointer,
         }
     }
 
-    fn into_raw(self) -> RawVal {
+    const fn into_raw(self) -> RawVal {
         match self {
-            Self::I8(v) => RawVal { i8: v },
-            Self::I16(v) => RawVal { i16: v },
-            Self::I32(v) => RawVal { i32: v },
-            Self::I64(v) => RawVal { i64: v },
-            Self::F32(v) => RawVal { f32: v },
-            Self::F64(v) => RawVal { f64: v },
-            Self::Isize(v) => RawVal { isize: v },
-            Self::Ptr(v) => RawVal { ptr: v },
+            Self::Bool(bool) => RawVal { bool },
+            Self::I32(i32) => RawVal { i32 },
+            Self::F32(f32) => RawVal { f32 },
+            Self::Object(object) => RawVal { object },
         }
     }
 }
@@ -211,13 +224,11 @@ impl Func {
 
             unsafe {
                 returns.push(match ty {
-                    Type::I8 => Val::I8(<u8 as NativeType>::from_raw(raw) as i8),
-                    Type::I16 => Val::I16(<u16 as NativeType>::from_raw(raw) as i16),
+                    Type::I8 => Val::Bool(<bool as NativeType>::from_raw(raw)),
                     Type::I32 => Val::I32(<i32 as NativeType>::from_raw(raw)),
-                    Type::I64 => todo!(),
                     Type::F32 => Val::F32(<f32 as NativeType>::from_raw(raw)),
-                    Type::F64 => todo!(),
-                    Type::Pointer => Val::Ptr(<isize as NativeType>::from_raw(raw) as *mut u8),
+                    Type::Pointer => Val::Object(<ObjectAddr as NativeType>::from_raw(raw)),
+                    _ => unreachable!(),
                 });
             }
         }
@@ -581,6 +592,7 @@ impl_into_func!(A0, A1, A2, A3, A4, A5, A6, A7, A8, A9, A10 => R0);
 impl_into_func!(A0, A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11 =>);
 impl_into_func!(A0, A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11 => R0);
 
+/// A type that can be send to Papyrus functions.
 pub unsafe trait NativeType: Copy {
     const TYPE: Type;
 
@@ -589,39 +601,15 @@ pub unsafe trait NativeType: Copy {
     fn to_raw(self) -> RawVal;
 }
 
-unsafe impl NativeType for u8 {
+unsafe impl NativeType for bool {
     const TYPE: Type = Type::I8;
 
     unsafe fn from_raw(val: &RawVal) -> Self {
-        unsafe { val.i8 as u8 }
+        unsafe { val.bool }
     }
 
     fn to_raw(self) -> RawVal {
-        RawVal { i8: self as i8 }
-    }
-}
-
-unsafe impl NativeType for u16 {
-    const TYPE: Type = Type::I16;
-
-    unsafe fn from_raw(val: &RawVal) -> Self {
-        unsafe { val.i16 as u16 }
-    }
-
-    fn to_raw(self) -> RawVal {
-        RawVal { i16: self as i16 }
-    }
-}
-
-unsafe impl NativeType for f32 {
-    const TYPE: Type = Type::F32;
-
-    unsafe fn from_raw(val: &RawVal) -> Self {
-        unsafe { val.f32 }
-    }
-
-    fn to_raw(self) -> RawVal {
-        RawVal { f32: self }
+        RawVal { bool: self }
     }
 }
 
@@ -637,28 +625,15 @@ unsafe impl NativeType for i32 {
     }
 }
 
-unsafe impl NativeType for isize {
-    const TYPE: Type = Type::Pointer;
+unsafe impl NativeType for f32 {
+    const TYPE: Type = Type::F32;
 
     unsafe fn from_raw(val: &RawVal) -> Self {
-        unsafe { val.isize }
+        unsafe { val.f32 }
     }
 
     fn to_raw(self) -> RawVal {
-        RawVal { isize: self }
-    }
-}
-
-unsafe impl NativeType for bool {
-    const TYPE: Type = Type::I8;
-
-    unsafe fn from_raw(val: &RawVal) -> Self {
-        let v = unsafe { val.i8 };
-        v != 0
-    }
-
-    fn to_raw(self) -> RawVal {
-        RawVal { i8: i8::from(self) }
+        RawVal { f32: self }
     }
 }
 
@@ -666,11 +641,11 @@ unsafe impl NativeType for ObjectAddr {
     const TYPE: Type = Type::Pointer;
 
     unsafe fn from_raw(val: &RawVal) -> Self {
-        Self::from_raw(unsafe { val.ptr })
+        unsafe { val.object }
     }
 
     fn to_raw(self) -> RawVal {
-        RawVal { ptr: self.to_raw() }
+        RawVal { object: self }
     }
 }
 

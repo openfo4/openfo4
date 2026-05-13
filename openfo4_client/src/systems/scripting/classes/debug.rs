@@ -54,7 +54,7 @@ fn center_on_cell(caller: Caller<'_, State>, as_cellname: Object) -> Result<(), 
 /// ```
 fn center_on_cell_and_wait(
     caller: Caller<'_, State>,
-    as_cellname: isize,
+    as_cellname: Object,
 ) -> Result<f32, Exception> {
     todo!()
 }
@@ -157,7 +157,7 @@ fn get_platform_name(caller: Caller<'_, State>) -> Result<Object, Exception> {
 /// ```text
 /// string Function() native global
 /// ```
-fn get_version_number(caller: Caller<'_, State>) -> Result<isize, Exception> {
+fn get_version_number(caller: Caller<'_, State>) -> Result<Object, Exception> {
     todo!()
 }
 
@@ -166,7 +166,7 @@ fn get_version_number(caller: Caller<'_, State>) -> Result<isize, Exception> {
 /// ```text
 /// Function(string asMessageBoxText) native global
 /// ```
-fn message_box(caller: Caller<'_, State>, as_message_box_text: isize) -> Result<(), Exception> {
+fn message_box(caller: Caller<'_, State>, as_message_box_text: Object) -> Result<(), Exception> {
     todo!()
 }
 
@@ -175,7 +175,7 @@ fn message_box(caller: Caller<'_, State>, as_message_box_text: isize) -> Result<
 /// ```text
 /// Function(string asNotificationText) native global
 /// ```
-fn notification(caller: Caller<'_, State>, as_notification_text: isize) -> Result<(), Exception> {
+fn notification(caller: Caller<'_, State>, as_notification_text: Object) -> Result<(), Exception> {
     todo!()
 }
 

@@ -48,7 +48,7 @@ fn get_all_linked_locations(
     caller: Caller<'_, State>,
     self_ptr: Object,
     ak_keyword: Object,
-) -> Result<isize, Exception> {
+) -> Result<Object, Exception> {
     todo!()
 }
 

@@ -18,7 +18,10 @@ pub fn register(engine: &mut Engine) {
 /// ```text
 /// PropertyModifier[] Function GetPropertyModifiers() native
 /// ```
-fn get_property_modifiers(caller: Caller<'_, State>, self_ptr: Object) -> Result<isize, Exception> {
+fn get_property_modifiers(
+    caller: Caller<'_, State>,
+    self_ptr: Object,
+) -> Result<Object, Exception> {
     todo!()
 }
 

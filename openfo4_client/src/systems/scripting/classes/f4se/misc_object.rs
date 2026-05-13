@@ -14,7 +14,7 @@ pub fn register(engine: &mut Engine) {
 /// ```text
 /// MiscComponent[] Function GetMiscComponents() native
 /// ```
-fn get_misc_components(caller: Caller<'_, State>, self_ptr: Object) -> Result<isize, Exception> {
+fn get_misc_components(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Exception> {
     todo!()
 }
 

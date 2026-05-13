@@ -63,7 +63,7 @@ fn get_next_perk(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, 
 /// ```text
 /// string Function GetSWFPath() native
 /// ```
-fn get_swf_path(caller: Caller<'_, State>, self_ptr: Object) -> Result<isize, Exception> {
+fn get_swf_path(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Exception> {
     todo!()
 }
 

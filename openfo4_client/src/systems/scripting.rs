@@ -27,7 +27,7 @@ use openfo4_script::runtime::{Context, Exception, ObjectRef, Stack, Val};
 use slab::Slab;
 
 use crate::config;
-use crate::events::combat::BleedoutStartEvent;
+use crate::events::combat::{BleedoutStartEvent, BodyPartCrippleEvent};
 use crate::events::inventory::{ItemAddedEvent, ItemEquippedEvent};
 use crate::events::trigger::{TriggerEnter, TriggerLeave};
 use crate::loader::FileLoader;
@@ -270,6 +270,7 @@ impl Executor {
         collect_event_dispatches::<TriggerLeave>(&mut self.event_queue, events, ctx);
         collect_event_dispatches::<DeathStartEvent>(&mut self.event_queue, events, ctx);
         collect_event_dispatches::<BleedoutStartEvent>(&mut self.event_queue, events, ctx);
+        collect_event_dispatches::<BodyPartCrippleEvent>(&mut self.event_queue, events, ctx);
 
         let dispatches = self
             .event_queue
@@ -411,12 +412,13 @@ fn call_event_invocation_single(
     let mut args = args
         .iter()
         .map(|value| match value {
+            Value::Bool(v) => Val::Bool((*v).into()),
             Value::Int(v) => Val::I32(*v),
-            Value::ObjectRef(object) => Val::Ptr(object.addr().to_raw()),
-            Value::ObjectAddr(addr) => Val::Ptr(addr.to_raw()),
+            Value::ObjectRef(object) => Val::Object(object.addr()),
+            Value::ObjectAddr(addr) => Val::Object(*addr),
         })
         .collect::<Vec<_>>();
-    args.insert(0, Val::Ptr(script.get().object.addr().to_raw()));
+    args.insert(0, Val::Object(script.get().object.addr()));
 
     let s = state.take().unwrap();
     let mut ctx = Context::new(engine, stack, s);

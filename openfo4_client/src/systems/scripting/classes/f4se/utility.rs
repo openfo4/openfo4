@@ -14,7 +14,7 @@ pub fn register(engine: &mut Engine) {
 /// ```text
 /// Var[] Function VarToVarArray(Var v) native global
 /// ```
-fn var_to_var_array(caller: Caller<'_, State>, v: Object) -> Result<isize, Exception> {
+fn var_to_var_array(caller: Caller<'_, State>, v: Object) -> Result<Object, Exception> {
     todo!()
 }
 
@@ -23,6 +23,6 @@ fn var_to_var_array(caller: Caller<'_, State>, v: Object) -> Result<isize, Excep
 /// ```text
 /// Var Function VarArrayToVar(Var[] v) native global
 /// ```
-fn var_array_to_var(caller: Caller<'_, State>, v: isize) -> Result<Object, Exception> {
+fn var_array_to_var(caller: Caller<'_, State>, v: Object) -> Result<Object, Exception> {
     todo!()
 }
