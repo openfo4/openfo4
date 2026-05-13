@@ -16,6 +16,7 @@ pub struct EventInvocation {
 
 #[derive(Clone, Debug)]
 pub enum Value {
+    Bool(bool),
     Int(i32),
     ObjectRef(ObjectRef),
     ObjectAddr(ObjectAddr),

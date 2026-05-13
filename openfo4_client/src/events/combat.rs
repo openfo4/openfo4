@@ -13,3 +13,12 @@ pub struct ReachedZeroHealthEvent {
 pub struct BleedoutStartEvent {
     pub actor: Entity,
 }
+
+/// Event sent when the body part of an actor reaches zero health and becomes crippled.
+#[derive(Copy, Clone, Debug)]
+pub struct BodyPartCrippleEvent {
+    /// The actor whose body part has become crippled.
+    pub actor: Entity,
+    /// The body part that has become crippled.
+    pub part: u32,
+}

@@ -11,7 +11,7 @@ use openfo4_physics::components::{Collider, CollisionLayer};
 use openfo4_physics::{PhysicsPipeline, QueryFilter};
 
 use crate::components::Camera;
-use crate::events::combat::ReachedZeroHealthEvent;
+use crate::events::combat::{BodyPartCrippleEvent, ReachedZeroHealthEvent};
 use crate::render::physics_debug::{DespawnAt, HitscanRaycast};
 use crate::state::actions::{Action, Actions};
 use crate::state::anim_starter::AnimationEventQueue;
@@ -296,6 +296,7 @@ pub fn handle_weapon_reload_events(world: &mut World, events: &mut EventBus) {
 
 pub fn handle_weapon_hit_damage(world: &mut World, events: &mut EventBus) {
     let mut zero_health_events = Vec::new();
+    let mut cripple_events = Vec::new();
 
     for event in events.read::<ProjectileHitEvent>() {
         let Ok(entity) = world.entity(event.target) else {
@@ -315,31 +316,40 @@ pub fn handle_weapon_hit_damage(world: &mut World, events: &mut EventBus) {
             // TODO: Damage resistance
         }
 
-        let Some(mut health) = properties.get(ACTOR_VALUE_HEALTH) else {
-            continue;
-        };
-
         // If an actor gets hit twice this frame and the first
         // attack causes the actor to reach zero health we still
         // only want to send one zero health event.
-        if health.damaged <= 0.0 {
-            continue;
+        if let Some(mut health) = properties.get(ACTOR_VALUE_HEALTH)
+            && health.damaged > 0.0
+        {
+            health.damaged = f32::max(health.damaged - damage, 0.0);
+            properties.set(ACTOR_VALUE_HEALTH, health);
+
+            if health.damaged <= 0.0 {
+                zero_health_events.push(ReachedZeroHealthEvent {
+                    actor: event.target,
+                    aggressor: event.shooter,
+                });
+            }
         }
 
-        health.damaged = f32::max(health.damaged - damage, 0.0);
-        properties.set(ACTOR_VALUE_HEALTH, health);
+        if let Some(mut limb_health) = properties.get(body_part.condition)
+            && limb_health.damaged > 0.0
+        {
+            limb_health.damaged = f32::max(limb_health.damaged - damage, 0.0);
+            properties.set(body_part.condition, limb_health);
 
-        if health.damaged <= 0.0 {
-            zero_health_events.push(ReachedZeroHealthEvent {
-                actor: event.target,
-                aggressor: event.shooter,
-            });
+            if limb_health.damaged <= 0.0 {
+                cripple_events.push(BodyPartCrippleEvent {
+                    actor: event.target,
+                    part: event.body_part,
+                })
+            }
         }
     }
 
-    for event in zero_health_events {
-        events.send(event);
-    }
+    events.extend(zero_health_events);
+    events.extend(cripple_events);
 }
 
 pub fn handle_weapon_draw_events(world: &mut World, events: &mut EventBus) {

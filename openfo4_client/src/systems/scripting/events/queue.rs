@@ -283,6 +283,7 @@ impl EventQueue {
                 .chain(std::iter::once(&event.event.receiver))
             {
                 match value {
+                    QueuedEventValue::Bool(_) => {}
                     QueuedEventValue::Int(_) => {}
                     QueuedEventValue::Object(object) => match object {
                         ObjectValue::None | ObjectValue::Script(_, _) => {}
@@ -321,6 +322,7 @@ impl EventQueue {
 
         for value in event.args.iter().chain(std::iter::once(&event.receiver)) {
             match value {
+                QueuedEventValue::Bool(_) => {}
                 QueuedEventValue::Int(_) => {}
                 QueuedEventValue::Object(object) => match object {
                     ObjectValue::None | ObjectValue::Script(_, _) => {}

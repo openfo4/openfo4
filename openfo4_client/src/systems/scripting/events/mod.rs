@@ -4,9 +4,10 @@ use openfo4_core::ecs::{Entity, World};
 use openfo4_core::record::RecordId;
 use openfo4_script::runtime::{ObjectAddr, ObjectRef};
 
-use crate::events::combat::BleedoutStartEvent;
+use crate::events::combat::{BleedoutStartEvent, BodyPartCrippleEvent};
 use crate::events::inventory::{ItemAddedEvent, ItemEquippedEvent};
 use crate::events::trigger::{TriggerEnter, TriggerLeave};
+use crate::state::npc::ActorBodyParts;
 use crate::systems::DeathStartEvent;
 use crate::systems::inventory::Inventory;
 use crate::systems::scripting::invocations::Value;
@@ -36,6 +37,7 @@ pub struct QueuedEvent {
 #[derive(Clone, Debug)]
 pub enum QueuedEventValue {
     Object(ObjectValue),
+    Bool(bool),
     Int(i32),
 }
 
@@ -55,6 +57,7 @@ impl QueuedEventValue {
             Self::Object(ObjectValue::Script(object, name)) => {
                 Value::ObjectRef(get_object(object, &name))
             }
+            Self::Bool(val) => Value::Bool(*val),
             Self::Int(val) => Value::Int(*val),
         }
     }
@@ -231,6 +234,32 @@ impl ExtractEvent for BleedoutStartEvent {
                 receiver: QueuedEventValue::Object(ObjectValue::Entity(self.actor, "Actor")),
                 kind: EventKind::EnterBleedout,
                 args: Vec::new(),
+            },
+        ]
+    }
+}
+
+impl ExtractEvent for BodyPartCrippleEvent {
+    fn extract(&self, ctx: Context<'_>) -> Vec<QueuedEvent> {
+        let Ok(parts) = ctx.world.get::<&ActorBodyParts>(self.actor) else {
+            return Vec::new();
+        };
+
+        let Some(part) = parts.get(self.part) else {
+            return Vec::new();
+        };
+
+        vec![
+            // OnCripple
+            QueuedEvent {
+                receiver: QueuedEventValue::Object(ObjectValue::Entity(self.actor, "Actor")),
+                kind: EventKind::Cripple,
+                args: vec![
+                    // akActorValue
+                    QueuedEventValue::Object(ObjectValue::Record(part.condition, "ActorValue")),
+                    //  abCrippled
+                    QueuedEventValue::Bool(true),
+                ],
             },
         ]
     }
