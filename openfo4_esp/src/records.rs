@@ -891,65 +891,6 @@ pub struct RaceBehaviorGraph {
     pub female: Option<SubRecordSection<Model>>,
 }
 
-#[derive(Copy, Clone, Debug, BinaryStruct)]
-pub struct RACE_BODT {
-    pub biped_object_flags: u32,
-    pub general_flags: u32,
-    pub armor_type: u32,
-}
-
-#[derive(Copy, Clone, Debug, BinaryStruct)]
-pub struct RACE_DATA {
-    pub skill_1: u8,
-    pub racial_bonus_for_skill_1: u8,
-    pub skill_2: u8,
-    pub racial_bonus_for_skill_2: u8,
-    pub skill_3: u8,
-    pub racial_bonus_for_skill_3: u8,
-    pub skill_4: u8,
-    pub racial_bonus_for_skill_4: u8,
-    pub skill_5: u8,
-    pub racial_bonus_for_skill_5: u8,
-    pub skill_6: u8,
-    pub racial_bonus_for_skill_6: u8,
-    pub skill_7: u8,
-    pub racial_bonus_for_skill_7: u8,
-    _pad0: u16,
-    pub height_male: f32,
-    pub height_female: f32,
-    pub weight_male: f32,
-    pub weight_female: f32,
-    pub flags: u32,
-    pub starting_health: f32,
-    pub starting_magicka: f32,
-    pub starting_stamina: f32,
-    pub base_mass: f32,
-    pub acceleration_rate: f32,
-    pub deceleration_rate: f32,
-    /// Size
-    /// 0=Small, 1=Medium,2=Large,3=Extra Large
-    pub size: u32,
-    pub head_biped_object: u32,
-    pub hair_biped_object: u32,
-    pub injured_health_pct: f32,
-    pub shield_biped_object: u32,
-    pub health_regen: f32,
-    pub magicka_regen: f32,
-    pub stamina_regen: f32,
-    pub body_biped_object: u32,
-    pub aim_angle_tolerance: f32,
-    _unknown0: u32,
-    pub angular_acceleration_rate: f32,
-    pub angular_tolerance: f32,
-    pub flag2: u32,
-    pub mount_data_offset_x: u32,
-    pub mount_data_offset_y: u32,
-    _unknown1: u32,
-}
-
-#[derive(Copy, Clone, Debug, BinaryStruct)]
-pub struct RACE_MODT {}
-
 #[derive(Clone, Debug, Record)]
 pub struct RaceAttack {
     #[record("ATKD")]
