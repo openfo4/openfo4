@@ -8,7 +8,7 @@ use openfo4_core::transform::ConvertCoordinateSystem;
 use openfo4_script::engine::Engine;
 use openfo4_script::runtime::{Caller, Exception};
 
-use crate::components::{ObjectBounds, ObjectLockLevel, ObjectProperties, TriggerBox};
+use crate::components::{Disabled, ObjectBounds, ObjectLockLevel, ObjectProperties, TriggerBox};
 use crate::state::npc::ObjectKeywords;
 use crate::systems::actor_value::ActorValueProperties;
 use crate::systems::inventory::Inventory;
@@ -1928,7 +1928,9 @@ fn is_destroyed(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Exc
 /// bool Function() native
 /// ```
 fn is_disabled(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Exception> {
-    todo!()
+    let entity = caller.data().entity(self_ptr).unwrap();
+    let entity = caller.data().world().entity(entity).unwrap();
+    Ok(entity.has::<Disabled>())
 }
 
 /// `IsFurnitureInUse`
