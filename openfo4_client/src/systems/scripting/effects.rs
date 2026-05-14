@@ -11,6 +11,7 @@ use openfo4_core::events::EventBus;
 use openfo4_core::record::RecordId;
 use openfo4_script::runtime::ObjectRef;
 
+use crate::components::Disabled;
 use crate::events::inventory::RemoveItemEvent;
 use crate::events::quest::{StartQuestScene, StopQuestScene};
 use crate::state::equipment::load_item;
@@ -383,5 +384,49 @@ impl DynamicEffect for LoadEntityEffectDone {
     fn run(&self, _ctx: Context<'_>) -> EffectResult {
         let obj: ScriptObject = self.obj.clone();
         EffectResult::DoneWithValue(Box::new(obj))
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct EnableEntitiesEffect {
+    pub entities: Vec<Entity>,
+    // TODO: Implement fading.
+    pub fade: bool,
+    pub wait_until_faded: bool,
+}
+
+impl Effect for EnableEntitiesEffect {
+    type Result = ();
+}
+
+impl DynamicEffect for EnableEntitiesEffect {
+    fn run(&self, ctx: Context<'_>) -> EffectResult {
+        for entity in &self.entities {
+            ctx.world.remove_one::<Disabled>(*entity).ok();
+        }
+
+        EffectResult::Done
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct DisableEntitiesEffect {
+    pub entities: Vec<Entity>,
+    // TODO: Implement fading.
+    pub fade: bool,
+    pub wait_until_faded: bool,
+}
+
+impl Effect for DisableEntitiesEffect {
+    type Result = ();
+}
+
+impl DynamicEffect for DisableEntitiesEffect {
+    fn run(&self, ctx: Context<'_>) -> EffectResult {
+        for entity in &self.entities {
+            ctx.world.insert_one(*entity, Disabled).ok();
+        }
+
+        EffectResult::Done
     }
 }

@@ -103,6 +103,10 @@ pub struct ActorMarker;
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Hash)]
 pub struct DeadActor;
 
+/// Marker for disabled object references.
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Hash)]
+pub struct Disabled;
+
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct LookingAtTarget(pub Entity);
 

@@ -14,7 +14,9 @@ use crate::systems::actor_value::ActorValueProperties;
 use crate::systems::inventory::Inventory;
 use crate::systems::linked_refs::LinkedRefs;
 use crate::systems::scripting::classes::{Object, State};
-use crate::systems::scripting::effects::AddItemEffect;
+use crate::systems::scripting::effects::{
+    AddItemEffect, DisableEntitiesEffect, EnableEntitiesEffect,
+};
 
 #[rustfmt::skip]
 pub fn register(engine: &mut Engine) {
@@ -675,11 +677,19 @@ fn delete(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Exception> 
 /// Function(bool abFadeOut) native
 /// ```
 fn disable(
-    caller: Caller<'_, State>,
+    mut caller: Caller<'_, State>,
     self_ptr: Object,
-    ab_fade_out: bool,
+    fade_out: bool,
 ) -> Result<(), Exception> {
-    todo!()
+    let entity = caller.data().entity(self_ptr).unwrap();
+    caller
+        .data_mut()
+        .run_effect_and_wait(DisableEntitiesEffect {
+            entities: vec![entity],
+            fade: fade_out,
+            wait_until_faded: true,
+        })?;
+    Ok(())
 }
 
 /// `DisableLinkChain`
@@ -688,12 +698,27 @@ fn disable(
 /// Function(Keyword apKeyword, bool abFadeOut) native
 /// ```
 fn disable_link_chain(
-    caller: Caller<'_, State>,
+    mut caller: Caller<'_, State>,
     self_ptr: Object,
-    ap_keyword: Object,
-    ab_fade_out: bool,
+    keyword: Object,
+    fade_out: bool,
 ) -> Result<(), Exception> {
-    todo!()
+    let Some(objects) = LinkedRefChainIter::new(&caller, self_ptr, keyword) else {
+        return Ok(());
+    };
+
+    let entities = objects
+        .map(|object| caller.data().entity(object).unwrap())
+        .collect();
+
+    caller
+        .data_mut()
+        .run_effect_and_wait(DisableEntitiesEffect {
+            entities,
+            fade: fade_out,
+            wait_until_faded: false,
+        })?;
+    Ok(())
 }
 
 /// `DisableNoWait`
@@ -702,11 +727,19 @@ fn disable_link_chain(
 /// Function(bool abFadeOut) native
 /// ```
 fn disable_no_wait(
-    caller: Caller<'_, State>,
+    mut caller: Caller<'_, State>,
     self_ptr: Object,
-    ab_fade_out: bool,
+    fade_out: bool,
 ) -> Result<(), Exception> {
-    todo!()
+    let entity = caller.data().entity(self_ptr).unwrap();
+    caller
+        .data_mut()
+        .run_effect_and_wait(DisableEntitiesEffect {
+            entities: vec![entity],
+            fade: fade_out,
+            wait_until_faded: false,
+        })?;
+    Ok(())
 }
 
 /// `Drop`
@@ -750,8 +783,16 @@ fn drop_object(
 /// ```text
 /// Function(bool abFadeIn) native
 /// ```
-fn enable(caller: Caller<'_, State>, self_ptr: Object, ab_fade_in: bool) -> Result<(), Exception> {
-    todo!()
+fn enable(mut caller: Caller<'_, State>, self_ptr: Object, fade_in: bool) -> Result<(), Exception> {
+    let entity = caller.data().entity(self_ptr).unwrap();
+    caller
+        .data_mut()
+        .run_effect_and_wait(EnableEntitiesEffect {
+            entities: vec![entity],
+            fade: fade_in,
+            wait_until_faded: true,
+        })?;
+    Ok(())
 }
 
 /// `EnableFastTravel`
@@ -773,12 +814,28 @@ fn enable_fast_travel(
 /// Function(Keyword apKeyword, bool abFadeIn) native
 /// ```
 fn enable_link_chain(
-    caller: Caller<'_, State>,
+    mut caller: Caller<'_, State>,
     self_ptr: Object,
-    ap_keyword: Object,
-    ab_fade_in: bool,
+    keyword: Object,
+    fade_in: bool,
 ) -> Result<(), Exception> {
-    todo!()
+    let Some(objects) = LinkedRefChainIter::new(&caller, self_ptr, keyword) else {
+        return Ok(());
+    };
+
+    let entities = objects
+        .map(|object| caller.data().entity(object).unwrap())
+        .collect();
+
+    caller
+        .data_mut()
+        .run_effect_and_wait(EnableEntitiesEffect {
+            entities,
+            fade: fade_in,
+            wait_until_faded: false,
+        })?;
+
+    Ok(())
 }
 
 /// `EnableNoWait`
@@ -787,11 +844,19 @@ fn enable_link_chain(
 /// Function(bool abFadeIn) native
 /// ```
 fn enable_no_wait(
-    caller: Caller<'_, State>,
+    mut caller: Caller<'_, State>,
     self_ptr: Object,
-    ab_fade_in: bool,
+    fade_in: bool,
 ) -> Result<(), Exception> {
-    todo!()
+    let entity = caller.data().entity(self_ptr).unwrap();
+    caller
+        .data_mut()
+        .run_effect_and_wait(EnableEntitiesEffect {
+            entities: vec![entity],
+            fade: fade_in,
+            wait_until_faded: false,
+        })?;
+    Ok(())
 }
 
 /// `FindAllReferencesOfType`
