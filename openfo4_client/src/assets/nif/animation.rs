@@ -122,12 +122,14 @@ pub fn loader_controller_sequences(
 
                             let duration = Duration::from_secs_f32(seq.stop_time);
 
-                            let interpolator = load_transform_interpolator(
+                            let Some(interpolator) = load_transform_interpolator(
                                 nif,
                                 block.interpolator,
                                 mode,
                                 duration,
-                            );
+                            ) else {
+                                continue;
+                            };
 
                             // TODO: start_time and frequency
 
@@ -189,7 +191,7 @@ fn load_transform_interpolator(
     block: BlockRef,
     mode: InterpolationMode,
     duration: Duration,
-) -> TransformInterpolator {
+) -> Option<TransformInterpolator> {
     match nif.get(block) {
         Some(Block::NiTransformInterpolator(interpolator)) => match nif.get(interpolator.data) {
             Some(Block::NiTransformData(data)) => {
@@ -285,13 +287,14 @@ fn load_transform_interpolator(
                     .as_ref()
                     .map(|keys| Interpolator::new(keys, mode, duration));
 
-                TransformInterpolator {
+                Some(TransformInterpolator {
                     translation,
                     rotation,
                     scale,
-                }
+                })
             }
-            _ => todo!(),
+            None => None,
+            block => todo!("{:?}", block),
         },
         _ => todo!(),
     }
