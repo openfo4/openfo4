@@ -883,11 +883,6 @@ impl Adapter {
             })
             .collect::<Vec<_>>();
 
-        let mut layers = Vec::new();
-        if self.instance.config.validation {
-            layers.push(InstanceLayers::VALIDATION.as_ptr());
-        }
-
         let supported_features = self.get_supported_features();
         let supported_extensions = self.get_supported_extensions();
         if !supported_extensions.swapchain {
@@ -1003,10 +998,6 @@ impl Adapter {
         #[allow(deprecated)]
         let mut create_info = vk::DeviceCreateInfo::default()
             .queue_create_infos(&queue_infos)
-            // Device layers are deprecated, but the Vulkan spec still recommends
-            // applications to pass layers.
-            // https://registry.khronos.org/vulkan/specs/latest/html/vkspec.html#extendingvulkan-layers-devicelayerdeprecation
-            .enabled_layer_names(&layers)
             .enabled_extension_names(&extensions)
             .enabled_features(&features)
             .push_next(&mut features11)
