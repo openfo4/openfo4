@@ -7,6 +7,7 @@ use openfo4_core::object_ref_set::ObjectReferenceSet;
 use openfo4_core::record::RecordId;
 
 use crate::components::{ActorMarker, NiTransform, WorldSpace};
+use crate::events::animation::StartNifAnimationSequence;
 use crate::systems::ActivationEvent;
 
 /// The radius at which the autoload door is activated.
@@ -14,10 +15,20 @@ use crate::systems::ActivationEvent;
 // the radius seen in CK.
 pub const AUTOLOAD_DOOR_RADIUS: f32 = 3.0;
 
+const DOOR_OPEN_ANIM: &str = "Open";
+const DOOR_CLOSE_ANIM: &str = "Close";
+
 #[derive(Copy, Clone, Debug)]
 pub enum Door {
+    Normal(DoorState),
     Portal(PortalDoor),
     AutoPortal(PortalDoor),
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub enum DoorState {
+    Open,
+    Closed,
 }
 
 #[derive(Copy, Clone, Debug)]
@@ -34,16 +45,40 @@ pub fn handle_door_activations(
 ) {
     let _span = trace_span!("handle_door_activations").entered();
 
+    let mut anim_events = Vec::new();
+
     for event in events.read::<ActivationEvent>() {
         if !world.contains(event.actor) {
             continue;
         }
 
-        let Ok(door) = world.get::<&Door>(event.target).map(|v| *v) else {
+        let Ok(door) = world.get::<&mut Door>(event.target).map(|v| *v) else {
             continue;
         };
 
         match door {
+            Door::Normal(DoorState::Open) => {
+                anim_events.push(StartNifAnimationSequence {
+                    entity: event.target,
+                    name: DOOR_CLOSE_ANIM.into(),
+                });
+
+                // FIXME: This should happen when the animation is done.
+                world
+                    .insert_one(event.target, Door::Normal(DoorState::Closed))
+                    .unwrap();
+            }
+            Door::Normal(DoorState::Closed) => {
+                anim_events.push(StartNifAnimationSequence {
+                    entity: event.target,
+                    name: DOOR_OPEN_ANIM.into(),
+                });
+
+                // FIXME: This should happen when the animation is done.
+                world
+                    .insert_one(event.target, Door::Normal(DoorState::Open))
+                    .unwrap();
+            }
             Door::Portal(door) => {
                 let Some(target) = object_ref_set.get_by_form(door.target) else {
                     tracing::warn!("unconnected portal door: {:?}", door.target);
@@ -62,6 +97,8 @@ pub fn handle_door_activations(
             Door::AutoPortal(_) => {}
         }
     }
+
+    events.extend(anim_events)
 }
 
 pub fn handle_automatic_doors(world: &mut World, object_ref_set: &ObjectReferenceSet) {

@@ -99,7 +99,7 @@ pub struct NiControllerSequence {
     pub array_grow_by: u32,
     pub weight: f32,
     pub text_keys: Option<BlockRef>,
-    pub cycle_type: u32,
+    pub cycle_mode: SequenceCycleMode,
     pub frequency: f32,
     pub start_time: f32,
     pub stop_time: f32,
@@ -120,7 +120,7 @@ impl Decode for NiControllerSequence {
 
         let weight = f32::decode(reader)?;
         let text_keys = <Option<BlockRef>>::decode(reader)?;
-        let cycle_type = u32::decode(reader)?;
+        let cycle_mode = SequenceCycleMode::decode(reader)?;
         let frequency = f32::decode(reader)?;
         let start_time = f32::decode(reader)?;
         let stop_time = f32::decode(reader)?;
@@ -134,13 +134,34 @@ impl Decode for NiControllerSequence {
             array_grow_by,
             weight,
             text_keys,
-            cycle_type,
+            cycle_mode,
             frequency,
             start_time,
             stop_time,
             manager,
             accum_root_name,
         })
+    }
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub enum SequenceCycleMode {
+    Loop,
+    Reverse,
+    Clamp,
+}
+
+impl Decode for SequenceCycleMode {
+    fn decode(reader: &mut Reader<'_>) -> Result<Self, Error> {
+        match reader.get_u32()? {
+            0 => Ok(Self::Loop),
+            1 => Ok(Self::Reverse),
+            2 => Ok(Self::Clamp),
+            n => Err(Error::UnknownEnumValue(
+                stringify!(SequenceCycleMode),
+                n.into(),
+            )),
+        }
     }
 }
 

@@ -3,11 +3,17 @@ use std::{
     time::Duration,
 };
 
+use game_common::components::Transform;
+use game_core::hierarchy::Key;
+use glam::{EulerRot, Quat, Vec3, Vec4};
 use hashbrown::HashMap;
-use openfo4_nif::{
-    Block, BlockRef, Nif,
-    controller::{BSLightingShaderPropertyFloatVariable, NiDataKey, TimeControllerLoopMode},
+use openfo4_nif::controller::{
+    BSLightingShaderPropertyFloatVariable, NiDataConstKey, NiDataKey, NiDataKeyRotation,
+    NiDataLinearKey, NiDataQuadraticKey, NiDataTbcKey, SequenceCycleMode, TimeControllerLoopMode,
 };
+use openfo4_nif::{Block, BlockRef, Nif};
+
+use crate::assets::nif::animation_controller::Sequence;
 
 /// Load a non-manager controller.
 pub fn load_controller(nif: &Nif, controller: BlockRef) -> Controller {
@@ -74,6 +80,92 @@ pub fn load_controller(nif: &Nif, controller: BlockRef) -> Controller {
     Controller { values }
 }
 
+pub fn loader_controller_sequences(
+    nif: &Nif,
+    block_to_node: &HashMap<BlockRef, Key>,
+) -> HashMap<String, Sequence> {
+    let mut sequences = HashMap::new();
+
+    for block in nif.iter() {
+        match block {
+            Block::NiControllerManager(manager) => {
+                for seq in &manager.sequences {
+                    let Some(Block::NiControllerSequence(seq)) = nif.get(*seq) else {
+                        todo!();
+                    };
+
+                    let mut transforms = HashMap::new();
+                    let mut max_duration = Some(Duration::ZERO);
+
+                    for block in &seq.blocks {
+                        let Some(Block::NiMultiTargetTransformController(controller)) =
+                            nif.get(block.controller)
+                        else {
+                            // TODO
+                            continue;
+                        };
+
+                        for target in &controller.targets {
+                            let Some(Block::NiNode(node)) = nif.get(*target) else {
+                                todo!();
+                            };
+
+                            if node.name != block.node_name {
+                                continue;
+                            }
+
+                            let mode = match seq.cycle_mode {
+                                SequenceCycleMode::Loop => InterpolationMode::Repeat,
+                                SequenceCycleMode::Reverse => InterpolationMode::MirroredRepeat,
+                                SequenceCycleMode::Clamp => InterpolationMode::Clamp,
+                            };
+
+                            let duration = Duration::from_secs_f32(seq.stop_time);
+
+                            let interpolator = load_transform_interpolator(
+                                nif,
+                                block.interpolator,
+                                mode,
+                                duration,
+                            );
+
+                            // TODO: start_time and frequency
+
+                            // If this does not exist we have culled the block and don't
+                            // need to animation it.
+                            let Some(key) = block_to_node.get(target).copied() else {
+                                continue;
+                            };
+
+                            if mode == InterpolationMode::Clamp {
+                                if let Some(max_duration) = &mut max_duration {
+                                    *max_duration = (*max_duration).max(duration);
+                                }
+                            } else {
+                                // The looping modes never stop animating.
+                                max_duration = None;
+                            }
+
+                            transforms.insert(key, interpolator);
+                        }
+                    }
+
+                    sequences.insert(
+                        seq.name.clone(),
+                        Sequence {
+                            transforms,
+                            duration: max_duration,
+                        },
+                    );
+                }
+            }
+            _ => {}
+        }
+    }
+
+    sequences
+}
+
 fn load_float_interpolator(
     nif: &Nif,
     block: BlockRef,
@@ -89,6 +181,119 @@ fn load_float_interpolator(
         Some(Block::NiBlendFloatInterpolator(_)) => None,
         Some(Block::Skipped) => None,
         x => todo!("{:?}", x),
+    }
+}
+
+fn load_transform_interpolator(
+    nif: &Nif,
+    block: BlockRef,
+    mode: InterpolationMode,
+    duration: Duration,
+) -> TransformInterpolator {
+    match nif.get(block) {
+        Some(Block::NiTransformInterpolator(interpolator)) => match nif.get(interpolator.data) {
+            Some(Block::NiTransformData(data)) => {
+                if let Some(translations) = &data.translations {
+                    Interpolator::new(translations, mode, duration);
+                }
+
+                let translation = data
+                    .translations
+                    .as_ref()
+                    .map(|keys| Interpolator::new(keys, mode, duration));
+
+                let rotation = match &data.rotations {
+                    Some(NiDataKeyRotation::XyzRotation(keys)) => {
+                        let mut keys = keys.iter();
+
+                        let x = keys
+                            .next()
+                            .map(|key| Interpolator::new(&key.keys, mode, duration));
+                        let y = keys
+                            .next()
+                            .map(|key| Interpolator::new(&key.keys, mode, duration));
+                        let z = keys
+                            .next()
+                            .map(|key| Interpolator::new(&key.keys, mode, duration));
+
+                        Some(RotationInterpolator::Euler { x, y, z })
+                    }
+                    Some(NiDataKeyRotation::Linear(keys)) => {
+                        let keys = NiDataKey::Linear(
+                            keys.iter()
+                                .map(|v| NiDataLinearKey {
+                                    time: v.time,
+                                    value: Vec4::from(v.value),
+                                })
+                                .collect(),
+                        );
+
+                        Some(RotationInterpolator::Quat(Interpolator::new(
+                            &keys, mode, duration,
+                        )))
+                    }
+                    Some(NiDataKeyRotation::Quadratic(keys)) => {
+                        let keys = NiDataKey::Quadratic(
+                            keys.iter()
+                                .map(|v| NiDataQuadraticKey {
+                                    time: v.time,
+                                    value: Vec4::from(v.value),
+                                    forward: Vec4::from(v.forward),
+                                    backward: Vec4::from(v.backward),
+                                })
+                                .collect(),
+                        );
+
+                        Some(RotationInterpolator::Quat(Interpolator::new(
+                            &keys, mode, duration,
+                        )))
+                    }
+                    Some(NiDataKeyRotation::Const(keys)) => {
+                        let keys = NiDataKey::Const(
+                            keys.iter()
+                                .map(|v| NiDataConstKey {
+                                    time: v.time,
+                                    value: Vec4::from(v.value),
+                                })
+                                .collect(),
+                        );
+
+                        Some(RotationInterpolator::Quat(Interpolator::new(
+                            &keys, mode, duration,
+                        )))
+                    }
+                    Some(NiDataKeyRotation::Tbc(keys)) => {
+                        let keys = NiDataKey::Tbc(
+                            keys.iter()
+                                .map(|v| NiDataTbcKey {
+                                    time: v.time,
+                                    value: Vec4::from(v.value),
+                                    tbc: v.tbc,
+                                })
+                                .collect(),
+                        );
+
+                        Some(RotationInterpolator::Quat(Interpolator::new(
+                            &keys, mode, duration,
+                        )))
+                    }
+                    None => None,
+                };
+
+                let scale = data
+                    .scales
+                    .as_ref()
+                    .map(|keys| Interpolator::new(keys, mode, duration));
+
+                TransformInterpolator {
+                    translation,
+                    rotation,
+                    scale,
+                }
+            }
+            _ => todo!(),
+        },
+        _ => todo!(),
     }
 }
 
@@ -281,4 +486,55 @@ struct CubicKey<T> {
     value: T,
     backward: T,
     forward: T,
+}
+
+#[derive(Clone, Debug)]
+pub struct TransformInterpolator {
+    translation: Option<Interpolator<Vec3>>,
+    rotation: Option<RotationInterpolator>,
+    scale: Option<Interpolator<f32>>,
+}
+
+impl TransformInterpolator {
+    pub fn sample(&self, time: Duration, default: Transform) -> Transform {
+        let mut t = default;
+
+        if let Some(translation) = &self.translation {
+            t.translation = translation.sample(time).unwrap_or(default.translation);
+        }
+
+        match &self.rotation {
+            Some(RotationInterpolator::Quat(interpolator)) => {
+                if let Some(value) = interpolator.sample(time) {
+                    t.rotation = Quat::from_vec4(value.normalize());
+                }
+            }
+            Some(RotationInterpolator::Euler { x, y, z }) => {
+                let (d_x, d_y, d_z) = default.rotation.to_euler(EulerRot::XYX);
+
+                let x = x.as_ref().map(|i| i.sample(time)).flatten().unwrap_or(d_x);
+                let y = y.as_ref().map(|i| i.sample(time)).flatten().unwrap_or(d_y);
+                let z = z.as_ref().map(|i| i.sample(time)).flatten().unwrap_or(d_z);
+
+                t.rotation = Quat::from_euler(EulerRot::XYZ, x, y, z);
+            }
+            None => {}
+        }
+
+        if let Some(scale) = &self.scale {
+            t.scale = scale.sample(time).map(Vec3::splat).unwrap_or(default.scale);
+        }
+
+        t
+    }
+}
+
+#[derive(Clone, Debug)]
+pub enum RotationInterpolator {
+    Quat(Interpolator<Vec4>),
+    Euler {
+        x: Option<Interpolator<f32>>,
+        y: Option<Interpolator<f32>>,
+        z: Option<Interpolator<f32>>,
+    },
 }

@@ -31,7 +31,7 @@ use crate::state::level::partial::PartialEntityFlags;
 use crate::state::level::terrain::load_land;
 use crate::state::npc::{Actor, ActorInstanceProps, ObjectKeywords};
 use crate::state::terrain::{TerrainManager, TerrainRegion};
-use crate::systems::door::{Door, PortalDoor};
+use crate::systems::door::{Door, DoorState, PortalDoor};
 use crate::systems::inventory::{Inventory, ItemStack};
 use crate::systems::lights::{LightFlicker, LightFlickerMode};
 use crate::systems::linked_refs::LinkedRefs;
@@ -199,14 +199,14 @@ impl SpawnEntity {
                 world.insert_one(e, worldspace).unwrap();
                 world.insert_one(e, RootParent(entity)).unwrap();
 
-                if let Some(door) = door {
-                    world.insert_one(e, door).unwrap();
-                }
-
                 if let Ok(children) = world.get::<&Children>(e) {
                     queue.extend(&children.0);
                 }
             }
+        }
+
+        if let Some(door) = door {
+            world.insert_one(entity, door).unwrap();
         }
 
         if let Some(form) = form {
@@ -383,6 +383,8 @@ impl SpawnEntity {
                         Door::Portal(door) => Door::AutoPortal(door),
                         door => door,
                     });
+                } else {
+                    door = Some(Door::Normal(DoorState::Closed));
                 }
 
                 object_bounds = Some(data.object_bounds);

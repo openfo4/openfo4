@@ -288,6 +288,7 @@ impl GameState {
             &mut self.world,
             &self.shared.entities,
             self.real_time_elapsed,
+            self.interval.timestep(),
         );
 
         systems::lights::update_flickering_lights(&mut self.world, time.delta());
@@ -320,6 +321,8 @@ impl GameState {
         self.physics.step(&mut self.world);
 
         systems::camera::update_camera_transform(&mut self.world);
+
+        systems::nif_animation::start_nif_animation_sequences(&mut self.world, &self.event_bus);
 
         self.executor
             .pump_events(&mut self.world, &mut self.event_bus, &self.pool);

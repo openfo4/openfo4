@@ -167,6 +167,7 @@ impl Instantiate for Handle<NifScene> {
             let controller = AnimationControllerInstance {
                 scene: self.clone(),
                 nodes: entities,
+                sequences: HashMap::new(),
             };
 
             world.insert_one(root, controller).unwrap();
@@ -649,8 +650,14 @@ impl Asset for NifScene {
 
         let mut controller = AnimationController::default();
         if key.flags.contains(LoadNifFlags::ANIMATIONS) {
-            controller =
-                build_animation_controller(&nif, loader, controllers_to_load, &state).await;
+            controller = build_animation_controller(
+                &nif,
+                loader,
+                controllers_to_load,
+                &state,
+                &block_to_node,
+            )
+            .await;
         };
 
         Ok(Self {
@@ -676,6 +683,7 @@ async fn build_animation_controller(
     loader: &AssetLoader,
     controllers_to_load: Vec<BlockRef>,
     state: &LoadState<'_>,
+    block_to_node: &HashMap<BlockRef, Key>,
 ) -> AnimationController {
     let mut material_controllers = HashMap::new();
 
@@ -708,8 +716,11 @@ async fn build_animation_controller(
         }
     }
 
+    let sequences = animation::loader_controller_sequences(nif, block_to_node);
+
     AnimationController {
         material: material_controllers,
+        sequences,
     }
 }
 

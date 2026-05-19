@@ -12,7 +12,7 @@ use openfo4_physics::components::{Collider, CollisionLayer};
 use openfo4_physics::{PhysicsPipeline, QueryFilter};
 
 use crate::assets::nif::NIF_TO_METERS;
-use crate::components::{Camera, LookingAtTarget, Player};
+use crate::components::{Camera, LookingAtTarget, Player, RootParent};
 use crate::render::physics_debug::{DespawnAt, HitscanRaycast};
 use crate::systems::ActivationEvent;
 use crate::systems::camera::{CameraMode, CameraOffset};
@@ -131,9 +131,14 @@ pub fn handle_activation_inputs(
         DespawnAt(Instant::now() + Duration::from_secs(5)),
     ));
 
+    let target = match world.get::<&RootParent>(target.entity) {
+        Ok(root) => root.0,
+        _ => target.entity,
+    };
+
     events.send(ActivationEvent {
         actor: player,
-        target: target.entity,
+        target,
     });
 }
 
