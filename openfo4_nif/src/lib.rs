@@ -592,6 +592,64 @@ pub enum Block {
     BSLeafAnimNode(BSLeafAnimNode),
 }
 
+impl Block {
+    pub const fn ty(&self) -> BlockType {
+        match self {
+            Self::Skipped => BlockType::Unknown,
+            Self::NiNode(_) => BlockType::NiNode,
+            Self::BSXFlags(_) => BlockType::BSXFlags,
+            Self::BSTriShape(_) => BlockType::BSTriShape,
+            Self::BSSubIndexTriShape(_) => BlockType::BSSubIndexTriShape,
+            Self::BSMeshLODTriShape(_) => BlockType::BSMeshLODTriShape,
+            Self::BSLightingShaderProperty(_) => BlockType::BSLightingShaderProperty,
+            Self::BSEffectShaderProperty(_) => BlockType::BSEffectShaderProperty,
+            Self::BSShaderTextureSet(_) => BlockType::BSShaderTextureSet,
+            Self::BhkNPCollisionObject(_) => BlockType::BhkNPCollisionObject,
+            Self::BhkPhysicsSystem(_) => BlockType::BhkNPCollisionObject,
+            Self::BSSkinInstance(_) => BlockType::BhkNPCollisionObject,
+            Self::BSSkinBoneData(_) => BlockType::BhkNPCollisionObject,
+            Self::BSBound(_) => BlockType::BhkNPCollisionObject,
+            Self::BhkRagdollSystem(_) => BlockType::BhkNPCollisionObject,
+            Self::BSSkyShaderProperty(_) => BlockType::BhkNPCollisionObject,
+            Self::NiAlphaProperty(_) => BlockType::BhkNPCollisionObject,
+            Self::BSConnectPointChildren(_) => BlockType::BhkNPCollisionObject,
+            Self::BSConnectPointParents(_) => BlockType::BhkNPCollisionObject,
+            Self::BSClothExtraData(_) => BlockType::BhkNPCollisionObject,
+            Self::NiBinaryExtraData(_) => BlockType::BhkNPCollisionObject,
+            Self::NiCamera(_) => BlockType::BhkNPCollisionObject,
+            Self::BSFrustumFOVController(_) => BlockType::BhkNPCollisionObject,
+            Self::NiStringExtraData(_) => BlockType::BhkNPCollisionObject,
+            Self::BSFurnitureMarkerNode(_) => BlockType::BhkNPCollisionObject,
+            Self::NiLightRadiusController(_) => BlockType::BhkNPCollisionObject,
+            Self::NiLightDimmerController(_) => BlockType::BhkNPCollisionObject,
+            Self::NiPointLight(_) => BlockType::BhkNPCollisionObject,
+            Self::BSFadeNode(_) => BlockType::BhkNPCollisionObject,
+            Self::BSLightingShaderPropertyFloatController(_) => BlockType::BhkNPCollisionObject,
+            Self::BSLightingShaderPropertyColorController(_) => BlockType::BhkNPCollisionObject,
+            Self::BSEffectShaderPropertyFloatController(_) => BlockType::BhkNPCollisionObject,
+            Self::NiFloatInterpolator(_) => BlockType::BhkNPCollisionObject,
+            Self::NiFloatData(_) => BlockType::BhkNPCollisionObject,
+            Self::NiControllerManager(_) => BlockType::BhkNPCollisionObject,
+            Self::NiMultiTargetTransformController(_) => BlockType::BhkNPCollisionObject,
+            Self::NiControllerSequence(_) => BlockType::BhkNPCollisionObject,
+            Self::NiTextKeyExtraData(_) => BlockType::BhkNPCollisionObject,
+            Self::NiTransformInterpolator(_) => BlockType::BhkNPCollisionObject,
+            Self::NiTransformData(_) => BlockType::BhkNPCollisionObject,
+            Self::NiDefaultAVObjectPalette(_) => BlockType::BhkNPCollisionObject,
+            Self::NiTransformController(_) => BlockType::BhkNPCollisionObject,
+            Self::BSNiAlphaPropertyTestRefController(_) => BlockType::BhkNPCollisionObject,
+            Self::NiBlendFloatInterpolator(_) => BlockType::BhkNPCollisionObject,
+            Self::NiPSysEmitterSpeedCtlr(_) => BlockType::BhkNPCollisionObject,
+            Self::NiPSysEmitterCtlr(_) => BlockType::BhkNPCollisionObject,
+            Self::NiPSysUpdateCtlr(_) => BlockType::BhkNPCollisionObject,
+            Self::NiBoolInterpolator(_) => BlockType::BhkNPCollisionObject,
+            Self::NiBlendBoolInterpolator(_) => BlockType::BhkNPCollisionObject,
+            Self::NiBoolData(_) => BlockType::BhkNPCollisionObject,
+            Self::BSLeafAnimNode(_) => BlockType::BhkNPCollisionObject,
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct NiNode {
     pub name: String,
@@ -751,6 +809,7 @@ impl Decode for Option<BlockRef> {
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub enum BlockType {
+    Unknown,
     NiNode,
     NiControllerManager,
     NiMultiTargetTransformController,

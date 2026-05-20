@@ -19,7 +19,7 @@ use openfo4_hkx::mesh::ExtractCompressedMeshShapeError;
 use openfo4_hkx::{HkObject, HkxFile};
 use openfo4_nif::material::{AlphaTestFunction, NiAlphaProperty, ShaderFlags1};
 use openfo4_nif::mesh::{BSMeshLODTriShape, BSSubIndexTriShape, BSTriShape};
-use openfo4_nif::{BSLeafAnimNode, BSXFlags, Block, BlockRef, Nif};
+use openfo4_nif::{BSLeafAnimNode, BSXFlags, Block, BlockRef, BlockType, Nif};
 use openfo4_physics::components::{Collider, ColliderShape, CollisionLayer, TriMesh};
 use thiserror::Error;
 
@@ -656,6 +656,7 @@ impl Asset for NifScene {
                 controllers_to_load,
                 &state,
                 &block_to_node,
+                &key.path,
             )
             .await;
         };
@@ -684,13 +685,22 @@ async fn build_animation_controller(
     controllers_to_load: Vec<BlockRef>,
     state: &LoadState<'_>,
     block_to_node: &HashMap<BlockRef, Key>,
+    file_path: &DataPath,
 ) -> AnimationController {
     let mut material_controllers = HashMap::new();
 
     for block in controllers_to_load {
-        let controller = animation::load_controller(&*nif, block);
+        let Ok(controller) = animation::load_controller(&*nif, block).inspect_err(|err| {
+            tracing::error!(
+                "failed to load animation controller from file {:?}: {}",
+                file_path,
+                err
+            );
+        }) else {
+            continue;
+        };
 
-        for (target, values) in controller.values {
+        for (target, values) in controller.material {
             match nif.get(target) {
                 // Material
                 Some(Block::BSLightingShaderProperty(_) | Block::BSEffectShaderProperty(_)) => {
@@ -716,7 +726,15 @@ async fn build_animation_controller(
         }
     }
 
-    let sequences = animation::loader_controller_sequences(nif, block_to_node);
+    let sequences = animation::loader_controller_sequences(nif, block_to_node)
+        .inspect_err(|err| {
+            tracing::error!(
+                "failed to load controller sequences from file {:?}: {}",
+                file_path,
+                err
+            );
+        })
+        .unwrap_or_default();
 
     AnimationController {
         material: material_controllers,
@@ -1341,4 +1359,14 @@ fn extract_attachment_name(mut name: &str) -> &str {
         name = name.strip_prefix("C-").unwrap_or(name);
         name.strip_prefix("P-").unwrap_or(name)
     }
+}
+
+#[derive(Clone, Debug, Error)]
+pub enum NifError {
+    #[error("unexpected block type {ty:?} for value {value} of {parent:?}")]
+    UnexpectedBlockType {
+        ty: BlockType,
+        value: &'static str,
+        parent: BlockType,
+    },
 }

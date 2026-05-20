@@ -7,17 +7,20 @@ use game_common::components::Transform;
 use game_core::hierarchy::Key;
 use glam::{EulerRot, Quat, Vec3, Vec4};
 use hashbrown::HashMap;
-use openfo4_nif::controller::{
-    BSLightingShaderPropertyFloatController, BSLightingShaderPropertyFloatVariable, NiDataConstKey,
-    NiDataKey, NiDataKeyRotation, NiDataLinearKey, NiDataQuadraticKey, NiDataTbcKey,
-    SequenceCycleMode, TimeControllerLoopMode,
-};
 use openfo4_nif::{Block, BlockRef, Nif};
+use openfo4_nif::{
+    BlockType,
+    controller::{
+        BSLightingShaderPropertyFloatController, BSLightingShaderPropertyFloatVariable,
+        NiDataConstKey, NiDataKey, NiDataKeyRotation, NiDataLinearKey, NiDataQuadraticKey,
+        NiDataTbcKey, SequenceCycleMode, TimeControllerLoopMode,
+    },
+};
 
-use crate::assets::nif::animation_controller::Sequence;
+use crate::assets::nif::{NifError, animation_controller::Sequence};
 
 /// Load a non-manager controller.
-pub fn load_controller(nif: &Nif, controller: BlockRef) -> Controller {
+pub fn load_controller(nif: &Nif, controller: BlockRef) -> Result<Controller, NifError> {
     let mut visitor = Visitor {
         nif,
         controller: Controller {
@@ -33,16 +36,16 @@ pub fn load_controller(nif: &Nif, controller: BlockRef) -> Controller {
             continue;
         };
 
-        block.visit(&mut visitor);
+        block.visit(&mut visitor)?;
     }
 
-    visitor.controller
+    Ok(visitor.controller)
 }
 
 pub fn loader_controller_sequences(
     nif: &Nif,
     block_to_node: &HashMap<BlockRef, Key>,
-) -> HashMap<String, Sequence> {
+) -> Result<HashMap<String, Sequence>, NifError> {
     let mut sequences = HashMap::new();
 
     for block in nif.iter() {
@@ -64,31 +67,35 @@ pub fn loader_controller_sequences(
                             continue;
                         };
 
+                        let mode = match seq.cycle_mode {
+                            SequenceCycleMode::Loop => InterpolationMode::Repeat,
+                            SequenceCycleMode::Reverse => InterpolationMode::MirroredRepeat,
+                            SequenceCycleMode::Clamp => InterpolationMode::Clamp,
+                        };
+
+                        let duration = Duration::from_secs_f32(seq.stop_time);
+
+                        let Some(interpolator) = load_transform_interpolator(
+                            nif,
+                            block.interpolator,
+                            mode,
+                            duration,
+                            BlockType::NiControllerSequence,
+                            "block.interpolator",
+                        )?
+                        else {
+                            continue;
+                        };
+
                         for target in &controller.targets {
                             let Some(Block::NiNode(node)) = nif.get(*target) else {
-                                todo!();
+                                // TODO
+                                continue;
                             };
 
                             if node.name != block.node_name {
                                 continue;
                             }
-
-                            let mode = match seq.cycle_mode {
-                                SequenceCycleMode::Loop => InterpolationMode::Repeat,
-                                SequenceCycleMode::Reverse => InterpolationMode::MirroredRepeat,
-                                SequenceCycleMode::Clamp => InterpolationMode::Clamp,
-                            };
-
-                            let duration = Duration::from_secs_f32(seq.stop_time);
-
-                            let Some(interpolator) = load_transform_interpolator(
-                                nif,
-                                block.interpolator,
-                                mode,
-                                duration,
-                            ) else {
-                                continue;
-                            };
 
                             // TODO: start_time and frequency
 
@@ -107,7 +114,7 @@ pub fn loader_controller_sequences(
                                 max_duration = None;
                             }
 
-                            transforms.insert(key, interpolator);
+                            transforms.insert(key, interpolator.clone());
                         }
                     }
 
@@ -124,7 +131,7 @@ pub fn loader_controller_sequences(
         }
     }
 
-    sequences
+    Ok(sequences)
 }
 
 struct Visitor<'a> {
@@ -134,21 +141,21 @@ struct Visitor<'a> {
 }
 
 trait VisitController {
-    fn visit(&self, visitor: &mut Visitor<'_>);
+    fn visit(&self, visitor: &mut Visitor<'_>) -> Result<(), NifError>;
 }
 
 impl VisitController for Block {
-    fn visit(&self, visitor: &mut Visitor<'_>) {
+    fn visit(&self, visitor: &mut Visitor<'_>) -> Result<(), NifError> {
         match self {
             Self::BSLightingShaderPropertyFloatController(block) => block.visit(visitor),
             // TODO
-            _ => {}
+            _ => Ok(()),
         }
     }
 }
 
 impl VisitController for BSLightingShaderPropertyFloatController {
-    fn visit(&self, visitor: &mut Visitor<'_>) {
+    fn visit(&self, visitor: &mut Visitor<'_>) -> Result<(), NifError> {
         visitor.queue.extend(self.next_controller);
 
         let mode = match self.flags.mode {
@@ -161,17 +168,23 @@ impl VisitController for BSLightingShaderPropertyFloatController {
         let stop_time = Duration::from_secs_f32(self.stop_time);
 
         let Some(target) = self.target else {
-            return;
+            return Ok(());
         };
 
         let Some(interpolator) = self.interpolator.or(self.interpolator) else {
-            return;
+            return Ok(());
         };
 
-        let Some(mut interpolator) =
-            load_float_interpolator(visitor.nif, interpolator, mode, start_time)
+        let Some(mut interpolator) = load_float_interpolator(
+            visitor.nif,
+            interpolator,
+            mode,
+            start_time,
+            BlockType::BSLightingShaderPropertyFloatController,
+            "interpolator",
+        )?
         else {
-            return;
+            return Ok(());
         };
 
         interpolator.offset = Duration::from_secs_f32(self.phase);
@@ -189,11 +202,11 @@ impl VisitController for BSLightingShaderPropertyFloatController {
             BSLightingShaderPropertyFloatVariable::Alpha => ControlledValue::Alpha(interpolator),
             BSLightingShaderPropertyFloatVariable::EmissiveStrenth => {
                 // FIXME: We don't support emission on our material yet.
-                return;
+                return Ok(());
             }
             BSLightingShaderPropertyFloatVariable::RefractionStrength => {
                 // FIXME: We don't support refraction on our material yet.
-                return;
+                return Ok(());
             }
         };
 
@@ -203,6 +216,7 @@ impl VisitController for BSLightingShaderPropertyFloatController {
             .entry(target)
             .or_default()
             .push(value);
+        Ok(())
     }
 }
 
@@ -211,16 +225,29 @@ fn load_float_interpolator(
     block: BlockRef,
     mode: InterpolationMode,
     duration: Duration,
-) -> Option<Interpolator<f32>> {
+    parent: BlockType,
+    value: &'static str,
+) -> Result<Option<Interpolator<f32>>, NifError> {
     match nif.get(block) {
         Some(Block::NiFloatInterpolator(interpolator)) => match nif.get(interpolator.data) {
-            Some(Block::NiFloatData(data)) => Some(Interpolator::new(&data.data, mode, duration)),
-            _ => todo!(),
+            Some(Block::NiFloatData(data)) => {
+                Ok(Some(Interpolator::new(&data.data, mode, duration)))
+            }
+            None => Ok(None),
+            Some(block) => Err(NifError::UnexpectedBlockType {
+                ty: block.ty(),
+                value: "data",
+                parent: BlockType::NiFloatInterpolator,
+            }),
         },
         // FIXME: Instructions unclear
-        Some(Block::NiBlendFloatInterpolator(_)) => None,
-        Some(Block::Skipped) => None,
-        x => todo!("{:?}", x),
+        Some(Block::NiBlendFloatInterpolator(_)) => Ok(None),
+        Some(Block::Skipped) | None => Ok(None),
+        Some(block) => Err(NifError::UnexpectedBlockType {
+            ty: block.ty(),
+            value,
+            parent,
+        }),
     }
 }
 
@@ -229,7 +256,9 @@ fn load_transform_interpolator(
     block: BlockRef,
     mode: InterpolationMode,
     duration: Duration,
-) -> Option<TransformInterpolator> {
+    parent: BlockType,
+    value: &'static str,
+) -> Result<Option<TransformInterpolator>, NifError> {
     match nif.get(block) {
         Some(Block::NiTransformInterpolator(interpolator)) => match nif.get(interpolator.data) {
             Some(Block::NiTransformData(data)) => {
@@ -325,16 +354,25 @@ fn load_transform_interpolator(
                     .as_ref()
                     .map(|keys| Interpolator::new(keys, mode, duration));
 
-                Some(TransformInterpolator {
+                Ok(Some(TransformInterpolator {
                     translation,
                     rotation,
                     scale,
-                })
+                }))
             }
-            None => None,
-            block => todo!("{:?}", block),
+            None => Ok(None),
+            Some(block) => Err(NifError::UnexpectedBlockType {
+                ty: block.ty(),
+                value: "data",
+                parent: BlockType::NiTransformInterpolator,
+            }),
         },
-        _ => todo!(),
+        None => Ok(None),
+        Some(block) => Err(NifError::UnexpectedBlockType {
+            ty: block.ty(),
+            value,
+            parent,
+        }),
     }
 }
 
