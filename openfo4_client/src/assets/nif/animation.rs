@@ -8,8 +8,9 @@ use game_core::hierarchy::Key;
 use glam::{EulerRot, Quat, Vec3, Vec4};
 use hashbrown::HashMap;
 use openfo4_nif::controller::{
-    BSLightingShaderPropertyFloatVariable, NiDataConstKey, NiDataKey, NiDataKeyRotation,
-    NiDataLinearKey, NiDataQuadraticKey, NiDataTbcKey, SequenceCycleMode, TimeControllerLoopMode,
+    BSLightingShaderPropertyFloatController, BSLightingShaderPropertyFloatVariable, NiDataConstKey,
+    NiDataKey, NiDataKeyRotation, NiDataLinearKey, NiDataQuadraticKey, NiDataTbcKey,
+    SequenceCycleMode, TimeControllerLoopMode,
 };
 use openfo4_nif::{Block, BlockRef, Nif};
 
@@ -17,67 +18,25 @@ use crate::assets::nif::animation_controller::Sequence;
 
 /// Load a non-manager controller.
 pub fn load_controller(nif: &Nif, controller: BlockRef) -> Controller {
-    let mut values = HashMap::<_, Vec<_>>::new();
+    let mut visitor = Visitor {
+        nif,
+        controller: Controller {
+            material: HashMap::new(),
+            transform: HashMap::new(),
+            duration: None,
+        },
+        queue: vec![controller],
+    };
 
-    let mut queue = vec![controller];
-    while let Some(block) = queue.pop() {
-        match nif.get(block) {
-            Some(Block::BSLightingShaderPropertyFloatController(controller)) => {
-                queue.extend(controller.next_controller);
+    while let Some(block) = visitor.queue.pop() {
+        let Some(block) = nif.get(block) else {
+            continue;
+        };
 
-                let mode = match controller.flags.mode {
-                    TimeControllerLoopMode::Clamp => InterpolationMode::Clamp,
-                    TimeControllerLoopMode::Cycle => InterpolationMode::Repeat,
-                    TimeControllerLoopMode::Reverse => InterpolationMode::MirroredRepeat,
-                };
-
-                let duration = Duration::from_secs_f32(controller.stop_time);
-
-                let interpolator = controller.interpolator.unwrap();
-                let target = controller.target.unwrap();
-
-                let Some(mut interpolator) =
-                    load_float_interpolator(nif, interpolator, mode, duration)
-                else {
-                    continue;
-                };
-
-                interpolator.offset = Duration::from_secs_f32(controller.phase);
-                interpolator.speed = controller.frequency;
-
-                let value = match controller.variable {
-                    BSLightingShaderPropertyFloatVariable::UOffset => {
-                        ControlledValue::UOffset(interpolator)
-                    }
-                    BSLightingShaderPropertyFloatVariable::VOffset => {
-                        ControlledValue::VOffset(interpolator)
-                    }
-                    BSLightingShaderPropertyFloatVariable::UScale => {
-                        ControlledValue::UScale(interpolator)
-                    }
-                    BSLightingShaderPropertyFloatVariable::VScale => {
-                        ControlledValue::VScale(interpolator)
-                    }
-                    BSLightingShaderPropertyFloatVariable::Alpha => {
-                        ControlledValue::Alpha(interpolator)
-                    }
-                    BSLightingShaderPropertyFloatVariable::EmissiveStrenth => {
-                        // FIXME: We don't support emission on our material yet.
-                        continue;
-                    }
-                    BSLightingShaderPropertyFloatVariable::RefractionStrength => {
-                        // FIXME: We don't support refraction on our material yet.
-                        continue;
-                    }
-                };
-
-                values.entry(target).or_default().push(value);
-            }
-            _ => {}
-        }
+        block.visit(&mut visitor);
     }
 
-    Controller { values }
+    visitor.controller
 }
 
 pub fn loader_controller_sequences(
@@ -91,7 +50,7 @@ pub fn loader_controller_sequences(
             Block::NiControllerManager(manager) => {
                 for seq in &manager.sequences {
                     let Some(Block::NiControllerSequence(seq)) = nif.get(*seq) else {
-                        todo!();
+                        continue;
                     };
 
                     let mut transforms = HashMap::new();
@@ -166,6 +125,85 @@ pub fn loader_controller_sequences(
     }
 
     sequences
+}
+
+struct Visitor<'a> {
+    nif: &'a Nif,
+    queue: Vec<BlockRef>,
+    controller: Controller,
+}
+
+trait VisitController {
+    fn visit(&self, visitor: &mut Visitor<'_>);
+}
+
+impl VisitController for Block {
+    fn visit(&self, visitor: &mut Visitor<'_>) {
+        match self {
+            Self::BSLightingShaderPropertyFloatController(block) => block.visit(visitor),
+            // TODO
+            _ => {}
+        }
+    }
+}
+
+impl VisitController for BSLightingShaderPropertyFloatController {
+    fn visit(&self, visitor: &mut Visitor<'_>) {
+        visitor.queue.extend(self.next_controller);
+
+        let mode = match self.flags.mode {
+            TimeControllerLoopMode::Clamp => InterpolationMode::Clamp,
+            TimeControllerLoopMode::Cycle => InterpolationMode::Repeat,
+            TimeControllerLoopMode::Reverse => InterpolationMode::MirroredRepeat,
+        };
+
+        let start_time = Duration::from_secs_f32(self.start_time);
+        let stop_time = Duration::from_secs_f32(self.stop_time);
+
+        let Some(target) = self.target else {
+            return;
+        };
+
+        let Some(interpolator) = self.interpolator.or(self.interpolator) else {
+            return;
+        };
+
+        let Some(mut interpolator) =
+            load_float_interpolator(visitor.nif, interpolator, mode, start_time)
+        else {
+            return;
+        };
+
+        interpolator.offset = Duration::from_secs_f32(self.phase);
+        interpolator.speed = self.frequency;
+
+        let value = match self.variable {
+            BSLightingShaderPropertyFloatVariable::UOffset => {
+                ControlledValue::UOffset(interpolator)
+            }
+            BSLightingShaderPropertyFloatVariable::VOffset => {
+                ControlledValue::VOffset(interpolator)
+            }
+            BSLightingShaderPropertyFloatVariable::UScale => ControlledValue::UScale(interpolator),
+            BSLightingShaderPropertyFloatVariable::VScale => ControlledValue::VScale(interpolator),
+            BSLightingShaderPropertyFloatVariable::Alpha => ControlledValue::Alpha(interpolator),
+            BSLightingShaderPropertyFloatVariable::EmissiveStrenth => {
+                // FIXME: We don't support emission on our material yet.
+                return;
+            }
+            BSLightingShaderPropertyFloatVariable::RefractionStrength => {
+                // FIXME: We don't support refraction on our material yet.
+                return;
+            }
+        };
+
+        visitor
+            .controller
+            .material
+            .entry(target)
+            .or_default()
+            .push(value);
+    }
 }
 
 fn load_float_interpolator(
@@ -301,7 +339,9 @@ fn load_transform_interpolator(
 }
 
 pub struct Controller {
-    pub values: HashMap<BlockRef, Vec<ControlledValue>>,
+    pub material: HashMap<BlockRef, Vec<ControlledValue>>,
+    pub transform: HashMap<BlockRef, TransformInterpolator>,
+    pub duration: Option<Duration>,
 }
 
 #[derive(Clone, Debug)]
@@ -540,4 +580,16 @@ pub enum RotationInterpolator {
         y: Option<Interpolator<f32>>,
         z: Option<Interpolator<f32>>,
     },
+}
+
+fn extract_3d_node_name(block: &Block) -> Option<&str> {
+    match block {
+        Block::Skipped => None,
+        Block::NiNode(node) => Some(&node.name),
+        Block::BSXFlags(_) => None,
+        Block::BSTriShape(node) => Some(&node.name),
+        Block::BSSubIndexTriShape(node) => Some(&node.shape.name),
+        Block::BSMeshLODTriShape(node) => Some(&node.shape.name),
+        _ => None,
+    }
 }
