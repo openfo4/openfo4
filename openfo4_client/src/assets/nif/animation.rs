@@ -3,7 +3,7 @@ use std::{
     time::Duration,
 };
 
-use game_common::components::Transform;
+use game_common::{components::Transform, utils::DurationExt};
 use game_core::hierarchy::Key;
 use glam::{EulerRot, Quat, Vec3, Vec4};
 use hashbrown::HashMap;
@@ -454,12 +454,11 @@ where
     }
 
     pub fn sample(&self, mut time: Duration) -> Option<T> {
-        time = time.mul_f32(self.speed) + self.offset;
+        time = time.mul_f32(self.speed).saturating_add(self.offset);
 
         match self.mode {
             InterpolationMode::Repeat => {
-                // FIXME: No Rem on Duration, but we can do better than this.
-                time = Duration::from_secs_f32(time.as_secs_f32() % self.duration.as_secs_f32());
+                time = time.checked_rem(self.duration).unwrap_or_default();
             }
             InterpolationMode::MirroredRepeat => {
                 todo!()

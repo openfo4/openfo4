@@ -1,10 +1,14 @@
 pub mod exclusive;
 pub mod vec_ext;
 
+mod duration;
+
 use std::fmt::{Arguments, Debug};
 
 use glam::{Quat, Vec2, Vec3, Vec4};
 use num_traits::Float;
+
+pub use duration::DurationExt;
 
 /// Floating-point approximate equality comparssion.
 ///
