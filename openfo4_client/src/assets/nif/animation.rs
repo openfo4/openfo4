@@ -1,5 +1,5 @@
 use std::{
-    ops::{Add, Mul},
+    ops::{Add, Mul, Sub},
     time::Duration,
 };
 
@@ -402,7 +402,7 @@ pub struct Interpolator<T> {
 
 impl<T> Interpolator<T>
 where
-    T: Copy + Mul<f32, Output = T> + Add<Output = T> + Add<f32, Output = T>,
+    T: Copy + Mul<f32, Output = T> + Add<Output = T> + Add<f32, Output = T> + Sub<Output = T>,
 {
     fn new(data: &NiDataKey<T>, mode: InterpolationMode, duration: Duration) -> Self {
         let keys = match data {
@@ -441,7 +441,69 @@ where
 
                 InterpolatorKeys::Cubic(keys)
             }
-            NiDataKey::Tbc(_) => todo!(),
+            NiDataKey::Tbc(keys) => {
+                // We need at least two points for TBC interpolation.
+                if keys.len() <= 1 {
+                    let keys = keys
+                        .first()
+                        .iter()
+                        .map(|v| NearestKey {
+                            time: Duration::from_secs_f32(v.time),
+                            value: v.value,
+                        })
+                        .collect();
+
+                    InterpolatorKeys::Nearest(keys)
+                } else {
+                    // https://en.wikipedia.org/wiki/Kochanek%E2%80%93Bartels_spline
+
+                    let mut dss = Vec::with_capacity(keys.len());
+                    let mut dds = Vec::with_capacity(keys.len());
+
+                    for (index, key) in keys.iter().enumerate() {
+                        let pcurr = key.value;
+                        let pnext = keys[(index + 1) % keys.len()].value;
+                        let pprev = if index == 0 {
+                            keys[keys.len() - 1].value
+                        } else {
+                            keys[index - 1].value
+                        };
+
+                        let [t, b, c] = key.tbc.to_array();
+                        let tn = 1.0 - t;
+                        let bn = 1.0 - b;
+                        let bp = 1.0 + b;
+                        let cn = 1.0 - c;
+                        let cp = 1.0 + c;
+
+                        let ds1 = (pcurr - pprev) * ((tn * bp * cn) / 2.0);
+                        let ds2 = (pnext - pcurr) * ((tn * bn * cp) / 2.0);
+                        let ds = ds1 + ds2;
+
+                        let dd1 = (pcurr - pprev) * ((tn * bp * cp) / 2.0);
+                        let dd2 = (pnext - pcurr) * ((tn * bn * cn) / 2.0);
+                        let dd = dd1 + dd2;
+
+                        dss.push(ds);
+                        dds.push(dd);
+                    }
+
+                    let mut new_keys = Vec::with_capacity(keys.len());
+                    for (index, key) in keys.iter().enumerate() {
+                        let ds = dss[index];
+                        let dd = dds[(index + 1) % keys.len()];
+
+                        new_keys.push(CubicKey {
+                            time: Duration::from_secs_f32(key.time),
+                            value: key.value,
+                            backward: ds,
+                            forward: dd,
+                        });
+                    }
+
+                    InterpolatorKeys::Cubic(new_keys)
+                }
+            }
         };
 
         Self {
