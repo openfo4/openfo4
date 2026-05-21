@@ -62,22 +62,31 @@ impl Allocator for BuddyAllocator {
         let align = layout.align();
         debug_assert!(align.is_power_of_two());
 
+        // SAFETY: Layout does guarantee that align is at least 1.
+        let align_m1 = unsafe { align.unchecked_sub(1) };
+
         self.stack.clear();
         unsafe {
             self.stack.push_unchecked(self.root);
         }
 
+        // Allocation is larger than root block.
+        if size > unsafe { self.blocks.get_unchecked(self.root).size } {
+            return None;
+        }
+
         while let Some(index) = self.stack.pop() {
             let block = unsafe { self.blocks.get_unchecked_mut(index) };
-
-            if size > block.size {
-                continue;
-            }
 
             match block.state {
                 State::Free => (),
                 State::Used => continue,
                 State::Split { left, right } => {
+                    let next_block_size = block.size / 2;
+                    if size > next_block_size {
+                        continue;
+                    }
+
                     // Walk down the left subtree first.
                     // This will keep smaller allocations on the left side.
 
@@ -86,7 +95,9 @@ impl Allocator for BuddyAllocator {
                     // The right block will be at `offset + size / 2`. This means
                     // we can only allocate in the right block if the alignment
                     // is small enough.
-                    if (block.offset + block.size / 2) % align == 0 {
+                    // X % align = X & (align - 1) is when align is a power of two
+                    // (required for Layout).
+                    if (block.offset + next_block_size) & align_m1 == 0 {
                         unsafe {
                             self.stack.push_unchecked(right);
                         }
