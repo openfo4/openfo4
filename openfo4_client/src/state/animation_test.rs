@@ -25,6 +25,7 @@ use crate::assets::data_file::DataFile;
 use crate::assets::nif::{Instantiate, LoadNifFlags, NIF_TO_METERS, NifScene};
 use crate::cell::CellId;
 use crate::components::{ActorMarker, NiTransform, Player, WorldSpace};
+use crate::config;
 use crate::state::anim_starter::AnimationEventQueue;
 use crate::state::animation::{self, SkeletonConfig, load_anim};
 use crate::state::esp::EspLoader;
@@ -50,6 +51,7 @@ pub fn animation_test(
     esp_loader: &EspLoader,
     script_loader: &ScriptLoader,
     script_entities: &mut ScriptEntities,
+    config: config::Streaming,
 ) {
     static ONCE: OnceLock<()> = OnceLock::new();
 
@@ -237,9 +239,7 @@ pub fn animation_test(
             // world.add_children(root, collider);
 
             if index == 0 {
-                let distance = std::env::var("OF4_DIST")
-                    .map(|v| v.parse().unwrap())
-                    .unwrap_or(0);
+                let distance = config.active;
 
                 crate::systems::camera::attach_camera(world, root);
                 world

@@ -101,6 +101,7 @@ pub struct GameState {
     pub ai: AiSystem,
     real_time_elapsed: Duration,
     transform_hierarchy_cache: TransformHierarchyCache,
+    config: Config,
 }
 
 impl GameState {
@@ -163,6 +164,7 @@ impl GameState {
             file_loader.clone(),
             shared.clone(),
             &mut executor,
+            config.streaming,
         );
 
         let mut world = World::new();
@@ -208,6 +210,7 @@ impl GameState {
             ai: AiSystem::default(),
             real_time_elapsed: Duration::ZERO,
             transform_hierarchy_cache: TransformHierarchyCache::default(),
+            config,
         }
     }
 
@@ -245,6 +248,7 @@ impl GameState {
             &self.esp_loader,
             &self.executor.loader(),
             &mut self.script_entities,
+            self.config.streaming,
         );
 
         update_time(&mut self.world, Duration::from_secs_f32(1.0 / UPS as f32));

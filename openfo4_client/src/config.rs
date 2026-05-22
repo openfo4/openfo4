@@ -17,10 +17,11 @@ pub enum ConfigError {
     Toml(#[from] toml_edit::TomlError),
 }
 
-#[derive(Clone, Debug, Default, Deserialize)]
+#[derive(Copy, Clone, Debug, Default, Deserialize)]
 #[serde(default)]
 pub struct Config {
     pub scripting: Scripting,
+    pub streaming: Streaming,
 }
 
 impl Config {
@@ -76,11 +77,18 @@ impl Config {
             Scripting::write(table);
         }
 
+        if let Item::Table(table) = root
+            .entry("streaming")
+            .or_insert_with(|| Item::Table(Table::new()))
+        {
+            Streaming::write(table);
+        }
+
         Ok((config, Some(document.to_string())))
     }
 }
 
-#[derive(Clone, Debug, Default, Deserialize)]
+#[derive(Copy, Clone, Debug, Default, Deserialize)]
 #[serde(default)]
 pub struct Scripting {
     pub validation: bool,
@@ -111,6 +119,33 @@ impl Scripting {
             compilation.
             "#,
         );
+    }
+}
+
+#[derive(Copy, Clone, Debug, Deserialize)]
+#[serde(default)]
+pub struct Streaming {
+    pub active: u32,
+}
+
+impl Streaming {
+    fn write(table: &mut Table) {
+        let default = Self::default();
+
+        insert_if_missing(
+            table,
+            "active",
+            i64::from(default.active),
+            r#"The radius around the player's current cell which are considered active
+            for gameplay.
+            "#,
+        );
+    }
+}
+
+impl Default for Streaming {
+    fn default() -> Self {
+        Self { active: 2 }
     }
 }
 

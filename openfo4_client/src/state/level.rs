@@ -33,6 +33,7 @@ use tracing::instrument;
 
 use crate::cell::CellId;
 use crate::components::{NiTransform, Persistent, Root, WorldSpace};
+use crate::config;
 use crate::loader::FileLoader;
 use crate::shared::SharedState;
 use crate::state::level::loader::{EntityLoader, EntityRefInner};
@@ -62,6 +63,7 @@ pub struct Level {
     terrain_manager: TerrainManager,
     loader: Arc<EntityLoader>,
     alive_entities: HashSet<Entity>,
+    config: config::Streaming,
 }
 
 impl Level {
@@ -72,6 +74,7 @@ impl Level {
         file_loader: Arc<FileLoader>,
         shared: Arc<SharedState>,
         executor: &mut Executor,
+        config: config::Streaming,
     ) -> Self {
         let terrain_manager = TerrainManager::new(shared.entities.clone());
 
@@ -145,6 +148,7 @@ impl Level {
                 executor.loader().clone(),
                 events,
             )),
+            config,
         }
     }
 
