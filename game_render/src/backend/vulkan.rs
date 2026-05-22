@@ -27,7 +27,8 @@ use thiserror::Error;
 
 use crate::backend::vulkan::alloc::BumpAllocator;
 use crate::backend::{
-    DedicatedAllocation, DescriptorType, SurfaceFormat, TextureLayout, mip_level_size_2d,
+    DedicatedAllocation, DescriptorType, DeviceDescriptor, SurfaceFormat, TextureLayout,
+    mip_level_size_2d,
 };
 use crate::shader::ShaderInstance;
 
@@ -802,7 +803,7 @@ impl Adapter {
         queue_families
             .into_iter()
             .enumerate()
-            .map(|(index, queue)| {
+            .filter_map(|(index, queue)| {
                 let mut capabilities = QueueCapabilities::empty();
 
                 if queue.queue_flags.contains(vk::QueueFlags::GRAPHICS) {
@@ -821,26 +822,30 @@ impl Adapter {
                     capabilities |= QueueCapabilities::TRANSFER;
                 }
 
-                QueueFamily {
+                // FIXME: We can expect that the driver reports at least one queue
+                // of any family, but it seems this is not strictly required by the spec.
+                let count = NonZeroU32::new(queue.queue_count)?;
+
+                Some(QueueFamily {
                     id: QueueFamilyId(index as u32),
-                    count: queue.queue_count,
+                    count,
                     capabilities,
                     timestamp_bits: queue.timestamp_valid_bits,
-                }
+                })
             })
             .collect()
     }
 
     /// Creates a new [`Device`] with the given queues.
-    pub fn create_device(&self, queue_families: &[QueueFamily]) -> Result<Device, Error> {
+    pub fn create_device(&self, descriptor: &DeviceDescriptor<'_>) -> Result<Device, Error> {
         let valid_queue_families = self.queue_families();
 
-        for (i1, q1) in queue_families.iter().enumerate() {
+        for (i1, q1) in descriptor.queues.iter().enumerate() {
             let Some(valid_queue) = valid_queue_families
                 .iter()
                 .find(|family| family.id == q1.id)
             else {
-                panic!("Queue {:?} does not exist on this Device", queue_families);
+                panic!("Queue {:?} does not exist on this Device", q1.id);
             };
 
             assert!(
@@ -848,10 +853,8 @@ impl Adapter {
                 "Cannot create more queues of family than exist"
             );
 
-            assert_eq!(q1.capabilities, valid_queue.capabilities);
-
             // Every element in `queue_families` must be unique.
-            for (i2, q2) in queue_families.iter().enumerate() {
+            for (i2, q2) in descriptor.queues.iter().enumerate() {
                 if i1 == i2 {
                     continue;
                 }
@@ -865,19 +868,21 @@ impl Adapter {
         }
 
         // Use a default priority of 1.0 for every queue.
-        let queue_count = queue_families
+        let max_family_queue_count = descriptor
+            .queues
             .iter()
-            .map(|family| family.count as usize)
+            .map(|family| family.count.get() as usize)
             .max()
             .unwrap_or_default();
-        let queue_priorities = vec![1.0; queue_count];
+        let queue_priorities = vec![1.0; max_family_queue_count];
 
-        let queue_infos = queue_families
+        let queue_infos = descriptor
+            .queues
             .iter()
             .map(|family| {
                 vk::DeviceQueueCreateInfo::default()
                     .queue_family_index(family.id.0)
-                    .queue_priorities(&queue_priorities[..family.count as usize])
+                    .queue_priorities(&queue_priorities[..family.count.get() as usize])
                     // - Must be equal to the flags used in `create_queue`.
                     .flags(vk::DeviceQueueCreateFlags::empty())
             })
@@ -995,7 +1000,6 @@ impl Adapter {
             .mesh_shader(true);
 
         // Allow passing deprecated `enabled_layer_names`.
-        #[allow(deprecated)]
         let mut create_info = vk::DeviceCreateInfo::default()
             .queue_create_infos(&queue_infos)
             .enabled_extension_names(&extensions)
@@ -1018,14 +1022,19 @@ impl Adapter {
                 .create_device(self.physical_device, &create_info, ALLOC)?
         };
 
-        let queues = queue_families
+        let queues = descriptor
+            .queues
             .iter()
             .flat_map(|family| {
-                (0..family.count).map(|index| QueueSlot {
-                    id: family.id,
+                let base = valid_queue_families
+                    .iter()
+                    .find(|v| v.id == family.id)
+                    .unwrap();
+
+                (0..family.count.get()).map(|index| QueueSlot {
                     index,
                     used: Mutex::new(false),
-                    caps: family.capabilities,
+                    family: *base,
                 })
             })
             .collect::<Vec<_>>()
@@ -1041,7 +1050,6 @@ impl Adapter {
                 memory_properties: self.memory_properties(),
                 num_allocations: Arc::new(AtomicU32::new(0)),
                 queues,
-                queue_families: queue_families.to_vec(),
             }),
         })
     }
@@ -1170,23 +1178,29 @@ impl Device {
     }
 
     /// Creates a new [`Queue`], bound to this `Device`.
+    ///
+    /// The queue must previously have been allocated [`create_device`]. The [`count`] parameter
+    /// defines how many queues of the same family may exist at the same time.
+    ///
+    /// [`create_device`]: Adapter::create_deviceInstance
+    /// [`count`]: super::DeviceQueueDescriptor::count
     pub fn create_queue(&mut self, family: QueueFamilyId) -> Result<Queue, Error> {
         // Find a queue with the fitting `id` that is not yet
         // marked as `used`.
-        let queue_index = self.device.queues.iter().find_map(|queue| {
-            if queue.id != family {
-                return None;
+        let Some(slot) = self.device.queues.iter().find(|queue| {
+            if queue.family.id != family {
+                return false;
             }
 
             let mut used = queue.used.lock();
-            if !*used {
-                *used = true;
-                Some(queue.index)
-            } else {
-                None
+            if *used {
+                return false;
             }
-        });
-        let Some(queue_index) = queue_index else {
+
+            // Mark queue as used.
+            *used = true;
+            true
+        }) else {
             return Err(Error::NoQueueLeft);
         };
 
@@ -1194,25 +1208,17 @@ impl Device {
             .queue_family_index(family.0)
             // Index is always 0 since we only create
             // a single queue for now.
-            .queue_index(queue_index)
+            .queue_index(slot.index)
             // - Must be equal to the flags used when calling `vkCreateDevice`.
             .flags(vk::DeviceQueueCreateFlags::empty());
 
         let queue = unsafe { self.device.get_device_queue2(&info) };
 
-        let family_data = self
-            .device
-            .queue_families
-            .iter()
-            .find(|f| f.id == family)
-            .unwrap();
-
         Ok(Queue {
             device: self.device.clone(),
             queue,
-            queue_family: family,
-            queue_index,
-            family: *family_data,
+            queue_index: slot.index,
+            family: slot.family,
         })
     }
 
@@ -2124,7 +2130,7 @@ impl Device {
             .device
             .queues
             .iter()
-            .find(|queue| queue.id == queue_family)
+            .find(|queue| queue.family.id == queue_family)
         else {
             panic!(
                 "Cannot create command pool for queue family {:?} which does not exist",
@@ -2163,7 +2169,7 @@ impl Device {
             buffers,
             next_buffer: 0,
             queue_family,
-            queue_caps: queue.caps,
+            queue_caps: queue.family.capabilities,
         })
     }
 
@@ -2302,7 +2308,6 @@ impl Device {
 pub struct Queue {
     device: Arc<DeviceShared>,
     queue: vk::Queue,
-    queue_family: QueueFamilyId,
     queue_index: u32,
     family: QueueFamily,
 }
@@ -2322,9 +2327,9 @@ impl Queue {
             .into_iter()
             .map(|buf| {
                 assert_eq!(
-                    buf.queue_family, self.queue_family,
+                    buf.queue_family, self.family.id,
                     "Queue with family {:?} cannot submit buffer allocated for queue family {:?}",
-                    self.queue_family, buf.queue_family,
+                    self.family.id, buf.queue_family,
                 );
 
                 buf.buffer
@@ -2389,7 +2394,7 @@ impl Drop for Queue {
         }
 
         for queue in self.device.queues.iter() {
-            if queue.id != self.queue_family || queue.index != self.queue_index {
+            if queue.family.id != self.family.id || queue.index != self.queue_index {
                 continue;
             }
 
@@ -2397,6 +2402,7 @@ impl Drop for Queue {
             let mut used = queue.used.lock();
             debug_assert!(*used);
             *used = false;
+            break;
         }
     }
 }
@@ -2577,7 +2583,7 @@ impl Surface {
         let is_supported = unsafe {
             instance.get_physical_device_surface_support(
                 device.physical_device,
-                queue.queue_family.0,
+                queue.family.id.0,
                 self.shared.surface,
             )?
         };
@@ -5124,7 +5130,6 @@ struct DeviceShared {
     /// Number of currently active allocations.
     num_allocations: Arc<AtomicU32>,
     queues: Arc<[QueueSlot]>,
-    queue_families: Vec<QueueFamily>,
 }
 
 impl DeviceShared {
@@ -5190,9 +5195,8 @@ impl DeviceExtensionFns {
 
 #[derive(Debug)]
 struct QueueSlot {
-    id: QueueFamilyId,
+    family: QueueFamily,
     index: u32,
-    caps: QueueCapabilities,
     used: Mutex<bool>,
 }
 

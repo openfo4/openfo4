@@ -26,6 +26,7 @@ use statistics::Statistics;
 use surface::SurfaceConfig;
 
 use std::collections::HashMap;
+use std::num::NonZeroU32;
 use std::sync::Arc;
 
 use game_tasks::TaskPool;
@@ -37,6 +38,7 @@ use graph::RenderGraph;
 use pipelined_rendering::{Command, RenderThreadHandle};
 use thiserror::Error;
 
+use crate::backend::{DeviceDescriptor, DeviceQueueDescriptor};
 use crate::graph::{NodeLabel, SlotFlags, SlotKind, SlotLabel};
 
 // TODO: Remove
@@ -145,7 +147,7 @@ impl Renderer {
 
         tracing::info!("Using graphics adapter {}", adapter.properties().name);
 
-        let queue_family = *adapter
+        let graphics_queue = *adapter
             .queue_families()
             .iter()
             .find(|q| {
@@ -154,8 +156,13 @@ impl Renderer {
             })
             .unwrap();
 
-        let mut device = adapter.create_device(&[queue_family]).unwrap();
-        let queue = device.create_queue(queue_family.id).unwrap();
+        let queues = &[DeviceQueueDescriptor {
+            id: graphics_queue.id,
+            count: NonZeroU32::MIN,
+        }];
+
+        let mut device = adapter.create_device(&DeviceDescriptor { queues }).unwrap();
+        let queue = device.create_queue(graphics_queue.id).unwrap();
 
         let statistics = Arc::new(Statistics::default());
         let render_thread =

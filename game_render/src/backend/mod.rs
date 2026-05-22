@@ -86,11 +86,25 @@ bitflags! {
 }
 
 #[derive(Copy, Clone, Debug)]
+pub struct DeviceDescriptor<'a> {
+    pub queues: &'a [DeviceQueueDescriptor],
+}
+
+#[derive(Copy, Clone, Debug)]
 pub struct QueueFamily {
+    /// The unique ID for this queue family.
     pub id: QueueFamilyId,
-    pub count: u32,
+    /// The number of queues that are available for this type of family.
+    pub count: NonZeroU32,
+    /// The capabilities of queues created with this family.
     pub capabilities: QueueCapabilities,
     pub timestamp_bits: u32,
+}
+
+#[derive(Copy, Clone, Debug)]
+pub struct DeviceQueueDescriptor {
+    pub id: QueueFamilyId,
+    pub count: NonZeroU32,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
