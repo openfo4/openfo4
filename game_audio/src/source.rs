@@ -442,7 +442,7 @@ impl Source {
                     .seek(
                         SeekMode::Accurate,
                         SeekTo::Timestamp {
-                            ts: Timestamp::MIN,
+                            ts: Timestamp::ZERO,
                             track_id: 0,
                         },
                     )

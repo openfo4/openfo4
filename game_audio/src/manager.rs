@@ -1,4 +1,5 @@
 use game_common::collections::arena::Arena;
+use tracing::trace_span;
 
 use crate::backend::Backend;
 use crate::channel::Sender;
@@ -80,6 +81,8 @@ where
     }
 
     pub fn update(&mut self) {
+        let _span = trace_span!("AudioManager::update").entered();
+
         let mut drop_sounds = vec![];
 
         let spare_cap = self.tx.spare_capacity();
@@ -91,36 +94,67 @@ where
 
         let mut main_buffer = vec![Frame::EQUILIBRIUM; spare_cap];
 
+        let mut scratch_buffer = vec![Frame::EQUILIBRIUM; spare_cap];
+
         // Reset all buffers from previous update.
         for track in self.tracks.values_mut() {
             track.buffer.fill(Frame::EQUILIBRIUM);
         }
 
-        // Spatial sound
-        for listener in self.listeners.values() {
-            let buf = match listener.track {
-                TrackId::Main => &mut main_buffer,
-                TrackId::Track(key) => {
-                    let track = self.tracks.get_mut(key).unwrap();
-                    &mut track.buffer
-                }
-            };
-
-            for (emitter_id, emitter) in self.emitters.iter() {
-                for (id, sound) in self.sounds.iter_mut() {
-                    let Destination::Emitter(dest_id) = sound.destination else {
+        for (id, sound) in self.sounds.iter_mut() {
+            match sound.destination {
+                Destination::Emitter(emitter) => {
+                    let Some(emitter) = self.emitters.get(emitter.0) else {
                         continue;
                     };
 
-                    if emitter_id != dest_id.0 {
-                        continue;
-                    }
+                    for listener in self.listeners.values() {
+                        let buf = match listener.track {
+                            TrackId::Main => &mut main_buffer,
+                            TrackId::Track(key) => {
+                                let track = self.tracks.get_mut(key).unwrap();
+                                &mut track.buffer
+                            }
+                        };
 
-                    let dst = &mut buf[0..spare_cap];
-                    match sound.source.read(dst, sound.looping) {
+                        match sound.source.read(&mut scratch_buffer, sound.looping) {
+                            Ok(frames_written) => {
+                                for frame in &mut scratch_buffer[..frames_written] {
+                                    *frame = crate::spatial::process(listener, emitter, *frame);
+                                }
+
+                                for (dst, src) in buf[..frames_written]
+                                    .iter_mut()
+                                    .zip(&scratch_buffer[..frames_written])
+                                {
+                                    *dst += *src;
+                                }
+                            }
+                            Err(err) => {
+                                drop_sounds.push(id);
+                                if !matches!(err, source::Error::Eof) {
+                                    tracing::error!("error reading audio source: {}", err);
+                                }
+                            }
+                        }
+                    }
+                }
+                Destination::Track(track) => {
+                    let buf = match track {
+                        TrackId::Main => &mut main_buffer,
+                        TrackId::Track(key) => {
+                            let track = self.tracks.get_mut(key).unwrap();
+                            &mut track.buffer
+                        }
+                    };
+
+                    match sound.source.read(&mut scratch_buffer, sound.looping) {
                         Ok(frames_written) => {
-                            for frame in &mut dst[..frames_written] {
-                                *frame = crate::spatial::process(listener, emitter, *frame);
+                            for (dst, src) in buf[..frames_written]
+                                .iter_mut()
+                                .zip(&scratch_buffer[..frames_written])
+                            {
+                                *dst += *src;
                             }
                         }
                         Err(err) => {
@@ -135,37 +169,6 @@ where
         }
 
         for &track_id in &self.track_graph.tracks {
-            {
-                let buf = match track_id {
-                    TrackId::Main => &mut main_buffer,
-                    TrackId::Track(key) => {
-                        let track = self.tracks.get_mut(key).unwrap();
-                        &mut track.buffer
-                    }
-                };
-
-                for (id, sound) in self.sounds.iter_mut() {
-                    let Destination::Track(dest_id) = sound.destination else {
-                        continue;
-                    };
-
-                    if track_id != dest_id {
-                        continue;
-                    }
-
-                    let dst = &mut buf[0..spare_cap];
-                    match sound.source.read(dst, sound.looping) {
-                        Ok(_) => (),
-                        Err(err) => {
-                            drop_sounds.push(id);
-                            if !matches!(err, source::Error::Eof) {
-                                tracing::error!("error reading audio source: {}", err);
-                            }
-                        }
-                    }
-                }
-            }
-
             // Done processing all sounds for this track.
             // Reroute the buffer into the target track.
             if let TrackId::Track(src_key) = track_id {
