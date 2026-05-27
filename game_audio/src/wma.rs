@@ -1,4 +1,4 @@
-use std::io::{self, Cursor, ErrorKind, Read, Write};
+use std::io::{self, Cursor, Read, Write};
 use std::process::{Command, Stdio};
 
 use game_tracing::trace_span;
@@ -23,8 +23,7 @@ pub struct XwmReader<'s> {
 
 impl<'s> XwmReader<'s> {
     fn try_new(mss: MediaSourceStream<'s>, opts: FormatOptions) -> Result<Self, Error> {
-        let input = ffmpeg_xwm_to_wav(mss)
-            .map_err(|err| Error::IoError(io::Error::new(ErrorKind::Other, err)))?;
+        let input = ffmpeg_xwm_to_wav(mss).map_err(|err| Error::IoError(io::Error::other(err)))?;
         let wav_src = MediaSourceStream::new(
             Box::new(Cursor::new(input)),
             MediaSourceStreamOptions::default(),
@@ -172,7 +171,7 @@ fn ffmpeg_xwm_to_wav(mut source: impl Read) -> Result<Vec<u8>, ConvError> {
 
     let (res0, res1) = std::thread::scope(|s| {
         // FIXME: Yes this is bad, we should prefer an async API for this.
-        let t0 = s.spawn(|| stdin.write_all(&mut input));
+        let t0 = s.spawn(|| stdin.write_all(&input));
         let t1 = s.spawn(|| stdout.read_to_end(&mut output));
 
         (t0.join().unwrap(), t1.join().unwrap())
