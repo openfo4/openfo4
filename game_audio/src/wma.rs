@@ -1,6 +1,7 @@
 use std::io::{self, Cursor, ErrorKind, Read, Write};
 use std::process::{Command, Stdio};
 
+use game_tracing::trace_span;
 use symphonia::core::common::FourCc;
 use symphonia::core::errors::Error;
 use symphonia::core::formats::probe::{
@@ -140,6 +141,8 @@ enum ConvError {
 }
 
 fn ffmpeg_xwm_to_wav(mut source: impl Read) -> Result<Vec<u8>, ConvError> {
+    let _span = trace_span!("ffmpeg_xwm_to_wav").entered();
+
     let mut input = Vec::new();
     source
         .read_to_end(&mut input)
