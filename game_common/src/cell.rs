@@ -1,6 +1,7 @@
 use std::cell::UnsafeCell;
 use std::ops::{Deref, DerefMut};
 
+#[cfg(debug_assertions)]
 use parking_lot::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 
 /// A cell for unchecked interior mutability.
