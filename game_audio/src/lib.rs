@@ -11,4 +11,7 @@ mod buffer;
 mod manager;
 mod resampler;
 
+#[cfg(feature = "xwma")]
+mod wma;
+
 pub use manager::AudioManager;

@@ -6,7 +6,9 @@ authors = ["MrGunflame <git@robbsrv.de>"]
 license = "GPL-3.0-or-later"
 
 [features]
-default = []
+default = ["xwma"]
+# Enable support for the xWMA audio format.
+xwma = []
 
 [lints]
 workspace = true
@@ -18,7 +20,7 @@ game_tracing = { version = "0.1.0", path = "../game_tracing" }
 tracing = { workspace = true }
 glam = { workspace = true }
 cpal = "0.15.3"
-symphonia = "0.5.4"
+symphonia = { version = "0.6.0", default-features = false, features = ["wav", "pcm"] }
 parking_lot = "0.12.3"
 thiserror = "1.0.61"
 rubato = "0.15.0"

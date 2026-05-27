@@ -1,22 +1,42 @@
 use std::cmp;
 use std::fmt::{self, Debug, Formatter};
 use std::fs::File;
-use std::io::ErrorKind;
 use std::path::Path;
+use std::sync::LazyLock;
 
 use game_tracing::trace_span;
-use symphonia::core::audio::{AudioBuffer, AudioBufferRef, Signal};
-use symphonia::core::codecs::Decoder;
-use symphonia::core::conv::FromSample;
-use symphonia::core::formats::{FormatReader, SeekMode, SeekTo};
+use symphonia::core::audio::conv::FromSample;
+use symphonia::core::audio::sample::Sample;
+use symphonia::core::audio::{Audio, AudioBuffer, GenericAudioBufferRef};
+use symphonia::core::codecs::audio::{AudioDecoder, AudioDecoderOptions};
+use symphonia::core::codecs::registry::CodecRegistry;
+use symphonia::core::formats::probe::{Hint, Probe};
+use symphonia::core::formats::{FormatOptions, FormatReader, SeekMode, SeekTo, TrackType};
 use symphonia::core::io::MediaSourceStream;
-use symphonia::core::sample::Sample;
+use symphonia::core::meta::MetadataOptions;
+use symphonia::core::units::Timestamp;
 use thiserror::Error;
 
 use crate::buffer::{Buf, BufMut, Sequential, SequentialView, SequentialViewMut};
 use crate::resampler::{self, Resampler};
 use crate::sound::Frame;
 use crate::sound_data::SoundData;
+
+static PROBE: LazyLock<Probe> = LazyLock::new(|| {
+    let mut probe = Probe::default();
+    symphonia::default::register_enabled_formats(&mut probe);
+
+    #[cfg(feature = "xwma")]
+    probe.register_format::<crate::wma::XwmReader<'_>>();
+
+    probe
+});
+
+static CODECS: LazyLock<CodecRegistry> = LazyLock::new(|| {
+    let mut registry = CodecRegistry::default();
+    symphonia::default::register_enabled_codecs(&mut registry);
+    registry
+});
 
 #[derive(Debug)]
 pub struct AudioSource {
@@ -34,24 +54,24 @@ impl AudioSource {
     {
         let file = File::open(path).unwrap();
 
-        let codecs = symphonia::default::get_codecs();
-        let probe = symphonia::default::get_probe();
         let mss = MediaSourceStream::new(Box::new(file), Default::default());
 
-        let format_reader = probe
-            .format(
-                &Default::default(),
+        let format_reader = PROBE
+            .probe(
+                &Hint::default(),
                 mss,
-                &Default::default(),
-                &Default::default(),
+                FormatOptions::default(),
+                MetadataOptions::default(),
             )
-            .unwrap()
-            .format;
+            .unwrap();
 
-        let codec_params = &format_reader.default_track().unwrap().codec_params;
+        let track = format_reader.default_track(TrackType::Audio).unwrap();
+        let codec_params = track.codec_params.as_ref().unwrap().audio().unwrap();
         let sample_rate = codec_params.sample_rate.unwrap();
 
-        let decoder = codecs.make(codec_params, &Default::default()).unwrap();
+        let decoder = CODECS
+            .make_audio_decoder(codec_params, &AudioDecoderOptions::default())
+            .unwrap();
 
         Self {
             sample_rate,
@@ -217,21 +237,21 @@ impl AudioSource {
     }
 }
 
-fn copy_frames_from_buffer_ref<Dst>(src: &AudioBufferRef<'_>, dst: Dst) -> usize
+fn copy_frames_from_buffer_ref<Dst>(src: &GenericAudioBufferRef<'_>, dst: Dst) -> usize
 where
     Dst: BufMut<Sample = f32>,
 {
     match src {
-        AudioBufferRef::U8(buf) => copy_frames_from_buffer(buf, dst),
-        AudioBufferRef::U16(buf) => copy_frames_from_buffer(buf, dst),
-        AudioBufferRef::U24(buf) => copy_frames_from_buffer(buf, dst),
-        AudioBufferRef::U32(buf) => copy_frames_from_buffer(buf, dst),
-        AudioBufferRef::S8(buf) => copy_frames_from_buffer(buf, dst),
-        AudioBufferRef::S16(buf) => copy_frames_from_buffer(buf, dst),
-        AudioBufferRef::S24(buf) => copy_frames_from_buffer(buf, dst),
-        AudioBufferRef::S32(buf) => copy_frames_from_buffer(buf, dst),
-        AudioBufferRef::F32(buf) => copy_frames_from_buffer(buf, dst),
-        AudioBufferRef::F64(buf) => copy_frames_from_buffer(buf, dst),
+        GenericAudioBufferRef::U8(buf) => copy_frames_from_buffer(buf, dst),
+        GenericAudioBufferRef::U16(buf) => copy_frames_from_buffer(buf, dst),
+        GenericAudioBufferRef::U24(buf) => copy_frames_from_buffer(buf, dst),
+        GenericAudioBufferRef::U32(buf) => copy_frames_from_buffer(buf, dst),
+        GenericAudioBufferRef::S8(buf) => copy_frames_from_buffer(buf, dst),
+        GenericAudioBufferRef::S16(buf) => copy_frames_from_buffer(buf, dst),
+        GenericAudioBufferRef::S24(buf) => copy_frames_from_buffer(buf, dst),
+        GenericAudioBufferRef::S32(buf) => copy_frames_from_buffer(buf, dst),
+        GenericAudioBufferRef::F32(buf) => copy_frames_from_buffer(buf, dst),
+        GenericAudioBufferRef::F64(buf) => copy_frames_from_buffer(buf, dst),
     }
 }
 
@@ -241,23 +261,35 @@ where
     T: Sample,
     Dst: BufMut<Sample = f32>,
 {
-    match src.spec().channels.count() {
+    src.spec().channels().count();
+
+    match src.spec().channels().count() {
         1 => {
             let dst = dst.channel_mut(0).unwrap();
 
-            debug_assert!(dst.len() >= src.chan(0).len());
-            for (sample, dst) in src.chan(0).iter().zip(dst) {
+            debug_assert!(dst.len() >= src.plane(0).unwrap().len());
+            for (sample, dst) in src.plane(0).unwrap().iter().zip(dst) {
                 *dst = f32::from_sample(*sample);
             }
         }
         2 => {
-            debug_assert!(dst.channel_mut(0).unwrap().len() >= src.chan(0).len());
-            for (src, dst) in src.chan(0).iter().zip(dst.channel_mut(0).unwrap()) {
+            debug_assert!(dst.channel_mut(0).unwrap().len() >= src.plane(0).unwrap().len());
+            for (src, dst) in src
+                .plane(0)
+                .unwrap()
+                .iter()
+                .zip(dst.channel_mut(0).unwrap())
+            {
                 *dst = f32::from_sample(*src);
             }
 
-            debug_assert!(dst.channel_mut(1).unwrap().len() >= src.chan(1).len());
-            for (src, dst) in src.chan(1).iter().zip(dst.channel_mut(1).unwrap()) {
+            debug_assert!(dst.channel_mut(1).unwrap().len() >= src.plane(1).unwrap().len());
+            for (src, dst) in src
+                .plane(1)
+                .unwrap()
+                .iter()
+                .zip(dst.channel_mut(1).unwrap())
+            {
                 *dst = f32::from_sample(*src);
             }
         }
@@ -386,7 +418,7 @@ impl Source {
         match self {
             Source::Empty => Err(Error::Eof),
             Source::Io(source) => match source.format_reader.next_packet() {
-                Ok(packet) => {
+                Ok(Some(packet)) => {
                     let buffer = source.decoder.decode(&packet).map_err(Error::Decode)?;
 
                     dst.reserve(buffer.frames());
@@ -395,14 +427,8 @@ impl Source {
 
                     Ok(())
                 }
-                Err(err) => match err {
-                    symphonia::core::errors::Error::IoError(err)
-                        if err.kind() == ErrorKind::UnexpectedEof =>
-                    {
-                        Err(Error::Eof)
-                    }
-                    err => Err(Error::Decode(err)),
-                },
+                Ok(None) => Err(Error::Eof),
+                Err(err) => Err(Error::Decode(err)),
             },
         }
     }
@@ -413,7 +439,13 @@ impl Source {
             Self::Io(source) => {
                 source
                     .format_reader
-                    .seek(SeekMode::Accurate, SeekTo::TimeStamp { ts: 0, track_id: 0 })
+                    .seek(
+                        SeekMode::Accurate,
+                        SeekTo::Timestamp {
+                            ts: Timestamp::MIN,
+                            track_id: 0,
+                        },
+                    )
                     .map_err(Error::Decode)?;
                 source.decoder.reset();
             }
@@ -425,7 +457,7 @@ impl Source {
 
 /// A source backed by some IO object, usually a file or similar.
 struct IoSource {
-    decoder: Box<dyn Decoder>,
+    decoder: Box<dyn AudioDecoder>,
     format_reader: Box<dyn FormatReader>,
 }
 
