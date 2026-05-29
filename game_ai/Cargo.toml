@@ -10,6 +10,7 @@ workspace = true
 
 [dependencies]
 game_common = { version = "0.1.0", path = "../game_common" }
+game_tracing = { version = "0.1.0", path = "../game_tracing" }
 
 glam = { workspace = true, features = [] }
 petgraph = "0.8.3"

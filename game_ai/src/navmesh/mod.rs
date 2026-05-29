@@ -1,6 +1,8 @@
 mod ssf;
 mod triangle;
 
+use game_common::math::Ray;
+use game_tracing::trace_span;
 use glam::Vec3;
 use petgraph::algo::astar;
 use petgraph::graph::NodeIndex;
@@ -76,6 +78,28 @@ impl NavMesh {
             self.tree
                 .insert(GeomWithData::new(Rectangle::from_aabb(aabb), new_index));
         }
+    }
+
+    /// Performs a raycast on the navmesh triangles.
+    pub fn cast_ray(&self, ray: Ray, max_toi: f32) -> Option<f32> {
+        let _span = trace_span!("NavMesh::cast_ray").entered();
+
+        let mut dist_sq = f32::MAX;
+        let max_toi_sq = max_toi * max_toi;
+
+        for tri in &self.triangles {
+            let tri = Triangle::from_vertices(*tri, UP);
+            if let Some(pt) = tri.ray_intersection(ray) {
+                let d_sq = ray.origin.distance_squared(pt);
+                if d_sq < 0.0 || d_sq > max_toi_sq {
+                    continue;
+                }
+
+                dist_sq = f32::min(dist_sq, d_sq);
+            }
+        }
+
+        (dist_sq != f32::MAX).then(|| dist_sq.sqrt())
     }
 
     pub fn search(&self, agent: &Agent, target: Vec3) -> Option<Path> {

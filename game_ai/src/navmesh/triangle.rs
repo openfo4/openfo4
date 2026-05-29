@@ -1,5 +1,6 @@
 //! Utility functions for triangle math
 
+use game_common::math::Ray;
 use glam::Vec3;
 
 /// A triangle with counter-clockwise winding.
@@ -49,6 +50,37 @@ impl Triangle {
 
     pub const fn edges(&self) -> [[Vec3; 2]; 3] {
         [[self.a, self.b], [self.b, self.c], [self.c, self.a]]
+    }
+
+    /// Returns the intersection point between the `Triangle` and the `Ray`.
+    pub fn ray_intersection(&self, ray: Ray) -> Option<Vec3> {
+        // https://en.wikipedia.org/wiki/M%C3%B6ller%E2%80%93Trumbore_intersection_algorithm
+
+        let edge1 = self.b - self.a;
+        let edge2 = self.c - self.a;
+
+        let re2 = ray.direction.cross(edge2);
+        let det = edge1.dot(re2);
+        // Triangle and ray parallel.
+        if det.abs() <= f32::EPSILON {
+            return None;
+        }
+
+        let inv_det = 1.0 / det;
+        let s = ray.origin - self.a;
+        let u = inv_det * s.dot(re2);
+        if u < -f32::EPSILON || u - 1.0 > f32::EPSILON {
+            return None;
+        }
+
+        let se1 = s.cross(edge1);
+        let v = inv_det * ray.direction.dot(se1);
+        if v < -f32::EPSILON || u + v - 1.0 > f32::EPSILON {
+            return None;
+        }
+
+        let t = inv_det * edge2.dot(se1);
+        Some(ray.point(t))
     }
 }
 
@@ -235,6 +267,7 @@ mod tests {
     use std::f32::consts::PI;
 
     use game_common::assert_approx_eq;
+    use game_common::math::Ray;
     use glam::Vec3;
 
     use crate::navmesh::triangle::Triangle;
@@ -377,5 +410,22 @@ mod tests {
         assert_eq!(tri0.normal(), tri3.normal());
         assert_eq!(tri0.normal(), tri4.normal());
         assert_eq!(tri0.normal(), tri5.normal());
+    }
+
+    #[test]
+    fn triangle_ray_intersection() {
+        let a = Vec3::new(1.0, 0.0, 1.0);
+        let b = Vec3::new(0.0, 0.0, 1.0);
+        let c = Vec3::new(1.0, 0.0, 0.0);
+        let tri = Triangle::from_vertices([a, b, c], Vec3::Y);
+
+        let ray = Ray::new(Vec3::new(1.0, -1.0, 1.0), Vec3::Y);
+        assert_eq!(tri.ray_intersection(ray), Some(Vec3::new(1.0, 0.0, 1.0)));
+
+        let ray = Ray::new(Vec3::new(1.0, 0.0, 1.0), Vec3::Y);
+        assert_eq!(tri.ray_intersection(ray), Some(Vec3::new(1.0, 0.0, 1.0)));
+
+        let ray = Ray::new(Vec3::new(0.0, -1.0, 0.0), Vec3::ONE.normalize());
+        assert_eq!(tri.ray_intersection(ray), Some(Vec3::new(1.0, 0.0, 1.0)));
     }
 }
