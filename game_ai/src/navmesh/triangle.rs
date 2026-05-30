@@ -48,6 +48,10 @@ impl Triangle {
         }
     }
 
+    pub const fn vertices(&self) -> [Vec3; 3] {
+        [self.a, self.b, self.c]
+    }
+
     pub const fn edges(&self) -> [[Vec3; 2]; 3] {
         [[self.a, self.b], [self.b, self.c], [self.c, self.a]]
     }
@@ -85,34 +89,22 @@ impl Triangle {
 }
 
 pub fn is_inside_triangle(triangle: [Vec3; 3], height: f32, point: Vec3) -> bool {
-    let normal = triangle[0].cross(triangle[1]);
+    let tri = Triangle::from_vertices(triangle, crate::navmesh::UP);
 
-    let vertices = [
-        triangle[0],
-        triangle[1],
-        triangle[2],
-        triangle[0] + normal * height,
-        triangle[1] + normal * height,
-        triangle[2] + normal * height,
-    ];
-
-    // Counter-clockwise winding
-    let faces = [[2, 1, 0], [3, 4, 5], [0, 1, 4], [1, 2, 5], [2, 0, 3]];
-
-    for face in faces {
-        let v0 = vertices[face[0]];
-        let v1 = vertices[face[1]];
-        let v2 = vertices[face[2]];
-
-        let normal = Vec3::cross(v1 - v0, v2 - v0);
-        let dist = normal.dot(point - v0);
-
-        if dist > 0.0 {
-            return false;
-        }
+    let normal = tri.normal();
+    let d = normal.dot(point - tri.a);
+    if d < 0.0 || d > height {
+        return false;
     }
 
-    true
+    let proj = point - tri.normal() * d;
+
+    let n = (tri.b - tri.a).cross(tri.c - tri.a);
+    let d0 = (tri.b - tri.a).cross(proj - tri.a);
+    let d1 = (tri.c - tri.b).cross(proj - tri.b);
+    let d2 = (tri.a - tri.c).cross(proj - tri.c);
+
+    n.dot(d0) >= 0.0 && n.dot(d1) >= 0.0 && n.dot(d2) >= 0.0
 }
 
 pub fn closest_points_between_triangles(
@@ -340,6 +332,33 @@ mod tests {
             ],
             HEIGHT,
             Vec3::Y * HEIGHT * 1.1
+        ));
+        assert!(is_inside_triangle(
+            [
+                Vec3::new(-742.95374, 64.64856, -773.8204),
+                Vec3::new(-739.74963, 64.579506, -774.95404),
+                Vec3::new(-742.49286, 64.579506, -779.06885),
+            ],
+            HEIGHT,
+            Vec3::new(-741.2727, 64.590034, -776.333)
+        ));
+        assert!(is_inside_triangle(
+            [
+                Vec3::new(-742.95374, 64.64856, -773.8204),
+                Vec3::new(-742.49286, 64.579506, -779.06885),
+                Vec3::new(-739.74963, 64.579506, -774.95404),
+            ],
+            HEIGHT,
+            Vec3::new(-741.6442, 64.59865, -776.14966)
+        ));
+        assert!(is_inside_triangle(
+            [
+                Vec3::new(-742.95374, 64.64856, -773.8204,),
+                Vec3::new(-742.49286, 64.579506, -779.06885,),
+                Vec3::new(-739.74963, 64.579506, -774.95404,),
+            ],
+            HEIGHT,
+            Vec3::new(-741.38403, 64.59744, -775.8629)
         ));
     }
 
