@@ -84,7 +84,11 @@ impl Triangle {
         }
 
         let t = inv_det * edge2.dot(se1);
-        Some(ray.point(t))
+        if t >= 0.0 {
+            Some(ray.point(t))
+        } else {
+            None
+        }
     }
 }
 
