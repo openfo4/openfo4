@@ -1,5 +1,5 @@
 mod ssf;
-mod triangle;
+pub mod triangle;
 
 use game_common::math::Ray;
 use game_tracing::trace_span;
@@ -20,7 +20,7 @@ const NEIGHBOR_THRESHOLD: f32 = 0.001;
 
 #[derive(Clone, Debug, Default)]
 pub struct NavMesh {
-    triangles: Vec<[Vec3; 3]>,
+    triangles: Vec<Triangle>,
     centers: Vec<Vec3>,
     graph: Graph<usize, (), Undirected>,
     tree: RTree<GeomWithData<Rectangle<[f32; 3]>, usize>>,
@@ -38,33 +38,32 @@ impl NavMesh {
 
     pub fn append(&mut self, mesh: &Mesh) {
         for &[i0, i1, i2] in mesh.indices.as_chunks().0 {
-            let triangle = [
-                mesh.triangles[i0 as usize],
-                mesh.triangles[i1 as usize],
-                mesh.triangles[i2 as usize],
-            ];
+            let triangle = Triangle::from_vertices(
+                [
+                    mesh.triangles[i0 as usize],
+                    mesh.triangles[i1 as usize],
+                    mesh.triangles[i2 as usize],
+                ],
+                UP,
+            );
 
             let new_index = self.triangles.len();
 
-            let center = Vec3::new(
-                (triangle[0].x + triangle[1].x + triangle[2].x) / 3.0,
-                (triangle[0].y + triangle[1].y + triangle[2].y) / 3.0,
-                (triangle[0].z + triangle[1].z + triangle[2].z) / 3.0,
-            );
+            let center = triangle.centroid();
 
             self.graph.add_node(new_index);
 
             let aabb = AABB::from_points([
-                &triangle[0].to_array(),
-                &triangle[1].to_array(),
-                &triangle[2].to_array(),
+                &triangle.a.to_array(),
+                &triangle.b.to_array(),
+                &triangle.c.to_array(),
             ]);
 
             for rect in self.tree.locate_in_envelope_intersecting(&aabb) {
                 let index = rect.data;
                 let tri = self.triangles[index];
 
-                let (_, d) = closest_points_between_triangles(tri, triangle);
+                let (_, d) = closest_points_between_triangles(tri.vertices(), triangle.vertices());
                 if d > NEIGHBOR_THRESHOLD {
                     continue;
                 }
@@ -88,7 +87,6 @@ impl NavMesh {
         let max_toi_sq = max_toi * max_toi;
 
         for tri in &self.triangles {
-            let tri = Triangle::from_vertices(*tri, UP);
             if let Some(pt) = tri.ray_intersection(ray) {
                 let d_sq = ray.origin.distance_squared(pt);
                 if d_sq < 0.0 || d_sq > max_toi_sq {
@@ -104,14 +102,15 @@ impl NavMesh {
 
     pub fn search(&self, agent: &Agent, target: Vec3) -> Option<Path> {
         // TODO: We can also use the RTree here, but we need to consider triangle height.
+
         let start = self
             .triangles
             .iter()
-            .position(|tri| is_inside_triangle(*tri, HEIGHT, agent.position))?;
+            .position(|tri| is_inside_triangle(tri.vertices(), HEIGHT, agent.position))?;
         let end = self
             .triangles
             .iter()
-            .position(|tri| is_inside_triangle(*tri, HEIGHT, target))?;
+            .position(|tri| is_inside_triangle(tri.vertices(), HEIGHT, target))?;
 
         let res = astar(
             &self.graph,
@@ -133,7 +132,7 @@ impl NavMesh {
 
         let tris: Vec<_> = triangles
             .iter()
-            .map(|index| Triangle::from_vertices(self.triangles[*index], UP))
+            .map(|index| self.triangles[*index])
             .collect();
 
         let mut waypoints = ssf::ssf(&tris, agent.position);
@@ -148,7 +147,7 @@ impl NavMesh {
     /// Returns an iterator over all triangles stored in the `NavMesh`.
     ///
     /// Primarily meant for debugging purposes.
-    pub fn triangles(&self) -> &[[Vec3; 3]] {
+    pub fn triangles(&self) -> &[Triangle] {
         &self.triangles
     }
 }
