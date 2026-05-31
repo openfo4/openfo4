@@ -2,8 +2,6 @@ use game_tracing::trace_span;
 use glam::{Vec2, Vec3, Vec4};
 use mikktspace::Geometry;
 
-use crate::aabb::Aabb;
-
 // FIXME: Meshes will be duplicated quite a bit, so
 // we don't want to have it attached to every entity.
 #[derive(Clone, Debug)]
@@ -126,23 +124,6 @@ impl Mesh {
 
     pub fn tangents_set(&self) -> bool {
         self.tangents_set
-    }
-
-    pub fn compute_aabb(&self) -> Option<Aabb> {
-        // We need at least one vertex to determine an AABB.
-        if self.positions.is_empty() {
-            return None;
-        }
-
-        let mut min = Vec3::splat(f32::MAX);
-        let mut max = Vec3::splat(f32::MIN);
-
-        for pos in &self.positions {
-            min = Vec3::min(min, *pos);
-            max = Vec3::max(max, *pos);
-        }
-
-        Some(Aabb::from_min_max(min, max))
     }
 
     pub fn validate_indices(&self) -> Result<(), InvalidIndices> {
