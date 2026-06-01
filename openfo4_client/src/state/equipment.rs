@@ -10,10 +10,11 @@ use openfo4_core::hierarchy::Children;
 use openfo4_core::path::DataPathBuf;
 use openfo4_core::record::RecordId;
 use openfo4_esp::records::{
-    BipedObjectFlags, ObjectModificationFunctionType, ObjectModificationPropertyProperty,
-    ObjectModificationValueType,
+    BipedObjectFlags, ObjectModificationFunctionType, ObjectModificationProperty,
+    ObjectModificationPropertyProperty, ObjectModificationValueType,
 };
 use openfo4_esp::{FormId, RecordData, RecordKind};
+use thiserror::Error;
 
 use crate::assets::nif::{LoadNifFlags, NifKey, NifScene};
 use crate::components::WorldSpace;
@@ -313,139 +314,18 @@ pub async fn load_equipment_item(
         };
 
         for property in &attachment.data.properties {
-            let params = match property.value_type {
-                ObjectModificationValueType::Int => Parameters::Int(property.value1),
-                ObjectModificationValueType::Float => {
-                    Parameters::Float(f32::from_bits(property.value1))
-                }
-                ObjectModificationValueType::Bool => Parameters::Bool(property.value1 != 0),
-                ObjectModificationValueType::FormIdInt => {
-                    Parameters::FormIdInt(FormId(property.value1), property.value2)
-                }
-                ObjectModificationValueType::FormIdFloat => Parameters::FormIdFloat(
-                    FormId(property.value1),
-                    f32::from_bits(property.value2),
-                ),
-                _ => unreachable!(),
-            };
-
-            enum ModificationClass<'base, 'combined> {
-                ScalarF32(&'base f32, &'combined mut f32),
-                ScalarU32(&'base u32, &'combined mut u32),
-            }
-
-            let class = match property.property {
-                ObjectModificationPropertyProperty::Keywords => {
-                    let keyword = params.to_formid::<0>().unwrap();
-                    let keyword = esp_loader.resolve_form(keyword, *attachment_id).unwrap();
-
-                    match property.function_type {
-                        ObjectModificationFunctionType::Add => {
-                            combined_props.keywords.insert(keyword);
-                        }
-                        ObjectModificationFunctionType::Rem => {
-                            combined_props.keywords.remove(&keyword);
-                        }
-                        _ => unreachable!(),
-                    }
-
-                    continue;
-                }
-                ObjectModificationPropertyProperty::Weight => {
-                    ModificationClass::ScalarF32(&base_props.weight, &mut combined_props.weight)
-                }
-                ObjectModificationPropertyProperty::Value => {
-                    ModificationClass::ScalarF32(&base_props.value, &mut combined_props.value)
-                }
-                // "Rating" actually is physical damage resistance.
-                ObjectModificationPropertyProperty::Rating => {
-                    let value = params.to_u32::<0>().unwrap();
-
-                    let resistance = combined_props
-                        .resistances
-                        .entry(DAMAGE_TYPE_PHYSICAL)
-                        .or_default();
-
-                    match property.function_type {
-                        ObjectModificationFunctionType::Set => *resistance = value,
-                        ObjectModificationFunctionType::Add => *resistance += value,
-                        _ => unreachable!(),
-                    }
-
-                    continue;
-                }
-                ObjectModificationPropertyProperty::DamageTypeValue => {
-                    let dmg_type = params.to_formid::<0>().unwrap();
-                    let dmg_type = esp_loader.resolve_form(dmg_type, *attachment_id).unwrap();
-                    let value = params.to_u32::<1>().unwrap();
-
-                    let resistance = combined_props.resistances.entry(dmg_type).or_default();
-
-                    match property.function_type {
-                        ObjectModificationFunctionType::Set => *resistance = value,
-                        ObjectModificationFunctionType::Add => *resistance += value,
-                        _ => unreachable!(),
-                    }
-
-                    continue;
-                }
-                ObjectModificationPropertyProperty::Ammo => {
-                    todo!();
-                }
-                ObjectModificationPropertyProperty::AimModelMinConeDegrees => {
-                    ModificationClass::ScalarF32(
-                        &base_props.weapon_cone_of_fire_min_angle,
-                        &mut combined_props.weapon_cone_of_fire_min_angle,
-                    )
-                }
-                ObjectModificationPropertyProperty::AimModelMaxConeDegrees => {
-                    ModificationClass::ScalarF32(
-                        &base_props.weapon_cone_of_fire_max_angle,
-                        &mut combined_props.weapon_cone_of_fire_max_angle,
-                    )
-                }
-                ObjectModificationPropertyProperty::AimModelConeIncreasePerShot => {
-                    ModificationClass::ScalarF32(
-                        &base_props.weapon_cone_of_fire_increase_per_shot,
-                        &mut combined_props.weapon_cone_of_fire_increase_per_shot,
-                    )
-                }
-                ObjectModificationPropertyProperty::AimModelConeDecreasePerSec => {
-                    ModificationClass::ScalarF32(
-                        &base_props.weapon_cone_of_fire_decrease_per_second,
-                        &mut combined_props.weapon_cone_of_fire_decrease_per_second,
-                    )
-                }
-                ObjectModificationPropertyProperty::AimModelConeDecreaseDelayMs => {
-                    ModificationClass::ScalarU32(
-                        &base_props.weapon_cone_of_fire_decrease_delay_milliseconds,
-                        &mut combined_props.weapon_cone_of_fire_decrease_delay_milliseconds,
-                    )
-                }
-                _ => continue,
-            };
-
-            match class {
-                ModificationClass::ScalarF32(base, combined) => {
-                    let value = params.to_f32::<0>().unwrap();
-
-                    match property.function_type {
-                        ObjectModificationFunctionType::Set => *combined = value,
-                        ObjectModificationFunctionType::Add => *combined += value,
-                        ObjectModificationFunctionType::MulAdd => *combined += *base * value,
-                        _ => unreachable!(),
-                    }
-                }
-                ModificationClass::ScalarU32(base, combined) => {
-                    let value = params.to_u32::<0>().unwrap();
-
-                    match property.function_type {
-                        ObjectModificationFunctionType::Set => *combined = value,
-                        ObjectModificationFunctionType::Add => *combined += value,
-                        ObjectModificationFunctionType::MulAdd => *combined += *base * value,
-                        _ => unreachable!(),
-                    }
-                }
+            if let Err(err) = apply_object_modification(
+                esp_loader,
+                *attachment_id,
+                &base_props,
+                &mut combined_props,
+                property,
+            ) {
+                tracing::error!(
+                    "failed to apply object modification property of attachment {:?}: {}",
+                    attachment_id,
+                    err
+                );
             }
         }
     }
@@ -751,4 +631,147 @@ fn extract_biped_object_flags(slots: BipedObjectFlags, dst: &mut HashSet<u32>) {
 
 async fn load_item_script(record: RecordId, loader: &ScriptLoader) -> Option<ScriptObject> {
     loader.load_instance(record).await
+}
+
+#[derive(Clone, Debug, Error)]
+enum ObjectModApplicationError {
+    #[error("unapplicable function type {ty:?} for property {property:?}")]
+    UnapplicableFunctionType {
+        property: ObjectModificationPropertyProperty,
+        ty: ObjectModificationFunctionType,
+    },
+}
+
+fn apply_object_modification(
+    esp_loader: &EspLoader,
+    omod_id: RecordId,
+    base: &EquipmentProperties,
+    combined: &mut EquipmentProperties,
+    property: &ObjectModificationProperty,
+) -> Result<(), ObjectModApplicationError> {
+    let params = match property.value_type {
+        ObjectModificationValueType::Int => Parameters::Int(property.value1),
+        ObjectModificationValueType::Float => Parameters::Float(f32::from_bits(property.value1)),
+        ObjectModificationValueType::Bool => Parameters::Bool(property.value1 != 0),
+        ObjectModificationValueType::FormIdInt => {
+            Parameters::FormIdInt(FormId(property.value1), property.value2)
+        }
+        ObjectModificationValueType::FormIdFloat => {
+            Parameters::FormIdFloat(FormId(property.value1), f32::from_bits(property.value2))
+        }
+        _ => unreachable!(),
+    };
+
+    enum ModificationClass<'combined> {
+        ScalarF32(f32, &'combined mut f32),
+        ScalarU32(u32, &'combined mut u32),
+    }
+
+    let class = match property.property {
+        ObjectModificationPropertyProperty::Keywords => {
+            let keyword = params.to_formid::<0>().unwrap();
+            let keyword = esp_loader.resolve_form(keyword, omod_id).unwrap();
+
+            match property.function_type {
+                ObjectModificationFunctionType::Add => {
+                    combined.keywords.insert(keyword);
+                }
+                ObjectModificationFunctionType::Rem => {
+                    combined.keywords.remove(&keyword);
+                }
+                _ => {
+                    return Err(ObjectModApplicationError::UnapplicableFunctionType {
+                        property: property.property,
+                        ty: property.function_type,
+                    });
+                }
+            }
+
+            return Ok(());
+        }
+        ObjectModificationPropertyProperty::Weight => {
+            ModificationClass::ScalarF32(base.weight, &mut combined.weight)
+        }
+        ObjectModificationPropertyProperty::Value => {
+            ModificationClass::ScalarF32(base.value, &mut combined.value)
+        }
+        // "Rating" actually is physical damage resistance.
+        ObjectModificationPropertyProperty::Rating => {
+            let base = base
+                .resistances
+                .get(&DAMAGE_TYPE_PHYSICAL)
+                .copied()
+                .unwrap_or_default();
+            let combined = combined
+                .resistances
+                .entry(DAMAGE_TYPE_PHYSICAL)
+                .or_default();
+
+            ModificationClass::ScalarU32(base, combined)
+        }
+        ObjectModificationPropertyProperty::DamageTypeValue => {
+            let dmg_type = params.to_formid::<0>().unwrap();
+            let dmg_type = esp_loader.resolve_form(dmg_type, omod_id).unwrap();
+
+            let base = base.resistances.get(&dmg_type).copied().unwrap_or_default();
+            let combined = combined.resistances.entry(dmg_type).or_default();
+
+            ModificationClass::ScalarU32(base, combined)
+        }
+        ObjectModificationPropertyProperty::Ammo => {
+            todo!();
+        }
+        ObjectModificationPropertyProperty::AimModelMinConeDegrees => ModificationClass::ScalarF32(
+            base.weapon_cone_of_fire_min_angle,
+            &mut combined.weapon_cone_of_fire_min_angle,
+        ),
+        ObjectModificationPropertyProperty::AimModelMaxConeDegrees => ModificationClass::ScalarF32(
+            base.weapon_cone_of_fire_max_angle,
+            &mut combined.weapon_cone_of_fire_max_angle,
+        ),
+        ObjectModificationPropertyProperty::AimModelConeIncreasePerShot => {
+            ModificationClass::ScalarF32(
+                base.weapon_cone_of_fire_increase_per_shot,
+                &mut combined.weapon_cone_of_fire_increase_per_shot,
+            )
+        }
+        ObjectModificationPropertyProperty::AimModelConeDecreasePerSec => {
+            ModificationClass::ScalarF32(
+                base.weapon_cone_of_fire_decrease_per_second,
+                &mut combined.weapon_cone_of_fire_decrease_per_second,
+            )
+        }
+        ObjectModificationPropertyProperty::AimModelConeDecreaseDelayMs => {
+            ModificationClass::ScalarU32(
+                base.weapon_cone_of_fire_decrease_delay_milliseconds,
+                &mut combined.weapon_cone_of_fire_decrease_delay_milliseconds,
+            )
+        }
+        _ => return Ok(()),
+    };
+
+    match class {
+        ModificationClass::ScalarF32(base, combined) => {
+            let value = params.to_f32::<0>().unwrap();
+
+            match property.function_type {
+                ObjectModificationFunctionType::Set => *combined = value,
+                ObjectModificationFunctionType::Add => *combined += value,
+                ObjectModificationFunctionType::MulAdd => *combined += base * value,
+                _ => unreachable!(),
+            }
+        }
+        ModificationClass::ScalarU32(base, combined) => {
+            let value = params.to_u32::<0>().unwrap();
+
+            match property.function_type {
+                ObjectModificationFunctionType::Set => *combined = value,
+                ObjectModificationFunctionType::Add => *combined += value,
+                ObjectModificationFunctionType::MulAdd => *combined += base * value,
+                _ => unreachable!(),
+            }
+        }
+    }
+
+    Ok(())
 }
