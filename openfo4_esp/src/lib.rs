@@ -26,6 +26,7 @@ use records::{
     Worldspace,
 };
 
+use crate::records::object_modification::ObjectModification;
 use crate::records::{
     ActorValueInfo, AddonNode, AimModel, AnimatedObject, Animation, AnimationSoundTagSet,
     ArmorAddon, ArtObject, AssocationType, AttractionRule, AudioCategorySnapshot, AudioEffectChain,
@@ -35,9 +36,9 @@ use crate::records::{
     FootstepSet, FormList, GodRays, ImageSpace, ImageSpaceAdapter, Impact, ImpactDataSet,
     InstanceNamingRules, Layer, LensFlare, LightingTemplate, LoadScreen, Location, MaterialObject,
     MaterialSwap, MaterialType, Message, MovementType, MusicTrack, MusicType, NAVI, NavMesh,
-    NavigationMeshObstacleManager, ObjectModification, ObjectVisibilityManager, Outfit, PackIn,
-    Package, Perk, PlacedMissile, Quest, ReferenceGroup, Region, Relationship, ReverbParameters,
-    Scene, SceneCollection, SoundCategory, SoundDescriptor, SoundKeywordMapping, SoundOutputModel,
+    NavigationMeshObstacleManager, ObjectVisibilityManager, Outfit, PackIn, Package, Perk,
+    PlacedMissile, Quest, ReferenceGroup, Region, Relationship, ReverbParameters, Scene,
+    SceneCollection, SoundCategory, SoundDescriptor, SoundKeywordMapping, SoundOutputModel,
     StoryManagerBranchNode, StoryManagerEventNode, StoryManagerQuestNode, Terminal, Tree,
     VoiceType, Water, Weapon, Zoom,
 };

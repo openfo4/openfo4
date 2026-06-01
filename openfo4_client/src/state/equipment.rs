@@ -9,9 +9,9 @@ use openfo4_core::ecs::{Entity, World};
 use openfo4_core::hierarchy::Children;
 use openfo4_core::path::DataPathBuf;
 use openfo4_core::record::RecordId;
-use openfo4_esp::records::{
-    BipedObjectFlags, ObjectModificationFunctionType, ObjectModificationProperty,
-    ObjectModificationPropertyProperty, ObjectModificationValueType,
+use openfo4_esp::records::BipedObjectFlags;
+use openfo4_esp::records::object_modification::{
+    ObjectModificationFunctionType, ObjectModificationProperty, ObjectModificationPropertyType,
 };
 use openfo4_esp::{FormId, RecordData, RecordKind};
 use thiserror::Error;
@@ -637,7 +637,7 @@ async fn load_item_script(record: RecordId, loader: &ScriptLoader) -> Option<Scr
 enum ObjectModApplicationError {
     #[error("unapplicable function type {ty:?} for property {property:?}")]
     UnapplicableFunctionType {
-        property: ObjectModificationPropertyProperty,
+        property: ObjectModificationPropertyType,
         ty: ObjectModificationFunctionType,
     },
 }
@@ -649,27 +649,21 @@ fn apply_object_modification(
     combined: &mut EquipmentProperties,
     property: &ObjectModificationProperty,
 ) -> Result<(), ObjectModApplicationError> {
-    let params = match property.value_type {
-        ObjectModificationValueType::Int => Parameters::Int(property.value1),
-        ObjectModificationValueType::Float => Parameters::Float(f32::from_bits(property.value1)),
-        ObjectModificationValueType::Bool => Parameters::Bool(property.value1 != 0),
-        ObjectModificationValueType::FormIdInt => {
-            Parameters::FormIdInt(FormId(property.value1), property.value2)
-        }
-        ObjectModificationValueType::FormIdFloat => {
-            Parameters::FormIdFloat(FormId(property.value1), f32::from_bits(property.value2))
-        }
-        _ => unreachable!(),
-    };
-
     enum ModificationClass<'combined> {
-        ScalarF32(f32, &'combined mut f32),
-        ScalarU32(u32, &'combined mut u32),
+        ScalarF32 {
+            base: f32,
+            combined: &'combined mut f32,
+            value: f32,
+        },
+        ScalarU32 {
+            base: u32,
+            combined: &'combined mut u32,
+            value: u32,
+        },
     }
 
-    let class = match property.property {
-        ObjectModificationPropertyProperty::Keywords => {
-            let keyword = params.to_formid::<0>().unwrap();
+    let class = match property.ty {
+        ObjectModificationPropertyType::Keywords(keyword) => {
             let keyword = esp_loader.resolve_form(keyword, omod_id).unwrap();
 
             match property.function_type {
@@ -681,7 +675,7 @@ fn apply_object_modification(
                 }
                 _ => {
                     return Err(ObjectModApplicationError::UnapplicableFunctionType {
-                        property: property.property,
+                        property: property.ty,
                         ty: property.function_type,
                     });
                 }
@@ -689,14 +683,18 @@ fn apply_object_modification(
 
             return Ok(());
         }
-        ObjectModificationPropertyProperty::Weight => {
-            ModificationClass::ScalarF32(base.weight, &mut combined.weight)
-        }
-        ObjectModificationPropertyProperty::Value => {
-            ModificationClass::ScalarF32(base.value, &mut combined.value)
-        }
+        ObjectModificationPropertyType::Weight(weight) => ModificationClass::ScalarF32 {
+            base: base.weight,
+            combined: &mut combined.weight,
+            value: weight,
+        },
+        ObjectModificationPropertyType::Value(value) => ModificationClass::ScalarF32 {
+            base: base.value,
+            combined: &mut combined.value,
+            value,
+        },
         // "Rating" actually is physical damage resistance.
-        ObjectModificationPropertyProperty::Rating => {
+        ObjectModificationPropertyType::Rating(rating) => {
             let base = base
                 .resistances
                 .get(&DAMAGE_TYPE_PHYSICAL)
@@ -707,70 +705,96 @@ fn apply_object_modification(
                 .entry(DAMAGE_TYPE_PHYSICAL)
                 .or_default();
 
-            ModificationClass::ScalarU32(base, combined)
+            ModificationClass::ScalarU32 {
+                base,
+                combined,
+                value: rating,
+            }
         }
-        ObjectModificationPropertyProperty::DamageTypeValue => {
-            let dmg_type = params.to_formid::<0>().unwrap();
+        ObjectModificationPropertyType::DamageTypeValue(dmg_type, value) => {
             let dmg_type = esp_loader.resolve_form(dmg_type, omod_id).unwrap();
 
             let base = base.resistances.get(&dmg_type).copied().unwrap_or_default();
             let combined = combined.resistances.entry(dmg_type).or_default();
 
-            ModificationClass::ScalarU32(base, combined)
+            ModificationClass::ScalarU32 {
+                base,
+                combined,
+                value,
+            }
         }
-        ObjectModificationPropertyProperty::Ammo => {
+        ObjectModificationPropertyType::Ammo(_) => {
             todo!();
         }
-        ObjectModificationPropertyProperty::AimModelMinConeDegrees => ModificationClass::ScalarF32(
-            base.weapon_cone_of_fire_min_angle,
-            &mut combined.weapon_cone_of_fire_min_angle,
-        ),
-        ObjectModificationPropertyProperty::AimModelMaxConeDegrees => ModificationClass::ScalarF32(
-            base.weapon_cone_of_fire_max_angle,
-            &mut combined.weapon_cone_of_fire_max_angle,
-        ),
-        ObjectModificationPropertyProperty::AimModelConeIncreasePerShot => {
-            ModificationClass::ScalarF32(
-                base.weapon_cone_of_fire_increase_per_shot,
-                &mut combined.weapon_cone_of_fire_increase_per_shot,
-            )
+        ObjectModificationPropertyType::AimModelMinConeDegrees(value) => {
+            ModificationClass::ScalarF32 {
+                base: base.weapon_cone_of_fire_min_angle,
+                combined: &mut combined.weapon_cone_of_fire_min_angle,
+                value,
+            }
         }
-        ObjectModificationPropertyProperty::AimModelConeDecreasePerSec => {
-            ModificationClass::ScalarF32(
-                base.weapon_cone_of_fire_decrease_per_second,
-                &mut combined.weapon_cone_of_fire_decrease_per_second,
-            )
+        ObjectModificationPropertyType::AimModelMaxConeDegrees(value) => {
+            ModificationClass::ScalarF32 {
+                base: base.weapon_cone_of_fire_max_angle,
+                combined: &mut combined.weapon_cone_of_fire_max_angle,
+                value,
+            }
         }
-        ObjectModificationPropertyProperty::AimModelConeDecreaseDelayMs => {
-            ModificationClass::ScalarU32(
-                base.weapon_cone_of_fire_decrease_delay_milliseconds,
-                &mut combined.weapon_cone_of_fire_decrease_delay_milliseconds,
-            )
+        ObjectModificationPropertyType::AimModelConeIncreasePerShot(value) => {
+            ModificationClass::ScalarF32 {
+                base: base.weapon_cone_of_fire_increase_per_shot,
+                combined: &mut combined.weapon_cone_of_fire_increase_per_shot,
+                value,
+            }
+        }
+        ObjectModificationPropertyType::AimModelConeDecreasePerSec(value) => {
+            ModificationClass::ScalarF32 {
+                base: base.weapon_cone_of_fire_decrease_per_second,
+                combined: &mut combined.weapon_cone_of_fire_decrease_per_second,
+                value,
+            }
+        }
+        ObjectModificationPropertyType::AimModelConeDecreaseDelayMs(value) => {
+            ModificationClass::ScalarU32 {
+                base: base.weapon_cone_of_fire_decrease_delay_milliseconds,
+                combined: &mut combined.weapon_cone_of_fire_decrease_delay_milliseconds,
+                value,
+            }
         }
         _ => return Ok(()),
     };
 
     match class {
-        ModificationClass::ScalarF32(base, combined) => {
-            let value = params.to_f32::<0>().unwrap();
-
-            match property.function_type {
-                ObjectModificationFunctionType::Set => *combined = value,
-                ObjectModificationFunctionType::Add => *combined += value,
-                ObjectModificationFunctionType::MulAdd => *combined += base * value,
-                _ => unreachable!(),
+        ModificationClass::ScalarF32 {
+            base,
+            combined,
+            value,
+        } => match property.function_type {
+            ObjectModificationFunctionType::Set => *combined = value,
+            ObjectModificationFunctionType::Add => *combined += value,
+            ObjectModificationFunctionType::MulAdd => *combined += base * value,
+            _ => {
+                return Err(ObjectModApplicationError::UnapplicableFunctionType {
+                    property: property.ty,
+                    ty: property.function_type,
+                });
             }
-        }
-        ModificationClass::ScalarU32(base, combined) => {
-            let value = params.to_u32::<0>().unwrap();
-
-            match property.function_type {
-                ObjectModificationFunctionType::Set => *combined = value,
-                ObjectModificationFunctionType::Add => *combined += value,
-                ObjectModificationFunctionType::MulAdd => *combined += base * value,
-                _ => unreachable!(),
+        },
+        ModificationClass::ScalarU32 {
+            base,
+            combined,
+            value,
+        } => match property.function_type {
+            ObjectModificationFunctionType::Set => *combined = value,
+            ObjectModificationFunctionType::Add => *combined += value,
+            ObjectModificationFunctionType::MulAdd => *combined += base * value,
+            _ => {
+                return Err(ObjectModApplicationError::UnapplicableFunctionType {
+                    property: property.ty,
+                    ty: property.function_type,
+                });
             }
-        }
+        },
     }
 
     Ok(())
