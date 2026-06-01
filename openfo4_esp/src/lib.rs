@@ -1286,7 +1286,7 @@ record_kind_label! {
     ObjectVisibilityManager => "OVIS",
 }
 
-pub trait Decode: Sized {
+trait Decode: Sized {
     type Error;
 
     fn decode<B>(buf: B) -> Result<Self, Self::Error>
