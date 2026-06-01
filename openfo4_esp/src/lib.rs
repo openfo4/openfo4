@@ -1286,40 +1286,6 @@ record_kind_label! {
     ObjectVisibilityManager => "OVIS",
 }
 
-enum Group {
-    ACCT,
-    ACHR,
-    ACTI,
-    ADDN,
-    ALCH,
-    AMMO,
-    ANIO,
-    APPA,
-    ARMA,
-    ARMO,
-    ARTO,
-    ASPC,
-    ASTP,
-    AVIF,
-    BOOK,
-    BPTD,
-    CAMS,
-    CELL,
-    CLAS,
-    CLFM,
-    CLMT,
-    COBJ,
-    COLL,
-    CONT,
-    CPTH,
-    CSTY,
-    DEBR,
-    DIAL,
-    DLBR,
-    VLVW,
-    DOBJ,
-}
-
 pub trait Decode: Sized {
     type Error;
 
