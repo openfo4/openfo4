@@ -221,6 +221,12 @@ impl<'a> FunctionBuilder<'a> {
         Value(id)
     }
 
+    fn produce_value_maybe_full(&mut self) -> Value {
+        let id = self.next_value;
+        self.next_value += 1;
+        Value(id)
+    }
+
     #[track_caller]
     fn unop<F>(&mut self, src: Value, op: F) -> Value
     where
@@ -269,7 +275,7 @@ impl<'a> FunctionBuilder<'a> {
 
         let params = state.signature.params.clone();
         let values = (0..state.signature.params.len())
-            .map(|_| self.produce_value())
+            .map(|_| self.produce_value_maybe_full())
             .collect::<Vec<_>>();
 
         self.instructions.push(Instruction::CreateBlock {
@@ -291,7 +297,7 @@ impl<'a> FunctionBuilder<'a> {
         self.next_block += 1;
 
         let values = (0..params.len())
-            .map(|_| self.produce_value())
+            .map(|_| self.produce_value_maybe_full())
             .collect::<Vec<_>>();
 
         self.instructions.push(Instruction::CreateBlock {
@@ -323,6 +329,10 @@ impl<'a> FunctionBuilder<'a> {
 
         if self.current_block == Some(block) {
             return;
+        }
+
+        if self.current_block.is_some() {
+            debug_assert!(self.current_block_full);
         }
 
         self.instructions.push(Instruction::SwitchBlock(block));
