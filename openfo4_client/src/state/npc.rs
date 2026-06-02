@@ -20,6 +20,7 @@ use crate::state::hardcoded::KEYWORD_FEMALE;
 use crate::state::level::leveled_list::select_from_leveled_list;
 use crate::systems::FacingDirection;
 use crate::systems::actor_value::{ActorValue, ActorValueProperties};
+use crate::systems::ai::AiComponent;
 use crate::systems::controller::ControllerShape;
 use crate::systems::equipment::{Equipment, equip_item};
 use crate::systems::inventory::{AddItemEventAsync, Inventory};
@@ -127,6 +128,7 @@ pub struct Actor {
     protection: ActorProtection,
     level: u32,
     factions: Vec<FactionMembership>,
+    items: Vec<(RecordId, u64)>,
 }
 
 impl Actor {
@@ -173,6 +175,17 @@ impl Actor {
             });
         }
 
+        for (item, count) in self.items {
+            events.send(AddItemEventAsync {
+                actor: root,
+                item,
+                attachments: Vec::new(),
+                hidden: false,
+                count,
+                equip: false,
+            });
+        }
+
         world
             .insert(
                 root,
@@ -201,6 +214,8 @@ impl Actor {
         if self.dead {
             world.insert_one(root, DeadActor).unwrap();
         }
+
+        world.insert_one(root, AiComponent).unwrap();
 
         root
     }
@@ -356,6 +371,7 @@ pub async fn spawn_actor(
         protection: props.protection,
         level,
         factions: props.factions,
+        items: props.items,
     })
 }
 
@@ -391,6 +407,7 @@ async fn resolve_actor_props(
 
     // Inventory
     let mut outfit = None;
+    let mut items = Vec::new();
 
     let mut queue = VecDeque::new();
     queue.push_back((NpcTemplateFlags::all(), npc));
@@ -492,6 +509,15 @@ async fn resolve_actor_props(
                     outfit = data
                         .default_outfit
                         .map(|form| esp_loader.resolve_form(form, record.id).unwrap());
+
+                    items = data
+                        .items
+                        .iter()
+                        .map(|item| {
+                            let id = esp_loader.resolve_form(item.item, record.id).unwrap();
+                            (id, item.count.into())
+                        })
+                        .collect();
                 }
 
                 if let Some(template) = data.template_actors {
@@ -586,6 +612,7 @@ async fn resolve_actor_props(
         protection,
         level,
         factions,
+        items,
     }
 }
 
@@ -602,6 +629,7 @@ struct ActorProps {
     protection: ActorProtection,
     level: ActorLevel,
     factions: Vec<FactionMembership>,
+    items: Vec<(RecordId, u64)>,
 }
 
 #[derive(Copy, Clone, Debug)]
