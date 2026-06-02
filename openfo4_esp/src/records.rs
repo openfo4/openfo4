@@ -3006,6 +3006,8 @@ bitflags! {
         /// than or equal to the player's level is selected.
         const ALL_LEVELS = 0x01;
         const EACH = 0x02;
+        /// Always add all entries, disregarding their chances.
+        const USE_ALL = 0x04;
     }
 }
 

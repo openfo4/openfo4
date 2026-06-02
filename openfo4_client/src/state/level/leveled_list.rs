@@ -6,9 +6,13 @@ pub fn select_from_leveled_list(
     flags: LeveledActorFlags,
     entries: &[LeveledListEntry],
     player_level: u16,
-) -> Option<usize> {
+) -> Vec<usize> {
     let mut weights = Vec::new();
     let mut indices = Vec::new();
+
+    if flags.contains(LeveledActorFlags::USE_ALL) {
+        return (0..entries.len()).collect();
+    }
 
     if flags.contains(LeveledActorFlags::ALL_LEVELS) {
         for (index, entry) in entries.iter().enumerate() {
@@ -51,10 +55,10 @@ pub fn select_from_leveled_list(
     }
 
     if weights.len() == 0 {
-        return None;
+        return Vec::new();
     }
 
     let distribution = WeightedIndex::new(weights).unwrap();
     let index = indices[distribution.sample(&mut rand::rng())];
-    Some(index)
+    vec![index]
 }

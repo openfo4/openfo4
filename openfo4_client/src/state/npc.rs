@@ -574,15 +574,12 @@ async fn resolve_actor_props(
                         .is_some_and(|id| !visited.contains(&id))
                 });
 
-                let Some(index) = select_from_leveled_list(data.flags, &data.entries, PLAYER_LEVEL)
-                else {
-                    continue;
-                };
-
-                let form = data.entries[index].reference;
-                let record_id = esp_loader.resolve_form(form, record.id).unwrap();
-                let record = esp_loader.lookup(None, record_id).await.unwrap();
-                queue.push_back((flags, record));
+                for index in select_from_leveled_list(data.flags, &data.entries, PLAYER_LEVEL) {
+                    let form = data.entries[index].reference;
+                    let record_id = esp_loader.resolve_form(form, record.id).unwrap();
+                    let record = esp_loader.lookup(None, record_id).await.unwrap();
+                    queue.push_back((flags, record));
+                }
             }
             _ => unreachable!(),
         }

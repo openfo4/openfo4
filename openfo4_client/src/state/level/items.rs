@@ -37,15 +37,12 @@ pub async fn resolve_item(
                         .is_some_and(|id| !visited.contains(&id))
                 });
 
-                let Some(index) = select_from_leveled_list(data.flags, &data.entries, PLAYER_LEVEL)
-                else {
-                    continue;
-                };
-
-                let form = data.entries[index].reference;
-                let count = u64::from(data.entries[index].count);
-                let rid = esp_loader.resolve_form(form, record_id).unwrap();
-                queue.push((rid, count, Vec::new()));
+                for index in select_from_leveled_list(data.flags, &data.entries, PLAYER_LEVEL) {
+                    let form = data.entries[index].reference;
+                    let count = u64::from(data.entries[index].count);
+                    let rid = esp_loader.resolve_form(form, record_id).unwrap();
+                    queue.push((rid, count, Vec::new()));
+                }
             }
             RecordData::MiscObject(data) => {
                 let keywords: HashSet<RecordId> = data
