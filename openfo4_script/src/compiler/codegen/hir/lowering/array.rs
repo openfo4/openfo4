@@ -10,7 +10,7 @@ use crate::compiler::codegen::hir::lowering::{
 use crate::compiler::codegen::hir::{
     ArrayAdd, ArrayFind, ArrayFindStruct, ArrayInsert, ArrayRemove, Literal, Null, Value,
 };
-use crate::compiler::resources::{Type, TypeId};
+use crate::compiler::resources::{Type, TypeId, TypeRepr};
 use crate::runtime::ArrayObject;
 
 pub fn array_length(translator: &mut Translator<'_>, array: &Value<Null>, dst: &Value<i32>) {
@@ -337,6 +337,7 @@ pub fn array_find_struct(translator: &mut Translator<'_>, op: &ArrayFindStruct) 
         .types
         .get(struct_.ty)
         .unwrap()
+        .repr
         .size_padded() as i64;
 
     let member = struct_
@@ -693,13 +694,13 @@ pub fn array_cast<F>(
 }
 
 fn lowered_elem_ty(ty: Type) -> JitType {
-    match ty {
-        Type::Unit => PTR_TYPE,
-        Type::Int { bits } if bits == 8 => BOOL_TYPE,
-        Type::Int { bits } if bits == 32 => INT_TYPE,
-        Type::Int { bits } if bits == usize::BITS => PTR_TYPE,
-        Type::Float { bits } if bits == 32 => FLOAT_TYPE,
-        Type::Composite(_) => PTR_TYPE,
+    match ty.repr {
+        TypeRepr::Unit => PTR_TYPE,
+        TypeRepr::Int { bits } if bits == 8 => BOOL_TYPE,
+        TypeRepr::Int { bits } if bits == 32 => INT_TYPE,
+        TypeRepr::Int { bits } if bits == usize::BITS => PTR_TYPE,
+        TypeRepr::Float { bits } if bits == 32 => FLOAT_TYPE,
+        TypeRepr::Composite(_) => PTR_TYPE,
         _ => unreachable!(),
     }
 }

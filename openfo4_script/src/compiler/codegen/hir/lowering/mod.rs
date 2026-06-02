@@ -18,7 +18,7 @@ use crate::compiler::codegen::hir::{
     AddrCompareOp, Function, Instruction, Literal, Null, ScalarCompareOp, Value,
 };
 use crate::compiler::codegen::trace::Span;
-use crate::compiler::resources::{Type, TypeId};
+use crate::compiler::resources::{TypeId, TypeRepr};
 use crate::runtime::object::ObjectTag;
 use crate::runtime::{RESULT_ERROR, RESULT_OK, RawContext, RawStack};
 
@@ -43,12 +43,12 @@ pub fn lower_function(
     let mut variables = Vec::new();
     for ty in function.variables.iter() {
         let ty = data.resources.types.get(*ty).unwrap();
-        let ty = match ty {
-            Type::Unit => PTR_TYPE,
-            Type::Int { bits } if bits == 8 => BOOL_TYPE,
-            Type::Int { bits } if bits == 32 => INT_TYPE,
-            Type::Float { bits } if bits == 32 => FLOAT_TYPE,
-            Type::Composite(_) => PTR_TYPE,
+        let ty = match ty.repr {
+            TypeRepr::Unit => PTR_TYPE,
+            TypeRepr::Int { bits } if bits == 8 => BOOL_TYPE,
+            TypeRepr::Int { bits } if bits == 32 => INT_TYPE,
+            TypeRepr::Float { bits } if bits == 32 => FLOAT_TYPE,
+            TypeRepr::Composite(_) => PTR_TYPE,
             _ => unreachable!(),
         };
 
@@ -884,12 +884,12 @@ impl<'a> Translator<'a> {
 
     pub fn lowered_ty_from_id(&mut self, ty: TypeId) -> JitType {
         let ty = self.data.resources.types.get(ty).unwrap();
-        match ty {
-            Type::Unit => PTR_TYPE,
-            Type::Int { bits } if bits == 8 => BOOL_TYPE,
-            Type::Int { bits } if bits == 32 => INT_TYPE,
-            Type::Float { bits } if bits == 32 => FLOAT_TYPE,
-            Type::Composite(_) => PTR_TYPE,
+        match ty.repr {
+            TypeRepr::Unit => PTR_TYPE,
+            TypeRepr::Int { bits } if bits == 8 => BOOL_TYPE,
+            TypeRepr::Int { bits } if bits == 32 => INT_TYPE,
+            TypeRepr::Float { bits } if bits == 32 => FLOAT_TYPE,
+            TypeRepr::Composite(_) => PTR_TYPE,
             _ => unreachable!(),
         }
     }
@@ -1067,12 +1067,12 @@ fn generate_abort_block(
 
     if let Some(ty) = function.returns {
         let ty = data.resources.types.get(ty).unwrap();
-        let ty = match ty {
-            Type::Unit => PTR_TYPE,
-            Type::Int { bits } if bits == 8 => BOOL_TYPE,
-            Type::Int { bits } if bits == 32 => INT_TYPE,
-            Type::Float { bits } if bits == 32 => FLOAT_TYPE,
-            Type::Composite(_) => PTR_TYPE,
+        let ty = match ty.repr {
+            TypeRepr::Unit => PTR_TYPE,
+            TypeRepr::Int { bits } if bits == 8 => BOOL_TYPE,
+            TypeRepr::Int { bits } if bits == 32 => INT_TYPE,
+            TypeRepr::Float { bits } if bits == 32 => FLOAT_TYPE,
+            TypeRepr::Composite(_) => PTR_TYPE,
             _ => unreachable!(),
         };
 

@@ -7,7 +7,7 @@ use crate::compiler::codegen::hir::lowering::malloc::call_malloc;
 use crate::compiler::codegen::hir::lowering::{
     BOOL_TYPE, FLOAT_TYPE, INT_TYPE, PTR_TYPE, Translator,
 };
-use crate::compiler::resources::Type;
+use crate::compiler::resources::TypeRepr;
 use crate::runtime::object::{ObjectTag, VarObject};
 
 /// Returns `src` is of type `class` or a subtype of `class`.
@@ -120,24 +120,24 @@ pub fn extract_var(
                 .builder
                 .load(PTR_TYPE, object, offset_of!(VarObject, data) as u32)
         }
-        ObjectTag::TypeId(id) => match translator.data.resources.types.get(id).unwrap() {
-            Type::Unit => translator.builder.iconst(PTR_TYPE, 0),
-            Type::Int { bits } if bits == 8 => {
+        ObjectTag::TypeId(id) => match translator.data.resources.types.get(id).unwrap().repr {
+            TypeRepr::Unit => translator.builder.iconst(PTR_TYPE, 0),
+            TypeRepr::Int { bits } if bits == 8 => {
                 translator
                     .builder
                     .load(BOOL_TYPE, object, offset_of!(VarObject, data) as u32)
             }
-            Type::Int { bits } if bits == 32 => {
+            TypeRepr::Int { bits } if bits == 32 => {
                 translator
                     .builder
                     .load(INT_TYPE, object, offset_of!(VarObject, data) as u32)
             }
-            Type::Float { bits } if bits == 32 => {
+            TypeRepr::Float { bits } if bits == 32 => {
                 translator
                     .builder
                     .load(FLOAT_TYPE, object, offset_of!(VarObject, data) as u32)
             }
-            Type::Composite(_) => {
+            TypeRepr::Composite(_) => {
                 translator
                     .builder
                     .load(PTR_TYPE, object, offset_of!(VarObject, data) as u32)

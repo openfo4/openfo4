@@ -4,7 +4,7 @@ use std::sync::{Arc, Mutex};
 use game_common::string::Lowercase;
 use hashbrown::HashMap;
 
-use crate::compiler::resources::{Resources, Type, TypeId, TypeInfo};
+use crate::compiler::resources::{Resources, Type, TypeId, TypeRepr};
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 #[repr(transparent)]
@@ -52,17 +52,10 @@ impl ObjectPool {
     }
 
     pub fn alloc(&self, ty: TypeId, array_len: usize) -> ObjectRef {
-        let layout = self.resources.types.get(ty).unwrap();
-        let info = self
-            .resources
-            .infos
-            .lock()
-            .get(&ty)
-            .cloned()
-            .unwrap_or_default();
+        let typ = self.resources.types.get(ty).unwrap();
 
-        let size = layout.size();
-        let align = layout.align();
+        let size = typ.repr.size();
+        let align = typ.repr.align();
         let stride = (size + align - 1) & !(align - 1);
 
         let array_size = stride * array_len;
@@ -87,7 +80,7 @@ impl ObjectPool {
             let elem_ptr = unsafe { ptr.add(stride * i) };
             let addr = ObjectAddr::from_raw(elem_ptr);
 
-            let object = unsafe { Object::new_at(ty, layout.clone(), info.clone(), elem_ptr) };
+            let object = unsafe { Object::new_at(ty, typ.clone(), elem_ptr) };
 
             objects.insert(addr, object);
         }
@@ -100,16 +93,9 @@ impl ObjectPool {
 
     pub fn insert(&self, ty: TypeId) -> ObjectBuilder {
         let object_ref = self.alloc(ty, 1);
-        let layout = self.resources.types.get(ty).unwrap();
-        let info = self
-            .resources
-            .infos
-            .lock()
-            .get(&ty)
-            .cloned()
-            .unwrap_or_default();
+        let typ = self.resources.types.get(ty).unwrap();
 
-        let object = unsafe { Object::new_at(ty, layout, info, object_ref.addr().0 as *mut u8) };
+        let object = unsafe { Object::new_at(ty, typ, object_ref.addr().0 as *mut u8) };
 
         ObjectBuilder {
             obj: object,
@@ -134,21 +120,18 @@ impl ObjectPool {
 
     pub fn insert_array(&self, elem_ty: TypeId, array_len: usize) -> ObjectArrayBuilder {
         let array_ref = self.alloc(elem_ty, array_len);
-        let elem_layout = self.resources.types.get(elem_ty).unwrap();
-        let properties = self.resources.infos.lock().get(&elem_ty).unwrap().clone();
+        let elem_typ = self.resources.types.get(elem_ty).unwrap();
 
         let mut objects = Vec::new();
 
-        let size = elem_layout.size();
-        let align = elem_layout.align();
+        let size = elem_typ.repr.size();
+        let align = elem_typ.repr.align();
         let stride = (size + align - 1) & !(align - 1);
 
         for i in 0..array_len {
             let elem_ptr = unsafe { array_ref.as_ptr().add(stride * i) };
 
-            let object = unsafe {
-                Object::new_at(elem_ty, elem_layout.clone(), properties.clone(), elem_ptr)
-            };
+            let object = unsafe { Object::new_at(elem_ty, elem_typ.clone(), elem_ptr) };
             objects.push(object);
         }
 
@@ -283,12 +266,11 @@ pub struct Object {
     memory: *mut u8,
     ty: Type,
     ty_id: TypeId,
-    info: TypeInfo,
 }
 
 impl Object {
-    unsafe fn new_at(ty_id: TypeId, ty: Type, info: TypeInfo, ptr: *mut u8) -> Self {
-        if let Type::Composite(ty) = &ty {
+    unsafe fn new_at(ty_id: TypeId, ty: Type, ptr: *mut u8) -> Self {
+        if let TypeRepr::Composite(ty) = &ty.repr {
             for member in &ty.members {
                 let Some(value) = &member.default_value else {
                     continue;
@@ -310,14 +292,13 @@ impl Object {
             memory: ptr,
             ty,
             ty_id,
-            info,
         }
     }
 
     fn get_prop_offset_and_size(&self, class: &str, name: &str) -> Option<(usize, usize)> {
         let index = self.get_property_var(class, name);
 
-        let Type::Composite(ty) = &self.ty else {
+        let TypeRepr::Composite(ty) = &self.ty.repr else {
             return Some((0, self.size()));
         };
 
@@ -371,6 +352,7 @@ impl Object {
 
         // Always prefer properties that match the requested class.
         if let Some((_, prop)) = self
+            .ty
             .info
             .properties
             .iter()
@@ -383,7 +365,13 @@ impl Object {
         // FIXME: Ideally we would recursively walk up the class
         // hierarchy instead of selecting any other matching property,
         // this requires us to have access to the class names from here.
-        if let Some((_, prop)) = self.info.properties.iter().find(|((_, fl), _)| *fl == name) {
+        if let Some((_, prop)) = self
+            .ty
+            .info
+            .properties
+            .iter()
+            .find(|((_, fl), _)| *fl == name)
+        {
             return prop.field;
         }
 
@@ -402,7 +390,7 @@ impl Object {
     }
 
     pub fn size(&self) -> usize {
-        self.ty.size()
+        self.ty.repr.size()
     }
 
     pub fn type_id(&self) -> TypeId {

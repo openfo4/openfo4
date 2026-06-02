@@ -13,7 +13,6 @@ pub struct Resources {
     pub constants: ConstantPool,
     pub primitives: PrimitiveTypes,
     pub string_to_type: Mutex<HashMap<Lowercase<String>, TypeId>>,
-    pub infos: Mutex<HashMap<TypeId, TypeInfo>>,
 }
 
 impl Resources {
@@ -57,7 +56,6 @@ impl Resources {
             primitives,
             constants: ConstantPool::default(),
             string_to_type: Mutex::new(string_to_type),
-            infos: Mutex::new(infos),
         }
     }
 }
@@ -106,14 +104,21 @@ impl Types {
 }
 
 #[derive(Clone, Debug)]
-pub enum Type {
+pub struct Type {
+    pub repr: TypeRepr,
+    pub info: TypeInfo,
+}
+
+/// Description of the binary representation of the type.
+#[derive(Clone, Debug)]
+pub enum TypeRepr {
     Unit,
     Int { bits: u32 },
     Float { bits: u32 },
     Composite(CompositeType),
 }
 
-impl Type {
+impl TypeRepr {
     pub fn size(&self) -> usize {
         match self {
             Self::Unit => 0,
@@ -206,90 +211,219 @@ pub struct PrimitiveTypes {
 impl PrimitiveTypes {
     pub fn new(types: &Types) -> Self {
         let none = types.declare();
-        types.define(none, Type::Unit);
+        types.define(
+            none,
+            Type {
+                repr: TypeRepr::Unit,
+                info: TypeInfo {
+                    name: Some(Lowercase::new("none")),
+                    classes: Vec::new(),
+                    properties: HashMap::from([(
+                        (Lowercase::new(""), Lowercase::new("")),
+                        TypeProperty {
+                            ty: PropertyType::Inline(none),
+                            field: 0,
+                        },
+                    )]),
+                },
+            },
+        );
 
         let bool = types.declare();
-        types.define(bool, Type::Int { bits: 8 });
+        types.define(
+            bool,
+            Type {
+                repr: TypeRepr::Int { bits: 8 },
+                info: TypeInfo {
+                    name: Some(Lowercase::new("bool")),
+                    classes: Vec::new(),
+                    properties: HashMap::from([(
+                        (Lowercase::new(""), Lowercase::new("")),
+                        TypeProperty {
+                            ty: PropertyType::Inline(bool),
+                            field: 0,
+                        },
+                    )]),
+                },
+            },
+        );
 
         let int = types.declare();
-        types.define(int, Type::Int { bits: 32 });
+        types.define(
+            int,
+            Type {
+                repr: TypeRepr::Int { bits: 32 },
+                info: TypeInfo {
+                    name: Some(Lowercase::new("int")),
+                    classes: Vec::new(),
+                    properties: HashMap::from([(
+                        (Lowercase::new(""), Lowercase::new("")),
+                        TypeProperty {
+                            ty: PropertyType::Inline(int),
+                            field: 0,
+                        },
+                    )]),
+                },
+            },
+        );
 
         let float = types.declare();
-        types.define(float, Type::Float { bits: 32 });
+        types.define(
+            float,
+            Type {
+                repr: TypeRepr::Float { bits: 32 },
+                info: TypeInfo {
+                    name: Some(Lowercase::new("float")),
+                    classes: Vec::new(),
+                    properties: HashMap::from([(
+                        (Lowercase::new(""), Lowercase::new("")),
+                        TypeProperty {
+                            ty: PropertyType::Inline(float),
+                            field: 0,
+                        },
+                    )]),
+                },
+            },
+        );
 
         let pointer = types.declare();
-        types.define(pointer, Type::Int { bits: usize::BITS });
+        types.define(
+            pointer,
+            Type {
+                repr: TypeRepr::Int { bits: usize::BITS },
+                info: TypeInfo {
+                    name: None,
+                    classes: Vec::new(),
+                    properties: HashMap::from([(
+                        (Lowercase::new(""), Lowercase::new("")),
+                        TypeProperty {
+                            ty: PropertyType::Inline(pointer),
+                            field: 0,
+                        },
+                    )]),
+                },
+            },
+        );
 
         let byte = types.declare();
-        types.define(byte, Type::Int { bits: 8 });
+        types.define(
+            byte,
+            Type {
+                repr: TypeRepr::Int { bits: 8 },
+                info: TypeInfo {
+                    name: None,
+                    classes: Vec::new(),
+                    properties: HashMap::from([(
+                        (Lowercase::new(""), Lowercase::new("")),
+                        TypeProperty {
+                            ty: PropertyType::Inline(byte),
+                            field: 0,
+                        },
+                    )]),
+                },
+            },
+        );
 
         let string = types.declare();
         types.define(
             string,
-            Type::Composite(CompositeType {
-                members: vec![
-                    CompositeTypeMember {
-                        ty: pointer,
-                        offset: 0,
-                        default_value: None,
-                        size: size_of::<usize>(),
-                    },
-                    CompositeTypeMember {
-                        ty: pointer,
-                        offset: size_of::<usize>(),
-                        default_value: None,
-                        size: size_of::<usize>(),
-                    },
-                ],
-                size: 2 * size_of::<usize>(),
-                align: align_of::<usize>(),
-            }),
+            Type {
+                repr: TypeRepr::Composite(CompositeType {
+                    members: vec![
+                        CompositeTypeMember {
+                            ty: pointer,
+                            offset: 0,
+                            default_value: None,
+                            size: size_of::<usize>(),
+                        },
+                        CompositeTypeMember {
+                            ty: pointer,
+                            offset: size_of::<usize>(),
+                            default_value: None,
+                            size: size_of::<usize>(),
+                        },
+                    ],
+                    size: 2 * size_of::<usize>(),
+                    align: align_of::<usize>(),
+                }),
+                info: TypeInfo {
+                    name: Some(Lowercase::new("string")),
+                    classes: Vec::new(),
+                    properties: HashMap::from([(
+                        (Lowercase::new(""), Lowercase::new("")),
+                        TypeProperty {
+                            ty: PropertyType::Inline(string),
+                            field: 0,
+                        },
+                    )]),
+                },
+            },
         );
 
         let array = types.declare();
         types.define(
             array,
-            Type::Composite(CompositeType {
-                members: vec![
-                    CompositeTypeMember {
-                        ty: pointer,
-                        offset: 0,
-                        default_value: None,
-                        size: size_of::<usize>(),
-                    },
-                    CompositeTypeMember {
-                        ty: pointer,
-                        offset: size_of::<usize>(),
-                        default_value: None,
-                        size: size_of::<usize>(),
-                    },
-                ],
-                size: 2 * size_of::<usize>(),
-                align: align_of::<usize>(),
-            }),
+            Type {
+                repr: TypeRepr::Composite(CompositeType {
+                    members: vec![
+                        CompositeTypeMember {
+                            ty: pointer,
+                            offset: 0,
+                            default_value: None,
+                            size: size_of::<usize>(),
+                        },
+                        CompositeTypeMember {
+                            ty: pointer,
+                            offset: size_of::<usize>(),
+                            default_value: None,
+                            size: size_of::<usize>(),
+                        },
+                    ],
+                    size: 2 * size_of::<usize>(),
+                    align: align_of::<usize>(),
+                }),
+                info: TypeInfo {
+                    name: None,
+                    classes: Vec::new(),
+                    properties: HashMap::new(),
+                },
+            },
         );
 
         let var = types.declare();
         types.define(
             var,
-            Type::Composite(CompositeType {
-                members: vec![
-                    CompositeTypeMember {
-                        ty: pointer,
-                        offset: 0,
-                        default_value: None,
-                        size: size_of::<usize>(),
-                    },
-                    CompositeTypeMember {
-                        ty: pointer,
-                        offset: size_of::<usize>(),
-                        default_value: None,
-                        size: size_of::<usize>(),
-                    },
-                ],
-                size: 2 * size_of::<usize>(),
-                align: align_of::<usize>(),
-            }),
+            Type {
+                repr: TypeRepr::Composite(CompositeType {
+                    members: vec![
+                        CompositeTypeMember {
+                            ty: pointer,
+                            offset: 0,
+                            default_value: None,
+                            size: size_of::<usize>(),
+                        },
+                        CompositeTypeMember {
+                            ty: pointer,
+                            offset: size_of::<usize>(),
+                            default_value: None,
+                            size: size_of::<usize>(),
+                        },
+                    ],
+                    size: 2 * size_of::<usize>(),
+                    align: align_of::<usize>(),
+                }),
+                info: TypeInfo {
+                    name: Some(Lowercase::new("var")),
+                    classes: Vec::new(),
+                    properties: HashMap::from([(
+                        (Lowercase::new(""), Lowercase::new("")),
+                        TypeProperty {
+                            ty: PropertyType::Inline(var),
+                            field: 0,
+                        },
+                    )]),
+                },
+            },
         );
 
         Self {

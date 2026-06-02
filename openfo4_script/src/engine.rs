@@ -185,7 +185,7 @@ impl Engine {
     }
 
     pub fn type_info(&self, id: TypeId) -> TypeInfo {
-        self.ctx.resources().infos.lock().get(&id).cloned().unwrap()
+        self.ctx.resources().types.get(id).unwrap().info
     }
 
     /// Creates a new empty [`Stack`] for function suspension and resumption.

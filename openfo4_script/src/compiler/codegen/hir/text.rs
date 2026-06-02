@@ -5,7 +5,7 @@ use crate::compiler::codegen::hir::{
     AddrCompareOp, Function, Instruction, Label, Literal, Null, ScalarCompareOp, StringCompareOp,
     Value,
 };
-use crate::compiler::resources::{Type, TypeId};
+use crate::compiler::resources::{TypeId, TypeRepr};
 
 pub fn function_text<W>(func: &Function, mut writer: W, data: &CodegenData) -> Result
 where
@@ -13,11 +13,11 @@ where
 {
     let ty_to_string = |ty: TypeId| {
         let ty = data.resources.types.get(ty).unwrap();
-        match ty {
-            Type::Unit => "unit".to_string(),
-            Type::Int { bits } => format!("i{}", bits),
-            Type::Float { bits } => format!("f{}", bits),
-            Type::Composite(_) => "composite".to_owned(),
+        match ty.repr {
+            TypeRepr::Unit => "unit".to_string(),
+            TypeRepr::Int { bits } => format!("i{}", bits),
+            TypeRepr::Float { bits } => format!("f{}", bits),
+            TypeRepr::Composite(_) => "composite".to_owned(),
         }
     };
 

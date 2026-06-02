@@ -23,7 +23,7 @@ use thiserror::Error;
 use crate::compiler::codegen::runtime::RuntimeFunctions;
 use crate::compiler::resources::{
     self, CompositeType, CompositeTypeMember, PropertyType, Resources, TypeId, TypeInfo,
-    TypeProperty,
+    TypeProperty, TypeRepr,
 };
 use crate::compiler::{CompilationResult, CompiledClass, NativeFunction};
 use crate::engine::Options;
@@ -330,19 +330,17 @@ impl CodegenPass {
 
             self.data.resources.types.define(
                 id,
-                resources::Type::Composite(CompositeType {
-                    members,
-                    size: offset,
-                    align,
-                }),
-            );
-
-            self.data.resources.infos.lock().insert(
-                id,
-                TypeInfo {
-                    classes: Vec::new(),
-                    properties,
-                    name: Some(name.to_owned()),
+                resources::Type {
+                    repr: TypeRepr::Composite(CompositeType {
+                        members,
+                        size: offset,
+                        align,
+                    }),
+                    info: TypeInfo {
+                        name: Some(name.clone()),
+                        classes: Vec::new(),
+                        properties,
+                    },
                 },
             );
 
@@ -370,8 +368,8 @@ impl CodegenPass {
                     continue;
                 };
 
-                match parent {
-                    resources::Type::Composite(ty) => ty.clone(),
+                match parent.repr {
+                    TypeRepr::Composite(ty) => ty.clone(),
                     _ => unreachable!(),
                 }
             } else {
@@ -461,27 +459,16 @@ impl CodegenPass {
                 base.align = base.align.max(member_align);
             }
 
-            self.data
-                .resources
-                .types
-                .define(id, resources::Type::Composite(base));
-
-            class_field_offsets.insert(
-                name.to_owned(),
-                (first_field_index + new_fields, field_offsets),
-            );
-
             // Properties
             let mut properties = if let Some(parent) = &class.parent {
                 let parent_id = self.data.classes[parent].type_id;
 
                 self.data
                     .resources
-                    .infos
-                    .lock()
-                    .get(&parent_id)
+                    .types
+                    .get(parent_id)
                     .unwrap()
-                    .clone()
+                    .info
                     .properties
             } else {
                 HashMap::new()
@@ -511,13 +498,21 @@ impl CodegenPass {
                 );
             }
 
-            self.data.resources.infos.lock().insert(
+            self.data.resources.types.define(
                 id,
-                TypeInfo {
-                    classes: class_ids,
-                    properties,
-                    name: Some(name.to_owned()),
+                resources::Type {
+                    repr: TypeRepr::Composite(base),
+                    info: TypeInfo {
+                        classes: class_ids,
+                        properties,
+                        name: Some(name.to_owned()),
+                    },
                 },
+            );
+
+            class_field_offsets.insert(
+                name.to_owned(),
+                (first_field_index + new_fields, field_offsets),
             );
         }
 
@@ -689,8 +684,8 @@ impl CodegenPass {
 
         // Update the "default value" for the class header ptr.
         let mut ty = self.data.resources.types.get(class.type_id).unwrap();
-        match &mut ty {
-            resources::Type::Composite(ty) => {
+        match &mut ty.repr {
+            TypeRepr::Composite(ty) => {
                 ty.members[0].default_value = Some(bytemuck::bytes_of(&ptr).to_vec());
             }
             _ => unreachable!(),
