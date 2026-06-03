@@ -48,73 +48,69 @@ pub fn handle_inputs(
                 transform.rotation = (q1 * transform.rotation).normalize();
                 offset.rotation = (offset.rotation * q2).normalize();
             }
-            WindowEvent::KeyboardInput(event) => {
-                let old_state = state.clone();
-
-                match event.key_code {
-                    Some(KeyCode::W) => {
-                        state.moving_front = event.state.is_pressed();
-                    }
-                    Some(KeyCode::S) => {
-                        state.moving_back = event.state.is_pressed();
-                    }
-                    Some(KeyCode::A) => {
-                        state.moving_left = event.state.is_pressed();
-                    }
-                    Some(KeyCode::D) => {
-                        state.moving_right = event.state.is_pressed();
-                    }
-                    Some(KeyCode::LControl) => {
-                        if !event.state.is_pressed() {
-                            continue;
-                        }
-
-                        if let Some(form) = actions.0.get(&Action::Sneak) {
-                            queue.0.push_back(*form);
-                        }
-
-                        state.sneaking ^= true;
-                    }
-                    Some(KeyCode::LShift) => {
-                        let action = if state.sprinting {
-                            Action::SprintStop
-                        } else {
-                            Action::SprintStart
-                        };
-
-                        if let Some(form) = actions.0.get(&action) {
-                            queue.0.push_back(*form);
-                        }
-
-                        state.sprinting ^= true;
-                    }
-                    Some(KeyCode::Space) => {
-                        if !event.state.is_pressed() {
-                            continue;
-                        }
-
-                        let action = if state.jumping {
-                            state.jumping = false;
-                            Action::Land
-                        } else {
-                            state.jumping = true;
-                            Action::Jump
-                        };
-
-                        if let Some(form) = actions.0.get(&action) {
-                            dbg!(form);
-                            queue.0.push_back(*form);
-                        }
-                    }
-                    Some(KeyCode::Key1) if event.state.is_pressed() => {
-                        state.walking ^= true;
-                    }
-                    Some(KeyCode::Key2) if event.state.is_pressed() => {
-                        events.send(GunFireEvent { actor: entity });
-                    }
-                    _ => continue,
+            WindowEvent::KeyboardInput(event) => match event.key_code {
+                Some(KeyCode::W) => {
+                    state.moving_front = event.state.is_pressed();
                 }
-            }
+                Some(KeyCode::S) => {
+                    state.moving_back = event.state.is_pressed();
+                }
+                Some(KeyCode::A) => {
+                    state.moving_left = event.state.is_pressed();
+                }
+                Some(KeyCode::D) => {
+                    state.moving_right = event.state.is_pressed();
+                }
+                Some(KeyCode::LControl) => {
+                    if !event.state.is_pressed() {
+                        continue;
+                    }
+
+                    if let Some(form) = actions.0.get(&Action::Sneak) {
+                        queue.0.push_back(*form);
+                    }
+
+                    state.sneaking ^= true;
+                }
+                Some(KeyCode::LShift) => {
+                    let action = if state.sprinting {
+                        Action::SprintStop
+                    } else {
+                        Action::SprintStart
+                    };
+
+                    if let Some(form) = actions.0.get(&action) {
+                        queue.0.push_back(*form);
+                    }
+
+                    state.sprinting ^= true;
+                }
+                Some(KeyCode::Space) => {
+                    if !event.state.is_pressed() {
+                        continue;
+                    }
+
+                    let action = if state.jumping {
+                        state.jumping = false;
+                        Action::Land
+                    } else {
+                        state.jumping = true;
+                        Action::Jump
+                    };
+
+                    if let Some(form) = actions.0.get(&action) {
+                        dbg!(form);
+                        queue.0.push_back(*form);
+                    }
+                }
+                Some(KeyCode::Key1) if event.state.is_pressed() => {
+                    state.walking ^= true;
+                }
+                Some(KeyCode::Key2) if event.state.is_pressed() => {
+                    events.send(GunFireEvent { actor: entity });
+                }
+                _ => continue,
+            },
             _ => (),
         }
     }
