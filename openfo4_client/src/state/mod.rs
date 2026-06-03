@@ -60,6 +60,7 @@ use crate::systems::door::{handle_automatic_doors, handle_door_activations};
 use crate::systems::global::{Difficulty, GameRules, GlobalProperties};
 use crate::systems::hierarchy::TransformHierarchyCache;
 use crate::systems::inventory::InventorySystem;
+use crate::systems::movement::apply_movement;
 use crate::systems::quests::QuestManager;
 use crate::systems::scripting::{Executor, ScriptEntities};
 use crate::systems::time::{init_time, update_time};
@@ -239,7 +240,7 @@ impl GameState {
             &mut self.object_ref_set,
             &mut self.script_entities,
         );
-        self.ai.update(&mut self.world);
+        self.ai.update(&mut self.world, &mut self.event_bus);
 
         animation_test::animation_test(
             &mut self.event_bus,
@@ -258,8 +259,10 @@ impl GameState {
         despawn_expired(&mut self.world);
 
         update_facing_direction(&mut self.world);
-        apply_player_movements(&mut self.world, &mut self.physics);
+        apply_player_movements(&mut self.world);
         update_trigger_box_contacts(&mut self.world, &mut self.event_bus);
+
+        apply_movement(&mut self.world, &mut self.physics);
 
         // systems::ni_transform::compute_transform_from_ni_transform(&mut self.world);
         // systems::ni_transform::compute_cell_ids_from_ni_transform(&mut self.world);

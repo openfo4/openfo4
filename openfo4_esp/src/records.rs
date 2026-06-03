@@ -6971,6 +6971,29 @@ pub struct MaterialObject {
 pub struct MovementType {
     #[record("EDID")]
     pub id: Option<ZString>,
+    #[record("MNAM")]
+    pub name: Option<ZString>,
+    #[record("SPED")]
+    pub speeds: MovementSpeeds,
+    #[record("JNAM")]
+    pub float_height: Option<f32>,
+}
+
+#[derive(Copy, Clone, Debug, BinaryStruct)]
+pub struct MovementSpeeds {
+    pub left: MovementSpeed,
+    pub right: MovementSpeed,
+    pub forward: MovementSpeed,
+    pub backward: MovementSpeed,
+    // TODO: Pitch Roll Yaw
+}
+
+#[derive(Copy, Clone, Debug, BinaryStruct)]
+pub struct MovementSpeed {
+    pub standing: f32,
+    pub walk: f32,
+    pub run: f32,
+    pub sprint: f32,
 }
 
 #[derive(Clone, Debug, Record)]

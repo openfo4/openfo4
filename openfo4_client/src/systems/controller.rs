@@ -1,5 +1,3 @@
-use std::f32::consts::PI;
-
 use game_common::components::Transform;
 use game_input::keyboard::KeyCode;
 use game_window::events::WindowEvent;
@@ -8,20 +6,15 @@ use openfo4_core::Frozen;
 use openfo4_core::ecs::{CommandBuffer, Entity, World};
 use openfo4_core::events::EventBus;
 use openfo4_core::transform::ConvertCoordinateSystem;
-use openfo4_physics::PhysicsPipeline;
 use openfo4_physics::components::ColliderShape;
-use openfo4_physics::controller::CharacterController;
 use slab::Slab;
 
-use crate::assets::nif::NIF_TO_METERS;
 use crate::components::{Camera, Player};
-use crate::state::UPS;
 use crate::state::actions::{Action, Actions};
 use crate::state::anim_starter::AnimationEventQueue;
-use crate::state::hardcoded::KEYWORD_FEMALE;
-use crate::state::npc::ObjectKeywords;
-use crate::systems::animation_sync::AnimationParameters;
+use crate::state::npc::ActorMovementSpeeds;
 use crate::systems::camera::{CameraMode, CameraOffset, PlayerControlled};
+use crate::systems::movement::{MovementDirection, MovementSpeed};
 use crate::systems::{FacingDirection, GunFireEvent, PlayerControlState};
 
 pub fn handle_inputs(
@@ -165,30 +158,21 @@ pub fn update_facing_direction(world: &mut World) {
     }
 }
 
-pub fn apply_player_movements(world: &mut World, pipeline: &mut PhysicsPipeline) {
+pub fn apply_player_movements(world: &mut World) {
     let mut buffer = CommandBuffer::new();
 
-    for (
-        entity,
-        mut transform,
-        facing_dir,
-        state,
-        mut controller,
-        collider,
-        actor_keywords,
-        player,
-        frozen,
-    ) in world.query_mut::<(
+    for (entity, state, speeds, frozen, _) in world.query_mut::<(
         Entity,
-        &mut Transform,
-        &FacingDirection,
-        &mut PlayerControlState,
-        Option<&mut CharacterController>,
-        &ControllerShape,
-        &ObjectKeywords,
-        Option<&Player>,
+        &PlayerControlState,
+        &ActorMovementSpeeds,
         Option<&Frozen>,
+        &Player,
     )>() {
+        if frozen.is_some_and(|v| v.controls) {
+            buffer.insert_one(entity, MovementDirection::ZERO);
+            continue;
+        }
+
         let mut direction = Vec3::ZERO;
 
         if state.moving_front {
@@ -204,85 +188,46 @@ pub fn apply_player_movements(world: &mut World, pipeline: &mut PhysicsPipeline)
             direction += Vec3::X;
         }
 
-        // Remove the Y component from the facing direction since
-        // we don't want to move up.
-        let mut translation = facing_dir.0 * direction;
-        translation.y = 0.0;
-        translation = translation.normalize_or_zero();
+        direction = direction.normalize_or_zero();
 
-        let speed = if state.sprinting {
-            500.0
+        let f_forward = f32::from(direction.z < 0.0) * direction.z.abs();
+        let f_backward = f32::from(direction.z > 0.0) * direction.z.abs();
+        let f_left = f32::from(direction.x < 0.0) * direction.x.abs();
+        let f_right = f32::from(direction.x > 0.0) * direction.x.abs();
+
+        let mut speed = 0.0;
+        if state.sneaking {
+            // FIXME: What to use here, all speeds don't seem to match the game speeds?
+            speed += f_forward * speeds.sneak.forward.run;
+            speed += f_backward * speeds.sneak.backward.run;
+            speed += f_left * speeds.sneak.left.run;
+            speed += f_right * speeds.sneak.right.run;
+        } else if state.sprinting {
+            speed += f_forward * speeds.default.forward.sprint;
+            speed += f_backward * speeds.default.backward.sprint;
+            speed += f_left * speeds.default.left.sprint;
+            speed += f_right * speeds.default.right.sprint;
+        } else if state.walking {
+            speed += f_forward * speeds.default.forward.walk;
+            speed += f_backward * speeds.default.backward.walk;
+            speed += f_left * speeds.default.left.walk;
+            speed += f_right * speeds.default.right.walk;
         } else {
-            if state.walking { 92.55 } else { 372.0 }
-        };
-
-        // Speed is in units per second.
-        // We are on a fixed timestep of 60 updates per second.
-        translation *= speed * NIF_TO_METERS / UPS as f32;
-
-        if let Some(controller) = &mut controller {
-            if frozen.as_ref().is_none_or(|v| !v.controls) {
-                let movement = controller.move_shape(
-                    pipeline,
-                    *transform * collider.offset,
-                    &collider.shape,
-                    translation,
-                    entity,
-                );
-
-                transform.translation += movement.translation;
-            }
-
-            if frozen.as_ref().is_none_or(|v| !v.physics) {
-                let gravity_movement = controller.apply_gravity(
-                    pipeline,
-                    *transform * collider.offset,
-                    &collider.shape,
-                    entity,
-                );
-
-                transform.translation += gravity_movement.translation;
-            }
-        } else {
-            transform.translation += translation;
+            speed += f_forward * speeds.default.forward.run;
+            speed += f_backward * speeds.default.backward.run;
+            speed += f_left * speeds.default.left.run;
+            speed += f_right * speeds.default.right.run;
         }
 
-        // Compute angle between forward (-Z) vector and the movement vector.
-        // 0.0 is front, 0.25 is right, 0.5 is back, 0.75 is left.
-        let dir_norm = direction.normalize_or_zero();
-        let mut dir = (-dir_norm.z).acos();
-        // acos will yield PI/2 for a zero vector, but we want to face forward
-        // when we don't move.
-        // The length is either zero or normalized, so this will multiply with
-        // either 0 or 1.
-        dir *= dir_norm.length_squared();
-
-        if (dir_norm.x).is_sign_negative() {
-            dir = PI + (PI - dir);
-        }
-
-        dir /= 2.0 * PI;
-
-        // Both rotation are world-space, but we want entity-space, so
-        // we must remove the entity rotation.
-        // The result is in the NIF coordinate system.
-        let facing_direction = (transform.rotation.conjugate() * facing_dir.0) * -Vec3::Z;
-
-        buffer.insert_one(
+        buffer.insert(
             entity,
-            AnimationParameters {
-                speed: speed,
-                direction: dir,
-                is_moving: state.moving_front
-                    || state.moving_back
-                    || state.moving_left
-                    || state.moving_right,
-                is_sprinting: state.sprinting,
-                is_player: player.is_some(),
-                is_female: actor_keywords.contains(KEYWORD_FEMALE),
-                is_jumping: state.jumping,
-                facing_direction,
-            },
+            (
+                MovementDirection::new_normalized(direction),
+                MovementSpeed {
+                    speed,
+                    sprinting: state.sprinting,
+                },
+            ),
         );
     }
 

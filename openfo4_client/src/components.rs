@@ -187,3 +187,7 @@ pub enum ObjectLockLevel {
     RequiresTerminal,
     RequiresKey,
 }
+
+/// Component attached to entities that are on the ground.
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub struct Grounded;

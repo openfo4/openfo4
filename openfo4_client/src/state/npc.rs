@@ -1,6 +1,7 @@
 use std::collections::VecDeque;
 use std::hash::Hash;
 
+use futures::TryFutureExt;
 use hashbrown::{HashMap, HashSet};
 use openfo4_asset::{AssetLoader, Handle};
 use openfo4_core::WorldExt;
@@ -8,7 +9,9 @@ use openfo4_core::ecs::{Entity, World};
 use openfo4_core::events::EventBus;
 use openfo4_core::path::DataPathBuf;
 use openfo4_core::record::RecordId;
-use openfo4_esp::records::{Class, NpcBaseFlags, NpcTemplateFlags, Race, SubgraphFlags};
+use openfo4_esp::records::{
+    Class, MovementSpeeds, NpcBaseFlags, NpcTemplateFlags, Race, SubgraphFlags,
+};
 use openfo4_esp::{RecordData, RecordKind, ZString};
 use openfo4_physics::components::{Collider, CollisionLayer, RigidBody};
 
@@ -17,6 +20,9 @@ use crate::components::{ActorProperties, ActorProtection, DeadActor};
 use crate::state::animation_test::{ActorCharacter, BodyPartBoneProps, load_character};
 use crate::state::esp::EspLoader;
 use crate::state::hardcoded::KEYWORD_FEMALE;
+use crate::state::hardcoded::fallout4::{
+    DEFAULT_MOVEMENT_TYPE_DEFAULT, DEFAULT_MOVEMENT_TYPE_SNEAK,
+};
 use crate::state::level::leveled_list::select_from_leveled_list;
 use crate::systems::FacingDirection;
 use crate::systems::actor_value::{ActorValue, ActorValueProperties};
@@ -24,6 +30,7 @@ use crate::systems::ai::AiComponent;
 use crate::systems::controller::ControllerShape;
 use crate::systems::equipment::{Equipment, equip_item};
 use crate::systems::inventory::{AddItemEventAsync, Inventory};
+use crate::systems::movement::{MovementDirection, MovementSpeed};
 
 // FIXME: Unhardcode this guy.
 const PLAYER_LEVEL: u16 = 1000;
@@ -129,6 +136,7 @@ pub struct Actor {
     level: u32,
     factions: Vec<FactionMembership>,
     items: Vec<(RecordId, u64)>,
+    speed: ActorMovementSpeeds,
 }
 
 impl Actor {
@@ -216,6 +224,9 @@ impl Actor {
         }
 
         world.insert_one(root, AiComponent).unwrap();
+        world.insert_one(root, MovementDirection::ZERO).unwrap();
+        world.insert_one(root, MovementSpeed::default()).unwrap();
+        world.insert_one(root, self.speed).unwrap();
 
         root
     }
@@ -301,6 +312,8 @@ pub async fn spawn_actor(
         character.body_parts = body_parts;
     }
 
+    let speed = load_movement_speeds(esp_loader, race.id, data).await;
+
     let mut subgraphs = Vec::new();
     for subgraph in load_subgraphs(esp_loader, props.race.unwrap(), data).await {
         let search_paths = subgraph
@@ -372,6 +385,7 @@ pub async fn spawn_actor(
         level,
         factions: props.factions,
         items: props.items,
+        speed,
     })
 }
 
@@ -804,4 +818,51 @@ async fn load_outfit(esp_loader: &EspLoader, outfit: RecordId) -> Vec<RecordId> 
     }
 
     items
+}
+
+async fn load_movement_speeds(
+    loader: &EspLoader,
+    race_id: RecordId,
+    race: &Race,
+) -> ActorMovementSpeeds {
+    let default = race
+        .base_movement_defaults_default
+        .map(|id| loader.resolve_form(id, race_id).unwrap())
+        .unwrap_or(DEFAULT_MOVEMENT_TYPE_DEFAULT);
+
+    let RecordData::MovementType(default) = loader
+        .lookup(Some(RecordKind::MovementType), default)
+        .await
+        .unwrap()
+        .local
+        .data
+    else {
+        todo!();
+    };
+
+    let sneak = race
+        .base_movement_defaults_sneak
+        .map(|id| loader.resolve_form(id, race_id).unwrap())
+        .unwrap_or(DEFAULT_MOVEMENT_TYPE_SNEAK);
+
+    let RecordData::MovementType(sneak) = loader
+        .lookup(Some(RecordKind::MovementType), sneak)
+        .await
+        .unwrap()
+        .local
+        .data
+    else {
+        todo!();
+    };
+
+    ActorMovementSpeeds {
+        default: default.speeds,
+        sneak: sneak.speeds,
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct ActorMovementSpeeds {
+    pub default: MovementSpeeds,
+    pub sneak: MovementSpeeds,
 }
