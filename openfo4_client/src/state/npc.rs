@@ -14,9 +14,11 @@ use openfo4_esp::records::{
 };
 use openfo4_esp::{RecordData, RecordKind, ZString};
 use openfo4_physics::components::{Collider, CollisionLayer, RigidBody};
+use openfo4_physics::controller::CharacterController;
 
 use crate::assets::nif::{LoadNifFlags, NifKey, NifScene};
 use crate::components::{ActorProperties, ActorProtection, DeadActor};
+use crate::state::anim_starter::AnimationEventQueue;
 use crate::state::animation_test::{ActorCharacter, BodyPartBoneProps, load_character};
 use crate::state::esp::EspLoader;
 use crate::state::hardcoded::KEYWORD_FEMALE;
@@ -227,6 +229,10 @@ impl Actor {
         world.insert_one(root, MovementDirection::ZERO).unwrap();
         world.insert_one(root, MovementSpeed::default()).unwrap();
         world.insert_one(root, self.speed).unwrap();
+        world.insert_one(root, CharacterController::new()).unwrap();
+        world
+            .insert_one(root, AnimationEventQueue::default())
+            .unwrap();
 
         root
     }

@@ -10,6 +10,8 @@ use openfo4_physics::controller::CharacterController;
 use crate::assets::nif::NIF_TO_METERS;
 use crate::components::{Grounded, Player};
 use crate::state::UPS;
+use crate::state::actions::{Action, Actions};
+use crate::state::anim_starter::AnimationEventQueue;
 use crate::state::hardcoded::KEYWORD_FEMALE;
 use crate::state::npc::ObjectKeywords;
 use crate::systems::FacingDirection;
@@ -34,7 +36,12 @@ impl MovementDirection {
     }
 }
 
-pub fn apply_movement(world: &mut World, pipeline: &mut PhysicsPipeline) {
+#[derive(Clone, Debug)]
+struct MovementState {
+    is_moving: bool,
+}
+
+pub fn apply_movement(world: &mut World, pipeline: &mut PhysicsPipeline, actions: &Actions) {
     let mut buffer = CommandBuffer::new();
 
     for (
@@ -48,6 +55,8 @@ pub fn apply_movement(world: &mut World, pipeline: &mut PhysicsPipeline) {
         actor_keywords,
         player,
         frozen,
+        mut queue,
+        move_state,
     ) in world.query_mut::<(
         Entity,
         &mut Transform,
@@ -59,6 +68,8 @@ pub fn apply_movement(world: &mut World, pipeline: &mut PhysicsPipeline) {
         &ObjectKeywords,
         Option<&Player>,
         Option<&Frozen>,
+        &mut AnimationEventQueue,
+        Option<&MovementState>,
     )>() {
         let direction = movement_dir.0;
 
@@ -138,6 +149,25 @@ pub fn apply_movement(world: &mut World, pipeline: &mut PhysicsPipeline) {
                 // is_jumping: state.jumping,
                 is_jumping: false,
                 facing_direction,
+            },
+        );
+
+        let start_moving =
+            direction != Vec3::ZERO && move_state.as_ref().is_none_or(|s| !s.is_moving);
+        if start_moving && let Some(action) = actions.0.get(&Action::MoveStart) {
+            queue.0.push_back(*action);
+        }
+
+        let stop_moving =
+            direction == Vec3::ZERO && move_state.as_ref().is_some_and(|s| s.is_moving);
+        if stop_moving && let Some(action) = actions.0.get(&Action::MoveStop) {
+            queue.0.push_back(*action);
+        }
+
+        buffer.insert_one(
+            entity,
+            MovementState {
+                is_moving: direction != Vec3::ZERO,
             },
         );
     }

@@ -114,35 +114,6 @@ pub fn handle_inputs(
                     }
                     _ => continue,
                 }
-
-                let started_moving = !old_state.moving_front
-                    && !old_state.moving_back
-                    && !old_state.moving_left
-                    && !old_state.moving_right
-                    && (state.moving_front
-                        || state.moving_back
-                        || state.moving_left
-                        || state.moving_right);
-                let stopped_moving = !state.moving_front
-                    && !state.moving_back
-                    && !state.moving_left
-                    && !state.moving_right
-                    && (old_state.moving_front
-                        || old_state.moving_back
-                        || old_state.moving_left
-                        || old_state.moving_right);
-
-                if started_moving {
-                    if let Some(form) = actions.0.get(&Action::MoveStart) {
-                        queue.0.push_back(*form);
-                    }
-                }
-
-                if stopped_moving {
-                    if let Some(form) = actions.0.get(&Action::MoveStop) {
-                        queue.0.push_back(*form);
-                    }
-                }
             }
             _ => (),
         }

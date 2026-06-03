@@ -262,7 +262,7 @@ impl GameState {
         apply_player_movements(&mut self.world);
         update_trigger_box_contacts(&mut self.world, &mut self.event_bus);
 
-        apply_movement(&mut self.world, &mut self.physics);
+        apply_movement(&mut self.world, &mut self.physics, &self.actions);
 
         // systems::ni_transform::compute_transform_from_ni_transform(&mut self.world);
         // systems::ni_transform::compute_cell_ids_from_ni_transform(&mut self.world);
