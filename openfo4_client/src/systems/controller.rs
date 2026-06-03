@@ -161,10 +161,10 @@ pub fn apply_player_movements(world: &mut World) {
 
         direction = direction.normalize_or_zero();
 
-        let f_forward = f32::from(direction.z < 0.0) * direction.z.abs();
-        let f_backward = f32::from(direction.z > 0.0) * direction.z.abs();
-        let f_left = f32::from(direction.x < 0.0) * direction.x.abs();
-        let f_right = f32::from(direction.x > 0.0) * direction.x.abs();
+        let f_forward = f32::from(direction.z < 0.0) * direction.z * direction.z;
+        let f_backward = f32::from(direction.z > 0.0) * direction.z * direction.z;
+        let f_left = f32::from(direction.x < 0.0) * direction.x * direction.x;
+        let f_right = f32::from(direction.x > 0.0) * direction.x * direction.x;
 
         let mut speed = 0.0;
         if state.sneaking {
