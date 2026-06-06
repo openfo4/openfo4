@@ -64,13 +64,14 @@ impl<'a, T> Context<'a, T> {
 }
 
 // The stack pointer must be at offset 0.
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 #[repr(C)]
 pub(crate) struct RawContext {
     pub stack_ptr: RawStack,
     pub state: *const HostState,
     pub data: *mut dyn Any,
     pub stack: *mut Stack,
+    panic: PanicMsg,
 }
 
 #[derive(Clone, Debug)]
@@ -78,6 +79,30 @@ pub(crate) struct RawContext {
 pub(crate) struct RawStack {
     pub ptr: *mut u8,
     pub len: usize,
+}
+
+#[derive(Debug, Default)]
+struct PanicMsg {
+    #[cfg(panic = "unwind")]
+    msg: Option<Box<dyn Any + Send>>,
+}
+
+impl PanicMsg {
+    /// Sets the panic message.
+    #[cfg(panic = "unwind")]
+    #[inline]
+    fn set(&mut self, msg: Box<dyn Any + Send>) {
+        self.msg = Some(msg);
+    }
+
+    /// Resumes the caught panic on the current thread.
+    #[inline]
+    fn resume(&mut self) {
+        #[cfg(panic = "unwind")]
+        if let Some(msg) = self.msg.take() {
+            std::panic::resume_unwind(msg);
+        }
+    }
 }
 
 /// A union over all values that can be used in Papyrus functions.
@@ -311,7 +336,7 @@ impl Func {
         // We must lock the call table before we call the guest function.
         let _lock = ctx.engine.call_table_lock.read();
 
-        let raw_ctx = RawContext {
+        let mut raw_ctx = RawContext {
             stack_ptr: RawStack {
                 ptr: ctx.stack.as_ptr(),
                 len: 0,
@@ -319,9 +344,15 @@ impl Func {
             state: &ctx.engine.state,
             data: &mut ctx.data as *mut dyn Any,
             stack: ctx.stack,
+            panic: PanicMsg::default(),
         };
 
         let res = unsafe { (self.ptr)(&raw_ctx, params, returns) };
+
+        // If the callee calls into a native host function that panics,
+        // we will resume the panic here.
+        // The following code will not be executed.
+        raw_ctx.panic.resume();
 
         if res == RESULT_OK {
             ctx.stack.free(size_of::<usize>());

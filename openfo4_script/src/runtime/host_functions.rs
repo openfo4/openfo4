@@ -1,5 +1,5 @@
 use std::cell::RefCell;
-use std::panic::AssertUnwindSafe;
+use std::panic::{AssertUnwindSafe, catch_unwind};
 
 use game_common::utils::vec_ext::VecExt;
 use tracing::span::EnteredSpan;
@@ -8,17 +8,30 @@ use crate::compiler::resources::TypeId;
 use crate::runtime::{ObjectAddr, RawContext, RawVal};
 
 pub unsafe extern "C" fn call_host_trampoline(
-    ctx: *const RawContext,
+    ctx: *mut RawContext,
     index: usize,
     params: *const RawVal,
     returns: *mut RawVal,
 ) -> i32 {
-    abort_on_unwind(|| {
+    match catch_unwind(AssertUnwindSafe(|| {
         // SAFETY: We have locked the call table before any guest function is called.
         let call_table = unsafe { (*(*ctx).state).call_table.borrow() };
         let func = &call_table.functions[index];
         func(ctx, params, returns)
-    })
+    })) {
+        Ok(v) => v,
+        #[cfg(panic = "unwind")]
+        Err(msg) => {
+            let ctx = unsafe { &mut *ctx };
+            ctx.panic.set(msg);
+            // Value does not matter, except that it must be non-zero,
+            // but we set it to a value that cannot be interpreted as any other status.
+            i32::MAX
+        }
+        // Cannot unwind when aborting.
+        #[cfg(not(panic = "unwind"))]
+        Err(_) => unreachable!(),
+    }
 }
 
 pub unsafe extern "C" fn alloc_zeroed(
@@ -126,7 +139,7 @@ where
     if cfg!(panic = "abort") {
         f()
     } else {
-        match std::panic::catch_unwind(AssertUnwindSafe(|| f())) {
+        match catch_unwind(AssertUnwindSafe(|| f())) {
             Ok(v) => v,
             Err(_) => std::process::abort(),
         }
