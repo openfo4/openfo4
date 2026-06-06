@@ -97,8 +97,6 @@ pub fn translate_function_psc_signature(data: &CodegenData, func: &FunctionDef) 
         let ty = if ty_name.as_inner().ends_with("[]") {
             data.resources.primitives.array
         } else {
-            dbg!(&ty_name);
-            dbg!(&data.resources.string_to_type);
             *data.resources.string_to_type.lock().get(&ty_name).unwrap()
         };
         sig.returns.push(ty);
