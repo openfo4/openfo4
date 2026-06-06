@@ -7,6 +7,7 @@ use crate::compiler::NativeFunction;
 use crate::compiler::codegen::hir::{
     self, AddrCompareOp, FunctionBuilder, Literal, Null, ScalarCompareOp, StringCompareOp, Variable,
 };
+use crate::compiler::codegen::pex::cfg::ControlFlowGraph;
 use crate::compiler::codegen::trace::Span;
 use crate::compiler::codegen::trampoline::generate_guest_to_host_trampoline;
 use crate::compiler::codegen::{
@@ -264,623 +265,554 @@ fn translate_function_body(
         self_ty: &class.name,
     };
 
+    let cfg = ControlFlowGraph::new(function);
+
     let mut labels = HashMap::new();
-    let mut out_of_bounds_labels = Vec::new();
-
-    for (index, instruction) in function.instructions.iter().enumerate() {
-        match instruction {
-            Instruction::Branch(op) => {
-                let addr = usize::min(
-                    (index as i32 + op.offset) as usize,
-                    function.instructions.len(),
-                );
-
-                if !labels.contains_key(&addr) {
-                    let label = translator.builder.create_label();
-                    labels.insert(addr, label);
-
-                    if (index as i32 + op.offset) as usize >= function.instructions.len() {
-                        out_of_bounds_labels.push(label);
-                    }
-                }
-            }
-            Instruction::BranchIfTrue(op) | Instruction::BranchIfFalse(op) => {
-                let addr = usize::min(
-                    (index as i32 + op.offset) as usize,
-                    function.instructions.len(),
-                );
-
-                if !labels.contains_key(&addr) {
-                    let label = translator.builder.create_label();
-                    labels.insert(addr, label);
-
-                    if (index as i32 + op.offset) as usize >= function.instructions.len() {
-                        out_of_bounds_labels.push(label);
-                    }
-                }
-            }
-            _ => {}
-        }
+    for (block_id, _) in cfg.blocks() {
+        let label = translator.builder.create_label();
+        labels.insert(block_id, label);
     }
 
-    let mut current_block_sealed = false;
+    for (block_id, instructions) in cfg.blocks() {
+        let mut current_block_sealed = false;
 
-    // let mut current_block = start_block;
-    for (index, instruction) in function.instructions.iter().enumerate() {
-        // if let Some(block) = blocks.get(&index)
-        //     && *block != current_block
-        // {
-        //     if !translator.builder.is_current_block_full() {
-        //         translator.builder.jump(*block, &[]);
-        //     }
+        let label = *labels.get(&block_id).unwrap();
+        translator.builder.set_label(label);
 
-        //     translator.builder.switch_to_block(*block);
-        //     current_block = *block;
-        // }
+        for instruction in instructions {
+            debug_assert!(!current_block_sealed);
 
-        // // Sometimes there are dead instructions present after returns.
-        // if translator.builder.is_current_block_full() {
-        //     continue;
-        // }
-
-        if let Some(label) = labels.get(&index).copied() {
-            translator.builder.set_label(label);
-            current_block_sealed = false;
-        }
-
-        if current_block_sealed {
-            continue;
-        }
-
-        match instruction {
-            Instruction::Nop => {}
-            Instruction::IAdd(op) => {
-                let lhs = translator.load(&op.lhs);
-                let rhs = translator.load(&op.rhs);
-                let dst = translator.load(&op.dst);
-                translator.builder.iadd(lhs, rhs, dst);
-            }
-            Instruction::ISub(op) => {
-                let lhs = translator.load(&op.lhs);
-                let rhs = translator.load(&op.rhs);
-                let dst = translator.load(&op.dst);
-                translator.builder.isub(lhs, rhs, dst);
-            }
-            Instruction::IMul(op) => {
-                let lhs = translator.load(&op.lhs);
-                let rhs = translator.load(&op.rhs);
-                let dst = translator.load(&op.dst);
-                translator.builder.imul(lhs, rhs, dst);
-            }
-            Instruction::IDiv(op) => {
-                let lhs = translator.load(&op.lhs);
-                let rhs = translator.load(&op.rhs);
-                let dst = translator.load(&op.dst);
-                translator.builder.idiv(lhs, rhs, dst);
-            }
-            Instruction::IMod(op) => {
-                let lhs = translator.load(&op.lhs);
-                let rhs = translator.load(&op.rhs);
-                let dst = translator.load(&op.dst);
-                translator.builder.imod(lhs, rhs, dst);
-            }
-            Instruction::INeg(op) => {
-                let src = translator.load(&op.src);
-                let dst = translator.load(&op.dst);
-                translator.builder.ineg(src, dst);
-            }
-            Instruction::FAdd(op) => {
-                let lhs = translator.load(&op.lhs);
-                let rhs = translator.load(&op.rhs);
-                let dst = translator.load(&op.dst);
-                translator.builder.fadd(lhs, rhs, dst);
-            }
-            Instruction::FSub(op) => {
-                let lhs = translator.load(&op.lhs);
-                let rhs = translator.load(&op.rhs);
-                let dst = translator.load(&op.dst);
-                translator.builder.fsub(lhs, rhs, dst);
-            }
-            Instruction::FMul(op) => {
-                let lhs = translator.load(&op.lhs);
-                let rhs = translator.load(&op.rhs);
-                let dst = translator.load(&op.dst);
-                translator.builder.fmul(lhs, rhs, dst);
-            }
-            Instruction::FDiv(op) => {
-                let lhs = translator.load(&op.lhs);
-                let rhs = translator.load(&op.rhs);
-                let dst = translator.load(&op.dst);
-                translator.builder.fdiv(lhs, rhs, dst);
-            }
-            Instruction::FNeg(op) => {
-                let src = translator.load(&op.src);
-                let dst = translator.load(&op.dst);
-                translator.builder.fneg(src, dst);
-            }
-            Instruction::Not(op) => match translator.get_type(&op.src) {
-                Type::Bool => {
+            match instruction {
+                Instruction::Nop => {}
+                Instruction::IAdd(op) => {
+                    let lhs = translator.load(&op.lhs);
+                    let rhs = translator.load(&op.rhs);
+                    let dst = translator.load(&op.dst);
+                    translator.builder.iadd(lhs, rhs, dst);
+                }
+                Instruction::ISub(op) => {
+                    let lhs = translator.load(&op.lhs);
+                    let rhs = translator.load(&op.rhs);
+                    let dst = translator.load(&op.dst);
+                    translator.builder.isub(lhs, rhs, dst);
+                }
+                Instruction::IMul(op) => {
+                    let lhs = translator.load(&op.lhs);
+                    let rhs = translator.load(&op.rhs);
+                    let dst = translator.load(&op.dst);
+                    translator.builder.imul(lhs, rhs, dst);
+                }
+                Instruction::IDiv(op) => {
+                    let lhs = translator.load(&op.lhs);
+                    let rhs = translator.load(&op.rhs);
+                    let dst = translator.load(&op.dst);
+                    translator.builder.idiv(lhs, rhs, dst);
+                }
+                Instruction::IMod(op) => {
+                    let lhs = translator.load(&op.lhs);
+                    let rhs = translator.load(&op.rhs);
+                    let dst = translator.load(&op.dst);
+                    translator.builder.imod(lhs, rhs, dst);
+                }
+                Instruction::INeg(op) => {
                     let src = translator.load(&op.src);
                     let dst = translator.load(&op.dst);
-
-                    translator.builder.bnot(src, dst);
+                    translator.builder.ineg(src, dst);
                 }
-                Type::Class(_) | Type::Struct(_) | Type::Array(_) => {
+                Instruction::FAdd(op) => {
+                    let lhs = translator.load(&op.lhs);
+                    let rhs = translator.load(&op.rhs);
+                    let dst = translator.load(&op.dst);
+                    translator.builder.fadd(lhs, rhs, dst);
+                }
+                Instruction::FSub(op) => {
+                    let lhs = translator.load(&op.lhs);
+                    let rhs = translator.load(&op.rhs);
+                    let dst = translator.load(&op.dst);
+                    translator.builder.fsub(lhs, rhs, dst);
+                }
+                Instruction::FMul(op) => {
+                    let lhs = translator.load(&op.lhs);
+                    let rhs = translator.load(&op.rhs);
+                    let dst = translator.load(&op.dst);
+                    translator.builder.fmul(lhs, rhs, dst);
+                }
+                Instruction::FDiv(op) => {
+                    let lhs = translator.load(&op.lhs);
+                    let rhs = translator.load(&op.rhs);
+                    let dst = translator.load(&op.dst);
+                    translator.builder.fdiv(lhs, rhs, dst);
+                }
+                Instruction::FNeg(op) => {
                     let src = translator.load(&op.src);
                     let dst = translator.load(&op.dst);
+                    translator.builder.fneg(src, dst);
+                }
+                Instruction::Not(op) => match translator.get_type(&op.src) {
+                    Type::Bool => {
+                        let src = translator.load(&op.src);
+                        let dst = translator.load(&op.dst);
 
-                    translator.builder.compare_addr(
-                        src,
-                        hir::Value::Const(Null),
-                        dst,
-                        AddrCompareOp::NotEqual,
-                    );
-                }
-                _ => unreachable!(),
-            },
-            Instruction::Store(op) => {
-                let src = translator.load(&op.src);
-                let dst = translator.load(&op.dst);
-                translator.builder.store(src, dst);
-            }
-            Instruction::CmpEq(op)
-            | Instruction::CmpLt(op)
-            | Instruction::CmpLe(op)
-            | Instruction::CmpGt(op)
-            | Instruction::CmpGe(op) => match translator.get_type(&op.lhs) {
-                Type::None => {
-                    todo!()
-                }
-                Type::Bool => {
-                    let lhs = translator.load(&op.lhs);
-                    let rhs = translator.load(&op.rhs);
+                        translator.builder.bnot(src, dst);
+                    }
+                    Type::Class(_) | Type::Struct(_) | Type::Array(_) => {
+                        let src = translator.load(&op.src);
+                        let dst = translator.load(&op.dst);
+
+                        translator.builder.compare_addr(
+                            src,
+                            hir::Value::Const(Null),
+                            dst,
+                            AddrCompareOp::NotEqual,
+                        );
+                    }
+                    _ => unreachable!(),
+                },
+                Instruction::Store(op) => {
+                    let src = translator.load(&op.src);
                     let dst = translator.load(&op.dst);
-
-                    let op = match instruction {
-                        Instruction::CmpEq(_) => ScalarCompareOp::Equal,
-                        Instruction::CmpLt(_) => ScalarCompareOp::LessThan,
-                        Instruction::CmpLe(_) => ScalarCompareOp::LessThanOrEqual,
-                        Instruction::CmpGt(_) => ScalarCompareOp::GreaterThan,
-                        Instruction::CmpGe(_) => ScalarCompareOp::GreaterThanOrEqual,
-                        _ => unreachable!(),
-                    };
-
-                    translator.builder.compare_bool(lhs, rhs, dst, op);
+                    translator.builder.store(src, dst);
                 }
-                Type::Int => {
-                    let lhs = translator.load(&op.lhs);
-                    let rhs = translator.load(&op.rhs);
-                    let dst = translator.load(&op.dst);
+                Instruction::CmpEq(op)
+                | Instruction::CmpLt(op)
+                | Instruction::CmpLe(op)
+                | Instruction::CmpGt(op)
+                | Instruction::CmpGe(op) => match translator.get_type(&op.lhs) {
+                    Type::None => {
+                        todo!()
+                    }
+                    Type::Bool => {
+                        let lhs = translator.load(&op.lhs);
+                        let rhs = translator.load(&op.rhs);
+                        let dst = translator.load(&op.dst);
 
-                    let op = match instruction {
-                        Instruction::CmpEq(_) => ScalarCompareOp::Equal,
-                        Instruction::CmpLt(_) => ScalarCompareOp::LessThan,
-                        Instruction::CmpLe(_) => ScalarCompareOp::LessThanOrEqual,
-                        Instruction::CmpGt(_) => ScalarCompareOp::GreaterThan,
-                        Instruction::CmpGe(_) => ScalarCompareOp::GreaterThanOrEqual,
-                        _ => unreachable!(),
-                    };
+                        let op = match instruction {
+                            Instruction::CmpEq(_) => ScalarCompareOp::Equal,
+                            Instruction::CmpLt(_) => ScalarCompareOp::LessThan,
+                            Instruction::CmpLe(_) => ScalarCompareOp::LessThanOrEqual,
+                            Instruction::CmpGt(_) => ScalarCompareOp::GreaterThan,
+                            Instruction::CmpGe(_) => ScalarCompareOp::GreaterThanOrEqual,
+                            _ => unreachable!(),
+                        };
 
-                    translator.builder.compare_int(lhs, rhs, dst, op);
+                        translator.builder.compare_bool(lhs, rhs, dst, op);
+                    }
+                    Type::Int => {
+                        let lhs = translator.load(&op.lhs);
+                        let rhs = translator.load(&op.rhs);
+                        let dst = translator.load(&op.dst);
+
+                        let op = match instruction {
+                            Instruction::CmpEq(_) => ScalarCompareOp::Equal,
+                            Instruction::CmpLt(_) => ScalarCompareOp::LessThan,
+                            Instruction::CmpLe(_) => ScalarCompareOp::LessThanOrEqual,
+                            Instruction::CmpGt(_) => ScalarCompareOp::GreaterThan,
+                            Instruction::CmpGe(_) => ScalarCompareOp::GreaterThanOrEqual,
+                            _ => unreachable!(),
+                        };
+
+                        translator.builder.compare_int(lhs, rhs, dst, op);
+                    }
+                    Type::Float => {
+                        let lhs = translator.load(&op.lhs);
+                        let rhs = translator.load(&op.rhs);
+                        let dst = translator.load(&op.dst);
+
+                        let op = match instruction {
+                            Instruction::CmpEq(_) => ScalarCompareOp::Equal,
+                            Instruction::CmpLt(_) => ScalarCompareOp::LessThan,
+                            Instruction::CmpLe(_) => ScalarCompareOp::LessThanOrEqual,
+                            Instruction::CmpGt(_) => ScalarCompareOp::GreaterThan,
+                            Instruction::CmpGe(_) => ScalarCompareOp::GreaterThanOrEqual,
+                            _ => unreachable!(),
+                        };
+
+                        translator.builder.compare_float(lhs, rhs, dst, op);
+                    }
+                    Type::String => {
+                        let lhs = translator.load(&op.lhs);
+                        let rhs = translator.load(&op.rhs);
+                        let dst = translator.load(&op.dst);
+
+                        let op = match instruction {
+                            Instruction::CmpEq(_) => StringCompareOp::Equal,
+                            _ => unreachable!(),
+                        };
+
+                        translator.builder.compare_string(lhs, rhs, dst, op);
+                    }
+                    Type::Class(_) | Type::Struct(_) | Type::Array(_) | Type::Var => {
+                        let lhs = translator.load(&op.lhs);
+                        let rhs = translator.load(&op.rhs);
+                        let dst = translator.load(&op.dst);
+
+                        let op = match instruction {
+                            Instruction::CmpEq(_) => AddrCompareOp::Equal,
+                            _ => unreachable!(),
+                        };
+
+                        translator.builder.compare_addr(lhs, rhs, dst, op);
+                    }
+                },
+                Instruction::Branch(_) => {
+                    let succ = cfg.successors(block_id);
+                    let target = *labels.get(&succ[0]).unwrap();
+                    translator.builder.jump(target);
+                    current_block_sealed = true;
                 }
-                Type::Float => {
-                    let lhs = translator.load(&op.lhs);
-                    let rhs = translator.load(&op.rhs);
-                    let dst = translator.load(&op.dst);
+                Instruction::BranchIfTrue(op) | Instruction::BranchIfFalse(op) => {
+                    let succ = cfg.successors(block_id);
+                    let then_target = *labels.get(&succ[0]).unwrap();
+                    let else_target = *labels.get(&succ[1]).unwrap();
 
-                    let op = match instruction {
-                        Instruction::CmpEq(_) => ScalarCompareOp::Equal,
-                        Instruction::CmpLt(_) => ScalarCompareOp::LessThan,
-                        Instruction::CmpLe(_) => ScalarCompareOp::LessThanOrEqual,
-                        Instruction::CmpGt(_) => ScalarCompareOp::GreaterThan,
-                        Instruction::CmpGe(_) => ScalarCompareOp::GreaterThanOrEqual,
-                        _ => unreachable!(),
-                    };
+                    let condition = translator.load(&op.condition);
 
-                    translator.builder.compare_float(lhs, rhs, dst, op);
+                    if matches!(instruction, Instruction::BranchIfTrue(_)) {
+                        translator.builder.brif_true(condition, then_target);
+                    } else {
+                        translator.builder.brif_false(condition, then_target);
+                    }
+
+                    translator.builder.jump(else_target);
+                    current_block_sealed = true;
                 }
-                Type::String => {
-                    let lhs = translator.load(&op.lhs);
-                    let rhs = translator.load(&op.rhs);
-                    let dst = translator.load(&op.dst);
+                Instruction::CallMethod(op) => {
+                    let class_name = translator.get_ty_name(&op.object);
+                    let function_name = Lowercase::new(op.function_name.as_str());
 
-                    let op = match instruction {
-                        Instruction::CmpEq(_) => StringCompareOp::Equal,
-                        _ => unreachable!(),
-                    };
+                    let callee = data
+                        .get_function_id(class_name.as_str(), function_name.as_str())
+                        .unwrap();
 
-                    translator.builder.compare_string(lhs, rhs, dst, op);
-                }
-                Type::Class(_) | Type::Struct(_) | Type::Array(_) | Type::Var => {
-                    let lhs = translator.load(&op.lhs);
-                    let rhs = translator.load(&op.rhs);
-                    let dst = translator.load(&op.dst);
-
-                    let op = match instruction {
-                        Instruction::CmpEq(_) => AddrCompareOp::Equal,
-                        _ => unreachable!(),
-                    };
-
-                    translator.builder.compare_addr(lhs, rhs, dst, op);
-                }
-            },
-            Instruction::Branch(op) => {
-                let addr = usize::min(
-                    (index as i32 + op.offset) as usize,
-                    function.instructions.len(),
-                );
-
-                let label = *labels.get(&addr).unwrap();
-                translator.builder.jump(label);
-
-                current_block_sealed = true;
-            }
-            Instruction::BranchIfTrue(op) => {
-                let addr = usize::min(
-                    (index as i32 + op.offset) as usize,
-                    function.instructions.len(),
-                );
-
-                let condition = translator.load(&op.condition);
-                let label = *labels.get(&addr).unwrap();
-                translator.builder.brif_true(condition, label);
-            }
-            Instruction::BranchIfFalse(op) => {
-                let addr = usize::min(
-                    (index as i32 + op.offset) as usize,
-                    function.instructions.len(),
-                );
-
-                let condition = translator.load(&op.condition);
-                let label = *labels.get(&addr).unwrap();
-                translator.builder.brif_false(condition, label);
-            }
-            Instruction::CallMethod(op) => {
-                let class_name = translator.get_ty_name(&op.object);
-                let function_name = Lowercase::new(op.function_name.as_str());
-
-                let callee = data
-                    .get_function_id(class_name.as_str(), function_name.as_str())
-                    .unwrap();
-
-                let object = translator.load(&op.object);
-                let dst = translator.load(&op.return_assignment);
-
-                let mut args = vec![object.clone().map(|_| Literal::Null)];
-                for arg in &op.args {
-                    let arg = translator.load(arg);
-                    args.push(arg);
-                }
-
-                translator
-                    .builder
-                    .call_indirect(callee, Some(object), &args, dst);
-            }
-            Instruction::CallParent(op) => {
-                let class_name = translator.get_ty_name(&Value::Ident("self".to_owned()));
-                let class = translator.data.classes.get(class_name.as_str()).unwrap();
-                let parent = class.parent.as_ref().unwrap();
-                let function_name = Lowercase::new(op.function.as_str());
-
-                let callee = data
-                    .get_function_id(parent.as_str(), function_name.as_str())
-                    .unwrap();
-
-                let object = translator.self_ptr.unwrap();
-                let dst = translator.load(&op.return_assignment);
-
-                let mut args = vec![hir::Value::Variable(object)];
-                for arg in &op.args {
-                    let arg = translator.load(arg);
-                    args.push(arg);
-                }
-
-                translator
-                    .builder
-                    .call(callee, Some(hir::Value::Variable(object)), &args, dst);
-            }
-            Instruction::CallStatic(op) => {
-                let class_name = Lowercase::new(op.class.as_str());
-                let function_name = Lowercase::new(op.function.as_str());
-
-                let args = op
-                    .args
-                    .iter()
-                    .map(|v| translator.load(v))
-                    .collect::<Vec<_>>();
-                let dst = translator.load(&op.return_assignment);
-
-                let callee = data.get_function_id(&class_name, &function_name).unwrap();
-
-                translator.builder.call(callee, None, &args, dst);
-            }
-            Instruction::PropertyGet(op) => {
-                let class_name = translator.get_ty_name(&op.value);
-                let prop_name = Lowercase::new(op.property.as_str());
-
-                // If a getter exists we must call it, otherwise we can load directly
-                // from the variable.
-                if let Some(id) = translator
-                    .data
-                    .get_property_getter_id(&class_name, &prop_name)
-                {
-                    let object = translator.load(&op.value);
+                    let object = translator.load(&op.object);
                     let dst = translator.load(&op.return_assignment);
 
-                    translator.builder.call(
-                        id,
-                        Some(object.clone()),
-                        &[object.map(|Null| Literal::Null)],
-                        dst,
-                    );
-                } else {
-                    let class_name =
-                        get_parent_class_with_property(&data.classes, &class_name, &prop_name)
-                            .unwrap();
+                    let mut args = vec![object.clone().map(|_| Literal::Null)];
+                    for arg in &op.args {
+                        let arg = translator.load(arg);
+                        args.push(arg);
+                    }
 
-                    let class = data.classes.get(class_name).unwrap();
-                    let prop = class.properties.get(&prop_name).unwrap();
-                    let var_name = prop.variable.as_ref().unwrap();
+                    translator
+                        .builder
+                        .call_indirect(callee, Some(object), &args, dst);
+                }
+                Instruction::CallParent(op) => {
+                    let class_name = translator.get_ty_name(&Value::Ident("self".to_owned()));
+                    let class = translator.data.classes.get(class_name.as_str()).unwrap();
+                    let parent = class.parent.as_ref().unwrap();
+                    let function_name = Lowercase::new(op.function.as_str());
 
-                    let object = translator.load(&op.value);
+                    let callee = data
+                        .get_function_id(parent.as_str(), function_name.as_str())
+                        .unwrap();
+
+                    let object = translator.self_ptr.unwrap();
+                    let dst = translator.load(&op.return_assignment);
+
+                    let mut args = vec![hir::Value::Variable(object)];
+                    for arg in &op.args {
+                        let arg = translator.load(arg);
+                        args.push(arg);
+                    }
+
+                    translator
+                        .builder
+                        .call(callee, Some(hir::Value::Variable(object)), &args, dst);
+                }
+                Instruction::CallStatic(op) => {
+                    let class_name = Lowercase::new(op.class.as_str());
+                    let function_name = Lowercase::new(op.function.as_str());
+
+                    let args = op
+                        .args
+                        .iter()
+                        .map(|v| translator.load(v))
+                        .collect::<Vec<_>>();
+                    let dst = translator.load(&op.return_assignment);
+
+                    let callee = data.get_function_id(&class_name, &function_name).unwrap();
+
+                    translator.builder.call(callee, None, &args, dst);
+                }
+                Instruction::PropertyGet(op) => {
+                    let class_name = translator.get_ty_name(&op.value);
+                    let prop_name = Lowercase::new(op.property.as_str());
+
+                    // If a getter exists we must call it, otherwise we can load directly
+                    // from the variable.
+                    if let Some(id) = translator
+                        .data
+                        .get_property_getter_id(&class_name, &prop_name)
+                    {
+                        let object = translator.load(&op.value);
+                        let dst = translator.load(&op.return_assignment);
+
+                        translator.builder.call(
+                            id,
+                            Some(object.clone()),
+                            &[object.map(|Null| Literal::Null)],
+                            dst,
+                        );
+                    } else {
+                        let class_name =
+                            get_parent_class_with_property(&data.classes, &class_name, &prop_name)
+                                .unwrap();
+
+                        let class = data.classes.get(class_name).unwrap();
+                        let prop = class.properties.get(&prop_name).unwrap();
+                        let var_name = prop.variable.as_ref().unwrap();
+
+                        let object = translator.load(&op.value);
+                        let dst = translator.load(&op.return_assignment);
+
+                        translator
+                            .builder
+                            .class_load(object, dst, class_name, &var_name);
+                    }
+                }
+                Instruction::PropertySet(op) => {
+                    let class_name = translator.get_ty_name(&op.object);
+                    let prop_name = Lowercase::new(op.property.as_str());
+
+                    // If a setter exists we must call it, otherwise we can store directly
+                    // to the variable.
+                    if let Some(id) = translator
+                        .data
+                        .get_property_setter_id(&class_name, &prop_name)
+                    {
+                        let object = translator.load(&op.object);
+                        let value = translator.load(&op.value);
+
+                        translator.builder.call(
+                            id,
+                            Some(object.clone()),
+                            &[object.map(|Null| Literal::Null), value],
+                            hir::Value::Const(Literal::Null),
+                        );
+                    } else {
+                        let class_name =
+                            get_parent_class_with_property(&data.classes, &class_name, &prop_name)
+                                .unwrap();
+
+                        let class = data.classes.get(class_name).unwrap();
+                        let prop = class.properties.get(&prop_name).unwrap();
+                        let var_name = prop.variable.as_ref().unwrap();
+
+                        let object = translator.load(&op.object);
+                        let value = translator.load(&op.value);
+
+                        translator
+                            .builder
+                            .class_store(object, value, class_name, &var_name);
+                    }
+                }
+                Instruction::Return(value) => {
+                    let value = translator.load(value);
+                    translator.builder.return_(value);
+                    current_block_sealed = true;
+                }
+                Instruction::Cast(op) => {
+                    perform_cast(&mut translator, &op.src, &op.dst);
+                }
+                Instruction::Is(op) => {
+                    let Value::Ident(class) = &op.class else {
+                        unreachable!();
+                    };
+                    let class = Lowercase::new(class.as_str());
+
+                    let src = translator.load(&op.object);
+                    let dst = translator.load(&op.return_assignment);
+                    translator.builder.class_is_instance_of(src, dst, class);
+                }
+                Instruction::StructCreate(op) => {
+                    let dst = translator.load(&op.return_assignment);
+
+                    let ty = translator.get_type(&op.return_assignment);
+                    let ty = translator.get_type_id(&ty);
+
+                    translator.builder.struct_create(dst, ty);
+                }
+                Instruction::StructGet(op) => {
+                    let Value::Ident(member) = &op.member_name else {
+                        unreachable!()
+                    };
+
+                    let struct_name = translator.get_ty_name(&op.struct_value);
+                    let field_name = Lowercase::new(&**member);
+
+                    let object = translator.load(&op.struct_value);
                     let dst = translator.load(&op.return_assignment);
 
                     translator
                         .builder
-                        .class_load(object, dst, class_name, &var_name);
+                        .struct_load(object, dst, struct_name, field_name);
                 }
-            }
-            Instruction::PropertySet(op) => {
-                let class_name = translator.get_ty_name(&op.object);
-                let prop_name = Lowercase::new(op.property.as_str());
+                Instruction::StructSet(op) => {
+                    let Value::Ident(member) = &op.member_name else {
+                        unreachable!()
+                    };
 
-                // If a setter exists we must call it, otherwise we can store directly
-                // to the variable.
-                if let Some(id) = translator
-                    .data
-                    .get_property_setter_id(&class_name, &prop_name)
-                {
-                    let object = translator.load(&op.object);
-                    let value = translator.load(&op.value);
+                    let struct_name = translator.get_ty_name(&op.struct_value);
+                    let field_name = Lowercase::new(&**member);
 
-                    translator.builder.call(
-                        id,
-                        Some(object.clone()),
-                        &[object.map(|Null| Literal::Null), value],
-                        hir::Value::Const(Literal::Null),
-                    );
-                } else {
-                    let class_name =
-                        get_parent_class_with_property(&data.classes, &class_name, &prop_name)
-                            .unwrap();
-
-                    let class = data.classes.get(class_name).unwrap();
-                    let prop = class.properties.get(&prop_name).unwrap();
-                    let var_name = prop.variable.as_ref().unwrap();
-
-                    let object = translator.load(&op.object);
+                    let object = translator.load(&op.struct_value);
                     let value = translator.load(&op.value);
 
                     translator
                         .builder
-                        .class_store(object, value, class_name, &var_name);
+                        .struct_store(object, value, struct_name, field_name);
+                }
+                Instruction::ArrayLength(op) => {
+                    let array = translator.load(&op.src);
+                    let dst = translator.load(&op.dst);
+                    translator.builder.array_length(array, dst);
+                }
+                Instruction::ArrayGet(op) => {
+                    let array = translator.load(&op.array);
+                    let index = translator.load(&op.index);
+                    let dst = translator.load(&op.return_assignment);
+                    translator.builder.array_get(array, index, dst);
+                }
+                Instruction::ArraySet(op) => {
+                    let index = translator.load(&op.index);
+                    let value = translator.load(&op.value);
+                    let array = translator.load(&op.array);
+                    translator.builder.array_set(array, index, value);
+                }
+                Instruction::ArrayCreate(op) => {
+                    let Type::Array(elem_ty) = translator.get_type(&op.dst) else {
+                        unreachable!();
+                    };
+
+                    let elem_ty = translator.get_type_id(&elem_ty);
+
+                    let len = translator.load(&op.src);
+                    let dst = translator.load(&op.dst);
+                    translator.builder.array_create(len, dst, elem_ty);
+                }
+                Instruction::ArrayAdd(op) => {
+                    let Type::Array(elem_ty) = translator.get_type(&op.array) else {
+                        unreachable!();
+                    };
+                    let elem_ty = translator.get_type_id(&elem_ty);
+
+                    let array = translator.load(&op.array);
+                    let value = translator.load(&op.value);
+                    let count = translator.load(&op.count);
+                    translator.builder.array_add(array, value, count, elem_ty);
+                }
+                Instruction::ArrayInsert(op) => {
+                    let Type::Array(elem_ty) = translator.get_type(&op.array) else {
+                        unreachable!();
+                    };
+                    let elem_ty = translator.get_type_id(&elem_ty);
+
+                    let array = translator.load(&op.array);
+                    let value = translator.load(&op.value);
+                    let index = translator.load(&op.index);
+                    translator
+                        .builder
+                        .array_insert(array, value, index, elem_ty);
+                }
+                Instruction::ArrayRemove(op) => {
+                    let Type::Array(elem_ty) = translator.get_type(&op.array_value) else {
+                        unreachable!();
+                    };
+                    let elem_ty = translator.get_type_id(&elem_ty);
+
+                    let array = translator.load(&op.array_value);
+                    let index = translator.load(&op.index);
+                    let count = translator.load(&op.count);
+                    translator
+                        .builder
+                        .array_remove(array, index, count, elem_ty);
+                }
+                Instruction::ArrayClear(op) => {
+                    let array = translator.load(&op.array);
+                    translator.builder.array_clear(array);
+                }
+                Instruction::ArrayPop(op) => {
+                    todo!();
+                }
+                Instruction::ArrayFind(op) | Instruction::ArrayRFind(op) => {
+                    let Type::Array(elem_ty) = translator.get_type(&op.array_value) else {
+                        unreachable!();
+                    };
+
+                    let elem_ty = translator.get_type_id(&elem_ty);
+
+                    let scan_backwards = matches!(instruction, Instruction::ArrayRFind(_));
+
+                    let array = translator.load(&op.array_value);
+                    let start_index = translator.load(&op.start_index);
+                    let searched_value = translator.load(&op.value);
+                    let write_index = translator.load(&op.return_index);
+
+                    translator.builder.array_find(
+                        array,
+                        start_index,
+                        searched_value,
+                        scan_backwards,
+                        write_index,
+                        elem_ty,
+                    );
+                }
+                Instruction::ArrayFindStruct(op) | Instruction::ArrayRFindStruct(op) => {
+                    let scan_backwards = matches!(instruction, Instruction::ArrayRFind(_));
+
+                    let array_ty = translator.get_type(&op.array_value);
+                    let Type::Array(struct_name) = array_ty else {
+                        unreachable!();
+                    };
+                    let Type::Struct(struct_name) = *struct_name else {
+                        unreachable!();
+                    };
+
+                    let Value::String(member_name) = &op.member_name else {
+                        unreachable!();
+                    };
+                    let member_name = Lowercase::new(&**member_name);
+
+                    let array = translator.load(&op.array_value);
+                    let start_index = translator.load(&op.start_index);
+                    let searched_value = translator.load(&op.value);
+                    let write_index = translator.load(&op.return_index);
+
+                    translator.builder.array_find_struct(
+                        array,
+                        start_index,
+                        searched_value,
+                        write_index,
+                        scan_backwards,
+                        struct_name,
+                        member_name,
+                    );
+                }
+                Instruction::StringConcat(op) => {
+                    let lhs = translator.load(&op.lhs);
+                    let rhs = translator.load(&op.rhs);
+                    let dst = translator.load(&op.dst);
+                    translator.builder.string_concat(lhs, rhs, dst);
                 }
             }
-            Instruction::Return(value) => {
-                let value = translator.load(value);
-                translator.builder.return_(value);
-                current_block_sealed = true;
-            }
-            Instruction::Cast(op) => {
-                perform_cast(&mut translator, &op.src, &op.dst);
-            }
-            Instruction::Is(op) => {
-                let Value::Ident(class) = &op.class else {
-                    unreachable!();
-                };
-                let class = Lowercase::new(class.as_str());
-
-                let src = translator.load(&op.object);
-                let dst = translator.load(&op.return_assignment);
-                translator.builder.class_is_instance_of(src, dst, class);
-            }
-            Instruction::StructCreate(op) => {
-                let dst = translator.load(&op.return_assignment);
-
-                let ty = translator.get_type(&op.return_assignment);
-                let ty = translator.get_type_id(&ty);
-
-                translator.builder.struct_create(dst, ty);
-            }
-            Instruction::StructGet(op) => {
-                let Value::Ident(member) = &op.member_name else {
-                    unreachable!()
-                };
-
-                let struct_name = translator.get_ty_name(&op.struct_value);
-                let field_name = Lowercase::new(&**member);
-
-                let object = translator.load(&op.struct_value);
-                let dst = translator.load(&op.return_assignment);
-
-                translator
-                    .builder
-                    .struct_load(object, dst, struct_name, field_name);
-            }
-            Instruction::StructSet(op) => {
-                let Value::Ident(member) = &op.member_name else {
-                    unreachable!()
-                };
-
-                let struct_name = translator.get_ty_name(&op.struct_value);
-                let field_name = Lowercase::new(&**member);
-
-                let object = translator.load(&op.struct_value);
-                let value = translator.load(&op.value);
-
-                translator
-                    .builder
-                    .struct_store(object, value, struct_name, field_name);
-            }
-            Instruction::ArrayLength(op) => {
-                let array = translator.load(&op.src);
-                let dst = translator.load(&op.dst);
-                translator.builder.array_length(array, dst);
-            }
-            Instruction::ArrayGet(op) => {
-                let array = translator.load(&op.array);
-                let index = translator.load(&op.index);
-                let dst = translator.load(&op.return_assignment);
-                translator.builder.array_get(array, index, dst);
-            }
-            Instruction::ArraySet(op) => {
-                let index = translator.load(&op.index);
-                let value = translator.load(&op.value);
-                let array = translator.load(&op.array);
-                translator.builder.array_set(array, index, value);
-            }
-            Instruction::ArrayCreate(op) => {
-                let Type::Array(elem_ty) = translator.get_type(&op.dst) else {
-                    unreachable!();
-                };
-
-                let elem_ty = translator.get_type_id(&elem_ty);
-
-                let len = translator.load(&op.src);
-                let dst = translator.load(&op.dst);
-                translator.builder.array_create(len, dst, elem_ty);
-            }
-            Instruction::ArrayAdd(op) => {
-                let Type::Array(elem_ty) = translator.get_type(&op.array) else {
-                    unreachable!();
-                };
-                let elem_ty = translator.get_type_id(&elem_ty);
-
-                let array = translator.load(&op.array);
-                let value = translator.load(&op.value);
-                let count = translator.load(&op.count);
-                translator.builder.array_add(array, value, count, elem_ty);
-            }
-            Instruction::ArrayInsert(op) => {
-                let Type::Array(elem_ty) = translator.get_type(&op.array) else {
-                    unreachable!();
-                };
-                let elem_ty = translator.get_type_id(&elem_ty);
-
-                let array = translator.load(&op.array);
-                let value = translator.load(&op.value);
-                let index = translator.load(&op.index);
-                translator
-                    .builder
-                    .array_insert(array, value, index, elem_ty);
-            }
-            Instruction::ArrayRemove(op) => {
-                let Type::Array(elem_ty) = translator.get_type(&op.array_value) else {
-                    unreachable!();
-                };
-                let elem_ty = translator.get_type_id(&elem_ty);
-
-                let array = translator.load(&op.array_value);
-                let index = translator.load(&op.index);
-                let count = translator.load(&op.count);
-                translator
-                    .builder
-                    .array_remove(array, index, count, elem_ty);
-            }
-            Instruction::ArrayClear(op) => {
-                let array = translator.load(&op.array);
-                translator.builder.array_clear(array);
-            }
-            Instruction::ArrayPop(op) => {
-                todo!();
-            }
-            Instruction::ArrayFind(op) | Instruction::ArrayRFind(op) => {
-                let Type::Array(elem_ty) = translator.get_type(&op.array_value) else {
-                    unreachable!();
-                };
-
-                let elem_ty = translator.get_type_id(&elem_ty);
-
-                let scan_backwards = matches!(instruction, Instruction::ArrayRFind(_));
-
-                let array = translator.load(&op.array_value);
-                let start_index = translator.load(&op.start_index);
-                let searched_value = translator.load(&op.value);
-                let write_index = translator.load(&op.return_index);
-
-                translator.builder.array_find(
-                    array,
-                    start_index,
-                    searched_value,
-                    scan_backwards,
-                    write_index,
-                    elem_ty,
-                );
-            }
-            Instruction::ArrayFindStruct(op) | Instruction::ArrayRFindStruct(op) => {
-                let scan_backwards = matches!(instruction, Instruction::ArrayRFind(_));
-
-                let array_ty = translator.get_type(&op.array_value);
-                let Type::Array(struct_name) = array_ty else {
-                    unreachable!();
-                };
-                let Type::Struct(struct_name) = *struct_name else {
-                    unreachable!();
-                };
-
-                let Value::String(member_name) = &op.member_name else {
-                    unreachable!();
-                };
-                let member_name = Lowercase::new(&**member_name);
-
-                let array = translator.load(&op.array_value);
-                let start_index = translator.load(&op.start_index);
-                let searched_value = translator.load(&op.value);
-                let write_index = translator.load(&op.return_index);
-
-                translator.builder.array_find_struct(
-                    array,
-                    start_index,
-                    searched_value,
-                    write_index,
-                    scan_backwards,
-                    struct_name,
-                    member_name,
-                );
-            }
-            Instruction::StringConcat(op) => {
-                let lhs = translator.load(&op.lhs);
-                let rhs = translator.load(&op.rhs);
-                let dst = translator.load(&op.dst);
-                translator.builder.string_concat(lhs, rhs, dst);
-            }
-        }
-    }
-
-    // Sometimes the final return instruction is missing and we must insert it.
-    // This is only possible for functions that return "none" and the fact we
-    // return "none" in this case is checked by the validation pass.
-    // Other functions that don't return also can also sometimes refer to this
-    // section due to weird pex codegen, however in that case this section
-    // is statically unreachable.
-    if !matches!(function.instructions.last(), Some(Instruction::Return(_)))
-        || !out_of_bounds_labels.is_empty()
-    {
-        for label in out_of_bounds_labels {
-            translator.builder.set_label(label);
         }
 
-        let return_ty = Lowercase::new(&*function.return_ty);
-        let value = match translator.data.resolve_ty(&return_ty) {
-            Type::None => Literal::Null,
-            Type::Bool => Literal::Bool(false),
-            Type::Int => Literal::Int(0),
-            Type::Float => Literal::Float(0.0),
-            Type::String => Literal::String("".to_owned()),
-            Type::Class(_) | Type::Struct(_) | Type::Array(_) | Type::Var => Literal::Null,
-        };
+        // Sometimes the final return instruction is missing and we must insert it.
+        // We must return the default value in this case.
+        if !matches!(instructions.last(), Some(Instruction::Return(_))) && !current_block_sealed {
+            let return_ty = Lowercase::new(&*function.return_ty);
+            let value = match translator.data.resolve_ty(&return_ty) {
+                Type::None => Literal::Null,
+                Type::Bool => Literal::Bool(false),
+                Type::Int => Literal::Int(0),
+                Type::Float => Literal::Float(0.0),
+                Type::String => Literal::String("".to_owned()),
+                Type::Class(_) | Type::Struct(_) | Type::Array(_) | Type::Var => Literal::Null,
+            };
 
-        translator.builder.return_(hir::Value::Const(value));
+            translator.builder.return_(hir::Value::Const(value));
+        }
     }
 }
 

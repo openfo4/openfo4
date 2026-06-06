@@ -2,6 +2,7 @@
 
 mod function;
 mod hir;
+mod pex;
 mod runtime;
 mod state_folding;
 mod trace;

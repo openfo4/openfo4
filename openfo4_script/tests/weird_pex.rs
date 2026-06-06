@@ -62,3 +62,21 @@ fn pex_instruction_after_jump() {
     engine.register(&module);
     engine.compile("MyClass", &Options::default());
 }
+
+#[test]
+fn pex_out_of_bounds_jump() {
+    let mut engine = Engine::new(COMPILER_OPTIONS);
+
+    let module = assemble(
+        r#"
+        class MyClass:
+
+        function MyFunc() -> int static:
+        branch 4
+        return 1
+        "#,
+    );
+
+    engine.register(&module);
+    engine.compile("MyClass", &Options::default());
+}
