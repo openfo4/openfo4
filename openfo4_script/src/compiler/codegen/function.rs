@@ -81,6 +81,17 @@ pub fn declare_function(
 
 pub fn translate_function_psc_signature(data: &CodegenData, func: &FunctionDef) -> PscSignature {
     let mut sig = PscSignature::default();
+
+    if !func.function.is_static {
+        let class = *data
+            .resources
+            .string_to_type
+            .lock()
+            .get(&func.class)
+            .unwrap();
+        sig.params.push(class);
+    }
+
     for param in func.function.params.iter() {
         let ty_name = Lowercase::new(&*param.ty);
 
