@@ -2,7 +2,7 @@ use openfo4_script::assembler::assemble;
 use openfo4_script::compiler::CompilerOptions;
 use openfo4_script::compiler::resources::TypeId;
 use openfo4_script::engine::{Engine, Options};
-use openfo4_script::runtime::{Caller, Context, Exception, ObjectAddr};
+use openfo4_script::runtime::{Caller, Context, Exception, ObjectAddr, Val};
 
 const COMPILER_OPTIONS: CompilerOptions = CompilerOptions {
     validation: true,
@@ -92,4 +92,30 @@ fn return_wrong_type_from_native_func() {
 
     let func = func.typed::<(), ()>().unwrap();
     func.call(&mut ctx, ()).unwrap();
+}
+
+#[test]
+#[should_panic]
+fn call_with_incorrect_parameter_count() {
+    let mut engine = Engine::new(COMPILER_OPTIONS);
+
+    let module = assemble(
+        r#"
+        class A:
+
+        function F(a: float, b: int) static:
+        local nonevar: none
+        return nonevar
+        "#,
+    );
+
+    engine.register(&module);
+
+    let a = engine.compile("A", &Options::default());
+    let func = a.get_func("F").unwrap();
+
+    let mut stack = engine.create_stack();
+    let mut ctx = Context::new(&engine, &mut stack, ());
+
+    func.call(&mut ctx, &[Val::F32(0.0)]).unwrap();
 }

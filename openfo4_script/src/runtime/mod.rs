@@ -151,15 +151,6 @@ pub enum Val {
 }
 
 impl Val {
-    const fn ty(&self) -> Type {
-        match self {
-            Self::Bool(_) => Type::I8,
-            Self::I32(_) => Type::I32,
-            Self::F32(_) => Type::F32,
-            Self::Object(_) => Type::Pointer,
-        }
-    }
-
     const fn into_raw(self) -> RawVal {
         match self {
             Self::Bool(bool) => RawVal { bool },
@@ -220,26 +211,19 @@ impl Func {
         T: 'static,
     {
         let res = ctx.engine.state.pool.resources();
+        assert_eq!(
+            self.psc_sig.params.len(),
+            params.len(),
+            "function takes {} parameters, {} were given",
+            self.psc_sig.params.len(),
+            params.len()
+        );
         for (is_ty, expect) in params.iter().zip(&self.psc_sig.params) {
             let is = is_ty.get_type_id(&ctx.engine.state.pool);
             let is_ty = res.types.get(is).unwrap();
             if !is_ty.info.classes.contains(expect) {
                 panic!("type {:?} is not compatible with {:?}", is, expect);
             }
-        }
-
-        assert_eq!(self.signature.params.len() - 1, params.len());
-        for (lhs, rhs) in self.signature.params[1..].iter().zip(params) {
-            assert_eq!(*lhs, rhs.ty());
-        }
-
-        let mut values = vec![
-            MaybeUninit::<RawVal>::uninit();
-            1 + self.signature.params.len() + self.signature.returns.len()
-        ];
-
-        for (index, param) in params.iter().enumerate() {
-            values[index].write(param.into_raw());
         }
 
         let mut r_params = vec![MaybeUninit::<RawVal>::uninit(); params.len()];
