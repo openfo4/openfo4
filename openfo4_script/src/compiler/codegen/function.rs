@@ -10,7 +10,7 @@ use crate::compiler::codegen::hir::{
 use crate::compiler::codegen::trace::Span;
 use crate::compiler::codegen::trampoline::generate_guest_to_host_trampoline;
 use crate::compiler::codegen::{
-    ClassDef, CodegenData, Error, FunctionDef, Type, get_parent_class_with_property,
+    ClassDef, CodegenData, Error, FunctionDef, PscSignature, Type, get_parent_class_with_property,
 };
 use crate::compiler::resources::TypeId;
 use crate::runtime::object::ObjectTag;
@@ -19,6 +19,7 @@ use crate::runtime::object::ObjectTag;
 pub struct FunctionResult {
     pub id: FuncId,
     pub signature: Signature,
+    pub psc_signature: PscSignature,
 }
 
 pub fn declare_function(
@@ -77,6 +78,35 @@ pub fn declare_function(
     }
 }
 
+pub fn translate_function_psc_signature(data: &CodegenData, func: &FunctionDef) -> PscSignature {
+    let mut sig = PscSignature::default();
+    for param in func.function.params.iter() {
+        let ty_name = Lowercase::new(&*param.ty);
+
+        let ty = if ty_name.as_inner().ends_with("[]") {
+            data.resources.primitives.array
+        } else {
+            *data.resources.string_to_type.lock().get(&ty_name).unwrap()
+        };
+        sig.params.push(ty);
+    }
+
+    if !func.function.return_ty.eq_ignore_ascii_case("none") {
+        let ty_name = Lowercase::new(&*func.function.return_ty);
+
+        let ty = if ty_name.as_inner().ends_with("[]") {
+            data.resources.primitives.array
+        } else {
+            dbg!(&ty_name);
+            dbg!(&data.resources.string_to_type);
+            *data.resources.string_to_type.lock().get(&ty_name).unwrap()
+        };
+        sig.returns.push(ty);
+    }
+
+    sig
+}
+
 pub fn translate_function(
     data: &CodegenData,
     class: &ClassDef,
@@ -86,6 +116,8 @@ pub fn translate_function(
     let signature = translate_function_signature(data, &function.function);
 
     let func_id = function.func_id.unwrap();
+
+    let sig = translate_function_psc_signature(data, function);
 
     let func_id = if function.function.is_native {
         func_id
@@ -119,6 +151,7 @@ pub fn translate_function(
     FunctionResult {
         id: func_id,
         signature,
+        psc_signature: sig,
     }
 }
 

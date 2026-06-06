@@ -100,6 +100,7 @@ impl CodegenPass {
                         class: Lowercase::new(&*class.name),
                         class_name_debug: class.name.clone(),
                         name: Lowercase::new(&*func.name),
+                        psc_signature: None,
                     }));
 
                     functions.insert(Lowercase::new(&*func.name), id);
@@ -132,6 +133,7 @@ impl CodegenPass {
                         class: Lowercase::new(&*class.name),
                         class_name_debug: class.name.clone(),
                         name: Lowercase::new(&*func.name),
+                        psc_signature: None,
                     }))
                 });
 
@@ -145,6 +147,7 @@ impl CodegenPass {
                         class: Lowercase::new(&*class.name),
                         class_name_debug: class.name.clone(),
                         name: Lowercase::new(&*func.name),
+                        psc_signature: None,
                     }))
                 });
 
@@ -338,7 +341,7 @@ impl CodegenPass {
                     }),
                     info: TypeInfo {
                         name: Some(name.clone()),
-                        classes: Vec::new(),
+                        classes: vec![id],
                         properties,
                     },
                 },
@@ -615,6 +618,7 @@ impl CodegenPass {
 
             let func = &mut self.data.functions[func_id.0];
             func.signature = Some(res.signature.clone());
+            func.psc_signature = Some(res.psc_signature.clone());
         }
 
         let func = self.data.get_function(class, func).unwrap();
@@ -634,6 +638,7 @@ impl CodegenPass {
             CompilationResult {
                 function: compiled_trampoline,
                 signature: func.signature.clone().unwrap(),
+                psc_signature: func.psc_signature.clone().unwrap(),
             },
             compiled_func.as_ptr(),
         ))
@@ -691,6 +696,14 @@ impl CodegenPass {
             _ => unreachable!(),
         }
         self.data.resources.types.define(class.type_id, ty);
+    }
+
+    pub fn compute_function_signature(&self, class: &str, func: &str) -> PscSignature {
+        let class = Lowercase::new(&*class);
+        let func = Lowercase::new(&*func);
+        let func = self.data.get_function(&class, &func).unwrap();
+        let sig = function::translate_function_psc_signature(&self.data, func);
+        sig
     }
 }
 
@@ -827,6 +840,7 @@ struct FunctionDef {
     class: Lowercase<String>,
     class_name_debug: String,
     signature: Option<Signature>,
+    psc_signature: Option<PscSignature>,
     func_id: Option<FuncId>,
     function: Function,
     native: Option<NativeFunction>,
@@ -1003,4 +1017,10 @@ enum Type {
     Array(Box<Type>),
     Class(Lowercase<String>),
     Struct(Lowercase<String>),
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct PscSignature {
+    pub params: Vec<TypeId>,
+    pub returns: Vec<TypeId>,
 }

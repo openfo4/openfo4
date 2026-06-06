@@ -227,6 +227,10 @@ impl ObjectPool {
             std::str::from_utf8_unchecked(data)
         }
     }
+
+    pub(crate) fn resources(&self) -> &Resources {
+        &self.resources
+    }
 }
 
 /// A reference handle to an [`Object`] in a pool.

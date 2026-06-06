@@ -3,6 +3,8 @@ mod validation;
 
 pub mod resources;
 
+pub use codegen::PscSignature;
+
 use std::sync::Arc;
 
 use game_common::string::Lowercase;
@@ -59,6 +61,11 @@ impl Context {
     pub(crate) fn resources(&self) -> &Arc<Resources> {
         self.codegen.resources()
     }
+
+    pub fn compute_function_signature(&mut self, class: &str, func: &str) -> PscSignature {
+        self.codegen.compute_type_layouts();
+        self.codegen.compute_function_signature(class, func)
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -77,6 +84,7 @@ unsafe impl Sync for NativeFunction {}
 pub struct CompilationResult {
     pub function: CompiledFunction,
     pub signature: Signature,
+    pub psc_signature: PscSignature,
 }
 
 #[derive(Clone, Debug)]

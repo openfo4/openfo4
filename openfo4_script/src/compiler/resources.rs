@@ -217,7 +217,7 @@ impl PrimitiveTypes {
                 repr: TypeRepr::Unit,
                 info: TypeInfo {
                     name: Some(Lowercase::new("none")),
-                    classes: Vec::new(),
+                    classes: vec![none],
                     properties: HashMap::from([(
                         (Lowercase::new(""), Lowercase::new("")),
                         TypeProperty {
@@ -236,7 +236,7 @@ impl PrimitiveTypes {
                 repr: TypeRepr::Int { bits: 8 },
                 info: TypeInfo {
                     name: Some(Lowercase::new("bool")),
-                    classes: Vec::new(),
+                    classes: vec![bool],
                     properties: HashMap::from([(
                         (Lowercase::new(""), Lowercase::new("")),
                         TypeProperty {
@@ -255,7 +255,7 @@ impl PrimitiveTypes {
                 repr: TypeRepr::Int { bits: 32 },
                 info: TypeInfo {
                     name: Some(Lowercase::new("int")),
-                    classes: Vec::new(),
+                    classes: vec![int],
                     properties: HashMap::from([(
                         (Lowercase::new(""), Lowercase::new("")),
                         TypeProperty {
@@ -274,7 +274,7 @@ impl PrimitiveTypes {
                 repr: TypeRepr::Float { bits: 32 },
                 info: TypeInfo {
                     name: Some(Lowercase::new("float")),
-                    classes: Vec::new(),
+                    classes: vec![float],
                     properties: HashMap::from([(
                         (Lowercase::new(""), Lowercase::new("")),
                         TypeProperty {
@@ -293,7 +293,7 @@ impl PrimitiveTypes {
                 repr: TypeRepr::Int { bits: usize::BITS },
                 info: TypeInfo {
                     name: None,
-                    classes: Vec::new(),
+                    classes: vec![pointer],
                     properties: HashMap::from([(
                         (Lowercase::new(""), Lowercase::new("")),
                         TypeProperty {
@@ -312,7 +312,7 @@ impl PrimitiveTypes {
                 repr: TypeRepr::Int { bits: 8 },
                 info: TypeInfo {
                     name: None,
-                    classes: Vec::new(),
+                    classes: vec![byte],
                     properties: HashMap::from([(
                         (Lowercase::new(""), Lowercase::new("")),
                         TypeProperty {
@@ -348,7 +348,7 @@ impl PrimitiveTypes {
                 }),
                 info: TypeInfo {
                     name: Some(Lowercase::new("string")),
-                    classes: Vec::new(),
+                    classes: vec![string],
                     properties: HashMap::from([(
                         (Lowercase::new(""), Lowercase::new("")),
                         TypeProperty {
@@ -384,7 +384,7 @@ impl PrimitiveTypes {
                 }),
                 info: TypeInfo {
                     name: None,
-                    classes: Vec::new(),
+                    classes: vec![array],
                     properties: HashMap::new(),
                 },
             },
@@ -414,7 +414,7 @@ impl PrimitiveTypes {
                 }),
                 info: TypeInfo {
                     name: Some(Lowercase::new("var")),
-                    classes: Vec::new(),
+                    classes: vec![var],
                     properties: HashMap::from([(
                         (Lowercase::new(""), Lowercase::new("")),
                         TypeProperty {

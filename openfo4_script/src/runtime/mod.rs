@@ -15,7 +15,8 @@ use thiserror::Error;
 pub use object::{ArrayObject, Object, ObjectAddr, ObjectPool, ObjectRef};
 pub use stack::Stack;
 
-use crate::compiler::CompilationResult;
+use crate::compiler::resources::TypeId;
+use crate::compiler::{CompilationResult, PscSignature};
 use crate::engine::{Engine, EngineShared};
 
 pub(crate) const RESULT_OK: i32 = 0;
@@ -142,12 +143,26 @@ impl Val {
             Self::Object(object) => RawVal { object },
         }
     }
+
+    fn get_type_id(self, pool: &ObjectPool) -> TypeId {
+        let res = pool.resources();
+        match self {
+            Self::Bool(_) => res.primitives.bool,
+            Self::I32(_) => res.primitives.int,
+            Self::F32(_) => res.primitives.float,
+            Self::Object(addr) => {
+                let obj = pool.get(addr);
+                obj.type_id()
+            }
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
 pub struct Func {
     ptr: NativeFnPtr,
     signature: Signature,
+    psc_sig: PscSignature,
     engine: Weak<EngineShared>,
 }
 
@@ -170,6 +185,7 @@ impl Func {
             // function pointer of type `NativeFnPtr`.
             ptr: unsafe { transmute::<*const u8, NativeFnPtr>(res.function.as_ptr()) },
             signature: res.signature.clone(),
+            psc_sig: res.psc_signature.clone(),
             engine,
         }
     }
@@ -178,6 +194,15 @@ impl Func {
     where
         T: 'static,
     {
+        let res = ctx.engine.state.pool.resources();
+        for (is_ty, expect) in params.iter().zip(&self.psc_sig.params) {
+            let is = is_ty.get_type_id(&ctx.engine.state.pool);
+            let is_ty = res.types.get(is).unwrap();
+            if !is_ty.info.classes.contains(expect) {
+                panic!("type {:?} is not compatible with {:?}", is, expect);
+            }
+        }
+
         assert_eq!(self.signature.params.len() - 1, params.len());
         for (lhs, rhs) in self.signature.params[1..].iter().zip(params) {
             assert_eq!(*lhs, rhs.ty());
@@ -361,6 +386,17 @@ where
     where
         T: 'static,
     {
+        let res = ctx.engine.state.pool.resources();
+        for (is, expect) in params
+            .type_ids(&ctx.engine.state.pool)
+            .zip(&self.func.psc_sig.params)
+        {
+            let is_ty = res.types.get(is).unwrap();
+            if !is_ty.info.classes.contains(expect) {
+                panic!("type {:?} is not compatible with {:?}", is, expect);
+            }
+        }
+
         // TODO: When const_generics is stabilized we can avoid the heap allocation
         // and use a regular array.
         let mut r_params = vec![MaybeUninit::<RawVal>::uninit(); Params::SIZE];
@@ -489,7 +525,7 @@ impl CallTable {
 pub trait IntoFunc<T, Params, Returns> {
     #[doc(hidden)]
     #[expect(private_interfaces)]
-    fn into_func(self, call_table: &mut CallTable) -> usize;
+    fn into_func(self, call_table: &mut CallTable, signature: PscSignature) -> usize;
 
     #[doc(hidden)]
     fn signature() -> Signature;
@@ -512,7 +548,7 @@ macro_rules! impl_into_func {
             )*
         {
             #[expect(private_interfaces)]
-            fn into_func(self, call_table: &mut CallTable) -> usize {
+            fn into_func(self, call_table: &mut CallTable, signature: PscSignature) -> usize {
                 let callback = move |ctx: *const RawContext, params: *const RawVal, returns: *mut RawVal| -> i32 {
                     let ctx = unsafe { &*ctx };
 
@@ -529,6 +565,8 @@ macro_rules! impl_into_func {
 
                     match self(caller, $($params),*) {
                         Ok(($($returns),*)) => {
+                            validate_return_value_types(ctx, &($($returns,)*), &signature);
+
                             let mut index = 0;
                             $(
                                 unsafe {
@@ -565,6 +603,29 @@ macro_rules! impl_into_func {
     };
 }
 
+fn validate_return_value_types<T>(ctx: &RawContext, values: &T, signature: &PscSignature)
+where
+    T: NativeTuple,
+{
+    let pool = unsafe { &(*ctx.state).pool };
+    let res = pool.resources();
+
+    for (lhs, &rhs) in values.type_ids(pool).zip(&signature.returns) {
+        // No need to check for subtyping if types are equal.
+        if lhs == rhs {
+            continue;
+        }
+
+        let ty = res.types.get(lhs).unwrap();
+        if !ty.info.classes.contains(&rhs) {
+            panic!(
+                "type of returned value {:?} is not compatible with signature return type {:?}",
+                lhs, rhs
+            );
+        }
+    }
+}
+
 impl_into_func!(=>);
 impl_into_func!(=> R0);
 impl_into_func!(A0 =>);
@@ -599,6 +660,8 @@ pub unsafe trait NativeType: Copy {
     unsafe fn from_raw(val: &RawVal) -> Self;
 
     fn to_raw(self) -> RawVal;
+
+    fn get_type_id(&self, pool: &ObjectPool) -> TypeId;
 }
 
 unsafe impl NativeType for bool {
@@ -610,6 +673,10 @@ unsafe impl NativeType for bool {
 
     fn to_raw(self) -> RawVal {
         RawVal { bool: self }
+    }
+
+    fn get_type_id(&self, pool: &ObjectPool) -> TypeId {
+        Val::Bool(*self).get_type_id(pool)
     }
 }
 
@@ -623,6 +690,10 @@ unsafe impl NativeType for i32 {
     fn to_raw(self) -> RawVal {
         RawVal { i32: self }
     }
+
+    fn get_type_id(&self, pool: &ObjectPool) -> TypeId {
+        Val::I32(*self).get_type_id(pool)
+    }
 }
 
 unsafe impl NativeType for f32 {
@@ -634,6 +705,10 @@ unsafe impl NativeType for f32 {
 
     fn to_raw(self) -> RawVal {
         RawVal { f32: self }
+    }
+
+    fn get_type_id(&self, pool: &ObjectPool) -> TypeId {
+        Val::F32(*self).get_type_id(pool)
     }
 }
 
@@ -647,6 +722,10 @@ unsafe impl NativeType for ObjectAddr {
     fn to_raw(self) -> RawVal {
         RawVal { object: self }
     }
+
+    fn get_type_id(&self, pool: &ObjectPool) -> TypeId {
+        Val::Object(*self).get_type_id(pool)
+    }
 }
 
 pub unsafe trait NativeTuple {
@@ -656,6 +735,8 @@ pub unsafe trait NativeTuple {
     unsafe fn write_raw(self, ptr: *mut RawVal);
 
     unsafe fn from_raw(ptr: *const RawVal) -> Self;
+
+    fn type_ids(&self, pool: &ObjectPool) -> impl Iterator<Item = TypeId>;
 }
 
 unsafe impl NativeTuple for () {
@@ -667,6 +748,10 @@ unsafe impl NativeTuple for () {
     }
 
     unsafe fn write_raw(self, _ptr: *mut RawVal) {}
+
+    fn type_ids(&self, _pool: &ObjectPool) -> impl Iterator<Item = TypeId> {
+        std::iter::empty()
+    }
 }
 
 unsafe impl<T> NativeTuple for T
@@ -684,6 +769,10 @@ where
         unsafe {
             ptr.write(self.to_raw());
         }
+    }
+
+    fn type_ids(&self, pool: &ObjectPool) -> impl Iterator<Item = TypeId> {
+        std::iter::once(self.get_type_id(pool))
     }
 }
 
@@ -720,6 +809,15 @@ macro_rules! impl_native_tuple {
                 )*
             }
 
+            fn type_ids(&self, pool: &ObjectPool) -> impl Iterator<Item = TypeId> {
+                let ( $($t,)* ) = self;
+                [
+                    $(
+                        $t.get_type_id(pool),
+                    )*
+                ]
+                .into_iter()
+            }
         }
     };
 }

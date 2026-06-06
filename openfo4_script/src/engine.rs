@@ -83,11 +83,13 @@ impl Engine {
             }
         }
 
+        let sig = self.ctx.compute_function_signature(class, func);
+
         let _lock = self.shared.call_table_lock.write();
         let mut call_table = unsafe { self.shared.state.call_table.borrow_mut() };
 
         let ptr = call_host_trampoline as *const u8;
-        let index = f.into_func(&mut call_table);
+        let index = f.into_func(&mut call_table, sig);
 
         let mut signature = F::signature();
         // Our VM context pointer.
