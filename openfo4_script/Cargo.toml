@@ -17,6 +17,8 @@ parking_lot = "0.12.5"
 hashbrown = { workspace = true }
 tracing = { workspace = true }
 
+capstone = "0.14.0"
+
 [lints]
 workspace = true
 

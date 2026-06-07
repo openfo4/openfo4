@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+</head>
+
+<style>
+    body {
+        background-color: black;
+        width: 100vw;
+        height: 100vh;
+        margin: 0;
+        color: white;
+    }
+
+    .grid {
+        display: flex;
+    }
+
+    .panel {
+        overflow: scroll;
+        height: 100vh;
+    }
+
+    .section {}
+
+    .section:hover {
+        background-color: gray;
+    }
+
+    .marked {
+        background-color: gray;
+    }
+</style>
+
+<body>
+    <h1>Disassembly for {%NAME%}</h1>
+    <div class="grid">
+        <div class="panel">
+            <h3>PEX</h3>
+            <pre><code id="pex">{%PEX%}</code></pre>
+        </div>
+        <div class="panel">
+            <h3>HIR</h3>
+            <pre><code id="hir">{%HIR%}</code></pre>
+        </div>
+        <div class="panel">
+            <h3>ASM</h3>
+            <pre><code id="asm">{%ASM%}</code></pre>
+        </div>
+    </div>
+</body>
+
+<script>
+    const PEX_TO_HIR = [1, 2, 3];
+    const PEX_TO_ASM = [1, 2, 3];
+    const HIR_TO_PEX = [0, 0, 0];
+    const HIR_TO_ASM = [{% HIR_TO_ASM %}];
+    const ASM_TO_PEX = [1, 2, 3];
+    const ASM_TO_HIR = [{% ASM_TO_HIR %}];
+
+
+    let pexElems = [];
+    let hirElems = [];
+    let asmElems = [];
+    let pexMarked = new Set();
+    let hirMarked = new Set();
+    let asmMarked = new Set();
+
+    function resetClasses() {
+        let pex = new Set();
+        let hir = new Set();
+        let asm = new Set();
+
+        pexMarked.forEach(index => {
+            pex.add(index);
+            const hirIndex = PEX_TO_HIR[index];
+            if (hirIndex) hir.add(hirIndex);
+            const asmIndex = PEX_TO_ASM[index];
+            if (asmIndex) asm.add(asmIndex);
+        });
+
+        hirMarked.forEach(index => {
+            hir.add(index);
+            const pexIndex = HIR_TO_PEX[index];
+            if (pexIndex) pex.add(pexIndex);
+
+            const asmIndex = HIR_TO_ASM[index];
+            if (asmIndex) {
+                asmIndex.forEach(i => {
+                    asm.add(i);
+                });
+            }
+        });
+
+        asmMarked.forEach(index => {
+            asm.add(index);
+            const pexIndex = ASM_TO_PEX[index];
+            if (pexIndex) pex.add(pexIndex);
+
+            const hirIndex = ASM_TO_HIR[index];
+            if (hirIndex) {
+                hirIndex.forEach(i => {
+                    hir.add(i);
+                });
+            }
+        });
+
+        for (let i = 0; i < pexElems.length; i++) {
+            if (pex.has(i)) {
+                pexElems[i].classList.add("marked");
+            } else {
+                pexElems[i].classList.remove("marked");
+            }
+        }
+
+        for (let i = 0; i < hirElems.length; i++) {
+            if (hir.has(i)) {
+                hirElems[i].classList.add("marked");
+            } else {
+                hirElems[i].classList.remove("marked");
+            }
+        }
+
+
+        for (let i = 0; i < asmElems.length; i++) {
+            if (asm.has(i)) {
+                asmElems[i].classList.add("marked");
+            } else {
+                asmElems[i].classList.remove("marked");
+            }
+        }
+
+        console.log("hir", hir);
+        console.log("asm", asm);
+    }
+
+    function loadElems(elemId, elems, set) {
+        let i = 0;
+        document.getElementById(elemId).childNodes.forEach(element => {
+            if (element.className === "line") {
+                const index = i;
+
+                element.addEventListener("mouseenter", (e) => {
+                    console.log(index);
+                    set.add(index);
+                    resetClasses();
+                });
+
+                element.addEventListener("mouseout", (e) => {
+                    set.delete(index);
+                    resetClasses();
+                });
+
+                i += 1;
+                elems.push(element);
+            }
+        });
+    }
+
+    loadElems("pex", pexElems, pexMarked);
+    loadElems("hir", hirElems, hirMarked);
+    loadElems("asm", asmElems, asmMarked);
+
+</script>
+
+</html>

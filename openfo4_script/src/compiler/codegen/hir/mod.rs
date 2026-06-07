@@ -9,6 +9,7 @@ use hashbrown::HashMap;
 
 use crate::compiler::codegen::trace::Span;
 use crate::compiler::codegen::{CodegenData, FunctionId};
+use crate::compiler::debug::HirDebugInfo;
 use crate::compiler::resources::TypeId;
 use crate::runtime::object::ObjectTag;
 
@@ -29,10 +30,11 @@ impl Function {
             .map(|(index, ty)| (Variable(index), *ty))
     }
 
-    pub fn debug_text(&self, data: &CodegenData) -> String {
+    pub fn debug_text(&self, data: &CodegenData) -> HirDebugInfo {
         let mut buf = String::new();
-        text::function_text(self, &mut buf, data).unwrap();
-        buf
+        let mut regions = Vec::new();
+        text::function_text(self, &mut buf, data, &mut regions).unwrap();
+        HirDebugInfo { text: buf, regions }
     }
 
     pub fn lower(&self, data: &CodegenData, builder: openfo4_jit::FunctionBuilder<'_>, span: Span) {

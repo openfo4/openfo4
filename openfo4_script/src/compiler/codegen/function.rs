@@ -13,6 +13,7 @@ use crate::compiler::codegen::trampoline::generate_guest_to_host_trampoline;
 use crate::compiler::codegen::{
     ClassDef, CodegenData, Error, FunctionDef, PscSignature, Type, get_parent_class_with_property,
 };
+use crate::compiler::debug::DebugInfo;
 use crate::compiler::resources::TypeId;
 use crate::runtime::object::ObjectTag;
 
@@ -21,6 +22,10 @@ pub struct FunctionResult {
     pub id: FuncId,
     pub signature: Signature,
     pub psc_signature: PscSignature,
+    // Keep this as Box instead of inlining directly.
+    // In most cases this will be None because debug info
+    // collection is disabled.
+    pub debug: Option<Box<DebugInfo>>,
 }
 
 pub fn declare_function(
@@ -122,12 +127,14 @@ pub fn translate_function(
     class: &ClassDef,
     function: &FunctionDef,
     compiler: &mut Compiler,
+    enable_debug: bool,
 ) -> FunctionResult {
     let signature = translate_function_signature(data, &function.function);
 
     let func_id = function.func_id.unwrap();
 
     let sig = translate_function_psc_signature(data, function);
+    let mut debug = None;
 
     let func_id = if function.function.is_native {
         func_id
@@ -155,6 +162,18 @@ pub fn translate_function(
         let builder = compiler.define_function(func_id);
         func.lower(data, builder, span);
 
+        if enable_debug {
+            debug = Some(Box::new(DebugInfo {
+                name: format!(
+                    "{}.{}",
+                    class.class.as_ref().unwrap().name,
+                    function.function.name
+                ),
+                pex: function.function.text(),
+                hir: func.debug_text(data),
+            }));
+        }
+
         func_id
     };
 
@@ -162,6 +181,7 @@ pub fn translate_function(
         id: func_id,
         signature,
         psc_signature: sig,
+        debug,
     }
 }
 

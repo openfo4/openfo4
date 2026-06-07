@@ -9,8 +9,8 @@ use std::mem::offset_of;
 
 use hashbrown::HashMap;
 use openfo4_jit::{
-    Block, FloatCompareOp, FunctionBuilder, IntCompareOp, Type as JitType, Value as JitValue,
-    Variable,
+    Block, FloatCompareOp, FunctionBuilder, IntCompareOp, SourceLoc, Type as JitType,
+    Value as JitValue, Variable,
 };
 
 use crate::compiler::codegen::CodegenData;
@@ -129,6 +129,8 @@ pub fn lower_function(
     // free space for us to store our `usize` tag.
     translator.stack_alloc(stack_frame.size.saturating_sub(size_of::<usize>()));
 
+    let mut next_srcloc = 0;
+
     for (index, instruction) in function.instructions.iter().enumerate() {
         if let Some(block) = blocks_by_position.get(&index) {
             if !translator.builder.is_current_block_full() {
@@ -137,6 +139,10 @@ pub fn lower_function(
 
             translator.builder.switch_to_block(*block);
         }
+
+        let srcloc = SourceLoc::new(next_srcloc);
+        next_srcloc += 1;
+        translator.builder.begin_srcloc(srcloc);
 
         match instruction {
             Instruction::IAdd(op) => {
@@ -789,6 +795,8 @@ pub fn lower_function(
                 }
             }
         }
+
+        translator.builder.end_srcloc();
     }
 
     generate_abort_block(

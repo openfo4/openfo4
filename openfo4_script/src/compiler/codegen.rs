@@ -22,6 +22,7 @@ use thiserror::Error;
 
 // use crate::compiler::codegen::layout::{ClassLayout, compute_struct_layout};
 use crate::compiler::codegen::runtime::RuntimeFunctions;
+use crate::compiler::debug::DebugInfo;
 use crate::compiler::resources::{
     self, CompositeType, CompositeTypeMember, PropertyType, Resources, TypeId, TypeInfo,
     TypeProperty, TypeRepr,
@@ -51,16 +52,18 @@ pub struct CodegenPass {
     data: CodegenData,
     compiler: Compiler,
     classes_updated: bool,
+    enable_debug: bool,
 }
 
 impl CodegenPass {
     pub fn new(config: CompilerConfig) -> Self {
-        let mut compiler = Compiler::new(config);
+        let mut compiler = Compiler::new(config.clone());
 
         Self {
             data: CodegenData::new(&mut compiler),
             compiler,
             classes_updated: false,
+            enable_debug: config.debug,
         }
     }
 
@@ -102,6 +105,7 @@ impl CodegenPass {
                         class_name_debug: class.name.clone(),
                         name: Lowercase::new(&*func.name),
                         psc_signature: None,
+                        debug: None,
                     }));
 
                     functions.insert(Lowercase::new(&*func.name), id);
@@ -135,6 +139,7 @@ impl CodegenPass {
                         class_name_debug: class.name.clone(),
                         name: Lowercase::new(&*func.name),
                         psc_signature: None,
+                        debug: None,
                     }))
                 });
 
@@ -149,6 +154,7 @@ impl CodegenPass {
                         class_name_debug: class.name.clone(),
                         name: Lowercase::new(&*func.name),
                         psc_signature: None,
+                        debug: None,
                     }))
                 });
 
@@ -615,11 +621,26 @@ impl CodegenPass {
         for func_id in &funcs_to_compile {
             let func = &self.data.functions[func_id.0];
             let class = &self.data.classes.get(&func.class).unwrap();
-            let res = function::translate_function(&self.data, class, func, &mut self.compiler);
+            let res = function::translate_function(
+                &self.data,
+                class,
+                func,
+                &mut self.compiler,
+                self.enable_debug,
+            );
 
             let func = &mut self.data.functions[func_id.0];
             func.signature = Some(res.signature.clone());
             func.psc_signature = Some(res.psc_signature.clone());
+            func.debug = res.debug;
+        }
+
+        for func_id in &funcs_to_compile {
+            let func = &self.data.functions[func_id.0];
+            let compiled_func = self.compiler.compile_function(func.func_id.unwrap());
+            if let Some(info) = &func.debug {
+                super::debug::write_debug_output(info, &compiled_func);
+            }
         }
 
         let func = self.data.get_function(class, func).unwrap();
@@ -846,6 +867,7 @@ struct FunctionDef {
     function: Function,
     native: Option<NativeFunction>,
     trampoline_func_id: Option<FuncId>,
+    debug: Option<Box<DebugInfo>>,
 }
 
 #[derive(Clone, Debug)]

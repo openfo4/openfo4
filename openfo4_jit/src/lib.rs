@@ -1,3 +1,5 @@
+mod backend;
+
 use std::fmt::{self, Debug, Formatter};
 
 use game_common::collections::vec_map::{Index, VecMap};
@@ -6,7 +8,7 @@ use slab::Slab;
 use crate::backend::cranelift::{self, CraneliftModule};
 use crate::backend::{FunctionDefinitionDesc, StackSlotDesc};
 
-mod backend;
+pub use crate::backend::SourceLocMap;
 
 /// Main driver for the JIT compiler.
 pub struct Compiler {
@@ -79,6 +81,8 @@ impl Compiler {
             current_block_full: false,
             current_block: None,
             blocks_filled: Vec::new(),
+            current_srcloc: None,
+            srclocs: SourceLocMap::default(),
         }
     }
 
@@ -209,6 +213,8 @@ pub struct FunctionBuilder<'a> {
     blocks_filled: Vec<bool>,
     current_block_full: bool,
     current_block: Option<Block>,
+    current_srcloc: Option<(SourceLoc, usize)>,
+    srclocs: SourceLocMap,
 }
 
 impl<'a> FunctionBuilder<'a> {
@@ -1013,6 +1019,7 @@ impl<'a> FunctionBuilder<'a> {
                 num_variables: self.next_variable,
                 block_params: self.block_params,
                 stack_slots: self.stack_slots,
+                srcloc: self.srclocs,
             },
         );
     }
@@ -1021,6 +1028,26 @@ impl<'a> FunctionBuilder<'a> {
     #[inline]
     fn assert_block_not_filled(&self) {
         debug_assert!(!self.current_block_full);
+    }
+
+    /// Begins a source location region.
+    ///
+    /// All following instructions will be tagged with the given [`SourceLoc`].
+    /// If another region is still active, it is closed before this region opened.
+    pub fn begin_srcloc(&mut self, loc: SourceLoc) {
+        self.end_srcloc();
+        let start = self.instructions.len();
+        self.current_srcloc = Some((loc, start));
+    }
+
+    /// Ends a source location region.
+    ///
+    /// Does nothing if no [`SourceLoc`] is currently open.
+    pub fn end_srcloc(&mut self) {
+        if let Some((loc, start)) = self.current_srcloc.take() {
+            let end = self.instructions.len();
+            self.srclocs.insert(start, end, loc);
+        }
     }
 }
 
@@ -1284,6 +1311,10 @@ impl CompiledFunction {
         self.inner.as_ptr()
     }
 
+    pub fn as_bytes(&self) -> &[u8] {
+        self.inner.as_bytes()
+    }
+
     /// Returns a textual representation of the compiled code.
     ///
     /// This is only available when debug was enabled. The text format is unspecified and only
@@ -1294,6 +1325,10 @@ impl CompiledFunction {
 
     pub fn signature(&self) -> &Signature {
         &self.signature
+    }
+
+    pub fn srclocs(&self) -> &SourceLocMap {
+        self.inner.srclocs()
     }
 }
 
@@ -1312,4 +1347,14 @@ pub struct DataId(usize);
 pub struct CompilerConfig {
     pub validation: bool,
     pub debug: bool,
+}
+
+/// A source location attached to code regions for debugging output.
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub struct SourceLoc(u32);
+
+impl SourceLoc {
+    pub fn new(loc: u32) -> Self {
+        Self(loc + 1)
+    }
 }
