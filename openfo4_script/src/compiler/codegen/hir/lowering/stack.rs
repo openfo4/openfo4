@@ -11,7 +11,7 @@ pub struct StackFrameInfo {
     /// Size of the entire stack for this function.
     pub size: usize,
     /// Suspension points after function calls.
-    pub call_points: IndexMap<usize, SuspensionPoint>,
+    pub call_points: IndexMap<InstructionPosition, SuspensionPoint>,
     pub points: IndexMap<usize, SuspensionPoint>,
 }
 
@@ -39,29 +39,34 @@ pub fn compute_suspension_points(
     let mut next_tag = NonZeroUsize::MIN;
     let mut call_points = IndexMap::new();
 
-    for (index, instruction) in func.instructions.iter().enumerate() {
-        match instruction {
-            Instruction::Call(_) | Instruction::CallIndirect(_) => {
-                let variables = func.variables().map(|v| v.0).collect();
+    for (block_index, block) in func.blocks.iter().enumerate() {
+        for (inst_index, instruction) in block.iter().enumerate() {
+            match instruction {
+                Instruction::Call(_) | Instruction::CallIndirect(_) => {
+                    let variables = func.variables().map(|v| v.0).collect();
 
-                let tag = next_tag;
-                next_tag = next_tag.checked_add(1).unwrap();
+                    let tag = next_tag;
+                    next_tag = next_tag.checked_add(1).unwrap();
 
-                // A call resumtpion semantically happens in the middle of an instruction
-                // and we cannot just reuse the block at the start of the instruction, if
-                // one exists.
-                let block = builder.create_block(&[]);
+                    // A call resumtpion semantically happens in the middle of an instruction
+                    // and we cannot just reuse the block at the start of the instruction, if
+                    // one exists.
+                    let block = builder.create_block(&[]);
 
-                call_points.insert(
-                    index,
-                    SuspensionPoint {
-                        tag,
-                        variables,
-                        block,
-                    },
-                );
+                    call_points.insert(
+                        InstructionPosition {
+                            block: block_index,
+                            instruction: inst_index,
+                        },
+                        SuspensionPoint {
+                            tag,
+                            variables,
+                            block,
+                        },
+                    );
+                }
+                _ => {}
             }
-            _ => {}
         }
     }
 
@@ -177,4 +182,10 @@ fn resume_point_load_vars(
 
         offset += local.ty.size();
     }
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub struct InstructionPosition {
+    pub block: usize,
+    pub instruction: usize,
 }

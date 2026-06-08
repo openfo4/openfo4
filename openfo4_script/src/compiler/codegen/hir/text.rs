@@ -5,8 +5,7 @@ use openfo4_jit::SourceLoc;
 
 use crate::compiler::codegen::CodegenData;
 use crate::compiler::codegen::hir::{
-    AddrCompareOp, Function, Instruction, Label, Literal, Null, ScalarCompareOp, StringCompareOp,
-    Value,
+    AddrCompareOp, Function, Instruction, Literal, Null, ScalarCompareOp, StringCompareOp, Value,
 };
 use crate::compiler::debug::HirRegion;
 use crate::compiler::resources::{TypeId, TypeRepr};
@@ -43,7 +42,7 @@ pub fn function_text(
 
     if let Some(ty) = func.returns {
         let ty = ty_to_string(ty);
-        write!(writer, ": {}", ty)?;
+        write!(writer, " {}", ty)?;
     }
 
     writeln!(writer, "")?;
@@ -58,31 +57,23 @@ pub fn function_text(
         writeln!(writer, "  %{}: {}", var, ty)?;
     }
 
-    regions.push(HirRegion {
-        region: Range {
-            start: 0,
-            end: writer.len(),
-        },
-        loc: None,
-    });
+    let mut index = 0;
+    for (block_index, block) in func.blocks.iter().enumerate() {
+        writeln!(writer, "b{}:", block_index)?;
 
-    for (index, instruction) in func.instructions.iter().enumerate() {
-        for (label, label_pos) in &func.labels {
-            if *label_pos == index {
-                writeln!(writer, "{}:", label)?;
-            }
+        for instruction in block {
+            let start = writer.len();
+
+            write!(writer, "  ")?;
+            write_instruction(func, instruction, &mut writer, data)?;
+
+            let end = writer.len();
+            regions.push(HirRegion {
+                region: Range { start, end },
+                loc: Some(SourceLoc::new(index as u32)),
+            });
+            index += 1;
         }
-
-        let start = writer.len();
-
-        write!(writer, "  ")?;
-        write_instruction(func, instruction, &mut writer, data)?;
-
-        let end = writer.len();
-        regions.push(HirRegion {
-            region: Range { start, end },
-            loc: Some(SourceLoc::new(index as u32)),
-        });
     }
 
     Ok(())
@@ -166,16 +157,21 @@ where
             writeln!(writer, "{} = string_concat {} {}", op.dst, op.lhs, op.rhs)?;
         }
 
-        Instruction::Jump { target } => {
-            writeln!(writer, "jmp {}", target)?;
+        Instruction::Jump { block } => {
+            writeln!(writer, "jmp b{}", block.0)?;
         }
         Instruction::Brif {
             condition,
             invert_condition,
-            target,
+            then_block,
+            else_block,
         } => {
             let mode = if *invert_condition { "false" } else { "true" };
-            writeln!(writer, "brif {} {} {}", mode, condition, target)?;
+            writeln!(
+                writer,
+                "brif {} {} b{} b{}",
+                mode, condition, then_block.0, else_block.0,
+            )?;
         }
         Instruction::Return(value) => {
             if func.returns.is_some() {
@@ -506,11 +502,5 @@ impl Display for AddrCompareOp {
 impl Display for Null {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         f.write_str("null")
-    }
-}
-
-impl Display for Label {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
-        write!(f, "L{}", self.0)
     }
 }

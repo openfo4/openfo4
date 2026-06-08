@@ -141,7 +141,7 @@ pub fn translate_function(
     } else {
         tracing::debug!("compiling {}.{}", function.class, function.function.name);
 
-        let mut builder = FunctionBuilder::default();
+        let mut builder = FunctionBuilder::new();
 
         translate_function_body(
             data,
@@ -298,17 +298,20 @@ fn translate_function_body(
 
     let cfg = ControlFlowGraph::new(function);
 
-    let mut labels = HashMap::new();
-    for (block_id, _) in cfg.blocks() {
-        let label = translator.builder.create_label();
-        labels.insert(block_id, label);
+    let mut blocks = HashMap::new();
+    for (block_id, _) in cfg.blocks().skip(1) {
+        let label = translator.builder.create_block();
+        blocks.insert(block_id, label);
     }
 
-    for (block_id, instructions) in cfg.blocks() {
+    for (block_index, (block_id, instructions)) in cfg.blocks().enumerate() {
         let mut current_block_sealed = false;
 
-        let label = *labels.get(&block_id).unwrap();
-        translator.builder.set_label(label);
+        // The entry block is enabled by default.
+        if block_index != 0 {
+            let block = blocks[&block_id];
+            translator.builder.switch_to_block(block);
+        }
 
         for instruction in instructions {
             debug_assert!(!current_block_sealed);
@@ -487,24 +490,27 @@ fn translate_function_body(
                 },
                 Instruction::Branch(_) => {
                     let succ = cfg.successors(block_id);
-                    let target = *labels.get(&succ[0]).unwrap();
+                    let target = *blocks.get(&succ[0]).unwrap();
                     translator.builder.jump(target);
                     current_block_sealed = true;
                 }
                 Instruction::BranchIfTrue(op) | Instruction::BranchIfFalse(op) => {
                     let succ = cfg.successors(block_id);
-                    let then_target = *labels.get(&succ[0]).unwrap();
-                    let else_target = *labels.get(&succ[1]).unwrap();
+                    let then_target = *blocks.get(&succ[0]).unwrap();
+                    let else_target = *blocks.get(&succ[1]).unwrap();
 
                     let condition = translator.load(&op.condition);
 
                     if matches!(instruction, Instruction::BranchIfTrue(_)) {
-                        translator.builder.brif_true(condition, then_target);
+                        translator
+                            .builder
+                            .brif_true(condition, then_target, else_target);
                     } else {
-                        translator.builder.brif_false(condition, then_target);
+                        translator
+                            .builder
+                            .brif_false(condition, then_target, else_target);
                     }
 
-                    translator.builder.jump(else_target);
                     current_block_sealed = true;
                 }
                 Instruction::CallMethod(op) => {

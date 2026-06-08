@@ -7,13 +7,13 @@ mod string;
 
 use std::mem::offset_of;
 
-use hashbrown::HashMap;
 use openfo4_jit::{
     Block, FloatCompareOp, FunctionBuilder, IntCompareOp, SourceLoc, Type as JitType,
     Value as JitValue, Variable,
 };
 
 use crate::compiler::codegen::CodegenData;
+use crate::compiler::codegen::hir::lowering::stack::InstructionPosition;
 use crate::compiler::codegen::hir::{
     AddrCompareOp, Function, Instruction, Literal, Null, ScalarCompareOp, Value,
 };
@@ -86,33 +86,10 @@ pub fn lower_function(
 
     let abort_block = builder.create_block(&[]);
 
-    let mut blocks = HashMap::new();
-    // FIXME: We can avoid using a hashmap by sorting the labels by position
-    // ahead of time and only check the next label at each position. This is valid
-    // because we build instructions linearly.
-    let mut blocks_by_position = HashMap::new();
-    for (label, position) in &function.labels {
-        let block = *blocks_by_position
-            .entry(*position)
-            .or_insert_with(|| builder.create_block(&[]));
-
-        blocks.insert(*label, block);
-    }
-
-    for (index, instruction) in function.instructions.iter().enumerate() {
-        match instruction {
-            Instruction::Brif {
-                condition: _,
-                invert_condition: _,
-                target: _,
-            } => {
-                blocks_by_position
-                    .entry(index + 1)
-                    .or_insert_with(|| builder.create_block(&[]));
-            }
-            _ => {}
-        }
-    }
+    // The entry block needs to be special cased.
+    let blocks: Vec<_> = (0..function.blocks.len().saturating_sub(1))
+        .map(|_| builder.create_block(&[]))
+        .collect();
 
     let stack_frame = stack::compute_suspension_points(&mut builder, function, &variables);
 
@@ -147,665 +124,685 @@ pub fn lower_function(
 
     let mut next_srcloc = 0;
 
-    for (index, instruction) in function.instructions.iter().enumerate() {
-        if let Some(block) = blocks_by_position.get(&index) {
-            if !translator.builder.is_current_block_full() {
-                translator.builder.jump(*block, &[]);
-            }
-
-            translator.builder.switch_to_block(*block);
+    for (block_index, block) in function.blocks.iter().enumerate() {
+        if block_index != 0 {
+            let block = blocks[block_index - 1];
+            translator.builder.switch_to_block(block);
         }
 
-        let srcloc = SourceLoc::new(next_srcloc);
-        next_srcloc += 1;
-        translator.builder.begin_srcloc(srcloc);
+        for (inst_index, instruction) in block.iter().enumerate() {
+            let srcloc = SourceLoc::new(next_srcloc);
+            next_srcloc += 1;
+            translator.builder.begin_srcloc(srcloc);
 
-        match instruction {
-            Instruction::IAdd(op) => {
-                let lhs = translator.load(&op.lhs);
-                let rhs = translator.load(&op.rhs);
-                let res = translator.builder.iadd(lhs, rhs);
-                translator.store(&op.dst, res);
-            }
-            Instruction::ISub(op) => {
-                let lhs = translator.load(&op.lhs);
-                let rhs = translator.load(&op.rhs);
-                let res = translator.builder.isub(lhs, rhs);
-                translator.store(&op.dst, res);
-            }
-            Instruction::IMul(op) => {
-                let lhs = translator.load(&op.lhs);
-                let rhs = translator.load(&op.rhs);
-                let res = translator.builder.imul(lhs, rhs);
-                translator.store(&op.dst, res);
-            }
-            Instruction::IDiv(op) => {
-                let lhs = translator.load(&op.lhs);
-                let rhs = translator.load(&op.rhs);
-                let res = translator.builder.sdiv(lhs, rhs);
-                translator.store(&op.dst, res);
-            }
-            Instruction::IMod(op) => {
-                let lhs = translator.load(&op.lhs);
-                let rhs = translator.load(&op.rhs);
-                let res = translator.builder.srem(lhs, rhs);
-                translator.store(&op.dst, res);
-            }
-            Instruction::INeg(op) => {
-                let src = translator.load(&op.src);
-                let res = translator.builder.ineg(src);
-                translator.store(&op.dst, res);
-            }
-            Instruction::FAdd(op) => {
-                let lhs = translator.load(&op.lhs);
-                let rhs = translator.load(&op.rhs);
-                let res = translator.builder.fadd(lhs, rhs);
-                translator.store(&op.dst, res);
-            }
-            Instruction::FSub(op) => {
-                let lhs = translator.load(&op.lhs);
-                let rhs = translator.load(&op.rhs);
-                let res = translator.builder.fsub(lhs, rhs);
-                translator.store(&op.dst, res);
-            }
-            Instruction::FMul(op) => {
-                let lhs = translator.load(&op.lhs);
-                let rhs = translator.load(&op.rhs);
-                let res = translator.builder.fmul(lhs, rhs);
-                translator.store(&op.dst, res);
-            }
-            Instruction::FDiv(op) => {
-                let lhs = translator.load(&op.lhs);
-                let rhs = translator.load(&op.rhs);
-                let res = translator.builder.fdiv(lhs, rhs);
-                translator.store(&op.dst, res);
-            }
-            Instruction::FNeg(op) => {
-                let src = translator.load(&op.src);
-                let res = translator.builder.fneg(src);
-                translator.store(&op.dst, res);
-            }
-            Instruction::BNot(op) => {
-                let src = translator.load(&op.src);
-                // FIXME: A `icmp` might result in better codegen here;
-                // we only care whether the byte is zero or non-zero.
-                let res = translator.builder.bnot(src);
-                translator.store(&op.dst, res);
-            }
-            Instruction::Store { src, dst } => {
-                let value = translator.load(src);
-                translator.store(dst, value);
-            }
-            Instruction::CompareBool(op) => {
-                let lhs = translator.load(&op.lhs);
-                let rhs = translator.load(&op.rhs);
-                let mode = match op.op {
-                    ScalarCompareOp::Equal => IntCompareOp::Equal,
-                    ScalarCompareOp::LessThan => IntCompareOp::SignedLessThan,
-                    ScalarCompareOp::LessThanOrEqual => IntCompareOp::SignedLessThanOrEqual,
-                    ScalarCompareOp::GreaterThan => IntCompareOp::SignedGreaterThan,
-                    ScalarCompareOp::GreaterThanOrEqual => IntCompareOp::SignedGreaterThanOrEqual,
-                };
+            match instruction {
+                Instruction::IAdd(op) => {
+                    let lhs = translator.load(&op.lhs);
+                    let rhs = translator.load(&op.rhs);
+                    let res = translator.builder.iadd(lhs, rhs);
+                    translator.store(&op.dst, res);
+                }
+                Instruction::ISub(op) => {
+                    let lhs = translator.load(&op.lhs);
+                    let rhs = translator.load(&op.rhs);
+                    let res = translator.builder.isub(lhs, rhs);
+                    translator.store(&op.dst, res);
+                }
+                Instruction::IMul(op) => {
+                    let lhs = translator.load(&op.lhs);
+                    let rhs = translator.load(&op.rhs);
+                    let res = translator.builder.imul(lhs, rhs);
+                    translator.store(&op.dst, res);
+                }
+                Instruction::IDiv(op) => {
+                    let lhs = translator.load(&op.lhs);
+                    let rhs = translator.load(&op.rhs);
+                    let res = translator.builder.sdiv(lhs, rhs);
+                    translator.store(&op.dst, res);
+                }
+                Instruction::IMod(op) => {
+                    let lhs = translator.load(&op.lhs);
+                    let rhs = translator.load(&op.rhs);
+                    let res = translator.builder.srem(lhs, rhs);
+                    translator.store(&op.dst, res);
+                }
+                Instruction::INeg(op) => {
+                    let src = translator.load(&op.src);
+                    let res = translator.builder.ineg(src);
+                    translator.store(&op.dst, res);
+                }
+                Instruction::FAdd(op) => {
+                    let lhs = translator.load(&op.lhs);
+                    let rhs = translator.load(&op.rhs);
+                    let res = translator.builder.fadd(lhs, rhs);
+                    translator.store(&op.dst, res);
+                }
+                Instruction::FSub(op) => {
+                    let lhs = translator.load(&op.lhs);
+                    let rhs = translator.load(&op.rhs);
+                    let res = translator.builder.fsub(lhs, rhs);
+                    translator.store(&op.dst, res);
+                }
+                Instruction::FMul(op) => {
+                    let lhs = translator.load(&op.lhs);
+                    let rhs = translator.load(&op.rhs);
+                    let res = translator.builder.fmul(lhs, rhs);
+                    translator.store(&op.dst, res);
+                }
+                Instruction::FDiv(op) => {
+                    let lhs = translator.load(&op.lhs);
+                    let rhs = translator.load(&op.rhs);
+                    let res = translator.builder.fdiv(lhs, rhs);
+                    translator.store(&op.dst, res);
+                }
+                Instruction::FNeg(op) => {
+                    let src = translator.load(&op.src);
+                    let res = translator.builder.fneg(src);
+                    translator.store(&op.dst, res);
+                }
+                Instruction::BNot(op) => {
+                    let src = translator.load(&op.src);
+                    // FIXME: A `icmp` might result in better codegen here;
+                    // we only care whether the byte is zero or non-zero.
+                    let res = translator.builder.bnot(src);
+                    translator.store(&op.dst, res);
+                }
+                Instruction::Store { src, dst } => {
+                    let value = translator.load(src);
+                    translator.store(dst, value);
+                }
+                Instruction::CompareBool(op) => {
+                    let lhs = translator.load(&op.lhs);
+                    let rhs = translator.load(&op.rhs);
+                    let mode = match op.op {
+                        ScalarCompareOp::Equal => IntCompareOp::Equal,
+                        ScalarCompareOp::LessThan => IntCompareOp::SignedLessThan,
+                        ScalarCompareOp::LessThanOrEqual => IntCompareOp::SignedLessThanOrEqual,
+                        ScalarCompareOp::GreaterThan => IntCompareOp::SignedGreaterThan,
+                        ScalarCompareOp::GreaterThanOrEqual => {
+                            IntCompareOp::SignedGreaterThanOrEqual
+                        }
+                    };
 
-                let res = translator.builder.icmp(lhs, rhs, mode);
-                translator.store(&op.dst, res);
-            }
-            Instruction::CompareInt(op) => {
-                let lhs = translator.load(&op.lhs);
-                let rhs = translator.load(&op.rhs);
-                let mode = match op.op {
-                    ScalarCompareOp::Equal => IntCompareOp::Equal,
-                    ScalarCompareOp::LessThan => IntCompareOp::SignedLessThan,
-                    ScalarCompareOp::LessThanOrEqual => IntCompareOp::SignedLessThanOrEqual,
-                    ScalarCompareOp::GreaterThan => IntCompareOp::SignedGreaterThan,
-                    ScalarCompareOp::GreaterThanOrEqual => IntCompareOp::SignedGreaterThanOrEqual,
-                };
+                    let res = translator.builder.icmp(lhs, rhs, mode);
+                    translator.store(&op.dst, res);
+                }
+                Instruction::CompareInt(op) => {
+                    let lhs = translator.load(&op.lhs);
+                    let rhs = translator.load(&op.rhs);
+                    let mode = match op.op {
+                        ScalarCompareOp::Equal => IntCompareOp::Equal,
+                        ScalarCompareOp::LessThan => IntCompareOp::SignedLessThan,
+                        ScalarCompareOp::LessThanOrEqual => IntCompareOp::SignedLessThanOrEqual,
+                        ScalarCompareOp::GreaterThan => IntCompareOp::SignedGreaterThan,
+                        ScalarCompareOp::GreaterThanOrEqual => {
+                            IntCompareOp::SignedGreaterThanOrEqual
+                        }
+                    };
 
-                let res = translator.builder.icmp(lhs, rhs, mode);
-                translator.store(&op.dst, res);
-            }
-            Instruction::CompareFloat(op) => {
-                let lhs = translator.load(&op.lhs);
-                let rhs = translator.load(&op.rhs);
-                let mode = match op.op {
-                    ScalarCompareOp::Equal => FloatCompareOp::Equal,
-                    ScalarCompareOp::LessThan => FloatCompareOp::LessThan,
-                    ScalarCompareOp::LessThanOrEqual => FloatCompareOp::LessThanOrEqual,
-                    ScalarCompareOp::GreaterThan => FloatCompareOp::GreaterThan,
-                    ScalarCompareOp::GreaterThanOrEqual => FloatCompareOp::GreaterThanOrEqual,
-                };
+                    let res = translator.builder.icmp(lhs, rhs, mode);
+                    translator.store(&op.dst, res);
+                }
+                Instruction::CompareFloat(op) => {
+                    let lhs = translator.load(&op.lhs);
+                    let rhs = translator.load(&op.rhs);
+                    let mode = match op.op {
+                        ScalarCompareOp::Equal => FloatCompareOp::Equal,
+                        ScalarCompareOp::LessThan => FloatCompareOp::LessThan,
+                        ScalarCompareOp::LessThanOrEqual => FloatCompareOp::LessThanOrEqual,
+                        ScalarCompareOp::GreaterThan => FloatCompareOp::GreaterThan,
+                        ScalarCompareOp::GreaterThanOrEqual => FloatCompareOp::GreaterThanOrEqual,
+                    };
 
-                let res = translator.builder.fcmp(lhs, rhs, mode);
-                translator.store(&op.dst, res);
-            }
-            Instruction::CompareString(op) => {
-                string::string_cmp(&mut translator, op);
-            }
-            Instruction::CompareAddr(op) => {
-                let lhs = translator.load(&op.lhs);
-                let rhs = translator.load(&op.rhs);
-                let mode = match op.op {
-                    AddrCompareOp::Equal => IntCompareOp::Equal,
-                    AddrCompareOp::NotEqual => IntCompareOp::NotEqual,
-                };
+                    let res = translator.builder.fcmp(lhs, rhs, mode);
+                    translator.store(&op.dst, res);
+                }
+                Instruction::CompareString(op) => {
+                    string::string_cmp(&mut translator, op);
+                }
+                Instruction::CompareAddr(op) => {
+                    let lhs = translator.load(&op.lhs);
+                    let rhs = translator.load(&op.rhs);
+                    let mode = match op.op {
+                        AddrCompareOp::Equal => IntCompareOp::Equal,
+                        AddrCompareOp::NotEqual => IntCompareOp::NotEqual,
+                    };
 
-                let res = translator.builder.icmp(lhs, rhs, mode);
-                translator.store(&op.dst, res);
-            }
-            Instruction::StringConcat(op) => {
-                string::string_concat(&mut translator, op);
-            }
-            Instruction::Return(value) => {
-                let result = translator.builder.iconst(RESULT_TYPE, RESULT_OK);
+                    let res = translator.builder.icmp(lhs, rhs, mode);
+                    translator.store(&op.dst, res);
+                }
+                Instruction::StringConcat(op) => {
+                    string::string_concat(&mut translator, op);
+                }
+                Instruction::Return(value) => {
+                    let result = translator.builder.iconst(RESULT_TYPE, RESULT_OK);
 
-                // Release our stack.
-                // The `usize` tag is released by our caller.
-                translator.stack_free(stack_frame.size.saturating_sub(size_of::<usize>()));
+                    // Release our stack.
+                    // The `usize` tag is released by our caller.
+                    translator.stack_free(stack_frame.size.saturating_sub(size_of::<usize>()));
 
-                if function.returns.is_some() {
+                    if function.returns.is_some() {
+                        let value = translator.load(value);
+                        translator
+                            .builder
+                            .jump(translator.return_block, &[value, result]);
+                    } else {
+                        translator.builder.jump(translator.return_block, &[result]);
+                    }
+                }
+                Instruction::Jump { block } => {
+                    let block = blocks[block.0 - 1];
+                    translator.builder.jump(block, &[]);
+                }
+                Instruction::Brif {
+                    condition,
+                    invert_condition,
+                    then_block,
+                    else_block,
+                } => {
+                    let condition = translator.load(condition);
+
+                    let true_block = blocks[then_block.0 - 1];
+                    let false_block = blocks[else_block.0 - 1];
+
+                    if *invert_condition {
+                        translator
+                            .builder
+                            .brif(condition, false_block, &[], true_block, &[]);
+                    } else {
+                        translator
+                            .builder
+                            .brif(condition, true_block, &[], false_block, &[]);
+                    }
+                }
+                Instruction::Call(op) => {
+                    let callee = &translator.data.functions[op.callee.0];
+                    let point = stack_frame
+                        .call_points
+                        .get(&InstructionPosition {
+                            block: block_index,
+                            instruction: inst_index,
+                        })
+                        .unwrap();
+
+                    call::perform_checked_call(
+                        &mut translator,
+                        function,
+                        callee,
+                        &op.args,
+                        Some(&op.dst),
+                        None,
+                        point,
+                        &stack_frame,
+                    );
+                }
+                Instruction::CallIndirect(op) => {
+                    let callee = &translator.data.functions[op.callee.0];
+                    let point = stack_frame
+                        .call_points
+                        .get(&InstructionPosition {
+                            block: block_index,
+                            instruction: inst_index,
+                        })
+                        .unwrap();
+
+                    call::perform_checked_call(
+                        &mut translator,
+                        function,
+                        callee,
+                        &op.args,
+                        Some(&op.dst),
+                        op.object.as_ref(),
+                        point,
+                        &stack_frame,
+                    );
+                }
+                Instruction::StructCreate { dst, ty } => {
+                    let one = translator.builder.iconst(PTR_TYPE, 1);
+
+                    // Allocation will already be zeroed, which is the default
+                    // value for all types.
+                    let ptr = malloc::call_malloc(&mut translator, *ty, one);
+
+                    translator.store(dst, ptr);
+                }
+                Instruction::StructLoad {
+                    st,
+                    dst,
+                    struct_name,
+                    field_name,
+                } => {
+                    let struct_ = translator.data.structs.get(struct_name).unwrap();
+                    let offset = *struct_.field_offsets.get(field_name).unwrap();
+
+                    let st = translator.load(st);
+                    let ty = translator.lowered_ty(dst);
+
+                    // Abort if struct == null
+                    translator.assert_true(st);
+
+                    let res = translator.builder.load(ty, st, offset as u32);
+                    translator.store(dst, res);
+                }
+                Instruction::StructStore {
+                    st,
+                    value,
+                    struct_name,
+                    field_name,
+                } => {
+                    let struct_ = translator.data.structs.get(struct_name).unwrap();
+                    let offset = *struct_.field_offsets.get(field_name).unwrap();
+
+                    let st = translator.load(st);
                     let value = translator.load(value);
-                    translator
-                        .builder
-                        .jump(translator.return_block, &[value, result]);
-                } else {
-                    translator.builder.jump(translator.return_block, &[result]);
+
+                    // Abort if struct == null
+                    translator.assert_true(st);
+
+                    translator.builder.store(value, st, offset as u32);
                 }
-            }
-            Instruction::Jump { target } => {
-                let block = *blocks.get(target).unwrap();
-                translator.builder.jump(block, &[]);
-            }
-            Instruction::Brif {
-                condition,
-                invert_condition,
-                target,
-            } => {
-                let condition = translator.load(condition);
+                Instruction::ClassLoad {
+                    object,
+                    dst,
+                    class_name,
+                    field_name,
+                } => {
+                    let object = translator.load(object);
+                    let class = translator.data.classes.get(class_name).unwrap();
+                    let offset = class.field_offsets.get(field_name).unwrap();
+                    let ty = translator
+                        .data
+                        .resolve_ty_jit(class.fields.get(field_name).unwrap());
 
-                let true_block = *blocks.get(target).unwrap();
-                let false_block = *blocks_by_position.get(&(index + 1)).unwrap();
+                    // Abort if object == null.
+                    translator.assert_true(object);
 
-                if *invert_condition {
-                    translator
-                        .builder
-                        .brif(condition, false_block, &[], true_block, &[]);
-                } else {
-                    translator
-                        .builder
-                        .brif(condition, true_block, &[], false_block, &[]);
+                    let value = translator.builder.load(ty, object, *offset as u32);
+                    translator.store(dst, value);
                 }
-            }
-            Instruction::Call(op) => {
-                let callee = &translator.data.functions[op.callee.0];
-                let point = stack_frame.call_points.get(&index).unwrap();
+                Instruction::ClassStore {
+                    object,
+                    value,
+                    class_name,
+                    field_name,
+                } => {
+                    let object = translator.load(object);
+                    let value = translator.load(value);
+                    let class = translator.data.classes.get(class_name).unwrap();
+                    let offset = class.field_offsets.get(field_name).unwrap();
 
-                call::perform_checked_call(
-                    &mut translator,
-                    function,
-                    callee,
-                    &op.args,
-                    Some(&op.dst),
-                    None,
-                    point,
-                    &stack_frame,
-                );
-            }
-            Instruction::CallIndirect(op) => {
-                let callee = &translator.data.functions[op.callee.0];
-                let point = stack_frame.call_points.get(&index).unwrap();
+                    // Abort if object == null.
+                    translator.assert_true(object);
 
-                call::perform_checked_call(
-                    &mut translator,
-                    function,
-                    callee,
-                    &op.args,
-                    Some(&op.dst),
-                    op.object.as_ref(),
-                    point,
-                    &stack_frame,
-                );
-            }
-            Instruction::StructCreate { dst, ty } => {
-                let one = translator.builder.iconst(PTR_TYPE, 1);
-
-                // Allocation will already be zeroed, which is the default
-                // value for all types.
-                let ptr = malloc::call_malloc(&mut translator, *ty, one);
-
-                translator.store(dst, ptr);
-            }
-            Instruction::StructLoad {
-                st,
-                dst,
-                struct_name,
-                field_name,
-            } => {
-                let struct_ = translator.data.structs.get(struct_name).unwrap();
-                let offset = *struct_.field_offsets.get(field_name).unwrap();
-
-                let st = translator.load(st);
-                let ty = translator.lowered_ty(dst);
-
-                // Abort if struct == null
-                translator.assert_true(st);
-
-                let res = translator.builder.load(ty, st, offset as u32);
-                translator.store(dst, res);
-            }
-            Instruction::StructStore {
-                st,
-                value,
-                struct_name,
-                field_name,
-            } => {
-                let struct_ = translator.data.structs.get(struct_name).unwrap();
-                let offset = *struct_.field_offsets.get(field_name).unwrap();
-
-                let st = translator.load(st);
-                let value = translator.load(value);
-
-                // Abort if struct == null
-                translator.assert_true(st);
-
-                translator.builder.store(value, st, offset as u32);
-            }
-            Instruction::ClassLoad {
-                object,
-                dst,
-                class_name,
-                field_name,
-            } => {
-                let object = translator.load(object);
-                let class = translator.data.classes.get(class_name).unwrap();
-                let offset = class.field_offsets.get(field_name).unwrap();
-                let ty = translator
-                    .data
-                    .resolve_ty_jit(class.fields.get(field_name).unwrap());
-
-                // Abort if object == null.
-                translator.assert_true(object);
-
-                let value = translator.builder.load(ty, object, *offset as u32);
-                translator.store(dst, value);
-            }
-            Instruction::ClassStore {
-                object,
-                value,
-                class_name,
-                field_name,
-            } => {
-                let object = translator.load(object);
-                let value = translator.load(value);
-                let class = translator.data.classes.get(class_name).unwrap();
-                let offset = class.field_offsets.get(field_name).unwrap();
-
-                // Abort if object == null.
-                translator.assert_true(object);
-
-                translator.builder.store(value, object, *offset as u32);
-            }
-            Instruction::ClassUpcast {
-                src,
-                dst,
-                src_class: _,
-                dst_class: _,
-            } => {
-                let addr = translator.load(src);
-                translator.store(dst, addr);
-            }
-            Instruction::ClassDowncast {
-                src,
-                dst,
-                src_class: _,
-                dst_class,
-            } => {
-                let src = translator.load(src);
-
-                let is_subclass_block = translator.builder.create_block(&[]);
-
-                let is_eq = cast::is_class(&mut translator, src, &dst_class);
-                translator
-                    .builder
-                    .brif(is_eq, is_subclass_block, &[], translator.abort_block, &[]);
-
-                translator.builder.switch_to_block(is_subclass_block);
-                translator.current_block = is_subclass_block;
-
-                translator.store(dst, src);
-            }
-            Instruction::ClassIsInstanceOf { src, dst, class } => {
-                let src = translator.load(src);
-                let is_eq = cast::is_class(&mut translator, src, class);
-                translator.store(dst, is_eq);
-            }
-            Instruction::ArrayCreate {
-                array,
-                len,
-                elem_ty,
-            } => {
-                array::array_create(&mut translator, array, len, *elem_ty);
-            }
-            Instruction::ArrayLength { array, dst } => {
-                array::array_length(&mut translator, array, dst);
-            }
-            Instruction::ArrayGet { array, index, dst } => {
-                array::array_get(&mut translator, array, index, dst);
-            }
-            Instruction::ArraySet {
-                array,
-                value,
-                index,
-            } => {
-                array::array_set(&mut translator, array, index, value);
-            }
-            Instruction::ArrayClear { array } => {
-                array::array_clear(&mut translator, array);
-            }
-            Instruction::ArrayAdd(op) => {
-                array::array_add(&mut translator, op);
-            }
-            Instruction::ArrayInsert(op) => {
-                array::array_insert(&mut translator, op);
-            }
-            Instruction::ArrayRemove(op) => {
-                array::array_remove(&mut translator, op);
-            }
-            Instruction::ArrayFind(op) => {
-                array::array_find(&mut translator, op);
-            }
-            Instruction::ArrayFindStruct(op) => {
-                array::array_find_struct(&mut translator, op);
-            }
-            Instruction::CreateVar {
-                src,
-                dst,
-                tag,
-                cast_array,
-            } => {
-                if *cast_array {
-                    let src = src.clone().map(|v| v.to_null().unwrap());
-                    let src_ty = match tag {
-                        ObjectTag::Class => translator.data.resources.primitives.pointer,
-                        ObjectTag::TypeId(id) => *id,
-                    };
-                    let dst_ty = translator.data.resources.primitives.var;
-
-                    array::array_cast(
-                        &mut translator,
-                        &src,
-                        dst,
-                        src_ty,
-                        dst_ty,
-                        |translator, value| cast::create_var(translator, value, *tag),
-                    );
-                } else {
+                    translator.builder.store(value, object, *offset as u32);
+                }
+                Instruction::ClassUpcast {
+                    src,
+                    dst,
+                    src_class: _,
+                    dst_class: _,
+                } => {
+                    let addr = translator.load(src);
+                    translator.store(dst, addr);
+                }
+                Instruction::ClassDowncast {
+                    src,
+                    dst,
+                    src_class: _,
+                    dst_class,
+                } => {
                     let src = translator.load(src);
-                    let res = cast::create_var(&mut translator, src, *tag);
-                    translator.store(dst, res);
-                }
-            }
-            Instruction::ExtractVar {
-                src,
-                dst,
-                tag,
-                class,
-                cast_array,
-            } => {
-                if *cast_array {
-                    let dst = dst.clone().map(|v| v.to_null().unwrap());
-                    let src_ty = translator.data.resources.primitives.var;
-                    let dst_ty = match tag {
-                        ObjectTag::Class => translator.data.resources.primitives.pointer,
-                        ObjectTag::TypeId(id) => *id,
-                    };
 
-                    array::array_cast(
-                        &mut translator,
-                        src,
-                        &dst,
-                        src_ty,
-                        dst_ty,
-                        |translator, value| {
-                            cast::extract_var(
-                                translator,
-                                value,
-                                *tag,
-                                class.as_ref().map(|v| v.as_str()),
-                            )
-                        },
+                    let is_subclass_block = translator.builder.create_block(&[]);
+
+                    let is_eq = cast::is_class(&mut translator, src, &dst_class);
+                    translator.builder.brif(
+                        is_eq,
+                        is_subclass_block,
+                        &[],
+                        translator.abort_block,
+                        &[],
                     );
-                } else {
+
+                    translator.builder.switch_to_block(is_subclass_block);
+                    translator.current_block = is_subclass_block;
+
+                    translator.store(dst, src);
+                }
+                Instruction::ClassIsInstanceOf { src, dst, class } => {
                     let src = translator.load(src);
-                    let res = cast::extract_var(
-                        &mut translator,
-                        src,
-                        *tag,
-                        class.as_ref().map(|v| v.as_str()),
-                    );
-                    translator.store(dst, res);
+                    let is_eq = cast::is_class(&mut translator, src, class);
+                    translator.store(dst, is_eq);
                 }
-            }
-            Instruction::BoolToString { src, dst } => {
-                let src = translator.load(src);
-                let res = translator.builder.call(
-                    translator.data.runtime_funcs.bool_to_string,
-                    &[translator.ctx_ptr, src],
-                )[0];
-                translator.store(dst, res);
-            }
-            Instruction::IntToString { src, dst } => {
-                let src = translator.load(src);
-                let res = translator.builder.call(
-                    translator.data.runtime_funcs.i32_to_string,
-                    &[translator.ctx_ptr, src],
-                )[0];
-                translator.store(dst, res);
-            }
-            Instruction::FloatToString { src, dst } => {
-                let src = translator.load(src);
-                let res = translator.builder.call(
-                    translator.data.runtime_funcs.f32_to_string,
-                    &[translator.ctx_ptr, src],
-                )[0];
-                translator.store(dst, res);
-            }
-            Instruction::ObjectToString {
-                src,
-                dst,
-                conv_array,
-            } => {
-                if *conv_array {
-                    let src = src.clone().map(|v| v.to_null().unwrap());
-                    let dst = dst.clone().map(|v| v.to_null().unwrap());
-                    let src_ty = translator.data.resources.primitives.pointer;
-                    let dst_ty = translator.data.resources.primitives.string;
+                Instruction::ArrayCreate {
+                    array,
+                    len,
+                    elem_ty,
+                } => {
+                    array::array_create(&mut translator, array, len, *elem_ty);
+                }
+                Instruction::ArrayLength { array, dst } => {
+                    array::array_length(&mut translator, array, dst);
+                }
+                Instruction::ArrayGet { array, index, dst } => {
+                    array::array_get(&mut translator, array, index, dst);
+                }
+                Instruction::ArraySet {
+                    array,
+                    value,
+                    index,
+                } => {
+                    array::array_set(&mut translator, array, index, value);
+                }
+                Instruction::ArrayClear { array } => {
+                    array::array_clear(&mut translator, array);
+                }
+                Instruction::ArrayAdd(op) => {
+                    array::array_add(&mut translator, op);
+                }
+                Instruction::ArrayInsert(op) => {
+                    array::array_insert(&mut translator, op);
+                }
+                Instruction::ArrayRemove(op) => {
+                    array::array_remove(&mut translator, op);
+                }
+                Instruction::ArrayFind(op) => {
+                    array::array_find(&mut translator, op);
+                }
+                Instruction::ArrayFindStruct(op) => {
+                    array::array_find_struct(&mut translator, op);
+                }
+                Instruction::CreateVar {
+                    src,
+                    dst,
+                    tag,
+                    cast_array,
+                } => {
+                    if *cast_array {
+                        let src = src.clone().map(|v| v.to_null().unwrap());
+                        let src_ty = match tag {
+                            ObjectTag::Class => translator.data.resources.primitives.pointer,
+                            ObjectTag::TypeId(id) => *id,
+                        };
+                        let dst_ty = translator.data.resources.primitives.var;
 
-                    array::array_cast(
-                        &mut translator,
-                        &src,
-                        &dst,
-                        src_ty,
-                        dst_ty,
-                        |translator, value| {
-                            translator.builder.call(
-                                translator.data.runtime_funcs.object_to_string,
-                                &[translator.ctx_ptr, value],
-                            )[0]
-                        },
-                    );
-                } else {
+                        array::array_cast(
+                            &mut translator,
+                            &src,
+                            dst,
+                            src_ty,
+                            dst_ty,
+                            |translator, value| cast::create_var(translator, value, *tag),
+                        );
+                    } else {
+                        let src = translator.load(src);
+                        let res = cast::create_var(&mut translator, src, *tag);
+                        translator.store(dst, res);
+                    }
+                }
+                Instruction::ExtractVar {
+                    src,
+                    dst,
+                    tag,
+                    class,
+                    cast_array,
+                } => {
+                    if *cast_array {
+                        let dst = dst.clone().map(|v| v.to_null().unwrap());
+                        let src_ty = translator.data.resources.primitives.var;
+                        let dst_ty = match tag {
+                            ObjectTag::Class => translator.data.resources.primitives.pointer,
+                            ObjectTag::TypeId(id) => *id,
+                        };
+
+                        array::array_cast(
+                            &mut translator,
+                            src,
+                            &dst,
+                            src_ty,
+                            dst_ty,
+                            |translator, value| {
+                                cast::extract_var(
+                                    translator,
+                                    value,
+                                    *tag,
+                                    class.as_ref().map(|v| v.as_str()),
+                                )
+                            },
+                        );
+                    } else {
+                        let src = translator.load(src);
+                        let res = cast::extract_var(
+                            &mut translator,
+                            src,
+                            *tag,
+                            class.as_ref().map(|v| v.as_str()),
+                        );
+                        translator.store(dst, res);
+                    }
+                }
+                Instruction::BoolToString { src, dst } => {
                     let src = translator.load(src);
                     let res = translator.builder.call(
-                        translator.data.runtime_funcs.object_to_string,
+                        translator.data.runtime_funcs.bool_to_string,
                         &[translator.ctx_ptr, src],
                     )[0];
                     translator.store(dst, res);
                 }
-            }
-            Instruction::ConvertBoolToInt {
-                src,
-                dst,
-                conv_array,
-            } => {
-                if *conv_array {
-                    let src = src.clone().map(|v| v.to_null().unwrap());
-                    let dst = dst.clone().map(|v| v.to_null().unwrap());
-                    let src_ty = translator.data.resources.primitives.bool;
-                    let dst_ty = translator.data.resources.primitives.int;
-
-                    array::array_cast(
-                        &mut translator,
-                        &src,
-                        &dst,
-                        src_ty,
-                        dst_ty,
-                        |translator, value| translator.builder.uextend(value, INT_TYPE),
-                    );
-                } else {
+                Instruction::IntToString { src, dst } => {
                     let src = translator.load(src);
-                    let res = translator.builder.uextend(src, INT_TYPE);
+                    let res = translator.builder.call(
+                        translator.data.runtime_funcs.i32_to_string,
+                        &[translator.ctx_ptr, src],
+                    )[0];
                     translator.store(dst, res);
                 }
-            }
-            Instruction::ConvertBoolToFloat {
-                src,
-                dst,
-                conv_array,
-            } => {
-                if *conv_array {
-                    let src = src.clone().map(|v| v.to_null().unwrap());
-                    let dst = dst.clone().map(|v| v.to_null().unwrap());
-                    let src_ty = translator.data.resources.primitives.bool;
-                    let dst_ty = translator.data.resources.primitives.int;
-
-                    array::array_cast(
-                        &mut translator,
-                        &src,
-                        &dst,
-                        src_ty,
-                        dst_ty,
-                        |translator, value| {
-                            translator.builder.convert_sint_to_float(value, FLOAT_TYPE)
-                        },
-                    );
-                } else {
+                Instruction::FloatToString { src, dst } => {
                     let src = translator.load(src);
-                    let res = translator.builder.convert_sint_to_float(src, FLOAT_TYPE);
+                    let res = translator.builder.call(
+                        translator.data.runtime_funcs.f32_to_string,
+                        &[translator.ctx_ptr, src],
+                    )[0];
                     translator.store(dst, res);
                 }
-            }
-            Instruction::ConvertIntToBool {
-                src,
-                dst,
-                conv_array,
-            } => {
-                if *conv_array {
-                    let src = src.clone().map(|v| v.to_null().unwrap());
-                    let dst = dst.clone().map(|v| v.to_null().unwrap());
-                    let src_ty = translator.data.resources.primitives.bool;
-                    let dst_ty = translator.data.resources.primitives.int;
+                Instruction::ObjectToString {
+                    src,
+                    dst,
+                    conv_array,
+                } => {
+                    if *conv_array {
+                        let src = src.clone().map(|v| v.to_null().unwrap());
+                        let dst = dst.clone().map(|v| v.to_null().unwrap());
+                        let src_ty = translator.data.resources.primitives.pointer;
+                        let dst_ty = translator.data.resources.primitives.string;
 
-                    array::array_cast(
-                        &mut translator,
-                        &src,
-                        &dst,
-                        src_ty,
-                        dst_ty,
-                        |translator, value| {
-                            let zero = translator.builder.iconst(INT_TYPE, 0);
-                            translator.builder.icmp(value, zero, IntCompareOp::NotEqual)
-                        },
-                    );
-                } else {
-                    let src = translator.load(src);
-                    let zero = translator.builder.iconst(INT_TYPE, 0);
-                    let res = translator.builder.icmp(src, zero, IntCompareOp::NotEqual);
-                    translator.store(dst, res);
+                        array::array_cast(
+                            &mut translator,
+                            &src,
+                            &dst,
+                            src_ty,
+                            dst_ty,
+                            |translator, value| {
+                                translator.builder.call(
+                                    translator.data.runtime_funcs.object_to_string,
+                                    &[translator.ctx_ptr, value],
+                                )[0]
+                            },
+                        );
+                    } else {
+                        let src = translator.load(src);
+                        let res = translator.builder.call(
+                            translator.data.runtime_funcs.object_to_string,
+                            &[translator.ctx_ptr, src],
+                        )[0];
+                        translator.store(dst, res);
+                    }
                 }
-            }
-            Instruction::ConvertIntToFloat {
-                src,
-                dst,
-                conv_array,
-            } => {
-                if *conv_array {
-                    let src = src.clone().map(|v| v.to_null().unwrap());
-                    let dst = dst.clone().map(|v| v.to_null().unwrap());
-                    let src_ty = translator.data.resources.primitives.int;
-                    let dst_ty = translator.data.resources.primitives.float;
+                Instruction::ConvertBoolToInt {
+                    src,
+                    dst,
+                    conv_array,
+                } => {
+                    if *conv_array {
+                        let src = src.clone().map(|v| v.to_null().unwrap());
+                        let dst = dst.clone().map(|v| v.to_null().unwrap());
+                        let src_ty = translator.data.resources.primitives.bool;
+                        let dst_ty = translator.data.resources.primitives.int;
 
-                    array::array_cast(
-                        &mut translator,
-                        &src,
-                        &dst,
-                        src_ty,
-                        dst_ty,
-                        |translator, value| {
-                            translator.builder.convert_sint_to_float(value, FLOAT_TYPE)
-                        },
-                    );
-                } else {
-                    let src = translator.load(src);
-                    let res = translator.builder.convert_sint_to_float(src, FLOAT_TYPE);
-                    translator.store(dst, res);
+                        array::array_cast(
+                            &mut translator,
+                            &src,
+                            &dst,
+                            src_ty,
+                            dst_ty,
+                            |translator, value| translator.builder.uextend(value, INT_TYPE),
+                        );
+                    } else {
+                        let src = translator.load(src);
+                        let res = translator.builder.uextend(src, INT_TYPE);
+                        translator.store(dst, res);
+                    }
                 }
-            }
-            Instruction::ConvertFloatToBool {
-                src,
-                dst,
-                conv_array,
-            } => {
-                if *conv_array {
-                    let src = src.clone().map(|v| v.to_null().unwrap());
-                    let dst = dst.clone().map(|v| v.to_null().unwrap());
-                    let src_ty = translator.data.resources.primitives.int;
-                    let dst_ty = translator.data.resources.primitives.float;
+                Instruction::ConvertBoolToFloat {
+                    src,
+                    dst,
+                    conv_array,
+                } => {
+                    if *conv_array {
+                        let src = src.clone().map(|v| v.to_null().unwrap());
+                        let dst = dst.clone().map(|v| v.to_null().unwrap());
+                        let src_ty = translator.data.resources.primitives.bool;
+                        let dst_ty = translator.data.resources.primitives.int;
 
-                    array::array_cast(
-                        &mut translator,
-                        &src,
-                        &dst,
-                        src_ty,
-                        dst_ty,
-                        |translator, value| {
-                            let zero = translator.builder.fconst(FLOAT_TYPE, 0.0);
-                            translator
-                                .builder
-                                .fcmp(value, zero, FloatCompareOp::NotEqual)
-                        },
-                    );
-                } else {
-                    let src = translator.load(src);
-                    let zero = translator.builder.fconst(FLOAT_TYPE, 0.0);
-                    let res = translator.builder.fcmp(src, zero, FloatCompareOp::NotEqual);
-                    translator.store(dst, res);
+                        array::array_cast(
+                            &mut translator,
+                            &src,
+                            &dst,
+                            src_ty,
+                            dst_ty,
+                            |translator, value| {
+                                translator.builder.convert_sint_to_float(value, FLOAT_TYPE)
+                            },
+                        );
+                    } else {
+                        let src = translator.load(src);
+                        let res = translator.builder.convert_sint_to_float(src, FLOAT_TYPE);
+                        translator.store(dst, res);
+                    }
                 }
-            }
-            Instruction::ConvertFloatToInt {
-                src,
-                dst,
-                conv_array,
-            } => {
-                if *conv_array {
-                    let src = src.clone().map(|v| v.to_null().unwrap());
-                    let dst = dst.clone().map(|v| v.to_null().unwrap());
-                    let src_ty = translator.data.resources.primitives.int;
-                    let dst_ty = translator.data.resources.primitives.float;
+                Instruction::ConvertIntToBool {
+                    src,
+                    dst,
+                    conv_array,
+                } => {
+                    if *conv_array {
+                        let src = src.clone().map(|v| v.to_null().unwrap());
+                        let dst = dst.clone().map(|v| v.to_null().unwrap());
+                        let src_ty = translator.data.resources.primitives.bool;
+                        let dst_ty = translator.data.resources.primitives.int;
 
-                    array::array_cast(
-                        &mut translator,
-                        &src,
-                        &dst,
-                        src_ty,
-                        dst_ty,
-                        |translator, value| {
-                            translator.builder.convert_float_to_sint(value, INT_TYPE)
-                        },
-                    );
-                } else {
-                    let src = translator.load(src);
-                    let res = translator.builder.convert_float_to_sint(src, INT_TYPE);
-                    translator.store(dst, res);
+                        array::array_cast(
+                            &mut translator,
+                            &src,
+                            &dst,
+                            src_ty,
+                            dst_ty,
+                            |translator, value| {
+                                let zero = translator.builder.iconst(INT_TYPE, 0);
+                                translator.builder.icmp(value, zero, IntCompareOp::NotEqual)
+                            },
+                        );
+                    } else {
+                        let src = translator.load(src);
+                        let zero = translator.builder.iconst(INT_TYPE, 0);
+                        let res = translator.builder.icmp(src, zero, IntCompareOp::NotEqual);
+                        translator.store(dst, res);
+                    }
+                }
+                Instruction::ConvertIntToFloat {
+                    src,
+                    dst,
+                    conv_array,
+                } => {
+                    if *conv_array {
+                        let src = src.clone().map(|v| v.to_null().unwrap());
+                        let dst = dst.clone().map(|v| v.to_null().unwrap());
+                        let src_ty = translator.data.resources.primitives.int;
+                        let dst_ty = translator.data.resources.primitives.float;
+
+                        array::array_cast(
+                            &mut translator,
+                            &src,
+                            &dst,
+                            src_ty,
+                            dst_ty,
+                            |translator, value| {
+                                translator.builder.convert_sint_to_float(value, FLOAT_TYPE)
+                            },
+                        );
+                    } else {
+                        let src = translator.load(src);
+                        let res = translator.builder.convert_sint_to_float(src, FLOAT_TYPE);
+                        translator.store(dst, res);
+                    }
+                }
+                Instruction::ConvertFloatToBool {
+                    src,
+                    dst,
+                    conv_array,
+                } => {
+                    if *conv_array {
+                        let src = src.clone().map(|v| v.to_null().unwrap());
+                        let dst = dst.clone().map(|v| v.to_null().unwrap());
+                        let src_ty = translator.data.resources.primitives.int;
+                        let dst_ty = translator.data.resources.primitives.float;
+
+                        array::array_cast(
+                            &mut translator,
+                            &src,
+                            &dst,
+                            src_ty,
+                            dst_ty,
+                            |translator, value| {
+                                let zero = translator.builder.fconst(FLOAT_TYPE, 0.0);
+                                translator
+                                    .builder
+                                    .fcmp(value, zero, FloatCompareOp::NotEqual)
+                            },
+                        );
+                    } else {
+                        let src = translator.load(src);
+                        let zero = translator.builder.fconst(FLOAT_TYPE, 0.0);
+                        let res = translator.builder.fcmp(src, zero, FloatCompareOp::NotEqual);
+                        translator.store(dst, res);
+                    }
+                }
+                Instruction::ConvertFloatToInt {
+                    src,
+                    dst,
+                    conv_array,
+                } => {
+                    if *conv_array {
+                        let src = src.clone().map(|v| v.to_null().unwrap());
+                        let dst = dst.clone().map(|v| v.to_null().unwrap());
+                        let src_ty = translator.data.resources.primitives.int;
+                        let dst_ty = translator.data.resources.primitives.float;
+
+                        array::array_cast(
+                            &mut translator,
+                            &src,
+                            &dst,
+                            src_ty,
+                            dst_ty,
+                            |translator, value| {
+                                translator.builder.convert_float_to_sint(value, INT_TYPE)
+                            },
+                        );
+                    } else {
+                        let src = translator.load(src);
+                        let res = translator.builder.convert_float_to_sint(src, INT_TYPE);
+                        translator.store(dst, res);
+                    }
                 }
             }
         }

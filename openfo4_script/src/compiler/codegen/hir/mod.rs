@@ -5,7 +5,6 @@ mod text;
 
 use game_common::string::Lowercase;
 use game_common::utils::vec_ext::VecExt;
-use hashbrown::HashMap;
 
 use crate::compiler::codegen::trace::Span;
 use crate::compiler::codegen::{CodegenData, FunctionId};
@@ -17,9 +16,8 @@ use crate::runtime::object::ObjectTag;
 pub struct Function {
     params: Vec<usize>,
     variables: Vec<TypeId>,
-    instructions: Vec<Instruction>,
-    labels: HashMap<Label, usize>,
     returns: Option<TypeId>,
+    blocks: Vec<Vec<Instruction>>,
 }
 
 impl Function {
@@ -70,12 +68,13 @@ enum Instruction {
     CompareAddr(Compare<Null, AddrCompareOp>),
     StringConcat(Binop<String>),
     Jump {
-        target: Label,
+        block: Block,
     },
     Brif {
         condition: Value<bool>,
         invert_condition: bool,
-        target: Label,
+        then_block: Block,
+        else_block: Block,
     },
     StructCreate {
         dst: Value<Null>,
@@ -366,24 +365,35 @@ impl Literal {
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Null;
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub struct FunctionBuilder {
     params: Vec<usize>,
     variables: Vec<TypeId>,
-    next_label: usize,
     instructions: Vec<Instruction>,
-    // FIXME: Use Vec
-    labels: HashMap<Label, usize>,
     returns: Option<TypeId>,
+    blocks: Vec<Vec<Instruction>>,
+    current_block: Block,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Variable(usize);
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
-pub struct Label(usize);
+pub struct Block(usize);
 
 impl FunctionBuilder {
+    pub fn new() -> Self {
+        Self {
+            params: Vec::new(),
+            variables: Vec::new(),
+            instructions: Vec::new(),
+            returns: None,
+            // Start with entry block.
+            blocks: vec![Vec::new()],
+            current_block: Block(0),
+        }
+    }
+
     pub fn add_param(&mut self, ty: TypeId) -> Variable {
         self.params.push(self.variables.len());
         Variable(self.variables.push_and_index(ty))
@@ -398,35 +408,36 @@ impl FunctionBuilder {
         Variable(self.variables.push_and_index(ty))
     }
 
-    pub fn create_label(&mut self) -> Label {
-        let label = Label(self.next_label);
-        self.next_label += 1;
-        label
+    pub fn create_block(&mut self) -> Block {
+        let block = Block(self.blocks.len());
+        self.blocks.push(Vec::new());
+        block
     }
 
-    pub fn set_label(&mut self, label: Label) {
-        debug_assert!(!self.labels.contains_key(&label), "cannot reassign label");
-
-        self.labels.insert(label, self.instructions.len());
+    pub fn switch_to_block(&mut self, block: Block) {
+        self.blocks[self.current_block.0] = core::mem::take(&mut self.instructions);
+        self.current_block = block;
     }
 
-    pub fn jump(&mut self, target: Label) {
-        self.instructions.push(Instruction::Jump { target });
+    pub fn jump(&mut self, block: Block) {
+        self.instructions.push(Instruction::Jump { block });
     }
 
-    pub fn brif_true(&mut self, condition: Value<bool>, target: Label) {
+    pub fn brif_true(&mut self, condition: Value<bool>, then_block: Block, else_block: Block) {
         self.instructions.push(Instruction::Brif {
             condition,
             invert_condition: false,
-            target,
+            then_block,
+            else_block,
         });
     }
 
-    pub fn brif_false(&mut self, condition: Value<bool>, target: Label) {
+    pub fn brif_false(&mut self, condition: Value<bool>, then_block: Block, else_block: Block) {
         self.instructions.push(Instruction::Brif {
             condition,
             invert_condition: true,
-            target,
+            then_block,
+            else_block,
         });
     }
 
@@ -951,13 +962,14 @@ impl FunctionBuilder {
         });
     }
 
-    pub fn finalize(self) -> Function {
+    pub fn finalize(mut self) -> Function {
+        self.blocks[self.current_block.0] = self.instructions;
+
         Function {
             params: self.params,
             variables: self.variables,
-            instructions: self.instructions,
-            labels: self.labels,
             returns: self.returns,
+            blocks: self.blocks,
         }
     }
 }

@@ -36,65 +36,63 @@ pub fn write_debug_output(info: &DebugInfo, func: &CompiledFunction) {
         .unwrap();
 
     let mut hir = String::new();
-    for region in &info.hir.regions {
-        if region.loc.is_some() {
+    render_segmented_text(
+        info.hir.regions.iter().map(|v| v.region),
+        info.hir.text.len(),
+        &mut hir,
+        |region| *region,
+        |buf, region| {
             write!(
-                hir,
+                buf,
                 "<span class=\"line\">{}</span>",
-                &info.hir.text[region.region]
+                &info.hir.text[*region]
             )
             .unwrap();
-        } else {
-            write!(hir, "<span>{}</span>", &info.hir.text[region.region]).unwrap();
-        }
-    }
+        },
+        |buf, region| {
+            write!(buf, "<span>{}</span>", &info.hir.text[region]).unwrap();
+        },
+    );
 
     let mut asm_to_hir = Vec::new();
 
     let mut asm = String::new();
     let base_addr = func.as_ptr().addr();
 
-    let mut last_srcloc_end = 0;
-    for (pos, srcloc) in func.srclocs().iter() {
-        if pos.start > last_srcloc_end {
-            let addr = base_addr + last_srcloc_end;
-            let unmapped_region = last_srcloc_end..pos.start;
+    render_segmented_text(
+        func.srclocs().iter(),
+        func.as_bytes().len(),
+        &mut (&mut asm, &mut asm_to_hir),
+        |(pos, _)| *pos,
+        |(asm, asm_to_hir), (range, srcloc)| {
+            let index = info
+                .hir
+                .regions
+                .iter()
+                .filter_map(|v| v.loc)
+                .position(|loc| loc == *srcloc)
+                .unwrap();
+
+            let addr = base_addr + range.start;
             let res = disasm
-                .disasm_all(&func.as_bytes()[unmapped_region], addr as u64)
+                .disasm_all(&func.as_bytes()[*range], addr as u64)
+                .unwrap();
+            write!(asm, "<span class=\"line\">{}</span>", res).unwrap();
+
+            asm_to_hir.push(index);
+        },
+        |(asm, _), range| {
+            let addr = base_addr + range.start;
+            let res = disasm
+                .disasm_all(&func.as_bytes()[range], addr as u64)
                 .unwrap();
             write!(asm, "<span>{}</span>", res).unwrap();
-        }
-
-        let index = info
-            .hir
-            .regions
-            .iter()
-            .filter_map(|v| v.loc)
-            .position(|loc| loc == srcloc)
-            .unwrap();
-
-        let addr = base_addr + pos.start;
-        let res = disasm
-            .disasm_all(&func.as_bytes()[pos], addr as u64)
-            .unwrap();
-        write!(asm, "<span class=\"line\">{}</span>", res).unwrap();
-
-        asm_to_hir.push(index);
-        last_srcloc_end = pos.end;
-    }
+        },
+    );
 
     let mut hir_to_asm = vec![Vec::new(); info.hir.regions.len()];
     for (asm_index, hir_index) in asm_to_hir.iter().enumerate() {
         hir_to_asm[*hir_index].push(asm_index);
-    }
-
-    if last_srcloc_end != func.as_bytes().len() {
-        let addr = base_addr + last_srcloc_end;
-        let unmapped_region = last_srcloc_end..;
-        let res = disasm
-            .disasm_all(&func.as_bytes()[unmapped_region], addr as u64)
-            .unwrap();
-        write!(asm, "<span>{}</span>", res).unwrap();
     }
 
     let output = TEMPLATE
@@ -148,4 +146,42 @@ fn write_output_file(name: &str, bytes: &[u8]) -> Result<(), io::Error> {
     );
 
     Ok(())
+}
+
+fn render_segmented_text<T, U>(
+    segments: impl Iterator<Item = U>,
+    len: usize,
+    buf: &mut T,
+    get_range: impl Fn(&U) -> Range<usize>,
+    mut render_segment: impl FnMut(&mut T, &U),
+    mut render_unmapped: impl FnMut(&mut T, Range<usize>),
+) {
+    let mut last_index = 0;
+
+    for segment in segments {
+        let range = get_range(&segment);
+
+        if range.start > last_index {
+            render_unmapped(
+                buf,
+                Range {
+                    start: last_index,
+                    end: range.start,
+                },
+            );
+        }
+
+        render_segment(buf, &segment);
+        last_index = range.end;
+    }
+
+    if last_index != len {
+        render_unmapped(
+            buf,
+            Range {
+                start: last_index,
+                end: len,
+            },
+        );
+    }
 }
