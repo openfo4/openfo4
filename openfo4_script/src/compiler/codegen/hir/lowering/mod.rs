@@ -69,6 +69,21 @@ pub fn lower_function(
         builder.set_var(local.var, *value);
     }
 
+    let return_block = if let Some(ret_ty) = function.returns {
+        let ty = data.resources.types.get(ret_ty).unwrap();
+        let ty = match ty.repr {
+            TypeRepr::Unit => PTR_TYPE,
+            TypeRepr::Int { bits } if bits == 8 => BOOL_TYPE,
+            TypeRepr::Int { bits } if bits == 32 => INT_TYPE,
+            TypeRepr::Float { bits } if bits == 32 => FLOAT_TYPE,
+            TypeRepr::Composite(_) => PTR_TYPE,
+            _ => unreachable!(),
+        };
+        builder.create_block(&[ty, JitType::I32])
+    } else {
+        builder.create_block(&[JitType::I32])
+    };
+
     let abort_block = builder.create_block(&[]);
 
     let mut blocks = HashMap::new();
@@ -110,6 +125,7 @@ pub fn lower_function(
     let mut translator = Translator {
         builder,
         locals: variables,
+        return_block,
         abort_block,
         current_block: entry_block,
         data,
@@ -286,15 +302,13 @@ pub fn lower_function(
                 // The `usize` tag is released by our caller.
                 translator.stack_free(stack_frame.size.saturating_sub(size_of::<usize>()));
 
-                translator
-                    .span
-                    .exit(data, &mut translator.builder, translator.ctx_ptr);
-
                 if function.returns.is_some() {
                     let value = translator.load(value);
-                    translator.builder.return_(&[value, result]);
+                    translator
+                        .builder
+                        .jump(translator.return_block, &[value, result]);
                 } else {
-                    translator.builder.return_(&[result]);
+                    translator.builder.jump(translator.return_block, &[result]);
                 }
             }
             Instruction::Jump { target } => {
@@ -799,13 +813,20 @@ pub fn lower_function(
         translator.builder.end_srcloc();
     }
 
+    generate_return_block(
+        function,
+        data,
+        &mut translator.builder,
+        &mut translator.span,
+        ctx_ptr,
+        translator.return_block,
+    );
     generate_abort_block(
         function,
         data,
         &mut translator.builder,
         translator.abort_block,
-        &mut translator.span,
-        translator.ctx_ptr,
+        translator.return_block,
     );
 
     translator.builder.finalize();
@@ -816,6 +837,7 @@ struct Translator<'a> {
     data: &'a CodegenData,
     locals: Vec<Local>,
     abort_block: Block,
+    return_block: Block,
     current_block: Block,
     ctx_ptr: JitValue,
     /// The starting offset where the stack for our current function starts.
@@ -1059,19 +1081,39 @@ impl LowerLiteral for Literal {
     }
 }
 
+fn generate_return_block(
+    function: &Function,
+    data: &CodegenData,
+    builder: &mut FunctionBuilder<'_>,
+    span: &mut Span,
+    ctx_ptr: JitValue,
+    block: Block,
+) {
+    builder.switch_to_block(block);
+
+    span.exit(data, builder, ctx_ptr);
+
+    if function.returns.is_some() {
+        let value = builder.block_params(block)[0];
+        let result = builder.block_params(block)[1];
+
+        builder.return_(&[value, result]);
+    } else {
+        let result = builder.block_params(block)[0];
+        builder.return_(&[result]);
+    }
+}
+
 fn generate_abort_block(
     function: &Function,
     data: &CodegenData,
     builder: &mut FunctionBuilder<'_>,
     block: Block,
-    span: &mut Span,
-    ctx_ptr: JitValue,
+    return_block: Block,
 ) {
     builder.switch_to_block(block);
 
     let result = builder.iconst(RESULT_TYPE, RESULT_ERROR);
-
-    span.exit(data, builder, ctx_ptr);
 
     if let Some(ty) = function.returns {
         let ty = data.resources.types.get(ty).unwrap();
@@ -1085,9 +1127,9 @@ fn generate_abort_block(
         };
 
         let value = builder.uninit(ty);
-        builder.return_(&[value, result]);
+        builder.jump(return_block, &[value, result]);
     } else {
-        builder.return_(&[result]);
+        builder.jump(return_block, &[result]);
     }
 }
 

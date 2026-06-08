@@ -116,11 +116,7 @@ pub fn perform_checked_call(
     }
     rvals.push(*result);
 
-    translator
-        .span
-        .exit(translator.data, &mut translator.builder, translator.ctx_ptr);
-
-    translator.builder.return_(&rvals);
+    translator.builder.jump(translator.return_block, &rvals);
 
     translator.builder.switch_to_block(continue_block);
 
