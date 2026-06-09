@@ -606,7 +606,7 @@ impl CodegenPass {
                     continue;
                 };
 
-                let id = if state.name == pex_class.default_state {
+                let id = if state.name.is_empty() {
                     StateId::Default
                 } else {
                     StateId::Named(state.name.clone())
@@ -649,6 +649,8 @@ impl CodegenPass {
                 },
             );
 
+            let default_state = class.class.as_ref().unwrap().default_state.clone();
+
             // FIXME: We should remove the entire original pex class to avoid
             // needing this double definition.
             class.class.as_mut().unwrap().variables.push(Variable {
@@ -657,7 +659,7 @@ impl CodegenPass {
                     ty: "string".to_owned(),
                 },
                 is_const: false,
-                value: Value::String("".to_owned()),
+                value: Value::String(default_state),
             });
             class.class.as_mut().unwrap().properties.push(Property {
                 name: "::state".to_owned(),

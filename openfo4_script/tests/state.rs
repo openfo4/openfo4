@@ -16,6 +16,11 @@ fn state() {
         r#"
         class MyClass:
 
+        state "":
+        
+        function MyFunction() -> int:
+        return 3
+
         state "a" default:
 
         function MyFunction() -> int:
@@ -63,7 +68,7 @@ fn state() {
     }
 
     // Fallthrough, default value
-    assert_eq!(func.call(&mut ctx, addr).unwrap(), 1);
+    assert_eq!(func.call(&mut ctx, addr).unwrap(), 3);
 }
 
 #[test]
