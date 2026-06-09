@@ -149,8 +149,3 @@ impl<'a> ExactSizeIterator for BlocksIter<'a> {
 }
 
 impl<'a> FusedIterator for BlocksIter<'a> {}
-
-mod tests {
-    #[test]
-    fn build_cfg() {}
-}

@@ -417,10 +417,15 @@ fn translate_state_body(mut translator: &mut FunctionTranslator<'_>, function: &
     let cfg = ControlFlowGraph::new(&function);
 
     let mut blocks = HashMap::new();
-    for (block_id, _) in cfg.blocks().skip(1) {
-        let label = translator.builder.create_block();
-        blocks.insert(block_id, label);
+    for (block_id, _) in cfg.blocks() {
+        let block = translator.builder.create_block();
+        blocks.insert(block_id, block);
     }
+
+    let (entry_block_id, _) = cfg.blocks().next().unwrap();
+    let entry_block = blocks[&entry_block_id];
+    translator.builder.jump(entry_block);
+    translator.builder.switch_to_block(entry_block);
 
     for (block_index, (block_id, instructions)) in cfg.blocks().enumerate() {
         let mut current_block_sealed = false;
