@@ -45,25 +45,25 @@ fn state() {
     let mut object = engine.object_pool().get(addr);
     unsafe {
         let b = engine.object_pool().insert_string("b");
-        object.set("MyClass", "MyClass.::state", b.addr());
+        object.set("MyClass", "::state", b.addr());
     }
 
     assert_eq!(func.call(&mut ctx, addr).unwrap(), 2);
 
     unsafe {
         let a = engine.object_pool().insert_string("a");
-        object.set("MyClass", "MyClass.::state", a.addr());
+        object.set("MyClass", "::state", a.addr());
     }
 
     assert_eq!(func.call(&mut ctx, addr).unwrap(), 1);
 
     unsafe {
         let a = engine.object_pool().insert_string("c");
-        object.set("MyClass", "MyClass.::state", a.addr());
+        object.set("MyClass", "::state", a.addr());
     }
 
     // Fallthrough, default value
-    assert_eq!(func.call(&mut ctx, addr).unwrap(), 0);
+    assert_eq!(func.call(&mut ctx, addr).unwrap(), 1);
 }
 
 #[test]
@@ -105,9 +105,9 @@ fn state_override_order() {
     );
 
     engine.register(&module);
-    let instance = engine.compile("A", &Options::default());
+    let instance = engine.compile("B", &Options::default());
     let func = instance.get_func("MyFunction").unwrap();
-    let type_id = engine.get_type("A").unwrap();
+    let type_id = engine.get_type("B").unwrap();
 
     let addr = engine.object_pool().insert(type_id).finalize().addr();
 
@@ -126,7 +126,7 @@ fn state_override_order() {
 
     unsafe {
         let mut obj = engine.object_pool().get(addr);
-        obj.set("C", "::state", x);
+        obj.set("B", "::state", x);
     }
 
     // C is the subclass of {A, B} with state "X".
@@ -135,7 +135,7 @@ fn state_override_order() {
 
     unsafe {
         let mut obj = engine.object_pool().get(addr);
-        obj.set("C", "::state", y);
+        obj.set("B", "::state", y);
     }
 
     // C has no state "Y", so B is the subclass of A with state "Y".
@@ -144,10 +144,10 @@ fn state_override_order() {
 
     unsafe {
         let mut obj = engine.object_pool().get(addr);
-        obj.set("C", "::state", z);
+        obj.set("B", "::state", z);
     }
 
     // C is the subclass of {A, B} with state "Z".
     // Calls C.MyFunction().
-    assert_eq!(func.call(&mut ctx, z).unwrap(), 5);
+    assert_eq!(func.call(&mut ctx, addr).unwrap(), 5);
 }

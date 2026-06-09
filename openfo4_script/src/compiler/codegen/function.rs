@@ -11,7 +11,8 @@ use crate::compiler::codegen::pex::cfg::ControlFlowGraph;
 use crate::compiler::codegen::trace::Span;
 use crate::compiler::codegen::trampoline::generate_guest_to_host_trampoline;
 use crate::compiler::codegen::{
-    ClassDef, CodegenData, Error, FunctionDef, PscSignature, Type, get_parent_class_with_property,
+    ClassDef, CodegenData, Error, FunctionDef, FunctionStateImpl, PscSignature, StateId, Type,
+    get_parent_class_with_property,
 };
 use crate::compiler::debug::DebugInfo;
 use crate::compiler::resources::TypeId;
@@ -147,7 +148,7 @@ pub fn translate_function(
             data,
             class,
             &function.class_name_debug,
-            &function.function,
+            &function,
             &mut builder,
         );
 
@@ -217,7 +218,7 @@ fn translate_function_body(
     data: &CodegenData,
     class: &ClassDef,
     class_name: &str,
-    function: &Function,
+    function: &FunctionDef,
     builder: &mut FunctionBuilder,
 ) {
     let self_ty = *data
@@ -226,12 +227,13 @@ fn translate_function_body(
         .lock()
         .get(&Lowercase::new(&*class_name))
         .unwrap();
-    let self_ptr = (!function.is_static).then(|| builder.add_param(self_ty));
+    let self_ptr = (!function.function.is_static).then(|| builder.add_param(self_ty));
 
-    let mut locals = HashMap::with_capacity(function.locals.len());
+    let mut locals = HashMap::with_capacity(function.function.locals.len());
 
     // Move function parameters into stack slots.
-    for param in function.params.iter() {
+    let mut params = Vec::new();
+    for param in function.function.params.iter() {
         let ty_name = Lowercase::new(&*param.ty);
 
         let ty = if ty_name.as_inner().ends_with("[]") {
@@ -240,35 +242,7 @@ fn translate_function_body(
             *data.resources.string_to_type.lock().get(&ty_name).unwrap()
         };
         let variable = builder.add_param(ty);
-
-        locals.insert(Lowercase::new(&*param.name), Local { ty_name, variable });
-    }
-
-    // Create stack slots for local variables.
-    for local in &function.locals {
-        let ty_name = Lowercase::new(&*local.ty);
-
-        let ty = if ty_name.as_inner().ends_with("[]") {
-            data.resources.primitives.array
-        } else {
-            *data.resources.string_to_type.lock().get(&ty_name).unwrap()
-        };
-        let variable = builder.declare_variable(ty);
-
-        let src = match data.resolve_ty(&ty_name) {
-            Type::None => hir::Value::Const(Literal::Null),
-            Type::Bool => hir::Value::Const(Literal::Bool(false)),
-            Type::Int => hir::Value::Const(Literal::Int(0)),
-            Type::Float => hir::Value::Const(Literal::Float(0.0)),
-            Type::String => hir::Value::Const(Literal::String("".to_owned())),
-            Type::Class(_) | Type::Struct(_) | Type::Array(_) | Type::Var => {
-                hir::Value::Const(Literal::Null)
-            }
-        };
-        let dst = hir::Value::Variable(variable);
-        builder.store(src, dst);
-
-        locals.insert(Lowercase::new(&*local.name), Local { ty_name, variable });
+        params.push((ty_name, variable));
     }
 
     let mut fields = HashMap::new();
@@ -276,8 +250,9 @@ fn translate_function_body(
         fields.insert(name.as_str(), Field {});
     }
 
-    if !function.return_ty.eq_ignore_ascii_case("none") {
-        let ty_name = Lowercase::new(&*function.return_ty);
+    let mut return_ty = None;
+    if !function.function.return_ty.eq_ignore_ascii_case("none") {
+        let ty_name = Lowercase::new(&*function.function.return_ty);
 
         let ty = if ty_name.as_inner().ends_with("[]") {
             data.resources.primitives.array
@@ -285,7 +260,53 @@ fn translate_function_body(
             *data.resources.string_to_type.lock().get(&ty_name).unwrap()
         };
 
+        return_ty = Some(ty);
         builder.set_returns(ty);
+    }
+
+    // Create a union over all locals used in all states.
+    // The variables are cleaned up later.
+    for (_, state) in &function.states {
+        let FunctionStateImpl::Body(body) = state else {
+            continue;
+        };
+
+        for (param, (ty_name, variable)) in body.params.iter().zip(&params) {
+            locals.insert(
+                Lowercase::new(&*param.name),
+                Local {
+                    ty_name: ty_name.clone(),
+                    variable: *variable,
+                },
+            );
+        }
+
+        // Create stack slots for local variables.
+        for local in &function.function.locals {
+            let ty_name = Lowercase::new(&*local.ty);
+
+            let ty = if ty_name.as_inner().ends_with("[]") {
+                data.resources.primitives.array
+            } else {
+                *data.resources.string_to_type.lock().get(&ty_name).unwrap()
+            };
+            let variable = builder.declare_variable(ty);
+
+            let src = match data.resolve_ty(&ty_name) {
+                Type::None => hir::Value::Const(Literal::Null),
+                Type::Bool => hir::Value::Const(Literal::Bool(false)),
+                Type::Int => hir::Value::Const(Literal::Int(0)),
+                Type::Float => hir::Value::Const(Literal::Float(0.0)),
+                Type::String => hir::Value::Const(Literal::String("".to_owned())),
+                Type::Class(_) | Type::Struct(_) | Type::Array(_) | Type::Var => {
+                    hir::Value::Const(Literal::Null)
+                }
+            };
+            let dst = hir::Value::Variable(variable);
+            builder.store(src, dst);
+
+            locals.insert(Lowercase::new(&*local.name), Local { ty_name, variable });
+        }
     }
 
     let mut translator = FunctionTranslator {
@@ -296,7 +317,104 @@ fn translate_function_body(
         self_ty: &class.name,
     };
 
-    let cfg = ControlFlowGraph::new(function);
+    // No need to load state value if only default state exists.
+    if function.states.len() > 1 {
+        let state_value = translator.load(&Value::Ident("::state".to_owned()));
+        let state_matches = translator
+            .builder
+            .declare_variable(translator.data.resources.primitives.bool);
+
+        let ret_dst = match return_ty {
+            Some(ty) => hir::Value::Variable(translator.builder.declare_variable(ty)),
+            None => hir::Value::Const(Literal::Null),
+        };
+
+        // States only work on non-static functions, i.e. the object
+        // pointer is always available.
+        let self_ptr = translator.self_ptr.unwrap();
+
+        let mut args: Vec<_> = params
+            .iter()
+            .map(|(_, var)| hir::Value::Variable(*var))
+            .collect();
+        args.insert(0, hir::Value::Variable(self_ptr));
+
+        let mut next_block = translator.builder.create_block();
+
+        for (id, state) in &function.states {
+            let StateId::Named(name) = id else {
+                continue;
+            };
+
+            translator.builder.compare_string(
+                state_value.clone(),
+                hir::Value::Const(name.clone()),
+                hir::Value::Variable(state_matches),
+                StringCompareOp::Equal,
+            );
+
+            let block = translator.builder.create_block();
+            translator
+                .builder
+                .brif_true(hir::Value::Variable(state_matches), block, next_block);
+
+            translator.builder.switch_to_block(block);
+
+            match state {
+                FunctionStateImpl::Body(body) => {
+                    translate_state_body(&mut translator, body);
+                }
+                FunctionStateImpl::Call(id) => {
+                    translator.builder.call(
+                        *id,
+                        Some(hir::Value::Variable(self_ptr)),
+                        &args,
+                        ret_dst.clone(),
+                    );
+                    translator.builder.return_(ret_dst.clone());
+                }
+            }
+
+            translator.builder.switch_to_block(next_block);
+            next_block = translator.builder.create_block();
+        }
+
+        translator.builder.jump(next_block);
+        translator.builder.switch_to_block(next_block);
+    }
+
+    let state = function.states.get(&StateId::Default).unwrap();
+    match state {
+        FunctionStateImpl::Body(body) => translate_state_body(&mut translator, body),
+        FunctionStateImpl::Call(id) => {
+            let ret_dst = match return_ty {
+                Some(ty) => hir::Value::Variable(translator.builder.declare_variable(ty)),
+                None => hir::Value::Const(Literal::Null),
+            };
+
+            // States only work on non-static functions, i.e. the object
+            // pointer is always available.
+            let self_ptr = translator.self_ptr.unwrap();
+
+            let mut args: Vec<_> = params
+                .iter()
+                .map(|(_, var)| hir::Value::Variable(*var))
+                .collect();
+            args.insert(0, hir::Value::Variable(self_ptr));
+
+            translator.builder.call(
+                *id,
+                Some(hir::Value::Variable(self_ptr)),
+                &args,
+                ret_dst.clone(),
+            );
+            translator.builder.return_(ret_dst.clone());
+        }
+    }
+}
+
+fn translate_state_body(mut translator: &mut FunctionTranslator<'_>, function: &Function) {
+    let cfg = ControlFlowGraph::new(&function);
 
     let mut blocks = HashMap::new();
     for (block_id, _) in cfg.blocks().skip(1) {
@@ -517,7 +635,8 @@ fn translate_function_body(
                     let class_name = translator.get_ty_name(&op.object);
                     let function_name = Lowercase::new(op.function_name.as_str());
 
-                    let callee = data
+                    let callee = translator
+                        .data
                         .get_function_id(class_name.as_str(), function_name.as_str())
                         .unwrap();
 
@@ -540,7 +659,8 @@ fn translate_function_body(
                     let parent = class.parent.as_ref().unwrap();
                     let function_name = Lowercase::new(op.function.as_str());
 
-                    let callee = data
+                    let callee = translator
+                        .data
                         .get_function_id(parent.as_str(), function_name.as_str())
                         .unwrap();
 
@@ -568,7 +688,10 @@ fn translate_function_body(
                         .collect::<Vec<_>>();
                     let dst = translator.load(&op.return_assignment);
 
-                    let callee = data.get_function_id(&class_name, &function_name).unwrap();
+                    let callee = translator
+                        .data
+                        .get_function_id(&class_name, &function_name)
+                        .unwrap();
 
                     translator.builder.call(callee, None, &args, dst);
                 }
@@ -592,11 +715,14 @@ fn translate_function_body(
                             dst,
                         );
                     } else {
-                        let class_name =
-                            get_parent_class_with_property(&data.classes, &class_name, &prop_name)
-                                .unwrap();
+                        let class_name = get_parent_class_with_property(
+                            &translator.data.classes,
+                            &class_name,
+                            &prop_name,
+                        )
+                        .unwrap();
 
-                        let class = data.classes.get(class_name).unwrap();
+                        let class = translator.data.classes.get(class_name).unwrap();
                         let prop = class.properties.get(&prop_name).unwrap();
                         let var_name = prop.variable.as_ref().unwrap();
 
@@ -628,11 +754,14 @@ fn translate_function_body(
                             hir::Value::Const(Literal::Null),
                         );
                     } else {
-                        let class_name =
-                            get_parent_class_with_property(&data.classes, &class_name, &prop_name)
-                                .unwrap();
+                        let class_name = get_parent_class_with_property(
+                            &translator.data.classes,
+                            &class_name,
+                            &prop_name,
+                        )
+                        .unwrap();
 
-                        let class = data.classes.get(class_name).unwrap();
+                        let class = translator.data.classes.get(class_name).unwrap();
                         let prop = class.properties.get(&prop_name).unwrap();
                         let var_name = prop.variable.as_ref().unwrap();
 

@@ -4,7 +4,6 @@ mod function;
 mod hir;
 mod pex;
 mod runtime;
-mod state_folding;
 mod trace;
 mod trampoline;
 
@@ -16,7 +15,9 @@ use game_tracing::trace_span;
 use hashbrown::{HashMap, HashSet};
 use indexmap::IndexMap;
 use openfo4_jit::{Compiler, CompilerConfig, FuncId, Signature, Type as JitType};
-use openfo4_pex::{Class, Function, Instruction, Module, Struct, Value};
+use openfo4_pex::{
+    Class, Function, Instruction, Module, Property, Struct, Value, Variable, VariableDefinition,
+};
 use slab::Slab;
 use thiserror::Error;
 
@@ -75,9 +76,6 @@ impl CodegenPass {
         for class in &module.classes {
             self.classes_updated = true;
 
-            let mut class = class.clone();
-            state_folding::fold_states(&mut class);
-
             let parent = if class.parent.is_empty() || class.parent.eq_ignore_ascii_case("none") {
                 None
             } else {
@@ -106,6 +104,7 @@ impl CodegenPass {
                         name: Lowercase::new(&*func.name),
                         psc_signature: None,
                         debug: None,
+                        states: HashMap::new(),
                     }));
 
                     functions.insert(Lowercase::new(&*func.name), id);
@@ -129,33 +128,45 @@ impl CodegenPass {
                 let variable = prop.variable.as_ref().map(|v| Lowercase::new(v.as_str()));
 
                 let getter = prop.getter.as_ref().map(|func| {
-                    FunctionId(self.data.functions.insert(FunctionDef {
-                        signature: None,
-                        func_id: None,
-                        function: func.clone(),
-                        native: None,
-                        trampoline_func_id: None,
-                        class: Lowercase::new(&*class.name),
-                        class_name_debug: class.name.clone(),
-                        name: Lowercase::new(&*func.name),
-                        psc_signature: None,
-                        debug: None,
-                    }))
+                    FunctionId(
+                        self.data.functions.insert(FunctionDef {
+                            signature: None,
+                            func_id: None,
+                            function: func.clone(),
+                            native: None,
+                            trampoline_func_id: None,
+                            class: Lowercase::new(&*class.name),
+                            class_name_debug: class.name.clone(),
+                            name: Lowercase::new(&*func.name),
+                            psc_signature: None,
+                            debug: None,
+                            // Getters/Setters cannot have states.
+                            states: [(StateId::Default, FunctionStateImpl::Body(func.clone()))]
+                                .into_iter()
+                                .collect(),
+                        }),
+                    )
                 });
 
                 let setter = prop.setter.as_ref().map(|func| {
-                    FunctionId(self.data.functions.insert(FunctionDef {
-                        signature: None,
-                        func_id: None,
-                        function: func.clone(),
-                        native: None,
-                        trampoline_func_id: None,
-                        class: Lowercase::new(&*class.name),
-                        class_name_debug: class.name.clone(),
-                        name: Lowercase::new(&*func.name),
-                        psc_signature: None,
-                        debug: None,
-                    }))
+                    FunctionId(
+                        self.data.functions.insert(FunctionDef {
+                            signature: None,
+                            func_id: None,
+                            function: func.clone(),
+                            native: None,
+                            trampoline_func_id: None,
+                            class: Lowercase::new(&*class.name),
+                            class_name_debug: class.name.clone(),
+                            name: Lowercase::new(&*func.name),
+                            psc_signature: None,
+                            debug: None,
+                            // Getters/Setters cannot have states.
+                            states: [(StateId::Default, FunctionStateImpl::Body(func.clone()))]
+                                .into_iter()
+                                .collect(),
+                        }),
+                    )
                 });
 
                 properties.insert(
@@ -203,6 +214,8 @@ impl CodegenPass {
             return;
         }
         self.classes_updated = false;
+
+        self.update_class_states();
 
         let resolve_ty_and_default_value = |ty: &Type| -> (TypeId, Option<Vec<u8>>) {
             match ty {
@@ -530,6 +543,129 @@ impl CodegenPass {
             let (_, fields) = class_field_offsets.remove(&class).unwrap();
             let class = self.data.classes.get_mut(&class).unwrap();
             class.field_offsets = fields;
+        }
+    }
+
+    fn update_class_states(&mut self) {
+        let mut queue = VecDeque::new();
+        let mut visited = HashSet::new();
+        let mut fn_queue = VecDeque::new();
+
+        for class in self.data.classes.keys() {
+            queue.push_back(class);
+        }
+
+        while let Some(name) = queue.pop_front() {
+            if visited.contains(name) {
+                continue;
+            }
+
+            let class = self.data.classes.get(name).unwrap();
+            if let Some(parent) = &class.parent
+                && !visited.contains(parent)
+            {
+                queue.push_front(name);
+                queue.push_front(parent);
+                continue;
+            }
+
+            visited.insert(name);
+
+            for (_, id) in &class.functions {
+                fn_queue.push_back(*id);
+            }
+        }
+
+        let mut create_state_for_class = Vec::new();
+
+        while let Some(id) = fn_queue.pop_front() {
+            let func = &self.data.functions[id.0];
+            let class = self.data.classes.get(&func.class).unwrap();
+
+            let mut states = HashMap::new();
+
+            // Inherit the states from the parent class function.
+            if let Some(parent) = &class.parent {
+                let parent = self.data.classes.get(parent).unwrap();
+                if let Some(id) = parent.functions.get(&func.name) {
+                    states = self.data.functions[id.0]
+                        .states
+                        .keys()
+                        .map(|state_id| (state_id.clone(), FunctionStateImpl::Call(*id)))
+                        .collect();
+                }
+            }
+
+            let pex_class = class.class.as_ref().unwrap();
+            for state in &pex_class.states {
+                let Some(f) = state
+                    .functions
+                    .iter()
+                    .find(|f| f.name == func.function.name)
+                else {
+                    continue;
+                };
+
+                let id = if state.name == pex_class.default_state {
+                    StateId::Default
+                } else {
+                    StateId::Named(state.name.clone())
+                };
+
+                states.insert(id, FunctionStateImpl::Body(f.clone()));
+            }
+
+            // If more than one state exists, we must ensure the builtin
+            // ::state variable exists for the object.
+            if states.len() > 1 {
+                create_state_for_class.push(class.name.clone());
+            }
+
+            let func = &mut self.data.functions[id.0];
+            func.states = states;
+        }
+
+        drop(visited);
+
+        for class in create_state_for_class {
+            let mut class = self.data.classes.get_mut(&class).unwrap();
+            while let Some(parent) = class.parent.clone() {
+                class = self.data.classes.get_mut(&parent).unwrap();
+            }
+
+            if class.fields.contains_key(Lowercase::from_static("::state")) {
+                continue;
+            }
+
+            class
+                .fields
+                .insert(Lowercase::new("::state"), Lowercase::new("string"));
+            class.properties.insert(
+                Lowercase::new("::state"),
+                ClassProperty {
+                    variable: Some(Lowercase::new("::state")),
+                    getter: None,
+                    setter: None,
+                },
+            );
+
+            // FIXME: We should remove the entire original pex class to avoid
+            // needing this double definition.
+            class.class.as_mut().unwrap().variables.push(Variable {
+                definition: VariableDefinition {
+                    name: "::state".to_owned(),
+                    ty: "string".to_owned(),
+                },
+                is_const: false,
+                value: Value::String("".to_owned()),
+            });
+            class.class.as_mut().unwrap().properties.push(Property {
+                name: "::state".to_owned(),
+                ty: "string".to_owned(),
+                variable: Some("::state".to_owned()),
+                getter: None,
+                setter: None,
+            });
         }
     }
 
@@ -868,6 +1004,7 @@ struct FunctionDef {
     native: Option<NativeFunction>,
     trampoline_func_id: Option<FuncId>,
     debug: Option<Box<DebugInfo>>,
+    states: HashMap<StateId, FunctionStateImpl>,
 }
 
 #[derive(Clone, Debug)]
@@ -885,6 +1022,18 @@ struct StructDef {
     pub s: Struct,
     pub ty: TypeId,
     pub field_offsets: HashMap<Lowercase<String>, usize>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+enum StateId {
+    Default,
+    Named(String),
+}
+
+#[derive(Clone, Debug)]
+enum FunctionStateImpl {
+    Call(FunctionId),
+    Body(Function),
 }
 
 fn find_function_callees(data: &CodegenData, function: &FunctionDef) -> Vec<FunctionId> {
@@ -929,51 +1078,62 @@ fn find_function_callees(data: &CodegenData, function: &FunctionDef) -> Vec<Func
         todo!()
     };
 
-    for instruction in &function.function.instructions {
-        match instruction {
-            Instruction::CallParent(op) => {
-                let parent = current_class.parent.as_ref().unwrap();
+    for (_, state) in &function.states {
+        match state {
+            FunctionStateImpl::Body(body) => {
+                for instruction in &body.instructions {
+                    match instruction {
+                        Instruction::CallParent(op) => {
+                            let parent = current_class.parent.as_ref().unwrap();
 
-                let func_name = Lowercase::new(op.function.as_str());
+                            let func_name = Lowercase::new(op.function.as_str());
 
-                let func = data.get_function_id(parent, &func_name).unwrap();
-                callees.push(func);
-            }
-            Instruction::CallStatic(op) => {
-                let class_name = Lowercase::new(op.class.as_str());
-                let function_name = Lowercase::new(op.function.as_str());
+                            let func = data.get_function_id(parent, &func_name).unwrap();
+                            callees.push(func);
+                        }
+                        Instruction::CallStatic(op) => {
+                            let class_name = Lowercase::new(op.class.as_str());
+                            let function_name = Lowercase::new(op.function.as_str());
 
-                let func = data.get_function_id(&class_name, &function_name).unwrap();
+                            let func = data.get_function_id(&class_name, &function_name).unwrap();
 
-                callees.push(func);
-            }
-            Instruction::PropertyGet(op) => {
-                let Value::Ident(object) = &op.value else {
-                    unreachable!()
-                };
+                            callees.push(func);
+                        }
+                        Instruction::PropertyGet(op) => {
+                            let Value::Ident(object) = &op.value else {
+                                unreachable!()
+                            };
 
-                let object = Lowercase::new(object.as_str());
-                let class_name = find_var(&object);
-                let prop_name = Lowercase::new(op.property.as_str());
+                            let object = Lowercase::new(object.as_str());
+                            let class_name = find_var(&object);
+                            let prop_name = Lowercase::new(op.property.as_str());
 
-                if let Some(func) = data.get_property_getter_id(&class_name, &prop_name) {
-                    callees.push(func);
+                            if let Some(func) = data.get_property_getter_id(&class_name, &prop_name)
+                            {
+                                callees.push(func);
+                            }
+                        }
+                        Instruction::PropertySet(op) => {
+                            let Value::Ident(object) = &op.object else {
+                                unreachable!()
+                            };
+
+                            let object = Lowercase::new(object.as_str());
+                            let class_name = find_var(&object);
+                            let prop_name = Lowercase::new(op.property.as_str());
+
+                            if let Some(func) = data.get_property_setter_id(&class_name, &prop_name)
+                            {
+                                callees.push(func);
+                            }
+                        }
+                        _ => {}
+                    }
                 }
             }
-            Instruction::PropertySet(op) => {
-                let Value::Ident(object) = &op.object else {
-                    unreachable!()
-                };
-
-                let object = Lowercase::new(object.as_str());
-                let class_name = find_var(&object);
-                let prop_name = Lowercase::new(op.property.as_str());
-
-                if let Some(func) = data.get_property_setter_id(&class_name, &prop_name) {
-                    callees.push(func);
-                }
+            FunctionStateImpl::Call(id) => {
+                callees.push(*id);
             }
-            _ => {}
         }
     }
 
