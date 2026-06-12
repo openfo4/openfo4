@@ -609,8 +609,9 @@ fn find_function_callees(data: &CodegenData, func: &FunctionDef) -> HashSet<Func
                             let class = find_var_as_class(&object);
                             let prop_name = Lowercase::new(op.property.as_str());
 
+                            let class =
+                                get_parent_class_with_property(data, class, &prop_name).unwrap();
                             let class = data.registry.class(class).unwrap();
-                            // TODO: Include parents
                             let prop = class.properties.get(&prop_name).unwrap();
 
                             if let Some(func) = prop.getter {
@@ -626,8 +627,9 @@ fn find_function_callees(data: &CodegenData, func: &FunctionDef) -> HashSet<Func
                             let class = find_var_as_class(&object);
                             let prop_name = Lowercase::new(op.property.as_str());
 
+                            let class =
+                                get_parent_class_with_property(data, class, &prop_name).unwrap();
                             let class = data.registry.class(class).unwrap();
-                            // TODO: Include parents
                             let prop = class.properties.get(&prop_name).unwrap();
 
                             if let Some(func) = prop.getter {

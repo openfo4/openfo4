@@ -21,7 +21,8 @@ use std::fmt::Debug;
 use openfo4_pex::{
     ArrayAdd, ArrayClear, ArrayFind, ArrayFindStruct, ArrayGet, ArrayInsert, ArrayRemove, Binop,
     Branch, CallMethod, CallParent, CallStatic, Class, ConditionalBranch, Function, Instruction,
-    Module, Property, State, Struct, StructMember, Unop, Value, Variable, VariableDefinition,
+    Module, Property, PropertyGet, State, Struct, StructMember, Unop, Value, Variable,
+    VariableDefinition,
 };
 
 pub fn assemble(input: &str) -> Module {
@@ -328,6 +329,15 @@ fn parse_instruction(cursor: &mut Cursor<'_>) -> Instruction {
                     function,
                     return_assignment: dst,
                     args,
+                })
+            }
+            "property_get" => {
+                let property = cursor.consume_ident().to_owned();
+                let object = parse_value(cursor);
+                Instruction::PropertyGet(PropertyGet {
+                    value: object,
+                    property,
+                    return_assignment: dst,
                 })
             }
             "array_create" => Instruction::ArrayCreate(parse_unop(cursor, dst)),

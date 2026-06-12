@@ -59,3 +59,40 @@ fn variable_shadowing() {
     let func = func.typed::<ObjectAddr, i32>().unwrap();
     assert_eq!(func.call(&mut ctx, addr).unwrap(), 600);
 }
+
+#[test]
+fn load_property_from_parent_class() {
+    let mut engine = Engine::new(COMPILER_OPTIONS);
+    let module = assemble(
+        r#"
+        class A:
+        global a: int = 0
+        property A: int -> a
+
+        class B:
+        parent: A
+
+        function F() -> int:
+        local res: int
+        res = property_get A self
+        return res
+        "#,
+    );
+
+    engine.register(&module);
+
+    let instance = engine.compile("B", &Options::default());
+    let func = instance.get_func("F").unwrap();
+    let type_id = engine.get_type("B").unwrap();
+
+    let mut builder = engine.object_pool().insert(type_id);
+    builder.set("A", "A", 1);
+
+    let addr = builder.finalize().addr();
+
+    let mut stack = engine.create_stack();
+    let mut ctx = Context::new(&engine, &mut stack, ());
+
+    let func = func.typed::<ObjectAddr, i32>().unwrap();
+    assert_eq!(func.call(&mut ctx, addr).unwrap(), 1);
+}
