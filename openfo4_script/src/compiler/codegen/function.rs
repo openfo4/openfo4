@@ -564,7 +564,7 @@ fn translate_state_body(
                     let function_name = Lowercase::new(op.function_name.as_str());
 
                     let class = translator.data.registry.class(class_id).unwrap();
-                    let callee = class.functions.get(&function_name).unwrap();
+                    let callee = class.functions.get_method(&function_name).unwrap();
 
                     let object = translator.load(&op.object);
                     let dst = translator.load(&op.return_assignment);
@@ -610,7 +610,7 @@ fn translate_state_body(
                     let dst = translator.load(&op.return_assignment);
 
                     let class = translator.data.registry.class_by_name(&class_name).unwrap();
-                    let callee = class.functions.get(&func_name).unwrap();
+                    let callee = class.functions.get_static(&func_name).unwrap();
 
                     translator.builder.call(callee, None, &args, dst);
                 }

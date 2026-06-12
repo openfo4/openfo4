@@ -160,6 +160,11 @@ impl Registry {
                 fn_name,
             );
 
+            if self.function(id).unwrap().is_static {
+                functions.new_static.insert(name, id);
+                continue;
+            }
+
             if let Some(func) = functions.inherited.remove(&name) {
                 functions.overriden.insert(
                     name,
@@ -455,6 +460,8 @@ pub struct FunctionBody {
 
 #[derive(Clone, Debug, Default)]
 pub struct FunctionSet {
+    /// Static functions on this class.
+    pub new_static: HashMap<Lowercase<String>, FunctionId>,
     /// Functions that are newly defined in this class.
     pub new: IndexMap<Lowercase<String>, FunctionId>,
     /// Functions that are overriding functions from another class.
@@ -464,7 +471,17 @@ pub struct FunctionSet {
 }
 
 impl FunctionSet {
+    /// Returns the function with the given `name`.
+    ///
+    /// This includes methods and static functions.
     pub fn get(&self, name: &Lowercase<str>) -> Option<FunctionId> {
+        self.get_method(name).or_else(|| self.get_static(name))
+    }
+
+    /// Returns the method with the given `name`.
+    ///
+    /// This includes overriden and inherited functions from the parent.
+    pub fn get_method(&self, name: &Lowercase<str>) -> Option<FunctionId> {
         self.new
             .get(name)
             .or_else(|| self.overriden.get(name).map(|f| &f.func))
@@ -472,6 +489,7 @@ impl FunctionSet {
             .copied()
     }
 
+    /// Returns the method with the given `name` from the parent class.
     pub fn get_parent(&self, name: &Lowercase<str>) -> Option<FunctionId> {
         self.overriden
             .get(name)
@@ -479,11 +497,20 @@ impl FunctionSet {
             .or_else(|| self.inherited.get(name).map(|f| f.next_parent_impl))
     }
 
+    /// Returns the static function with the given `name`.
+    pub fn get_static(&self, name: &Lowercase<str>) -> Option<FunctionId> {
+        self.new_static.get(name).copied()
+    }
+
+    /// Returns an `Iterator` over all functions available in this set.
+    ///
+    /// This includes methods, including overriden and inherited functions, and static functions.
     pub fn iter(&self) -> impl Iterator<Item = FunctionId> {
         self.new
             .values()
             .chain(self.overriden.values().map(|f| &f.func))
             .chain(self.inherited.values().map(|f| &f.next_parent_impl))
+            .chain(self.new_static.values())
             .copied()
     }
 }

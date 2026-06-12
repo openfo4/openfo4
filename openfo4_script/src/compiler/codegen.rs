@@ -578,7 +578,7 @@ fn find_function_callees(data: &CodegenData, func: &FunctionDef) -> HashSet<Func
                             let func_name = Lowercase::new(&*op.function_name);
 
                             let parent = data.registry.class(class).unwrap();
-                            let func = parent.functions.get(&func_name).unwrap();
+                            let func = parent.functions.get_method(&func_name).unwrap();
 
                             callees.insert(func);
                         }
@@ -596,7 +596,7 @@ fn find_function_callees(data: &CodegenData, func: &FunctionDef) -> HashSet<Func
                             let func_name = Lowercase::new(op.function.as_str());
 
                             let class = data.registry.class_by_name(&class_name).unwrap();
-                            let func = class.functions.get(&func_name).unwrap();
+                            let func = class.functions.get_static(&func_name).unwrap();
 
                             callees.insert(func);
                         }
