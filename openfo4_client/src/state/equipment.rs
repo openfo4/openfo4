@@ -20,12 +20,15 @@ use crate::assets::nif::{LoadNifFlags, NifKey, NifScene};
 use crate::components::WorldSpace;
 use crate::state::esp::EspLoader;
 use crate::state::hardcoded::DAMAGE_TYPE_PHYSICAL;
-use crate::state::level::items::resolve_item;
+use crate::state::level::items::{LoadItemProps, resolve_item};
 use crate::systems::equipment::{Equipment, EquipmentKey, equip_item};
 use crate::systems::inventory::{
     AimProps, ItemData, ItemKind, ItemStack, WeaponItemData, WeaponProjectileNode,
 };
 use crate::systems::scripting::loader::{ScriptLoader, ScriptObject};
+
+// FIXME: Unhardcode this guy.
+const PLAYER_LEVEL: u16 = 1000;
 
 // Note: The "P-" prefix is already stripped in the NifScene.
 const PROJECTILE_NODE_NAME: &str = "ProjectileNode";
@@ -155,7 +158,18 @@ pub async fn load_item(
     attachments: &[RecordId],
     count: u64,
 ) -> Vec<ItemStack> {
-    resolve_item(esp_loader, script_loader, record, count, attachments).await
+    resolve_item(
+        esp_loader,
+        script_loader,
+        record,
+        count,
+        attachments,
+        &LoadItemProps {
+            level: PLAYER_LEVEL,
+            object_template_keywords: HashSet::new(),
+        },
+    )
+    .await
 }
 
 pub async fn load_equipment_item(

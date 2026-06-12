@@ -25,7 +25,7 @@ use crate::render::RenderObject;
 use crate::state::esp::GlobalRecord;
 use crate::state::level::LoadContext;
 use crate::state::level::data_ext::RecordDataExt;
-use crate::state::level::items::resolve_item;
+use crate::state::level::items::{LoadItemProps, resolve_item};
 use crate::state::level::navmesh::load_navmesh;
 use crate::state::level::partial::PartialEntityFlags;
 use crate::state::level::terrain::load_land;
@@ -38,6 +38,9 @@ use crate::systems::linked_refs::LinkedRefs;
 use crate::systems::pathing::NavMesh;
 use crate::systems::scripting::ScriptEntities;
 use crate::systems::scripting::loader::ScriptObject;
+
+// FIXME: Unhardcode this guy.
+pub const PLAYER_LEVEL: u16 = 1000;
 
 #[derive(Debug, Default)]
 pub struct SpawnEntity {
@@ -403,6 +406,10 @@ impl SpawnEntity {
                         item_id,
                         item.count.into(),
                         &[],
+                        &LoadItemProps {
+                            level: PLAYER_LEVEL,
+                            object_template_keywords: HashSet::new(),
+                        },
                     )
                     .await;
                     for item in items {
@@ -585,9 +592,19 @@ async fn load_item(ctx: &LoadContext<'_>, record: &GlobalRecord) -> Option<ItemS
 
     if is_item {
         Some(
-            resolve_item(ctx.esp_loader, ctx.script_loader, record.id, 1, &[])
-                .await
-                .remove(0),
+            resolve_item(
+                ctx.esp_loader,
+                ctx.script_loader,
+                record.id,
+                1,
+                &[],
+                &LoadItemProps {
+                    level: PLAYER_LEVEL,
+                    object_template_keywords: HashSet::new(),
+                },
+            )
+            .await
+            .remove(0),
         )
     } else {
         None

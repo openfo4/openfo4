@@ -1,6 +1,7 @@
 use hashbrown::HashSet;
 use openfo4_core::record::RecordId;
-use openfo4_esp::RecordData;
+use openfo4_esp::records::object_modification::ObjectModificationFormType;
+use openfo4_esp::{RecordData, RecordKind};
 
 use crate::state::equipment::load_equipment_item;
 use crate::state::esp::EspLoader;
@@ -8,8 +9,12 @@ use crate::state::level::leveled_list::select_from_leveled_list;
 use crate::systems::inventory::{ItemData, ItemKind, ItemStack};
 use crate::systems::scripting::loader::{ScriptLoader, ScriptObject};
 
-// FIXME: Unhardcode this guy.
-const PLAYER_LEVEL: u16 = 1000;
+#[derive(Clone, Debug)]
+pub struct LoadItemProps {
+    pub level: u16,
+    /// If loading an object template, only include items with these keywords.
+    pub object_template_keywords: HashSet<RecordId>,
+}
 
 pub async fn resolve_item(
     esp_loader: &EspLoader,
@@ -17,6 +22,7 @@ pub async fn resolve_item(
     record_id: RecordId,
     count: u64,
     attachments: &[RecordId],
+    props: &LoadItemProps,
 ) -> Vec<ItemStack> {
     let mut items = Vec::new();
 
@@ -37,7 +43,7 @@ pub async fn resolve_item(
                         .is_some_and(|id| !visited.contains(&id))
                 });
 
-                for index in select_from_leveled_list(data.flags, &data.entries, PLAYER_LEVEL) {
+                for index in select_from_leveled_list(data.flags, &data.entries, props.level) {
                     let form = data.entries[index].reference;
                     let count = u64::from(data.entries[index].count);
                     let rid = esp_loader.resolve_form(form, record_id).unwrap();
@@ -73,6 +79,17 @@ pub async fn resolve_item(
                 });
             }
             RecordData::Weapon(_) | RecordData::Armor(_) => {
+                let mut attachments = attachments;
+                if attachments.is_empty() {
+                    attachments = select_object_attachments(
+                        esp_loader,
+                        record_id,
+                        &record.local.data,
+                        &props,
+                    )
+                    .await;
+                }
+
                 // FIXME: Merge this function into this file.
                 let item =
                     load_equipment_item(esp_loader, script_loader, record_id, &attachments).await;
@@ -260,4 +277,136 @@ pub async fn resolve_item(
 
 async fn load_item_script(record: RecordId, loader: &ScriptLoader) -> Option<ScriptObject> {
     loader.load_instance(record).await
+}
+
+async fn select_object_attachments(
+    esp_loader: &EspLoader,
+    id: RecordId,
+    data: &RecordData,
+    props: &LoadItemProps,
+) -> Vec<RecordId> {
+    let templates = match data {
+        RecordData::Weapon(data) => &data.object_templates.templates,
+        // TODO
+        RecordData::Armor(data) => return Vec::new(),
+        _ => return Vec::new(),
+    };
+
+    let mut chosen_template = templates.iter().find(|t| t.item.default);
+
+    // Choose the object template with the most matching keywords.
+    // Exclude all templates where not all keywords are matching.
+    let mut max_keywords = 0;
+
+    'outer: for (index, template) in templates.iter().enumerate() {
+        if u16::from(template.item.min_level) > props.level {
+            continue;
+        }
+
+        if template.item.max_level != 0 && u16::from(template.item.max_level) < props.level {
+            continue;
+        }
+
+        let mut next = Some(index);
+        let mut keywords = 0;
+        while let Some(index) = next {
+            let template = templates.get(index).unwrap();
+
+            for keyword in &template.item.keywords {
+                let keyword = esp_loader.resolve_form(*keyword, id).unwrap();
+                if !props.object_template_keywords.contains(&keyword) {
+                    continue 'outer;
+                }
+            }
+
+            keywords += template.item.keywords.len();
+            next = template.item.parent_combination_index.map(|i| i.into());
+        }
+
+        if keywords > max_keywords {
+            chosen_template = Some(template);
+            max_keywords = keywords;
+        }
+    }
+
+    let Some(template) = chosen_template else {
+        return Vec::new();
+    };
+
+    let mut visited = HashSet::new();
+
+    let mut attachments = Vec::new();
+
+    let mut queue = Vec::new();
+    for attachment in &template.item.includes {
+        if attachment.optional && rand::random::<bool>() {
+            continue;
+        }
+
+        let attachment_id = esp_loader.resolve_form(attachment.item_mod, id).unwrap();
+        queue.push((attachment_id, !attachment.dont_use_all));
+    }
+
+    while let Some((id, use_all)) = queue.pop() {
+        // We must protect against cyclic references in mod collections.
+        if !visited.insert(id) {
+            continue;
+        }
+
+        let attachment = esp_loader
+            .lookup(Some(RecordKind::ObjectModification), id)
+            .await
+            .unwrap();
+        match attachment.local.data {
+            RecordData::ObjectModification(data) => {
+                // We can generally differentiate between "normal" object mods
+                // and mod collections (called "modcols" in the game).
+                // Normal object mods are attachments that directly modify the visuals
+                // and/or stats of the weapon/armor.
+                // Mod collections only contain a list of other mods that are applicable,
+                // and don't modify the weapon/armor directly.
+
+                // Mod collections have form type "none".
+                if data.data.form_type != ObjectModificationFormType::None {
+                    attachments.push(id);
+                    continue;
+                }
+
+                let mut chosen_mod = None;
+                let mut chosen_mod_level = 0;
+
+                for item in &data.data.includes {
+                    if item.optional && rand::random::<bool>() {
+                        continue;
+                    }
+
+                    if u16::from(item.min_level) > props.level {
+                        continue;
+                    }
+
+                    if use_all {
+                        let next_id = esp_loader.resolve_form(item.mod_, id).unwrap();
+                        queue.push((next_id, !item.dont_use_all));
+                    }
+
+                    if item.min_level > chosen_mod_level || chosen_mod.is_none() {
+                        chosen_mod = Some(item);
+                        chosen_mod_level = item.min_level;
+                    }
+                }
+
+                let Some(item) = chosen_mod else {
+                    continue;
+                };
+
+                let id = esp_loader.resolve_form(item.mod_, id).unwrap();
+                queue.push((id, !item.dont_use_all));
+            }
+            _ => todo!(),
+        }
+    }
+
+    dbg!(&attachments);
+
+    attachments
 }

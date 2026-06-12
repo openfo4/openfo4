@@ -2381,7 +2381,7 @@ pub struct ObjectTemplateItem {
     pub keywords: Vec<FormId>,
     pub min_level: u8,
     pub max_level: u8,
-    pub parent_combination_index: i16,
+    pub parent_combination_index: Option<u16>,
     pub default: bool,
     pub min_level_for_ranks: u8,
     pub alt_level_per_tier: u8,
@@ -2400,7 +2400,13 @@ impl Decode for ObjectTemplateItem {
         u8::decode(&mut buf)?;
         let max_level = u8::decode(&mut buf)?;
         u8::decode(&mut buf)?;
-        let parent_combination_index = i16::decode(&mut buf)?;
+        let parent_combination_index = u16::decode(&mut buf)?;
+        let parent_combination_index = if parent_combination_index == u16::MAX {
+            None
+        } else {
+            Some(parent_combination_index)
+        };
+
         let default = bool::decode(&mut buf)?;
 
         let keyword_count = u8::decode(&mut buf)?;
