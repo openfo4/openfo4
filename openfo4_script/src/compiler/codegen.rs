@@ -227,14 +227,23 @@ impl CodegenPass {
         let mut classes_to_build = HashSet::new();
         for (id, _) in &self.data.function_addrs {
             let func = self.data.registry.function(*id).unwrap();
-            if !self.data.class_headers.contains_key(&func.class) {
-                classes_to_build.insert(func.class);
+            // Static functions don't need any vtable.
+            if func.is_static {
+                continue;
             }
+
+            if self.data.class_headers.contains_key(&func.class) {
+                continue;
+            }
+
+            classes_to_build.insert(func.class);
         }
 
         let mut classes_to_build: VecDeque<_> = classes_to_build.into_iter().collect();
         while let Some(id) = classes_to_build.pop_front() {
             let class = self.data.registry.class(id).unwrap();
+
+            tracing::debug!("building vtable for {}", class.debug_name);
 
             if self.data.class_headers.contains_key(&id) {
                 continue;
@@ -310,6 +319,8 @@ impl CodegenPass {
 
     pub fn compile(&mut self, class: &str, options: &Options) -> Result<CompiledClass, Error> {
         let _span = trace_span!("CodegenPass::compile").entered();
+
+        tracing::debug!("compiling class {}", class);
 
         self.compute_type_layouts();
 
@@ -387,11 +398,15 @@ impl CodegenPass {
                 // This also includes all functions of the parent class.
                 let mut class = self.data.registry.class(func.class).unwrap();
                 loop {
-                    for func_id in class.functions.iter() {
-                        let func = self.data.registry.function(func_id).unwrap();
-                        if !func.is_static {
-                            queue.push(func_id);
-                        }
+                    for func_id in class.functions.new.values() {
+                        queue.push(*func_id);
+                    }
+
+                    // We need to visit both our overriding function and the original
+                    // function. The original function will be visited when the visit
+                    // our parent and we don't need to push it here.
+                    for func in class.functions.overriden.values() {
+                        queue.push(func.func);
                     }
 
                     if let Some(parent) = class.parent {

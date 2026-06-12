@@ -159,3 +159,28 @@ fn method_resolution_call_parent() {
     let f = f.typed::<ObjectAddr, i32>().unwrap();
     assert_eq!(f.call(&mut ctx, addr).unwrap(), 2);
 }
+
+#[test]
+fn skip_static_only_vtable() {
+    let mut engine = Engine::new(COMPILER_OPTIONS);
+
+    let module = assemble(
+        r#"
+        class A:
+        function F():
+
+        class B:
+        function F():
+
+        function G():
+
+        function H() static:
+        local b: B
+        local nonevar: none
+        nonevar = call_method F b
+        "#,
+    );
+
+    engine.register(&module);
+    engine.compile("B", &Options::default());
+}

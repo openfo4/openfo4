@@ -513,6 +513,14 @@ impl FunctionSet {
             .chain(self.new_static.values())
             .copied()
     }
+
+    pub fn iter_methods(&self) -> impl Iterator<Item = FunctionId> {
+        self.new
+            .values()
+            .chain(self.overriden.values().map(|f| &f.func))
+            .chain(self.inherited.values().map(|f| &f.next_parent_impl))
+            .copied()
+    }
 }
 
 #[derive(Copy, Clone, Debug)]
