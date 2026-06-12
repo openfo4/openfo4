@@ -184,3 +184,64 @@ fn skip_static_only_vtable() {
     engine.register(&module);
     engine.compile("B", &Options::default());
 }
+
+#[test]
+fn class_without_methods() {
+    let mut engine = Engine::new(COMPILER_OPTIONS);
+
+    let module = assemble(
+        r#"
+        class A:
+        function F() -> int:
+        return 1
+
+        class B:
+        parent: A
+        "#,
+    );
+
+    engine.register(&module);
+    let instance = engine.compile("B", &Options::default());
+    let type_id = engine.get_type("B").unwrap();
+
+    let addr = engine.object_pool().insert(type_id).finalize().addr();
+
+    let mut stack = engine.create_stack();
+    let mut ctx = Context::new(&engine, &mut stack, ());
+
+    let f = instance.get_func("F").unwrap();
+    let f = f.typed::<ObjectAddr, i32>().unwrap();
+    assert_eq!(f.call(&mut ctx, addr).unwrap(), 1);
+}
+
+#[test]
+fn class_without_methods_twice() {
+    let mut engine = Engine::new(COMPILER_OPTIONS);
+
+    let module = assemble(
+        r#"
+        class A:
+        function F() -> int:
+        return 1
+
+        class B:
+        parent: A
+
+        class C:
+        parent: B
+        "#,
+    );
+
+    engine.register(&module);
+    let instance = engine.compile("C", &Options::default());
+    let type_id = engine.get_type("C").unwrap();
+
+    let addr = engine.object_pool().insert(type_id).finalize().addr();
+
+    let mut stack = engine.create_stack();
+    let mut ctx = Context::new(&engine, &mut stack, ());
+
+    let f = instance.get_func("F").unwrap();
+    let f = f.typed::<ObjectAddr, i32>().unwrap();
+    assert_eq!(f.call(&mut ctx, addr).unwrap(), 1);
+}

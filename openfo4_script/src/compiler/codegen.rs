@@ -239,6 +239,32 @@ impl CodegenPass {
             classes_to_build.insert(func.class);
         }
 
+        // Classes without functions will never get visited be the above loop.
+        // While we don't need a vtable for these classes, we still need to their
+        // header.
+        // We simply visit any functionless classes whenever the parent is visited.
+        for (_, class) in self.data.registry.classes() {
+            if !class.functions.new.is_empty() || !class.functions.overriden.is_empty() {
+                continue;
+            }
+
+            if self.data.class_headers.contains_key(&class.id) {
+                continue;
+            }
+
+            // Note that this will still work correctly when the parent is also functionless,
+            // since parents will get yielded after child classes in the iterator.
+            if let Some(parent) = class.parent {
+                if !self.data.class_headers.contains_key(&parent)
+                    && !classes_to_build.contains(&parent)
+                {
+                    continue;
+                }
+            }
+
+            classes_to_build.insert(class.id);
+        }
+
         let mut classes_to_build: VecDeque<_> = classes_to_build.into_iter().collect();
         while let Some(id) = classes_to_build.pop_front() {
             let class = self.data.registry.class(id).unwrap();
