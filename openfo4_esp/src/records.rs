@@ -1431,7 +1431,7 @@ pub struct Armor {
     #[record("APPR")]
     pub attach_parent_slots: Option<Array<FormId>>,
     #[record("OBTE")]
-    pub object_template: Option<SubRecordSection<ObjectModificationTemplates>>,
+    pub object_templates: ObjectTemplates,
 }
 
 #[derive(Clone, Debug, Record)]
@@ -1534,87 +1534,6 @@ pub enum Stagger {
 pub struct Resistance {
     pub damage_type: FormId,
     pub value: u32,
-}
-
-#[derive(Clone, Debug, Record)]
-pub struct ObjectModificationTemplates {
-    #[record("OBTF")]
-    pub templates: SubRecordArray<ObjectTemplateCombination>,
-    #[record("STOP")]
-    _stop: Option<()>,
-}
-
-#[derive(Clone, Debug, Record)]
-pub struct ObjectTemplateCombination {
-    #[record("OBTF")]
-    pub editor_only: (),
-    #[record("FULL")]
-    pub full_name: Option<LString>,
-    #[record("OBTS")]
-    pub item: ObjectModTemplateItem,
-}
-
-#[derive(Clone, Debug)]
-pub struct ObjectModTemplateItem {
-    pub level_min: u8,
-    pub level_max: u8,
-    pub parent_combination_index: i16,
-    pub default: bool,
-    pub keywords: Vec<FormId>,
-    pub min_level_for_ranks: u8,
-    pub alt_level_per_tier: u8,
-    pub includes: Vec<ObjectModTemplateItemInclude>,
-}
-
-impl Decode for ObjectModTemplateItem {
-    type Error = Error;
-
-    fn decode<B>(mut buf: B) -> Result<Self, Self::Error>
-    where
-        B: Buf,
-    {
-        let include_count = u32::decode(&mut buf)?;
-        let property_count = u32::decode(&mut buf)?;
-        let level_min = u8::decode(&mut buf)?;
-        u8::decode(&mut buf)?;
-        let level_max = u8::decode(&mut buf)?;
-        u8::decode(&mut buf)?;
-        let parent_combination_index = i16::decode(&mut buf)?;
-        let default = bool::decode(&mut buf)?;
-
-        let keyword_count = u8::decode(&mut buf)?;
-        let keywords = (0..keyword_count)
-            .map(|_| FormId::decode(&mut buf))
-            .collect::<Result<_, _>>()?;
-
-        let min_level_for_ranks = u8::decode(&mut buf)?;
-        let alt_level_per_tier = u8::decode(&mut buf)?;
-
-        let includes = (0..include_count)
-            .map(|_| ObjectModTemplateItemInclude::decode(&mut buf))
-            .collect::<Result<_, _>>()?;
-
-        // TODO: Properties
-
-        Ok(Self {
-            level_min,
-            level_max,
-            parent_combination_index,
-            default,
-            keywords,
-            min_level_for_ranks,
-            alt_level_per_tier,
-            includes,
-        })
-    }
-}
-
-#[derive(Copy, Clone, Debug, BinaryStruct)]
-pub struct ObjectModTemplateItemInclude {
-    pub mod_: FormId,
-    pub attach_point_index: u8,
-    pub optional: bool,
-    pub dont_use_all: bool,
 }
 
 #[derive(Clone, Debug, Record)]
@@ -2363,6 +2282,8 @@ pub struct ObjectTemplates {
     #[record("OBTS")]
     #[record(unordered)]
     pub templates: SubRecordArray<ObjectTemplate>,
+    #[record("STOP")]
+    _stop: Option<()>,
 }
 
 #[derive(Clone, Debug, Record)]

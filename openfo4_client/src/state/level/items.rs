@@ -287,8 +287,7 @@ async fn select_object_attachments(
 ) -> Vec<RecordId> {
     let templates = match data {
         RecordData::Weapon(data) => &data.object_templates.templates,
-        // TODO
-        RecordData::Armor(data) => return Vec::new(),
+        RecordData::Armor(data) => &data.object_templates.templates,
         _ => return Vec::new(),
     };
 
@@ -405,8 +404,6 @@ async fn select_object_attachments(
             _ => todo!(),
         }
     }
-
-    dbg!(&attachments);
 
     attachments
 }
