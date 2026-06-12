@@ -632,7 +632,7 @@ fn find_function_callees(data: &CodegenData, func: &FunctionDef) -> HashSet<Func
                             let class = data.registry.class(class).unwrap();
                             let prop = class.properties.get(&prop_name).unwrap();
 
-                            if let Some(func) = prop.getter {
+                            if let Some(func) = prop.setter {
                                 callees.insert(func);
                             }
                         }
