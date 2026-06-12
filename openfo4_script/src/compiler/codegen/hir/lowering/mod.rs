@@ -316,7 +316,7 @@ pub fn lower_function(
                     }
                 }
                 Instruction::Call(op) => {
-                    let callee = &translator.data.functions[op.callee.0];
+                    let callee = &translator.data.registry.function(op.callee).unwrap();
                     let point = stack_frame
                         .call_points
                         .get(&InstructionPosition {
@@ -337,7 +337,7 @@ pub fn lower_function(
                     );
                 }
                 Instruction::CallIndirect(op) => {
-                    let callee = &translator.data.functions[op.callee.0];
+                    let callee = &translator.data.registry.function(op.callee).unwrap();
                     let point = stack_frame
                         .call_points
                         .get(&InstructionPosition {
@@ -369,11 +369,16 @@ pub fn lower_function(
                 Instruction::StructLoad {
                     st,
                     dst,
-                    struct_name,
+                    struct_id,
                     field_name,
                 } => {
-                    let struct_ = translator.data.structs.get(struct_name).unwrap();
-                    let offset = *struct_.field_offsets.get(field_name).unwrap();
+                    let offset = *translator
+                        .data
+                        .struct_field_offsets
+                        .get(struct_id)
+                        .unwrap()
+                        .get(field_name)
+                        .unwrap();
 
                     let st = translator.load(st);
                     let ty = translator.lowered_ty(dst);
@@ -387,11 +392,16 @@ pub fn lower_function(
                 Instruction::StructStore {
                     st,
                     value,
-                    struct_name,
+                    struct_id,
                     field_name,
                 } => {
-                    let struct_ = translator.data.structs.get(struct_name).unwrap();
-                    let offset = *struct_.field_offsets.get(field_name).unwrap();
+                    let offset = *translator
+                        .data
+                        .struct_field_offsets
+                        .get(struct_id)
+                        .unwrap()
+                        .get(field_name)
+                        .unwrap();
 
                     let st = translator.load(st);
                     let value = translator.load(value);
@@ -404,15 +414,20 @@ pub fn lower_function(
                 Instruction::ClassLoad {
                     object,
                     dst,
-                    class_name,
+                    class_id,
                     field_name,
                 } => {
                     let object = translator.load(object);
-                    let class = translator.data.classes.get(class_name).unwrap();
-                    let offset = class.field_offsets.get(field_name).unwrap();
-                    let ty = translator
+                    let class = translator.data.registry.class(*class_id).unwrap();
+                    let offset = translator
                         .data
-                        .resolve_ty_jit(class.fields.get(field_name).unwrap());
+                        .class_field_offsets
+                        .get(class_id)
+                        .unwrap()
+                        .get(field_name)
+                        .unwrap();
+
+                    let ty = class.fields.get(field_name).unwrap().ty.to_jit();
 
                     // Abort if object == null.
                     translator.assert_true(object);
@@ -423,13 +438,18 @@ pub fn lower_function(
                 Instruction::ClassStore {
                     object,
                     value,
-                    class_name,
+                    class_id,
                     field_name,
                 } => {
                     let object = translator.load(object);
                     let value = translator.load(value);
-                    let class = translator.data.classes.get(class_name).unwrap();
-                    let offset = class.field_offsets.get(field_name).unwrap();
+                    let offset = translator
+                        .data
+                        .class_field_offsets
+                        .get(class_id)
+                        .unwrap()
+                        .get(field_name)
+                        .unwrap();
 
                     // Abort if object == null.
                     translator.assert_true(object);
@@ -455,7 +475,7 @@ pub fn lower_function(
 
                     let is_subclass_block = translator.builder.create_block(&[]);
 
-                    let is_eq = cast::is_class(&mut translator, src, &dst_class);
+                    let is_eq = cast::is_class(&mut translator, src, *dst_class);
                     translator.builder.brif(
                         is_eq,
                         is_subclass_block,
@@ -471,7 +491,7 @@ pub fn lower_function(
                 }
                 Instruction::ClassIsInstanceOf { src, dst, class } => {
                     let src = translator.load(src);
-                    let is_eq = cast::is_class(&mut translator, src, class);
+                    let is_eq = cast::is_class(&mut translator, src, *class);
                     translator.store(dst, is_eq);
                 }
                 Instruction::ArrayCreate {
@@ -561,23 +581,11 @@ pub fn lower_function(
                             &dst,
                             src_ty,
                             dst_ty,
-                            |translator, value| {
-                                cast::extract_var(
-                                    translator,
-                                    value,
-                                    *tag,
-                                    class.as_ref().map(|v| v.as_str()),
-                                )
-                            },
+                            |translator, value| cast::extract_var(translator, value, *tag, *class),
                         );
                     } else {
                         let src = translator.load(src);
-                        let res = cast::extract_var(
-                            &mut translator,
-                            src,
-                            *tag,
-                            class.as_ref().map(|v| v.as_str()),
-                        );
+                        let res = cast::extract_var(&mut translator, src, *tag, *class);
                         translator.store(dst, res);
                     }
                 }
@@ -866,8 +874,13 @@ impl<'a> Translator<'a> {
 
                 let ty = self.lowered_ty(value);
 
-                let class = self.data.classes.get(class).unwrap();
-                let offset = class.field_offsets.get(field).unwrap();
+                let offset = self
+                    .data
+                    .class_field_offsets
+                    .get(class)
+                    .unwrap()
+                    .get(field)
+                    .unwrap();
 
                 self.builder.load(ty, object, *offset as u32)
             }
@@ -902,9 +915,9 @@ impl<'a> Translator<'a> {
                 class,
                 field,
             } => {
-                let class = self.data.classes.get(class).unwrap();
-                let ty = class.fields.get(field).unwrap();
-                self.data.resolve_ty_jit(ty)
+                let class = self.data.registry.class(*class).unwrap();
+                let field = class.fields.get(field).unwrap();
+                field.ty.to_jit()
             }
         }
     }

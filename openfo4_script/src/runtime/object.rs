@@ -1,6 +1,7 @@
 use std::alloc::Layout;
 use std::sync::{Arc, Mutex};
 
+use bytemuck::AnyBitPattern;
 use game_common::string::Lowercase;
 use hashbrown::HashMap;
 
@@ -318,6 +319,14 @@ impl Object {
             let ptr = self.as_ptr().add(offset);
             Some(core::slice::from_raw_parts(ptr, size))
         }
+    }
+
+    pub unsafe fn get_typed<T>(&self, class: &str, name: &str) -> Option<T>
+    where
+        T: AnyBitPattern,
+    {
+        let bytes = unsafe { self.get(class, name)? };
+        Some(*bytemuck::from_bytes(bytes))
     }
 
     /// # Safety

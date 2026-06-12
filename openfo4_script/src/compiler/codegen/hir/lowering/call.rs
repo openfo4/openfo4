@@ -15,6 +15,10 @@ use crate::compiler::codegen::hir::lowering::Translator;
 use crate::compiler::codegen::hir::lowering::stack;
 use crate::compiler::codegen::hir::lowering::stack::StackFrameInfo;
 use crate::compiler::codegen::hir::lowering::stack::SuspensionPoint;
+use crate::compiler::codegen::pex::registry::ClassId;
+use crate::compiler::codegen::pex::registry::FunctionId;
+use crate::compiler::codegen::pex::registry::FunctionSet;
+use crate::compiler::codegen::pex::registry::Type;
 use crate::runtime::RESULT_OK;
 use crate::runtime::RawContext;
 use crate::runtime::RawStack;
@@ -29,8 +33,7 @@ pub fn perform_checked_call(
     suspension_point: &SuspensionPoint,
     stack_frame: &StackFrameInfo,
 ) {
-    let callee_returns_value = !callee.function.return_ty.is_empty()
-        && !callee.function.return_ty.eq_ignore_ascii_case("none");
+    let callee_returns_value = callee.returns != Type::None;
 
     let resume_call_block = suspension_point.block;
 
@@ -66,14 +69,14 @@ pub fn perform_checked_call(
     args.insert(0, translator.ctx_ptr);
 
     let res = if let Some(object) = object {
-        let signature = translate_function_signature(translator.data, &callee.function);
+        let signature = translate_function_signature(&callee);
 
         let object = translator.load(object);
 
         let fn_ptr = load_function_addr(translator, callee, object);
         translator.builder.call_indirect(signature, fn_ptr, &args)
     } else {
-        let func_id = callee.func_id.unwrap();
+        let func_id = *translator.data.functions.get(&callee.id).unwrap();
 
         translator.builder.call(func_id, &args)
     };
@@ -138,15 +141,23 @@ pub fn load_function_addr(
     callee: &FunctionDef,
     object_ptr: JitValue,
 ) -> JitValue {
-    let class = translator.data.classes.get(&callee.class).unwrap();
-    let func_index = class.functions.get_index_of(&callee.name).unwrap();
+    let class = translator.data.registry.class(callee.class).unwrap();
+    let (class, func) = get_declaring_class_of_func(&class.functions, callee.class, callee.id);
+
+    let class = translator.data.registry.class(class).unwrap();
+    let func_index = class
+        .functions
+        .new
+        .iter()
+        .position(|(_, f)| *f == func)
+        .unwrap();
 
     let mut class_index = 0;
-    let mut next_parent = class.parent.as_ref();
+    let mut next_parent = class.parent;
     while let Some(parent) = next_parent {
         class_index += 1;
-        let class = translator.data.classes.get(parent).unwrap();
-        next_parent = class.parent.as_ref();
+        let class = translator.data.registry.class(parent).unwrap();
+        next_parent = class.parent;
     }
 
     let header_ptr = translator.builder.load(JitType::Pointer, object_ptr, 0);
@@ -168,4 +179,31 @@ pub fn load_function_addr(
         .load(JitType::Pointer, vtable_ptr, byte_func_offset as u32);
 
     fn_ptr
+}
+
+fn get_declaring_class_of_func(
+    funcs: &FunctionSet,
+    callee: ClassId,
+    id: FunctionId,
+) -> (ClassId, FunctionId) {
+    // FIXME: Restructure the FunctionSet internals so that we don't need to loop here.
+    for (_, f) in &funcs.new {
+        if *f == id {
+            return (callee, id);
+        }
+    }
+
+    for (_, f) in &funcs.inherited {
+        if f.next_parent_impl == id {
+            return (f.def_class, f.def_function);
+        }
+    }
+
+    for (_, f) in &funcs.overriden {
+        if f.func == id {
+            return (f.def_class, f.def_function);
+        }
+    }
+
+    unreachable!("error resolving function vtable offset")
 }

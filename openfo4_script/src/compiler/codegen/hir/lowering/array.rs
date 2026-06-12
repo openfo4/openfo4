@@ -1,8 +1,8 @@
 use std::mem::offset_of;
 
-use game_common::string::Lowercase;
 use openfo4_jit::{FloatCompareOp, IntCompareOp, Type as JitType, Value as JitValue};
 
+use crate::compiler::codegen::function::type_to_id;
 use crate::compiler::codegen::hir::lowering::malloc::call_malloc;
 use crate::compiler::codegen::hir::lowering::{
     BOOL_TYPE, FLOAT_TYPE, INT_TYPE, PTR_TYPE, Translator, string,
@@ -328,32 +328,31 @@ pub fn array_find(translator: &mut Translator<'_>, op: &ArrayFind) {
 }
 
 pub fn array_find_struct(translator: &mut Translator<'_>, op: &ArrayFindStruct) {
-    let struct_ = translator.data.structs.get(&op.struct_name).unwrap();
-    let member_offset = struct_.field_offsets.get(&op.struct_member).unwrap();
+    let struct_ = translator.data.registry.struct_(op.struct_ty).unwrap();
+    let member_offset = translator
+        .data
+        .struct_field_offsets
+        .get(&op.struct_ty)
+        .unwrap()
+        .get(&op.struct_member)
+        .unwrap();
+    let struct_ty = *translator.data.struct_types.get(&op.struct_ty).unwrap();
 
     let stride = translator
         .data
         .resources
         .types
-        .get(struct_.ty)
+        .get(struct_ty)
         .unwrap()
         .repr
         .size_padded() as i64;
 
-    let member = struct_
-        .s
-        .members
+    let (_, member_ty) = struct_
+        .fields
         .iter()
-        .find(|member| Lowercase::new(&*member.name) == op.struct_member)
+        .find(|(name, _)| **name == op.struct_member)
         .unwrap();
-    let member_ty = Lowercase::new(&*member.ty);
-    let member_ty = *translator
-        .data
-        .resources
-        .string_to_type
-        .lock()
-        .get(&member_ty)
-        .unwrap();
+    let member_ty = type_to_id(translator.data, member_ty);
 
     let member_ty_lowered = translator.lowered_ty_from_id(member_ty);
 

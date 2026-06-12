@@ -287,23 +287,19 @@ fn array_find_int() {
 fn array_find_struct() {
     let mut engine = Engine::new(COMPILER_OPTIONS);
 
-    #[derive(Copy, Clone, Debug)]
-    #[repr(C)]
-    struct MyStruct {
-        x: i32,
-        y: f32,
-    }
-
     fn assert_valid_result(
         caller: Caller<'_, ()>,
         addr: ObjectAddr,
         index: i32,
     ) -> Result<(), Exception> {
-        let array = unsafe { caller.copy_array_of_structs::<MyStruct>(addr) };
+        let array = unsafe { caller.array::<ObjectAddr>(addr) };
+        let object = caller.object_pool().get(array[index as usize]);
 
         assert_eq!(index, 42);
-        assert_eq!(array[index as usize].x, 42);
-        assert_eq!(array[index as usize].y, 42.0);
+        unsafe {
+            assert_eq!(object.get_typed::<i32>("", "x").unwrap(), 42);
+            assert_eq!(object.get_typed::<f32>("", "y").unwrap(), 42.0);
+        }
 
         Ok(())
     }

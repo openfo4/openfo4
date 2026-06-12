@@ -72,8 +72,6 @@ impl Default for Resources {
 pub struct TypeId(usize);
 
 impl TypeId {
-    pub(crate) const DANGLING: Self = Self(usize::MAX);
-
     pub(crate) const fn as_bits(&self) -> usize {
         self.0
     }

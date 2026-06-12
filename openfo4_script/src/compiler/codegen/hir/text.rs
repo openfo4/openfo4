@@ -219,49 +219,53 @@ where
         Instruction::StructLoad {
             st,
             dst,
-            struct_name,
+            struct_id,
             field_name,
         } => {
+            let str = data.registry.struct_(*struct_id).unwrap();
             writeln!(
                 writer,
                 "{} = struct_load {} {} {}",
-                dst, st, struct_name, field_name
+                dst, st, str.debug_name, field_name
             )?;
         }
         Instruction::StructStore {
             st,
             value,
-            struct_name,
+            struct_id,
             field_name,
         } => {
+            let str = data.registry.struct_(*struct_id).unwrap();
             writeln!(
                 writer,
                 "struct_store {} {} {} {}",
-                st, struct_name, field_name, value
+                st, str.debug_name, field_name, value
             )?;
         }
         Instruction::ClassLoad {
             object,
             dst,
-            class_name,
+            class_id,
             field_name,
         } => {
+            let class = data.registry.class(*class_id).unwrap();
             writeln!(
                 writer,
                 "{} = class_load {} {} {}",
-                dst, object, class_name, field_name
+                dst, object, class.debug_name, field_name
             )?;
         }
         Instruction::ClassStore {
             object,
             value,
-            class_name,
+            class_id,
             field_name,
         } => {
+            let class = data.registry.class(*class_id).unwrap();
             writeln!(
                 writer,
                 "class_store {} {} {} {}",
-                object, class_name, field_name, value
+                object, class.debug_name, field_name, value
             )?;
         }
         Instruction::ClassUpcast {
@@ -270,10 +274,12 @@ where
             src_class,
             dst_class,
         } => {
+            let src_class = data.registry.class(*src_class).unwrap();
+            let dst_class = data.registry.class(*dst_class).unwrap();
             writeln!(
                 writer,
                 "{} = class_upcast {} {} {}",
-                dst, src, src_class, dst_class
+                dst, src, src_class.debug_name, dst_class.debug_name
             )?;
         }
         Instruction::ClassDowncast {
@@ -282,14 +288,21 @@ where
             src_class,
             dst_class,
         } => {
+            let src_class = data.registry.class(*src_class).unwrap();
+            let dst_class = data.registry.class(*dst_class).unwrap();
             writeln!(
                 writer,
                 "{} = class_downcast {} {} {}",
-                dst, src, src_class, dst_class
+                dst, src, src_class.debug_name, dst_class.debug_name
             )?;
         }
         Instruction::ClassIsInstanceOf { src, dst, class } => {
-            writeln!(writer, "{} = class_is_instance_of {} {}", dst, src, class)?;
+            let class = data.registry.class(*class).unwrap();
+            writeln!(
+                writer,
+                "{} = class_is_instance_of {} {}",
+                dst, src, class.debug_name
+            )?;
         }
         Instruction::ArrayCreate {
             array,
@@ -340,12 +353,14 @@ where
             )?;
         }
         Instruction::ArrayFindStruct(op) => {
+            let str = data.registry.struct_(op.struct_ty).unwrap();
+
             writeln!(
                 writer,
                 "{} = array_find_struct {} {} {} {} {}",
                 op.write_index,
                 op.array,
-                op.struct_name,
+                str.debug_name,
                 op.struct_member,
                 op.start_index,
                 op.searched_value
@@ -464,7 +479,7 @@ where
                 class,
                 field,
             } => {
-                write!(f, "%{}->{}->{}", object.0, class, field)
+                write!(f, "%{}->{:?}->{}", object.0, class, field)
             }
         }
     }

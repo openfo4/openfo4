@@ -1,24 +1,20 @@
 use std::mem::offset_of;
 
-use game_common::string::Lowercase;
 use openfo4_jit::{IntCompareOp, Value as JitValue};
 
 use crate::compiler::codegen::hir::lowering::malloc::call_malloc;
 use crate::compiler::codegen::hir::lowering::{
     BOOL_TYPE, FLOAT_TYPE, INT_TYPE, PTR_TYPE, Translator,
 };
+use crate::compiler::codegen::pex::registry::ClassId;
 use crate::compiler::resources::TypeRepr;
 use crate::runtime::object::{ObjectTag, VarObject};
 
 /// Returns `src` is of type `class` or a subtype of `class`.
 ///
 /// - `src` must be of type [`PTR_TYPE`] and must point to a class object, or be null.
-pub fn is_class(
-    translator: &mut Translator<'_>,
-    src: JitValue,
-    class: &Lowercase<str>,
-) -> JitValue {
-    let dst_id = translator.data.classes.get(class).unwrap().type_id;
+pub fn is_class(translator: &mut Translator<'_>, src: JitValue, class: ClassId) -> JitValue {
+    let dst_id = translator.data.class_types.get(&class).unwrap();
     let dst_id = translator.builder.iconst(PTR_TYPE, dst_id.as_bits() as i64);
 
     let type_info_ptr = translator.builder.load(PTR_TYPE, src, 0);
@@ -97,7 +93,7 @@ pub fn extract_var(
     translator: &mut Translator<'_>,
     object: JitValue,
     tag: ObjectTag,
-    class: Option<&Lowercase<str>>,
+    class: Option<ClassId>,
 ) -> JitValue {
     let wanted_tag = translator.builder.iconst(PTR_TYPE, tag.to_bits() as i64);
 
@@ -147,7 +143,7 @@ pub fn extract_var(
     };
 
     if let Some(class) = class {
-        let is_class = is_class(translator, data, &class);
+        let is_class = is_class(translator, data, class);
         translator.assert_true(is_class);
     }
 

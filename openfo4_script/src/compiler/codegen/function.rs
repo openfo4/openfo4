@@ -1,17 +1,18 @@
 use game_common::string::Lowercase;
 use hashbrown::HashMap;
 use openfo4_jit::{Compiler, FuncId, Signature, Type as JitType};
-use openfo4_pex::{Function, Instruction, Value};
+use openfo4_pex::{Instruction, Value};
 
 use crate::compiler::NativeFunction;
 use crate::compiler::codegen::hir::{
     self, AddrCompareOp, FunctionBuilder, Literal, Null, ScalarCompareOp, StringCompareOp, Variable,
 };
 use crate::compiler::codegen::pex::cfg::ControlFlowGraph;
+use crate::compiler::codegen::pex::registry::{ClassId, FunctionBody, FunctionId, StateId};
 use crate::compiler::codegen::trace::Span;
 use crate::compiler::codegen::trampoline::generate_guest_to_host_trampoline;
 use crate::compiler::codegen::{
-    ClassDef, CodegenData, Error, FunctionDef, FunctionStateImpl, PscSignature, StateId, Type,
+    ClassDef, CodegenData, Error, FunctionDef, FunctionStateImpl, PscSignature, Type,
     get_parent_class_with_property,
 };
 use crate::compiler::debug::DebugInfo;
@@ -20,9 +21,6 @@ use crate::runtime::object::ObjectTag;
 
 #[derive(Debug)]
 pub struct FunctionResult {
-    pub id: FuncId,
-    pub signature: Signature,
-    pub psc_signature: PscSignature,
     // Keep this as Box instead of inlining directly.
     // In most cases this will be None because debug info
     // collection is disabled.
@@ -32,24 +30,25 @@ pub struct FunctionResult {
 pub fn declare_function(
     data: &CodegenData,
     class: &ClassDef,
-    function: &FunctionDef,
+    func_id: FunctionId,
+    func: &FunctionDef,
     compiler: &mut Compiler,
     use_native_stubs: bool,
 ) -> Result<FuncId, Error> {
-    let signature = translate_function_signature(data, &function.function);
+    let signature = translate_function_signature(&func);
 
-    if function.function.is_native {
+    if func.is_native {
         tracing::debug!(
             "compiling {}.{} (native)",
-            function.class,
-            function.function.name
+            class.debug_name,
+            func.debug_name
         );
 
-        let native = match function.native.as_ref() {
+        let native = match data.native_funcs.get(&func_id) {
             Some(native) => {
                 if signature != native.signature {
                     return Err(Error::NativeFuncSignatureMissmatch {
-                        name: format!("{}.{}", function.class, function.function.name),
+                        name: format!("{}.{}", class.debug_name, func.debug_name),
                         script: signature,
                         host: native.signature.clone(),
                     });
@@ -65,7 +64,7 @@ pub fn declare_function(
             None => {
                 return Err(Error::UndefNativeFunc(format!(
                     "{}.{}",
-                    function.class, function.function.name
+                    class.debug_name, func.debug_name
                 )));
             }
         };
@@ -75,8 +74,8 @@ pub fn declare_function(
             data,
             &signature,
             &native,
-            &function.class_name_debug,
-            &function.function.name,
+            &class.debug_name,
+            &func.debug_name,
         );
         Ok(id)
     } else {
@@ -88,35 +87,18 @@ pub fn declare_function(
 pub fn translate_function_psc_signature(data: &CodegenData, func: &FunctionDef) -> PscSignature {
     let mut sig = PscSignature::default();
 
-    if !func.function.is_static {
-        let class = *data
-            .resources
-            .string_to_type
-            .lock()
-            .get(&func.class)
-            .unwrap();
-        sig.params.push(class);
-    }
-
-    for param in func.function.params.iter() {
-        let ty_name = Lowercase::new(&*param.ty);
-
-        let ty = if ty_name.as_inner().ends_with("[]") {
-            data.resources.primitives.array
-        } else {
-            *data.resources.string_to_type.lock().get(&ty_name).unwrap()
-        };
+    if !func.is_static {
+        let ty = type_to_id(data, &Type::Class(func.class));
         sig.params.push(ty);
     }
 
-    if !func.function.return_ty.eq_ignore_ascii_case("none") {
-        let ty_name = Lowercase::new(&*func.function.return_ty);
+    for ty in &func.params {
+        let ty = type_to_id(data, ty);
+        sig.params.push(ty);
+    }
 
-        let ty = if ty_name.as_inner().ends_with("[]") {
-            data.resources.primitives.array
-        } else {
-            *data.resources.string_to_type.lock().get(&ty_name).unwrap()
-        };
+    if func.returns != Type::None {
+        let ty = type_to_id(data, &func.returns);
         sig.returns.push(ty);
     }
 
@@ -126,67 +108,41 @@ pub fn translate_function_psc_signature(data: &CodegenData, func: &FunctionDef) 
 pub fn translate_function(
     data: &CodegenData,
     class: &ClassDef,
-    function: &FunctionDef,
+    func: &FunctionDef,
     compiler: &mut Compiler,
     enable_debug: bool,
 ) -> FunctionResult {
-    let signature = translate_function_signature(data, &function.function);
+    let func_id = data.functions[&func.id];
 
-    let func_id = function.func_id.unwrap();
-
-    let sig = translate_function_psc_signature(data, function);
     let mut debug = None;
 
-    let func_id = if function.function.is_native {
-        func_id
-    } else {
-        tracing::debug!("compiling {}.{}", function.class, function.function.name);
+    if !func.is_native {
+        tracing::debug!("compiling {}.{}", class.debug_name, func.debug_name);
 
         let mut builder = FunctionBuilder::new();
 
-        translate_function_body(
-            data,
-            class,
-            &function.class_name_debug,
-            &function,
-            &mut builder,
-        );
+        translate_function_body(data, class.id, func, &mut builder);
 
-        let func = builder.clone().finalize();
+        let span = Span::new(data, &class.debug_name, &func.debug_name);
 
-        let span = Span::new(
-            data,
-            &class.class.as_ref().unwrap().name,
-            &function.function.name,
-        );
+        let f = builder.clone().finalize();
 
         let builder = compiler.define_function(func_id);
-        func.lower(data, builder, span);
+        f.lower(data, builder, span);
 
         if enable_debug {
             debug = Some(Box::new(DebugInfo {
-                name: format!(
-                    "{}.{}",
-                    class.class.as_ref().unwrap().name,
-                    function.function.name
-                ),
-                pex: function.function.text(),
-                hir: func.debug_text(data),
+                name: format!("{}.{}", class.debug_name, func.debug_name),
+                pex: "TODO".into(),
+                hir: f.debug_text(data),
             }));
         }
-
-        func_id
-    };
-
-    FunctionResult {
-        id: func_id,
-        signature,
-        psc_signature: sig,
-        debug,
     }
+
+    FunctionResult { debug }
 }
 
-pub fn translate_function_signature(data: &CodegenData, function: &Function) -> Signature {
+pub fn translate_function_signature(func: &FunctionDef) -> Signature {
     let mut params = Vec::new();
     let mut returns = Vec::new();
 
@@ -194,18 +150,16 @@ pub fn translate_function_signature(data: &CodegenData, function: &Function) -> 
     params.push(JitType::Pointer);
 
     // For non-static function (methods) the first argument is the object pointer.
-    if !function.is_static {
+    if !func.is_static {
         params.push(JitType::Pointer);
     }
 
-    for param in &function.params {
-        let ty = data.resolve_ty_jit(Lowercase::new(&*param.ty).as_str());
-        params.push(ty);
+    for ty in &func.params {
+        params.push(ty.to_jit());
     }
 
-    if !function.return_ty.is_empty() && function.return_ty.to_lowercase() != "none" {
-        let ty = data.resolve_ty_jit(Lowercase::new(&*function.return_ty).as_str());
-        returns.push(ty);
+    if func.returns != Type::None {
+        returns.push(func.returns.to_jit());
     }
 
     // VM error value
@@ -216,118 +170,44 @@ pub fn translate_function_signature(data: &CodegenData, function: &Function) -> 
 
 fn translate_function_body(
     data: &CodegenData,
-    class: &ClassDef,
-    class_name: &str,
-    function: &FunctionDef,
+    class: ClassId,
+    func: &FunctionDef,
     builder: &mut FunctionBuilder,
 ) {
-    let self_ty = *data
-        .resources
-        .string_to_type
-        .lock()
-        .get(&Lowercase::new(&*class_name))
-        .unwrap();
-    let self_ptr = (!function.function.is_static).then(|| builder.add_param(self_ty));
+    let self_ty = *data.class_types.get(&class).unwrap();
+    let self_ptr = (!func.is_static).then(|| builder.add_param(self_ty));
 
-    let mut locals = HashMap::with_capacity(function.function.locals.len());
-
-    // Move function parameters into stack slots.
     let mut params = Vec::new();
-    for param in function.function.params.iter() {
-        let ty_name = Lowercase::new(&*param.ty);
-
-        let ty = if ty_name.as_inner().ends_with("[]") {
-            data.resources.primitives.array
-        } else {
-            *data.resources.string_to_type.lock().get(&ty_name).unwrap()
-        };
-        let variable = builder.add_param(ty);
-        params.push((ty_name, variable));
+    for ty in &func.params {
+        let var = builder.add_param(type_to_id(data, ty));
+        params.push((ty, var));
     }
 
-    let mut fields = HashMap::new();
-    for (name, _) in &class.fields {
-        fields.insert(name.as_str(), Field {});
-    }
-
-    let mut return_ty = None;
-    if !function.function.return_ty.eq_ignore_ascii_case("none") {
-        let ty_name = Lowercase::new(&*function.function.return_ty);
-
-        let ty = if ty_name.as_inner().ends_with("[]") {
-            data.resources.primitives.array
-        } else {
-            *data.resources.string_to_type.lock().get(&ty_name).unwrap()
-        };
-
-        return_ty = Some(ty);
+    let return_ty = (func.returns != Type::None).then(|| type_to_id(data, &func.returns));
+    if let Some(ty) = return_ty {
         builder.set_returns(ty);
-    }
-
-    // Create a union over all locals used in all states.
-    // The variables are cleaned up later.
-    for (_, state) in &function.states {
-        let FunctionStateImpl::Body(body) = state else {
-            continue;
-        };
-
-        for (param, (ty_name, variable)) in body.params.iter().zip(&params) {
-            locals.insert(
-                Lowercase::new(&*param.name),
-                Local {
-                    ty_name: ty_name.clone(),
-                    variable: *variable,
-                },
-            );
-        }
-
-        // Create stack slots for local variables.
-        for local in &function.function.locals {
-            let ty_name = Lowercase::new(&*local.ty);
-
-            let ty = if ty_name.as_inner().ends_with("[]") {
-                data.resources.primitives.array
-            } else {
-                *data.resources.string_to_type.lock().get(&ty_name).unwrap()
-            };
-            let variable = builder.declare_variable(ty);
-
-            let src = match data.resolve_ty(&ty_name) {
-                Type::None => hir::Value::Const(Literal::Null),
-                Type::Bool => hir::Value::Const(Literal::Bool(false)),
-                Type::Int => hir::Value::Const(Literal::Int(0)),
-                Type::Float => hir::Value::Const(Literal::Float(0.0)),
-                Type::String => hir::Value::Const(Literal::String("".to_owned())),
-                Type::Class(_) | Type::Struct(_) | Type::Array(_) | Type::Var => {
-                    hir::Value::Const(Literal::Null)
-                }
-            };
-            let dst = hir::Value::Variable(variable);
-            builder.store(src, dst);
-
-            locals.insert(Lowercase::new(&*local.name), Local { ty_name, variable });
-        }
     }
 
     let mut translator = FunctionTranslator {
         data,
         builder,
-        locals,
+        locals: HashMap::new(),
         self_ptr,
-        self_ty: &class.name,
+        self_ty: class,
     };
 
     // No need to load state value if only default state exists.
-    if function.states.len() > 1 {
+    if func.states.len() > 1 {
         let state_value = translator.load(&Value::Ident("::state".to_owned()));
         let state_matches = translator
             .builder
             .declare_variable(translator.data.resources.primitives.bool);
 
-        let ret_dst = match return_ty {
-            Some(ty) => hir::Value::Variable(translator.builder.declare_variable(ty)),
-            None => hir::Value::Const(Literal::Null),
-        };
+        let ret_dst = hir::Value::Variable(
+            translator
+                .builder
+                .declare_variable(type_to_id(translator.data, &func.returns)),
+        );
 
         // States only work on non-static functions, i.e. the object
         // pointer is always available.
@@ -341,7 +221,7 @@ fn translate_function_body(
 
         let mut next_block = translator.builder.create_block();
 
-        for (id, state) in &function.states {
+        for (id, state) in &func.states {
             let StateId::Named(name) = id else {
                 continue;
             };
@@ -362,7 +242,18 @@ fn translate_function_body(
 
             match state {
                 FunctionStateImpl::Body(body) => {
-                    translate_state_body(&mut translator, body);
+                    translator.locals.clear();
+                    for ((ty, var), name) in params.iter().zip(&body.params) {
+                        translator.locals.insert(
+                            name.clone(),
+                            Local {
+                                ty: (*ty).clone(),
+                                var: *var,
+                            },
+                        );
+                    }
+
+                    translate_state_body(&mut translator, func, body);
                 }
                 FunctionStateImpl::Call(id) => {
                     translator.builder.call(
@@ -383,14 +274,28 @@ fn translate_function_body(
         translator.builder.switch_to_block(next_block);
     }
 
-    let state = function.states.get(&StateId::Default).unwrap();
+    let state = func.states.get(&StateId::Default).unwrap();
     match state {
-        FunctionStateImpl::Body(body) => translate_state_body(&mut translator, body),
+        FunctionStateImpl::Body(body) => {
+            translator.locals.clear();
+            for ((ty, var), name) in params.iter().zip(&body.params) {
+                translator.locals.insert(
+                    name.clone(),
+                    Local {
+                        ty: (*ty).clone(),
+                        var: *var,
+                    },
+                );
+            }
+
+            translate_state_body(&mut translator, func, body);
+        }
         FunctionStateImpl::Call(id) => {
-            let ret_dst = match return_ty {
-                Some(ty) => hir::Value::Variable(translator.builder.declare_variable(ty)),
-                None => hir::Value::Const(Literal::Null),
-            };
+            let ret_dst = hir::Value::Variable(
+                translator
+                    .builder
+                    .declare_variable(type_to_id(translator.data, &func.returns)),
+            );
 
             // States only work on non-static functions, i.e. the object
             // pointer is always available.
@@ -413,8 +318,24 @@ fn translate_function_body(
     }
 }
 
-fn translate_state_body(mut translator: &mut FunctionTranslator<'_>, function: &Function) {
-    let cfg = ControlFlowGraph::new(&function);
+fn translate_state_body(
+    mut translator: &mut FunctionTranslator<'_>,
+    func: &FunctionDef,
+    body: &FunctionBody,
+) {
+    let cfg = ControlFlowGraph::new(&body.instructions);
+
+    for (name, ty) in &body.locals {
+        let id = type_to_id(translator.data, ty);
+        let var = translator.builder.declare_variable(id);
+        translator.locals.insert(
+            name.clone(),
+            Local {
+                ty: ty.clone(),
+                var,
+            },
+        );
+    }
 
     let mut blocks = HashMap::new();
     for (block_id, _) in cfg.blocks() {
@@ -505,7 +426,7 @@ fn translate_state_body(mut translator: &mut FunctionTranslator<'_>, function: &
                     let dst = translator.load(&op.dst);
                     translator.builder.fneg(src, dst);
                 }
-                Instruction::Not(op) => match translator.get_type(&op.src) {
+                Instruction::Not(op) => match translator.type_of_value(&op.src) {
                     Type::Bool => {
                         let src = translator.load(&op.src);
                         let dst = translator.load(&op.dst);
@@ -534,7 +455,7 @@ fn translate_state_body(mut translator: &mut FunctionTranslator<'_>, function: &
                 | Instruction::CmpLt(op)
                 | Instruction::CmpLe(op)
                 | Instruction::CmpGt(op)
-                | Instruction::CmpGe(op) => match translator.get_type(&op.lhs) {
+                | Instruction::CmpGe(op) => match translator.type_of_value(&op.lhs) {
                     Type::None => {
                         todo!()
                     }
@@ -637,13 +558,13 @@ fn translate_state_body(mut translator: &mut FunctionTranslator<'_>, function: &
                     current_block_sealed = true;
                 }
                 Instruction::CallMethod(op) => {
-                    let class_name = translator.get_ty_name(&op.object);
+                    let Type::Class(class_id) = translator.type_of_value(&op.object) else {
+                        unreachable!();
+                    };
                     let function_name = Lowercase::new(op.function_name.as_str());
 
-                    let callee = translator
-                        .data
-                        .get_function_id(class_name.as_str(), function_name.as_str())
-                        .unwrap();
+                    let class = translator.data.registry.class(class_id).unwrap();
+                    let callee = class.functions.get(&function_name).unwrap();
 
                     let object = translator.load(&op.object);
                     let dst = translator.load(&op.return_assignment);
@@ -659,15 +580,10 @@ fn translate_state_body(mut translator: &mut FunctionTranslator<'_>, function: &
                         .call_indirect(callee, Some(object), &args, dst);
                 }
                 Instruction::CallParent(op) => {
-                    let class_name = translator.get_ty_name(&Value::Ident("self".to_owned()));
-                    let class = translator.data.classes.get(class_name.as_str()).unwrap();
-                    let parent = class.parent.as_ref().unwrap();
-                    let function_name = Lowercase::new(op.function.as_str());
+                    let func_name = Lowercase::new(op.function.as_str());
 
-                    let callee = translator
-                        .data
-                        .get_function_id(parent.as_str(), function_name.as_str())
-                        .unwrap();
+                    let class = translator.data.registry.class(translator.self_ty).unwrap();
+                    let callee = class.functions.get_parent(&func_name).unwrap();
 
                     let object = translator.self_ptr.unwrap();
                     let dst = translator.load(&op.return_assignment);
@@ -684,7 +600,7 @@ fn translate_state_body(mut translator: &mut FunctionTranslator<'_>, function: &
                 }
                 Instruction::CallStatic(op) => {
                     let class_name = Lowercase::new(op.class.as_str());
-                    let function_name = Lowercase::new(op.function.as_str());
+                    let func_name = Lowercase::new(op.function.as_str());
 
                     let args = op
                         .args
@@ -693,23 +609,27 @@ fn translate_state_body(mut translator: &mut FunctionTranslator<'_>, function: &
                         .collect::<Vec<_>>();
                     let dst = translator.load(&op.return_assignment);
 
-                    let callee = translator
-                        .data
-                        .get_function_id(&class_name, &function_name)
-                        .unwrap();
+                    let class = translator.data.registry.class_by_name(&class_name).unwrap();
+                    let callee = class.functions.get(&func_name).unwrap();
 
                     translator.builder.call(callee, None, &args, dst);
                 }
                 Instruction::PropertyGet(op) => {
-                    let class_name = translator.get_ty_name(&op.value);
+                    let Type::Class(class_id) = translator.type_of_value(&op.value) else {
+                        unreachable!();
+                    };
                     let prop_name = Lowercase::new(op.property.as_str());
+
+                    let class_id =
+                        get_parent_class_with_property(translator.data, class_id, &prop_name)
+                            .unwrap();
+
+                    let class = translator.data.registry.class(class_id).unwrap();
+                    let prop = class.properties.get(&prop_name).unwrap();
 
                     // If a getter exists we must call it, otherwise we can load directly
                     // from the variable.
-                    if let Some(id) = translator
-                        .data
-                        .get_property_getter_id(&class_name, &prop_name)
-                    {
+                    if let Some(id) = prop.getter {
                         let object = translator.load(&op.value);
                         let dst = translator.load(&op.return_assignment);
 
@@ -719,36 +639,31 @@ fn translate_state_body(mut translator: &mut FunctionTranslator<'_>, function: &
                             &[object.map(|Null| Literal::Null)],
                             dst,
                         );
-                    } else {
-                        let class_name = get_parent_class_with_property(
-                            &translator.data.classes,
-                            &class_name,
-                            &prop_name,
-                        )
-                        .unwrap();
-
-                        let class = translator.data.classes.get(class_name).unwrap();
-                        let prop = class.properties.get(&prop_name).unwrap();
-                        let var_name = prop.variable.as_ref().unwrap();
-
+                    } else if let Some(field) = &prop.field {
                         let object = translator.load(&op.value);
                         let dst = translator.load(&op.return_assignment);
 
-                        translator
-                            .builder
-                            .class_load(object, dst, class_name, &var_name);
+                        translator.builder.class_load(object, dst, class.id, &field);
+                    } else {
+                        unreachable!();
                     }
                 }
                 Instruction::PropertySet(op) => {
-                    let class_name = translator.get_ty_name(&op.object);
+                    let Type::Class(class_id) = translator.type_of_value(&op.object) else {
+                        unreachable!();
+                    };
                     let prop_name = Lowercase::new(op.property.as_str());
+
+                    let class_id =
+                        get_parent_class_with_property(translator.data, class_id, &prop_name)
+                            .unwrap();
+
+                    let class = translator.data.registry.class(class_id).unwrap();
+                    let prop = class.properties.get(&prop_name).unwrap();
 
                     // If a setter exists we must call it, otherwise we can store directly
                     // to the variable.
-                    if let Some(id) = translator
-                        .data
-                        .get_property_setter_id(&class_name, &prop_name)
-                    {
+                    if let Some(id) = prop.setter {
                         let object = translator.load(&op.object);
                         let value = translator.load(&op.value);
 
@@ -758,24 +673,13 @@ fn translate_state_body(mut translator: &mut FunctionTranslator<'_>, function: &
                             &[object.map(|Null| Literal::Null), value],
                             hir::Value::Const(Literal::Null),
                         );
-                    } else {
-                        let class_name = get_parent_class_with_property(
-                            &translator.data.classes,
-                            &class_name,
-                            &prop_name,
-                        )
-                        .unwrap();
-
-                        let class = translator.data.classes.get(class_name).unwrap();
-                        let prop = class.properties.get(&prop_name).unwrap();
-                        let var_name = prop.variable.as_ref().unwrap();
-
+                    } else if let Some(field) = &prop.field {
                         let object = translator.load(&op.object);
                         let value = translator.load(&op.value);
 
                         translator
                             .builder
-                            .class_store(object, value, class_name, &var_name);
+                            .class_store(object, value, class.id, &field);
                     }
                 }
                 Instruction::Return(value) => {
@@ -791,16 +695,16 @@ fn translate_state_body(mut translator: &mut FunctionTranslator<'_>, function: &
                         unreachable!();
                     };
                     let class = Lowercase::new(class.as_str());
+                    let class = translator.data.registry.class_by_name(&class).unwrap();
 
                     let src = translator.load(&op.object);
                     let dst = translator.load(&op.return_assignment);
-                    translator.builder.class_is_instance_of(src, dst, class);
+                    translator.builder.class_is_instance_of(src, dst, class.id);
                 }
                 Instruction::StructCreate(op) => {
                     let dst = translator.load(&op.return_assignment);
 
-                    let ty = translator.get_type(&op.return_assignment);
-                    let ty = translator.get_type_id(&ty);
+                    let ty = translator.ty_of_val(&op.return_assignment);
 
                     translator.builder.struct_create(dst, ty);
                 }
@@ -808,23 +712,25 @@ fn translate_state_body(mut translator: &mut FunctionTranslator<'_>, function: &
                     let Value::Ident(member) = &op.member_name else {
                         unreachable!()
                     };
+                    let Type::Struct(id) = translator.type_of_value(&op.struct_value) else {
+                        unreachable!();
+                    };
 
-                    let struct_name = translator.get_ty_name(&op.struct_value);
                     let field_name = Lowercase::new(&**member);
 
                     let object = translator.load(&op.struct_value);
                     let dst = translator.load(&op.return_assignment);
 
-                    translator
-                        .builder
-                        .struct_load(object, dst, struct_name, field_name);
+                    translator.builder.struct_load(object, dst, id, field_name);
                 }
                 Instruction::StructSet(op) => {
                     let Value::Ident(member) = &op.member_name else {
                         unreachable!()
                     };
+                    let Type::Struct(id) = translator.type_of_value(&op.struct_value) else {
+                        unreachable!();
+                    };
 
-                    let struct_name = translator.get_ty_name(&op.struct_value);
                     let field_name = Lowercase::new(&**member);
 
                     let object = translator.load(&op.struct_value);
@@ -832,7 +738,7 @@ fn translate_state_body(mut translator: &mut FunctionTranslator<'_>, function: &
 
                     translator
                         .builder
-                        .struct_store(object, value, struct_name, field_name);
+                        .struct_store(object, value, id, field_name);
                 }
                 Instruction::ArrayLength(op) => {
                     let array = translator.load(&op.src);
@@ -852,21 +758,20 @@ fn translate_state_body(mut translator: &mut FunctionTranslator<'_>, function: &
                     translator.builder.array_set(array, index, value);
                 }
                 Instruction::ArrayCreate(op) => {
-                    let Type::Array(elem_ty) = translator.get_type(&op.dst) else {
+                    let Type::Array(elem_ty) = translator.type_of_value(&op.dst) else {
                         unreachable!();
                     };
-
-                    let elem_ty = translator.get_type_id(&elem_ty);
+                    let elem_ty = type_to_id(translator.data, &elem_ty);
 
                     let len = translator.load(&op.src);
                     let dst = translator.load(&op.dst);
                     translator.builder.array_create(len, dst, elem_ty);
                 }
                 Instruction::ArrayAdd(op) => {
-                    let Type::Array(elem_ty) = translator.get_type(&op.array) else {
+                    let Type::Array(elem_ty) = translator.type_of_value(&op.array) else {
                         unreachable!();
                     };
-                    let elem_ty = translator.get_type_id(&elem_ty);
+                    let elem_ty = type_to_id(translator.data, &elem_ty);
 
                     let array = translator.load(&op.array);
                     let value = translator.load(&op.value);
@@ -874,10 +779,10 @@ fn translate_state_body(mut translator: &mut FunctionTranslator<'_>, function: &
                     translator.builder.array_add(array, value, count, elem_ty);
                 }
                 Instruction::ArrayInsert(op) => {
-                    let Type::Array(elem_ty) = translator.get_type(&op.array) else {
+                    let Type::Array(elem_ty) = translator.type_of_value(&op.array) else {
                         unreachable!();
                     };
-                    let elem_ty = translator.get_type_id(&elem_ty);
+                    let elem_ty = type_to_id(translator.data, &elem_ty);
 
                     let array = translator.load(&op.array);
                     let value = translator.load(&op.value);
@@ -887,10 +792,10 @@ fn translate_state_body(mut translator: &mut FunctionTranslator<'_>, function: &
                         .array_insert(array, value, index, elem_ty);
                 }
                 Instruction::ArrayRemove(op) => {
-                    let Type::Array(elem_ty) = translator.get_type(&op.array_value) else {
+                    let Type::Array(elem_ty) = translator.type_of_value(&op.array_value) else {
                         unreachable!();
                     };
-                    let elem_ty = translator.get_type_id(&elem_ty);
+                    let elem_ty = type_to_id(translator.data, &elem_ty);
 
                     let array = translator.load(&op.array_value);
                     let index = translator.load(&op.index);
@@ -907,11 +812,10 @@ fn translate_state_body(mut translator: &mut FunctionTranslator<'_>, function: &
                     todo!();
                 }
                 Instruction::ArrayFind(op) | Instruction::ArrayRFind(op) => {
-                    let Type::Array(elem_ty) = translator.get_type(&op.array_value) else {
+                    let Type::Array(elem_ty) = translator.type_of_value(&op.array_value) else {
                         unreachable!();
                     };
-
-                    let elem_ty = translator.get_type_id(&elem_ty);
+                    let elem_ty = type_to_id(translator.data, &elem_ty);
 
                     let scan_backwards = matches!(instruction, Instruction::ArrayRFind(_));
 
@@ -932,7 +836,7 @@ fn translate_state_body(mut translator: &mut FunctionTranslator<'_>, function: &
                 Instruction::ArrayFindStruct(op) | Instruction::ArrayRFindStruct(op) => {
                     let scan_backwards = matches!(instruction, Instruction::ArrayRFind(_));
 
-                    let array_ty = translator.get_type(&op.array_value);
+                    let array_ty = translator.type_of_value(&op.array_value);
                     let Type::Array(struct_name) = array_ty else {
                         unreachable!();
                     };
@@ -972,8 +876,7 @@ fn translate_state_body(mut translator: &mut FunctionTranslator<'_>, function: &
         // Sometimes the final return instruction is missing and we must insert it.
         // We must return the default value in this case.
         if !matches!(instructions.last(), Some(Instruction::Return(_))) && !current_block_sealed {
-            let return_ty = Lowercase::new(&*function.return_ty);
-            let value = match translator.data.resolve_ty(&return_ty) {
+            let value = match func.returns {
                 Type::None => Literal::Null,
                 Type::Bool => Literal::Bool(false),
                 Type::Int => Literal::Int(0),
@@ -1054,7 +957,7 @@ pub struct FunctionTranslator<'a> {
     pub builder: &'a mut FunctionBuilder,
     locals: HashMap<Lowercase<String>, Local>,
     self_ptr: Option<Variable>,
-    self_ty: &'a Lowercase<str>,
+    self_ty: ClassId,
 }
 
 impl<'a> FunctionTranslator<'a> {
@@ -1080,23 +983,23 @@ impl<'a> FunctionTranslator<'a> {
         }
 
         if let Some(local) = self.locals.get(name) {
-            return hir::Value::Variable(local.variable);
+            return hir::Value::Variable(local.var);
         }
 
-        let mut class = self.data.get_class(&self.self_ty).unwrap();
+        let mut class_id = self.self_ty;
         loop {
-            if let Some(_) = class.fields.get(name) {
-                let self_ptr = self.self_ptr.unwrap();
+            let class = self.data.registry.class(class_id).unwrap();
 
+            if class.fields.contains_key(name) {
                 return hir::Value::ClassVar {
-                    object: self_ptr,
-                    class: class.name.clone(),
+                    object: self.self_ptr.unwrap(),
+                    class: class_id,
                     field: name.to_owned(),
                 };
             }
 
-            if let Some(parent) = &class.parent {
-                class = self.data.get_class(&parent).unwrap();
+            if let Some(parent) = class.parent {
+                class_id = parent;
             } else {
                 break;
             }
@@ -1105,80 +1008,61 @@ impl<'a> FunctionTranslator<'a> {
         panic!("undefined variable {}", name);
     }
 
-    pub fn get_type(&self, value: &Value) -> Type {
-        self.data.resolve_ty(&self.get_ty_name(value))
-    }
-
-    pub fn get_type_id(&self, ty: &Type) -> TypeId {
-        match ty {
-            Type::None => self.data.resources.primitives.none,
-            Type::Bool => self.data.resources.primitives.bool,
-            Type::Int => self.data.resources.primitives.int,
-            Type::Float => self.data.resources.primitives.float,
-            Type::String => self.data.resources.primitives.string,
-            Type::Struct(name) => {
-                let s = self.data.structs.get(name).unwrap();
-                s.ty
-            }
-            Type::Class(name) => {
-                let c = self.data.classes.get(name).unwrap();
-                c.type_id
-            }
-            Type::Array(_) => self.data.resources.primitives.array,
-            Type::Var => self.data.resources.primitives.var,
-        }
-    }
-
-    pub fn get_ty_name(&self, value: &Value) -> Lowercase<String> {
+    fn type_of_value(&self, value: &Value) -> Type {
         match value {
-            Value::Null => Lowercase::new("none"),
-            Value::Bool(_) => Lowercase::new("bool"),
-            Value::Int(_) => Lowercase::new("int"),
-            Value::Float(_) => Lowercase::new("float"),
-            Value::String(_) => Lowercase::new("string"),
+            Value::Null => Type::None,
+            Value::Bool(_) => Type::Bool,
+            Value::Int(_) => Type::Int,
+            Value::Float(_) => Type::Float,
+            Value::String(_) => Type::String,
             Value::Ident(name) => {
-                let name = Lowercase::new(name.as_str());
+                let name = Lowercase::new(&**name);
 
                 if name.as_inner() == "self" {
-                    return self.self_ty.to_owned();
-                };
+                    Type::Class(self.self_ty)
+                } else if let Some(local) = &self.locals.get(&name) {
+                    local.ty.clone()
+                } else {
+                    let mut class_id = self.self_ty;
+                    loop {
+                        let class = self.data.registry.class(class_id).unwrap();
 
-                if let Some(local) = self.locals.get(&name) {
-                    return local.ty_name.clone();
-                }
+                        if let Some(field) = class.fields.get(&name) {
+                            return field.ty.clone();
+                        }
 
-                let mut class = self.data.get_class(&self.self_ty).unwrap();
-                loop {
-                    if let Some(ty) = class.fields.get(&name) {
-                        return ty.clone();
+                        if let Some(parent) = class.parent {
+                            class_id = parent;
+                        } else {
+                            break;
+                        }
                     }
 
-                    if let Some(parent) = &class.parent {
-                        class = self.data.get_class(&parent).unwrap();
-                    } else {
-                        break;
-                    }
+                    panic!("undefined variable {}", name);
                 }
-
-                panic!("undefiend variable {}", name);
             }
         }
+    }
+
+    fn ty(&self, ty: &Type) -> TypeId {
+        type_to_id(self.data, ty)
+    }
+
+    fn ty_of_val(&self, value: &Value) -> TypeId {
+        self.ty(&self.type_of_value(value))
     }
 }
 
 #[derive(Clone, Debug)]
-struct Field {}
-
-#[derive(Clone, Debug)]
 struct Local {
-    ty_name: Lowercase<String>,
-    variable: Variable,
+    ty: Type,
+    var: Variable,
 }
 
 /// Performs a runtime cast of `src` to `dst`.
 fn perform_cast(translator: &mut FunctionTranslator<'_>, src_val: &Value, dst_val: &Value) {
-    let src_ty = translator.get_type(&src_val);
-    let dst_ty = translator.get_type(&dst_val);
+    let src_ty = translator.type_of_value(&src_val);
+    let dst_ty = translator.type_of_value(&dst_val);
 
     let src = translator.load(src_val);
     let dst = translator.load(dst_val);
@@ -1258,22 +1142,19 @@ fn perform_cast_inner(
             let dst = dst_val.map(|v| v.to_null().unwrap());
 
             // Try upcasting.
-            let mut class_name = src_class;
+            let mut class_id = *src_class;
             loop {
-                if class_name == dst_class {
-                    translator.builder.class_upcast(
-                        src,
-                        dst,
-                        src_class.to_owned(),
-                        dst_class.to_owned(),
-                    );
+                if class_id == *dst_class {
+                    translator
+                        .builder
+                        .class_upcast(src, dst, *src_class, *dst_class);
 
                     return;
                 }
 
-                let class = translator.data.classes.get(class_name).unwrap();
+                let class = translator.data.registry.class(class_id).unwrap();
                 if let Some(parent) = &class.parent {
-                    class_name = parent;
+                    class_id = *parent;
                 } else {
                     break;
                 }
@@ -1282,9 +1163,9 @@ fn perform_cast_inner(
             // Try downcasting.
             // Casting unrelated class will never be successful.
             // We validate that `src_class` is a subtype of `dst_class` before checking.
-            let mut class_name = dst_class;
+            let mut class_id = *dst_class;
             loop {
-                if class_name == src_class {
+                if class_id == *src_class {
                     translator.builder.class_downcast(
                         src,
                         dst,
@@ -1294,9 +1175,9 @@ fn perform_cast_inner(
                     return;
                 }
 
-                let class = translator.data.classes.get(class_name).unwrap();
+                let class = translator.data.registry.class(class_id).unwrap();
                 if let Some(parent) = &class.parent {
-                    class_name = parent;
+                    class_id = *parent;
                 } else {
                     break;
                 }
@@ -1364,7 +1245,7 @@ fn perform_cast_inner(
                     );
                 }
                 Type::Struct(name) => {
-                    let id = translator.data.structs.get(name).unwrap().ty;
+                    let id = *translator.data.struct_types.get(name).unwrap();
                     translator.builder.extract_var(
                         src,
                         dst,
@@ -1391,7 +1272,7 @@ fn perform_cast_inner(
                 Type::String => ObjectTag::TypeId(translator.data.resources.primitives.string),
                 Type::Class(_) => ObjectTag::Class,
                 Type::Struct(name) => {
-                    let id = translator.data.structs.get(name).unwrap().ty;
+                    let id = *translator.data.struct_types.get(name).unwrap();
                     ObjectTag::TypeId(id)
                 }
                 Type::Var => unreachable!(),
@@ -1434,5 +1315,19 @@ fn perform_cast_inner(
             todo!();
         }
         (src_ty, dst_ty) => todo!("{:?} {:?}", src_ty, dst_ty),
+    }
+}
+
+pub fn type_to_id(data: &CodegenData, ty: &Type) -> TypeId {
+    match ty {
+        Type::None => data.resources.primitives.none,
+        Type::Bool => data.resources.primitives.bool,
+        Type::Int => data.resources.primitives.int,
+        Type::Float => data.resources.primitives.float,
+        Type::String => data.resources.primitives.string,
+        Type::Var => data.resources.primitives.var,
+        Type::Class(id) => data.class_types[id],
+        Type::Struct(id) => data.struct_types[id],
+        Type::Array(_) => data.resources.primitives.array,
     }
 }

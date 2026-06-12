@@ -6,6 +6,7 @@ mod text;
 use game_common::string::Lowercase;
 use game_common::utils::vec_ext::VecExt;
 
+use crate::compiler::codegen::pex::registry::{ClassId, StructId};
 use crate::compiler::codegen::trace::Span;
 use crate::compiler::codegen::{CodegenData, FunctionId};
 use crate::compiler::debug::HirDebugInfo;
@@ -83,43 +84,43 @@ enum Instruction {
     StructLoad {
         st: Value<Null>,
         dst: Value<Literal>,
-        struct_name: Lowercase<String>,
+        struct_id: StructId,
         field_name: Lowercase<String>,
     },
     StructStore {
         st: Value<Null>,
         value: Value<Literal>,
-        struct_name: Lowercase<String>,
+        struct_id: StructId,
         field_name: Lowercase<String>,
     },
     ClassLoad {
         object: Value<Null>,
         dst: Value<Literal>,
-        class_name: Lowercase<String>,
+        class_id: ClassId,
         field_name: Lowercase<String>,
     },
     ClassStore {
         object: Value<Null>,
         value: Value<Literal>,
-        class_name: Lowercase<String>,
+        class_id: ClassId,
         field_name: Lowercase<String>,
     },
     ClassUpcast {
         src: Value<Null>,
         dst: Value<Null>,
-        src_class: Lowercase<String>,
-        dst_class: Lowercase<String>,
+        src_class: ClassId,
+        dst_class: ClassId,
     },
     ClassDowncast {
         src: Value<Null>,
         dst: Value<Null>,
-        src_class: Lowercase<String>,
-        dst_class: Lowercase<String>,
+        src_class: ClassId,
+        dst_class: ClassId,
     },
     ClassIsInstanceOf {
         src: Value<Null>,
         dst: Value<bool>,
-        class: Lowercase<String>,
+        class: ClassId,
     },
     ArrayLength {
         array: Value<Null>,
@@ -188,7 +189,7 @@ enum Instruction {
         src: Value<Null>,
         dst: Value<Literal>,
         tag: ObjectTag,
-        class: Option<Lowercase<String>>,
+        class: Option<ClassId>,
         cast_array: bool,
     },
     BoolToString {
@@ -280,7 +281,7 @@ struct ArrayFindStruct {
     searched_value: Value<Literal>,
     scan_backwards: bool,
     write_index: Value<i32>,
-    struct_name: Lowercase<String>,
+    struct_ty: StructId,
     struct_member: Lowercase<String>,
 }
 
@@ -290,7 +291,7 @@ pub enum Value<T> {
     Variable(Variable),
     ClassVar {
         object: Variable,
-        class: Lowercase<String>,
+        class: ClassId,
         field: Lowercase<String>,
     },
 }
@@ -605,13 +606,13 @@ impl FunctionBuilder {
         &mut self,
         st: Value<Null>,
         dst: Value<Literal>,
-        struct_name: Lowercase<String>,
+        struct_id: StructId,
         field_name: Lowercase<String>,
     ) {
         self.instructions.push(Instruction::StructLoad {
             st,
             dst,
-            struct_name,
+            struct_id,
             field_name,
         });
     }
@@ -620,13 +621,13 @@ impl FunctionBuilder {
         &mut self,
         st: Value<Null>,
         value: Value<Literal>,
-        struct_name: Lowercase<String>,
+        struct_id: StructId,
         field_name: Lowercase<String>,
     ) {
         self.instructions.push(Instruction::StructStore {
             st,
             value,
-            struct_name,
+            struct_id,
             field_name,
         });
     }
@@ -713,13 +714,13 @@ impl FunctionBuilder {
         &mut self,
         object: Value<Null>,
         dst: Value<Literal>,
-        class: &Lowercase<str>,
+        class: ClassId,
         field: &Lowercase<str>,
     ) {
         self.instructions.push(Instruction::ClassLoad {
             object,
             dst,
-            class_name: class.to_owned(),
+            class_id: class,
             field_name: field.to_owned(),
         });
     }
@@ -728,13 +729,13 @@ impl FunctionBuilder {
         &mut self,
         object: Value<Null>,
         value: Value<Literal>,
-        class: &Lowercase<str>,
+        class: ClassId,
         field: &Lowercase<str>,
     ) {
         self.instructions.push(Instruction::ClassStore {
             object,
             value,
-            class_name: class.to_owned(),
+            class_id: class,
             field_name: field.to_owned(),
         });
     }
@@ -747,8 +748,8 @@ impl FunctionBuilder {
         &mut self,
         src: Value<Null>,
         dst: Value<Null>,
-        src_class: Lowercase<String>,
-        dst_class: Lowercase<String>,
+        src_class: ClassId,
+        dst_class: ClassId,
     ) {
         self.instructions.push(Instruction::ClassUpcast {
             src,
@@ -763,8 +764,8 @@ impl FunctionBuilder {
         &mut self,
         src: Value<Null>,
         dst: Value<Null>,
-        src_class: Lowercase<String>,
-        dst_class: Lowercase<String>,
+        src_class: ClassId,
+        dst_class: ClassId,
     ) {
         self.instructions.push(Instruction::ClassDowncast {
             src,
@@ -774,12 +775,7 @@ impl FunctionBuilder {
         });
     }
 
-    pub fn class_is_instance_of(
-        &mut self,
-        src: Value<Null>,
-        dst: Value<bool>,
-        class: Lowercase<String>,
-    ) {
+    pub fn class_is_instance_of(&mut self, src: Value<Null>, dst: Value<bool>, class: ClassId) {
         self.instructions
             .push(Instruction::ClassIsInstanceOf { src, dst, class });
     }
@@ -887,7 +883,7 @@ impl FunctionBuilder {
         searched_value: Value<Literal>,
         write_index: Value<i32>,
         scan_backwards: bool,
-        struct_name: Lowercase<String>,
+        struct_ty: StructId,
         struct_member: Lowercase<String>,
     ) {
         self.instructions
@@ -897,7 +893,7 @@ impl FunctionBuilder {
                 searched_value,
                 scan_backwards,
                 write_index,
-                struct_name,
+                struct_ty,
                 struct_member,
             }));
     }
@@ -927,7 +923,7 @@ impl FunctionBuilder {
         src: Value<Null>,
         dst: Value<Literal>,
         tag: ObjectTag,
-        class: Option<Lowercase<String>>,
+        class: Option<ClassId>,
         cast_array: bool,
     ) {
         self.instructions.push(Instruction::ExtractVar {

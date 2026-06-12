@@ -118,3 +118,44 @@ fn method_resolution_internal() {
     let h = h.typed::<ObjectAddr, i32>().unwrap();
     assert_eq!(h.call(&mut ctx, addr).unwrap(), 4);
 }
+
+#[test]
+fn method_resolution_call_parent() {
+    let mut engine = Engine::new(COMPILER_OPTIONS);
+
+    let module = assemble(
+        r#"
+        class A:
+
+        function F() -> int:
+        return 1
+
+        class B:
+        parent: A
+
+        function F() -> int:
+        return 2
+
+        class C:
+        parent: B
+
+        function F() -> int:
+        local res: int
+        res = call_parent F
+        return res
+        "#,
+    );
+    engine.register(&module);
+
+    let instance = engine.compile("C", &Options::default());
+    let type_id = engine.get_type("C").unwrap();
+
+    let addr = engine.object_pool().insert(type_id).finalize().addr();
+
+    let mut stack = engine.create_stack();
+    let mut ctx = Context::new(&engine, &mut stack, ());
+
+    let f = instance.get_func("F").unwrap();
+    let f = f.typed::<ObjectAddr, i32>().unwrap();
+    assert_eq!(f.call(&mut ctx, addr).unwrap(), 2);
+}
