@@ -465,7 +465,14 @@ fn parse_value(cursor: &mut Cursor<'_>) -> Value {
     match cursor.pop() {
         Some(Token::Ident("null")) => Value::Null,
         Some(Token::StrLit(s)) => Value::String(s.to_string()),
-        Some(Token::Ident(s)) => Value::Ident(s.to_string()),
+        Some(Token::Ident(s)) => {
+            let mut s = s.to_string();
+            if s.starts_with("__") {
+                s = s.replacen("__", "::", 1);
+            }
+
+            Value::Ident(s)
+        }
         Some(Token::BoolLit(v)) => Value::Bool(*v),
         Some(Token::IntLit(v)) => Value::Int(*v),
         Some(Token::FloatLit(v)) => Value::Float(*v),

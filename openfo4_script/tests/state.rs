@@ -156,3 +156,19 @@ fn state_override_order() {
     // Calls C.MyFunction().
     assert_eq!(func.call(&mut ctx, addr).unwrap(), 5);
 }
+
+#[test]
+fn access_undeclared_state_builtin() {
+    let mut engine = Engine::new(COMPILER_OPTIONS);
+
+    let module = assemble(
+        r#"
+        class A:
+
+        function F() -> string:
+        return __state
+        "#,
+    );
+    engine.register(&module);
+    engine.compile("A", &Options::default());
+}

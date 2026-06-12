@@ -125,13 +125,8 @@ impl Registry {
             }
         }
 
-        let mut uses_non_default_state = false;
         let mut funcs_by_state = HashMap::<_, Vec<_>>::new();
         for state in class.states {
-            if !state.name.is_empty() {
-                uses_non_default_state |= true;
-            }
-
             for func in state.functions {
                 funcs_by_state
                     .entry(func.name.clone())
@@ -180,39 +175,23 @@ impl Registry {
             }
         }
 
-        // If the class uses states we must ensure that the builtin ::state
-        // variable exists.
-        if uses_non_default_state {
-            let mut has_state_field = fields.contains_key(Lowercase::from_static("::static"));
-
-            let mut parent = parent;
-            while let Some(parent_id) = parent {
-                let class = &self.classes[parent_id.0].as_ref().unwrap();
-                has_state_field = class.fields.contains_key(Lowercase::from_static("::state"));
-                if has_state_field {
-                    break;
-                }
-
-                parent = class.parent;
-            }
-
-            if !has_state_field {
-                fields.insert(
-                    Lowercase::new("::state"),
-                    Field {
-                        ty: Type::String,
-                        value: Value::String(class.default_state),
-                    },
-                );
-                properties.insert(
-                    Lowercase::new("::state"),
-                    Property {
-                        field: Some(Lowercase::new("::state")),
-                        getter: None,
-                        setter: None,
-                    },
-                );
-            }
+        // The root class always has the builtin ::state field.
+        if parent.is_none() {
+            fields.insert(
+                Lowercase::new("::state"),
+                Field {
+                    ty: Type::String,
+                    value: Value::String(class.default_state),
+                },
+            );
+            properties.insert(
+                Lowercase::new("::state"),
+                Property {
+                    field: Some(Lowercase::new("::state")),
+                    getter: None,
+                    setter: None,
+                },
+            );
         }
 
         self.classes[id.0] = Some(ClassDef {
