@@ -34,7 +34,7 @@ fn default_class_values() {
     builder.set("MyClass", "d", 50);
 
     let object = builder.finalize();
-    let object = engine.object_pool().get(object);
+    let object = engine.object_pool().get(object).unwrap();
 
     unsafe {
         assert_eq!(

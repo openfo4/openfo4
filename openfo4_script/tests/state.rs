@@ -47,7 +47,7 @@ fn state() {
     let func = func.typed::<ObjectAddr, i32>().unwrap();
     assert_eq!(func.call(&mut ctx, addr).unwrap(), 1);
 
-    let mut object = engine.object_pool().get(addr);
+    let mut object = engine.object_pool().get(addr).unwrap();
     unsafe {
         let b = engine.object_pool().insert_string("b");
         object.set("MyClass", "::state", b.addr());
@@ -130,7 +130,7 @@ fn state_override_order() {
     let z = engine.object_pool().insert_string("Z").addr();
 
     unsafe {
-        let mut obj = engine.object_pool().get(addr);
+        let mut obj = engine.object_pool().get(addr).unwrap();
         obj.set("B", "::state", x);
     }
 
@@ -139,7 +139,7 @@ fn state_override_order() {
     assert_eq!(func.call(&mut ctx, addr).unwrap(), 4);
 
     unsafe {
-        let mut obj = engine.object_pool().get(addr);
+        let mut obj = engine.object_pool().get(addr).unwrap();
         obj.set("B", "::state", y);
     }
 
@@ -148,7 +148,7 @@ fn state_override_order() {
     assert_eq!(func.call(&mut ctx, addr).unwrap(), 3);
 
     unsafe {
-        let mut obj = engine.object_pool().get(addr);
+        let mut obj = engine.object_pool().get(addr).unwrap();
         obj.set("B", "::state", z);
     }
 

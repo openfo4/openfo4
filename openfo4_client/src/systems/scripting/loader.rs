@@ -1248,13 +1248,13 @@ mod tests {
         len: usize,
         data: &[u8],
     ) {
-        let object = engine.object_pool().get(&object);
+        let object = engine.object_pool().get(&object).unwrap();
 
         unsafe {
             let ptr = object.get(class, name).unwrap();
             let ptr = ObjectAddr::from_raw(ptr.as_ptr().cast::<*mut u8>().read());
 
-            let array = engine.object_pool().get(ptr);
+            let array = engine.object_pool().get(ptr).unwrap();
             let array = &*array.as_ptr().cast::<ArrayObject>();
 
             assert_eq!(array.len, len);
@@ -1264,7 +1264,7 @@ mod tests {
             let mut next_ptr = array.ptr;
             for _ in 0..array.len {
                 let addr = ObjectAddr::from_raw(next_ptr);
-                let elem = engine.object_pool().get(addr);
+                let elem = engine.object_pool().get(addr).unwrap();
                 mem.extend_from_slice(elem.memory());
 
                 next_ptr = next_ptr.add(elem.size());
@@ -1307,7 +1307,7 @@ mod tests {
         };
 
         let object = build_direct(&engine, &script);
-        let object = engine.object_pool().get(&object);
+        let object = engine.object_pool().get(&object).unwrap();
 
         unsafe {
             assert_eq!(object.get("test", "a").unwrap(), 1u32.to_ne_bytes());
@@ -1432,7 +1432,7 @@ mod tests {
         };
 
         let object = build_direct(&engine, &script);
-        let object = engine.object_pool().get(&object);
+        let object = engine.object_pool().get(&object).unwrap();
 
         unsafe {
             assert_eq!(object.get("test", "a").unwrap(), 1u32.to_ne_bytes());
@@ -1443,7 +1443,7 @@ mod tests {
                 .cast::<ObjectAddr>()
                 .read();
 
-            let st = engine.object_pool().get(struct_addr);
+            let st = engine.object_pool().get(struct_addr).unwrap();
             assert_eq!(st.get("test#MyStruct", "x").unwrap(), 2u32.to_ne_bytes());
             assert_eq!(st.get("test#MyStruct", "y").unwrap(), 3u32.to_ne_bytes());
         }
@@ -1540,7 +1540,7 @@ mod tests {
         );
         assert!(warnings.is_empty());
 
-        let object = engine.object_pool().get(builder.finalize());
+        let object = engine.object_pool().get(builder.finalize()).unwrap();
         unsafe {
             assert_eq!(
                 object.get("C", "a").unwrap(),

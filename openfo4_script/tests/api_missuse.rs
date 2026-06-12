@@ -119,3 +119,38 @@ fn call_with_incorrect_parameter_count() {
 
     func.call(&mut ctx, &[Val::F32(0.0)]).unwrap();
 }
+
+#[test]
+#[should_panic]
+fn return_null_non_nullable_object() {
+    let mut engine = Engine::new(COMPILER_OPTIONS);
+
+    fn f(_caller: Caller<'_, ()>) -> Result<ObjectAddr, Exception> {
+        Ok(ObjectAddr::NULL)
+    }
+
+    let module = assemble(
+        r#"
+        class A:
+
+        function F() -> string static native:
+
+        function G() -> string static:
+        local res: string
+        res = call_static A F
+        return res
+        "#,
+    );
+
+    engine.register(&module);
+    engine.register_native_function("A", "F", f);
+
+    let instance = engine.compile("A", &Options::default());
+    let func = instance.get_func("G").unwrap();
+    let func = func.typed::<(), ObjectAddr>().unwrap();
+
+    let mut stack = engine.create_stack();
+    let mut ctx = Context::new(&engine, &mut stack, ());
+
+    func.call(&mut ctx, ()).unwrap();
+}

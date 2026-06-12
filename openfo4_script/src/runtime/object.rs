@@ -185,13 +185,12 @@ impl ObjectPool {
     //     self.objects.get_mut(&addr)
     // }
 
-    pub fn get<T>(&self, object: T) -> Object
+    pub fn get<T>(&self, object: T) -> Option<Object>
     where
         T: AsRef<ObjectAddr>,
     {
         let addr = *object.as_ref();
-
-        self.objects.lock().unwrap().get(&addr).unwrap().clone()
+        self.objects.lock().unwrap().get(&addr).cloned()
     }
 
     pub unsafe fn array<U>(&self, addr: ObjectAddr) -> &[U] {

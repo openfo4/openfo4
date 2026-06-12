@@ -293,7 +293,7 @@ fn array_find_struct() {
         index: i32,
     ) -> Result<(), Exception> {
         let array = unsafe { caller.array::<ObjectAddr>(addr) };
-        let object = caller.object_pool().get(array[index as usize]);
+        let object = caller.object_pool().get(array[index as usize]).unwrap();
 
         assert_eq!(index, 42);
         unsafe {

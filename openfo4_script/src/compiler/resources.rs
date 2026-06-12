@@ -21,7 +21,6 @@ impl Resources {
         let primitives = PrimitiveTypes::new(&types);
         let mut string_to_type = HashMap::default();
 
-        let mut infos = HashMap::new();
         for (id, name) in [
             (primitives.none, Some(Lowercase::from_static("none"))),
             (primitives.bool, Some(Lowercase::from_static("bool"))),
@@ -31,21 +30,6 @@ impl Resources {
             (primitives.var, Some(Lowercase::from_static("var"))),
             (primitives.pointer, None),
         ] {
-            infos.insert(
-                id,
-                TypeInfo {
-                    classes: Vec::new(),
-                    properties: HashMap::from([(
-                        (Lowercase::new(""), Lowercase::new("")),
-                        TypeProperty {
-                            ty: PropertyType::Inline(id),
-                            field: 0,
-                        },
-                    )]),
-                    name: name.map(|v| v.to_owned()),
-                },
-            );
-
             if let Some(name) = name {
                 string_to_type.insert(name.to_owned(), id);
             }
@@ -223,6 +207,7 @@ impl PrimitiveTypes {
                             field: 0,
                         },
                     )]),
+                    allows_null: true,
                 },
             },
         );
@@ -242,6 +227,7 @@ impl PrimitiveTypes {
                             field: 0,
                         },
                     )]),
+                    allows_null: true,
                 },
             },
         );
@@ -261,6 +247,7 @@ impl PrimitiveTypes {
                             field: 0,
                         },
                     )]),
+                    allows_null: true,
                 },
             },
         );
@@ -280,6 +267,7 @@ impl PrimitiveTypes {
                             field: 0,
                         },
                     )]),
+                    allows_null: true,
                 },
             },
         );
@@ -299,6 +287,7 @@ impl PrimitiveTypes {
                             field: 0,
                         },
                     )]),
+                    allows_null: true,
                 },
             },
         );
@@ -318,6 +307,7 @@ impl PrimitiveTypes {
                             field: 0,
                         },
                     )]),
+                    allows_null: true,
                 },
             },
         );
@@ -354,6 +344,7 @@ impl PrimitiveTypes {
                             field: 0,
                         },
                     )]),
+                    allows_null: false,
                 },
             },
         );
@@ -384,6 +375,7 @@ impl PrimitiveTypes {
                     name: None,
                     classes: vec![array],
                     properties: HashMap::new(),
+                    allows_null: false,
                 },
             },
         );
@@ -420,6 +412,7 @@ impl PrimitiveTypes {
                             field: 0,
                         },
                     )]),
+                    allows_null: false,
                 },
             },
         );
@@ -443,6 +436,7 @@ pub struct TypeInfo {
     pub name: Option<Lowercase<String>>,
     pub classes: Vec<TypeId>,
     pub properties: HashMap<(Lowercase<String>, Lowercase<String>), TypeProperty>,
+    pub allows_null: bool,
 }
 
 #[derive(Clone, Debug)]
