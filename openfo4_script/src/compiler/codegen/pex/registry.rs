@@ -396,7 +396,7 @@ pub enum Type {
 impl Type {
     pub fn to_jit(&self) -> JitType {
         match self {
-            Self::None => JitType::I8,
+            Self::None => JitType::Pointer,
             Self::Bool => JitType::I8,
             Self::Int => JitType::I32,
             Self::Float => JitType::F32,

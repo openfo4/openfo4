@@ -1311,8 +1311,9 @@ fn perform_cast_inner(
         }
         // A null pointer.
         (Type::None, Type::Class(_)) => {
-            // translator.builder.iconst(JitType::Pointer, 0);
-            todo!();
+            translator
+                .builder
+                .store(hir::Value::Const(Literal::Null), dst_val);
         }
         (src_ty, dst_ty) => todo!("{:?} {:?}", src_ty, dst_ty),
     }

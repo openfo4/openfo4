@@ -259,6 +259,14 @@ fn cast_float_to_string() {
     });
 }
 
+#[test]
+fn cast_null_to_class() {
+    cast_test_impl("none", "MyClass", |_engine, func, ctx| {
+        let res: ObjectAddr = func.call(ctx, ObjectAddr::NULL).unwrap();
+        assert_eq!(res, ObjectAddr::NULL);
+    });
+}
+
 fn cast_test_impl<F, Params, Returns>(in_ty: &str, out_ty: &str, f: F)
 where
     F: FnOnce(&mut Engine, &TypedFunc<'_, Params, Returns>, &mut Context<'_, ()>),
