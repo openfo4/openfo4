@@ -46,13 +46,7 @@ pub fn compute_class_layout(
         }
     };
 
-    let parent_field_count = properties
-        .iter()
-        .max_by(|(_, a), (_, b)| a.field.cmp(&b.field))
-        // We start at field 1, field 0 contains the object
-        // header pointer.
-        .map(|(_, f)| f.field + 1)
-        .unwrap_or(1);
+    let parent_field_count = ty.members.len();
 
     classes.push(id);
 

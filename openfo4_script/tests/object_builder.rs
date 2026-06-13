@@ -1,6 +1,7 @@
 use openfo4_script::assembler::assemble;
 use openfo4_script::compiler::CompilerOptions;
 use openfo4_script::engine::{Engine, Options};
+use openfo4_script::runtime::{Context, ObjectAddr};
 
 const COMPILER_OPTIONS: CompilerOptions = CompilerOptions {
     validation: true,
@@ -51,4 +52,65 @@ fn default_class_values() {
             bytemuck::bytes_of(&50_i32)
         );
     }
+}
+
+#[test]
+fn field_without_property() {
+    let mut engine = Engine::new(COMPILER_OPTIONS);
+
+    let module = assemble(
+        r#"
+        class A:
+
+        global a: int = 0
+        global b: float = 0.0f
+        global c: A = null
+
+        property a: int -> a
+        property c: A -> c
+
+        class B:
+        parent: A
+
+        global e: bool = false
+
+        property e: bool -> e
+
+        function GetA() -> int:
+        return a
+
+        function GetC() -> A:
+        return c
+
+        function GetE() -> bool:
+        return e
+        "#,
+    );
+
+    engine.register(&module);
+
+    let instance = engine.compile("B", &Options::default());
+    let type_id = engine.get_type("B").unwrap();
+
+    let mut builder = engine.object_pool().insert(type_id);
+    builder.set("A", "a", 1);
+    builder.set("A", "c", builder.addr());
+    builder.set("B", "e", true);
+
+    let addr = builder.finalize().addr();
+
+    let mut stack = engine.create_stack();
+    let mut ctx = Context::new(&engine, &mut stack, ());
+
+    let get_a = instance.get_func("GetA").unwrap();
+    let get_a = get_a.typed::<ObjectAddr, i32>().unwrap();
+    assert_eq!(get_a.call(&mut ctx, addr).unwrap(), 1);
+
+    let get_b = instance.get_func("GetC").unwrap();
+    let get_c = get_b.typed::<ObjectAddr, ObjectAddr>().unwrap();
+    assert_eq!(get_c.call(&mut ctx, addr).unwrap(), addr);
+
+    let get_e = instance.get_func("GetE").unwrap();
+    let get_e = get_e.typed::<ObjectAddr, bool>().unwrap();
+    assert_eq!(get_e.call(&mut ctx, addr).unwrap(), true);
 }
