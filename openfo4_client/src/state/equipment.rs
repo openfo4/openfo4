@@ -52,7 +52,9 @@ pub struct EquipmentItem {
 
 #[derive(Clone, Debug)]
 pub struct EquipmentItemModels {
+    /// List of all renderable scenes for ths item.
     models: Vec<Handle<NifScene>>,
+    /// Contains the parent scene that must be loaded before the current scene.
     attachment_parents: HashMap<usize, usize>,
     /// Index of the model which contains the `P-ProjectileNode` attachment point.
     ///
@@ -468,26 +470,53 @@ pub async fn load_equipment_item_models(
 
             if let Some(attach_parent_slots) = weapon.attach_parent_slots {
                 for slot in &attach_parent_slots {
-                    attachment_point_parents.insert(*slot, model_index);
+                    let slot = esp_loader.resolve_form(*slot, record.id).unwrap();
+                    attachment_point_parents.insert(slot, model_index);
                 }
             }
         }
         _ => unreachable!(),
     }
 
-    let mut attachment_parents = HashMap::new();
-    for attachment in attachments {
-        let RecordData::ObjectModification(attachment) = esp_loader
-            .lookup(None, *attachment)
-            .await
-            .unwrap()
-            .local
-            .data
+    let mut attachment_records = HashMap::new();
+    let mut requires = HashMap::new();
+    let mut provides = HashMap::<_, Vec<_>>::new();
+
+    for id in attachments {
+        let RecordData::ObjectModification(attachment) =
+            esp_loader.lookup(None, *id).await.unwrap().local.data
         else {
             unreachable!()
         };
 
-        let Some(parent) = attachment_point_parents.get(&attachment.data.attach_point) else {
+        let attach_point = esp_loader
+            .resolve_form(attachment.data.attach_point, *id)
+            .unwrap();
+
+        // Don't depend on the root attachment point, it is always provided and
+        // loaded at the very first.
+        if !attachment_point_parents.contains_key(&attach_point) {
+            requires.insert(*id, attach_point);
+        }
+
+        for slot in &attachment.data.attach_parent_slots {
+            let slot = esp_loader.resolve_form(*slot, *id).unwrap();
+            provides.entry(*id).or_default().push(slot);
+        }
+
+        attachment_records.insert(*id, attachment);
+    }
+
+    let mut attachment_parents = HashMap::new();
+
+    for id in load_attachments_order(attachments, &requires, &provides) {
+        let attachment = &attachment_records[&id];
+
+        let attach_point = esp_loader
+            .resolve_form(attachment.data.attach_point, id)
+            .unwrap();
+
+        let Some(parent) = attachment_point_parents.get(&attach_point) else {
             continue;
         };
 
@@ -513,7 +542,8 @@ pub async fn load_equipment_item_models(
         };
 
         for slot in &attachment.data.attach_parent_slots {
-            attachment_point_parents.insert(*slot, model_index);
+            let slot = esp_loader.resolve_form(*slot, id).unwrap();
+            attachment_point_parents.insert(slot, model_index);
         }
     }
 
@@ -525,6 +555,42 @@ pub async fn load_equipment_item_models(
         attachment_parents,
         projectile_node,
     }
+}
+
+fn load_attachments_order(
+    attachments: &[RecordId],
+    requires: &HashMap<RecordId, RecordId>,
+    provides: &HashMap<RecordId, Vec<RecordId>>,
+) -> Vec<RecordId> {
+    let mut queue: VecDeque<_> = attachments
+        .iter()
+        .filter(|id| !requires.contains_key(*id))
+        .collect();
+
+    let mut required_by = HashMap::<_, Vec<_>>::new();
+    for (attachment, keyword) in requires {
+        required_by.entry(keyword).or_default().push(attachment);
+    }
+
+    let mut attachments = Vec::new();
+
+    while let Some(id) = queue.pop_front() {
+        attachments.push(*id);
+
+        let Some(keywords) = provides.get(id) else {
+            continue;
+        };
+
+        for keyword in keywords {
+            let Some(attachments) = required_by.remove(keyword) else {
+                continue;
+            };
+
+            queue.extend(attachments);
+        }
+    }
+
+    attachments
 }
 
 /// Finds the index of the deepest [`NifScene`] with the given attachment name.
