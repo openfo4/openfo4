@@ -412,6 +412,9 @@ pub async fn load_equipment_item_models(
     let mut models = Vec::new();
     let mut attachment_point_parents = HashMap::new();
 
+    let mut default_addon_index = None;
+    let mut scenes_by_addon_index = HashMap::<_, Vec<_>>::new();
+
     let record = esp_loader.lookup(None, record).await.unwrap();
     match record.local.data {
         RecordData::Armor(armor) => {
@@ -444,14 +447,14 @@ pub async fn load_equipment_item_models(
                     continue;
                 };
 
-                let scene = loader
-                    .load::<NifScene, _>(&NifKey {
-                        path: DataPathBuf::new(model_path.as_bytes()),
-                        flags: LoadNifFlags::all(),
-                    })
-                    .await
-                    .unwrap();
-                models.push(scene);
+                if default_addon_index.is_none() {
+                    default_addon_index = Some(model.addon_index);
+                }
+
+                scenes_by_addon_index
+                    .entry(model.addon_index)
+                    .or_default()
+                    .push(model_path);
             }
         }
         RecordData::Weapon(weapon) => {
@@ -482,12 +485,31 @@ pub async fn load_equipment_item_models(
     let mut requires = HashMap::new();
     let mut provides = HashMap::<_, Vec<_>>::new();
 
+    let mut addon_index = default_addon_index;
+
     for id in attachments {
         let RecordData::ObjectModification(attachment) =
             esp_loader.lookup(None, *id).await.unwrap().local.data
         else {
             unreachable!()
         };
+
+        for prop in &attachment.data.properties {
+            match prop.ty {
+                ObjectModificationPropertyType::AddonIndex(index) => match prop.function_type {
+                    ObjectModificationFunctionType::Set => {
+                        addon_index = u16::try_from(index).ok();
+                    }
+                    ty => {
+                        tracing::warn!(
+                            "object mod property addon index only supports funftion type set, found {:?}",
+                            ty
+                        );
+                    }
+                },
+                _ => {}
+            }
+        }
 
         let attach_point = esp_loader
             .resolve_form(attachment.data.attach_point, *id)
@@ -505,6 +527,21 @@ pub async fn load_equipment_item_models(
         }
 
         attachment_records.insert(*id, attachment);
+    }
+
+    if let Some(addon_index) = addon_index
+        && let Some(paths) = scenes_by_addon_index.remove(&addon_index)
+    {
+        for path in paths {
+            let scene = loader
+                .load::<NifScene, _>(&NifKey {
+                    path: DataPathBuf::new(path.as_bytes()),
+                    flags: LoadNifFlags::all(),
+                })
+                .await
+                .unwrap();
+            models.push(scene);
+        }
     }
 
     let mut attachment_parents = HashMap::new();
