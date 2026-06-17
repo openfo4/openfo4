@@ -8,7 +8,6 @@ members = [
     "game_ui",
     "game_input",
     "game_macros",
-    "game_wasm",
     "game_render",
     "game_render/slangc",
     "game_window",

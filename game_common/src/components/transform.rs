@@ -2,15 +2,9 @@ use core::ops::{Mul, MulAssign};
 
 use glam::{Mat3, Mat4, Quat, Vec3};
 
-use crate::components::Component;
-use crate::encoding::{Decode, Encode};
-use crate::record::RecordReference;
-
-use super::TRANSFORM;
-
 const FORWARD: Vec3 = Vec3::NEG_Z;
 
-#[derive(Copy, Clone, Debug, PartialEq, Encode, Decode)]
+#[derive(Copy, Clone, Debug, PartialEq)]
 pub struct Transform {
     pub translation: Vec3,
     pub rotation: Quat,
@@ -110,10 +104,6 @@ impl Default for Transform {
     }
 }
 
-impl Component for Transform {
-    const ID: RecordReference = TRANSFORM;
-}
-
 impl Mul for Transform {
     type Output = Self;
 
@@ -128,11 +118,14 @@ impl MulAssign for Transform {
     }
 }
 
+#[derive(Copy, Clone, Debug, Default, PartialEq)]
+pub struct GlobalTransform(pub Transform);
+
 #[cfg(test)]
 mod tests {
     use glam::Vec3;
 
-    use crate::components::builtin::Transform;
+    use super::Transform;
 
     #[track_caller]
     fn assert_valid_transform(transform: Transform) {
