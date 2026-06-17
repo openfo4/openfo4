@@ -48,7 +48,7 @@ impl Lowercase<str> {
     pub const fn from_static(s: &'static str) -> &'static Self {
         let mut i = 0;
         while i < s.len() {
-            if !s.as_bytes()[i].is_ascii_lowercase() {
+            if s.as_bytes()[i].is_ascii_uppercase() {
                 panic!("string passed to Lowercase::<str>::from_static is not ASCII lowercase (non-ascii is not yet supported)");
             }
 
