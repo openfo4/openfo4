@@ -1,5 +1,4 @@
 use core::ops::{Mul, MulAssign};
-use core::ptr::with_exposed_provenance;
 
 use glam::{Mat3, Mat4, Quat, Vec3};
 
@@ -8,6 +7,8 @@ use crate::encoding::{Decode, Encode};
 use crate::record::RecordReference;
 
 use super::TRANSFORM;
+
+const FORWARD: Vec3 = Vec3::NEG_Z;
 
 #[derive(Copy, Clone, Debug, PartialEq, Encode, Decode)]
 pub struct Transform {
@@ -49,7 +50,7 @@ impl Transform {
     }
 
     pub fn looking_to(mut self, direction: Vec3, up: Vec3) -> Self {
-        let forward = -direction.normalize();
+        let forward = -direction.try_normalize().unwrap_or(FORWARD);
         let right = up
             .cross(forward)
             .try_normalize()
@@ -127,21 +128,35 @@ impl MulAssign for Transform {
     }
 }
 
-#[track_caller]
-fn assert_transform(transform: Transform) {
-    assert!(
-        transform.translation.is_finite(),
-        "invalid translation value: {:?}",
-        transform.translation,
-    );
-    assert!(
-        transform.translation.is_finite() && transform.rotation.is_normalized(),
-        "invalid rotation value: {:?}",
-        transform.rotation,
-    );
-    assert!(
-        transform.scale.is_finite(),
-        "invalid scale value: {:?}",
-        transform.scale,
-    );
+#[cfg(test)]
+mod tests {
+    use glam::Vec3;
+
+    use crate::components::builtin::Transform;
+
+    #[track_caller]
+    fn assert_valid_transform(transform: Transform) {
+        assert!(
+            transform.translation.is_finite(),
+            "invalid translation value: {:?}",
+            transform.translation,
+        );
+        assert!(
+            transform.translation.is_finite() && transform.rotation.is_normalized(),
+            "invalid rotation value: {:?}",
+            transform.rotation,
+        );
+        assert!(
+            transform.scale.is_finite(),
+            "invalid scale value: {:?}",
+            transform.scale,
+        );
+    }
+
+    #[test]
+    fn transform_looking_at() {
+        let transform = Transform::from_translation(Vec3::new(1.0, 2.0, 3.0));
+        let transform = transform.looking_at(Vec3::new(1.0, 2.0, 3.0), Vec3::Y);
+        assert_valid_transform(transform);
+    }
 }
