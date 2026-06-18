@@ -5,13 +5,16 @@ use rand::distr::weighted::WeightedIndex;
 pub fn select_from_leveled_list(
     flags: LeveledActorFlags,
     entries: &[LeveledListEntry],
+    count: u64,
     player_level: u16,
-) -> Vec<usize> {
+) -> Vec<SelectedLeveledEntry> {
     let mut weights = Vec::new();
     let mut indices = Vec::new();
 
     if flags.contains(LeveledActorFlags::USE_ALL) {
-        return (0..entries.len()).collect();
+        return (0..entries.len())
+            .map(|index| SelectedLeveledEntry { index, count })
+            .collect();
     }
 
     if flags.contains(LeveledActorFlags::ALL_LEVELS) {
@@ -59,6 +62,23 @@ pub fn select_from_leveled_list(
     }
 
     let distribution = WeightedIndex::new(weights).unwrap();
-    let index = indices[distribution.sample(&mut rand::rng())];
-    vec![index]
+
+    let mut entries = Vec::new();
+    if flags.contains(LeveledActorFlags::EACH) {
+        for _ in 0..count {
+            let index = indices[distribution.sample(&mut rand::rng())];
+            entries.push(SelectedLeveledEntry { index, count: 1 });
+        }
+    } else {
+        let index = indices[distribution.sample(&mut rand::rng())];
+        entries.push(SelectedLeveledEntry { index, count });
+    }
+
+    entries
+}
+
+#[derive(Copy, Clone, Debug)]
+pub struct SelectedLeveledEntry {
+    pub index: usize,
+    pub count: u64,
 }

@@ -1,7 +1,6 @@
 use std::collections::VecDeque;
 use std::hash::Hash;
 
-use futures::TryFutureExt;
 use hashbrown::{HashMap, HashSet};
 use openfo4_asset::{AssetLoader, Handle};
 use openfo4_core::WorldExt;
@@ -594,8 +593,8 @@ async fn resolve_actor_props(
                         .is_some_and(|id| !visited.contains(&id))
                 });
 
-                for index in select_from_leveled_list(data.flags, &data.entries, PLAYER_LEVEL) {
-                    let form = data.entries[index].reference;
+                for entry in select_from_leveled_list(data.flags, &data.entries, 1, PLAYER_LEVEL) {
+                    let form = data.entries[entry.index].reference;
                     let record_id = esp_loader.resolve_form(form, record.id).unwrap();
                     let record = esp_loader.lookup(None, record_id).await.unwrap();
                     queue.push_back((flags, record));

@@ -1,5 +1,6 @@
 use hashbrown::HashSet;
 use openfo4_core::record::RecordId;
+use openfo4_esp::records::LeveledActorFlags;
 use openfo4_esp::records::object_modification::ObjectModificationFormType;
 use openfo4_esp::{RecordData, RecordKind};
 
@@ -43,9 +44,12 @@ pub async fn resolve_item(
                         .is_some_and(|id| !visited.contains(&id))
                 });
 
-                for index in select_from_leveled_list(data.flags, &data.entries, props.level) {
-                    let form = data.entries[index].reference;
-                    let count = u64::from(data.entries[index].count);
+                if data.flags.contains(LeveledActorFlags::EACH) {}
+
+                for entry in select_from_leveled_list(data.flags, &data.entries, count, props.level)
+                {
+                    let form = data.entries[entry.index].reference;
+                    let count = entry.count * u64::from(data.entries[entry.index].count);
                     let rid = esp_loader.resolve_form(form, record_id).unwrap();
                     queue.push((rid, count, Vec::new()));
                 }
