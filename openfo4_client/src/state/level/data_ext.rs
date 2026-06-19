@@ -52,9 +52,11 @@ impl RecordDataExt for RecordData {
             Self::Weapon(data) => data.virtual_machine_adapter.as_ref(),
             Self::Book(data) => data.virtual_machine_adapter.as_ref(),
             Self::Key(data) => data.virtual_machine_adapter.as_ref(),
+            Self::Note(data) => data.virtual_machine_adapter.as_ref(),
+            Self::Terminal(data) => data.virtual_machine_adapter.as_ref(),
             Self::PlacedNpc(data) => data.virtual_machine_adapter.as_ref(),
             Self::PlacedObject(data) => data.virtual_machine_adapter.as_ref(),
-            _ => todo!(),
+            _ => None,
         }
     }
 }

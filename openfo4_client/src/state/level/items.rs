@@ -1,11 +1,11 @@
 use hashbrown::HashSet;
 use openfo4_core::record::RecordId;
-use openfo4_esp::records::LeveledActorFlags;
 use openfo4_esp::records::object_modification::ObjectModificationFormType;
 use openfo4_esp::{RecordData, RecordKind};
 
 use crate::state::equipment::load_equipment_item;
-use crate::state::esp::EspLoader;
+use crate::state::esp::{EspLoader, GlobalRecord};
+use crate::state::level::data_ext::RecordDataExt;
 use crate::state::level::leveled_list::select_from_leveled_list;
 use crate::systems::inventory::{ItemData, ItemKind, ItemStack};
 use crate::systems::scripting::loader::{ScriptLoader, ScriptObject};
@@ -34,8 +34,9 @@ pub async fn resolve_item(
         visited.insert(record_id);
 
         let record = esp_loader.lookup(None, record_id).await.unwrap();
-        match record.local.data {
-            RecordData::LeveledItem(mut data) => {
+        match &record.local.data {
+            RecordData::LeveledItem(data) => {
+                let mut data = data.clone();
                 // Discard any entries that we have already seen, otherwise
                 // we might get a cycle in the reference graph.
                 data.entries.retain(|entry| {
@@ -43,8 +44,6 @@ pub async fn resolve_item(
                         .resolve_form(entry.reference, record_id)
                         .is_some_and(|id| !visited.contains(&id))
                 });
-
-                if data.flags.contains(LeveledActorFlags::EACH) {}
 
                 for entry in select_from_leveled_list(data.flags, &data.entries, count, props.level)
                 {
@@ -62,7 +61,7 @@ pub async fn resolve_item(
                     .map(|form| esp_loader.resolve_form(*form, record_id).unwrap())
                     .collect();
 
-                let script = load_item_script(record.id, script_loader).await;
+                let script = load_item_script(&record, script_loader).await;
 
                 items.push(ItemStack {
                     item: record_id,
@@ -98,7 +97,7 @@ pub async fn resolve_item(
                 let item =
                     load_equipment_item(esp_loader, script_loader, record_id, &attachments).await;
 
-                let script = load_item_script(record.id, script_loader).await;
+                let script = load_item_script(&record, script_loader).await;
 
                 items.push(ItemStack {
                     item: record_id,
@@ -126,7 +125,7 @@ pub async fn resolve_item(
                     .map(|form| esp_loader.resolve_form(*form, record_id).unwrap())
                     .collect();
 
-                let script = load_item_script(record.id, script_loader).await;
+                let script = load_item_script(&record, script_loader).await;
 
                 items.push(ItemStack {
                     item: record_id,
@@ -154,7 +153,7 @@ pub async fn resolve_item(
                     .map(|form| esp_loader.resolve_form(*form, record_id).unwrap())
                     .collect();
 
-                let script = load_item_script(record.id, script_loader).await;
+                let script = load_item_script(&record, script_loader).await;
 
                 items.push(ItemStack {
                     item: record_id,
@@ -182,7 +181,7 @@ pub async fn resolve_item(
                     .map(|form| esp_loader.resolve_form(*form, record_id).unwrap())
                     .collect();
 
-                let script = load_item_script(record.id, script_loader).await;
+                let script = load_item_script(&record, script_loader).await;
 
                 items.push(ItemStack {
                     item: record_id,
@@ -210,7 +209,7 @@ pub async fn resolve_item(
                     .map(|form| esp_loader.resolve_form(*form, record_id).unwrap())
                     .collect();
 
-                let script = load_item_script(record.id, script_loader).await;
+                let script = load_item_script(&record, script_loader).await;
 
                 items.push(ItemStack {
                     item: record_id,
@@ -231,7 +230,7 @@ pub async fn resolve_item(
                 });
             }
             RecordData::Component(data) => {
-                let script = load_item_script(record.id, script_loader).await;
+                let script = load_item_script(&record, script_loader).await;
 
                 items.push(ItemStack {
                     item: record_id,
@@ -252,7 +251,7 @@ pub async fn resolve_item(
                 });
             }
             RecordData::Note(data) => {
-                let script = load_item_script(record.id, script_loader).await;
+                let script = load_item_script(&record, script_loader).await;
 
                 items.push(ItemStack {
                     item: record_id,
@@ -279,8 +278,15 @@ pub async fn resolve_item(
     items
 }
 
-async fn load_item_script(record: RecordId, loader: &ScriptLoader) -> Option<ScriptObject> {
-    loader.load_instance(record).await
+async fn load_item_script(record: &GlobalRecord, loader: &ScriptLoader) -> Option<ScriptObject> {
+    // Most items will have no scripts attached. Loading the base script
+    // has no effect. If this item is needed as a script object later it
+    // is lazily loaded.
+    if record.local.data.virtual_machine_adapter().is_none() {
+        return None;
+    }
+
+    loader.load_instance(record.id).await
 }
 
 async fn select_object_attachments(
