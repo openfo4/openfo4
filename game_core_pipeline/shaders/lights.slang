@@ -83,8 +83,6 @@ func get_distance_attenuation(distance_square: f32, inv_range_squared: f32) -> f
 
 // FIXME: Instead of hardcoding all directions here,
 // we should use a cubemap here to make this more flexible.
-public func eval_indirect_light(light: Ambient, material: pbr::Material, view_dir: Vec3) -> Vec3 {
-    let reflected = reflect(view_dir, material.normal);
-    // return abs(reflected);
-    return material.diffuse_color() * light.sample(reflected);
+public func eval_indirect_light(light: Ambient, material: pbr::Material) -> Vec3 {
+    return material.diffuse_color() * light.sample(material.normal);
 }

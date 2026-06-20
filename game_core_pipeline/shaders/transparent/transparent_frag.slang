@@ -116,7 +116,7 @@ func shading(input: Input) -> Vec4 {
     var luminance = Vec3(0.0);
 
     // Ambient light
-    luminance += eval_indirect_light(scene.ambient, pbr_material, -view_dir);
+    luminance += eval_indirect_light(scene.ambient, pbr_material);
 
     for (var i = 0; i < push_constants.num_directional_lights; i++) {
         let light = directional_lights[i].eval();

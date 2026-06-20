@@ -142,7 +142,7 @@ void main(
     var luminance = Vec3(0.0);
 
     // Ambient light
-    luminance += eval_indirect_light(constants.scene.ambient, pbr_material, -view_dir);
+    luminance += eval_indirect_light(constants.scene.ambient, pbr_material);
 
     for (var i = 0; i < constants.num_directional_lights; i++) {
         let shadow = shadow_sample.sample_shadow_csm(world_position, shadow_maps, shadow_light_vps, shadow_sampler);
