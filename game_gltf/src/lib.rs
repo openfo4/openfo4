@@ -727,7 +727,7 @@ impl GltfStagingData {
         let metallic_roughness_texture = if let Some(info) = pbr.metallic_roughness_texture() {
             let image = info.texture().source();
 
-            Some(self.load_image(image, TextureFormat::Rgba8UnormSrgb)?)
+            Some(self.load_image(image, TextureFormat::Rgba8Unorm)?)
         } else {
             None
         };
