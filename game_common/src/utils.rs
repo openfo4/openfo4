@@ -4,6 +4,7 @@ pub mod vec_ext;
 mod duration;
 
 use std::fmt::{Arguments, Debug};
+use std::range::Range;
 
 use glam::{Quat, Vec2, Vec3, Vec4};
 use num_traits::Float;
@@ -201,4 +202,18 @@ mod tests {
     // fn assert_approx_eq_args() {
     //     assert_approx_eq!(1.0, 1.0, "oh no!");
     // }
+}
+
+pub trait RangeExt {
+    /// Returns `true` if the two ranges are overlapping.
+    fn is_overlapping(&self, other: &Self) -> bool;
+}
+
+impl<T> RangeExt for Range<T>
+where
+    T: Ord,
+{
+    fn is_overlapping(&self, other: &Self) -> bool {
+        self.start < other.end && other.start < self.end
+    }
 }
