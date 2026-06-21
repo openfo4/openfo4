@@ -4,9 +4,6 @@ use std::str::FromStr;
 use winit::event_loop::EventLoop;
 
 pub(crate) const DEFAULT_BACKEND: Backend = Backend(
-    // Keep using X11 until the bug causing render blocking on
-    // multiple surfaces are fixed.
-    // https://github.com/MrGunflame/big-gaming/issues/220
     #[cfg(target_family = "unix")]
     Inner::Wayland,
     #[cfg(target_family = "windows")]
