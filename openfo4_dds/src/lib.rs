@@ -353,18 +353,12 @@ decode_primitive!(u8, u16, u32, u64);
 
 #[derive(Copy, Clone, Debug)]
 struct Header {
-    size: u32,
     flags: HeaderFlags,
     height: u32,
     width: u32,
-    pitch_or_linear_size: u32,
     depth: u32,
     mipmap_count: u32,
     pixel_format: PixelFormat,
-    caps: u32,
-    caps2: u32,
-    caps3: u32,
-    caps4: u32,
 }
 
 impl Decode for Header {
@@ -372,11 +366,13 @@ impl Decode for Header {
     where
         B: Buf,
     {
-        let size = u32::decode(&mut buf)?;
+        // Size of header, must be 124.
+        let _size = u32::decode(&mut buf)?;
         let flags = u32::decode(&mut buf)?;
         let height = u32::decode(&mut buf)?;
         let width = u32::decode(&mut buf)?;
-        let pitch_or_linear_size = u32::decode(&mut buf)?;
+        // PitchOrLinearSize
+        let _pitch_or_linear_size = u32::decode(&mut buf)?;
         let depth = u32::decode(&mut buf)?;
         let mipmap_count = u32::decode(&mut buf)?;
         // Reserved1
@@ -384,26 +380,20 @@ impl Decode for Header {
             u32::decode(&mut buf)?;
         }
         let pixel_format = PixelFormat::decode(&mut buf)?;
-        let caps = u32::decode(&mut buf)?;
-        let caps2 = u32::decode(&mut buf)?;
-        let caps3 = u32::decode(&mut buf)?;
-        let caps4 = u32::decode(&mut buf)?;
+        let _caps = u32::decode(&mut buf)?;
+        let _caps2 = u32::decode(&mut buf)?;
+        let _caps3 = u32::decode(&mut buf)?;
+        let _caps4 = u32::decode(&mut buf)?;
         // Reseved2
         u32::decode(&mut buf)?;
 
         Ok(Self {
-            size,
             flags: HeaderFlags::from_bits_truncate(flags),
             height,
             width,
-            pitch_or_linear_size,
             depth,
             mipmap_count,
             pixel_format,
-            caps,
-            caps2,
-            caps3,
-            caps4,
         })
     }
 }
@@ -429,7 +419,6 @@ bitflags! {
 
 #[derive(Copy, Clone, Debug)]
 struct PixelFormat {
-    size: u32,
     flags: PixelFormatFlags,
     four_cc: [u8; 4],
     rgb_bit_count: u32,
@@ -444,7 +433,8 @@ impl Decode for PixelFormat {
     where
         B: Buf,
     {
-        let size = u32::decode(&mut buf)?;
+        // Size of header, must be 32.
+        let _size = u32::decode(&mut buf)?;
         let flags = u32::decode(&mut buf)?;
         let four_cc = <[u8; 4]>::decode(&mut buf)?;
         let rgb_bit_count = u32::decode(&mut buf)?;
@@ -454,7 +444,6 @@ impl Decode for PixelFormat {
         let a_bit_mask = u32::decode(&mut buf)?;
 
         Ok(Self {
-            size,
             flags: PixelFormatFlags::from_bits_truncate(flags),
             four_cc,
             rgb_bit_count,
