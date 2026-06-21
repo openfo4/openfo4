@@ -4,8 +4,9 @@ use game_window::windows::{WindowId, WindowState};
 use glam::UVec2;
 use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
 
-use crate::api::executor::TemporaryResources;
+use crate::FpsLimit;
 use crate::api::Texture;
+use crate::api::executor::TemporaryResources;
 use crate::backend::vulkan::{
     CommandPool, Device, Fence, Instance, Queue, Semaphore, Surface, Swapchain,
 };
@@ -13,7 +14,6 @@ use crate::backend::{
     ColorSpace, PresentMode, SurfaceFormat, SwapchainCapabilities, SwapchainConfig,
 };
 use crate::fps_limiter::FpsLimiter;
-use crate::FpsLimit;
 
 // TODO: Make this configurable.
 // Note that this value still bounded by the maxImageCount of the swapchain.
@@ -236,9 +236,6 @@ fn get_surface_present_mode(modes: &[PresentMode]) -> Option<PresentMode> {
     // TODO: FIFO is always supported, but
     // support other (better) modes is beneficial.
     for mode in modes {
-        // FIFO currently does not work on Wayland, so this is stuck
-        // on immediate until https://github.com/MrGunflame/big-gaming/issues/220
-        // is resolved.
         if *mode == PresentMode::Immediate {
             return Some(*mode);
         }
