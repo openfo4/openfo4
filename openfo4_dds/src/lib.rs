@@ -7,6 +7,7 @@
 
 use bitflags::bitflags;
 use bytes::{Buf, Bytes};
+use game_common::utils::ExtractBits;
 use glam::UVec2;
 use thiserror::Error;
 
@@ -115,10 +116,16 @@ fn read_uncompressed(
         return Ok(Vec::new());
     }
 
+    // The caller asserts this.
+    debug_assert_eq!(header.pixel_format.rgb_bit_count % 8, 0);
+    debug_assert!(header.pixel_format.rgb_bit_count <= 32);
+
+    let bytes_per_pixel = header.pixel_format.rgb_bit_count / 8;
+
     let mut mips = Vec::new();
     for _ in 0..mip_count {
         let size = mip_size.x as usize * mip_size.y as usize;
-        let size_in_bytes = size * (header.pixel_format.rgb_bit_count / 8) as usize;
+        let size_in_bytes = size * bytes_per_pixel as usize;
 
         if size_in_bytes == 0 {
             break;
@@ -130,24 +137,16 @@ fn read_uncompressed(
 
         let mut bytes = Vec::with_capacity(size_in_bytes);
 
-        assert_eq!(header.pixel_format.rgb_bit_count, 32);
-
         for _ in 0..size {
-            // let mut pixel = 0;
-            let pixel = buf.get_u32().swap_bytes();
-            // for index in 0..header.pixel_format.rgb_bit_count / 8 {
-            //     pixel |= (buf.get_u8() as u32) << (index * 8);
-            // }
+            let mut pixel = 0;
+            for index in 0..bytes_per_pixel {
+                pixel |= u32::from(buf.get_u8()) << (index * 8);
+            }
 
-            let b = pixel & 0xff;
-            let g = (pixel & 0xff_00) >> 8;
-            let r = (pixel & 0xff_00_00) >> 16;
-            let a = (pixel & 0xff_00_00_00) >> 24;
-
-            // let r = extract_bits(pixel, header.pixel_format.r_bit_mask);
-            // let g = extract_bits(pixel, header.pixel_format.g_bit_mask);
-            // let b = extract_bits(pixel, header.pixel_format.b_bit_mask);
-            // let a = extract_bits(pixel, header.pixel_format.a_bit_mask);
+            let r = pixel.extract_bits_(header.pixel_format.r_bit_mask);
+            let g = pixel.extract_bits_(header.pixel_format.g_bit_mask);
+            let b = pixel.extract_bits_(header.pixel_format.b_bit_mask);
+            let a = pixel.extract_bits_(header.pixel_format.a_bit_mask);
 
             bytes.push(r as u8);
             bytes.push(g as u8);
@@ -171,44 +170,6 @@ fn read_uncompressed(
     }
 
     Ok(mips)
-}
-
-/// Extracts all bits from `a` that are set in `mask` and moves them into a contigous region.
-///
-/// This can be used to create an integer from a non-contigous bitmask. This is the same operation
-/// as the x86 `pext_u32` instruction.
-///
-/// See also:
-/// - https://www.felixcloutier.com/x86/pext
-fn extract_bits(a: u32, mask: u32) -> u32 {
-    #[cfg(not(all(target_arch = "x86_64", target_feature = "bmi2")))]
-    {
-        extract_bits_naive(a, mask)
-    }
-
-    #[cfg(all(target_arch = "x86_64", target_feature = "bmi2"))]
-    {
-        extract_bits_bmi2(a, mask)
-    }
-}
-
-fn extract_bits_naive(a: u32, mask: u32) -> u32 {
-    let src = a & mask;
-    let mut dst = 0;
-
-    let mut next_bit = 0;
-    for index in 0..u32::BITS {
-        let bit = (src & (1 << index)) >> index;
-        dst |= bit << next_bit;
-        next_bit += bit;
-    }
-
-    dst
-}
-
-#[cfg(all(target_arch = "x86_64", target_feature = "bmi2"))]
-fn extract_bits_bmi2(a: u32, mask: u32) -> u32 {
-    unsafe { core::arch::x86_64::_pext_u32(a, mask) }
 }
 
 fn read_copy(
@@ -673,22 +634,5 @@ impl TryFrom<u32> for Format {
             99 => Ok(Self::Bc7UnormSrgb),
             _ => Err(UnknownFormat(value)),
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use crate::extract_bits_naive;
-
-    use super::extract_bits;
-
-    #[test]
-    fn test_extract_bits() {
-        let src = 0b01_01_11_01;
-        let mask = 0b11_00_11_00;
-        let dst = 0b00_00_01_11;
-
-        assert_eq!(extract_bits(src, mask), dst);
-        assert_eq!(extract_bits_naive(src, mask), extract_bits(src, mask));
     }
 }
