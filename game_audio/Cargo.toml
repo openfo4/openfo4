@@ -2,8 +2,6 @@
 name = "game_audio"
 version = "0.1.0"
 edition = "2021"
-authors = ["MrGunflame <git@robbsrv.de>"]
-license = "GPL-3.0-or-later"
 
 [features]
 default = ["xwma"]
