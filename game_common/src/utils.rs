@@ -184,7 +184,74 @@ where
     }
 }
 
+pub trait RangeExt {
+    /// Returns `true` if the two ranges are overlapping.
+    fn is_overlapping(&self, other: &Self) -> bool;
+}
+
+impl<T> RangeExt for Range<T>
+where
+    T: Ord,
+{
+    fn is_overlapping(&self, other: &Self) -> bool {
+        self.start < other.end && other.start < self.end
+    }
+}
+
+// FIXME: The same functionality is provided by the nightly feature uint_gather_scatter_bits.
+// We can remove this once https://github.com/rust-lang/rust/issues/149069 is stable.
+pub trait ExtractBits {
+    /// Extracts all bits from `a` that are set in `mask` and moves them into a contigous region.
+    ///
+    /// This can be used to create an integer from a non-contigous bitmask. This is the same operation
+    /// as the x86 `pext_u32` instruction.
+    ///
+    /// See also:
+    /// - https://www.felixcloutier.com/x86/pext
+    ///
+    fn extract_bits_(self, mask: Self) -> Self;
+}
+
+macro_rules! impl_extract_bits {
+    ($t:ty) => {
+        impl ExtractBits for $t {
+            fn extract_bits_(self, mask: Self) -> Self {
+                cfg_select! {
+                    all(target_arch= "x86_64", target_feature = "bmi2") => {
+                        // Since we are zero-extending our mask, the result will always fit
+                        // within our integer type.
+                        // SAFETY: We just asserted that the bmi2 feature is enabled.
+                        unsafe { core::arch::x86_64::_pext_u64(self as u64, mask as u64) as $t }
+                    }
+                    _ => {
+                        let src = self & mask;
+                        let mut dst = 0;
+
+                        let mut next_bit = 0;
+                        for index in 0..Self::BITS {
+                            let bit = (src & (1 << index)) >> index;
+                            let mask_bit = (mask & (1 << index)) >> index;
+                            dst |= bit << next_bit;
+                            next_bit += mask_bit;
+                        }
+                        dst
+                    }
+                }
+            }
+        }
+    };
+}
+
+impl_extract_bits!(u8);
+impl_extract_bits!(u16);
+impl_extract_bits!(u32);
+impl_extract_bits!(u64);
+impl_extract_bits!(usize);
+
+#[cfg(test)]
 mod tests {
+    use super::ExtractBits;
+
     #[test]
     fn assert_approx_eq() {
         let lhs = (-1.0) + ((1.0 - -1.0) * 400.0 / 1000.0);
@@ -202,18 +269,22 @@ mod tests {
     // fn assert_approx_eq_args() {
     //     assert_approx_eq!(1.0, 1.0, "oh no!");
     // }
-}
 
-pub trait RangeExt {
-    /// Returns `true` if the two ranges are overlapping.
-    fn is_overlapping(&self, other: &Self) -> bool;
-}
+    #[test]
+    fn extract_bits() {
+        let a: u8 = 0b11_11_11_11;
+        let b: u8 = 0b00_00_00_00;
+        let c: u8 = 0b00_00_00_00;
+        assert_eq!(a.extract_bits_(b), c);
 
-impl<T> RangeExt for Range<T>
-where
-    T: Ord,
-{
-    fn is_overlapping(&self, other: &Self) -> bool {
-        self.start < other.end && other.start < self.end
+        let a: u8 = 0b10_11_01_00;
+        let b: u8 = 0b11_11_11_11;
+        let c: u8 = 0b10_11_01_00;
+        assert_eq!(a.extract_bits_(b), c);
+
+        let a: u32 = 0b01_00_00_10_01_10_00_00_11_00_01_01_01_01_00_01;
+        let b: u32 = 0b01_11_01_11_10_01_01_10_01_11_01_00_11_01_10_00;
+        let c: u32 = 0b00_00_00_00_00_00_00_10_00_10_00_00_10_01_01_10;
+        assert_eq!(a.extract_bits_(b), c);
     }
 }
