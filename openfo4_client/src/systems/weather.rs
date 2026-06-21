@@ -581,12 +581,12 @@ async fn load_worldspace_weather_props(
             let dir_light = weather.lighting_data[dir_light_index];
 
             WeatherParams {
-                ambient_top: rgb_to_color(dir_light.directional_ambient_z_up),
-                ambient_bottom: rgb_to_color(dir_light.directional_ambient_z_down),
-                ambient_right: rgb_to_color(dir_light.directional_ambient_y_up),
-                ambient_left: rgb_to_color(dir_light.directional_ambient_y_down),
-                ambient_front: rgb_to_color(dir_light.directional_ambient_x_down),
-                ambient_back: rgb_to_color(dir_light.directional_ambient_x_up),
+                ambient_top: rgb_to_color(dir_light.directional_ambient_z_down),
+                ambient_bottom: rgb_to_color(dir_light.directional_ambient_z_up),
+                ambient_right: rgb_to_color(dir_light.directional_ambient_x_down),
+                ambient_left: rgb_to_color(dir_light.directional_ambient_x_up),
+                ambient_front: rgb_to_color(dir_light.directional_ambient_y_down),
+                ambient_back: rgb_to_color(dir_light.directional_ambient_y_up),
                 sky_lower: rgb_to_color(f(weather.colors.sky_lower)),
                 sky_upper: rgb_to_color(f(weather.colors.sky_upper)),
                 horizon: rgb_to_color(f(weather.colors.horizon)),
