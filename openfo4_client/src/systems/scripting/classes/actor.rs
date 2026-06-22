@@ -2,6 +2,7 @@ use openfo4_script::engine::Engine;
 use openfo4_script::runtime::{Caller, Exception};
 
 use crate::components::{ActorProperties, ActorProtection, Player};
+use crate::state::hardcoded::fallout4::GOLD;
 use crate::systems::inventory::{Inventory, ItemData, WeaponItemData};
 use crate::systems::scripting::classes::{Object, State};
 use crate::systems::scripting::effects::{EquipItemEffect, UnequipItemEffect};
@@ -687,7 +688,14 @@ fn get_forced_landing_marker(
 /// int Function() native
 /// ```
 fn get_gold_amount(caller: Caller<'_, State>, self_ptr: Object) -> Result<i32, Exception> {
-    todo!()
+    with_inventory(caller, self_ptr, |inventory| {
+        let mut sum: i32 = 0;
+        for (_, item) in inventory.get_by_form(GOLD) {
+            sum = sum.saturating_add(item.count.try_into().unwrap_or(i32::MAX));
+        }
+
+        sum
+    })
 }
 
 /// `GetHighestRelationshipRank`

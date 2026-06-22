@@ -14,6 +14,8 @@ macro_rules! define_forms {
 }
 
 define_forms! {
+    GOLD => 0xf,
+
     GAME_SETTING_F_PHYSICAL_DAMAGE_FACTOR => 0x769cb,
     GAME_SETTING_F_PHYSICAL_ARMOR_DMG_REDUCTION_EXP => 0x17d8a9,
 
