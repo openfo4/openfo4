@@ -2,7 +2,7 @@ use openfo4_script::engine::Engine;
 use openfo4_script::runtime::{Caller, Exception};
 
 use crate::components::{ActorProperties, ActorProtection, Player};
-use crate::systems::inventory::Inventory;
+use crate::systems::inventory::{Inventory, ItemData, WeaponItemData};
 use crate::systems::scripting::classes::{Object, State};
 use crate::systems::scripting::effects::{EquipItemEffect, UnequipItemEffect};
 
@@ -1366,7 +1366,15 @@ fn is_unconscious(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, E
 /// bool Function() native
 /// ```
 fn is_weapon_drawn(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Exception> {
-    todo!()
+    with_inventory(caller, self_ptr, |inventory| {
+        inventory.items().any(|(_, item)| {
+            item.equipped
+                && matches!(
+                    &item.data,
+                    ItemData::Weapon(WeaponItemData { drawn: true, .. }),
+                )
+        })
+    })
 }
 
 /// `Kill`
@@ -2673,7 +2681,20 @@ where
     let props = caller
         .data()
         .world()
-        .get::<&mut ActorProperties>(entity)
+        .get::<&ActorProperties>(entity)
         .map_err(|_| Exception::Error)?;
     Ok(f(&props))
+}
+
+fn with_inventory<T, F>(caller: Caller<'_, State>, self_ptr: Object, f: F) -> Result<T, Exception>
+where
+    F: FnOnce(&Inventory) -> T,
+{
+    let entity = caller.data().entity(self_ptr).ok_or(Exception::Error)?;
+    let inventory = caller
+        .data()
+        .world()
+        .get::<&Inventory>(entity)
+        .map_err(|_| Exception::Error)?;
+    Ok(f(&inventory))
 }
