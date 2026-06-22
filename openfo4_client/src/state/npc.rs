@@ -214,6 +214,7 @@ impl Actor {
                         bleedout_recovery: true,
                         perk_points: 0,
                         factions: self.factions,
+                        is_dead: self.dead,
                     },
                 ),
             )

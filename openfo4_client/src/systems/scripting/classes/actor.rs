@@ -1055,7 +1055,7 @@ fn is_commanded_actor(caller: Caller<'_, State>, self_ptr: Object) -> Result<boo
 /// bool Function() native
 /// ```
 fn is_dead(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Exception> {
-    todo!()
+    with_actor_props(caller, self_ptr, |actor| actor.is_dead)
 }
 
 /// `IsDetectedBy`
@@ -1130,13 +1130,9 @@ fn is_equipped(
 /// bool Function() native
 /// ```
 fn is_essential(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Exception> {
-    let entity = caller.data().entity(self_ptr).ok_or(Exception::Error)?;
-
-    let Ok(props) = caller.data().world().get::<&ActorProperties>(entity) else {
-        return Ok(false);
-    };
-
-    Ok(props.protection == ActorProtection::Essential)
+    with_actor_props(caller, self_ptr, |actor| {
+        actor.protection == ActorProtection::Essential
+    })
 }
 
 /// `IsFlying`
@@ -2664,12 +2660,20 @@ fn get_furniture_reference(
 /// bool Function() native
 /// ```
 fn is_protected(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Exception> {
+    with_actor_props(caller, self_ptr, |actor| {
+        actor.protection == ActorProtection::Protected
+    })
+}
+
+fn with_actor_props<T, F>(caller: Caller<'_, State>, self_ptr: Object, f: F) -> Result<T, Exception>
+where
+    F: FnOnce(&ActorProperties) -> T,
+{
     let entity = caller.data().entity(self_ptr).ok_or(Exception::Error)?;
     let props = caller
         .data()
         .world()
         .get::<&mut ActorProperties>(entity)
         .map_err(|_| Exception::Error)?;
-
-    Ok(props.protection == ActorProtection::Protected)
+    Ok(f(&props))
 }

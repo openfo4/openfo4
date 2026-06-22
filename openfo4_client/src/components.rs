@@ -135,6 +135,8 @@ pub struct ActorProperties {
     pub perk_points: u32,
     /// Factions that the actor is a member of.
     pub factions: Vec<FactionMembership>,
+    /// Whether the actor is currently dead.
+    pub is_dead: bool,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
