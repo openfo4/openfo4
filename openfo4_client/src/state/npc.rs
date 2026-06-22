@@ -9,7 +9,7 @@ use openfo4_core::events::EventBus;
 use openfo4_core::path::DataPathBuf;
 use openfo4_core::record::RecordId;
 use openfo4_esp::records::{
-    Class, MovementSpeeds, NpcBaseFlags, NpcTemplateFlags, Race, SubgraphFlags,
+    Class, MovementSpeeds, NpcBaseFlags, NpcTemplateFlags, Race, RaceDataFlags, SubgraphFlags,
 };
 use openfo4_esp::{RecordData, RecordKind, ZString};
 use openfo4_physics::components::{Collider, CollisionLayer, RigidBody};
@@ -138,6 +138,7 @@ pub struct Actor {
     factions: Vec<FactionMembership>,
     items: Vec<(RecordId, u64)>,
     speed: ActorMovementSpeeds,
+    is_child: bool,
 }
 
 impl Actor {
@@ -215,6 +216,7 @@ impl Actor {
                         perk_points: 0,
                         factions: self.factions,
                         is_dead: self.dead,
+                        is_child: self.is_child,
                     },
                 ),
             )
@@ -392,6 +394,7 @@ pub async fn spawn_actor(
         factions: props.factions,
         items: props.items,
         speed,
+        is_child: data.data.flags.contains(RaceDataFlags::CHILD),
     })
 }
 

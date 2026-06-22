@@ -137,6 +137,8 @@ pub struct ActorProperties {
     pub factions: Vec<FactionMembership>,
     /// Whether the actor is currently dead.
     pub is_dead: bool,
+    /// Whether the actor is classified as a child.
+    pub is_child: bool,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]

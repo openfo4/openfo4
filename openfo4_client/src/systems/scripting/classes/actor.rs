@@ -1037,7 +1037,7 @@ fn is_bribed(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Except
 /// bool Function() native
 /// ```
 fn is_child(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Exception> {
-    todo!()
+    with_actor_props(caller, self_ptr, |actor| actor.is_child)
 }
 
 /// `IsCommandedActor`
