@@ -169,6 +169,10 @@ pub struct WeaponItemData {
     ///
     /// Only valid while the weapon is equipped and drawn.
     pub projectile_node: Option<WeaponProjectileNode>,
+    /// Whether NPCs use ammo when reloading.
+    ///
+    /// If `false` NPCs have infinite ammo.
+    pub npcs_use_ammo: bool,
 }
 
 /// Defines properties for the aiming of guns.

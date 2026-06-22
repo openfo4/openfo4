@@ -10,7 +10,7 @@ use openfo4_core::hierarchy::Children;
 use openfo4_physics::components::{Collider, CollisionLayer};
 use openfo4_physics::{PhysicsPipeline, QueryFilter};
 
-use crate::components::Camera;
+use crate::components::{Camera, Player};
 use crate::events::combat::{BodyPartCrippleEvent, ReachedZeroHealthEvent};
 use crate::render::physics_debug::{DespawnAt, HitscanRaycast};
 use crate::state::actions::{Action, Actions};
@@ -61,11 +61,15 @@ pub fn handle_weapon_reload_requests(world: &mut World, actions: &Actions, event
 
         let inventory = entity.get::<&Inventory>().unwrap();
         let mut animation_events = entity.get::<&mut AnimationEventQueue>().unwrap();
+        let is_player = entity.get::<&Player>().is_some();
 
         let mut ammo = None;
-        let can_reload = inventory.items().any(|(_, item)| match &item.data {
+        let mut npcs_use_ammo = false;
+
+        let mut can_reload = inventory.items().any(|(_, item)| match &item.data {
             ItemData::Weapon(weapon) => {
                 ammo = weapon.ammo;
+                npcs_use_ammo = weapon.npcs_use_ammo;
                 item.equipped && weapon.current_ammo != weapon.ammo_capacity
             }
             _ => false,
@@ -75,11 +79,16 @@ pub fn handle_weapon_reload_requests(world: &mut World, actions: &Actions, event
             continue;
         };
 
-        let Some((_, ammo)) = inventory.get_by_form(ammo).next() else {
-            continue;
-        };
+        // If NPCs use ammo is set to false, they are always allowed to reload.
+        if is_player || npcs_use_ammo {
+            let Some((_, ammo)) = inventory.get_by_form(ammo).next() else {
+                continue;
+            };
 
-        if can_reload && ammo.count > 0 {
+            can_reload &= ammo.count > 0;
+        }
+
+        if can_reload {
             if let Some(action) = actions.0.get(&Action::Reload) {
                 animation_events.0.push_back(*action);
             }
@@ -248,6 +257,7 @@ pub fn handle_weapon_reload_events(world: &mut World, events: &mut EventBus) {
         };
 
         let mut inventory = entity.get::<&mut Inventory>().unwrap();
+        let is_player = entity.get::<&Player>().is_some();
 
         let mut weapons_reloaded = Vec::new();
 
@@ -265,6 +275,14 @@ pub fn handle_weapon_reload_events(world: &mut World, events: &mut EventBus) {
                 continue;
             };
 
+            let spare_capacity = weapon.ammo_capacity.saturating_sub(weapon.current_ammo);
+
+            // If NPCs use ammo is set to false, they are always allowed to reload.
+            if !is_player && !weapon.npcs_use_ammo {
+                weapons_reloaded.push((weapon_id, None, spare_capacity));
+                continue;
+            }
+
             let Some((ammo_id, ammo)) = inventory.items().find(|(_, v)| v.item == ammo) else {
                 continue;
             };
@@ -273,7 +291,7 @@ pub fn handle_weapon_reload_events(world: &mut World, events: &mut EventBus) {
                 ammo.count as u32,
                 weapon.ammo_capacity.saturating_sub(weapon.current_ammo),
             );
-            weapons_reloaded.push((weapon_id, ammo_id, amount));
+            weapons_reloaded.push((weapon_id, Some(ammo_id), amount));
         }
 
         for (weapon_id, ammo_id, amount) in weapons_reloaded {
@@ -285,10 +303,12 @@ pub fn handle_weapon_reload_events(world: &mut World, events: &mut EventBus) {
             weapon.current_ammo += amount;
             debug_assert!(weapon.current_ammo <= weapon.ammo_capacity);
 
-            let ammo = inventory.get_mut(ammo_id).unwrap();
-            ammo.count -= u64::from(amount);
-            if ammo.count == 0 {
-                inventory.remove(ammo_id);
+            if let Some(ammo_id) = ammo_id {
+                let ammo = inventory.get_mut(ammo_id).unwrap();
+                ammo.count -= u64::from(amount);
+                if ammo.count == 0 {
+                    inventory.remove(ammo_id);
+                }
             }
         }
     }

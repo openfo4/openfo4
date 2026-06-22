@@ -9,10 +9,10 @@ use openfo4_core::ecs::{Entity, World};
 use openfo4_core::hierarchy::Children;
 use openfo4_core::path::DataPathBuf;
 use openfo4_core::record::RecordId;
-use openfo4_esp::records::BipedObjectFlags;
 use openfo4_esp::records::object_modification::{
     ObjectModificationFunctionType, ObjectModificationProperty, ObjectModificationPropertyType,
 };
+use openfo4_esp::records::{BipedObjectFlags, WeaponDataFlags};
 use openfo4_esp::{FormId, RecordData, RecordKind};
 use thiserror::Error;
 
@@ -151,6 +151,7 @@ struct EquipmentProperties {
     weapon_cone_of_fire_increase_per_shot: f32,
     weapon_cone_of_fire_decrease_per_second: f32,
     weapon_cone_of_fire_decrease_delay_milliseconds: u32,
+    weapon_npcs_use_ammo: bool,
 }
 
 pub async fn load_item(
@@ -242,6 +243,9 @@ pub async fn load_equipment_item(
             }
 
             base_props.weapon_capacity = u32::from(weapon.data.capacity);
+
+            base_props.weapon_npcs_use_ammo =
+                weapon.data.flags.contains(WeaponDataFlags::NPCS_USE_AMMO);
 
             // Physical damage is hardcoded in the data field.
             // Other damage types are set in the damage_types field instead.
@@ -380,6 +384,7 @@ pub async fn load_equipment_item(
                 },
                 ammo: combined_props.weapon_ammo,
                 projectile_node: None,
+                npcs_use_ammo: combined_props.weapon_npcs_use_ammo,
             })
         }
         ItemKind::Ammo | ItemKind::Misc | ItemKind::Aid | ItemKind::Junk => ItemData::None,
@@ -842,6 +847,10 @@ fn apply_object_modification(
         }
         ObjectModificationPropertyType::Ammo(_) => {
             todo!();
+        }
+        ObjectModificationPropertyType::NpcsUseAmmo(use_ammo) => {
+            combined.weapon_npcs_use_ammo = use_ammo;
+            return Ok(());
         }
         ObjectModificationPropertyType::AimModelMinConeDegrees(value) => {
             ModificationClass::ScalarF32 {
