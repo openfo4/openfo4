@@ -819,6 +819,7 @@ fn record_script_name(data: &RecordData) -> Option<&'static str> {
         RecordData::Weapon(_) => Some("Weapon"),
         RecordData::Weather(_) => Some("Weather"),
         RecordData::Worldspace(_) => Some("WorldSpace"),
+        RecordData::Land(_) => Some("Form"),
         RecordData::PlacedObject(_) => Some("ObjectReference"),
         RecordData::PlacedNpc(_) => Some("Actor"),
         RecordData::PlacedHazard(_) => Some("ObjectReference"),
