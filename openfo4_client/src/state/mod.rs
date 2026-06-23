@@ -240,7 +240,7 @@ impl GameState {
             &mut self.object_ref_set,
             &mut self.script_entities,
         );
-        self.ai.update(&mut self.world, &mut self.event_bus);
+        self.ai.run_events(&mut self.world, &mut self.event_bus);
 
         animation_test::animation_test(
             &mut self.event_bus,
@@ -283,14 +283,6 @@ impl GameState {
         self.quests
             .update(&mut self.world, &mut self.event_bus, &mut self.executor);
 
-        openfo4_animation::systems::drive_animations::<AnimationSet>(
-            &mut self.world,
-            Duration::from_secs(1) / UPS,
-            self.anim_event.take(),
-            &mut self.event_bus,
-        );
-        bounce_animation_events(&mut self.event_bus);
-
         systems::nif_animation::update_nif_animations(
             &mut self.world,
             &self.shared.entities,
@@ -308,6 +300,14 @@ impl GameState {
         update_actor_animation_graphs(&mut self.world, &self.asset_loader, &self.pool);
         update_animation_parameters(&mut self.world);
 
+        openfo4_animation::systems::drive_animations::<AnimationSet>(
+            &mut self.world,
+            Duration::from_secs(1) / UPS,
+            self.anim_event.take(),
+            &mut self.event_bus,
+        );
+        bounce_animation_events(&mut self.event_bus);
+
         handle_weapon_fire_requests(&mut self.world, &self.actions, &self.event_bus);
         handle_weapon_reload_requests(&mut self.world, &self.actions, &self.event_bus);
         handle_weapon_fire_events(&mut self.world, &self.physics, &mut self.event_bus);
@@ -320,6 +320,8 @@ impl GameState {
         handle_door_activations(&mut self.world, &mut self.event_bus, &self.object_ref_set);
         handle_automatic_doors(&mut self.world, &self.object_ref_set);
         update_player_looking_at_target(&mut self.world, &self.physics);
+
+        self.ai.update(&mut self.world, &mut self.event_bus);
 
         systems::hierarchy::compute_global_transform(
             &mut self.world,
