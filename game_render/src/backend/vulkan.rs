@@ -3241,12 +3241,6 @@ impl<'a> CommandEncoder<'a> {
         dst_offset: u64,
         count: u64,
     ) {
-        tracing::trace!(
-            "vkCopyBufferToBuffer(src={:p} dst={:p})",
-            src.buffer,
-            dst.buffer,
-        );
-
         assert!(self.queue_caps.contains(QueueCapabilities::TRANSFER));
 
         if count == 0 {
