@@ -455,6 +455,10 @@ impl<'a, T> Caller<'a, T> {
     }
 
     pub unsafe fn array<U>(&self, addr: ObjectAddr) -> &[U] {
+        if addr.is_null() {
+            return &[];
+        }
+
         unsafe {
             let object = &*addr.to_raw().cast::<ArrayObject>();
 
@@ -469,6 +473,10 @@ impl<'a, T> Caller<'a, T> {
     }
 
     pub unsafe fn array_mut<U>(&mut self, addr: ObjectAddr) -> &mut [U] {
+        if addr.is_null() {
+            return &mut [];
+        }
+
         unsafe {
             let object = &*addr.to_raw().cast::<ArrayObject>();
 
@@ -482,7 +490,21 @@ impl<'a, T> Caller<'a, T> {
         }
     }
 
-    pub unsafe fn string(&self, addr: ObjectAddr) -> &str {
+    /// Views the contents of a string object.
+    ///
+    /// # Panics
+    ///
+    /// - Panics if the [`ObjectAddr`] is not allocated from this [`ObjectPool`] (allocated in a
+    ///   different [`Engine`] or already deallocated).
+    /// - Panics if the [`ObjectAddr`] is not a string object.
+    pub fn string(&self, addr: ObjectAddr) -> &str {
+        let obj = self.object_pool().get(addr).expect("object not allocated");
+        if obj.type_id() != self.object_pool().resources().primitives.string {
+            panic!("cannot view object as string");
+        }
+
+        // SAFETY: We have asserted that the object address is allocated and points
+        // to a string object.
         unsafe {
             let data = self.array::<u8>(addr);
             std::str::from_utf8_unchecked(data)

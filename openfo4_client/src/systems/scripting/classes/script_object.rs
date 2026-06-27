@@ -192,7 +192,7 @@ fn register_for_animation_event(
         return Ok(false);
     }
 
-    let event_name = unsafe { caller.string(event_name).to_owned() };
+    let event_name = caller.string(event_name).to_owned();
 
     caller.data_mut().registration.register(
         self_ptr,
@@ -221,7 +221,7 @@ fn register_for_custom_event(
         return Ok(());
     }
 
-    let event_name = unsafe { caller.string(event_name).to_owned() };
+    let event_name = caller.string(event_name).to_owned();
 
     caller.data_mut().registration.register(
         self_ptr,
@@ -308,8 +308,8 @@ fn register_for_direct_los_gain(
         return Ok(());
     }
 
-    let viewer_node = unsafe { caller.string(viewer_node).to_owned() };
-    let target_node = unsafe { caller.string(target_node).to_owned() };
+    let viewer_node = caller.string(viewer_node).to_owned();
+    let target_node = caller.string(target_node).to_owned();
 
     caller.data_mut().registration.register(
         self_ptr,
@@ -346,8 +346,8 @@ fn register_for_direct_los_lost(
         return Ok(());
     }
 
-    let viewer_node = unsafe { caller.string(viewer_node).to_owned() };
-    let target_node = unsafe { caller.string(target_node).to_owned() };
+    let viewer_node = caller.string(viewer_node).to_owned();
+    let target_node = caller.string(target_node).to_owned();
 
     caller.data_mut().registration.register(
         self_ptr,
@@ -528,7 +528,7 @@ fn register_for_menu_open_close_event(
     self_ptr: Object,
     menu_name: Object,
 ) -> Result<(), Exception> {
-    let menu_name = unsafe { caller.string(menu_name).to_owned() };
+    let menu_name = caller.string(menu_name).to_owned();
 
     caller.data_mut().registration.register(
         self_ptr,
@@ -647,7 +647,7 @@ fn register_for_remote_event(
         return Ok(false);
     }
 
-    let event_name = unsafe { caller.string(event_name) };
+    let event_name = caller.string(event_name);
     let Ok(kind) = event_name.parse() else {
         tracing::warn!("unknown event name: {}", event_name);
         return Ok(false);
@@ -676,7 +676,7 @@ fn register_for_tracked_stats_event(
     stat: Object,
     threshold: i32,
 ) -> Result<(), Exception> {
-    let stat = unsafe { caller.string(stat).to_owned() };
+    let stat = caller.string(stat).to_owned();
 
     caller.data_mut().registration.register(
         self_ptr,
@@ -722,7 +722,7 @@ fn register_for_tutorial_event(
     self_ptr: Object,
     event_name: Object,
 ) -> Result<(), Exception> {
-    let name = unsafe { caller.string(event_name).to_owned() };
+    let name = caller.string(event_name).to_owned();
 
     caller.data_mut().registration.register(
         self_ptr,
@@ -1050,7 +1050,7 @@ fn unregister_for_animation_event(
         return Ok(());
     }
 
-    let event_name = unsafe { caller.string(event_name).to_owned() };
+    let event_name = caller.string(event_name).to_owned();
 
     caller.data_mut().registration.unregister(
         self_ptr,
@@ -1079,7 +1079,7 @@ fn unregister_for_custom_event(
         return Ok(());
     }
 
-    let event_name = unsafe { caller.string(event_name).to_owned() };
+    let event_name = caller.string(event_name).to_owned();
 
     caller.data_mut().registration.unregister(
         self_ptr,
@@ -1221,7 +1221,7 @@ fn unregister_for_menu_open_close_event(
     self_ptr: Object,
     menu_name: Object,
 ) -> Result<(), Exception> {
-    let menu_name = unsafe { caller.string(menu_name).to_owned() };
+    let menu_name = caller.string(menu_name).to_owned();
 
     caller.data_mut().registration.register(
         self_ptr,
@@ -1339,7 +1339,7 @@ fn unregister_for_remote_event(
         return Ok(());
     }
 
-    let event_name = unsafe { caller.string(event_name) };
+    let event_name = caller.string(event_name);
     let Ok(kind) = event_name.parse() else {
         tracing::warn!("unknown event name: {}", event_name);
         return Ok(());
@@ -1367,7 +1367,7 @@ fn unregister_for_tracked_stats_event(
     self_ptr: Object,
     stat: Object,
 ) -> Result<(), Exception> {
-    let name = unsafe { caller.string(stat).to_owned() };
+    let name = caller.string(stat).to_owned();
 
     caller
         .data_mut()
@@ -1431,7 +1431,7 @@ fn unregister_for_tutorial_event(
     self_ptr: Object,
     event_name: Object,
 ) -> Result<(), Exception> {
-    let name = unsafe { caller.string(event_name).to_owned() };
+    let name = caller.string(event_name).to_owned();
 
     caller.data_mut().registration.register(
         self_ptr,

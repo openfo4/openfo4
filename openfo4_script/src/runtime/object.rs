@@ -190,7 +190,14 @@ impl ObjectPool {
         T: AsRef<ObjectAddr>,
     {
         let addr = *object.as_ref();
-        self.objects.lock().unwrap().get(&addr).cloned()
+        let objects = self.objects.lock().unwrap();
+        if let Some(obj) = objects.get(&addr) {
+            return Some(obj.clone());
+        }
+
+        let obj = self.resources.constants.object(addr)?;
+        let ty = self.resources.types.get(obj.ty).unwrap();
+        Some(unsafe { Object::new_at(obj.ty, ty, obj.ptr.cast_mut()) })
     }
 
     pub unsafe fn array<U>(&self, addr: ObjectAddr) -> &[U] {

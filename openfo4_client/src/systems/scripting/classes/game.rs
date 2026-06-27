@@ -186,7 +186,7 @@ fn enable_pipboy_hdr_mask(caller: Caller<'_, State>, ab_enable: bool) -> Result<
 /// Function(string asMessage) native global
 /// ```
 fn error(caller: Caller<'_, State>, msg: Object) -> Result<(), Exception> {
-    let msg = unsafe { caller.string(msg) };
+    let msg = caller.string(msg);
     tracing::error!("script message: {}", msg);
     Ok(())
 }
@@ -1221,7 +1221,7 @@ fn using_gamepad(caller: Caller<'_, State>) -> Result<bool, Exception> {
 /// Function(string asMessage) native global
 /// ```
 fn warning(caller: Caller<'_, State>, msg: Object) -> Result<(), Exception> {
-    let msg = unsafe { caller.string(msg) };
+    let msg = caller.string(msg);
     tracing::warn!("script message: {}", msg);
     Ok(())
 }

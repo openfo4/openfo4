@@ -980,7 +980,7 @@ fn get_animation_variable_bool(
     self_ptr: Object,
     variable_name: Object,
 ) -> Result<bool, Exception> {
-    let name = unsafe { caller.string(variable_name) };
+    let name = caller.string(variable_name);
 
     let entity = caller.data().entity(self_ptr).ok_or(Exception::Error)?;
     let Ok(driver) = caller.data().world().get::<&AnimationDriver>(entity) else {
@@ -1004,7 +1004,7 @@ fn get_animation_variable_int(
     self_ptr: Object,
     variable_name: Object,
 ) -> Result<i32, Exception> {
-    let name = unsafe { caller.string(variable_name) };
+    let name = caller.string(variable_name);
 
     let entity = caller.data().entity(self_ptr).ok_or(Exception::Error)?;
     let Ok(driver) = caller.data().world().get::<&AnimationDriver>(entity) else {
@@ -1028,7 +1028,7 @@ fn get_animation_variable_float(
     self_ptr: Object,
     variable_name: Object,
 ) -> Result<f32, Exception> {
-    let name = unsafe { caller.string(variable_name) };
+    let name = caller.string(variable_name);
 
     let entity = caller.data().entity(self_ptr).ok_or(Exception::Error)?;
     let Ok(driver) = caller.data().world().get::<&AnimationDriver>(entity) else {
@@ -2911,7 +2911,7 @@ fn set_animation_variable_bool(
     variable_name: Object,
     new_value: bool,
 ) -> Result<(), Exception> {
-    let variable_name = unsafe { caller.string(variable_name) };
+    let variable_name = caller.string(variable_name);
 
     let entity = caller.data().entity(self_ptr).ok_or(Exception::Error)?;
     let Ok(mut driver) = caller.data().world().get::<&mut AnimationDriver>(entity) else {
@@ -2936,7 +2936,7 @@ fn set_animation_variable_int(
     variable_name: Object,
     new_value: i32,
 ) -> Result<(), Exception> {
-    let variable_name = unsafe { caller.string(variable_name) };
+    let variable_name = caller.string(variable_name);
 
     let entity = caller.data().entity(self_ptr).ok_or(Exception::Error)?;
     let Ok(mut driver) = caller.data().world().get::<&mut AnimationDriver>(entity) else {
@@ -2961,7 +2961,7 @@ fn set_animation_variable_float(
     variable_name: Object,
     new_value: f32,
 ) -> Result<(), Exception> {
-    let variable_name = unsafe { caller.string(variable_name) };
+    let variable_name = caller.string(variable_name);
 
     let entity = caller.data().entity(self_ptr).ok_or(Exception::Error)?;
     let Ok(mut driver) = caller.data().world().get::<&mut AnimationDriver>(entity) else {

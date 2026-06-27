@@ -6,6 +6,8 @@ use hashbrown::HashMap;
 use parking_lot::Mutex;
 use slab::Slab;
 
+use crate::runtime::ObjectAddr;
+
 /// A collection of all compiled artifacts required for runnable functions.
 #[derive(Debug)]
 pub struct Resources {
@@ -155,8 +157,10 @@ pub struct CompositeTypeMember {
 }
 
 /// Pool for constant memory allocation.
-#[derive(Clone, Debug, Default)]
-pub struct ConstantPool {}
+#[derive(Debug, Default)]
+pub struct ConstantPool {
+    objects: Mutex<HashMap<ObjectAddr, ConstantObject>>,
+}
 
 impl ConstantPool {
     pub fn alloc(&self, buf: &[u8], align: usize) -> *const u8 {
@@ -174,7 +178,29 @@ impl ConstantPool {
 
         ptr
     }
+
+    pub fn alloc_object(&self, buf: &[u8], align: usize, ty: TypeId) -> *const u8 {
+        let ptr = self.alloc(buf, align);
+        self.objects.lock().insert(
+            ObjectAddr::from_raw(ptr.cast_mut()),
+            ConstantObject { ptr, ty },
+        );
+        ptr
+    }
+
+    pub fn object(&self, addr: ObjectAddr) -> Option<ConstantObject> {
+        self.objects.lock().get(&addr).copied()
+    }
 }
+
+#[derive(Copy, Clone, Debug)]
+pub struct ConstantObject {
+    pub ptr: *const u8,
+    pub ty: TypeId,
+}
+
+unsafe impl Send for ConstantObject {}
+unsafe impl Sync for ConstantObject {}
 
 /// The set of primitive types.
 #[derive(Copy, Clone, Debug)]

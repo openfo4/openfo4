@@ -68,13 +68,14 @@ pub fn compute_class_layout(
             Value::String(v) => {
                 let ptr = res.constants.alloc(v.as_bytes(), 1);
 
-                let string_ptr = res.constants.alloc(
+                let string_ptr = res.constants.alloc_object(
                     ArrayObject {
                         ptr: ptr.cast_mut(),
                         len: v.len(),
                     }
                     .as_bytes(),
                     align_of::<ArrayObject>(),
+                    res.primitives.string,
                 );
 
                 default_value = string_ptr.expose_provenance().to_ne_bytes().to_vec();

@@ -15,11 +15,11 @@ pub fn string_create(translator: &mut Translator<'_>, s: &str) -> JitValue {
         len: s.len(),
     };
 
-    let object_ptr = translator
-        .data
-        .resources
-        .constants
-        .alloc(object.as_bytes(), align_of::<ArrayObject>());
+    let object_ptr = translator.data.resources.constants.alloc_object(
+        object.as_bytes(),
+        align_of::<ArrayObject>(),
+        translator.data.resources.primitives.string,
+    );
 
     translator
         .builder

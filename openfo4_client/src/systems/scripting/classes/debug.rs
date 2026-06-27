@@ -289,7 +289,7 @@ fn stop_stack_root_profiling(
 /// Function(string asTextToPrint, int aiSeverity) native global
 /// ```
 fn trace(caller: Caller<'_, State>, text: Object, severity: i32) -> Result<(), Exception> {
-    let msg = unsafe { caller.string(text) };
+    let msg = caller.string(text);
 
     match severity {
         0 => {
