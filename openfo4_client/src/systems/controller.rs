@@ -84,6 +84,9 @@ pub fn handle_inputs(
                     }
 
                     state.sprinting ^= true;
+                    // Stop sneaking when we start sprinting.
+                    // When we stop sprinting this is already false.
+                    state.sneaking = false;
                 }
                 Some(KeyCode::Space) => {
                     if !event.state.is_pressed() {
