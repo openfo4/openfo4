@@ -35,6 +35,11 @@ impl MovementDirection {
     }
 }
 
+#[derive(Copy, Clone, Debug)]
+struct AnimMoveState {
+    is_moving: bool,
+}
+
 pub fn apply_movement(world: &mut World, pipeline: &mut PhysicsPipeline, actions: &Actions) {
     let mut buffer = CommandBuffer::new();
 
@@ -51,6 +56,7 @@ pub fn apply_movement(world: &mut World, pipeline: &mut PhysicsPipeline, actions
         frozen,
         mut queue,
         move_state,
+        anim_move_state,
     ) in world.query_mut::<(
         Entity,
         &mut Transform,
@@ -64,6 +70,7 @@ pub fn apply_movement(world: &mut World, pipeline: &mut PhysicsPipeline, actions
         Option<&Frozen>,
         &mut AnimationEventQueue,
         &MovementState,
+        Option<&AnimMoveState>,
     )>() {
         let direction = movement_dir.0;
 
@@ -147,15 +154,23 @@ pub fn apply_movement(world: &mut World, pipeline: &mut PhysicsPipeline, actions
             },
         );
 
-        let start_moving = direction != Vec3::ZERO && !move_state.is_moving;
+        let start_moving =
+            direction != Vec3::ZERO && anim_move_state.as_ref().is_none_or(|s| !s.is_moving);
         if start_moving && let Some(action) = actions.0.get(&Action::MoveStart) {
             queue.0.push_back(*action);
         }
 
-        let stop_moving = direction == Vec3::ZERO && move_state.is_moving;
+        let stop_moving = direction == Vec3::ZERO && anim_move_state.is_some_and(|s| s.is_moving);
         if stop_moving && let Some(action) = actions.0.get(&Action::MoveStop) {
             queue.0.push_back(*action);
         }
+
+        buffer.insert_one(
+            entity,
+            AnimMoveState {
+                is_moving: move_state.is_moving,
+            },
+        );
     }
 
     buffer.run_on(world);
