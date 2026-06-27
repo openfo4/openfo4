@@ -19,6 +19,7 @@ pub struct AnimationParameters {
     pub direction: f32,
     pub is_moving: bool,
     pub is_sprinting: bool,
+    pub is_sneaking: bool,
     pub is_jumping: bool,
     pub is_player: bool,
     pub is_female: bool,
@@ -83,6 +84,10 @@ pub fn update_animation_parameters(world: &mut World) {
 
         if let Some(var) = driver.get_variable_mut("camerafromz") {
             *var = Value::F32(params.facing_direction.z);
+        }
+
+        if let Some(var) = driver.get_variable_mut("iIsInSneak") {
+            *var = Value::I32(i32::from(params.is_sneaking));
         }
 
         // Hardcoded variables that come from "animtextdata/animspeedinfo".
@@ -240,7 +245,6 @@ pub fn bounce_animation_events(events: &mut EventBus) {
                 });
             }
             GameEvent::ReloadComplete => {
-                dbg!(&event);
                 events.send(GunReloadEvent {
                     actor: event.entity,
                 });
