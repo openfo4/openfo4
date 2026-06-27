@@ -9,7 +9,7 @@ use openfo4_core::transform::ConvertCoordinateSystem;
 use openfo4_physics::components::ColliderShape;
 use slab::Slab;
 
-use crate::components::{Camera, Player};
+use crate::components::{Camera, MovementState, Player};
 use crate::state::actions::{Action, Actions};
 use crate::state::anim_starter::AnimationEventQueue;
 use crate::state::npc::ActorMovementSpeeds;
@@ -190,9 +190,11 @@ pub fn apply_player_movements(world: &mut World) {
             entity,
             (
                 MovementDirection::new_normalized(direction),
-                MovementSpeed {
-                    speed,
-                    sprinting: state.sprinting,
+                MovementSpeed { speed },
+                MovementState {
+                    is_moving: direction != Vec3::ZERO,
+                    is_sneaking: state.sneaking,
+                    is_sprinting: state.sprinting,
                 },
             ),
         );

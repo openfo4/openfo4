@@ -195,3 +195,10 @@ pub enum ObjectLockLevel {
 /// Component attached to entities that are on the ground.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Grounded;
+
+#[derive(Copy, Clone, Debug, Default)]
+pub struct MovementState {
+    pub is_moving: bool,
+    pub is_sneaking: bool,
+    pub is_sprinting: bool,
+}

@@ -8,7 +8,7 @@ use openfo4_physics::PhysicsPipeline;
 use openfo4_physics::controller::CharacterController;
 
 use crate::assets::nif::NIF_TO_METERS;
-use crate::components::{Grounded, Player};
+use crate::components::{Grounded, MovementState, Player};
 use crate::state::UPS;
 use crate::state::actions::{Action, Actions};
 use crate::state::anim_starter::AnimationEventQueue;
@@ -21,7 +21,6 @@ use crate::systems::controller::ControllerShape;
 #[derive(Copy, Clone, Debug, Default)]
 pub struct MovementSpeed {
     pub speed: f32,
-    pub sprinting: bool,
 }
 
 #[derive(Copy, Clone, Debug)]
@@ -34,11 +33,6 @@ impl MovementDirection {
         debug_assert!(dir.is_normalized() || dir == Vec3::ZERO);
         Self(dir)
     }
-}
-
-#[derive(Clone, Debug)]
-struct MovementState {
-    is_moving: bool,
 }
 
 pub fn apply_movement(world: &mut World, pipeline: &mut PhysicsPipeline, actions: &Actions) {
@@ -69,7 +63,7 @@ pub fn apply_movement(world: &mut World, pipeline: &mut PhysicsPipeline, actions
         Option<&Player>,
         Option<&Frozen>,
         &mut AnimationEventQueue,
-        Option<&MovementState>,
+        &MovementState,
     )>() {
         let direction = movement_dir.0;
 
@@ -143,7 +137,8 @@ pub fn apply_movement(world: &mut World, pipeline: &mut PhysicsPipeline, actions
                 speed: speed.speed,
                 direction: dir,
                 is_moving: direction != Vec3::ZERO,
-                is_sprinting: speed.sprinting,
+                is_sprinting: move_state.is_sprinting,
+                is_sneaking: move_state.is_sneaking,
                 is_player: player.is_some(),
                 is_female: actor_keywords.contains(KEYWORD_FEMALE),
                 // is_jumping: state.jumping,
@@ -152,24 +147,15 @@ pub fn apply_movement(world: &mut World, pipeline: &mut PhysicsPipeline, actions
             },
         );
 
-        let start_moving =
-            direction != Vec3::ZERO && move_state.as_ref().is_none_or(|s| !s.is_moving);
+        let start_moving = direction != Vec3::ZERO && !move_state.is_moving;
         if start_moving && let Some(action) = actions.0.get(&Action::MoveStart) {
             queue.0.push_back(*action);
         }
 
-        let stop_moving =
-            direction == Vec3::ZERO && move_state.as_ref().is_some_and(|s| s.is_moving);
+        let stop_moving = direction == Vec3::ZERO && move_state.is_moving;
         if stop_moving && let Some(action) = actions.0.get(&Action::MoveStop) {
             queue.0.push_back(*action);
         }
-
-        buffer.insert_one(
-            entity,
-            MovementState {
-                is_moving: direction != Vec3::ZERO,
-            },
-        );
     }
 
     buffer.run_on(world);
