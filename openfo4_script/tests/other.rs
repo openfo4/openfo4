@@ -1,7 +1,7 @@
 use openfo4_script::assembler::assemble;
 use openfo4_script::compiler::CompilerOptions;
 use openfo4_script::engine::{Engine, Options};
-use openfo4_script::runtime::{Caller, Context, Exception, ObjectAddr};
+use openfo4_script::runtime::{Caller, Context, ObjectAddr};
 
 const COMPILER_OPTIONS: CompilerOptions = CompilerOptions {
     validation: true,
@@ -35,8 +35,8 @@ fn pass_null_param() {
 fn host_function_returns_null() {
     let mut engine = Engine::new(COMPILER_OPTIONS);
 
-    fn f(_caller: Caller<'_, ()>) -> Result<ObjectAddr, Exception> {
-        Ok(ObjectAddr::NULL)
+    fn f(_caller: Caller<'_, ()>) -> ObjectAddr {
+        ObjectAddr::NULL
     }
 
     let module = assemble(

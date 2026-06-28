@@ -1,7 +1,7 @@
 use openfo4_script::assembler::assemble;
 use openfo4_script::compiler::CompilerOptions;
 use openfo4_script::engine::{Engine, Options};
-use openfo4_script::runtime::{Caller, Context, Exception, ObjectAddr};
+use openfo4_script::runtime::{Caller, Context, ObjectAddr};
 
 const COMPILER_OPTIONS: CompilerOptions = CompilerOptions {
     validation: true,
@@ -12,9 +12,8 @@ const COMPILER_OPTIONS: CompilerOptions = CompilerOptions {
 fn int_var() {
     let mut engine = Engine::new(COMPILER_OPTIONS);
 
-    fn assert_valid_result(_caller: Caller<'_, ()>, v: i32) -> Result<(), Exception> {
+    fn assert_valid_result(_caller: Caller<'_, ()>, v: i32) {
         assert_eq!(v, 1);
-        Ok(())
     }
 
     let module = assemble(

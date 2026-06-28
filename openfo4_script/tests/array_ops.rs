@@ -12,14 +12,12 @@ const COMPILER_OPTIONS: CompilerOptions = CompilerOptions {
 fn array_create() {
     let mut engine = Engine::new(COMPILER_OPTIONS);
 
-    fn test_valid_array(caller: Caller<'_, ()>, addr: ObjectAddr) -> Result<(), Exception> {
+    fn test_valid_array(caller: Caller<'_, ()>, addr: ObjectAddr) {
         let array = unsafe { caller.array::<i32>(addr) };
 
         for elem in array {
             assert_eq!(*elem, 0);
         }
-
-        Ok(())
     }
 
     let module = assemble(
@@ -55,9 +53,8 @@ fn array_create() {
 fn array_get() {
     let mut engine = Engine::new(COMPILER_OPTIONS);
 
-    fn assert_valid_result(_caller: Caller<'_, ()>, value: i32) -> Result<(), Exception> {
+    fn assert_valid_result(_caller: Caller<'_, ()>, value: i32) {
         assert_eq!(value, 9);
-        Ok(())
     }
 
     let module = assemble(
@@ -100,10 +97,9 @@ fn array_get() {
 fn array_add() {
     let mut engine = Engine::new(COMPILER_OPTIONS);
 
-    fn assert_valid_result(caller: Caller<'_, ()>, addr: ObjectAddr) -> Result<(), Exception> {
+    fn assert_valid_result(caller: Caller<'_, ()>, addr: ObjectAddr) {
         let arr = unsafe { caller.array::<i32>(addr) };
         assert_eq!(arr, [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 5, 5, 5]);
-        Ok(())
     }
 
     let module = assemble(
@@ -144,10 +140,9 @@ fn array_add() {
 fn array_insert() {
     let mut engine = Engine::new(COMPILER_OPTIONS);
 
-    fn assert_valid_result(caller: Caller<'_, ()>, addr: ObjectAddr) -> Result<(), Exception> {
+    fn assert_valid_result(caller: Caller<'_, ()>, addr: ObjectAddr) {
         let arr = unsafe { caller.array::<i32>(addr) };
         assert_eq!(arr, [0, 1, 2, 42, 3, 4, 5, 6, 7, 8, 9]);
-        Ok(())
     }
 
     let module = assemble(
@@ -188,10 +183,9 @@ fn array_insert() {
 fn array_clear() {
     let mut engine = Engine::new(COMPILER_OPTIONS);
 
-    fn assert_valid_result(caller: Caller<'_, ()>, addr: ObjectAddr) -> Result<(), Exception> {
+    fn assert_valid_result(caller: Caller<'_, ()>, addr: ObjectAddr) {
         let array = unsafe { caller.array::<i32>(addr) };
         assert_eq!(array.len(), 0);
-        Ok(())
     }
 
     let module = assemble(
@@ -233,17 +227,11 @@ fn array_clear() {
 fn array_find_int() {
     let mut engine = Engine::new(COMPILER_OPTIONS);
 
-    fn assert_valid_result(
-        caller: Caller<'_, ()>,
-        addr: ObjectAddr,
-        index: i32,
-    ) -> Result<(), Exception> {
+    fn assert_valid_result(caller: Caller<'_, ()>, addr: ObjectAddr, index: i32) {
         let array = unsafe { caller.array::<i32>(addr) };
 
         assert_eq!(index, 42);
         assert_eq!(array[index as usize], 42);
-
-        Ok(())
     }
 
     let module = assemble(
@@ -287,11 +275,7 @@ fn array_find_int() {
 fn array_find_struct() {
     let mut engine = Engine::new(COMPILER_OPTIONS);
 
-    fn assert_valid_result(
-        caller: Caller<'_, ()>,
-        addr: ObjectAddr,
-        index: i32,
-    ) -> Result<(), Exception> {
+    fn assert_valid_result(caller: Caller<'_, ()>, addr: ObjectAddr, index: i32) {
         let array = unsafe { caller.array::<ObjectAddr>(addr) };
         let object = caller.object_pool().get(array[index as usize]).unwrap();
 
@@ -300,8 +284,6 @@ fn array_find_struct() {
             assert_eq!(object.get_typed::<i32>("", "x").unwrap(), 42);
             assert_eq!(object.get_typed::<f32>("", "y").unwrap(), 42.0);
         }
-
-        Ok(())
     }
 
     let module = assemble(

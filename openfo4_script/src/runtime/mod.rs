@@ -549,7 +549,13 @@ impl CallTable {
     }
 }
 
-pub trait IntoFunc<T, Params, Returns> {
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub enum FnMarker {}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub enum FalliableFnMarker {}
+
+pub trait IntoFunc<T, Marker, Params, Returns> {
     #[doc(hidden)]
     #[expect(private_interfaces)]
     fn into_func(self, call_table: &mut CallTable, signature: PscSignature) -> usize;
@@ -563,7 +569,7 @@ macro_rules! impl_into_func {
         #[allow(unused_assignments)]
         #[allow(non_snake_case)]
         #[allow(unused)]
-        impl<F, T, $($params,)* $($returns,)*> IntoFunc<T, ($($params,)*), ($($returns,)*)> for F
+        impl<F, T, $($params,)* $($returns,)*> IntoFunc<T, FnMarker, ($($params,)*), ($($returns,)*)> for F
         where
             F: Fn(Caller<'_, T>, $($params),*) -> Result<($($returns),*), Exception> + Send + Sync + 'static,
             T: 'static,
@@ -608,6 +614,68 @@ macro_rules! impl_into_func {
                         // values uninitialized.
                         Err(err) => err as i32,
                     }
+                };
+
+                call_table.insert(callback)
+            }
+
+            fn signature() -> Signature {
+                let mut params = Vec::new();
+                $(
+                    params.push($params::TYPE);
+                )*
+
+                let mut returns = Vec::new();
+                $(
+                    returns.push($returns::TYPE);
+                )*
+
+                Signature { params, returns }
+            }
+        }
+
+        #[allow(unused_assignments)]
+        #[allow(non_snake_case)]
+        #[allow(unused)]
+        impl<F, T, $($params,)* $($returns,)*> IntoFunc<T, FalliableFnMarker, ($($params,)*), ($($returns,)*)> for F
+        where
+            F: Fn(Caller<'_, T>, $($params),*) -> ($($returns),*) + Send + Sync + 'static,
+            T: 'static,
+            $(
+                $params: NativeType,
+            )*
+            $(
+                $returns: NativeType,
+            )*
+        {
+            #[expect(private_interfaces)]
+            fn into_func(self, call_table: &mut CallTable, signature: PscSignature) -> usize {
+                let callback = move |ctx: *const RawContext, params: *const RawVal, returns: *mut RawVal| -> i32 {
+                    let ctx = unsafe { &*ctx };
+
+                    let mut index = 0;
+                    $(
+                        let $params = unsafe { $params::from_raw(&*params.add(index)) };
+                        index += 1;
+                    )*
+
+                    let caller = Caller {
+                        ctx,
+                        _marker: PhantomData,
+                    };
+
+                    let ($($returns),*) =  self(caller, $($params),*);
+                    validate_return_value_types(ctx, &($($returns,)*), &signature);
+
+                    let mut index = 0;
+                    $(
+                        unsafe {
+                            returns.add(index).write($returns.to_raw());
+                            index += 1;
+                        }
+                    )*
+
+                    RESULT_OK
                 };
 
                 call_table.insert(callback)

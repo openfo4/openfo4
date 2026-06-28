@@ -67,9 +67,13 @@ impl Engine {
     ///
     /// Panics if the same a native function with the same `class` and `func` was already registered
     /// with this `Engine`.
-    pub fn register_native_function<F, T, Params, Returns>(&mut self, class: &str, func: &str, f: F)
-    where
-        F: IntoFunc<T, Params, Returns>,
+    pub fn register_native_function<F, T, Marker, Params, Returns>(
+        &mut self,
+        class: &str,
+        func: &str,
+        f: F,
+    ) where
+        F: IntoFunc<T, Marker, Params, Returns>,
     {
         {
             let class = Lowercase::new(class);

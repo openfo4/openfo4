@@ -2,7 +2,7 @@ use openfo4_script::assembler::assemble;
 use openfo4_script::compiler::CompilerOptions;
 use openfo4_script::compiler::resources::TypeId;
 use openfo4_script::engine::{Engine, Options};
-use openfo4_script::runtime::{Caller, Context, Exception, ObjectAddr, Val};
+use openfo4_script::runtime::{Caller, Context, ObjectAddr, Val};
 
 const COMPILER_OPTIONS: CompilerOptions = CompilerOptions {
     validation: true,
@@ -52,8 +52,8 @@ fn return_wrong_type_from_native_func() {
         a: TypeId,
     }
 
-    fn f(caller: Caller<'_, State>) -> Result<ObjectAddr, Exception> {
-        Ok(caller.object_pool().insert(caller.data().a).addr())
+    fn f(caller: Caller<'_, State>) -> ObjectAddr {
+        caller.object_pool().insert(caller.data().a).addr()
     }
 
     let module = assemble(
@@ -125,8 +125,8 @@ fn call_with_incorrect_parameter_count() {
 fn return_null_non_nullable_object() {
     let mut engine = Engine::new(COMPILER_OPTIONS);
 
-    fn f(_caller: Caller<'_, ()>) -> Result<ObjectAddr, Exception> {
-        Ok(ObjectAddr::NULL)
+    fn f(_caller: Caller<'_, ()>) -> ObjectAddr {
+        ObjectAddr::NULL
     }
 
     let module = assemble(

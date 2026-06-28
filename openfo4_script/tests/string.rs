@@ -14,10 +14,9 @@ const COMPILER_OPTIONS: CompilerOptions = CompilerOptions {
 fn string_constant() {
     let mut engine = Engine::new(COMPILER_OPTIONS);
 
-    fn assert_valid_result(caller: Caller<'_, ()>, addr: ObjectAddr) -> Result<(), Exception> {
+    fn assert_valid_result(caller: Caller<'_, ()>, addr: ObjectAddr) {
         let s = caller.string(addr);
         assert_eq!(s, "Hello World!");
-        Ok(())
     }
 
     let module = assemble(
@@ -51,10 +50,9 @@ fn string_constant() {
 fn string_concat() {
     let mut engine = Engine::new(COMPILER_OPTIONS);
 
-    fn assert_valid_result(caller: Caller<'_, ()>, addr: ObjectAddr) -> Result<(), Exception> {
+    fn assert_valid_result(caller: Caller<'_, ()>, addr: ObjectAddr) {
         let s = caller.string(addr);
         assert_eq!(s, "Hello World");
-        Ok(())
     }
 
     let module = assemble(
