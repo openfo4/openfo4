@@ -166,6 +166,10 @@ impl ConstantPool {
     pub fn alloc(&self, buf: &[u8], align: usize) -> *const u8 {
         debug_assert!(align > 0);
 
+        if buf.is_empty() {
+            return core::ptr::dangling();
+        }
+
         let layout = Layout::for_value(buf);
         let layout = layout.align_to(align).unwrap();
 
