@@ -7,6 +7,8 @@ use openfo4_core::ecs::{Entity, World};
 use openfo4_core::events::EventBus;
 
 use crate::components::{ActorMarker, DeadActor, LookingAtTarget, PlacedItem, Player, RootParent};
+use crate::state::hardcoded::fallout4::ACTOR_VALUE_HEALTH;
+use crate::systems::actor_value::ActorValueProperties;
 use crate::systems::inventory::Inventory;
 use crate::systems::{PickupItemEvent, TransferItemEvent};
 
@@ -34,7 +36,7 @@ pub fn draw_hud(ctx: &Context, state: &mut HudState, world: &World, events: &mut
     let viewport = ctx.content_rect();
 
     draw_crosshair(&painter, viewport, world);
-    draw_health(&painter, viewport);
+    draw_health(&painter, viewport, world);
     draw_quickloot_menu(ctx, viewport, world, events, &mut state.quickloot);
     draw_pickup_menu(ctx, world, events);
 }
@@ -133,7 +135,7 @@ fn draw_interaction_crosshair(painter: &Painter, viewport: Rect) {
     }
 }
 
-fn draw_health(painter: &Painter, viewport: Rect) {
+fn draw_health(painter: &Painter, viewport: Rect, world: &World) {
     let outer_area = Rect {
         min: Pos2 {
             x: viewport.min.x + 100.0,
@@ -155,10 +157,17 @@ fn draw_health(painter: &Painter, viewport: Rect) {
         },
     };
 
-    draw_outline(&painter, outer_area);
+    let mut iter = world.query::<(&Player, &ActorValueProperties)>();
+    let Some((_, props)) = iter.iter().next() else {
+        return;
+    };
 
-    let health_factor = 0.7;
-    let rads_factor = 0.3;
+    let health = props.get(ACTOR_VALUE_HEALTH).unwrap();
+    let health_factor = health.damaged / health.value;
+
+    let rads_factor = 0.0;
+
+    draw_outline(&painter, outer_area);
 
     painter.rect_filled(
         Rect {
