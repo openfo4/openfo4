@@ -367,7 +367,7 @@ struct ScheduledTask {
 
 #[derive(Clone, Debug, Default)]
 struct TaskState {
-    stack: Option<Stack>,
+    stack: Option<Arc<parking_lot::Mutex<Stack>>>,
     suspended_on: Option<EffectId>,
 }
 
@@ -407,7 +407,7 @@ fn call_event_invocation_single(
     let is_resumed = task_state.stack.is_some();
     let stack = task_state
         .stack
-        .get_or_insert_with(|| engine.create_stack());
+        .get_or_insert_with(|| Arc::new(parking_lot::Mutex::new(engine.create_stack())));
 
     let mut args = args
         .iter()
@@ -420,8 +420,10 @@ fn call_event_invocation_single(
         .collect::<Vec<_>>();
     args.insert(0, Val::Object(script.get().object.addr()));
 
+    let mut stack = stack.lock();
+
     let s = state.take().unwrap();
-    let mut ctx = Context::new(engine, stack, s);
+    let mut ctx = Context::new(engine, &mut stack, s);
 
     if is_resumed {
         tracing::debug!(
@@ -450,6 +452,7 @@ fn call_event_invocation_single(
             );
 
             // Execution is done, reset the stack.
+            drop(stack);
             task_state.stack = None;
         }
         Err(Exception::Suspend) => {
@@ -526,7 +529,7 @@ struct ScriptInstance {
     instance: Instance,
     layout: TypeId,
     object: ObjectRef,
-    stacks: HashMap<String, Stack>,
+    stacks: HashMap<String, Arc<parking_lot::Mutex<Stack>>>,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
