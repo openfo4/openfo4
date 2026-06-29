@@ -1,11 +1,15 @@
 use core::range::Range;
 use std::fmt::Write;
 use std::io;
+use std::sync::LazyLock;
 
-use capstone::Capstone;
 use capstone::arch::BuildsCapstone;
 use capstone::arch::x86::ArchMode;
+use capstone::{Capstone, Insn};
+use hashbrown::HashMap;
 use openfo4_jit::{CompiledFunction, SourceLoc};
+
+use crate::runtime::host_functions;
 
 const TEMPLATE: &str = include_str!("debug.html");
 
@@ -77,7 +81,12 @@ pub fn write_debug_output(info: &DebugInfo, func: &CompiledFunction) {
             let res = disasm
                 .disasm_all(&func.as_bytes()[*range], addr as u64)
                 .unwrap();
-            write!(asm, "<span class=\"line\">{}</span>", res).unwrap();
+            let res: String = res
+                .iter()
+                .map(|ins| format_instruction(ins))
+                .collect::<Vec<_>>()
+                .join("\n");
+            write!(asm, "<span class=\"line\">{}\n</span>", res).unwrap();
 
             asm_to_hir.push(index);
         },
@@ -86,7 +95,12 @@ pub fn write_debug_output(info: &DebugInfo, func: &CompiledFunction) {
             let res = disasm
                 .disasm_all(&func.as_bytes()[range], addr as u64)
                 .unwrap();
-            write!(asm, "<span>{}</span>", res).unwrap();
+            let res: String = res
+                .iter()
+                .map(|ins| format_instruction(ins))
+                .collect::<Vec<_>>()
+                .join("\n");
+            write!(asm, "<span>{}\n</span>", res).unwrap();
         },
     );
 
@@ -183,5 +197,52 @@ fn render_segmented_text<T, U>(
                 end: len,
             },
         );
+    }
+}
+
+fn format_instruction(ins: &Insn<'_>) -> String {
+    #[allow(function_casts_as_integer)]
+    static SYMBOLS: LazyLock<HashMap<usize, &'static str>> = LazyLock::new(|| {
+        HashMap::from([
+            (
+                host_functions::call_host_trampoline as usize,
+                "call_host_trampoline",
+            ),
+            (host_functions::alloc_zeroed as usize, "alloc_zeroed"),
+            (
+                host_functions::alloc_stack_frame as usize,
+                "alloc_stack_frame",
+            ),
+            (
+                host_functions::free_stack_frame as usize,
+                "free_stack_frame",
+            ),
+            (host_functions::bool_to_string as usize, "bool_to_string"),
+            (host_functions::i32_to_string as usize, "i32_to_string"),
+            (host_functions::f32_to_string as usize, "f32_to_string"),
+            (
+                host_functions::object_to_string as usize,
+                "object_to_string",
+            ),
+            (host_functions::enter_span as usize, "enter_span"),
+            (host_functions::exit_span as usize, "exit_span"),
+            (host_functions::stub as usize, "stub"),
+        ])
+    });
+
+    let s = ins.to_string();
+
+    let Some(imm_start) = s.trim().rfind("0x") else {
+        return s;
+    };
+
+    let Ok(imm) = usize::from_str_radix(s[imm_start + 2..].trim(), 16) else {
+        return s;
+    };
+
+    if let Some(symbol) = SYMBOLS.get(&imm) {
+        format!("{s} # {symbol}")
+    } else {
+        s
     }
 }
