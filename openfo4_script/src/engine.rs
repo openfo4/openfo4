@@ -9,8 +9,9 @@ use openfo4_pex::{Class, Module};
 
 use crate::compiler::resources::{TypeId, TypeInfo};
 use crate::compiler::{CompilationResult, CompilerOptions, Context, NativeFunction};
+use crate::runtime::func::Func;
 use crate::runtime::host_functions::call_host_trampoline;
-use crate::runtime::{CallTable, Func, HostState, IntoFunc, ObjectPool, Stack};
+use crate::runtime::{CallTable, HostState, IntoFunc, ObjectPool, Stack};
 
 #[derive(Clone, Debug)]
 pub enum Error {

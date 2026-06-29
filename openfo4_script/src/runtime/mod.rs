@@ -1,3 +1,4 @@
+pub mod func;
 pub mod object;
 mod stack;
 
@@ -5,18 +6,17 @@ pub(crate) mod host_functions;
 
 use std::any::Any;
 use std::marker::PhantomData;
-use std::mem::{MaybeUninit, transmute};
-use std::sync::{Arc, Weak};
+use std::sync::Arc;
+use std::task::{Poll, Waker};
 
 use game_common::cell::UnsafeRefCell;
 use openfo4_jit::{Signature, Type};
-use thiserror::Error;
 
 pub use object::{ArrayObject, Object, ObjectAddr, ObjectPool, ObjectRef};
 pub use stack::Stack;
 
+use crate::compiler::PscSignature;
 use crate::compiler::resources::TypeId;
-use crate::compiler::{CompilationResult, PscSignature};
 use crate::engine::{Engine, EngineShared};
 
 pub(crate) const RESULT_OK: i32 = 0;
@@ -69,10 +69,13 @@ impl<'a, T> Context<'a, T> {
 pub(crate) struct RawContext {
     pub stack_ptr: RawStack,
     pub state: *const HostState,
-    pub data: *mut dyn Any,
+    pub data: *mut (dyn Any + Send),
     pub stack: *mut Stack,
     panic: PanicMsg,
+    waker: *const Waker,
 }
+
+unsafe impl Send for RawContext {}
 
 #[derive(Clone, Debug)]
 #[repr(C)]
@@ -180,261 +183,6 @@ impl Val {
     }
 }
 
-#[derive(Clone, Debug)]
-pub struct Func {
-    ptr: NativeFnPtr,
-    signature: Signature,
-    psc_sig: PscSignature,
-    engine: Weak<EngineShared>,
-}
-
-impl Func {
-    /// # Safety
-    ///
-    /// - The function pointer must point to a [`NativeFnPtr`] function.
-    pub(crate) unsafe fn new(res: &CompilationResult, engine: Weak<EngineShared>) -> Self {
-        // Should always match the ABI of `host_call_trampoline`.
-        debug_assert_eq!(
-            res.function.signature(),
-            &Signature {
-                params: vec![Type::Pointer, Type::Pointer, Type::Pointer],
-                returns: vec![Type::I32]
-            }
-        );
-
-        Self {
-            // SAFETY: The caller guarantees that the function is a valid
-            // function pointer of type `NativeFnPtr`.
-            ptr: unsafe { transmute::<*const u8, NativeFnPtr>(res.function.as_ptr()) },
-            signature: res.signature.clone(),
-            psc_sig: res.psc_signature.clone(),
-            engine,
-        }
-    }
-
-    pub fn call<T>(&self, ctx: &mut Context<'_, T>, params: &[Val]) -> Result<Vec<Val>, Exception>
-    where
-        T: 'static,
-    {
-        assert_eq!(
-            self.psc_sig.params.len(),
-            params.len(),
-            "function takes {} parameters, {} were given",
-            self.psc_sig.params.len(),
-            params.len()
-        );
-        validate_parameter_types(&ctx.engine.state.pool, params, &self.psc_sig);
-
-        let mut r_params = vec![MaybeUninit::<RawVal>::uninit(); params.len()];
-        let mut r_returns = vec![MaybeUninit::<RawVal>::uninit(); self.signature.returns.len()];
-
-        // We don't need logic to drop written `MaybeUninit<RawVal>` values.
-        const {
-            assert!(!core::mem::needs_drop::<RawVal>());
-        }
-
-        for (index, param) in params.iter().enumerate() {
-            r_params[index].write(param.into_raw());
-        }
-
-        // SAFETY:
-        // - When we have constructed this `TypedFunc` we have asserted that the signature
-        //   matches.
-        // - We have filled all params according to the function signature.
-        // - We have allocated enough capacity for all return values according to the function
-        //   signature.
-        unsafe {
-            self.call_unchecked(
-                ctx,
-                r_params.as_ptr().cast::<RawVal>(),
-                r_returns.as_mut_ptr().cast::<RawVal>(),
-            )?;
-        }
-
-        let mut returns = Vec::with_capacity(self.signature.returns.len());
-        for (index, ty) in self.signature.returns.iter().enumerate() {
-            let raw = unsafe { r_returns[index].assume_init_ref() };
-
-            unsafe {
-                returns.push(match ty {
-                    Type::I8 => Val::Bool(<bool as NativeType>::from_raw(raw)),
-                    Type::I32 => Val::I32(<i32 as NativeType>::from_raw(raw)),
-                    Type::F32 => Val::F32(<f32 as NativeType>::from_raw(raw)),
-                    Type::Pointer => Val::Object(<ObjectAddr as NativeType>::from_raw(raw)),
-                    _ => unreachable!(),
-                });
-            }
-        }
-
-        Ok(returns)
-    }
-
-    /// Calls the guest function.
-    ///
-    /// # Panics
-    ///
-    /// - Panics if the provided [`Context`] was created from a different [`Engine`] than this
-    ///   `Func`.
-    /// - Panics if the [`Stack`] of the provided [`Context`] is not empty and contains contents
-    ///   for a different `Func`.
-    ///
-    /// # Safety
-    ///
-    /// - The values in `params` must match the function signature.
-    /// - The `returns` allocation must be large enough for the return parameters of the function
-    ///   signature.
-    pub unsafe fn call_unchecked<T>(
-        &self,
-        ctx: &mut Context<'_, T>,
-        params: *const RawVal,
-        returns: *mut RawVal,
-    ) -> Result<(), Exception>
-    where
-        T: 'static,
-    {
-        // The guest function will read from the stack and on suspension assume that
-        // current contents match the contents of the previous writes.
-        // We must ensure that we only resume using a stack that is compatible with
-        // function we are calling, otherwise the guest function will begin reading
-        // arbitrary memory and reinterpret memory incorrectly.
-        assert!(
-            core::ptr::addr_eq(Arc::as_ptr(&ctx.engine), Weak::as_ptr(&self.engine)),
-            "attempted to call func with context from another Engine"
-        );
-        if let Some(stack_fn_ptr) = ctx.stack.func {
-            let fn_ptr = self.ptr as *const u8;
-            assert!(
-                core::ptr::addr_eq(fn_ptr, stack_fn_ptr),
-                "attempted to reuse stack for incompatible func"
-            );
-        }
-
-        ctx.stack.func = Some(self.ptr as *const u8);
-
-        // Allocate enough stack space for the callee prologue.
-        if ctx.stack.size() == 0 {
-            ctx.stack.alloc(size_of::<usize>());
-        }
-
-        // We must lock the call table before we call the guest function.
-        let _lock = ctx.engine.call_table_lock.read();
-
-        let mut raw_ctx = RawContext {
-            stack_ptr: RawStack {
-                ptr: ctx.stack.as_ptr(),
-                len: 0,
-            },
-            state: &ctx.engine.state,
-            data: &mut ctx.data as *mut dyn Any,
-            stack: ctx.stack,
-            panic: PanicMsg::default(),
-        };
-
-        let res = unsafe { (self.ptr)(&raw_ctx, params, returns) };
-
-        // If the callee calls into a native host function that panics,
-        // we will resume the panic here.
-        // The following code will not be executed.
-        raw_ctx.panic.resume();
-
-        if res == RESULT_OK {
-            ctx.stack.free(size_of::<usize>());
-            debug_assert_eq!(ctx.stack.size(), 0);
-
-            ctx.stack.func = None;
-
-            Ok(())
-        } else {
-            // SAFETY: The result parameter is only created as RESULT_OK from inside
-            // compiled functions. All other values are only produced by host functions
-            // that return a Exception, so we are doing a type roundtrip.
-            Err(unsafe { transmute::<i32, Exception>(res) })
-        }
-    }
-
-    pub fn typed<Params, Returns>(
-        &self,
-    ) -> Result<TypedFunc<'_, Params, Returns>, FuncSignatureMismatch>
-    where
-        Params: NativeTuple,
-        Returns: NativeTuple,
-    {
-        if &self.signature.params[1..] != Params::TYPES
-            || &self.signature.returns[..self.signature.returns.len() - 1] != Returns::TYPES
-        {
-            let expected = Signature {
-                params: Params::TYPES.to_vec(),
-                returns: Returns::TYPES.to_vec(),
-            };
-            let found = self.signature.clone();
-
-            return Err(FuncSignatureMismatch { expected, found });
-        }
-
-        Ok(TypedFunc {
-            func: self,
-            _marker: PhantomData,
-        })
-    }
-}
-
-#[derive(Clone, Debug, Error)]
-#[error("expected {expected:?} found {found:?}")]
-pub struct FuncSignatureMismatch {
-    expected: Signature,
-    found: Signature,
-}
-
-/// A statically typed function.
-pub struct TypedFunc<'a, Params, Returns> {
-    func: &'a Func,
-    _marker: PhantomData<fn(Params) -> Returns>,
-}
-
-impl<'a, Params, Returns> TypedFunc<'a, Params, Returns>
-where
-    Params: NativeTuple,
-    Returns: NativeTuple,
-{
-    pub fn call<T>(&self, ctx: &mut Context<'_, T>, params: Params) -> Result<Returns, Exception>
-    where
-        T: 'static,
-    {
-        validate_parameter_types(&ctx.engine.state.pool, &params, &self.func.psc_sig);
-
-        // TODO: When const_generics is stabilized we can avoid the heap allocation
-        // and use a regular array.
-        let mut r_params = vec![MaybeUninit::<RawVal>::uninit(); Params::SIZE];
-        let mut r_returns = vec![MaybeUninit::<RawVal>::uninit(); Returns::SIZE];
-
-        // We don't need logic to drop written `MaybeUninit<RawVal>` values.
-        const {
-            assert!(!core::mem::needs_drop::<RawVal>());
-        }
-
-        unsafe {
-            params.write_raw(r_params.as_mut_ptr().cast::<RawVal>());
-        }
-
-        // SAFETY:
-        // - When we have constructed this `TypedFunc` we have asserted that the signature
-        //   matches.
-        // - We have filled all params according to the function signature.
-        // - We have allocated enough capacity for all return values according to the function
-        //   signature.
-        unsafe {
-            self.func.call_unchecked(
-                ctx,
-                r_params.as_ptr().cast::<RawVal>(),
-                r_returns.as_mut_ptr().cast::<RawVal>(),
-            )?;
-        }
-
-        let returns = unsafe { Returns::from_raw(r_returns.as_ptr().cast::<RawVal>()) };
-        Ok(returns)
-    }
-}
-
 /// Context passed to host functions called from the guest.
 pub struct Caller<'a, T>
 where
@@ -528,6 +276,17 @@ impl<'a, T> Caller<'a, T> {
     }
 }
 
+// Caller<'_, T> wraps a &'_ RawContext. RawContext is Send, but not Sync,
+// however semantically we behave as if we wrapped an &'_ mut RawContext,
+// which is Send.
+// Note that we don't actually care about `T` here at all, since we don't
+// know if we even have a `T` until a runtime typecheck.
+// If the typecheck fails we never actually have a `T` value whose Send
+// properties could be violated.
+// If the typecheck suceeds, we know that the type is already guaranteed
+// to be `Send`, as we only allow `Any + Send` types.
+unsafe impl<T> Send for Caller<'_, T> {}
+
 pub(crate) struct HostState {
     pub call_table: UnsafeRefCell<CallTable>,
     pub pool: ObjectPool,
@@ -555,6 +314,10 @@ pub enum FnMarker {}
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub enum FalliableFnMarker {}
 
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Hash)]
+pub struct AsyncFnMarker<'a>(PhantomData<fn(&'a ())>);
+
+/// A native host function that can be called from the guest.
 pub trait IntoFunc<T, Marker, Params, Returns> {
     #[doc(hidden)]
     #[expect(private_interfaces)]
@@ -695,6 +458,84 @@ macro_rules! impl_into_func {
                 Signature { params, returns }
             }
         }
+
+        #[allow(unused_assignments)]
+        #[allow(non_snake_case)]
+        #[allow(unused)]
+        impl<'a, F, Fut, T, $($params,)* $($returns,)*> IntoFunc<T, AsyncFnMarker<'a>, ($($params,)*), ($($returns,)*)> for F
+        where
+            F: Fn(Caller<'a, T>, $($params),*) -> Fut + Send + Sync + 'static,
+            Fut: IntoFuture<Output = ($($returns),*)> + Send + 'a,
+            T: 'static,
+            $(
+                $params: NativeType,
+            )*
+            $(
+                $returns: NativeType,
+            )*
+        {
+            #[expect(private_interfaces)]
+            fn into_func(self, call_table: &mut CallTable, signature: PscSignature) -> usize {
+                let callback = move |ctx: *const RawContext, params: *const RawVal, returns: *mut RawVal| -> i32 {
+                    let ctx = unsafe { &*ctx };
+                    let stack = unsafe { &mut *ctx.stack };
+
+                    let waker = unsafe { &*ctx.waker };
+                    let mut cx = std::task::Context::from_waker(waker);
+
+                    if !stack.future.is_init() {
+                        let mut index = 0;
+                        $(
+                            let $params = unsafe { $params::from_raw(&*params.add(index)) };
+                            index += 1;
+                        )*
+
+                        let caller = Caller {
+                            ctx,
+                            _marker: PhantomData,
+                        };
+
+                        let future = self(caller, $($params),*).into_future();
+                        stack.future.set(future);
+                    }
+
+                    match unsafe { stack.future.poll::<($($returns),*), Fut::IntoFuture>(&mut cx) } {
+                        Poll::Ready(($($returns),*)) => {
+                            validate_return_value_types(ctx, &($($returns,)*), &signature);
+
+                            let mut index = 0;
+                            $(
+                                unsafe {
+                                    returns.add(index).write($returns.to_raw());
+                                    index += 1;
+                                }
+                            )*
+
+                            RESULT_OK
+                        }
+                        Poll::Pending => {
+                            RESULT_SUSPEND
+                        }
+                    }
+                };
+
+                call_table.insert(callback)
+            }
+
+            fn signature() -> Signature {
+                let mut params = Vec::new();
+                $(
+                    params.push($params::TYPE);
+                )*
+
+                let mut returns = Vec::new();
+                $(
+                    returns.push($returns::TYPE);
+                )*
+
+                Signature { params, returns }
+            }
+        }
     };
 }
 
@@ -725,37 +566,6 @@ where
             }
             TypeRef::Invalid => {
                 panic!("returning invalid value");
-            }
-        }
-    }
-}
-
-fn validate_parameter_types<T>(pool: &ObjectPool, params: &T, signature: &PscSignature)
-where
-    T: ?Sized + TypeArray,
-{
-    let res = pool.resources();
-
-    for (is, expect) in params.type_ids(pool).zip(&signature.params) {
-        match is {
-            TypeRef::Concrete(is) => {
-                if is == *expect {
-                    continue;
-                }
-
-                let is_ty = res.types.get(is).unwrap();
-                if !is_ty.info.classes.contains(expect) {
-                    panic!("type {:?} is not compatible with {:?}", is, expect);
-                }
-            }
-            TypeRef::Null => {
-                let expect = res.types.get(*expect).unwrap();
-                if !expect.info.allows_null {
-                    panic!("type {:?} is null, but the type is non-nullable", expect);
-                }
-            }
-            TypeRef::Invalid => {
-                panic!("passing invalid value");
             }
         }
     }

@@ -2,7 +2,7 @@ use openfo4_script::{
     assembler::assemble,
     compiler::CompilerOptions,
     engine::{Engine, Options},
-    runtime::{Caller, Context, Exception, ObjectAddr},
+    runtime::{Caller, Context, ObjectAddr},
 };
 
 const COMPILER_OPTIONS: CompilerOptions = CompilerOptions {

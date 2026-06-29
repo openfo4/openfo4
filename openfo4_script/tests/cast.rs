@@ -1,9 +1,8 @@
 use openfo4_script::assembler::assemble;
 use openfo4_script::compiler::CompilerOptions;
 use openfo4_script::engine::{Engine, Options};
-use openfo4_script::runtime::{
-    ArrayObject, Context, Exception, NativeTuple, ObjectAddr, TypedFunc,
-};
+use openfo4_script::runtime::func::TypedFunc;
+use openfo4_script::runtime::{ArrayObject, Context, Exception, NativeTuple, ObjectAddr};
 
 const COMPILER_OPTIONS: CompilerOptions = CompilerOptions {
     validation: true,
