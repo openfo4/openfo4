@@ -1,3 +1,4 @@
+mod debug;
 mod libcall;
 mod memory;
 mod relocs;
@@ -22,7 +23,7 @@ use slab::Slab;
 
 use crate::backend::cranelift::memory::{Allocation, MemoryAllocator};
 use crate::backend::cranelift::relocs::perform_relocations;
-use crate::backend::{FunctionDefinitionDesc, SourceLocMap, StackSlotDesc};
+use crate::backend::{FunctionDefinitionDesc, SourceLocMap, StackSlotDesc, TextWithSrcLocs};
 use crate::{FloatCompareOp, FuncId, Instruction, IntCompareOp, Signature, SourceLoc, Type, Value};
 
 #[derive(Clone, Debug)]
@@ -43,10 +44,8 @@ impl CraneliftModule {
         let mut flags = settings::builder();
         flags.set("use_colocated_libcalls", "false").unwrap();
         flags.set("is_pic", "false").unwrap();
-        // flags.set("opt_level", "speed_and_size").unwrap();
-        flags.set("opt_level", "none").unwrap();
-        // flags.set("regalloc_algorithm", "backtracking").unwrap();
-        flags.set("regalloc_algorithm", "single_pass").unwrap();
+        flags.set("opt_level", "speed_and_size").unwrap();
+        flags.set("regalloc_algorithm", "backtracking").unwrap();
 
         if validation {
             flags.set("enable_verifier", "true").unwrap();
@@ -849,7 +848,6 @@ impl CraneliftModule {
 
             self.ctx.clear();
             self.ctx.func = func;
-            self.ctx.want_disasm = self.debug;
 
             self.ctx
                 .compile(&*self.isa, &mut ControlPlane::default())
@@ -858,10 +856,7 @@ impl CraneliftModule {
 
             let mut text = None;
             if self.debug {
-                let disasm = code.vcode.as_ref().unwrap();
-
-                let t = format!("CLIF:\n{}------------\nASM:\n{}------------", clif, disasm);
-                text = Some(t);
+                text = Some(debug::format_clif(&clif));
             }
 
             let mut final_srclocs = SourceLocMap::default();
@@ -885,7 +880,7 @@ impl CraneliftModule {
                 code,
                 allocation: Arc::new(allocation),
                 callees: refs_to_funcs,
-                text,
+                clif: text,
                 srclocs: final_srclocs,
             });
 
@@ -902,7 +897,7 @@ impl CraneliftModule {
         CompiledFunction {
             _allocation: compiled.allocation.clone(),
             fn_ptr: compiled.allocation.as_exec_ptr(),
-            text: compiled.text.clone(),
+            clif: compiled.clif.clone(),
             srclocs: compiled.srclocs.clone(),
             len: compiled.code.code_buffer().len(),
         }
@@ -913,7 +908,7 @@ struct CompilationResult {
     code: CompiledCode,
     allocation: Arc<Allocation>,
     callees: HashMap<UserExternalNameRef, FuncId>,
-    text: Option<String>,
+    clif: Option<TextWithSrcLocs<String>>,
     srclocs: SourceLocMap,
 }
 
@@ -953,7 +948,7 @@ pub struct CompiledFunction {
     /// The allocation must not be droped until all function calls terminate.
     _allocation: Arc<Allocation>,
     fn_ptr: *const u8,
-    text: Option<String>,
+    clif: Option<TextWithSrcLocs<String>>,
     srclocs: SourceLocMap,
     len: usize,
 }
@@ -969,8 +964,8 @@ impl CompiledFunction {
         unsafe { core::slice::from_raw_parts(ptr, len) }
     }
 
-    pub fn text(&self) -> Option<&str> {
-        self.text.as_ref().map(|v| v.as_str())
+    pub fn clif(&self) -> Option<&TextWithSrcLocs<String>> {
+        self.clif.as_ref()
     }
 
     pub fn srclocs(&self) -> &SourceLocMap {

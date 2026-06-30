@@ -23,6 +23,7 @@
     .panel {
         overflow: scroll;
         height: 100vh;
+        flex: 1 1 0px;
     }
 
     .section {}
@@ -49,7 +50,7 @@
         </div>
         <div class="panel">
             <h3>CLIF</h3>
-            <pre><code id="hir">{%CLIF%}</code></pre>
+            <pre><code id="clif">{%CLIF%}</code></pre>
         </div>
         <div class="panel">
             <h3>ASM</h3>
@@ -65,19 +66,23 @@
     const HIR_TO_ASM = [{% HIR_TO_ASM %}];
     const ASM_TO_PEX = [1, 2, 3];
     const ASM_TO_HIR = [{% ASM_TO_HIR %}];
-
+    const HIR_TO_CLIF = [{% HIR_TO_CLIF %}];
+    const CLIF_TO_HIR = [{% CLIF_TO_HIR %}];
 
     let pexElems = [];
     let hirElems = [];
+    let clifElems = [];
     let asmElems = [];
     let pexMarked = new Set();
     let hirMarked = new Set();
+    let clifMarked = new Set();
     let asmMarked = new Set();
 
     function resetClasses() {
         let pex = new Set();
         let hir = new Set();
         let asm = new Set();
+        let clif = new Set();
 
         pexMarked.forEach(index => {
             pex.add(index);
@@ -92,10 +97,28 @@
             const pexIndex = HIR_TO_PEX[index];
             if (pexIndex) pex.add(pexIndex);
 
+            const clifIndex = HIR_TO_CLIF[index];
+            if (clifIndex) {
+                clifIndex.forEach(i => {
+                    clif.add(i);
+                });
+            }
+
             const asmIndex = HIR_TO_ASM[index];
             if (asmIndex) {
                 asmIndex.forEach(i => {
                     asm.add(i);
+                });
+            }
+        });
+
+        clifMarked.forEach(index => {
+            clif.add(index);
+
+            const hirIndex = CLIF_TO_HIR[index];
+            if (hirIndex) {
+                hirIndex.forEach(i => {
+                    hir.add(i);
                 });
             }
         });
@@ -126,6 +149,14 @@
                 hirElems[i].classList.add("marked");
             } else {
                 hirElems[i].classList.remove("marked");
+            }
+        }
+
+        for (let i = 0; i < clifElems.length; i++) {
+            if (clif.has(i)) {
+                clifElems[i].classList.add("marked");
+            } else {
+                clifElems[i].classList.remove("marked");
             }
         }
 
@@ -167,6 +198,7 @@
 
     loadElems("pex", pexElems, pexMarked);
     loadElems("hir", hirElems, hirMarked);
+    loadElems("clif", clifElems, clifMarked);
     loadElems("asm", asmElems, asmMarked);
 
 </script>

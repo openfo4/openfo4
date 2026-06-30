@@ -6,7 +6,7 @@ use game_common::collections::vec_map::{Index, VecMap};
 use slab::Slab;
 
 use crate::backend::cranelift::{self, CraneliftModule};
-use crate::backend::{FunctionDefinitionDesc, StackSlotDesc};
+use crate::backend::{FunctionDefinitionDesc, StackSlotDesc, TextWithSrcLocs};
 
 pub use crate::backend::SourceLocMap;
 
@@ -969,10 +969,12 @@ impl<'a> FunctionBuilder<'a> {
         var
     }
 
+    #[track_caller]
     pub fn set_var(&mut self, var: Variable, value: Value) {
         self.instructions.push(Instruction::SetVar { var, value });
     }
 
+    #[track_caller]
     pub fn get_var(&mut self, var: Variable) -> Value {
         let dst = self.produce_value();
 
@@ -1053,6 +1055,11 @@ impl<'a> FunctionBuilder<'a> {
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Block(usize);
+
+impl Block {
+    /// A placeholder value that does not refer to a valid block.
+    pub const DANGLING: Self = Self(usize::MAX);
+}
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct StackSlot(usize);
@@ -1319,8 +1326,8 @@ impl CompiledFunction {
     ///
     /// This is only available when debug was enabled. The text format is unspecified and only
     /// meant for debugging purposes.
-    pub fn text(&self) -> Option<&str> {
-        self.inner.text()
+    pub fn text(&self) -> Option<&TextWithSrcLocs<String>> {
+        self.inner.clif()
     }
 
     pub fn signature(&self) -> &Signature {

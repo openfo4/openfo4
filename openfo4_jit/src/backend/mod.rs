@@ -100,3 +100,9 @@ impl<'a> Iterator for SourceLocMapIter<'a> {
         ))
     }
 }
+
+#[derive(Clone, Debug)]
+pub struct TextWithSrcLocs<T> {
+    pub text: T,
+    pub srclocs: SourceLocMap,
+}

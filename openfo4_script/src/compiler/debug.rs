@@ -109,12 +109,46 @@ pub fn write_debug_output(info: &DebugInfo, func: &CompiledFunction) {
         hir_to_asm[*hir_index].push(asm_index);
     }
 
+    let mut clif = String::new();
+    let mut clif_to_hir = Vec::new();
+    if let Some(text) = func.text() {
+        render_segmented_text(
+            text.srclocs.iter(),
+            text.text.len(),
+            &mut (&mut clif, &mut clif_to_hir),
+            |(range, _)| *range,
+            |(clif, hir_to_clif), (range, srcloc)| {
+                let text = &text.text[*range];
+                write!(clif, "<span class=\"line\">{}</span>", text).unwrap();
+
+                let index = info
+                    .hir
+                    .regions
+                    .iter()
+                    .filter_map(|v| v.loc)
+                    .position(|loc| loc == *srcloc)
+                    .unwrap();
+
+                hir_to_clif.push(index);
+            },
+            |(clif, _), range| {
+                let text = &text.text[range];
+                write!(clif, "<span>{}</span>", text).unwrap();
+            },
+        )
+    }
+
+    let mut hir_to_clif = vec![Vec::new(); info.hir.regions.len()];
+    for (clif_index, hir_index) in clif_to_hir.iter().enumerate() {
+        hir_to_clif[*hir_index].push(clif_index);
+    }
+
     let output = TEMPLATE
         .replace("{%NAME%}", &info.name)
         .replace("{%PEX%}", &info.pex)
         .replace("{%HIR%}", &hir)
         .replace("{%ASM%}", &asm)
-        .replace("{%CLIF%}", func.text().unwrap_or_default())
+        .replace("{%CLIF%}", &clif)
         .replace(
             "{% HIR_TO_ASM %}",
             &hir_to_asm
@@ -134,6 +168,30 @@ pub fn write_debug_output(info: &DebugInfo, func: &CompiledFunction) {
         .replace(
             "{% ASM_TO_HIR %}",
             &asm_to_hir
+                .iter()
+                .map(|v| format!("[{v}]"))
+                .collect::<Vec<_>>()
+                .join(","),
+        )
+        .replace(
+            "{% HIR_TO_CLIF %}",
+            &hir_to_clif
+                .iter()
+                .map(|v| {
+                    format!(
+                        "[{}]",
+                        v.iter()
+                            .map(|v| v.to_string())
+                            .collect::<Vec<_>>()
+                            .join(",")
+                    )
+                })
+                .collect::<Vec<_>>()
+                .join(","),
+        )
+        .replace(
+            "{% CLIF_TO_HIR %}",
+            &clif_to_hir
                 .iter()
                 .map(|v| format!("[{v}]"))
                 .collect::<Vec<_>>()
