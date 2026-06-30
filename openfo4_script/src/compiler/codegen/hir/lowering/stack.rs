@@ -1,7 +1,13 @@
+use std::alloc::Layout;
+use std::collections::VecDeque;
+use std::hash::Hash;
+use std::mem;
 use std::num::NonZeroUsize;
 
+use game_common::utils::vec_ext::VecExt;
+use hashbrown::{HashMap, HashSet};
 use indexmap::IndexMap;
-use openfo4_jit::{Block, FunctionBuilder, IntCompareOp, Value};
+use openfo4_jit::{Block, FunctionBuilder, IntCompareOp, Type as JitType, Value};
 
 use crate::compiler::codegen::hir::lowering::{Local, PTR_TYPE, Translator};
 use crate::compiler::codegen::hir::{Function, Instruction, Variable};
@@ -119,73 +125,437 @@ pub fn resume(translator: &mut Translator<'_>, frame: &StackFrameInfo, start_blo
 
     let tag = translator.builder.load(PTR_TYPE, stack_ptr, 0);
 
-    let resume_block = translator.builder.create_block(&[]);
+    let resume_root_block = translator.builder.create_block(&[]);
 
     // If tag == 0 we don't resume.
     translator
         .builder
-        .brif(tag, resume_block, &[], start_block, &[]);
+        .brif(tag, resume_root_block, &[], start_block, &[]);
 
-    translator.builder.switch_to_block(resume_block);
+    let blocks = build_resume_blocks(translator, frame);
 
-    let mut next_block = translator.builder.create_block(&[]);
+    let graph = Graph::new(frame, |var| {
+        let ty = translator.locals[var.0].ty;
+        (ty.size(), ty.align())
+    });
 
-    let num_points = frame.points.len() + frame.call_points.len();
+    // Tag was already read.
+    let offset = PTR_TYPE.size();
 
-    for (index, point) in frame
-        .points
-        .values()
-        .chain(frame.call_points.values())
-        .enumerate()
-    {
-        // If we reach the last point, the tag must match.
-        if index + 1 != num_points {
-            let wanted_tag = translator.builder.iconst(PTR_TYPE, point.tag.get() as i64);
+    let mut queue = VecDeque::new();
+    queue.push_back((graph.root(), offset, Vec::new(), resume_root_block));
+
+    while let Some((node, mut offset, mut vars, node_block)) = queue.pop_front() {
+        translator.builder.switch_to_block(node_block);
+
+        for var in &node.vars {
+            let local = &translator.locals[*var];
+
+            offset = (offset + local.ty.align() - 1) & !(local.ty.align() - 1);
+
+            let value = translator.builder.load(local.ty, stack_ptr, offset as u32);
+            vars.push(value);
+
+            offset += local.ty.size();
+        }
+
+        // Each block must have at least one leaf or children.
+        debug_assert!(node.leaves().count() != 0 || !node.children().is_empty());
+
+        let mut next_block = translator.builder.create_block(&[]);
+
+        let mut num_blocks_remaining = node.leaves().count() + node.children().len();
+
+        for wanted_tag in node.leaves() {
+            let dst_block = blocks.get(&wanted_tag).unwrap();
+
+            // The tag will always match on the last entry.
+            if num_blocks_remaining == 1 {
+                num_blocks_remaining -= 1;
+                translator.builder.jump(*dst_block, &vars);
+                break;
+            }
+
+            let wanted_tag = translator.builder.iconst(PTR_TYPE, wanted_tag.get() as i64);
             let tag_matches = translator
                 .builder
                 .icmp(tag, wanted_tag, IntCompareOp::Equal);
 
-            let tag_matches_block = translator.builder.create_block(&[]);
-
             translator
                 .builder
-                .brif(tag_matches, tag_matches_block, &[], next_block, &[]);
+                .brif(tag_matches, *dst_block, &vars, next_block, &[]);
 
-            translator.builder.switch_to_block(tag_matches_block);
-        }
-
-        resume_point_load_vars(translator, stack_ptr, point);
-        translator.builder.jump(point.block, &[]);
-
-        if index + 1 != num_points {
             translator.builder.switch_to_block(next_block);
             next_block = translator.builder.create_block(&[]);
+            num_blocks_remaining -= 1;
+        }
+
+        debug_assert_eq!(node.children().len(), num_blocks_remaining);
+
+        for (child, tags) in node.children() {
+            debug_assert!(!tags.is_empty());
+
+            let block = translator.builder.create_block(&[]);
+
+            // The tag will always match on the last entry.
+            if num_blocks_remaining == 1 {
+                translator.builder.jump(block, &[]);
+            } else {
+                let mut any_tag_matches = translator.builder.iconst(JitType::I8, 0);
+                for wanted_tag in tags {
+                    let wanted_tag = translator.builder.iconst(PTR_TYPE, wanted_tag.get() as i64);
+                    let tag_matches = translator
+                        .builder
+                        .icmp(tag, wanted_tag, IntCompareOp::Equal);
+                    any_tag_matches = translator.builder.bor(any_tag_matches, tag_matches);
+                }
+
+                translator
+                    .builder
+                    .brif(any_tag_matches, block, &[], next_block, &[]);
+
+                translator.builder.switch_to_block(next_block);
+                next_block = translator.builder.create_block(&[]);
+                num_blocks_remaining -= 1;
+            }
+
+            let node = graph.get(child);
+
+            queue.push_back((node, offset, vars.clone(), block));
         }
     }
 }
 
-fn resume_point_load_vars(
+fn build_resume_blocks(
     translator: &mut Translator<'_>,
-    stack_ptr: Value,
-    point: &SuspensionPoint,
-) {
-    // Tag was already read.
-    let mut offset = PTR_TYPE.size();
+    frame: &StackFrameInfo,
+) -> HashMap<NonZeroUsize, Block> {
+    let mut blocks = HashMap::new();
 
-    for var in &point.variables {
-        let local = &translator.locals[var.0];
+    for point in frame.points.values().chain(frame.call_points.values()) {
+        let params: Vec<_> = point
+            .variables
+            .iter()
+            .map(|var| translator.locals[var.0].ty)
+            .collect();
 
-        offset = (offset + local.ty.align() - 1) & !(local.ty.align() - 1);
+        let block = translator.builder.create_block(&params);
+        translator.builder.switch_to_block(block);
 
-        let value = translator.builder.load(local.ty, stack_ptr, offset as u32);
-        translator.builder.set_var(local.var, value);
+        let values = translator.builder.block_params(block).to_vec();
+        for (var, value) in point.variables.iter().zip(values) {
+            let local = translator.locals[var.0];
+            translator.builder.set_var(local.var, value);
+        }
 
-        offset += local.ty.size();
+        translator.builder.jump(point.block, &[]);
+        blocks.insert(point.tag, block);
     }
+
+    blocks
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct InstructionPosition {
     pub block: usize,
     pub instruction: usize,
+}
+
+#[derive(Clone, Debug)]
+struct Graph {
+    blocks: Vec<Class>,
+}
+
+impl Graph {
+    fn new<F>(frame: &StackFrameInfo, get_size_align: F) -> Self
+    where
+        F: Fn(Variable) -> (usize, usize),
+    {
+        let mut blocks: Vec<Class> = Vec::new();
+        let mut last_class: HashMap<NonZeroUsize, usize> = HashMap::new();
+
+        let mut index = 0;
+        loop {
+            let mut layout_per_var = HashMap::<_, HashSet<_>>::new();
+
+            let mut found_any_var = false;
+            for point in frame.points.values().chain(frame.call_points.values()) {
+                if let Some(var) = point.variables.get(index) {
+                    found_any_var = true;
+
+                    let (size, align) = get_size_align(*var);
+                    let layout = Layout::from_size_align(size, align).unwrap();
+
+                    layout_per_var.entry(layout).or_default().insert(point.tag);
+                }
+            }
+
+            for tags in layout_per_var.into_values() {
+                let new_index = blocks.push_and_index(Class {
+                    vars: vec![index],
+                    tags: tags.clone(),
+                    children: HashMap::new(),
+                });
+
+                for tag in tags {
+                    if let Some(index) = last_class.get(&tag) {
+                        let block = &mut blocks[*index];
+                        block.children.insert(tag, new_index);
+                    }
+
+                    last_class.insert(tag, new_index);
+                }
+            }
+
+            if !found_any_var {
+                break;
+            }
+
+            index += 1;
+        }
+
+        let mut parents = vec![None; blocks.len()];
+        for (index, block) in blocks.iter().enumerate() {
+            for child in block.children.values() {
+                parents[*child] = Some(index);
+            }
+        }
+
+        // Collapse block A into block B where A dominates B and A dominates no other blocks,
+        // i.e. there is only one edge going from A to B.
+        for index in (0..blocks.len()).rev() {
+            if let Some(parent) = parents[index] {
+                let [block, parent] = blocks.get_disjoint_mut([index, parent]).unwrap();
+
+                if block.tags.len() == parent.tags.len() {
+                    debug_assert_eq!(block.tags, parent.tags);
+
+                    // We effectively move the block upwards into the parent block, leaving
+                    // our block dangling.
+                    // Since the graph is a tree the parent is the only node with a reference to
+                    // this block, which we have now overwritten.
+                    parent.vars.extend(mem::take(&mut block.vars));
+                    parent.children = mem::take(&mut block.children);
+                }
+            }
+        }
+
+        Self { blocks }
+    }
+
+    fn root(&self) -> &Class {
+        &self.blocks[0]
+    }
+
+    fn get(&self, index: usize) -> &Class {
+        &self.blocks[index]
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+struct Class {
+    vars: Vec<usize>,
+    tags: HashSet<NonZeroUsize>,
+    children: HashMap<NonZeroUsize, usize>,
+}
+
+impl Class {
+    /// Returns all tags that end at this block.
+    fn leaves(&self) -> impl Iterator<Item = NonZeroUsize> {
+        self.tags
+            .iter()
+            .filter(|tag| !self.children.contains_key(*tag))
+            .copied()
+    }
+
+    fn children(&self) -> HashMap<usize, Vec<NonZeroUsize>> {
+        let mut blocks = HashMap::<_, Vec<_>>::new();
+
+        for (tag, block) in &self.children {
+            blocks.entry(*block).or_default().push(*tag);
+        }
+
+        blocks
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::num::NonZeroUsize;
+
+    use hashbrown::HashSet;
+    use indexmap::IndexMap;
+    use openfo4_jit::Block;
+
+    use crate::compiler::codegen::hir::Variable;
+    use crate::compiler::codegen::hir::lowering::stack::{Graph, StackFrameInfo, SuspensionPoint};
+
+    #[test]
+    fn build_graph() {
+        let a = Variable(0);
+        let b = Variable(1);
+        let c = Variable(2);
+        let d = Variable(3);
+        let e = Variable(4);
+        let f = Variable(5);
+
+        let mut frame = StackFrameInfo {
+            size: 0,
+            call_points: IndexMap::new(),
+            points: IndexMap::new(),
+        };
+        frame.points.insert(
+            0,
+            SuspensionPoint {
+                block: Block::DANGLING,
+                tag: NonZeroUsize::new(1).unwrap(),
+                variables: vec![a, b, c],
+            },
+        );
+        frame.points.insert(
+            1,
+            SuspensionPoint {
+                block: Block::DANGLING,
+                tag: NonZeroUsize::new(2).unwrap(),
+                variables: vec![a, c, d],
+            },
+        );
+        frame.points.insert(
+            2,
+            SuspensionPoint {
+                tag: NonZeroUsize::new(3).unwrap(),
+                variables: vec![a, c],
+                block: Block::DANGLING,
+            },
+        );
+        frame.points.insert(
+            3,
+            SuspensionPoint {
+                tag: NonZeroUsize::new(4).unwrap(),
+                variables: vec![a, b, c],
+                block: Block::DANGLING,
+            },
+        );
+        frame.points.insert(
+            4,
+            SuspensionPoint {
+                tag: NonZeroUsize::new(5).unwrap(),
+                variables: vec![a, d, e],
+                block: Block::DANGLING,
+            },
+        );
+        frame.points.insert(
+            5,
+            SuspensionPoint {
+                tag: NonZeroUsize::new(6).unwrap(),
+                variables: vec![d, e],
+                block: Block::DANGLING,
+            },
+        );
+        frame.points.insert(
+            6,
+            SuspensionPoint {
+                tag: NonZeroUsize::new(7).unwrap(),
+                variables: vec![a, b, c, d, e, f],
+                block: Block::DANGLING,
+            },
+        );
+        frame.points.insert(
+            7,
+            SuspensionPoint {
+                tag: NonZeroUsize::new(8).unwrap(),
+                variables: vec![a, b, c, d, e, f],
+                block: Block::DANGLING,
+            },
+        );
+
+        let get_size_align = |var| {
+            if var == a || var == b || var == c || var == d {
+                (4, 4)
+            } else if var == e {
+                (2, 2)
+            } else if var == f {
+                (1, 1)
+            } else {
+                unreachable!()
+            }
+        };
+
+        let graph = Graph::new(&frame, get_size_align);
+
+        let t1 = NonZeroUsize::new(1).unwrap();
+        let t2 = NonZeroUsize::new(2).unwrap();
+        let t3 = NonZeroUsize::new(3).unwrap();
+        let t4 = NonZeroUsize::new(4).unwrap();
+        let t5 = NonZeroUsize::new(5).unwrap();
+        let t6 = NonZeroUsize::new(6).unwrap();
+        let t7 = NonZeroUsize::new(7).unwrap();
+        let t8 = NonZeroUsize::new(8).unwrap();
+
+        let paths = vec![
+            // t1, t2, t4
+            vec![
+                vec![t1, t2, t3, t4, t5, t6, t7, t8],
+                vec![t1, t2, t3, t4, t5, t7, t8],
+                vec![t1, t2, t4, t7, t8],
+            ],
+            // t3
+            vec![
+                vec![t1, t2, t3, t4, t5, t6, t7, t8],
+                vec![t1, t2, t3, t4, t5, t7, t8],
+            ],
+            // t5
+            vec![
+                vec![t1, t2, t3, t4, t5, t6, t7, t8],
+                vec![t1, t2, t3, t4, t5, t7, t8],
+                vec![t5],
+            ],
+            // t6
+            vec![vec![t1, t2, t3, t4, t5, t6, t7, t8], vec![t6]],
+            // t7, t8
+            vec![
+                vec![t1, t2, t3, t4, t5, t6, t7, t8],
+                vec![t1, t2, t3, t4, t5, t7, t8],
+                vec![t1, t2, t4, t7, t8],
+                vec![t7, t8],
+            ],
+        ];
+        let leaf_tags = vec![
+            // t1, t2, t4
+            vec![t1, t2, t4],
+            // t3
+            vec![t3],
+            // t5
+            vec![t5],
+            // t6
+            vec![t6],
+            // t7, t8
+            vec![t7, t8],
+        ];
+
+        for (path, leaf_tags) in paths.iter().zip(leaf_tags) {
+            let mut block = graph.root();
+
+            for (index, tags) in path.iter().enumerate() {
+                assert_eq!(block.tags, tags.iter().copied().collect());
+
+                if index + 1 == path.len() {
+                    assert_eq!(
+                        block.leaves().collect::<HashSet<_>>(),
+                        leaf_tags.iter().copied().collect()
+                    );
+                    break;
+                }
+
+                let next_tags = &path[index + 1];
+
+                let next = *block.children.get(&next_tags[0]).unwrap();
+                for tag in next_tags {
+                    assert_eq!(*block.children.get(tag).unwrap(), next);
+                }
+
+                block = graph.get(next);
+            }
+        }
+    }
 }
