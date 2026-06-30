@@ -114,6 +114,7 @@ pub fn write_debug_output(info: &DebugInfo, func: &CompiledFunction) {
         .replace("{%PEX%}", &info.pex)
         .replace("{%HIR%}", &hir)
         .replace("{%ASM%}", &asm)
+        .replace("{%CLIF%}", func.text().unwrap_or_default())
         .replace(
             "{% HIR_TO_ASM %}",
             &hir_to_asm

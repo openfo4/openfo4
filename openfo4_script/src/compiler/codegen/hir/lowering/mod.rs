@@ -6,14 +6,16 @@ mod stack;
 mod string;
 
 use std::mem::offset_of;
+use std::num::NonZeroUsize;
 
+use hashbrown::HashMap;
 use openfo4_jit::{
     Block, FloatCompareOp, FunctionBuilder, IntCompareOp, SourceLoc, Type as JitType,
     Value as JitValue, Variable,
 };
 
 use crate::compiler::codegen::CodegenData;
-use crate::compiler::codegen::hir::lowering::stack::InstructionPosition;
+use crate::compiler::codegen::hir::lowering::stack::{InstructionPosition, SuspensionPoint};
 use crate::compiler::codegen::hir::{
     AddrCompareOp, Function, Instruction, Literal, Null, ScalarCompareOp, Value,
 };
@@ -109,11 +111,14 @@ pub fn lower_function(
         ctx_ptr,
         stack_start_offset,
         span,
+        suspend_blocks: HashMap::new(),
     };
 
     // Resume from stack.
     let start_block = translator.builder.create_block(&[]);
     stack::resume(&mut translator, &stack_frame, start_block);
+    stack::generate_suspension_blocks(&mut translator, function, &stack_frame);
+
     translator.builder.switch_to_block(start_block);
 
     // This is first time we are being called.
@@ -327,7 +332,6 @@ pub fn lower_function(
 
                     call::perform_checked_call(
                         &mut translator,
-                        function,
                         callee,
                         &op.args,
                         Some(&op.dst),
@@ -348,7 +352,6 @@ pub fn lower_function(
 
                     call::perform_checked_call(
                         &mut translator,
-                        function,
                         callee,
                         &op.args,
                         Some(&op.dst),
@@ -848,6 +851,7 @@ struct Translator<'a> {
     /// The starting offset where the stack for our current function starts.
     stack_start_offset: JitValue,
     span: Span,
+    suspend_blocks: HashMap<NonZeroUsize, Block>,
 }
 
 impl<'a> Translator<'a> {
@@ -1010,6 +1014,11 @@ impl<'a> Translator<'a> {
     pub fn load_stack_ptr(&mut self) -> JitValue {
         let base = self.load_stack_base();
         self.builder.iadd(base, self.stack_start_offset)
+    }
+
+    pub fn suspend(&mut self, point: &SuspensionPoint, stack_ptr: JitValue, result: JitValue) {
+        let block = self.suspend_blocks.get(&point.tag).unwrap();
+        self.builder.jump(*block, &[stack_ptr, result]);
     }
 }
 

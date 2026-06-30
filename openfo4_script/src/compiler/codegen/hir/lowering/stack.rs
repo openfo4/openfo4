@@ -7,9 +7,9 @@ use std::num::NonZeroUsize;
 use game_common::utils::vec_ext::VecExt;
 use hashbrown::{HashMap, HashSet};
 use indexmap::IndexMap;
-use openfo4_jit::{Block, FunctionBuilder, IntCompareOp, Type as JitType, Value};
+use openfo4_jit::{Block, FunctionBuilder, IntCompareOp, Type as JitType};
 
-use crate::compiler::codegen::hir::lowering::{Local, PTR_TYPE, Translator};
+use crate::compiler::codegen::hir::lowering::{Local, PTR_TYPE, RESULT_TYPE, Translator};
 use crate::compiler::codegen::hir::{Function, Instruction, Variable};
 
 #[derive(Clone, Debug)]
@@ -97,21 +97,130 @@ pub fn compute_suspension_points(
     }
 }
 
-/// Suspends execution of the function at the [`SuspensionPoint`].
-pub fn suspend(translator: &mut Translator<'_>, stack_ptr: Value, point: &SuspensionPoint) {
-    let tag = translator.builder.iconst(PTR_TYPE, point.tag.get() as i64);
-    translator.builder.store(tag, stack_ptr, 0);
+pub fn generate_suspension_blocks(
+    translator: &mut Translator<'_>,
+    func: &Function,
+    frame: &StackFrameInfo,
+) {
+    if frame.has_no_suspension_points() {
+        return;
+    }
 
-    let mut offset = PTR_TYPE.size();
+    let graph = Graph::new(frame, |var| {
+        let ty = translator.locals[var.0].ty;
+        (ty.size(), ty.align())
+    });
 
-    for var in &point.variables {
-        let local = &translator.locals[var.0];
-        let value = translator.builder.get_var(local.var);
+    let offset = PTR_TYPE.size();
 
-        offset = (offset + local.ty.align() - 1) & !(local.ty.align() - 1);
-        translator.builder.store(value, stack_ptr, offset as u32);
+    let mut block_per_tag = HashMap::new();
 
-        offset += local.ty.size();
+    // Stack Pointer
+    let mut root_params = vec![PTR_TYPE, RESULT_TYPE];
+    for var in &graph.root().vars {
+        let local = translator.locals[*var];
+        root_params.push(local.ty);
+    }
+
+    let root_block = translator.builder.create_block(&root_params);
+
+    for tag in &graph.root().tags {
+        block_per_tag.insert(*tag, root_block);
+    }
+
+    let mut queue = VecDeque::new();
+    let mut stack = Vec::new();
+
+    queue.push_back((graph.root(), offset));
+    stack.push((graph.root(), offset, root_block, None));
+
+    while let Some((node, mut offset)) = queue.pop_front() {
+        // Stack Pointer, Result Value
+        let mut params = vec![PTR_TYPE, RESULT_TYPE];
+
+        for var in &node.vars {
+            let local = &translator.locals[*var];
+            offset = (offset + local.ty.align() - 1) & !(local.ty.align() - 1);
+            offset += local.ty.size();
+            params.push(local.ty);
+        }
+
+        for (child, _) in node.children() {
+            let child = graph.get(child);
+
+            let mut params = params.clone();
+            for var in &child.vars {
+                let local = translator.locals[*var];
+                params.push(local.ty);
+            }
+
+            let block = translator.builder.create_block(&params);
+            stack.push((child, offset, block, Some(block)));
+
+            for tag in &child.tags {
+                block_per_tag.insert(*tag, block);
+            }
+        }
+    }
+
+    for (node, mut offset, block, parent_block) in stack {
+        translator.builder.switch_to_block(block);
+
+        let stack_ptr = translator.builder.block_params(block)[0];
+        let result = translator.builder.block_params(block)[1];
+        let mut values = translator.builder.block_params(block)[2..].to_vec();
+
+        for var in &node.vars {
+            let local = &translator.locals[*var];
+            let value = values.remove(0);
+
+            offset = (offset + local.ty.align() - 1) & !(local.ty.align() - 1);
+            translator.builder.store(value, stack_ptr, offset as u32);
+
+            offset += local.ty.size();
+        }
+
+        if let Some(parent) = parent_block {
+            values.insert(0, stack_ptr);
+            values.insert(1, result);
+            translator.builder.jump(parent, &values);
+        } else {
+            let mut rvals = Vec::new();
+            if let Some(ty) = func.returns {
+                let ty = translator.lowered_ty_from_id(ty);
+                let value = translator.builder.uninit(ty);
+                rvals.push(value);
+            }
+
+            rvals.push(result);
+
+            // Root block, we can return now.
+            translator.builder.jump(translator.return_block, &rvals);
+        }
+    }
+
+    for point in frame.points.values().chain(frame.call_points.values()) {
+        let block = translator.builder.create_block(&[PTR_TYPE, RESULT_TYPE]);
+        translator.builder.switch_to_block(block);
+
+        let stack_ptr = translator.builder.block_params(block)[0];
+        let result = translator.builder.block_params(block)[1];
+
+        let mut values = vec![stack_ptr, result];
+        for var in &point.variables {
+            let local = translator.locals[var.0];
+            let value = translator.builder.get_var(local.var);
+            values.push(value);
+        }
+
+        // Store tag at offset 0.
+        let tag = translator.builder.iconst(PTR_TYPE, point.tag.get() as i64);
+        translator.builder.store(tag, stack_ptr, 0);
+
+        let dst_block = block_per_tag.get(&point.tag).unwrap();
+        translator.builder.jump(*dst_block, &values);
+
+        translator.suspend_blocks.insert(point.tag, block);
     }
 }
 

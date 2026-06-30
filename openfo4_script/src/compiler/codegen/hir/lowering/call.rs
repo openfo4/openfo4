@@ -6,13 +6,11 @@ use openfo4_jit::Value as JitValue;
 
 use crate::compiler::codegen::FunctionDef;
 use crate::compiler::codegen::function::translate_function_signature;
-use crate::compiler::codegen::hir::Function;
 use crate::compiler::codegen::hir::Literal;
 use crate::compiler::codegen::hir::Null;
 use crate::compiler::codegen::hir::Value;
 use crate::compiler::codegen::hir::lowering::RESULT_TYPE;
 use crate::compiler::codegen::hir::lowering::Translator;
-use crate::compiler::codegen::hir::lowering::stack;
 use crate::compiler::codegen::hir::lowering::stack::StackFrameInfo;
 use crate::compiler::codegen::hir::lowering::stack::SuspensionPoint;
 use crate::compiler::codegen::pex::registry::ClassId;
@@ -25,7 +23,6 @@ use crate::runtime::RawStack;
 
 pub fn perform_checked_call(
     translator: &mut Translator<'_>,
-    caller: &Function,
     callee: &FunctionDef,
     args: &[Value<Literal>],
     dst: Option<&Value<Literal>>,
@@ -110,16 +107,7 @@ pub fn perform_checked_call(
         .brif(is_ok, continue_block, &[], suspend_block, &[]);
 
     translator.builder.switch_to_block(suspend_block);
-    stack::suspend(translator, stack_ptr, suspension_point);
-
-    let mut rvals = Vec::new();
-    if let Some(ty) = caller.returns {
-        let ty = translator.lowered_ty_from_id(ty);
-        rvals.push(translator.builder.uninit(ty));
-    }
-    rvals.push(*result);
-
-    translator.builder.jump(translator.return_block, &rvals);
+    translator.suspend(suspension_point, stack_ptr, *result);
 
     translator.builder.switch_to_block(continue_block);
 
