@@ -25,6 +25,13 @@ impl StackFrameInfo {
     pub fn has_no_suspension_points(&self) -> bool {
         self.call_points.is_empty() && self.points.is_empty()
     }
+
+    pub fn suspension_point(&self, tag: NonZeroUsize) -> Option<&SuspensionPoint> {
+        self.call_points
+            .values()
+            .find(|v| v.tag == tag)
+            .or_else(|| self.points.values().find(|v| v.tag == tag))
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -78,8 +85,15 @@ pub fn compute_suspension_points(
 
     let mut max_size = 0;
 
-    for point in call_points.values() {
+    for point in call_points.values_mut() {
         let mut size = PTR_TYPE.size();
+
+        // Sort by alignment descending to minimize stack space.
+        point.variables.sort_unstable_by(|a, b| {
+            let local_a = &locals[a.0];
+            let local_b = &locals[b.0];
+            local_b.ty.align().cmp(&local_a.ty.align())
+        });
 
         for var in &point.variables {
             let local = &locals[var.0];
@@ -118,7 +132,8 @@ pub fn generate_suspension_blocks(
     // Stack Pointer
     let mut root_params = vec![PTR_TYPE, RESULT_TYPE];
     for var in &graph.root().vars {
-        let local = translator.locals[*var];
+        let var = graph.root().resolve_var(*var, frame);
+        let local = translator.locals[var.0];
         root_params.push(local.ty);
     }
 
@@ -139,7 +154,8 @@ pub fn generate_suspension_blocks(
         let mut params = vec![PTR_TYPE, RESULT_TYPE];
 
         for var in &node.vars {
-            let local = &translator.locals[*var];
+            let var = node.resolve_var(*var, frame);
+            let local = &translator.locals[var.0];
             offset = (offset + local.ty.align() - 1) & !(local.ty.align() - 1);
             offset += local.ty.size();
             params.push(local.ty);
@@ -150,7 +166,8 @@ pub fn generate_suspension_blocks(
 
             let mut params = params.clone();
             for var in &child.vars {
-                let local = translator.locals[*var];
+                let var = child.resolve_var(*var, frame);
+                let local = translator.locals[var.0];
                 params.push(local.ty);
             }
 
@@ -171,7 +188,8 @@ pub fn generate_suspension_blocks(
         let mut values = translator.builder.block_params(block)[2..].to_vec();
 
         for var in &node.vars {
-            let local = &translator.locals[*var];
+            let var = node.resolve_var(*var, frame);
+            let local = &translator.locals[var.0];
             let value = values.remove(0);
 
             offset = (offset + local.ty.align() - 1) & !(local.ty.align() - 1);
@@ -258,7 +276,8 @@ pub fn resume(translator: &mut Translator<'_>, frame: &StackFrameInfo, start_blo
         translator.builder.switch_to_block(node_block);
 
         for var in &node.vars {
-            let local = &translator.locals[*var];
+            let var = node.resolve_var(*var, frame);
+            let local = &translator.locals[var.0];
 
             offset = (offset + local.ty.align() - 1) & !(local.ty.align() - 1);
 
@@ -485,6 +504,23 @@ impl Class {
         }
 
         blocks
+    }
+
+    /// Resolve the variable location into a real [`Variable`].
+    fn resolve_var(&self, var: usize, frame: &StackFrameInfo) -> Variable {
+        let any_tag = *self.tags.iter().next().unwrap();
+        let any_tag = frame.suspension_point(any_tag).unwrap();
+
+        let v = any_tag.variables[var];
+
+        if cfg!(debug_assertions) {
+            for tag in &self.tags {
+                let tag = frame.suspension_point(*tag).unwrap();
+                assert_eq!(tag.variables[var], v);
+            }
+        }
+
+        v
     }
 }
 
