@@ -4,15 +4,15 @@
 //! http://www.andreasaristidou.com/publications/papers/FABRIK.pdf
 
 use core::f32;
+use std::f32::consts::PI;
 
-use game_common::components::Transform;
-use glam::Vec3;
+use game_common::components::{Axis, Transform};
+use glam::{EulerRot, Quat, Vec3};
 
 const FABRIK_TOLERANCE: f32 = 0.01;
 const FABRIK_MAX_ITERATIONS: usize = 1000;
 
 const FORWARD: Vec3 = Vec3::NEG_Z;
-const UP: Vec3 = Vec3::Y;
 
 #[derive(Clone, Debug)]
 pub struct Joint {
@@ -23,20 +23,20 @@ pub struct Joint {
 
 #[derive(Copy, Clone, Debug)]
 pub enum Constraint {
+    None,
     Spherical(SphericalConstraint),
 }
 
 impl Constraint {
-    fn apply(&self, orientation: Vec3, direction: Vec3) -> Vec3 {
+    fn apply(&self, rotation: Quat, direction: Vec3) -> (Quat, Vec3) {
         match self {
-            Self::Spherical(constraint) => {
-                todo!()
-            }
+            Self::None => (rotation, direction),
+            Self::Spherical(constraint) => constraint.apply(rotation, direction),
         }
     }
 }
 
-#[derive(Copy, Clone, Debug, Default)]
+#[derive(Copy, Clone, Debug)]
 pub struct SphericalConstraint {
     pub min_x: f32,
     pub max_x: f32,
@@ -47,12 +47,61 @@ pub struct SphericalConstraint {
 }
 
 impl SphericalConstraint {
-    fn apply(&self, start: Transform, target: Vec3) -> Transform {
-        let distance = start.translation.distance(target);
+    pub const UNCONSTRAINED: Self = Self {
+        min_x: -PI,
+        max_x: PI,
+        min_y: -PI,
+        max_y: PI,
+        min_z: -PI,
+        max_z: PI,
+    };
 
-        let dir = start.rotation * FORWARD;
+    pub const FIXED: Self = Self {
+        min_x: 0.0,
+        max_x: 0.0,
+        min_y: 0.0,
+        max_y: 0.0,
+        min_z: 0.0,
+        max_z: 0.0,
+    };
 
-        todo!()
+    pub fn with_axis(mut self, axis: Axis, min: f32, max: f32) -> Self {
+        assert!(min < max);
+        assert!(min >= -PI);
+        assert!(min <= PI);
+
+        match axis {
+            Axis::X => {
+                self.min_x = min;
+                self.max_x = max;
+            }
+            Axis::Y => {
+                self.min_y = min;
+                self.max_y = max;
+            }
+            Axis::Z => {
+                self.min_z = min;
+                self.max_z = max;
+            }
+        }
+
+        self
+    }
+
+    fn apply(&self, rotation: Quat, direction: Vec3) -> (Quat, Vec3) {
+        let desired = Quat::from_rotation_arc(FORWARD, direction);
+        let local = rotation.inverse() * desired;
+
+        let (mut x, mut y, mut z) = local.to_euler(EulerRot::XYZ);
+
+        x = f32::clamp(x, self.min_x, self.max_x);
+        y = f32::clamp(y, self.min_y, self.max_y);
+        z = f32::clamp(z, self.min_z, self.max_z);
+
+        let local = Quat::from_euler(EulerRot::XYZ, x, y, z);
+        let world = rotation * local;
+
+        (world, world * FORWARD)
     }
 }
 
@@ -67,6 +116,7 @@ pub fn solve(joints: &[Joint], target: Vec3) -> Option<Vec<Transform>> {
             is_edge: false,
             transform: joint.transform,
             length: joint.length,
+            constraint: joint.constraint.unwrap_or(Constraint::None),
         })
         .collect();
 
@@ -122,6 +172,9 @@ fn solve_internal(segments: &mut [Segment], target: Vec3) -> Option<Vec3> {
         while let Some((a, b)) = iter.next() {
             let direction = (b.transform.translation - a.transform.translation).normalize();
 
+            let (rotation, direction) = a.constraint.apply(a.transform.rotation, direction);
+            a.transform.rotation = rotation;
+
             let delta = direction * a.length;
 
             if !b.is_edge {
@@ -147,6 +200,7 @@ struct Segment {
     transform: Transform,
     length: f32,
     is_edge: bool,
+    constraint: Constraint,
 }
 
 #[derive(Debug)]
@@ -184,10 +238,11 @@ impl<'a, T> WindowsMut<'a, T> {
 
 #[cfg(test)]
 mod tests {
-    use game_common::components::Transform;
+    use game_common::assert_approx_eq;
+    use game_common::components::{Axis, Transform};
     use glam::{Quat, Vec3};
 
-    use crate::ik::SphericalConstraint;
+    use crate::ik::{FORWARD, SphericalConstraint};
 
     use super::{Joint, solve};
 
@@ -244,17 +299,109 @@ mod tests {
     }
 
     #[test]
-    fn constraint_apply() {
-        let constraint = SphericalConstraint::default();
-        let target = constraint.apply(
-            Transform {
-                translation: Vec3::new(5.0, 0.0, 0.0),
-                rotation: Quat::IDENTITY,
-                ..Default::default()
-            },
-            Vec3::new(3.0, 3.0, 3.0),
-        );
+    fn spherical_constraint_unconstrained() {
+        let constraint = SphericalConstraint::UNCONSTRAINED;
+        let target = Vec3::new(3.0, 3.0, 3.0);
+        let (_, dir) = constraint.apply(Quat::IDENTITY, target.normalize());
+        assert_approx_eq!(dir.normalize(), target.normalize());
+    }
 
-        dbg!(&target);
+    #[test]
+    fn spherical_constraint_fixed() {
+        let constraint = SphericalConstraint::FIXED;
+        let target = Vec3::new(3.0, 3.0, 3.0);
+        let (rot, dir) = constraint.apply(Quat::IDENTITY, target.normalize());
+        assert!(rot.is_near_identity());
+        assert_eq!(dir.normalize(), FORWARD);
+    }
+
+    #[test]
+    fn spherical_constraint_single_axis_x() {
+        for (min, max, target, expected) in [
+            (
+                -90.0f32,
+                90.0f32,
+                Vec3::new(0.0, 1.0, 0.0),
+                Vec3::new(0.0, 1.0, 0.0),
+            ),
+            (
+                -45.0f32,
+                45.0f32,
+                Vec3::new(0.0, 1.0, 0.0),
+                Vec3::new(0.0, 1.0, -1.0),
+            ),
+            (
+                -45.0f32,
+                45.0f32,
+                Vec3::new(0.0, -1.0, 0.0),
+                Vec3::new(0.0, -1.0, -1.0),
+            ),
+        ] {
+            let constraint =
+                SphericalConstraint::FIXED.with_axis(Axis::X, min.to_radians(), max.to_radians());
+            let (_, dir) = constraint.apply(Quat::IDENTITY, target.normalize());
+            assert_approx_eq!(dir.normalize(), expected.normalize());
+        }
+    }
+
+    #[test]
+    fn spherical_constraint_single_axis_y() {
+        for (min, max, target, expected) in [
+            (
+                -90.0f32,
+                90.0f32,
+                Vec3::new(1.0, 0.0, 0.0),
+                Vec3::new(1.0, 0.0, 0.0),
+            ),
+            (
+                -45.0f32,
+                45.0f32,
+                Vec3::new(1.0, 0.0, 0.0),
+                Vec3::new(1.0, 0.0, -1.0),
+            ),
+            (
+                -45.0f32,
+                45.0f32,
+                Vec3::new(-1.0, 0.0, 0.0),
+                Vec3::new(-1.0, 0.0, -1.0),
+            ),
+        ] {
+            let constraint =
+                SphericalConstraint::FIXED.with_axis(Axis::Y, min.to_radians(), max.to_radians());
+            let (_, dir) = constraint.apply(Quat::IDENTITY, target.normalize());
+            assert_approx_eq!(dir.normalize(), expected.normalize());
+        }
+    }
+
+    #[test]
+    fn spherical_constraint_two_axis() {
+        let constraint = SphericalConstraint::FIXED
+            .with_axis(Axis::X, -45.0_f32.to_radians(), 45.0_f32.to_radians())
+            .with_axis(Axis::Y, -45.0_f32.to_radians(), 45.0_f32.to_radians());
+
+        let target = Vec3::new(-1.0, -1.0, 0.0);
+        let (_, dir) = constraint.apply(Quat::IDENTITY, target.normalize());
+        assert_approx_eq!(dir, Vec3::new(-0.7071068, -0.5, -0.5));
+    }
+
+    #[test]
+    fn spherical_constraint_single_axis_z() {
+        let constraint = SphericalConstraint::FIXED.with_axis(
+            Axis::Y,
+            -90.0_f32.to_radians(),
+            90.0_f32.to_radians(),
+        );
+        let target = Vec3::new(1.0, 0.0, 0.0);
+        let (_, dir) = constraint.apply(Quat::IDENTITY, target.normalize());
+        assert_approx_eq!(dir, target.normalize());
+
+        let constraint = SphericalConstraint::FIXED.with_axis(
+            Axis::Y,
+            -45.0_f32.to_radians(),
+            45.0_f32.to_radians(),
+        );
+        let target = Vec3::new(1.0, 0.0, 0.0);
+        let (_, dir) = constraint.apply(Quat::IDENTITY, target.normalize());
+        assert_approx_eq!(dir, Vec3::new(1.0, 0.0, -1.0).normalize());
     }
 }
