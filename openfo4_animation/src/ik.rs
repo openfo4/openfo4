@@ -6,7 +6,7 @@
 use core::f32;
 use std::f32::consts::PI;
 
-use game_common::components::{Axis, Transform};
+use game_common::components::Axis;
 use glam::{EulerRot, Quat, Vec3};
 
 const FABRIK_TOLERANCE: f32 = 0.01;
@@ -14,9 +14,17 @@ const FABRIK_MAX_ITERATIONS: usize = 1000;
 
 const FORWARD: Vec3 = Vec3::NEG_Z;
 
+#[derive(Copy, Clone, Debug, Default)]
+pub struct Pose {
+    /// The translation in world space.
+    pub translation: Vec3,
+    /// The rotation in world space.
+    pub rotation: Quat,
+}
+
 #[derive(Clone, Debug)]
 pub struct Joint {
-    pub transform: Transform,
+    pub pose: Pose,
     pub length: f32,
     pub constraint: Option<Constraint>,
 }
@@ -24,6 +32,7 @@ pub struct Joint {
 #[derive(Copy, Clone, Debug)]
 pub enum Constraint {
     None,
+    Fixed,
     Spherical(SphericalConstraint),
 }
 
@@ -31,6 +40,7 @@ impl Constraint {
     fn apply(&self, rotation: Quat, direction: Vec3) -> (Quat, Vec3) {
         match self {
             Self::None => (rotation, direction),
+            Self::Fixed => (rotation, rotation * FORWARD),
             Self::Spherical(constraint) => constraint.apply(rotation, direction),
         }
     }
@@ -66,7 +76,7 @@ impl SphericalConstraint {
     };
 
     pub fn with_axis(mut self, axis: Axis, min: f32, max: f32) -> Self {
-        assert!(min < max);
+        assert!(min <= max);
         assert!(min >= -PI);
         assert!(min <= PI);
 
@@ -105,7 +115,7 @@ impl SphericalConstraint {
     }
 }
 
-pub fn solve(joints: &[Joint], target: Vec3) -> Option<Vec<Transform>> {
+pub fn solve(joints: &[Joint], target: Vec3) -> Option<Vec<Pose>> {
     if joints.is_empty() {
         return Some(Vec::new());
     }
@@ -114,7 +124,7 @@ pub fn solve(joints: &[Joint], target: Vec3) -> Option<Vec<Transform>> {
         .iter()
         .map(|joint| Segment {
             is_edge: false,
-            transform: joint.transform,
+            pose: joint.pose,
             length: joint.length,
             constraint: joint.constraint.unwrap_or(Constraint::None),
         })
@@ -124,7 +134,7 @@ pub fn solve(joints: &[Joint], target: Vec3) -> Option<Vec<Transform>> {
     segments.last_mut().unwrap().is_edge = true;
 
     if solve_internal(&mut segments, target).is_some() {
-        Some(segments.into_iter().map(|v| v.transform).collect())
+        Some(segments.into_iter().map(|v| v.pose).collect())
     } else {
         None
     }
@@ -143,14 +153,15 @@ fn solve_internal(segments: &mut [Segment], target: Vec3) -> Option<Vec3> {
 
     // If the end effector is already close enough we don't need
     // to solve anything.
-    if last.transform.translation.distance(target).abs() <= FABRIK_TOLERANCE {
-        return Some(last.transform.translation);
+    if last.pose.translation.distance(target).abs() <= FABRIK_TOLERANCE {
+        return Some(last.pose.translation);
     }
 
-    last.transform.translation = target;
+    last.pose.translation = target;
 
     // Overwritten in the first iteration.
     let mut actual_target = Vec3::ZERO;
+    let mut actual_rotation = Quat::IDENTITY;
 
     for _ in 0..FABRIK_MAX_ITERATIONS {
         // Backwards
@@ -161,26 +172,29 @@ fn solve_internal(segments: &mut [Segment], target: Vec3) -> Option<Vec3> {
                 continue;
             }
 
-            let direction = (a.transform.translation - b.transform.translation).normalize();
+            let direction = (a.pose.translation - b.pose.translation).normalize();
             let delta = direction * a.length;
 
-            a.transform.translation = b.transform.translation + delta;
+            a.pose.translation = b.pose.translation + delta;
         }
 
         // Forwards
         let mut iter = WindowsMut::forwards(segments);
+        let mut combined_rotation = Quat::IDENTITY;
         while let Some((a, b)) = iter.next() {
-            let direction = (b.transform.translation - a.transform.translation).normalize();
+            let direction = (b.pose.translation - a.pose.translation).normalize();
 
-            let (rotation, direction) = a.constraint.apply(a.transform.rotation, direction);
-            a.transform.rotation = rotation;
+            let (rotation, direction) = a.constraint.apply(combined_rotation, direction);
+            a.pose.rotation = rotation;
+            combined_rotation = rotation;
 
             let delta = direction * a.length;
 
             if !b.is_edge {
-                b.transform.translation = a.transform.translation + delta;
+                b.pose.translation = a.pose.translation + delta;
             } else {
-                actual_target = a.transform.translation + delta;
+                actual_target = a.pose.translation + delta;
+                actual_rotation = rotation;
             }
         }
 
@@ -190,14 +204,15 @@ fn solve_internal(segments: &mut [Segment], target: Vec3) -> Option<Vec3> {
     }
 
     let last = segments.last_mut().unwrap();
-    last.transform.translation = actual_target;
+    last.pose.translation = actual_target;
+    last.pose.rotation = actual_rotation;
 
     Some(actual_target)
 }
 
 #[derive(Copy, Clone, Debug)]
 struct Segment {
-    transform: Transform,
+    pose: Pose,
     length: f32,
     is_edge: bool,
     constraint: Constraint,
@@ -207,17 +222,23 @@ struct Segment {
 struct WindowsMut<'a, T> {
     inner: &'a mut [T],
     next: usize,
+    forwards: bool,
 }
 
 impl<'a, T> WindowsMut<'a, T> {
     fn forwards(inner: &'a mut [T]) -> Self {
-        Self { inner, next: 1 }
+        Self {
+            inner,
+            next: 1,
+            forwards: true,
+        }
     }
 
     fn backwards(inner: &'a mut [T]) -> Self {
         Self {
             next: inner.len().saturating_sub(1),
             inner,
+            forwards: false,
         }
     }
 
@@ -231,7 +252,12 @@ impl<'a, T> WindowsMut<'a, T> {
         let a = a.last_mut()?;
         let b = b.first_mut()?;
 
-        self.next += 1;
+        if self.forwards {
+            self.next += 1;
+        } else {
+            self.next = self.next.wrapping_sub(1);
+        }
+
         Some((a, b))
     }
 }
@@ -239,10 +265,10 @@ impl<'a, T> WindowsMut<'a, T> {
 #[cfg(test)]
 mod tests {
     use game_common::assert_approx_eq;
-    use game_common::components::{Axis, Transform};
+    use game_common::components::Axis;
     use glam::{Quat, Vec3};
 
-    use crate::ik::{FORWARD, SphericalConstraint};
+    use crate::ik::{Constraint, FORWARD, Pose, SphericalConstraint, WindowsMut};
 
     use super::{Joint, solve};
 
@@ -260,11 +286,41 @@ mod tests {
     }
 
     #[test]
+    fn windows_mut_forwards() {
+        let array = [0, 1, 2, 3, 4, 5];
+        let mut array2 = array;
+        let mut windows = WindowsMut::forwards(&mut array2);
+
+        for [lhs_a, lhs_b] in array.array_windows::<2>() {
+            let (rhs_a, rhs_b) = windows.next().unwrap();
+            assert_eq!(lhs_a, rhs_a);
+            assert_eq!(lhs_b, rhs_b);
+        }
+
+        assert_eq!(windows.next(), None);
+    }
+
+    #[test]
+    fn windows_mut_backwards() {
+        let array = [0, 1, 2, 3, 4, 5];
+        let mut array2 = array;
+        let mut windows = WindowsMut::backwards(&mut array2);
+
+        for [lhs_a, lhs_b] in array.array_windows::<2>().rev() {
+            let (rhs_a, rhs_b) = windows.next().unwrap();
+            assert_eq!(lhs_a, rhs_a);
+            assert_eq!(lhs_b, rhs_b);
+        }
+
+        assert_eq!(windows.next(), None);
+    }
+
+    #[test]
     fn solve_basic_2d() {
         let transforms = solve(
             &[
                 Joint {
-                    transform: Transform {
+                    pose: Pose {
                         translation: Vec3::new(0.0, 0.0, 0.0),
                         ..Default::default()
                     },
@@ -272,7 +328,7 @@ mod tests {
                     constraint: None,
                 },
                 Joint {
-                    transform: Transform {
+                    pose: Pose {
                         translation: Vec3::new(0.0, 5.0, 0.0),
                         ..Default::default()
                     },
@@ -280,7 +336,7 @@ mod tests {
                     constraint: None,
                 },
                 Joint {
-                    transform: Transform {
+                    pose: Pose {
                         translation: Vec3::new(0.0, 10.0, 0.0),
                         ..Default::default()
                     },
@@ -296,6 +352,65 @@ mod tests {
         assert_eq_tolerance!(transforms[0].translation, Vec3::new(0.0, 0.0, 0.0));
         assert_eq_tolerance!(transforms[1].translation, Vec3::new(5.0, 0.0, 0.0));
         assert_eq_tolerance!(transforms[2].translation, Vec3::new(10.0, 0.0, 0.0));
+    }
+
+    #[test]
+    fn solve_constrained_2d() {
+        let constraint = SphericalConstraint::FIXED.with_axis(
+            Axis::Y,
+            -45.0_f32.to_radians(),
+            45.0_f32.to_radians(),
+            // 0.,
+            // 0.,
+        );
+        let joints = [
+            Joint {
+                pose: Pose {
+                    translation: Vec3::new(0.0, 0.0, 0.0),
+                    rotation: Quat::IDENTITY,
+                },
+                length: 5.0,
+                constraint: Some(Constraint::Spherical(constraint)),
+            },
+            Joint {
+                pose: Pose {
+                    translation: Vec3::new(0.0, 0.0, -5.0),
+                    rotation: Quat::IDENTITY,
+                },
+                length: 5.0,
+                constraint: Some(Constraint::Spherical(constraint)),
+            },
+            Joint {
+                pose: Pose {
+                    translation: Vec3::new(0.0, 0.0, -10.0),
+                    rotation: Quat::IDENTITY,
+                },
+                length: 5.0,
+                constraint: Some(Constraint::Spherical(constraint)),
+            },
+            Joint {
+                pose: Pose {
+                    translation: Vec3::new(0.0, 0.0, -15.0),
+                    rotation: Quat::IDENTITY,
+                },
+                length: 5.0,
+                constraint: Some(Constraint::Spherical(constraint)),
+            },
+        ];
+        let target = Vec3::new(10.0, 0.0, 0.0);
+
+        let poses = solve(&joints, target).unwrap();
+        for [a, b] in poses.array_windows::<2>() {
+            let delta = a.rotation.angle_between(b.rotation).to_degrees();
+            // 45.2 instead of 45.0 for some tolerance.
+            assert!(delta <= 45.2);
+        }
+
+        let reached_target = poses.last().unwrap();
+        assert_eq!(
+            reached_target.translation,
+            Vec3::new(11.973446, 0.0, -1.5320861,)
+        );
     }
 
     #[test]
