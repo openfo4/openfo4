@@ -442,7 +442,7 @@ where
 
 pub struct CallUnchecked<'a, 'b, T> {
     func: &'a Func,
-    ctx: &'b mut Context<'a, T>,
+    ctx: &'a mut Context<'b, T>,
     raw_ctx: Option<RawContext>,
     params: *const RawVal,
     returns: *mut RawVal,
