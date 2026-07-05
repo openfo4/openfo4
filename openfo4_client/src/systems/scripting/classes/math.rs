@@ -1,12 +1,7 @@
 //! `Math` Script
-//!
-//! TODO: We should directly expand these in assembly.
-//!
-//! Note that some functions are stubbed out. The calls are replaced with compiler intrinsics,
-//! but we still need to declare the functions to satisfy the linker.
 
 use openfo4_script::engine::Engine;
-use openfo4_script::runtime::{Caller, Exception};
+use openfo4_script::runtime::Caller;
 
 use crate::systems::scripting::classes::State;
 
@@ -32,8 +27,8 @@ pub fn register(engine: &mut Engine) {
 /// ```text
 /// float Function(float afValue) native global
 /// ```
-fn abs(_caller: Caller<'_, State>, _value: f32) -> Result<f32, Exception> {
-    unreachable!()
+fn abs(_caller: Caller<'_, State>, value: f32) -> f32 {
+    value.abs()
 }
 
 /// `acos`
@@ -41,8 +36,8 @@ fn abs(_caller: Caller<'_, State>, _value: f32) -> Result<f32, Exception> {
 /// ```text
 /// float Function(float afValue) native global
 /// ```
-fn acos(_caller: Caller<'_, State>, value: f32) -> Result<f32, Exception> {
-    Ok(value.acos())
+fn acos(_caller: Caller<'_, State>, value: f32) -> f32 {
+    value.acos()
 }
 
 /// `asin`
@@ -50,8 +45,8 @@ fn acos(_caller: Caller<'_, State>, value: f32) -> Result<f32, Exception> {
 /// ```text
 /// float Function(float afValue) native global
 /// ```
-fn asin(_caller: Caller<'_, State>, value: f32) -> Result<f32, Exception> {
-    Ok(value.asin())
+fn asin(_caller: Caller<'_, State>, value: f32) -> f32 {
+    value.asin()
 }
 
 /// `atan`
@@ -59,8 +54,8 @@ fn asin(_caller: Caller<'_, State>, value: f32) -> Result<f32, Exception> {
 /// ```text
 /// float Function(float afValue) native global
 /// ```
-fn atan(_caller: Caller<'_, State>, value: f32) -> Result<f32, Exception> {
-    Ok(value.atan())
+fn atan(_caller: Caller<'_, State>, value: f32) -> f32 {
+    value.atan()
 }
 
 /// `Ceiling`
@@ -68,8 +63,8 @@ fn atan(_caller: Caller<'_, State>, value: f32) -> Result<f32, Exception> {
 /// ```text
 /// int Function(float afValue) native global
 /// ```
-fn ceiling(_caller: Caller<'_, State>, _value: f32) -> Result<i32, Exception> {
-    unreachable!()
+fn ceiling(_caller: Caller<'_, State>, value: f32) -> i32 {
+    value.ceil() as i32
 }
 
 /// `cos`
@@ -77,8 +72,8 @@ fn ceiling(_caller: Caller<'_, State>, _value: f32) -> Result<i32, Exception> {
 /// ```text
 /// float Function(float afValue) native global
 /// ```
-fn cos(_caller: Caller<'_, State>, value: f32) -> Result<f32, Exception> {
-    Ok(value.cos())
+fn cos(_caller: Caller<'_, State>, value: f32) -> f32 {
+    value.cos()
 }
 
 /// `DegreesToRadians`
@@ -86,8 +81,8 @@ fn cos(_caller: Caller<'_, State>, value: f32) -> Result<f32, Exception> {
 /// ```text
 /// float Function(float afDegrees) native global
 /// ```
-fn degrees_to_radians(_caller: Caller<'_, State>, _value: f32) -> Result<f32, Exception> {
-    unreachable!()
+fn degrees_to_radians(_caller: Caller<'_, State>, value: f32) -> f32 {
+    value.to_radians()
 }
 
 /// `Floor`
@@ -95,8 +90,8 @@ fn degrees_to_radians(_caller: Caller<'_, State>, _value: f32) -> Result<f32, Ex
 /// ```text
 /// int Function(float afValue) native global
 /// ```
-fn floor(_caller: Caller<'_, State>, _value: f32) -> Result<i32, Exception> {
-    unreachable!()
+fn floor(_caller: Caller<'_, State>, value: f32) -> i32 {
+    value.floor() as i32
 }
 
 /// `pow`
@@ -104,8 +99,8 @@ fn floor(_caller: Caller<'_, State>, _value: f32) -> Result<i32, Exception> {
 /// ```text
 /// float Function(float x, float y) native global
 /// ```
-fn pow(_caller: Caller<'_, State>, x: f32, y: f32) -> Result<f32, Exception> {
-    Ok(x.powf(y))
+fn pow(_caller: Caller<'_, State>, x: f32, y: f32) -> f32 {
+    x.powf(y)
 }
 
 /// `RadiansToDegrees`
@@ -113,8 +108,8 @@ fn pow(_caller: Caller<'_, State>, x: f32, y: f32) -> Result<f32, Exception> {
 /// ```text
 /// float Function(float afRadians) native global
 /// ```
-fn radians_to_degrees(_caller: Caller<'_, State>, _value: f32) -> Result<f32, Exception> {
-    unreachable!()
+fn radians_to_degrees(_caller: Caller<'_, State>, value: f32) -> f32 {
+    value.to_degrees()
 }
 
 /// `sin`
@@ -122,8 +117,8 @@ fn radians_to_degrees(_caller: Caller<'_, State>, _value: f32) -> Result<f32, Ex
 /// ```text
 /// float Function(float afValue) native global
 /// ```
-fn sin(_caller: Caller<'_, State>, value: f32) -> Result<f32, Exception> {
-    Ok(value.sin())
+fn sin(_caller: Caller<'_, State>, value: f32) -> f32 {
+    value.sin()
 }
 
 /// `sqrt`
@@ -131,8 +126,8 @@ fn sin(_caller: Caller<'_, State>, value: f32) -> Result<f32, Exception> {
 /// ```text
 /// float Function(float afValue) native global
 /// ```
-fn sqrt(_caller: Caller<'_, State>, _value: f32) -> Result<f32, Exception> {
-    unreachable!()
+fn sqrt(_caller: Caller<'_, State>, value: f32) -> f32 {
+    value.sqrt()
 }
 
 /// `tan`
@@ -140,6 +135,6 @@ fn sqrt(_caller: Caller<'_, State>, _value: f32) -> Result<f32, Exception> {
 /// ```text
 /// float Function(float afValue) native global
 /// ```
-fn tan(_caller: Caller<'_, State>, value: f32) -> Result<f32, Exception> {
-    Ok(value.tan())
+fn tan(_caller: Caller<'_, State>, value: f32) -> f32 {
+    value.tan()
 }

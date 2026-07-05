@@ -1,7 +1,5 @@
-use openfo4_script::{
-    engine::Engine,
-    runtime::{Caller, Exception},
-};
+use openfo4_script::engine::Engine;
+use openfo4_script::runtime::Caller;
 
 use crate::systems::scripting::classes::State;
 
@@ -21,8 +19,8 @@ pub fn register(engine: &mut Engine) {
 /// ```text
 /// float Function Exp(float afArg1) native global
 /// ```
-fn exp(_caller: Caller<'_, State>, value: f32) -> Result<f32, Exception> {
-    Ok(value.exp())
+fn exp(_caller: Caller<'_, State>, value: f32) -> f32 {
+    value.exp()
 }
 
 /// `LeftShift`
@@ -30,12 +28,12 @@ fn exp(_caller: Caller<'_, State>, value: f32) -> Result<f32, Exception> {
 /// ```text
 /// int Function LeftShift(int value, int shiftBy) native global
 /// ```
-fn left_shift(_caller: Caller<'_, State>, lhs: i32, rhs: i32) -> Result<i32, Exception> {
-    Ok(lhs << rhs)
+fn left_shift(_caller: Caller<'_, State>, lhs: i32, rhs: i32) -> i32 {
+    lhs.unbounded_shl(rhs.cast_unsigned())
 }
 
-fn log(_caller: Caller<'_, State>, value: f32) -> Result<f32, Exception> {
-    Ok(value.ln())
+fn log(_caller: Caller<'_, State>, value: f32) -> f32 {
+    value.ln()
 }
 
 /// `LogicalAnd`
@@ -44,8 +42,8 @@ fn log(_caller: Caller<'_, State>, value: f32) -> Result<f32, Exception> {
 /// int Function LogicalAnd(int arg1, int arg2) native global
 /// ```
 ///
-fn logical_and(_caller: Caller<'_, State>, lhs: i32, rhs: i32) -> Result<i32, Exception> {
-    Ok(lhs & rhs)
+fn logical_and(_caller: Caller<'_, State>, lhs: i32, rhs: i32) -> i32 {
+    lhs & rhs
 }
 
 /// `LogicalNot`
@@ -53,8 +51,8 @@ fn logical_and(_caller: Caller<'_, State>, lhs: i32, rhs: i32) -> Result<i32, Ex
 /// ```text
 /// int Function LogicalNot(int arg1) native global
 /// ```
-fn logical_not(_caller: Caller<'_, State>, value: i32) -> Result<i32, Exception> {
-    Ok(!value)
+fn logical_not(_caller: Caller<'_, State>, value: i32) -> i32 {
+    !value
 }
 
 /// `LogicalOr`
@@ -62,8 +60,8 @@ fn logical_not(_caller: Caller<'_, State>, value: i32) -> Result<i32, Exception>
 /// ```text
 /// int Function LogicalOr(int arg1, int arg2) native global
 /// ```
-fn logical_or(_caller: Caller<'_, State>, lhs: i32, rhs: i32) -> Result<i32, Exception> {
-    Ok(lhs | rhs)
+fn logical_or(_caller: Caller<'_, State>, lhs: i32, rhs: i32) -> i32 {
+    lhs | rhs
 }
 
 /// `LogicalXor`
@@ -71,8 +69,8 @@ fn logical_or(_caller: Caller<'_, State>, lhs: i32, rhs: i32) -> Result<i32, Exc
 /// ```text
 /// int Function LogicalXor(int arg1, int arg2) native global
 /// ```
-fn logical_xor(_caller: Caller<'_, State>, lhs: i32, rhs: i32) -> Result<i32, Exception> {
-    Ok(lhs ^ rhs)
+fn logical_xor(_caller: Caller<'_, State>, lhs: i32, rhs: i32) -> i32 {
+    lhs ^ rhs
 }
 
 /// `RightShift`
@@ -80,6 +78,6 @@ fn logical_xor(_caller: Caller<'_, State>, lhs: i32, rhs: i32) -> Result<i32, Ex
 /// ```text
 /// int Function RightShift(int value, int shiftBy) native global
 /// ```
-fn right_shift(_caller: Caller<'_, State>, lhs: i32, rhs: i32) -> Result<i32, Exception> {
-    Ok(lhs >> rhs)
+fn right_shift(_caller: Caller<'_, State>, lhs: i32, rhs: i32) -> i32 {
+    lhs.unbounded_shr(rhs.cast_unsigned())
 }
