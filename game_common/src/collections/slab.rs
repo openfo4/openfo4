@@ -52,7 +52,7 @@ impl<K, V> Slab<K, V> {
     ///
     /// Does nothing if capacity is already sufficient.
     pub fn reserve(&mut self, additional: usize) {
-        let free_cap = self.buckets.capacity() - self.len;
+        let free_cap = self.buckets.len() - self.len;
         if free_cap < additional {
             self.buckets.reserve(additional - free_cap);
         }
@@ -627,5 +627,28 @@ mod tests {
         assert_eq!(slab.remove(k2).unwrap(), 2);
         assert_eq!(slab.remove(k3).unwrap(), 3);
         assert_eq!(slab.remove(k4).unwrap(), 4);
+    }
+
+    #[test]
+    fn slab_reserve() {
+        let mut slab = Slab::<usize, i32>::new();
+
+        assert_eq!(slab.capacity(), 0);
+        assert_eq!(slab.len(), 0);
+
+        slab.reserve(3);
+        let cap = slab.capacity();
+        assert!(cap >= 3);
+        assert_eq!(slab.len(), 0);
+
+        slab.insert(0);
+        slab.insert(1);
+
+        assert_eq!(slab.capacity(), cap);
+        assert_eq!(slab.len(), 2);
+
+        slab.reserve(3);
+        assert!(slab.capacity() >= 5);
+        assert_eq!(slab.len(), 2);
     }
 }
