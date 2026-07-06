@@ -1,14 +1,14 @@
 use std::alloc::Layout;
 
+use game_common::collections::slab::Slab;
 use game_common::utils::vec_ext::VecExt;
 use game_tracing::trace_span;
-use slab::Slab;
 
 use super::{Allocator, GrowableAllocator, Region};
 
 #[derive(Clone, Debug)]
 pub struct BuddyAllocator {
-    blocks: Slab<Block>,
+    blocks: Slab<usize, Block>,
     root: usize,
     stack: Vec<usize>,
 }
@@ -144,8 +144,8 @@ impl Allocator for BuddyAllocator {
             // This means the branch to grow the slab only exists
             // once. The compiler is unable to elide this otherwise.
             self.blocks.reserve(2);
-            let left = unsafe { self.blocks.insert_unchecked(left) };
-            let right = unsafe { self.blocks.insert_unchecked(right) };
+            let left = unsafe { self.blocks.insert_within_capacity_unchecked(left) };
+            let right = unsafe { self.blocks.insert_within_capacity_unchecked(right) };
 
             // Mark the block as split.
             let block = unsafe { self.blocks.get_unchecked_mut(index) };
