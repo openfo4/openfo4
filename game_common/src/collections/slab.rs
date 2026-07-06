@@ -1,70 +1,72 @@
-//! A slab, similar to the [`slab`] crate.
-//!
-//! The main difference is that this [`Slab`] implementation stores entries and residency
-//! information separately.
-//!
-//! This reduces memory usage and cache pressure for unchecked accesses.
-//!
-//! [`slab`]: https://docs.rs/slab/latest/slab/
-
-use std::fmt::{self, Debug, Formatter};
+use core::slice;
+use std::fmt::Debug;
+use std::hint::unreachable_unchecked;
 use std::iter::FusedIterator;
-use std::mem::MaybeUninit;
+use std::marker::PhantomData;
+use std::mem;
 
+use allocator_api2::alloc::{Allocator, Global};
 use allocator_api2::vec::Vec;
 
-pub struct Slab<T> {
-    // Note: We store data and residency separately and also don't use a union { T, usize }
-    // here as that would each data entry to usize.
-    // Skipping this allows for less memory accesses when using unchecked the methods.
-    // FIXME: We could try to store both Vecs in one allocation.
-    data: Vec<MaybeUninit<T>>,
-    // A value of usize::MAX indicates the presence of a value.
-    residency: Vec<usize>,
+#[derive(Clone, Debug)]
+pub struct Slab<K, V, A = Global>
+where
+    A: Allocator,
+{
+    buckets: Vec<Bucket<V>, A>,
     len: usize,
     next_free: usize,
+    _marker: PhantomData<K>,
 }
 
-impl<T> Slab<T> {
+impl<K, V> Slab<K, V> {
+    /// Creates a new empty `Slab`.
     pub fn new() -> Self {
         Self {
-            data: Vec::new(),
-            residency: Vec::new(),
-            next_free: 0,
+            buckets: Vec::new(),
             len: 0,
+            next_free: 0,
+            _marker: PhantomData,
         }
     }
 
+    /// Returns the number of items in this `Slab`.
     pub fn len(&self) -> usize {
         self.len
     }
 
+    /// Returns `true` if this `Slab` contains no items.
     pub fn is_empty(&self) -> bool {
         self.len() == 0
     }
+}
 
+impl<K, V> Slab<K, V>
+where
+    K: SlabKey,
+{
     /// Returns `true` if a value with the give `key` exists in the `Slab`.
-    pub fn contains(&self, key: usize) -> bool {
-        self.residency
-            .get(key)
-            .is_some_and(|residency| *residency == usize::MAX)
+    pub fn contains(&self, key: K) -> bool {
+        self.buckets
+            .get(key.to_index())
+            .is_some_and(|bucket| matches!(bucket, Bucket::Occupied(_)))
     }
 
-    pub fn get(&self, key: usize) -> Option<&T> {
-        if self.contains(key) {
-            // SAFETY: We just checked that the key exists.
-            Some(unsafe { self.get_unchecked(key) })
-        } else {
-            None
+    /// Returns a reference to the value at the given `key`.
+    #[inline]
+    pub fn get(&self, key: K) -> Option<&V> {
+        match self.buckets.get(key.to_index()) {
+            Some(Bucket::Occupied(value)) => Some(value),
+            _ => None,
         }
     }
 
-    pub fn get_mut(&mut self, key: usize) -> Option<&mut T> {
-        if self.contains(key) {
-            // SAFETY: We just checked that the key exists.
-            Some(unsafe { self.get_unchecked_mut(key) })
-        } else {
-            None
+    /// Returns a mutable reference to the value at the given `key`.
+    #[inline]
+    pub fn get_mut(&mut self, key: K) -> Option<&mut V> {
+        match self.buckets.get_mut(key.to_index()) {
+            Some(Bucket::Occupied(value)) => Some(value),
+            _ => None,
         }
     }
 
@@ -73,10 +75,14 @@ impl<T> Slab<T> {
     /// # Safety
     ///
     /// The given `key` must currently exist in the `Slab`.
-    pub unsafe fn get_unchecked(&self, key: usize) -> &T {
-        // SAFEY: The caller guarantees that the index is valid
-        // and a initialized value exists and the given index.
-        unsafe { self.data.get_unchecked(key).assume_init_ref() }
+    #[inline]
+    pub unsafe fn get_unchecked(&self, key: K) -> &V {
+        // SAFEY: The caller guarantees that the index is valid the bucket is occupied.
+        unsafe {
+            self.buckets
+                .get_unchecked(key.to_index())
+                .assume_occupied_ref()
+        }
     }
 
     /// Returns a mutable reference to the value at the given `key` without checking if it exists.
@@ -84,47 +90,59 @@ impl<T> Slab<T> {
     /// # Safety
     ///
     /// The given `key` must currently exist in the `Slab`.
-    pub unsafe fn get_unchecked_mut(&mut self, key: usize) -> &mut T {
-        // SAFEY: The caller guarantees that the index is valid
-        // and a initialized value exists and the given index.
-        unsafe { self.data.get_unchecked_mut(key).assume_init_mut() }
+    #[inline]
+    pub unsafe fn get_unchecked_mut(&mut self, key: K) -> &mut V {
+        // SAFEY: The caller guarantees that the index is valid the bucket is occupied.
+        unsafe {
+            self.buckets
+                .get_unchecked_mut(key.to_index())
+                .assume_occupied_mut()
+        }
     }
 
     /// Inserts a new value into the [`Slab`] and returns the key to access it.
-    pub fn insert(&mut self, value: T) -> usize {
-        let index = self.next_free;
-
-        if index == self.data.len() {
-            self.data.push(MaybeUninit::new(value));
-            self.residency.push(usize::MAX);
-            self.next_free = index + 1;
-        } else {
-            // SAFETY: We guarantee that `next_free` is in bounds at
-            // all times.
-            unsafe {
-                let residency_slot = self.residency.get_unchecked_mut(index);
-                debug_assert_ne!(*residency_slot, usize::MAX);
-                self.next_free = *residency_slot;
-
-                let slot = self.data.get_unchecked_mut(index);
-                slot.write(value);
-
-                // Mark as occupied.
-                *residency_slot = usize::MAX;
-            }
-        }
-
-        self.len += 1;
-
-        index
+    pub fn insert(&mut self, value: V) -> K {
+        self.try_insert(value).expect("Slab is full")
     }
 
-    pub fn remove(&mut self, key: usize) -> Option<T> {
-        if self.contains(key) {
-            // SAFETY: We just checked that the key exists.
-            Some(unsafe { self.remove_unchecked(key) })
+    pub fn try_insert(&mut self, value: V) -> Option<K> {
+        let index = self.next_free;
+        let key = K::from_index(index)?;
+
+        if index == self.buckets.len() {
+            // We must not wrap around here, otherwise next_free would point
+            // to a bucket that is occupied.
+            self.next_free = index.checked_add(1)?;
+
+            self.buckets.push(Bucket::Occupied(value));
+            self.len += 1;
         } else {
-            None
+            // SAFETY: The next free index always points to a bucket in bounds.
+            let bucket = unsafe { self.buckets.get_unchecked_mut(index) };
+            debug_assert!(matches!(bucket, Bucket::Free(_)));
+
+            let bucket = mem::replace(bucket, Bucket::Occupied(value));
+            // SAFETY: The next free index always points to a free bucket.
+            self.next_free = unsafe { bucket.assume_free() };
+        }
+
+        Some(key)
+    }
+
+    /// Remove the value at the given `key`.
+    pub fn remove(&mut self, key: K) -> Option<V> {
+        let index = key.to_index();
+
+        match self.buckets.get_mut(index) {
+            Some(bucket) if matches!(bucket, Bucket::Occupied(_)) => {
+                let bucket = mem::replace(bucket, Bucket::Free(self.next_free));
+                self.next_free = index;
+                self.len -= 1;
+
+                // SAFETY: We just checked that the slot is occupied.
+                Some(unsafe { bucket.assume_occupied() })
+            }
+            _ => None,
         }
     }
 
@@ -133,112 +151,252 @@ impl<T> Slab<T> {
     /// # Safety
     ///
     /// A entry with the given `key` must currently exist in the `Slab`.
-    pub unsafe fn remove_unchecked(&mut self, key: usize) -> T {
-        let index = key as usize;
+    pub unsafe fn remove_unchecked(&mut self, key: K) -> V {
+        let index = key.to_index();
 
         // SAFETY: The caller guarantees that the given index is in bounds.
-        let residency_slot = unsafe { self.residency.get_unchecked_mut(index) };
-        let data_slot = unsafe { self.data.get_unchecked_mut(index) };
+        let bucket = unsafe { self.buckets.get_unchecked_mut(index) };
 
-        debug_assert_eq!(*residency_slot, usize::MAX);
-        *residency_slot = self.next_free;
+        let bucket = mem::replace(bucket, Bucket::Free(self.next_free));
         self.next_free = index;
-
-        // SAFETY: The caller guarantees that a value exists at the given index.
-        let value = unsafe { data_slot.assume_init_read() };
-
         self.len -= 1;
 
-        value
+        // SAFETY: The caller guarantees that the bucket is occupied.
+        unsafe { bucket.assume_occupied() }
     }
 
-    pub fn iter(&self) -> Iter<'_, T> {
+    /// Returns an iterator over all the items in this `Slab`.
+    ///
+    /// The order of returned items is not specified.
+    pub fn iter(&self) -> Iter<'_, K, V> {
         Iter {
-            data: self.data.iter(),
-            residency: self.residency.iter(),
+            buckets: self.buckets.iter(),
             index: 0,
             len: self.len,
+            _marker: PhantomData,
         }
     }
 
-    pub fn iter_mut(&mut self) -> IterMut<'_, T> {
+    /// Returns an iterator over all the items in this `Slab`.
+    ///
+    /// The order of returned items is not specified.
+    pub fn iter_mut(&mut self) -> IterMut<'_, K, V> {
         IterMut {
-            data: self.data.iter_mut(),
-            residency: self.residency.iter_mut(),
+            buckets: self.buckets.iter_mut(),
             index: 0,
             len: self.len,
+            _marker: PhantomData,
         }
     }
 
-    pub fn values(&self) -> Values<'_, T> {
+    /// Returns an iterator over all the values in this `Slab`.
+    ///
+    /// The order of returned items is not specified.
+    pub fn values(&self) -> Values<'_, K, V> {
         Values { iter: self.iter() }
     }
 }
 
-impl<T> Clone for Slab<T>
+impl<'a, K, V> IntoIterator for &'a Slab<K, V>
 where
-    T: Clone,
+    K: SlabKey,
 {
-    fn clone(&self) -> Self {
-        let mut data = Vec::with_capacity(self.data.len());
-        data.resize_with(self.data.len(), || MaybeUninit::uninit());
+    type Item = (K, &'a V);
+    type IntoIter = Iter<'a, K, V>;
 
-        for index in 0..self.data.len() {
-            if let Some(value) = self.get(index) {
-                data[index].write(value.clone());
-            }
-        }
-
-        Self {
-            data,
-            residency: self.residency.clone(),
-            len: self.len,
-            next_free: self.next_free,
-        }
+    fn into_iter(self) -> Self::IntoIter {
+        self.iter()
     }
 }
 
-impl<T> Debug for Slab<T>
+impl<'a, K, V> IntoIterator for &'a mut Slab<K, V>
 where
-    T: Debug,
+    K: SlabKey,
 {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        if f.alternate() {
-            f.debug_map().entries(self.iter()).finish()
-        } else {
-            f.debug_struct("Slab")
-                .field("len", &self.len)
-                .field("cap", &self.data.capacity())
-                .finish_non_exhaustive()
+    type Item = (K, &'a mut V);
+    type IntoIter = IterMut<'a, K, V>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.iter_mut()
+    }
+}
+
+/// A type that can be used as a key for a [`Slab`].
+///
+/// Implementations must satisfy the following guarantees:
+///
+/// - A key constructed from an index via [`from_index`] or [`from_index_unchecked`] must convert
+///   back the same index via [`to_index`].
+/// - A key that can be constructed via [`from_index`] must also be valid to construct via
+///   [`from_index_unchecked`].
+/// - If a key can be constructed from index A, another index B with `B < A` must also be
+///   constructible.
+///
+/// [`from_index`]: Self::from_index
+/// [`from_index_unchecked`]: Self::from_index_unchecked
+/// [`to_index`]: Self::to_index
+pub trait SlabKey: Copy + PartialEq + Eq {
+    /// Creates a key from an index. Returns `None` if the index is too large.
+    fn from_index(index: usize) -> Option<Self>;
+
+    /// Creates a key from an index, assuming it is valid.
+    ///
+    /// An index is valid exactly if [`from_index`] returns `Some(..)`.
+    ///
+    /// [`from_index`]: Self::from_index
+    fn from_index_unchecked(index: usize) -> Self;
+
+    /// Extracts the index of this key.
+    ///
+    /// This returns the same index used to construct this key.
+    fn to_index(&self) -> usize;
+}
+
+impl SlabKey for u32 {
+    fn from_index(index: usize) -> Option<Self> {
+        index.try_into().ok()
+    }
+
+    fn from_index_unchecked(index: usize) -> Self {
+        index as u32
+    }
+
+    fn to_index(&self) -> usize {
+        *self as usize
+    }
+}
+
+impl SlabKey for usize {
+    fn from_index(index: usize) -> Option<Self> {
+        Some(index)
+    }
+
+    fn from_index_unchecked(index: usize) -> Self {
+        index
+    }
+
+    #[inline]
+    fn to_index(&self) -> usize {
+        *self
+    }
+}
+
+/// Defines a custom [`SlabKey`] type.
+///
+/// # Examples
+///
+/// ```
+/// use game_common::collections::slab::{define_slab_key, Slab};
+///
+/// define_slab_key! {
+///     struct MyKey: usize;
+/// }
+///
+/// let mut slab = Slab::<MyKey, i32>::new();
+/// let key: MyKey = slab.insert(0);
+/// ```
+#[macro_export]
+macro_rules! define_slab_key {
+    (
+        $(#[$attrs:meta])*
+        $vis:vis struct $name:ident : $base:ty;
+    ) => {
+        $(#[$attrs])*
+        #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+        #[repr(transparent)]
+        $vis struct $name($base);
+
+        impl $crate::collections::slab::SlabKey for $name {
+            #[inline]
+            fn from_index(index: usize) -> Option<Self> {
+                <$base as $crate::collections::slab::SlabKey>::from_index(index).map(Self)
+            }
+
+            #[inline]
+            fn from_index_unchecked(index: usize) -> Self {
+                Self(<$base as $crate::collections::slab::SlabKey>::from_index_unchecked(index))
+            }
+
+            #[inline]
+            fn to_index(&self) -> usize {
+                <$base as $crate::collections::slab::SlabKey>::to_index(&self.0)
+            }
+        }
+    };
+}
+
+pub use define_slab_key;
+
+#[derive(Clone, Debug)]
+enum Bucket<T> {
+    Occupied(T),
+    Free(usize),
+}
+
+impl<T> Bucket<T> {
+    #[inline]
+    unsafe fn assume_occupied_ref(&self) -> &T {
+        match self {
+            Self::Occupied(v) => v,
+            // SAFETY: The caller guarantees that the bucket is occupied.
+            _ => unsafe { unreachable_unchecked() },
+        }
+    }
+
+    #[inline]
+    unsafe fn assume_occupied_mut(&mut self) -> &mut T {
+        match self {
+            Self::Occupied(v) => v,
+            // SAFETY: The caller guarantees that the bucket is occupied.
+            _ => unsafe { unreachable_unchecked() },
+        }
+    }
+
+    #[inline]
+    unsafe fn assume_occupied(self) -> T {
+        match self {
+            Self::Occupied(v) => v,
+            // SAFETY: The caller guarantees that the bucket is occupied.
+            _ => unsafe { unreachable_unchecked() },
+        }
+    }
+
+    #[inline]
+    unsafe fn assume_free(self) -> usize {
+        match self {
+            Self::Free(v) => v,
+            // SAFETY: The caller guarantees that the bucket is free.
+            _ => unsafe { unreachable_unchecked() },
         }
     }
 }
 
 #[derive(Clone, Debug)]
-pub struct Iter<'a, T> {
-    data: core::slice::Iter<'a, MaybeUninit<T>>,
-    residency: core::slice::Iter<'a, usize>,
+pub struct Iter<'a, K, V> {
+    buckets: slice::Iter<'a, Bucket<V>>,
     index: usize,
     len: usize,
+    _marker: PhantomData<K>,
 }
 
-impl<'a, T> Iterator for Iter<'a, T> {
-    type Item = (usize, &'a T);
+impl<'a, K, V> Iterator for Iter<'a, K, V>
+where
+    K: SlabKey,
+{
+    type Item = (K, &'a V);
 
     fn next(&mut self) -> Option<Self::Item> {
         loop {
             let index = self.index;
-            let data = self.data.next()?;
-            let residency = self.residency.next()?;
             self.index += 1;
 
-            if *residency == usize::MAX {
-                self.len -= 1;
-
-                // SAFETY: residency == usize::MAX indicates a value exists
-                // at this index.
-                let data = unsafe { data.assume_init_ref() };
-                return Some((index, data));
+            match self.buckets.next()? {
+                Bucket::Occupied(value) => {
+                    let key = K::from_index_unchecked(index);
+                    self.len -= 1;
+                    return Some((key, value));
+                }
+                Bucket::Free(_) => (),
             }
         }
     }
@@ -248,39 +406,43 @@ impl<'a, T> Iterator for Iter<'a, T> {
     }
 }
 
-impl<'a, T> ExactSizeIterator for Iter<'a, T> {
+impl<'a, K, V> ExactSizeIterator for Iter<'a, K, V>
+where
+    K: SlabKey,
+{
     fn len(&self) -> usize {
         self.len
     }
 }
 
-impl<'a, T> FusedIterator for Iter<'a, T> {}
+impl<'a, K, V> FusedIterator for Iter<'a, K, V> where K: SlabKey {}
 
 #[derive(Debug)]
-pub struct IterMut<'a, T> {
-    data: core::slice::IterMut<'a, MaybeUninit<T>>,
-    residency: core::slice::IterMut<'a, usize>,
+pub struct IterMut<'a, K, V> {
+    buckets: slice::IterMut<'a, Bucket<V>>,
     index: usize,
     len: usize,
+    _marker: PhantomData<K>,
 }
 
-impl<'a, T> Iterator for IterMut<'a, T> {
-    type Item = (usize, &'a mut T);
+impl<'a, K, V> Iterator for IterMut<'a, K, V>
+where
+    K: SlabKey,
+{
+    type Item = (K, &'a mut V);
 
     fn next(&mut self) -> Option<Self::Item> {
         loop {
             let index = self.index;
-            let data = self.data.next()?;
-            let residency = self.residency.next()?;
             self.index += 1;
 
-            if *residency == usize::MAX {
-                self.len -= 1;
-
-                // SAFETY: residency == usize::MAX indicates a value exists
-                // at this index.
-                let data = unsafe { data.assume_init_mut() };
-                return Some((index, data));
+            match self.buckets.next()? {
+                Bucket::Occupied(value) => {
+                    let key = K::from_index_unchecked(index);
+                    self.len -= 1;
+                    return Some((key, value));
+                }
+                Bucket::Free(_) => (),
             }
         }
     }
@@ -290,13 +452,16 @@ impl<'a, T> Iterator for IterMut<'a, T> {
     }
 }
 
-impl<'a, T> ExactSizeIterator for IterMut<'a, T> {
+impl<'a, K, V> ExactSizeIterator for IterMut<'a, K, V>
+where
+    K: SlabKey,
+{
     fn len(&self) -> usize {
         self.len
     }
 }
 
-impl<'a, T> FusedIterator for IterMut<'a, T> {}
+impl<'a, K, V> FusedIterator for IterMut<'a, K, V> where K: SlabKey {}
 
 /// An iterator visiting all values of a [`Slab`].
 ///
@@ -304,29 +469,37 @@ impl<'a, T> FusedIterator for IterMut<'a, T> {}
 ///
 /// [`values`]: Slab::values
 #[derive(Clone, Debug)]
-pub struct Values<'a, T> {
-    iter: Iter<'a, T>,
+pub struct Values<'a, K, V> {
+    iter: Iter<'a, K, V>,
 }
 
-impl<'a, T> Iterator for Values<'a, T> {
-    type Item = &'a T;
+impl<'a, K, V> Iterator for Values<'a, K, V>
+where
+    K: SlabKey,
+{
+    type Item = &'a V;
 
+    #[inline]
     fn next(&mut self) -> Option<Self::Item> {
         self.iter.next().map(|(_, v)| v)
     }
 
+    #[inline]
     fn size_hint(&self) -> (usize, Option<usize>) {
-        (self.iter.len(), Some(self.iter.len()))
+        self.iter.size_hint()
     }
 }
 
-impl<'a, T> ExactSizeIterator for Values<'a, T> {
+impl<'a, K, V> ExactSizeIterator for Values<'a, K, V>
+where
+    K: SlabKey,
+{
     fn len(&self) -> usize {
         self.iter.len()
     }
 }
 
-impl<'a, T> FusedIterator for Values<'a, T> {}
+impl<'a, K, V> FusedIterator for Values<'a, K, V> where K: SlabKey {}
 
 #[cfg(test)]
 mod tests {
@@ -334,7 +507,7 @@ mod tests {
 
     #[test]
     fn slab_basic() {
-        let mut slab = Slab::new();
+        let mut slab = Slab::<usize, i32>::new();
 
         let a = slab.insert(0);
         let b = slab.insert(23);

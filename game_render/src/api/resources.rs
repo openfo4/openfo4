@@ -4,6 +4,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use crossbeam_queue::SegQueue;
 use game_common::collections::slab;
 use game_common::collections::vec_map::{Index, VecMap};
+use game_common::define_slab_key;
 use hashbrown::HashMap;
 use parking_lot::{Mutex, MutexGuard};
 use sharded_slab::Slab;
@@ -15,8 +16,9 @@ use crate::backend::{AccessFlags, DescriptorBinding, TextureDescriptor, vulkan};
 
 use super::{BindingMap, DeletionEvent, RawTextureView, ResourceId, ResourceMap};
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
-pub struct BufferId(usize);
+define_slab_key! {
+    pub struct BufferId: usize;
+}
 
 impl Index for BufferId {
     fn index(&self) -> usize {
@@ -24,8 +26,9 @@ impl Index for BufferId {
     }
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
-pub struct TextureId(usize);
+define_slab_key! {
+    pub struct TextureId: usize;
+}
 
 impl Index for TextureId {
     fn index(&self) -> usize {
@@ -56,13 +59,13 @@ pub struct Resources {
     /// Staging memory used to `WriteBuffer` commands.
     pub staging_memory: Mutex<Vec<u8>>,
     // FIXME: These can go behind the same lock.
-    buffers: Mutex<slab::Slab<BufferDescriptor>>,
-    buffer_rcs: Mutex<slab::Slab<RefCount>>,
-    textures: Mutex<slab::Slab<TextureDescriptor>>,
-    buffer_access: Mutex<slab::Slab<AccessFlags>>,
-    texture_rcs: Mutex<slab::Slab<RefCount>>,
+    buffers: Mutex<slab::Slab<BufferId, BufferDescriptor>>,
+    buffer_rcs: Mutex<slab::Slab<BufferId, RefCount>>,
+    textures: Mutex<slab::Slab<TextureId, TextureDescriptor>>,
+    buffer_access: Mutex<slab::Slab<BufferId, AccessFlags>>,
+    texture_rcs: Mutex<slab::Slab<TextureId, RefCount>>,
     // FIXME: Can we flatten this array?
-    texture_access: Mutex<slab::Slab<Vec<AccessFlags>>>,
+    texture_access: Mutex<slab::Slab<TextureId, Vec<AccessFlags>>>,
     pub cache: Mutex<CachePool>,
 }
 
@@ -97,12 +100,12 @@ impl Resources {
         debug_assert_eq!(index0, index1);
         debug_assert_eq!(index0, index2);
 
-        BufferId(index0)
+        index0
     }
 
     pub fn buffer_descriptor(&self, id: BufferId) -> BufferDescriptor {
         let buffers = self.buffers.lock();
-        *buffers.get(id.0).unwrap()
+        *buffers.get(id).unwrap()
     }
 
     pub fn with_buffer_access_flags<T, F>(&self, id: BufferId, f: F) -> T
@@ -110,7 +113,7 @@ impl Resources {
         F: FnOnce(&mut AccessFlags) -> T,
     {
         let mut buffers = self.buffer_access.lock();
-        f(buffers.get_mut(id.0).unwrap())
+        f(buffers.get_mut(id).unwrap())
     }
 
     pub fn with_buffer_rc<T, F>(&self, id: BufferId, f: F) -> T
@@ -118,7 +121,7 @@ impl Resources {
         F: FnOnce(&RefCount) -> T,
     {
         let buffers = self.buffer_rcs.lock();
-        let ref_count = buffers.get(id.0).unwrap();
+        let ref_count = buffers.get(id).unwrap();
         f(&ref_count)
     }
 
@@ -127,9 +130,9 @@ impl Resources {
         let mut buffer_rcs = self.buffer_rcs.lock();
         let mut buffer_access = self.buffer_access.lock();
 
-        buffers.remove(id.0);
-        buffer_rcs.remove(id.0);
-        buffer_access.remove(id.0);
+        buffers.remove(id);
+        buffer_rcs.remove(id);
+        buffer_access.remove(id);
     }
 
     pub fn create_texture(&self, descriptor: TextureDescriptor) -> TextureId {
@@ -144,12 +147,12 @@ impl Resources {
         debug_assert_eq!(index0, index1);
         debug_assert_eq!(index0, index2);
 
-        TextureId(index0)
+        index0
     }
 
     pub fn texture_descriptor(&self, id: TextureId) -> TextureDescriptor {
         let textures = self.textures.lock();
-        *textures.get(id.0).unwrap()
+        *textures.get(id).unwrap()
     }
 
     pub fn with_texture_access_flags<T, F>(&self, id: TextureId, f: F) -> T
@@ -157,7 +160,7 @@ impl Resources {
         F: FnOnce(&mut [AccessFlags]) -> T,
     {
         let mut textures = self.texture_access.lock();
-        f(textures.get_mut(id.0).unwrap())
+        f(textures.get_mut(id).unwrap())
     }
 
     pub fn with_texture_rc<T, F>(&self, id: TextureId, f: F) -> T
@@ -165,7 +168,7 @@ impl Resources {
         F: FnOnce(&RefCount) -> T,
     {
         let textures = self.texture_rcs.lock();
-        let ref_count = textures.get(id.0).unwrap();
+        let ref_count = textures.get(id).unwrap();
         f(ref_count)
     }
 
@@ -174,9 +177,9 @@ impl Resources {
         let mut texture_rcs = self.texture_rcs.lock();
         let mut texture_access = self.texture_access.lock();
 
-        textures.remove(id.0);
-        texture_rcs.remove(id.0);
-        texture_access.remove(id.0);
+        textures.remove(id);
+        texture_rcs.remove(id);
+        texture_access.remove(id);
     }
 
     pub fn access_view_mut(&self) -> ResourceAccessViewMut<'_> {
@@ -189,8 +192,8 @@ impl Resources {
 
 /// View into [`Resources`] that provides exclusive access to [`AccessFlags`] of all resources.
 pub struct ResourceAccessViewMut<'a> {
-    buffers: MutexGuard<'a, slab::Slab<AccessFlags>>,
-    textures: MutexGuard<'a, slab::Slab<Vec<AccessFlags>>>,
+    buffers: MutexGuard<'a, slab::Slab<BufferId, AccessFlags>>,
+    textures: MutexGuard<'a, slab::Slab<TextureId, Vec<AccessFlags>>>,
 }
 
 impl<'a> ResourceMap for ResourceAccessViewMut<'a> {
@@ -198,11 +201,11 @@ impl<'a> ResourceMap for ResourceAccessViewMut<'a> {
 
     fn access(&self, id: Self::Id) -> AccessFlags {
         match id {
-            ResourceId::Buffer(buffer) => unsafe { *self.buffers.get_unchecked(buffer.0) },
+            ResourceId::Buffer(buffer) => unsafe { *self.buffers.get_unchecked(buffer) },
             ResourceId::Texture { id, mip_level } => unsafe {
                 *self
                     .textures
-                    .get_unchecked(id.0)
+                    .get_unchecked(id)
                     .get_unchecked(mip_level as usize)
             },
         }
@@ -211,12 +214,12 @@ impl<'a> ResourceMap for ResourceAccessViewMut<'a> {
     fn set_access(&mut self, id: Self::Id, access: AccessFlags) {
         match id {
             ResourceId::Buffer(buffer) => unsafe {
-                *self.buffers.get_unchecked_mut(buffer.0) = access;
+                *self.buffers.get_unchecked_mut(buffer) = access;
             },
             ResourceId::Texture { id, mip_level } => unsafe {
                 *self
                     .textures
-                    .get_unchecked_mut(id.0)
+                    .get_unchecked_mut(id)
                     .get_unchecked_mut(mip_level as usize) = access;
             },
         }
