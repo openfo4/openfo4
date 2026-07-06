@@ -8,6 +8,8 @@ use std::mem;
 use allocator_api2::alloc::{Allocator, Global};
 use allocator_api2::vec::Vec;
 
+use crate::utils::vec_ext::VecExt;
+
 #[derive(Clone, Debug)]
 pub struct Slab<K, V, A = Global>
 where
@@ -30,6 +32,11 @@ impl<K, V> Slab<K, V> {
         }
     }
 
+    /// Returns the total number of items this `Slab` can store wihout reallocating.
+    pub fn capacity(&self) -> usize {
+        self.buckets.capacity()
+    }
+
     /// Returns the number of items in this `Slab`.
     pub fn len(&self) -> usize {
         self.len
@@ -38,6 +45,16 @@ impl<K, V> Slab<K, V> {
     /// Returns `true` if this `Slab` contains no items.
     pub fn is_empty(&self) -> bool {
         self.len() == 0
+    }
+
+    /// Reserve capacity for at least `additional` more values to be inserted without allocating.
+    ///
+    /// Does nothing if capacity is already sufficient.
+    pub fn reserve(&mut self, additional: usize) {
+        let free_cap = self.buckets.capacity() - self.len;
+        if free_cap < additional {
+            self.buckets.reserve(additional - free_cap);
+        }
     }
 }
 
@@ -115,7 +132,6 @@ where
             self.next_free = index.checked_add(1)?;
 
             self.buckets.push(Bucket::Occupied(value));
-            self.len += 1;
         } else {
             // SAFETY: The next free index always points to a bucket in bounds.
             let bucket = unsafe { self.buckets.get_unchecked_mut(index) };
@@ -126,7 +142,44 @@ where
             self.next_free = unsafe { bucket.assume_free() };
         }
 
+        self.len += 1;
+
         Some(key)
+    }
+
+    /// Inserts a new value into the [`Slab`] assuming that there is free capacity for the new
+    /// item.
+    ///
+    /// # Safety
+    ///
+    /// The spare capacity must be at least 1.
+    ///
+    pub unsafe fn insert_within_capacity_unchecked(&mut self, value: V) -> K {
+        debug_assert!(self.capacity() > self.len());
+
+        let index = self.next_free;
+        let key = K::from_index_unchecked(index);
+
+        if index == self.buckets.len() {
+            self.next_free = index + 1;
+
+            // SAFETY: The caller guarantees that there is spare capacity for a push.
+            unsafe {
+                self.buckets.push_unchecked(Bucket::Occupied(value));
+            }
+        } else {
+            // SAFETY: The next free index always points to a bucket in bounds.
+            let bucket = unsafe { self.buckets.get_unchecked_mut(index) };
+            debug_assert!(matches!(bucket, Bucket::Free(_)));
+
+            let bucket = mem::replace(bucket, Bucket::Occupied(value));
+            // SAFETY: The next free index always points to a free bucket.
+            self.next_free = unsafe { bucket.assume_free() };
+        }
+
+        self.len += 1;
+
+        key
     }
 
     /// Remove the value at the given `key`.
@@ -514,6 +567,7 @@ mod tests {
         let c = slab.insert(53);
         let d = slab.insert(47);
 
+        assert_eq!(slab.len(), 4);
         assert_eq!(*slab.get(a).unwrap(), 0);
         assert_eq!(*slab.get(b).unwrap(), 23);
         assert_eq!(*slab.get(c).unwrap(), 53);
@@ -522,6 +576,7 @@ mod tests {
         slab.remove(b);
         slab.remove(d);
 
+        assert_eq!(slab.len(), 2);
         assert!(slab.contains(a));
         assert!(!slab.contains(b));
         assert!(slab.contains(c));
@@ -529,5 +584,27 @@ mod tests {
 
         let e = slab.insert(100);
         assert_eq!(*slab.get(e).unwrap(), 100);
+    }
+
+    #[test]
+    fn slab_insert_within_capacity_unchecked() {
+        let mut slab = Slab::<usize, i32>::new();
+
+        slab.reserve(2);
+        let k0 = unsafe { slab.insert_within_capacity_unchecked(0) };
+        let k1 = unsafe { slab.insert_within_capacity_unchecked(1) };
+
+        assert_eq!(slab.remove(k1).unwrap(), 1);
+        assert_eq!(slab.remove(k0).unwrap(), 0);
+
+        let k2 = unsafe { slab.insert_within_capacity_unchecked(2) };
+        let k3 = unsafe { slab.insert_within_capacity_unchecked(3) };
+
+        slab.reserve(1);
+        let k4 = unsafe { slab.insert_within_capacity_unchecked(4) };
+
+        assert_eq!(slab.remove(k2).unwrap(), 2);
+        assert_eq!(slab.remove(k3).unwrap(), 3);
+        assert_eq!(slab.remove(k4).unwrap(), 4);
     }
 }
