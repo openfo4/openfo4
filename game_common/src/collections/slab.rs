@@ -4,6 +4,7 @@ use std::hint::unreachable_unchecked;
 use std::iter::FusedIterator;
 use std::marker::PhantomData;
 use std::mem;
+use std::ops::{Index, IndexMut};
 
 use allocator_api2::alloc::{Allocator, Global};
 use allocator_api2::vec::Vec;
@@ -271,6 +272,26 @@ where
 
     fn into_iter(self) -> Self::IntoIter {
         self.iter_mut()
+    }
+}
+
+impl<K, V> Index<K> for Slab<K, V>
+where
+    K: SlabKey,
+{
+    type Output = V;
+
+    fn index(&self, index: K) -> &Self::Output {
+        self.get(index).expect("key does not exist")
+    }
+}
+
+impl<K, V> IndexMut<K> for Slab<K, V>
+where
+    K: SlabKey,
+{
+    fn index_mut(&mut self, index: K) -> &mut Self::Output {
+        self.get_mut(index).expect("key does not exist")
     }
 }
 
