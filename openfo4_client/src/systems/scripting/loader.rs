@@ -796,6 +796,7 @@ fn record_script_name(data: &RecordData) -> Option<&'static str> {
         RecordData::MiscObject(_) => Some("MiscObject"),
         RecordData::MSTT(_) => Some("MovableStatic"),
         RecordData::MusicType(_) => Some("MusicType"),
+        RecordData::NavMesh(_) => Some("Form"),
         RecordData::Note(_) => Some("Holotape"),
         RecordData::Npc(_) => Some("ActorBase"),
         RecordData::ObjectModification(_) => Some("ObjectMod"),
