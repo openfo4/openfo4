@@ -20,6 +20,7 @@ use game_tasks::TaskPool;
 use game_tracing::trace_span;
 use glam::UVec2;
 use hashbrown::HashMap;
+use hashbrown::HashSet;
 use openfo4_core::ecs::{Entity, World};
 
 use crate::components::{Camera as CameraComp, WorldSpace};
@@ -238,9 +239,10 @@ impl RenderState {
         {
             let view = world.view::<(&GlobalTransform, &WorldSpace, &RenderObject)>();
 
+            let mut recreated = HashSet::new();
+
             for entity in world
                 .component_added::<GlobalTransform>()
-                .chain(world.component_changed::<GlobalTransform>())
                 .chain(world.component_added::<WorldSpace>())
                 .chain(world.component_changed::<WorldSpace>())
                 .chain(world.component_added::<RenderObject>())
@@ -262,6 +264,25 @@ impl RenderState {
                     scene: scene.clone(),
                 });
                 self.objects.insert(entity, handle);
+                recreated.insert(entity);
+            }
+
+            for entity in world.component_changed::<GlobalTransform>() {
+                // If the entity was already changed by other means, it will already
+                // have its transform updated.
+                if recreated.contains(&entity) {
+                    continue;
+                }
+
+                let Some((transform, _, _)) = view.get(entity) else {
+                    continue;
+                };
+
+                let Some(handle) = self.objects.get(&entity) else {
+                    continue;
+                };
+
+                self.entities.set_transform(handle, transform.0);
             }
         }
 

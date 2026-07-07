@@ -351,6 +351,10 @@ impl MeshState {
 
         self.skin_bones.write(queue, data.bones_offset, &matrices);
     }
+
+    pub fn update_transform(&mut self, key: InstanceKey, transform: Transform) {
+        self.instances.update_transform(key, transform);
+    }
 }
 
 define_slab_key! {
@@ -499,6 +503,40 @@ impl InstanceBuffer {
         }
     }
 
+    pub fn update_transform(&mut self, key: InstanceKey, transform: Transform) {
+        let normal = Mat3::from_quat(transform.rotation);
+        let normal_x = Vec4::new(normal.x_axis.x, normal.x_axis.y, normal.x_axis.z, 0.0);
+        let normal_y = Vec4::new(normal.y_axis.x, normal.y_axis.y, normal.y_axis.z, 0.0);
+        let normal_z = Vec4::new(normal.z_axis.x, normal.z_axis.y, normal.z_axis.z, 0.0);
+
+        let transform = InstanceTransform {
+            transform: Mat4::from_scale_rotation_translation(
+                transform.scale,
+                transform.rotation,
+                transform.translation,
+            )
+            .to_cols_array_2d(),
+            normal: [
+                normal_x.to_array(),
+                normal_y.to_array(),
+                normal_z.to_array(),
+            ],
+        };
+        let bytes = bytemuck::bytes_of(&transform);
+
+        match key {
+            InstanceKey::Opaque(index) => {
+                self.opaque.write_bytes(index, bytes);
+            }
+            InstanceKey::Transparent(index) => {
+                self.transparent.write_bytes(index, bytes);
+            }
+            InstanceKey::Translucent(index) => {
+                self.translucent.write_bytes(index, bytes);
+            }
+        }
+    }
+
     pub fn remove(&mut self, key: InstanceKey) {
         match key {
             InstanceKey::Opaque(index) => {
@@ -515,6 +553,16 @@ impl InstanceBuffer {
             }
         }
     }
+}
+
+#[derive(Copy, Clone, Debug, Zeroable, Pod)]
+#[repr(C)]
+struct InstanceTransform {
+    transform: [[f32; 4]; 4],
+    // rotation matrix for normals/tangents
+    // Note that we can't use the transform matrix for non-uniform
+    // scaling values.
+    normal: [[f32; 4]; 3],
 }
 
 #[derive(Copy, Clone, Debug, Zeroable, Pod)]

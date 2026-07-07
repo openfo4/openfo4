@@ -170,6 +170,15 @@ impl Node for UpdatePass {
                         scene.objects.insert(id, ObjectState { id: key });
                     }
                 }
+                Event::UpdateTransform(id, scene, transform) => {
+                    let state = &mut *state;
+
+                    if let Some(scene) = state.scenes.get(&scene)
+                        && let Some(object) = scene.objects.get(&id)
+                    {
+                        state.mesh.update_transform(object.id, transform);
+                    }
+                }
                 Event::DestroyObject(id) => {
                     let state = &mut *state;
 

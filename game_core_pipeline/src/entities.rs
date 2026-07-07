@@ -118,6 +118,7 @@ impl Entities {
             id,
             mesh: object.mesh,
             material: object.material,
+            scene: object.scene.id,
         }
     }
 
@@ -207,6 +208,13 @@ impl Entities {
             id,
             material: material.layers.into_iter().map(|v| v.material).collect(),
         }
+    }
+
+    pub fn set_transform(&mut self, object: &ObjectHandle, transform: Transform) {
+        self.inner
+            .events
+            .send(Event::UpdateTransform(object.id, object.scene, transform))
+            .ok();
     }
 }
 
@@ -390,6 +398,7 @@ pub struct ObjectHandle {
     id: ObjectId,
     mesh: MeshHandle,
     material: MaterialHandle,
+    scene: SceneId,
 }
 
 impl Clone for ObjectHandle {
@@ -404,6 +413,7 @@ impl Clone for ObjectHandle {
             id: self.id,
             mesh: self.mesh.clone(),
             material: self.material.clone(),
+            scene: self.scene,
         }
     }
 }
@@ -542,6 +552,7 @@ pub(crate) enum Event {
     CreateLight(LightId, Light),
     DestroyLight(SceneId, LightId),
     UpdateBoneTransforms(ObjectId, Vec<Transform>),
+    UpdateTransform(ObjectId, SceneId, Transform),
 }
 
 #[derive(Clone, Debug)]
