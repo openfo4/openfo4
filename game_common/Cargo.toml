@@ -18,4 +18,3 @@ num-traits = "0.2.19"
 parking_lot = "0.12.3"
 allocator-api2 = "0.2.21"
 hashbrown = { workspace = true }
-slab = { version = "0.4.9", git = "https://github.com/MrGunflame/slab", branch = "unchecked-methods" }
