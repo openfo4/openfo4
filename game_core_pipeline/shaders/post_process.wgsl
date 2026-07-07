@@ -45,6 +45,18 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
 fn tonemap(color: vec3<f32>) -> vec3<f32> {
     // return color / (color + vec3(1.0));
     return aces_fitted(color);
+    return uncharted2_tonemap_partial(color);
+}
+
+fn uncharted2_tonemap_partial(x: vec3<f32>) -> vec3<f32>
+{
+    let A = 0.15f;
+    let B = 0.50f;
+    let C = 0.10f;
+    let D = 0.20f;
+    let E = 0.02f;
+    let F = 0.30f;
+    return ((x*(A*x+C*B)+D*E)/(x*(A*x+B)+D*F))-E/F;
 }
 
 fn gamma_correct(color: vec3<f32>) -> vec3<f32> {

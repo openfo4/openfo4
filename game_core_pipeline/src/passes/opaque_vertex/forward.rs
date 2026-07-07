@@ -18,6 +18,7 @@ use parking_lot::Mutex;
 
 use crate::camera::CameraUniform;
 use crate::entities::{CameraId, SceneId};
+use crate::passes::mesh::Instance;
 use crate::passes::opaque_vertex::pipelines::drawcall_gen::{
     DrawcallGenParams, DrawcallGenPipeline,
 };
@@ -32,10 +33,9 @@ use crate::passes::opaque_vertex::pipelines::visbuffer_shading::{
     ShadingParameters, ShadingPipeline,
 };
 use crate::passes::opaque_vertex::shadow::compute_directional_csm_shadow_params;
-use crate::passes::opaque_vertex::state::Instance;
 use crate::passes::sky::SkyPass;
 use crate::passes::update::{RawAmbientLight, RawSceneData};
-use crate::passes::{DEPTH_FORMAT, HDR_FORMAT, HDR_TEXTURE, MeshStateImpl, OPAQUE_DEPTH, State};
+use crate::passes::{DEPTH_FORMAT, HDR_FORMAT, HDR_TEXTURE, OPAQUE_DEPTH, State};
 
 pub struct OpaqueVertexForwardPass {
     state: Arc<Mutex<State>>,
@@ -119,21 +119,19 @@ impl OpaqueVertexForwardPass {
         let point_lights = scene.point_lights_buffer.buffer(ctx.queue);
         let spot_lights = scene.spot_lights_buffer.buffer(ctx.queue);
 
-        let MeshStateImpl::Vertex(mesh_state) = &mut state.mesh;
-
-        if mesh_state.num_opauqe_instances == 0 && mesh_state.num_transparent_mask_instances == 0 {
+        if state.mesh.instances.num_opaque == 0 && state.mesh.instances.num_transparent == 0 {
             self.clear_pass(ctx, size);
             return;
         }
 
-        let positions = mesh_state.positions.buffer();
-        let normals = mesh_state.normals.buffer();
-        let tangents = mesh_state.tangents.buffer();
-        let uvs = mesh_state.uvs.buffer();
-        let colors = mesh_state.colors.buffer();
+        let positions = state.mesh.positions.buffer();
+        let normals = state.mesh.normals.buffer();
+        let tangents = state.mesh.tangents.buffer();
+        let uvs = state.mesh.uvs.buffer();
+        let colors = state.mesh.colors.buffer();
 
-        let offsets = mesh_state.mesh_offsets.buffer(ctx.queue);
-        let index_buffer = mesh_state.index_buffer.buffer();
+        let offsets = state.mesh.mesh_offsets.buffer(ctx.queue);
+        let index_buffer = state.mesh.indices.buffer();
 
         let visbuffer = ctx.queue.create_texture(&TextureDescriptor {
             size,
@@ -143,8 +141,10 @@ impl OpaqueVertexForwardPass {
         });
 
         let opauqe_instances = ctx.queue.create_buffer(&BufferDescriptor {
-            size: mesh_state
-                .opaque_instances
+            size: state
+                .mesh
+                .instances
+                .opaque
                 .buffer(ctx.queue)
                 .size()
                 .max(size_of::<Instance>() as u64),
@@ -156,12 +156,12 @@ impl OpaqueVertexForwardPass {
         let mut shadow_maps = Vec::new();
 
         // Opaque Forward
-        if mesh_state.num_opauqe_instances != 0 {
+        if state.mesh.instances.num_opaque != 0 {
             let mut pipeline = self.drawcall_gen_pipeline.lock();
 
-            let instances_in = mesh_state.opaque_instances.buffer(ctx.queue);
+            let instances_in = state.mesh.instances.opaque.buffer(ctx.queue);
             let draws = ctx.queue.create_buffer(&BufferDescriptor {
-                size: mesh_state.num_opauqe_instances as u64
+                size: state.mesh.instances.num_opaque as u64
                     * size_of::<DrawIndirectCommand>() as u64,
                 usage: BufferUsage::STORAGE | BufferUsage::INDIRECT,
                 flags: UsageFlags::empty(),
@@ -170,7 +170,7 @@ impl OpaqueVertexForwardPass {
             pipeline.run(
                 ctx.queue,
                 DrawcallGenParams {
-                    instance_count: mesh_state.num_opauqe_instances,
+                    instance_count: state.mesh.instances.num_opaque,
                     instances_in,
                     instances_out: &opauqe_instances,
                     draws: &draws,
@@ -229,8 +229,10 @@ impl OpaqueVertexForwardPass {
         }
 
         let alpha_mask_instances = ctx.queue.create_buffer(&BufferDescriptor {
-            size: mesh_state
-                .transparent_mask_instances
+            size: state
+                .mesh
+                .instances
+                .transparent
                 .buffer(ctx.queue)
                 .size()
                 .max(size_of::<Instance>() as u64),
@@ -239,11 +241,11 @@ impl OpaqueVertexForwardPass {
         });
 
         // Alpha Mask forward
-        if mesh_state.num_transparent_mask_instances != 0 {
-            let instance_in = mesh_state.transparent_mask_instances.buffer(ctx.queue);
+        if state.mesh.instances.num_transparent != 0 {
+            let instance_in = state.mesh.instances.transparent.buffer(ctx.queue);
 
             let draws = ctx.queue.create_buffer(&BufferDescriptor {
-                size: mesh_state.num_transparent_mask_instances as u64
+                size: state.mesh.instances.num_transparent as u64
                     * size_of::<DrawIndirectCommand>() as u64,
                 usage: BufferUsage::STORAGE | BufferUsage::INDIRECT,
                 flags: UsageFlags::empty(),
@@ -254,7 +256,7 @@ impl OpaqueVertexForwardPass {
                 pipeline.run(
                     ctx.queue,
                     DrawcallGenParams {
-                        instance_count: mesh_state.num_transparent_mask_instances,
+                        instance_count: state.mesh.instances.num_transparent,
                         instances_in: instance_in,
                         instances_out: &alpha_mask_instances,
                         draws: &draws,
@@ -280,7 +282,7 @@ impl OpaqueVertexForwardPass {
                         depth: &depth_texture,
                         indirect_buffer: &draws,
                         offsets,
-                        clear_output_and_depth: mesh_state.num_opauqe_instances == 0,
+                        clear_output_and_depth: state.mesh.instances.num_opaque == 0,
                     },
                 );
             }

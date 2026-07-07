@@ -27,7 +27,7 @@ use parking_lot::Mutex;
 use crate::camera::CameraUniform;
 use crate::entities::{CameraId, SceneId};
 use crate::passes::update::{RawAmbientLight, RawSceneData};
-use crate::passes::{DEPTH_FORMAT, HDR_FORMAT, HDR_TEXTURE, MeshStateImpl, OPAQUE_DEPTH, State};
+use crate::passes::{DEPTH_FORMAT, HDR_FORMAT, HDR_TEXTURE, OPAQUE_DEPTH, State};
 
 const DRAWGEN_SHADER: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),
@@ -306,8 +306,6 @@ impl TransparentVertexPass {
         let scene = state.scenes.get_mut(&scene).unwrap();
         let camera = scene.cameras.get(&camera).unwrap();
 
-        let MeshStateImpl::Vertex(mesh_state) = &mut state.mesh;
-
         let depth_target = ctx.read::<Texture>(OPAQUE_DEPTH).unwrap();
         let color_target = ctx.read::<Texture>(HDR_TEXTURE).unwrap();
         let size = color_target.size();
@@ -316,7 +314,7 @@ impl TransparentVertexPass {
         // The size of one element is 16 bytes.
         let abuffer_size = size.x as u64 * size.y as u64 * 4 * 16;
 
-        if mesh_state.num_transparent_blend_instances == 0 || size.x == 0 || size.y == 0 {
+        if state.mesh.instances.num_translucent == 0 || size.x == 0 || size.y == 0 {
             return;
         }
 
@@ -325,14 +323,14 @@ impl TransparentVertexPass {
 
         // Drawcall Generation Pass
         {
-            let instances_in = mesh_state.transparent_blend_instances.buffer(ctx.queue);
+            let instances_in = state.mesh.instances.translucent.buffer(ctx.queue);
             let instances_out = ctx.queue.create_buffer(&BufferDescriptor {
                 size: instances_in.size(),
                 usage: BufferUsage::STORAGE,
                 flags: UsageFlags::empty(),
             });
             let draws = ctx.queue.create_buffer(&BufferDescriptor {
-                size: mesh_state.num_transparent_blend_instances as u64
+                size: state.mesh.instances.num_translucent as u64
                     * size_of::<DrawIndexedIndirectCommand>() as u64,
                 usage: BufferUsage::STORAGE | BufferUsage::INDIRECT,
                 flags: UsageFlags::empty(),
@@ -360,15 +358,17 @@ impl TransparentVertexPass {
                 name: "Transparent Drawcall Generation Pass",
             });
 
-            let num_dispatches = mesh_state
-                .num_transparent_blend_instances
+            let num_dispatches = state
+                .mesh
+                .instances
+                .num_translucent
                 .div_ceil(WORKGROUP_SIZE);
 
             pass.set_pipeline(&self.drawcall_gen_pipeline.get(ctx.queue, HDR_FORMAT));
             pass.set_push_constants(
                 ShaderStages::COMPUTE,
                 0,
-                bytemuck::bytes_of(&mesh_state.num_transparent_blend_instances),
+                bytemuck::bytes_of(&state.mesh.instances.num_translucent),
             );
             pass.set_descriptor_set(0, &descriptor);
             pass.dispatch(num_dispatches, 1, 1);
@@ -382,7 +382,7 @@ impl TransparentVertexPass {
 
         // Color Pass
         {
-            let offsets = mesh_state.mesh_offsets.buffer(ctx.queue);
+            let offsets = state.mesh.mesh_offsets.buffer(ctx.queue);
             let materials = state.material_slab.buffer(ctx.queue);
 
             let mesh_descriptor = ctx.queue.create_descriptor_set(&DescriptorSetDescriptor {
@@ -390,23 +390,23 @@ impl TransparentVertexPass {
                 entries: &[
                     DescriptorSetEntry {
                         binding: 0,
-                        resource: BindingResource::Buffer(mesh_state.positions.buffer()),
+                        resource: BindingResource::Buffer(state.mesh.positions.buffer()),
                     },
                     DescriptorSetEntry {
                         binding: 1,
-                        resource: BindingResource::Buffer(mesh_state.normals.buffer()),
+                        resource: BindingResource::Buffer(state.mesh.normals.buffer()),
                     },
                     DescriptorSetEntry {
                         binding: 2,
-                        resource: BindingResource::Buffer(mesh_state.uvs.buffer()),
+                        resource: BindingResource::Buffer(state.mesh.uvs.buffer()),
                     },
                     DescriptorSetEntry {
                         binding: 3,
-                        resource: BindingResource::Buffer(mesh_state.tangents.buffer()),
+                        resource: BindingResource::Buffer(state.mesh.tangents.buffer()),
                     },
                     DescriptorSetEntry {
                         binding: 4,
-                        resource: BindingResource::Buffer(mesh_state.colors.buffer()),
+                        resource: BindingResource::Buffer(state.mesh.colors.buffer()),
                     },
                     DescriptorSetEntry {
                         binding: 5,
@@ -585,7 +585,7 @@ impl TransparentVertexPass {
             pass.set_descriptor_set(0, &mesh_descriptor);
             pass.set_descriptor_set(1, &material_descriptor);
             pass.set_descriptor_set(2, &output_descriptor);
-            pass.set_index_buffer(mesh_state.index_buffer.buffer(), IndexFormat::U32);
+            pass.set_index_buffer(state.mesh.indices.buffer(), IndexFormat::U32);
             pass.draw_indexed_indirect(&indirect_buffer);
         }
 

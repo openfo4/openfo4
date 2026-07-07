@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use crossbeam::channel::{Receiver, Sender};
 use game_common::collections::arena::{Arena, Key};
+use game_common::collections::vec_map::Index;
 use game_common::components::{Color, Transform};
 use game_render::mesh::Mesh;
 use game_render::texture::image::MipImage;
@@ -506,6 +507,12 @@ pub struct ObjectId(Key);
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct CameraId(Key);
+
+impl Index for CameraId {
+    fn index(&self) -> usize {
+        self.0.index()
+    }
+}
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct LightId(Key);

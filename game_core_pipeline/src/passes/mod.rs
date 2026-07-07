@@ -1,3 +1,4 @@
+mod mesh;
 mod opaque_vertex;
 mod pipeline;
 mod post_process;
@@ -7,27 +8,21 @@ mod transparent_vertex;
 mod update;
 
 use std::collections::HashMap;
-use std::num::NonZeroU32;
 use std::sync::Arc;
 
 use bitflags::bitflags;
 use bytemuck::{NoUninit, Pod, Zeroable};
 use crossbeam::channel::Receiver;
-use game_common::collections::arena::Key;
-use game_common::components::Transform;
-use game_render::api::{CommandQueue, DescriptorSetLayout, TextureRegion, TextureViewDescriptor};
+use game_render::api::{CommandQueue, TextureRegion, TextureViewDescriptor};
 use game_render::backend::{
-    BufferUsage, DescriptorBinding, DescriptorSetDescriptor, DescriptorType, ImageDataLayout,
-    ShaderStages, TextureDescriptor, TextureFormat, TextureUsage,
+    BufferUsage, ImageDataLayout, TextureDescriptor, TextureFormat, TextureUsage,
 };
 use game_render::buffer::GpuBuffer;
 use game_render::buffer::slab::{CompactSlabBuffer, SlabBuffer, SlabIndex};
 use game_render::buffer::suballocated::SubAllocatedGrowableBuffer;
 use game_render::buffer::texture_slab::{TextureSlab, TextureSlabIndex};
 use game_render::graph::{NodeLabel, RenderGraph, SlotFlags, SlotKind, SlotLabel};
-use game_render::mesh::Mesh;
 use glam::{UVec2, Vec3};
-use opaque_vertex::state::VertexMeshState;
 use parking_lot::Mutex;
 use post_process::PostProcessPass;
 use update::{TransformUniform, UpdatePass};
@@ -36,6 +31,7 @@ use crate::camera::Camera;
 use crate::entities::{CameraId, Event, ImageId, LightId, MaterialId, MeshId, ObjectId, SceneId};
 use crate::lights::{AmbientLight, DirectionalLightUniform, PointLightUniform, SpotLightUniform};
 use crate::material::AlphaMode;
+use crate::passes::mesh::{InstanceKey, MeshKey, MeshState};
 use crate::passes::skinning::SkinningPass;
 use crate::passes::sky::SkyState;
 use crate::passes::transparent_vertex::TransparentVertexPass;
@@ -108,11 +104,8 @@ pub(crate) fn init(
 
 #[derive(Debug)]
 struct State {
+    mesh: MeshState,
     default_textures: DefaultTextures,
-
-    mesh_descriptor_layout: DescriptorSetLayout,
-
-    mesh: MeshStateImpl,
 
     meshes: HashMap<MeshId, MeshKey>,
     images: HashMap<ImageId, TextureSlabIndex>,
@@ -130,67 +123,6 @@ struct State {
 
 impl State {
     fn new(queue: &CommandQueue<'_>, sky: Arc<Mutex<SkyState>>) -> Self {
-        let mesh_descriptor_layout = queue.create_descriptor_set_layout(&DescriptorSetDescriptor {
-            bindings: &[
-                // POSITIONS
-                DescriptorBinding {
-                    binding: 0,
-                    visibility: ShaderStages::MESH,
-                    kind: DescriptorType::Storage,
-                    count: NonZeroU32::MIN,
-                },
-                // NORMALS
-                DescriptorBinding {
-                    binding: 1,
-                    visibility: ShaderStages::MESH,
-                    kind: DescriptorType::Storage,
-                    count: NonZeroU32::MIN,
-                },
-                // TANGENTS
-                DescriptorBinding {
-                    binding: 2,
-                    visibility: ShaderStages::MESH,
-                    kind: DescriptorType::Storage,
-                    count: NonZeroU32::MIN,
-                },
-                // UVS
-                DescriptorBinding {
-                    binding: 3,
-                    visibility: ShaderStages::MESH,
-                    kind: DescriptorType::Storage,
-                    count: NonZeroU32::MIN,
-                },
-                // VERTEX INDICES
-                DescriptorBinding {
-                    binding: 4,
-                    visibility: ShaderStages::MESH,
-                    kind: DescriptorType::Storage,
-                    count: NonZeroU32::MIN,
-                },
-                // TRIANGLE INDICES
-                DescriptorBinding {
-                    binding: 5,
-                    visibility: ShaderStages::MESH,
-                    kind: DescriptorType::Storage,
-                    count: NonZeroU32::MIN,
-                },
-                // MESHLETS
-                DescriptorBinding {
-                    binding: 6,
-                    visibility: ShaderStages::MESH,
-                    kind: DescriptorType::Storage,
-                    count: NonZeroU32::MIN,
-                },
-                // INSTANCES
-                DescriptorBinding {
-                    binding: 7,
-                    visibility: ShaderStages::TASK | ShaderStages::MESH,
-                    kind: DescriptorType::Storage,
-                    count: NonZeroU32::MIN,
-                },
-            ],
-        });
-
         let placeholder_texture = queue.create_texture(&TextureDescriptor {
             size: UVec2::ONE,
             mip_levels: 1,
@@ -205,14 +137,13 @@ impl State {
 
         Self {
             default_textures,
-            mesh_descriptor_layout,
             meshes: HashMap::new(),
             materials: HashMap::new(),
             scenes: HashMap::new(),
             images: HashMap::new(),
             textures,
             material_slab: SlabBuffer::new(BufferUsage::STORAGE),
-            mesh: MeshStateImpl::new(queue),
+            mesh: MeshState::new(queue),
             sky,
             terrain_layers: SubAllocatedGrowableBuffer::new(queue, BufferUsage::STORAGE),
             terrain_material: HashMap::new(),
@@ -366,68 +297,6 @@ struct RawObjectData {
     pub meshlet_offset: u32,
     pub material: SlabIndex,
     _pad0: [u32; 2],
-}
-
-#[derive(Debug)]
-enum MeshStateImpl {
-    Vertex(VertexMeshState),
-}
-
-impl MeshStateImpl {
-    fn new(queue: &CommandQueue<'_>) -> Self {
-        Self::Vertex(VertexMeshState::new(queue))
-    }
-
-    fn create_mesh(&mut self, queue: &CommandQueue<'_>, mesh: &Mesh) -> MeshKey {
-        match self {
-            Self::Vertex(state) => state.create_mesh(queue, mesh),
-        }
-    }
-
-    fn remove_mesh(&mut self, key: MeshKey) {
-        match self {
-            Self::Vertex(state) => state.remove_mesh(key),
-        }
-    }
-
-    fn create_instance(
-        &mut self,
-        queue: &CommandQueue<'_>,
-        transform: Transform,
-        mesh: MeshKey,
-        material: &MaterialState,
-    ) -> InstanceKey {
-        match self {
-            Self::Vertex(state) => state.create_instance(queue, transform, mesh, material),
-        }
-    }
-
-    fn remove_instance(&mut self, key: InstanceKey) {
-        match self {
-            Self::Vertex(state) => state.remove_instance(key),
-        }
-    }
-
-    fn set_skinned_bones_transforms(
-        &mut self,
-        queue: &CommandQueue<'_>,
-        key: InstanceKey,
-        transforms: &[Transform],
-    ) {
-        match self {
-            Self::Vertex(state) => state.set_skinned_bones_transforms(queue, key, transforms),
-        }
-    }
-}
-
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
-pub struct MeshKey(pub Key);
-
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
-pub enum InstanceKey {
-    Opaque(SlabIndex),
-    TransparentMask(SlabIndex),
-    TransparentBlend(SlabIndex),
 }
 
 #[derive(Copy, Clone, Debug)]

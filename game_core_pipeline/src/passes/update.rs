@@ -73,7 +73,7 @@ impl Node for UpdatePass {
                 Event::CreateMesh(id, mesh) => {
                     assert!(mesh.validate_indices().is_ok());
 
-                    let key = state.mesh.create_mesh(ctx.queue, &mesh);
+                    let key = state.mesh.create_mesh_unchecked(ctx.queue, &mesh);
                     state.meshes.insert(id, key);
                 }
                 Event::DestroyMesh(id) => {

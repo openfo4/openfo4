@@ -13,7 +13,8 @@ public struct DirectionalLight {
 
     public func eval() -> pbr::Light {
         pbr::Light light;
-        light.color = this.color * this.intensity;
+        light.color = this.color * this.intensity / 4.5;
+        light.color = this.color ;
         light.attenuation = 1.0;
         light.direction = normalize(-this.direction);
         return light;

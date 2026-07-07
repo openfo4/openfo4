@@ -11,8 +11,6 @@ use crate::passes::{HDR_TEXTURE, OPAQUE_DEPTH, SKINNING_PASS};
 
 use super::State;
 
-pub mod state;
-
 mod forward;
 mod pipelines;
 mod shadow;
