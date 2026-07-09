@@ -629,8 +629,8 @@ pub fn array_cast<F>(
 
     let dst_base_ptr = call_malloc(translator, dst_ty, len);
 
-    let src_ty = lowered_elem_ty(translator.data.resources.types.get(src_ty).unwrap());
-    let dst_ty = lowered_elem_ty(translator.data.resources.types.get(dst_ty).unwrap());
+    let src_ty = lowered_elem_ty(&translator.data.resources.types.get(src_ty).unwrap());
+    let dst_ty = lowered_elem_ty(&translator.data.resources.types.get(dst_ty).unwrap());
 
     let src_stride = src_ty.size();
     let dst_stride = dst_ty.size();
@@ -692,7 +692,7 @@ pub fn array_cast<F>(
     translator.current_block = final_block;
 }
 
-fn lowered_elem_ty(ty: Type) -> JitType {
+fn lowered_elem_ty(ty: &Type) -> JitType {
     match ty.repr {
         TypeRepr::Unit => PTR_TYPE,
         TypeRepr::Int { bits } if bits == 8 => BOOL_TYPE,

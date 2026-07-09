@@ -1,9 +1,10 @@
 use std::alloc::Layout;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 use bytemuck::AnyBitPattern;
 use game_common::string::Lowercase;
 use hashbrown::HashMap;
+use parking_lot::Mutex;
 
 use crate::compiler::resources::{Resources, Type, TypeId, TypeRepr};
 
@@ -52,6 +53,7 @@ impl ObjectPool {
         }
     }
 
+    /// Allocates a new object with the given ty.
     pub fn alloc(&self, ty: TypeId, array_len: usize) -> ObjectRef {
         let typ = self.resources.types.get(ty).unwrap();
 
@@ -75,7 +77,7 @@ impl ObjectPool {
             std::alloc::handle_alloc_error(alloc_layout);
         }
 
-        let mut objects = self.objects.lock().unwrap();
+        let mut objects = self.objects.lock();
 
         for i in 0..array_len {
             let elem_ptr = unsafe { ptr.add(stride * i) };
@@ -154,7 +156,7 @@ impl ObjectPool {
     /// No thread must currently access the given object referenced by the [`ObjectRef`].
     pub unsafe fn clone_object(&self, object: &ObjectRef) -> ObjectBuilder {
         let ty_id = {
-            let objects = self.objects.lock().unwrap();
+            let objects = self.objects.lock();
 
             let object = objects.get(&object.addr()).unwrap();
             object.ty_id
@@ -162,7 +164,7 @@ impl ObjectPool {
 
         let builder = self.insert(ty_id);
 
-        let mut objects = self.objects.lock().unwrap();
+        let mut objects = self.objects.lock();
         let object = objects.get_mut(&object.addr()).unwrap();
 
         unsafe {
@@ -190,7 +192,7 @@ impl ObjectPool {
         T: AsRef<ObjectAddr>,
     {
         let addr = *object.as_ref();
-        let objects = self.objects.lock().unwrap();
+        let objects = self.objects.lock();
         if let Some(obj) = objects.get(&addr) {
             return Some(obj.clone());
         }
@@ -268,19 +270,19 @@ struct ObjectRefInner {
 
 impl Drop for ObjectRefInner {
     fn drop(&mut self) {
-        self.drop.lock().unwrap().push(self.addr);
+        self.drop.lock().push(self.addr);
     }
 }
 
 #[derive(Clone, Debug)]
 pub struct Object {
     memory: *mut u8,
-    ty: Type,
+    ty: Arc<Type>,
     ty_id: TypeId,
 }
 
 impl Object {
-    unsafe fn new_at(ty_id: TypeId, ty: Type, ptr: *mut u8) -> Self {
+    unsafe fn new_at(ty_id: TypeId, ty: Arc<Type>, ptr: *mut u8) -> Self {
         if let TypeRepr::Composite(ty) = &ty.repr {
             for member in &ty.members {
                 let Some(value) = &member.default_value else {

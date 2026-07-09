@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use game_common::string::Lowercase;
 use hashbrown::HashMap;
 use openfo4_pex::Value;
@@ -23,7 +25,7 @@ pub fn compute_class_layout(
     let mut classes = Vec::new();
 
     let mut ty = if let Some(parent) = parent_ty {
-        let parent = res.types.get(parent).unwrap();
+        let parent = Arc::make_mut(&mut res.types.get(parent).unwrap()).clone();
 
         properties = parent.info.properties;
         classes = parent.info.classes;

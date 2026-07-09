@@ -331,7 +331,8 @@ impl CodegenPass {
             self.data.class_headers.insert(id, data);
 
             // Update the "default value" for the class header ptr.
-            let mut ty = self.data.resources.types.get(type_id).unwrap();
+            let mut ty =
+                Arc::make_mut(&mut self.data.resources.types.get(type_id).unwrap()).clone();
             match &mut ty.repr {
                 TypeRepr::Composite(ty) => {
                     ty.members[0].default_value =

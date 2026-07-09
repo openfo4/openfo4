@@ -1,4 +1,5 @@
 use std::alloc::Layout;
+use std::sync::Arc;
 
 use bytemuck::NoUninit;
 use game_common::string::Lowercase;
@@ -65,7 +66,7 @@ impl TypeId {
 
 #[derive(Debug, Default)]
 pub struct Types {
-    types: Mutex<Slab<Option<Type>>>,
+    types: Mutex<Slab<Option<Arc<Type>>>>,
 }
 
 impl Types {
@@ -75,10 +76,10 @@ impl Types {
     }
 
     pub fn define(&self, id: TypeId, ty: Type) {
-        self.types.lock()[id.0] = Some(ty);
+        self.types.lock()[id.0] = Some(Arc::new(ty));
     }
 
-    pub fn get(&self, id: TypeId) -> Option<Type> {
+    pub fn get(&self, id: TypeId) -> Option<Arc<Type>> {
         self.types
             .lock()
             .get(id.0)
