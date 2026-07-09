@@ -1,14 +1,14 @@
 use std::marker::PhantomData;
 
-use bytemuck::{NoUninit, Pod, Zeroable};
+use bytemuck::{Pod, Zeroable};
 use hashbrown::HashMap;
 use slab::Slab;
 
 use crate::api::{Buffer, CommandQueue};
 use crate::backend::BufferUsage;
 
-use super::block::BlockBuffer;
 use super::GpuBuffer;
+use super::block::BlockBuffer;
 
 /// Index for a [`SlabBuffer`].
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Zeroable, Pod)]
@@ -40,6 +40,16 @@ where
     pub fn insert(&mut self, value: &T) -> SlabIndex {
         let index = self.buffer.insert(bytemuck::bytes_of(value));
         SlabIndex(index)
+    }
+
+    /// Writes bytes directly into an allocated bucket.
+    ///
+    /// # Panics
+    ///
+    /// - Panics if `bytes` is larger than `T::SIZE`.
+    /// - Panics if the given `index` is not allocated.
+    pub fn write_bytes(&mut self, index: SlabIndex, bytes: &[u8]) {
+        self.buffer.write(index.0, bytes);
     }
 
     /// Removes the value at the given `index` from the `SlabBuffer`.
@@ -88,6 +98,12 @@ where
         self.physical_to_logical
             .insert(physical_index, logical_index);
         SlabIndex(logical_index)
+    }
+
+    pub fn write_bytes(&mut self, index: SlabIndex, bytes: &[u8]) {
+        assert!(bytes.len() <= T::SIZE);
+        let physical_index = self.logical_to_physical.get(index.0 as usize).unwrap();
+        self.buffer.write_bytes(*physical_index, bytes);
     }
 
     pub fn remove(&mut self, index: SlabIndex) {

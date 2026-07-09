@@ -4,8 +4,8 @@ use std::collections::{BTreeSet, BinaryHeap};
 use game_tracing::trace_span;
 
 use crate::api::{Buffer, BufferDescriptor, CommandQueue};
-use crate::backend::allocator::UsageFlags;
 use crate::backend::BufferUsage;
+use crate::backend::allocator::UsageFlags;
 
 /// A buffer for storing fixed size blocks, backed by GPU memory.
 #[derive(Debug)]
@@ -54,8 +54,9 @@ impl BlockBuffer {
         // makes the biggest difference when a new area is loaded and many new
         // blocks are inserted at the same time.
         match self.writes_queued.last_mut() {
-            Some(BufferWrite::Data(last_index, buf)) => {
-                debug_assert_eq!(buf.len() % self.block_size, 0);
+            // It is possible that only a prefix of a block is written,
+            // in this case we cannot merge.
+            Some(BufferWrite::Data(last_index, buf)) if buf.len() == self.block_size => {
                 let count = (buf.len() / self.block_size) as u32;
 
                 if last_index.checked_add(count) == Some(index) {
@@ -80,6 +81,19 @@ impl BlockBuffer {
         }
 
         index
+    }
+
+    /// Writes directly into an allocated bucket.
+    ///
+    /// # Panics
+    ///
+    /// - Panics if `index` is not allocated.
+    /// - Panics if `bytes` is larger than the `block_size`.
+    pub fn write(&mut self, index: u32, bytes: &[u8]) {
+        assert!(bytes.len() <= self.block_size);
+        assert!(self.occupied_blocks.contains(&index));
+        self.writes_queued
+            .push(BufferWrite::Data(index, bytes.to_vec()));
     }
 
     fn grow(&mut self) {
