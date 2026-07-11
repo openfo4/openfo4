@@ -1,15 +1,15 @@
 use openfo4_script::engine::Engine;
 use openfo4_script::runtime::{Caller, Exception};
 
-use crate::systems::scripting::classes::{Object, State};
+use crate::systems::scripting::classes::{EngineExt, Object, State};
 
 pub fn register(engine: &mut Engine) {
-    engine.register_native_function("SoundCategory", "Mute", mute);
-    engine.register_native_function("SoundCategory", "Pause", pause);
-    engine.register_native_function("SoundCategory", "SetFrequency", set_frequency);
-    engine.register_native_function("SoundCategory", "SetVolume", set_volume);
-    engine.register_native_function("SoundCategory", "UnMute", un_mute);
-    engine.register_native_function("SoundCategory", "UnPause", un_pause);
+    engine.register_if_exists("SoundCategory", "Mute", mute);
+    engine.register_if_exists("SoundCategory", "Pause", pause);
+    engine.register_if_exists("SoundCategory", "SetFrequency", set_frequency);
+    engine.register_if_exists("SoundCategory", "SetVolume", set_volume);
+    engine.register_if_exists("SoundCategory", "UnMute", un_mute);
+    engine.register_if_exists("SoundCategory", "UnPause", un_pause);
 }
 
 /// `Mute`

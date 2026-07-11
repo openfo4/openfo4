@@ -3,14 +3,14 @@ use openfo4_script::{
     runtime::{Caller, Exception},
 };
 
-use crate::systems::scripting::classes::{Object, State};
+use crate::systems::scripting::classes::{EngineExt, Object, State};
 
 #[rustfmt::skip]
 pub fn register(engine: &mut Engine) {
-    engine.register_native_function("Location", "GetParent", get_parent);
-    engine.register_native_function("Location", "SetParent", set_parent);
-    engine.register_native_function("Location", "GetEncounterZone", get_encounter_zone);
-    engine.register_native_function("Location", "SetEncounterZone", set_encounter_zone);
+    engine.register_if_exists("Location", "GetParent", get_parent);
+    engine.register_if_exists("Location", "SetParent", set_parent);
+    engine.register_if_exists("Location", "GetEncounterZone", get_encounter_zone);
+    engine.register_if_exists("Location", "SetEncounterZone", set_encounter_zone);
 }
 
 /// `GetParent`

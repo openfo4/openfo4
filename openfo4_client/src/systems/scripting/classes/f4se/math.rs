@@ -1,17 +1,17 @@
 use openfo4_script::engine::Engine;
 use openfo4_script::runtime::Caller;
 
-use crate::systems::scripting::classes::State;
+use crate::systems::scripting::classes::{EngineExt, State};
 
 pub fn register(engine: &mut Engine) {
-    engine.register_native_function("Math", "exp", exp);
-    engine.register_native_function("Math", "log", log);
-    engine.register_native_function("Math", "LeftShift", left_shift);
-    engine.register_native_function("Math", "RightShift", right_shift);
-    engine.register_native_function("Math", "LogicalNot", logical_not);
-    engine.register_native_function("Math", "LogicalAnd", logical_and);
-    engine.register_native_function("Math", "LogicalOr", logical_or);
-    engine.register_native_function("Math", "LogicalXor", logical_xor);
+    engine.register_if_exists("Math", "exp", exp);
+    engine.register_if_exists("Math", "log", log);
+    engine.register_if_exists("Math", "LeftShift", left_shift);
+    engine.register_if_exists("Math", "RightShift", right_shift);
+    engine.register_if_exists("Math", "LogicalNot", logical_not);
+    engine.register_if_exists("Math", "LogicalAnd", logical_and);
+    engine.register_if_exists("Math", "LogicalOr", logical_or);
+    engine.register_if_exists("Math", "LogicalXor", logical_xor);
 }
 
 /// `Exp`

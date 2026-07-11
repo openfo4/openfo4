@@ -1,20 +1,20 @@
 use openfo4_script::engine::Engine;
 use openfo4_script::runtime::{Caller, Exception};
 
-use crate::systems::scripting::classes::{Object, State};
+use crate::systems::scripting::classes::{EngineExt, Object, State};
 
 #[rustfmt::skip]
 pub fn register(engine: &mut Engine) {
-    engine.register_native_function("Game", "GetCurrentConsoleRef", get_current_console_ref);
-    engine.register_native_function("Game", "GetInstalledPlugins", get_installed_plugins);
-    engine.register_native_function("Game", "GetInstalledLightPlugins", get_installed_light_plugins);
-    engine.register_native_function("Game", "GetPluginDependencies", get_plugin_dependencies);
-    engine.register_native_function("Game", "SetGameSettingFloat", set_game_setting_float);
-    engine.register_native_function("Game", "SetGameSettingInt", set_game_setting_int);
-    engine.register_native_function("Game", "SetGameSettingBool", set_game_setting_bool);
-    engine.register_native_function("Game", "SetGameSettingString", set_game_setting_string);
-    engine.register_native_function("Game", "UpdateThirdPerson", update_third_person);
-    engine.register_native_function("Game", "GetCameraState", get_camera_state);
+    engine.register_if_exists("Game", "GetCurrentConsoleRef", get_current_console_ref);
+    engine.register_if_exists("Game", "GetInstalledPlugins", get_installed_plugins);
+    engine.register_if_exists("Game", "GetInstalledLightPlugins", get_installed_light_plugins);
+    engine.register_if_exists("Game", "GetPluginDependencies", get_plugin_dependencies);
+    engine.register_if_exists("Game", "SetGameSettingFloat", set_game_setting_float);
+    engine.register_if_exists("Game", "SetGameSettingInt", set_game_setting_int);
+    engine.register_if_exists("Game", "SetGameSettingBool", set_game_setting_bool);
+    engine.register_if_exists("Game", "SetGameSettingString", set_game_setting_string);
+    engine.register_if_exists("Game", "UpdateThirdPerson", update_third_person);
+    engine.register_if_exists("Game", "GetCameraState", get_camera_state);
 }
 
 /// `GetCurrentConsoleRef`

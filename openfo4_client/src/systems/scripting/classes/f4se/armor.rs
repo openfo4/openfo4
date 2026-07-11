@@ -1,10 +1,10 @@
 use openfo4_script::engine::Engine;
 use openfo4_script::runtime::{Caller, Exception};
 
-use crate::systems::scripting::classes::{Object, State};
+use crate::systems::scripting::classes::{EngineExt, Object, State};
 
 pub fn register(engine: &mut Engine) {
-    engine.register_native_function("Armor", "GetArmorAddons", get_armor_addons);
+    engine.register_if_exists("Armor", "GetArmorAddons", get_armor_addons);
 }
 
 /// `GetArmorAddons`

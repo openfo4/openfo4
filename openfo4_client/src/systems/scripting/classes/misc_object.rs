@@ -1,11 +1,11 @@
 use openfo4_script::engine::Engine;
 use openfo4_script::runtime::{Caller, Exception};
 
-use crate::systems::scripting::classes::{Object, State};
+use crate::systems::scripting::classes::{EngineExt, Object, State};
 
 #[rustfmt::skip]
 pub fn register(engine: &mut Engine) {
-    engine.register_native_function("MiscObject", "GetObjectComponentCount", get_object_component_count);
+    engine.register_if_exists("MiscObject", "GetObjectComponentCount", get_object_component_count);
 }
 
 /// `GetObjectComponentCount`

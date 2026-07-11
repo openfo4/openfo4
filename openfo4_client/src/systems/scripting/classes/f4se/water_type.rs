@@ -3,14 +3,14 @@ use openfo4_script::{
     runtime::{Caller, Exception},
 };
 
-use crate::systems::scripting::classes::{Object, State};
+use crate::systems::scripting::classes::{EngineExt, Object, State};
 
 #[rustfmt::skip]
 pub fn register(engine: &mut Engine) {
-    engine.register_native_function("WaterType", "GetConsumeSpell", get_consume_spell);
-    engine.register_native_function("WaterType", "SetConsumeSpell", set_consume_spell);
-    engine.register_native_function("WaterType", "GetContactSpell", get_contact_spell);
-    engine.register_native_function("WaterType", "SetContactSpell", set_contact_spell);
+    engine.register_if_exists("WaterType", "GetConsumeSpell", get_consume_spell);
+    engine.register_if_exists("WaterType", "SetConsumeSpell", set_consume_spell);
+    engine.register_if_exists("WaterType", "GetContactSpell", get_contact_spell);
+    engine.register_if_exists("WaterType", "SetContactSpell", set_contact_spell);
 }
 
 /// `GetConsumeSpell`

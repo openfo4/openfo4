@@ -1,16 +1,16 @@
 use openfo4_script::engine::Engine;
 use openfo4_script::runtime::{Caller, Exception};
 
-use crate::systems::scripting::classes::{Object, State};
+use crate::systems::scripting::classes::{EngineExt, Object, State};
 
 #[rustfmt::skip]
 pub fn register(engine: &mut Engine) {
-    engine.register_native_function("ActiveMagicEffect", "Dispel", dispel);
-    engine.register_native_function("ActiveMagicEffect", "GetBaseObject", get_base_object);
-    engine.register_native_function("ActiveMagicEffect", "GetCasterActor", get_caster_actor);
-    engine.register_native_function("ActiveMagicEffect", "GetTargetActor", get_target_actor);
-    engine.register_native_function("ActiveMagicEffect", "StartObjectProfiling", start_object_profiling);
-    engine.register_native_function("ActiveMagicEffect", "StopObjectProfiling", stop_object_profiling);
+    engine.register_if_exists("ActiveMagicEffect", "Dispel", dispel);
+    engine.register_if_exists("ActiveMagicEffect", "GetBaseObject", get_base_object);
+    engine.register_if_exists("ActiveMagicEffect", "GetCasterActor", get_caster_actor);
+    engine.register_if_exists("ActiveMagicEffect", "GetTargetActor", get_target_actor);
+    engine.register_if_exists("ActiveMagicEffect", "StartObjectProfiling", start_object_profiling);
+    engine.register_if_exists("ActiveMagicEffect", "StopObjectProfiling", stop_object_profiling);
 }
 
 /// `Dispel`

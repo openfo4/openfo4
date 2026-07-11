@@ -3,40 +3,40 @@ use std::time::Duration;
 use openfo4_script::engine::Engine;
 use openfo4_script::runtime::{Caller, Exception};
 
-use crate::systems::scripting::classes::{Object, State};
+use crate::systems::scripting::classes::{EngineExt, Object, State};
 
 #[rustfmt::skip]
 pub fn register(engine: &mut Engine) {
-    engine.register_native_function("Utility", "CallGlobalFunction", call_global_function);
-    engine.register_native_function("Utility", "CallGlobalFunctionNoWait", call_global_function_no_wait);
-    engine.register_native_function("Utility", "GameTimeToString", game_time_to_string);
-    engine.register_native_function("Utility", "GetCurrentGameTime", get_current_game_time);
-    engine.register_native_function("Utility", "GetCurrentRealTime", get_current_real_time);
-    engine.register_native_function("Utility", "GetCurrentStackID", get_current_stack_id);
-    engine.register_native_function("Utility", "IsInMenuMode", is_in_menu_mode);
-    engine.register_native_function("Utility", "RandomInt", random_int);
-    engine.register_native_function("Utility", "RandomFloat", random_float);
-    engine.register_native_function("Utility", "SetINIFloat", set_ini_float);
-    engine.register_native_function("Utility", "SetINIInt", set_ini_int);
-    engine.register_native_function("Utility", "SetINIBool", set_ini_bool);
-    engine.register_native_function("Utility", "SetINIString", set_ini_string);
-    engine.register_native_function("Utility", "Wait", wait);
-    engine.register_native_function("Utility", "WaitGameTime", wait_game_time);
-    engine.register_native_function("Utility", "WaitMenuMode", wait_menu_mode);
-    engine.register_native_function("Utility", "CaptureFrameRate", capture_frame_rate);
-    engine.register_native_function("Utility", "EnterTestData", enter_test_data);
-    engine.register_native_function("Utility", "PostStartUpTimes", post_start_up_times);
-    engine.register_native_function("Utility", "StartFrameRateCapture", start_frame_rate_capture);
-    engine.register_native_function("Utility", "EndFrameRateCapture", end_frame_rate_capture);
-    engine.register_native_function("Utility", "GetAverageFrameRate", get_average_frame_rate);
-    engine.register_native_function("Utility", "GetMinFrameRate", get_min_frame_rate);
-    engine.register_native_function("Utility", "GetMaxFrameRate", get_max_frame_rate);
-    engine.register_native_function("Utility", "GetCurrentMemory", get_current_memory);
-    engine.register_native_function("Utility", "GetBudgetCount", get_budget_count);
-    engine.register_native_function("Utility", "GetCurrentBudget", get_current_budget);
-    engine.register_native_function("Utility", "GetBudgetLimit", get_budget_limit);
-    engine.register_native_function("Utility", "OverBudget", over_budget);
-    engine.register_native_function("Utility", "GetBudgetName", get_budget_name);
+    engine.register_if_exists("Utility", "CallGlobalFunction", call_global_function);
+    engine.register_if_exists("Utility", "CallGlobalFunctionNoWait", call_global_function_no_wait);
+    engine.register_if_exists("Utility", "GameTimeToString", game_time_to_string);
+    engine.register_if_exists("Utility", "GetCurrentGameTime", get_current_game_time);
+    engine.register_if_exists("Utility", "GetCurrentRealTime", get_current_real_time);
+    engine.register_if_exists("Utility", "GetCurrentStackID", get_current_stack_id);
+    engine.register_if_exists("Utility", "IsInMenuMode", is_in_menu_mode);
+    engine.register_if_exists("Utility", "RandomInt", random_int);
+    engine.register_if_exists("Utility", "RandomFloat", random_float);
+    engine.register_if_exists("Utility", "SetINIFloat", set_ini_float);
+    engine.register_if_exists("Utility", "SetINIInt", set_ini_int);
+    engine.register_if_exists("Utility", "SetINIBool", set_ini_bool);
+    engine.register_if_exists("Utility", "SetINIString", set_ini_string);
+    engine.register_if_exists("Utility", "Wait", wait);
+    engine.register_if_exists("Utility", "WaitGameTime", wait_game_time);
+    engine.register_if_exists("Utility", "WaitMenuMode", wait_menu_mode);
+    engine.register_if_exists("Utility", "CaptureFrameRate", capture_frame_rate);
+    engine.register_if_exists("Utility", "EnterTestData", enter_test_data);
+    engine.register_if_exists("Utility", "PostStartUpTimes", post_start_up_times);
+    engine.register_if_exists("Utility", "StartFrameRateCapture", start_frame_rate_capture);
+    engine.register_if_exists("Utility", "EndFrameRateCapture", end_frame_rate_capture);
+    engine.register_if_exists("Utility", "GetAverageFrameRate", get_average_frame_rate);
+    engine.register_if_exists("Utility", "GetMinFrameRate", get_min_frame_rate);
+    engine.register_if_exists("Utility", "GetMaxFrameRate", get_max_frame_rate);
+    engine.register_if_exists("Utility", "GetCurrentMemory", get_current_memory);
+    engine.register_if_exists("Utility", "GetBudgetCount", get_budget_count);
+    engine.register_if_exists("Utility", "GetCurrentBudget", get_current_budget);
+    engine.register_if_exists("Utility", "GetBudgetLimit", get_budget_limit);
+    engine.register_if_exists("Utility", "OverBudget", over_budget);
+    engine.register_if_exists("Utility", "GetBudgetName", get_budget_name);
 }
 
 /// `CallGlobalFunction`

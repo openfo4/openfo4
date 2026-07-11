@@ -1,15 +1,15 @@
 use openfo4_script::engine::Engine;
 use openfo4_script::runtime::{Caller, Exception};
 
-use crate::systems::scripting::classes::{Object, State};
+use crate::systems::scripting::classes::{EngineExt, Object, State};
 
 pub fn register(engine: &mut Engine) {
-    engine.register_native_function("ActorBase", "GetTemplate", get_template);
-    engine.register_native_function("ActorBase", "HasHeadPartOverlays", has_head_part_overlays);
-    engine.register_native_function("ActorBase", "GetHeadParts", get_head_parts);
-    engine.register_native_function("ActorBase", "GetOutfit", get_outfit);
-    engine.register_native_function("ActorBase", "SetBodyWeight", set_body_weight);
-    engine.register_native_function("ActorBase", "GetBodyWeight", get_body_weight);
+    engine.register_if_exists("ActorBase", "GetTemplate", get_template);
+    engine.register_if_exists("ActorBase", "HasHeadPartOverlays", has_head_part_overlays);
+    engine.register_if_exists("ActorBase", "GetHeadParts", get_head_parts);
+    engine.register_if_exists("ActorBase", "GetOutfit", get_outfit);
+    engine.register_if_exists("ActorBase", "SetBodyWeight", set_body_weight);
+    engine.register_if_exists("ActorBase", "GetBodyWeight", get_body_weight);
 }
 
 /// `GetTemplate`

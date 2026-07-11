@@ -1,13 +1,13 @@
 use openfo4_script::engine::Engine;
 use openfo4_script::runtime::{Caller, Exception};
 
-use crate::systems::scripting::classes::{Object, State};
+use crate::systems::scripting::classes::{EngineExt, Object, State};
 
 #[rustfmt::skip]
 pub fn register(engine: &mut Engine) {
-    engine.register_native_function("Alias", "GetOwningQuest", get_owning_quest);
-    engine.register_native_function("Alias", "StartObjectProfiling", start_object_profiling);
-    engine.register_native_function("Alias", "StopObjectProfiling", stop_object_profiling);
+    engine.register_if_exists("Alias", "GetOwningQuest", get_owning_quest);
+    engine.register_if_exists("Alias", "StartObjectProfiling", start_object_profiling);
+    engine.register_if_exists("Alias", "StopObjectProfiling", stop_object_profiling);
 }
 
 /// `GetOwningQuest`

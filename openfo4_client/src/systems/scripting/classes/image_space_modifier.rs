@@ -1,15 +1,15 @@
 use openfo4_script::engine::Engine;
 use openfo4_script::runtime::{Caller, Exception};
 
-use crate::systems::scripting::classes::{Object, State};
+use crate::systems::scripting::classes::{EngineExt, Object, State};
 
 #[rustfmt::skip]
 pub fn register(engine: &mut Engine) {
-    engine.register_native_function("ImageSpaceModifier", "Apply", apply);
-    engine.register_native_function("ImageSpaceModifier", "ApplyCrossFade", apply_cross_fade);
-    engine.register_native_function("ImageSpaceModifier", "PopTo", pop_to);
-    engine.register_native_function("ImageSpaceModifier", "Remove", remove);
-    engine.register_native_function("ImageSpaceModifier", "RemoveCrossFade", remove_cross_fade);
+    engine.register_if_exists("ImageSpaceModifier", "Apply", apply);
+    engine.register_if_exists("ImageSpaceModifier", "ApplyCrossFade", apply_cross_fade);
+    engine.register_if_exists("ImageSpaceModifier", "PopTo", pop_to);
+    engine.register_if_exists("ImageSpaceModifier", "Remove", remove);
+    engine.register_if_exists("ImageSpaceModifier", "RemoveCrossFade", remove_cross_fade);
 }
 
 /// `Apply`

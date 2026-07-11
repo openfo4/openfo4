@@ -3,16 +3,16 @@ use openfo4_script::{
     runtime::{Caller, Exception},
 };
 
-use crate::systems::scripting::classes::{Object, State};
+use crate::systems::scripting::classes::{EngineExt, Object, State};
 
 #[rustfmt::skip]
 pub fn register(engine: &mut Engine) {
-    engine.register_native_function("FavoritesManager", "GetTaggedForms", get_tagged_forms);
-    engine.register_native_function("FavoritesManager", "AddTaggedForms", add_tagged_forms);
-    engine.register_native_function("FavoritesManager", "RemoveTaggedForms", remove_tagged_forms);
-    engine.register_native_function("FavoritesManager", "IsTaggedForm", is_tagged_form);
-    engine.register_native_function("FavoritesManager", "GetFavorites", get_favorites);
-    engine.register_native_function("FavoritesManager", "SetFavorites", set_favorites);
+    engine.register_if_exists("FavoritesManager", "GetTaggedForms", get_tagged_forms);
+    engine.register_if_exists("FavoritesManager", "AddTaggedForms", add_tagged_forms);
+    engine.register_if_exists("FavoritesManager", "RemoveTaggedForms", remove_tagged_forms);
+    engine.register_if_exists("FavoritesManager", "IsTaggedForm", is_tagged_form);
+    engine.register_if_exists("FavoritesManager", "GetFavorites", get_favorites);
+    engine.register_if_exists("FavoritesManager", "SetFavorites", set_favorites);
 }
 
 /// `GetTaggedForms`

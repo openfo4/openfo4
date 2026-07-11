@@ -54,8 +54,9 @@ use std::time::{Duration, Instant};
 use hashbrown::{HashMap, HashSet};
 use openfo4_core::ecs::{Entity, World};
 use openfo4_core::record::RecordId;
+use openfo4_script::RegisterNativeError;
 use openfo4_script::engine::Engine;
-use openfo4_script::runtime::{Exception, ObjectAddr, ObjectRef};
+use openfo4_script::runtime::{Exception, IntoFunc, ObjectAddr, ObjectRef};
 use slab::Slab;
 
 use crate::components::BaseObject;
@@ -120,32 +121,32 @@ pub fn register_builtins(engine: &mut Engine) {
     active_magic_effect::register(engine);
     terminal::register(engine);
 
-    engine.register_native_function("Sound", "SetInstanceVolume", sound::set_instance_volume);
-    engine.register_native_function("Sound", "StopInstance", sound::stop_instance);
-    engine.register_native_function("Sound", "Play", sound::play);
-    engine.register_native_function("Sound", "PlayAndWait", sound::play_and_wait);
+    engine.register_if_exists("Sound", "SetInstanceVolume", sound::set_instance_volume);
+    engine.register_if_exists("Sound", "StopInstance", sound::stop_instance);
+    engine.register_if_exists("Sound", "Play", sound::play);
+    engine.register_if_exists("Sound", "PlayAndWait", sound::play_and_wait);
 
-    engine.register_native_function("Spell", "Cast", spell::cast);
-    engine.register_native_function("Spell", "IsHostile", spell::is_hostile);
-    engine.register_native_function("Spell", "RemoteCast", spell::remote_cast);
+    engine.register_if_exists("Spell", "Cast", spell::cast);
+    engine.register_if_exists("Spell", "IsHostile", spell::is_hostile);
+    engine.register_if_exists("Spell", "RemoteCast", spell::remote_cast);
 
-    engine.register_native_function("GlobalVariable", "GetValue", global_variable::get_value);
-    engine.register_native_function("GlobalVariable", "SetValue", global_variable::set_value);
+    engine.register_if_exists("GlobalVariable", "GetValue", global_variable::get_value);
+    engine.register_if_exists("GlobalVariable", "SetValue", global_variable::set_value);
 
-    engine.register_native_function("Keyword", "SendStoryEvent", keyword::send_story_event);
-    engine.register_native_function("Keyword", "SendStoryEventAndWait", keyword::send_story_event_and_wait);
+    engine.register_if_exists("Keyword", "SendStoryEvent", keyword::send_story_event);
+    engine.register_if_exists("Keyword", "SendStoryEventAndWait", keyword::send_story_event_and_wait);
 
-    engine.register_native_function("MagicEffect", "GetAssociatedSkill", magic_effect::get_assocaited_skill);
+    engine.register_if_exists("MagicEffect", "GetAssociatedSkill", magic_effect::get_assocaited_skill);
 
-    engine.register_native_function("Potion", "IsHostile", potion::is_hostile);
+    engine.register_if_exists("Potion", "IsHostile", potion::is_hostile);
 
-    engine.register_native_function("FormList", "AddForm", form_list::add_form);
-    engine.register_native_function("FormList", "Find", form_list::find);
-    engine.register_native_function("FormList", "GetAt", form_list::get_at);
-    engine.register_native_function("FormList", "GetSize", form_list::get_size);
-    engine.register_native_function("FormList", "HasForm", form_list::has_form);
-    engine.register_native_function("FormList", "RemoveAddedForm", form_list::remove_added_form);
-    engine.register_native_function("FormList", "Revert", form_list::revert);
+    engine.register_if_exists("FormList", "AddForm", form_list::add_form);
+    engine.register_if_exists("FormList", "Find", form_list::find);
+    engine.register_if_exists("FormList", "GetAt", form_list::get_at);
+    engine.register_if_exists("FormList", "GetSize", form_list::get_size);
+    engine.register_if_exists("FormList", "HasForm", form_list::has_form);
+    engine.register_if_exists("FormList", "RemoveAddedForm", form_list::remove_added_form);
+    engine.register_if_exists("FormList", "Revert", form_list::revert);
 
 
     f4se::register(engine);
@@ -443,4 +444,31 @@ pub struct TimerEntry {
 #[derive(Clone, Debug)]
 pub enum ObjectData {
     InputEnableLayer { layer: usize },
+}
+
+pub trait EngineExt {
+    fn register_if_exists<F, T, Marker, Params, Returns>(&mut self, class: &str, func: &str, f: F)
+    where
+        F: IntoFunc<T, Marker, Params, Returns>;
+}
+
+impl EngineExt for Engine {
+    fn register_if_exists<F, T, Marker, Params, Returns>(&mut self, class: &str, func: &str, f: F)
+    where
+        F: IntoFunc<T, Marker, Params, Returns>,
+    {
+        match self.register_native_function(class, func, f) {
+            Ok(()) => {}
+            Err(RegisterNativeError::UnknownFunction(_)) => {
+                tracing::debug!("not registering {}.{}: not found", class, func);
+            }
+            Err(RegisterNativeError::IncompatibleSignature { expected, found }) => {
+                tracing::warn!(
+                    "not registering {}.{}: incompatible signature: {found:?}, expected {expected:?}",
+                    class,
+                    func,
+                );
+            }
+        }
+    }
 }

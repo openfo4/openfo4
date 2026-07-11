@@ -1,41 +1,41 @@
 use openfo4_script::engine::Engine;
 use openfo4_script::runtime::{Caller, Exception};
 
-use crate::systems::scripting::classes::{Object, State};
+use crate::systems::scripting::classes::{EngineExt, Object, State};
 
 #[rustfmt::skip]
 pub fn register(engine: &mut Engine) {
-    engine.register_native_function("Debug", "CenterOnCell", center_on_cell);
-    engine.register_native_function("Debug", "CenterOnCellAndWait", center_on_cell_and_wait);
-    engine.register_native_function("Debug", "PlayerMoveToAndWait", player_move_to_and_wait);
-    engine.register_native_function("Debug", "CloseUserLog", close_user_log);
-    engine.register_native_function("Debug", "DumpAliasData", dump_alias_data);
-    engine.register_native_function("Debug", "DumpEventRegistrations", dump_event_registrations);
-    engine.register_native_function("Debug", "EnableAI", enable_ai);
-    engine.register_native_function("Debug", "EnableCollisions", enable_collisions);
-    engine.register_native_function("Debug", "EnableDetection", enable_detection);
-    engine.register_native_function("Debug", "EnableMenus", enable_menus);
-    engine.register_native_function("Debug", "GetConfigName", get_config_name);
-    engine.register_native_function("Debug", "GetPlatformName", get_platform_name);
-    engine.register_native_function("Debug", "GetVersionNumber", get_version_number);
-    engine.register_native_function("Debug", "MessageBox", message_box);
-    engine.register_native_function("Debug", "Notification", notification);
-    engine.register_native_function("Debug", "OpenUserLog", open_user_log);
-    engine.register_native_function("Debug", "QuitGame", quit_game);
-    engine.register_native_function("Debug", "SetFootIK", set_foot_ik);
-    engine.register_native_function("Debug", "SetGodMode", set_god_mode);
-    engine.register_native_function("Debug", "StartScriptProfiling", start_script_profiling);
-    engine.register_native_function("Debug", "StartStackProfiling", start_stack_profiling);
-    engine.register_native_function("Debug", "StartStackRootProfiling", start_stack_root_profiling);
-    engine.register_native_function("Debug", "StopScriptProfiling", stop_script_profiling);
-    engine.register_native_function("Debug", "StopStackProfiling", stop_stack_profiling);
-    engine.register_native_function("Debug", "StopStackRootProfiling", stop_stack_root_profiling);
-    engine.register_native_function("Debug", "Trace", trace);
-    engine.register_native_function("Debug", "TraceFunction", trace_function);
-    engine.register_native_function("Debug", "TraceStack", trace_stack);
-    engine.register_native_function("Debug", "TraceUser", trace_user);
-    engine.register_native_function("Debug", "ShowRefPosition", show_ref_position);
-    engine.register_native_function("Debug", "DBSendPlayerPosition", db_send_player_position);
+    engine.register_if_exists("Debug", "CenterOnCell", center_on_cell);
+    engine.register_if_exists("Debug", "CenterOnCellAndWait", center_on_cell_and_wait);
+    engine.register_if_exists("Debug", "PlayerMoveToAndWait", player_move_to_and_wait);
+    engine.register_if_exists("Debug", "CloseUserLog", close_user_log);
+    engine.register_if_exists("Debug", "DumpAliasData", dump_alias_data);
+    engine.register_if_exists("Debug", "DumpEventRegistrations", dump_event_registrations);
+    engine.register_if_exists("Debug", "EnableAI", enable_ai);
+    engine.register_if_exists("Debug", "EnableCollisions", enable_collisions);
+    engine.register_if_exists("Debug", "EnableDetection", enable_detection);
+    engine.register_if_exists("Debug", "EnableMenus", enable_menus);
+    engine.register_if_exists("Debug", "GetConfigName", get_config_name);
+    engine.register_if_exists("Debug", "GetPlatformName", get_platform_name);
+    engine.register_if_exists("Debug", "GetVersionNumber", get_version_number);
+    engine.register_if_exists("Debug", "MessageBox", message_box);
+    engine.register_if_exists("Debug", "Notification", notification);
+    engine.register_if_exists("Debug", "OpenUserLog", open_user_log);
+    engine.register_if_exists("Debug", "QuitGame", quit_game);
+    engine.register_if_exists("Debug", "SetFootIK", set_foot_ik);
+    engine.register_if_exists("Debug", "SetGodMode", set_god_mode);
+    engine.register_if_exists("Debug", "StartScriptProfiling", start_script_profiling);
+    engine.register_if_exists("Debug", "StartStackProfiling", start_stack_profiling);
+    engine.register_if_exists("Debug", "StartStackRootProfiling", start_stack_root_profiling);
+    engine.register_if_exists("Debug", "StopScriptProfiling", stop_script_profiling);
+    engine.register_if_exists("Debug", "StopStackProfiling", stop_stack_profiling);
+    engine.register_if_exists("Debug", "StopStackRootProfiling", stop_stack_root_profiling);
+    engine.register_if_exists("Debug", "Trace", trace);
+    engine.register_if_exists("Debug", "TraceFunction", trace_function);
+    engine.register_if_exists("Debug", "TraceStack", trace_stack);
+    engine.register_if_exists("Debug", "TraceUser", trace_user);
+    engine.register_if_exists("Debug", "ShowRefPosition", show_ref_position);
+    engine.register_if_exists("Debug", "DBSendPlayerPosition", db_send_player_position);
 }
 
 /// `CenterOnCell`

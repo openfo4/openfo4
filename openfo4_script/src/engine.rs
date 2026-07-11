@@ -7,6 +7,7 @@ use hashbrown::{HashMap, HashSet};
 use openfo4_jit::{CompilerConfig, Type};
 use openfo4_pex::{Class, Module};
 
+use crate::RegisterNativeError;
 use crate::compiler::resources::{TypeId, TypeInfo};
 use crate::compiler::{CompilationResult, CompilerOptions, Context, NativeFunction};
 use crate::runtime::func::Func;
@@ -73,7 +74,8 @@ impl Engine {
         class: &str,
         func: &str,
         f: F,
-    ) where
+    ) -> Result<(), RegisterNativeError>
+    where
         F: IntoFunc<T, Marker, Params, Returns>,
     {
         {
@@ -88,7 +90,10 @@ impl Engine {
             }
         }
 
-        let sig = self.ctx.compute_function_signature(class, func);
+        let sig = self
+            .ctx
+            .compute_function_signature(class, func)
+            .map_err(|err| RegisterNativeError::UnknownFunction(err))?;
 
         let _lock = self.shared.call_table_lock.write();
         let mut call_table = unsafe { self.shared.state.call_table.borrow_mut() };
@@ -110,7 +115,7 @@ impl Engine {
                 index,
                 signature,
             },
-        );
+        )
     }
 
     pub fn compile(&mut self, class: &str, options: &Options) -> Instance {
@@ -153,7 +158,7 @@ impl Engine {
         // to construct.
         fn is_class(name: &Lowercase<str>) -> bool {
             !matches!(name.as_inner(), "none" | "int" | "float" | "string" | "var")
-                // Structs 
+                // Structs
                 && !name.as_inner().contains('#')
         }
 

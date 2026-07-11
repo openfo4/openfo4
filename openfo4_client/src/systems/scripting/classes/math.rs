@@ -3,23 +3,23 @@
 use openfo4_script::engine::Engine;
 use openfo4_script::runtime::Caller;
 
-use crate::systems::scripting::classes::State;
+use crate::systems::scripting::classes::{EngineExt, State};
 
 #[rustfmt::skip]
 pub fn register(engine: &mut Engine) {
-    engine.register_native_function("Math", "abs", abs);
-    engine.register_native_function("Math", "acos", acos);
-    engine.register_native_function("Math", "asin", asin);
-    engine.register_native_function("Math", "atan", atan);
-    engine.register_native_function("Math", "Ceiling", ceiling);
-    engine.register_native_function("Math", "cos", cos);
-    engine.register_native_function("Math", "DegreesToRadians", degrees_to_radians);
-    engine.register_native_function("Math", "Floor", floor);
-    engine.register_native_function("Math", "pow", pow);
-    engine.register_native_function("Math", "RadiansToDegrees", radians_to_degrees);
-    engine.register_native_function("Math", "sin", sin);
-    engine.register_native_function("Math", "sqrt", sqrt);
-    engine.register_native_function("Math", "tan", tan);
+    engine.register_if_exists("Math", "abs", abs);
+    engine.register_if_exists("Math", "acos", acos);
+    engine.register_if_exists("Math", "asin", asin);
+    engine.register_if_exists("Math", "atan", atan);
+    engine.register_if_exists("Math", "Ceiling", ceiling);
+    engine.register_if_exists("Math", "cos", cos);
+    engine.register_if_exists("Math", "DegreesToRadians", degrees_to_radians);
+    engine.register_if_exists("Math", "Floor", floor);
+    engine.register_if_exists("Math", "pow", pow);
+    engine.register_if_exists("Math", "RadiansToDegrees", radians_to_degrees);
+    engine.register_if_exists("Math", "sin", sin);
+    engine.register_if_exists("Math", "sqrt", sqrt);
+    engine.register_if_exists("Math", "tan", tan);
 }
 
 /// `abs`

@@ -2,37 +2,38 @@ use openfo4_script::engine::Engine;
 use openfo4_script::runtime::{Caller, Exception};
 
 use crate::systems::quests::QuestState;
+use crate::systems::scripting::classes::EngineExt;
 
 use super::{Int, Object, State};
 
 #[rustfmt::skip]
 pub fn register(engine: &mut Engine) {
-    engine.register_native_function("Quest", "CompleteAllObjectives", complete_all_objectives);
-    engine.register_native_function("Quest", "CompleteQuest", complete_quest);
-    engine.register_native_function("Quest", "FailAllObjectives", fail_all_objectives);
-    engine.register_native_function("Quest", "GetAlias", get_alias);
-    engine.register_native_function("Quest", "GetCurrentStageID", get_current_stage_id);
-    engine.register_native_function("Quest", "HasObjective", has_objective);
-    engine.register_native_function("Quest", "IsActive", is_active);
-    engine.register_native_function("Quest", "IsCompleted", is_completed);
-    engine.register_native_function("Quest", "IsObjectiveCompleted", is_objective_completed);
-    engine.register_native_function("Quest", "IsObjectiveDisplayed", is_objective_displayed);
-    engine.register_native_function("Quest", "IsObjectiveFailed", is_objective_failed);
-    engine.register_native_function("Quest", "IsRunning", is_running);
-    engine.register_native_function("Quest", "IsStageDone", is_stage_done);
-    engine.register_native_function("Quest", "IsStarting", is_starting);
-    engine.register_native_function("Quest", "IsStopping", is_stopping);
-    engine.register_native_function("Quest", "IsStopped", is_stopped);
-    engine.register_native_function("Quest", "Reset", reset);
-    engine.register_native_function("Quest", "ResetSpeechChallenges", reset_speech_challenges);
-    engine.register_native_function("Quest", "SetActive", set_active);
-    engine.register_native_function("Quest", "SetCurrentStageID", set_current_stage_id);
-    engine.register_native_function("Quest", "SetObjectiveCompleted", set_objective_completed);
-    engine.register_native_function("Quest", "SetObjectiveDisplayed", set_objective_displayed);
-    engine.register_native_function("Quest", "SetObjectiveFailed", set_objective_failed);
-    engine.register_native_function("Quest", "Start", start);
-    engine.register_native_function("Quest", "stop", stop);
-    engine.register_native_function("Quest", "UpdateCurrentInstanceGlobal", update_current_instance_global);
+    engine.register_if_exists("Quest", "CompleteAllObjectives", complete_all_objectives);
+    engine.register_if_exists("Quest", "CompleteQuest", complete_quest);
+    engine.register_if_exists("Quest", "FailAllObjectives", fail_all_objectives);
+    engine.register_if_exists("Quest", "GetAlias", get_alias);
+    engine.register_if_exists("Quest", "GetCurrentStageID", get_current_stage_id);
+    engine.register_if_exists("Quest", "HasObjective", has_objective);
+    engine.register_if_exists("Quest", "IsActive", is_active);
+    engine.register_if_exists("Quest", "IsCompleted", is_completed);
+    engine.register_if_exists("Quest", "IsObjectiveCompleted", is_objective_completed);
+    engine.register_if_exists("Quest", "IsObjectiveDisplayed", is_objective_displayed);
+    engine.register_if_exists("Quest", "IsObjectiveFailed", is_objective_failed);
+    engine.register_if_exists("Quest", "IsRunning", is_running);
+    engine.register_if_exists("Quest", "IsStageDone", is_stage_done);
+    engine.register_if_exists("Quest", "IsStarting", is_starting);
+    engine.register_if_exists("Quest", "IsStopping", is_stopping);
+    engine.register_if_exists("Quest", "IsStopped", is_stopped);
+    engine.register_if_exists("Quest", "Reset", reset);
+    engine.register_if_exists("Quest", "ResetSpeechChallenges", reset_speech_challenges);
+    engine.register_if_exists("Quest", "SetActive", set_active);
+    engine.register_if_exists("Quest", "SetCurrentStageID", set_current_stage_id);
+    engine.register_if_exists("Quest", "SetObjectiveCompleted", set_objective_completed);
+    engine.register_if_exists("Quest", "SetObjectiveDisplayed", set_objective_displayed);
+    engine.register_if_exists("Quest", "SetObjectiveFailed", set_objective_failed);
+    engine.register_if_exists("Quest", "Start", start);
+    engine.register_if_exists("Quest", "stop", stop);
+    engine.register_if_exists("Quest", "UpdateCurrentInstanceGlobal", update_current_instance_global);
 }
 
 /// `CompleteAllObjectives`

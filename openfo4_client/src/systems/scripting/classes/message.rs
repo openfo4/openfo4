@@ -3,16 +3,18 @@ use std::sync::OnceLock;
 use openfo4_script::engine::Engine;
 use openfo4_script::runtime::{Caller, Exception};
 
+use crate::systems::scripting::classes::EngineExt;
+
 use super::{Float, Int, Object, State};
 
 static X: OnceLock<()> = OnceLock::new();
 
 pub fn register(engine: &mut Engine) {
-    engine.register_native_function("Message", "ClearHelpMessages", clear_help_messages);
-    engine.register_native_function("Message", "ResetHelpMessage", reset_help_message);
-    engine.register_native_function("Message", "Show", show);
-    engine.register_native_function("Message", "ShowAsHelpMessage", show_as_help_message);
-    engine.register_native_function("Message", "UnshowAsHelpMessage", unshow_as_help_message);
+    engine.register_if_exists("Message", "ClearHelpMessages", clear_help_messages);
+    engine.register_if_exists("Message", "ResetHelpMessage", reset_help_message);
+    engine.register_if_exists("Message", "Show", show);
+    engine.register_if_exists("Message", "ShowAsHelpMessage", show_as_help_message);
+    engine.register_if_exists("Message", "UnshowAsHelpMessage", unshow_as_help_message);
 }
 
 /// `ClearHelpMessages`

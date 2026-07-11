@@ -37,7 +37,9 @@ fn array_create() {
     );
 
     engine.register(&module);
-    engine.register_native_function("test", "test_valid_array", test_valid_array);
+    engine
+        .register_native_function("test", "test_valid_array", test_valid_array)
+        .unwrap();
 
     let instance = engine.compile("MyClass", &Options::default());
     let func = instance.get_func("MyFunction").unwrap();
@@ -74,7 +76,9 @@ fn array_get() {
     );
 
     engine.register(&module);
-    engine.register_native_function("test", "assert_valid_result", assert_valid_result);
+    engine
+        .register_native_function("test", "assert_valid_result", assert_valid_result)
+        .unwrap();
 
     let mut builder = engine.object_pool().insert_array(engine.int_type(), 10);
     for i in 0..10 {
@@ -117,7 +121,9 @@ fn array_add() {
     );
 
     engine.register(&module);
-    engine.register_native_function("test", "assert_valid_result", assert_valid_result);
+    engine
+        .register_native_function("test", "assert_valid_result", assert_valid_result)
+        .unwrap();
 
     let mut builder = engine.object_pool().insert_array(engine.int_type(), 10);
     for i in 0..10 {
@@ -160,7 +166,9 @@ fn array_insert() {
     );
 
     engine.register(&module);
-    engine.register_native_function("test", "assert_valid_result", assert_valid_result);
+    engine
+        .register_native_function("test", "assert_valid_result", assert_valid_result)
+        .unwrap();
 
     let mut builder = engine.object_pool().insert_array(engine.int_type(), 10);
     for i in 0..10 {
@@ -204,7 +212,9 @@ fn array_clear() {
     );
 
     engine.register(&module);
-    engine.register_native_function("test", "assert_valid_result", assert_valid_result);
+    engine
+        .register_native_function("test", "assert_valid_result", assert_valid_result)
+        .unwrap();
 
     let mut builder = engine.object_pool().insert_array(engine.int_type(), 5);
     for i in 0..5 {
@@ -251,7 +261,9 @@ fn array_find_int() {
     );
 
     engine.register(&module);
-    engine.register_native_function("test", "assert_valid_result", assert_valid_result);
+    engine
+        .register_native_function("test", "assert_valid_result", assert_valid_result)
+        .unwrap();
 
     let mut builder = engine.object_pool().insert_array(engine.int_type(), 100);
     for i in 0..100 {
@@ -307,7 +319,9 @@ fn array_find_struct() {
     );
 
     engine.register(&module);
-    engine.register_native_function("test", "assert_valid_result", assert_valid_result);
+    engine
+        .register_native_function("test", "assert_valid_result", assert_valid_result)
+        .unwrap();
 
     let instance = engine.compile("MyClass", &Options::default());
     let func = instance.get_func("MyFunction").unwrap();

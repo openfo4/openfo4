@@ -140,7 +140,7 @@ where
     );
 
     engine.register(&module);
-    engine.register_native_function("test", "F", f);
+    engine.register_native_function("test", "F", f).unwrap();
 
     let instance = engine.compile("MyClass", &Options::default());
     let func = instance.get_func("MyFunc").unwrap();

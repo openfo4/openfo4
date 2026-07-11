@@ -1,11 +1,11 @@
 use openfo4_script::engine::Engine;
 use openfo4_script::runtime::{Caller, Exception};
 
-use crate::systems::scripting::classes::{Object, State};
+use crate::systems::scripting::classes::{EngineExt, Object, State};
 
 pub fn register(engine: &mut Engine) {
-    engine.register_native_function("Package", "GetOwningQuest", get_owning_quest);
-    engine.register_native_function("Package", "GetTemplate", get_template);
+    engine.register_if_exists("Package", "GetOwningQuest", get_owning_quest);
+    engine.register_if_exists("Package", "GetTemplate", get_template);
 }
 
 /// `GetOwningQuest`

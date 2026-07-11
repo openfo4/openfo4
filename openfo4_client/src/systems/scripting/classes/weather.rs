@@ -1,20 +1,20 @@
 use openfo4_script::engine::Engine;
 use openfo4_script::runtime::{Caller, Exception};
 
-use crate::systems::scripting::classes::{Object, State};
+use crate::systems::scripting::classes::{EngineExt, Object, State};
 
 #[rustfmt::skip]
 pub fn register(engine: &mut Engine) {
-    engine.register_native_function("Weather", "EnableAmbientParticles", enable_ambient_particles);
-    engine.register_native_function("Weather", "FindWeather", find_weather);
-    engine.register_native_function("Weather", "ForceActive", force_active);
-    engine.register_native_function("Weather", "GetClassification", get_classification);
-    engine.register_native_function("Weather", "GetCurrentWeather", get_current_weather);
-    engine.register_native_function("Weather", "GetCurrentWeatherTransition", get_current_weather_transition);
-    engine.register_native_function("Weather", "GetOutgoingWeather", get_outgoing_weather);
-    engine.register_native_function("Weather", "GetSkyMode", get_sky_mode);
-    engine.register_native_function("Weather", "ReleaseOverride", release_override);
-    engine.register_native_function("Weather", "SetActive", set_active);
+    engine.register_if_exists("Weather", "EnableAmbientParticles", enable_ambient_particles);
+    engine.register_if_exists("Weather", "FindWeather", find_weather);
+    engine.register_if_exists("Weather", "ForceActive", force_active);
+    engine.register_if_exists("Weather", "GetClassification", get_classification);
+    engine.register_if_exists("Weather", "GetCurrentWeather", get_current_weather);
+    engine.register_if_exists("Weather", "GetCurrentWeatherTransition", get_current_weather_transition);
+    engine.register_if_exists("Weather", "GetOutgoingWeather", get_outgoing_weather);
+    engine.register_if_exists("Weather", "GetSkyMode", get_sky_mode);
+    engine.register_if_exists("Weather", "ReleaseOverride", release_override);
+    engine.register_if_exists("Weather", "SetActive", set_active);
 }
 
 /// `EnableAmbientParticles`

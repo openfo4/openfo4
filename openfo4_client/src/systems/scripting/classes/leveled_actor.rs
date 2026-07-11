@@ -1,12 +1,12 @@
 use openfo4_script::engine::Engine;
 use openfo4_script::runtime::{Caller, Exception};
 
-use crate::systems::scripting::classes::{Object, State};
+use crate::systems::scripting::classes::{EngineExt, Object, State};
 
 #[rustfmt::skip]
 pub fn register(engine: &mut Engine) {
-    engine.register_native_function("LeveledActor", "AddForm", add_form);
-    engine.register_native_function("LeveledActor", "Revert", revert);
+    engine.register_if_exists("LeveledActor", "AddForm", add_form);
+    engine.register_if_exists("LeveledActor", "Revert", revert);
 }
 
 /// `AddForm`

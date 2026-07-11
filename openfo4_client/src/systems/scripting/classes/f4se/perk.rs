@@ -1,16 +1,16 @@
 use openfo4_script::engine::Engine;
 use openfo4_script::runtime::{Caller, Exception};
 
-use crate::systems::scripting::classes::{Object, State};
+use crate::systems::scripting::classes::{EngineExt, Object, State};
 
 pub fn register(engine: &mut Engine) {
-    engine.register_native_function("Perk", "IsPlayable", is_playable);
-    engine.register_native_function("Perk", "IsHidden", is_hidden);
-    engine.register_native_function("Perk", "GetLevel", get_level);
-    engine.register_native_function("Perk", "GetNumRanks", get_num_ranks);
-    engine.register_native_function("Perk", "GetNextPerk", get_next_perk);
-    engine.register_native_function("Perk", "GetSWFPath", get_swf_path);
-    engine.register_native_function("Perk", "IsEligible", is_eligible);
+    engine.register_if_exists("Perk", "IsPlayable", is_playable);
+    engine.register_if_exists("Perk", "IsHidden", is_hidden);
+    engine.register_if_exists("Perk", "GetLevel", get_level);
+    engine.register_if_exists("Perk", "GetNumRanks", get_num_ranks);
+    engine.register_if_exists("Perk", "GetNextPerk", get_next_perk);
+    engine.register_if_exists("Perk", "GetSWFPath", get_swf_path);
+    engine.register_if_exists("Perk", "IsEligible", is_eligible);
 }
 
 /// `IsPlayable`

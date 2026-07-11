@@ -3,37 +3,37 @@ use openfo4_script::{
     runtime::{Caller, Exception},
 };
 
-use crate::systems::scripting::classes::{Object, State};
+use crate::systems::scripting::classes::{EngineExt, Object, State};
 
 #[rustfmt::skip]
 pub fn register(engine: &mut Engine) {
-    engine.register_native_function("Form", "GetName", get_name);
-    engine.register_native_function("Form", "SetName", set_name);
-    engine.register_native_function("Form", "GetDescription", get_description);
-    engine.register_native_function("Form", "GetWeight", get_weight);
-    engine.register_native_function("Form", "SetWeight", set_weight);
-    engine.register_native_function("Form", "SetGoldValue", set_gold_value);
-    engine.register_native_function("Form", "GetKeywords", get_keywords);
-    engine.register_native_function("Form", "HasWorldModel", has_world_model);
-    engine.register_native_function("Form", "GetWorldModelPath", get_world_model_path);
-    engine.register_native_function("Form", "SetWorldModelPath", set_world_model_path);
-    engine.register_native_function("Form", "GetIconPath", get_icon_path);
-    engine.register_native_function("Form", "SetIconPath", set_icon_path);
-    engine.register_native_function("Form", "GetMessageIconPath", get_message_icon_path);
-    engine.register_native_function("Form", "SetMessageIconPath", set_message_icon_path);
-    engine.register_native_function("Form", "GetEnchantment", get_enchantment);
-    engine.register_native_function("Form", "SetEnchantment", set_enchantment);
-    engine.register_native_function("Form", "GetEnchantmentValue", get_enchantment_value);
-    engine.register_native_function("Form", "SetEnchantmentValue", set_enchantment_value);
-    engine.register_native_function("Form", "GetEquipType", get_equip_type);
-    engine.register_native_function("Form", "SetEquipType", set_equip_type);
-    engine.register_native_function("Form", "GetRaceForm", get_race_form);
-    engine.register_native_function("Form", "SetRaceForm", set_race_form);
-    engine.register_native_function("Form", "GetSlotMask", get_slot_mask);
-    engine.register_native_function("Form", "SetSlotMask", set_slot_mask);
-    engine.register_native_function("Form", "AddSlotToMask", add_slot_to_mask);
-    engine.register_native_function("Form", "RemoveSlotFromMask", remove_slot_from_mask);
-    engine.register_native_function("Form", "GetMaskForSlot", get_mask_for_slot);
+    engine.register_if_exists("Form", "GetName", get_name);
+    engine.register_if_exists("Form", "SetName", set_name);
+    engine.register_if_exists("Form", "GetDescription", get_description);
+    engine.register_if_exists("Form", "GetWeight", get_weight);
+    engine.register_if_exists("Form", "SetWeight", set_weight);
+    engine.register_if_exists("Form", "SetGoldValue", set_gold_value);
+    engine.register_if_exists("Form", "GetKeywords", get_keywords);
+    engine.register_if_exists("Form", "HasWorldModel", has_world_model);
+    engine.register_if_exists("Form", "GetWorldModelPath", get_world_model_path);
+    engine.register_if_exists("Form", "SetWorldModelPath", set_world_model_path);
+    engine.register_if_exists("Form", "GetIconPath", get_icon_path);
+    engine.register_if_exists("Form", "SetIconPath", set_icon_path);
+    engine.register_if_exists("Form", "GetMessageIconPath", get_message_icon_path);
+    engine.register_if_exists("Form", "SetMessageIconPath", set_message_icon_path);
+    engine.register_if_exists("Form", "GetEnchantment", get_enchantment);
+    engine.register_if_exists("Form", "SetEnchantment", set_enchantment);
+    engine.register_if_exists("Form", "GetEnchantmentValue", get_enchantment_value);
+    engine.register_if_exists("Form", "SetEnchantmentValue", set_enchantment_value);
+    engine.register_if_exists("Form", "GetEquipType", get_equip_type);
+    engine.register_if_exists("Form", "SetEquipType", set_equip_type);
+    engine.register_if_exists("Form", "GetRaceForm", get_race_form);
+    engine.register_if_exists("Form", "SetRaceForm", set_race_form);
+    engine.register_if_exists("Form", "GetSlotMask", get_slot_mask);
+    engine.register_if_exists("Form", "SetSlotMask", set_slot_mask);
+    engine.register_if_exists("Form", "AddSlotToMask", add_slot_to_mask);
+    engine.register_if_exists("Form", "RemoveSlotFromMask", remove_slot_from_mask);
+    engine.register_if_exists("Form", "GetMaskForSlot", get_mask_for_slot);
 }
 
 /// `GetName`

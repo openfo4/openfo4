@@ -3,12 +3,12 @@ use openfo4_script::{
     runtime::{Caller, Exception},
 };
 
-use crate::systems::scripting::classes::{Object, State};
+use crate::systems::scripting::classes::{EngineExt, Object, State};
 
 #[rustfmt::skip]
 pub fn register(engine: &mut Engine) {
-    engine.register_native_function("Weapon", "Fire", fire);
-    engine.register_native_function("Weapon", "GetAmmo", get_ammo);
+    engine.register_if_exists("Weapon", "Fire", fire);
+    engine.register_if_exists("Weapon", "GetAmmo", get_ammo);
 }
 
 /// `Fire`

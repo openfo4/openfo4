@@ -34,7 +34,9 @@ fn string_constant() {
     );
 
     engine.register(&module);
-    engine.register_native_function("test", "assert_valid_result", assert_valid_result);
+    engine
+        .register_native_function("test", "assert_valid_result", assert_valid_result)
+        .unwrap();
 
     let instance = engine.compile("MyClass", &Options::default());
     let func = instance.get_func("MyFunction").unwrap();
@@ -72,7 +74,9 @@ fn string_concat() {
     );
 
     engine.register(&module);
-    engine.register_native_function("test", "assert_valid_result", assert_valid_result);
+    engine
+        .register_native_function("test", "assert_valid_result", assert_valid_result)
+        .unwrap();
 
     let a = engine.object_pool().insert_string("Hello");
     let b = engine.object_pool().insert_string(" World");

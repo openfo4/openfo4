@@ -53,7 +53,7 @@ fn host_function_returns_null() {
     );
 
     engine.register(&module);
-    engine.register_native_function("A", "F", f);
+    engine.register_native_function("A", "F", f).unwrap();
 
     let instance = engine.compile("A", &Options::default());
     let func = instance.get_func("G").unwrap();

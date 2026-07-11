@@ -3,12 +3,12 @@ use openfo4_script::{
     runtime::{Caller, Exception, ObjectAddr},
 };
 
-use crate::systems::scripting::classes::State;
+use crate::systems::scripting::classes::{EngineExt, State};
 
 #[rustfmt::skip]
 pub fn register(engine: &mut Engine) {
-    engine.register_native_function("Input", "GetMappedKey", get_mapped_key);
-    engine.register_native_function("Input", "GetMappedControl", get_mapped_control);
+    engine.register_if_exists("Input", "GetMappedKey", get_mapped_key);
+    engine.register_if_exists("Input", "GetMappedControl", get_mapped_control);
 }
 
 /// `GetMappedKey`

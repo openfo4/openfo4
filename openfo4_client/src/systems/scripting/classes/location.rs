@@ -3,26 +3,26 @@ use openfo4_script::{
     runtime::{Caller, Exception},
 };
 
-use crate::systems::scripting::classes::{Object, State};
+use crate::systems::scripting::classes::{EngineExt, Object, State};
 
 #[rustfmt::skip]
 pub fn register(engine: &mut Engine) {
-    engine.register_native_function("Location", "AddLinkedLocation", add_linked_location);
-    engine.register_native_function("Location", "GetAllLinkedLocations", get_all_linked_locations);
-    engine.register_native_function("Location", "GetKeywordData", get_keyword_data);
-    engine.register_native_function("Location", "GetRefTypeAliveCount", get_ref_type_alive_count);
-    engine.register_native_function("Location", "GetRefTypeDeadCount", get_ref_type_dead_count);
-    engine.register_native_function("Location", "HasCommonParent", has_common_parent);
-    engine.register_native_function("Location", "HasEverBeenCleared", has_ever_been_cleared);
-    engine.register_native_function("Location", "HasRefType", has_ref_type);
-    engine.register_native_function("Location", "IsCleared", is_cleared);
-    engine.register_native_function("Location", "IsChild", is_child);
-    engine.register_native_function("Location", "IsLinkedLocation", is_linked_location);
-    engine.register_native_function("Location", "IsLoaded", is_loaded);
-    engine.register_native_function("Location", "RemoveLinkedLocation", remove_linked_location);
-    engine.register_native_function("Location", "Reset", reset);
-    engine.register_native_function("Location", "SetKeywordData", set_keyword_data);
-    engine.register_native_function("Location", "SetCleared", set_cleared);
+    engine.register_if_exists("Location", "AddLinkedLocation", add_linked_location);
+    engine.register_if_exists("Location", "GetAllLinkedLocations", get_all_linked_locations);
+    engine.register_if_exists("Location", "GetKeywordData", get_keyword_data);
+    engine.register_if_exists("Location", "GetRefTypeAliveCount", get_ref_type_alive_count);
+    engine.register_if_exists("Location", "GetRefTypeDeadCount", get_ref_type_dead_count);
+    engine.register_if_exists("Location", "HasCommonParent", has_common_parent);
+    engine.register_if_exists("Location", "HasEverBeenCleared", has_ever_been_cleared);
+    engine.register_if_exists("Location", "HasRefType", has_ref_type);
+    engine.register_if_exists("Location", "IsCleared", is_cleared);
+    engine.register_if_exists("Location", "IsChild", is_child);
+    engine.register_if_exists("Location", "IsLinkedLocation", is_linked_location);
+    engine.register_if_exists("Location", "IsLoaded", is_loaded);
+    engine.register_if_exists("Location", "RemoveLinkedLocation", remove_linked_location);
+    engine.register_if_exists("Location", "Reset", reset);
+    engine.register_if_exists("Location", "SetKeywordData", set_keyword_data);
+    engine.register_if_exists("Location", "SetCleared", set_cleared);
 }
 
 /// `AddLinkedLocation`

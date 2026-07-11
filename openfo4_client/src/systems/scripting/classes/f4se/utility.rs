@@ -1,12 +1,12 @@
 use openfo4_script::engine::Engine;
 use openfo4_script::runtime::{Caller, Exception};
 
-use crate::systems::scripting::classes::{Object, State};
+use crate::systems::scripting::classes::{EngineExt, Object, State};
 
 #[rustfmt::skip]
 pub fn register(engine: &mut Engine) {
-    engine.register_native_function("Utility", "VarToVarArray", var_to_var_array);
-    engine.register_native_function("Utility", "VarArrayToVar", var_array_to_var);
+    engine.register_if_exists("Utility", "VarToVarArray", var_to_var_array);
+    engine.register_if_exists("Utility", "VarArrayToVar", var_array_to_var);
 }
 
 /// `VarToVarArray`

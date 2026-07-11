@@ -1,21 +1,21 @@
 use openfo4_script::engine::Engine;
 use openfo4_script::runtime::{Caller, Exception};
 
-use crate::systems::scripting::classes::{Object, State};
+use crate::systems::scripting::classes::{EngineExt, Object, State};
 
 pub fn register(engine: &mut Engine) {
-    engine.register_native_function("EncounterZone", "GetLocation", get_location);
-    engine.register_native_function("EncounterZone", "SetLocation", set_location);
-    engine.register_native_function("EncounterZone", "GetRank", get_rank);
-    engine.register_native_function("EncounterZone", "SetRank", set_rank);
-    engine.register_native_function("EncounterZone", "GetMinLevel", get_min_level);
-    engine.register_native_function("EncounterZone", "SetMinLevel", set_min_level);
-    engine.register_native_function("EncounterZone", "GetMaxLevel", get_max_level);
-    engine.register_native_function("EncounterZone", "SetMaxLevel", set_max_level);
-    engine.register_native_function("EncounterZone", "IsNeverResetable", is_never_resetable);
-    engine.register_native_function("EncounterZone", "SetNeverResetable", set_never_resetable);
-    engine.register_native_function("EncounterZone", "IsWorkshop", is_workshop);
-    engine.register_native_function("EncounterZone", "SetWorkshop", set_workshop);
+    engine.register_if_exists("EncounterZone", "GetLocation", get_location);
+    engine.register_if_exists("EncounterZone", "SetLocation", set_location);
+    engine.register_if_exists("EncounterZone", "GetRank", get_rank);
+    engine.register_if_exists("EncounterZone", "SetRank", set_rank);
+    engine.register_if_exists("EncounterZone", "GetMinLevel", get_min_level);
+    engine.register_if_exists("EncounterZone", "SetMinLevel", set_min_level);
+    engine.register_if_exists("EncounterZone", "GetMaxLevel", get_max_level);
+    engine.register_if_exists("EncounterZone", "SetMaxLevel", set_max_level);
+    engine.register_if_exists("EncounterZone", "IsNeverResetable", is_never_resetable);
+    engine.register_if_exists("EncounterZone", "SetNeverResetable", set_never_resetable);
+    engine.register_if_exists("EncounterZone", "IsWorkshop", is_workshop);
+    engine.register_if_exists("EncounterZone", "SetWorkshop", set_workshop);
 }
 
 /// `GetLocation`

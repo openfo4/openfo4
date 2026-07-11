@@ -2,33 +2,33 @@ use openfo4_script::engine::Engine;
 use openfo4_script::runtime::{Caller, Exception};
 
 use crate::systems::global::{Faction, FactionReaction};
-use crate::systems::scripting::classes::{Object, State};
+use crate::systems::scripting::classes::{EngineExt, Object, State};
 
 #[rustfmt::skip]
 pub fn register(engine: &mut Engine) {
-    engine.register_native_function("Faction", "CanPayCrimeGold", can_pay_crime_gold);
-    engine.register_native_function("Faction", "GetCrimeGold", get_crime_gold);
-    engine.register_native_function("Faction", "GetCrimeGoldNonViolent", get_crime_gold_non_violent);
-    engine.register_native_function("Faction", "GetCrimeGoldViolent", get_crime_gold_violent);
-    engine.register_native_function("Faction", "GetInfamy", get_infamy);
-    engine.register_native_function("Faction", "GetInfamyNonViolent", get_infamy_non_violent);
-    engine.register_native_function("Faction", "GetInfamyViolent", get_infamy_violent);
-    engine.register_native_function("Faction", "GetFactionReaction", get_faction_reaction);
-    engine.register_native_function("Faction", "GetStolenItemValueCrime", get_stolen_item_value_crime);
-    engine.register_native_function("Faction", "GetStolenItemValueNoCrime", get_stolen_item_value_no_crime);
-    engine.register_native_function("Faction", "IsFactionInCrimeGroup", is_faction_in_crime_group);
-    engine.register_native_function("Faction", "IsPlayerEnemy", is_player_enemy);
-    engine.register_native_function("Faction", "IsPlayerExpelled", is_player_expelled);
-    engine.register_native_function("Faction", "ModCrimeGold", mod_crime_gold);
-    engine.register_native_function("Faction", "PlayerPayCrimeGold", player_pay_crime_gold);
-    engine.register_native_function("Faction", "SendAssaultAlarm", send_assault_alarm);
-    engine.register_native_function("Faction", "SendPlayerToJail", send_player_to_jail);
-    engine.register_native_function("Faction", "SetAlly", set_ally);
-    engine.register_native_function("Faction", "SetCrimeGold", set_crime_gold);
-    engine.register_native_function("Faction", "SetCrimeGoldViolent", set_crime_gold_violent);
-    engine.register_native_function("Faction", "SetEnemy", set_enemy);
-    engine.register_native_function("Faction", "SetPlayerEnemy", set_player_enemy);
-    engine.register_native_function("Faction", "SetPlayerExpelled", set_player_expelled);
+    engine.register_if_exists("Faction", "CanPayCrimeGold", can_pay_crime_gold);
+    engine.register_if_exists("Faction", "GetCrimeGold", get_crime_gold);
+    engine.register_if_exists("Faction", "GetCrimeGoldNonViolent", get_crime_gold_non_violent);
+    engine.register_if_exists("Faction", "GetCrimeGoldViolent", get_crime_gold_violent);
+    engine.register_if_exists("Faction", "GetInfamy", get_infamy);
+    engine.register_if_exists("Faction", "GetInfamyNonViolent", get_infamy_non_violent);
+    engine.register_if_exists("Faction", "GetInfamyViolent", get_infamy_violent);
+    engine.register_if_exists("Faction", "GetFactionReaction", get_faction_reaction);
+    engine.register_if_exists("Faction", "GetStolenItemValueCrime", get_stolen_item_value_crime);
+    engine.register_if_exists("Faction", "GetStolenItemValueNoCrime", get_stolen_item_value_no_crime);
+    engine.register_if_exists("Faction", "IsFactionInCrimeGroup", is_faction_in_crime_group);
+    engine.register_if_exists("Faction", "IsPlayerEnemy", is_player_enemy);
+    engine.register_if_exists("Faction", "IsPlayerExpelled", is_player_expelled);
+    engine.register_if_exists("Faction", "ModCrimeGold", mod_crime_gold);
+    engine.register_if_exists("Faction", "PlayerPayCrimeGold", player_pay_crime_gold);
+    engine.register_if_exists("Faction", "SendAssaultAlarm", send_assault_alarm);
+    engine.register_if_exists("Faction", "SendPlayerToJail", send_player_to_jail);
+    engine.register_if_exists("Faction", "SetAlly", set_ally);
+    engine.register_if_exists("Faction", "SetCrimeGold", set_crime_gold);
+    engine.register_if_exists("Faction", "SetCrimeGoldViolent", set_crime_gold_violent);
+    engine.register_if_exists("Faction", "SetEnemy", set_enemy);
+    engine.register_if_exists("Faction", "SetPlayerEnemy", set_player_enemy);
+    engine.register_if_exists("Faction", "SetPlayerExpelled", set_player_expelled);
 }
 
 /// `CanPayCrimeGold`

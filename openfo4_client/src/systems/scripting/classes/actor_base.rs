@@ -3,26 +3,26 @@ use openfo4_script::{
     runtime::{Caller, Exception},
 };
 
-use crate::systems::scripting::classes::{Object, State};
+use crate::systems::scripting::classes::{EngineExt, Object, State};
 
 #[rustfmt::skip]
 pub fn register(engine: &mut Engine) {
-    engine.register_native_function("ActorBase", "GetClass", get_class);
-    engine.register_native_function("ActorBase", "GetDeadCount", get_dead_count);
-    engine.register_native_function("ActorBase", "GetGiftFilter", get_gift_filter);
-    engine.register_native_function("ActorBase", "GetRace", get_race);
-    engine.register_native_function("ActorBase", "GetLevel", get_level);
-    engine.register_native_function("ActorBase", "GetLevelExact", get_level_exact);
-    engine.register_native_function("ActorBase", "GetSex", get_sex);
-    engine.register_native_function("ActorBase", "GetUniqueActor", get_unique_actor);
-    engine.register_native_function("ActorBase", "IsEssential", is_essential);
-    engine.register_native_function("ActorBase", "IsInvulnerable", is_invulnerable);
-    engine.register_native_function("ActorBase", "IsProtected", is_protected);
-    engine.register_native_function("ActorBase", "IsUnique", is_unique);
-    engine.register_native_function("ActorBase", "SetEssential", set_essential);
-    engine.register_native_function("ActorBase", "SetInvulnerable", set_invulnerable);
-    engine.register_native_function("ActorBase", "SetProtected", set_protected);
-    engine.register_native_function("ActorBase", "SetOutfit", set_outfit);
+    engine.register_if_exists("ActorBase", "GetClass", get_class);
+    engine.register_if_exists("ActorBase", "GetDeadCount", get_dead_count);
+    engine.register_if_exists("ActorBase", "GetGiftFilter", get_gift_filter);
+    engine.register_if_exists("ActorBase", "GetRace", get_race);
+    engine.register_if_exists("ActorBase", "GetLevel", get_level);
+    engine.register_if_exists("ActorBase", "GetLevelExact", get_level_exact);
+    engine.register_if_exists("ActorBase", "GetSex", get_sex);
+    engine.register_if_exists("ActorBase", "GetUniqueActor", get_unique_actor);
+    engine.register_if_exists("ActorBase", "IsEssential", is_essential);
+    engine.register_if_exists("ActorBase", "IsInvulnerable", is_invulnerable);
+    engine.register_if_exists("ActorBase", "IsProtected", is_protected);
+    engine.register_if_exists("ActorBase", "IsUnique", is_unique);
+    engine.register_if_exists("ActorBase", "SetEssential", set_essential);
+    engine.register_if_exists("ActorBase", "SetInvulnerable", set_invulnerable);
+    engine.register_if_exists("ActorBase", "SetProtected", set_protected);
+    engine.register_if_exists("ActorBase", "SetOutfit", set_outfit);
 }
 
 /// `GetClass`

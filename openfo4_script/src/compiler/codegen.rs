@@ -26,6 +26,7 @@ use crate::compiler::codegen::runtime::RuntimeFunctions;
 use crate::compiler::resources::{Resources, TypeId, TypeRepr};
 use crate::compiler::{CompilationResult, CompiledClass, NativeFunction};
 use crate::engine::Options;
+use crate::{RegisterNativeError, UnknownFunctionError};
 
 #[derive(Clone, Debug, Error)]
 #[error("codegen error")]
@@ -125,7 +126,12 @@ impl CodegenPass {
         }
     }
 
-    pub fn define_native_function(&mut self, class: &str, function: &str, func: NativeFunction) {
+    pub fn define_native_function(
+        &mut self,
+        class: &str,
+        function: &str,
+        func: NativeFunction,
+    ) -> Result<(), RegisterNativeError> {
         let class = Lowercase::new(class);
         let function = Lowercase::new(function);
 
@@ -137,6 +143,8 @@ impl CodegenPass {
         if self.data.native_funcs.insert(function, func).is_some() {
             panic!("cannot redefined native functions");
         }
+
+        Ok(())
     }
 
     pub fn compute_type_layouts(&mut self) {
@@ -513,13 +521,30 @@ impl CodegenPass {
         Ok(res)
     }
 
-    pub fn compute_function_signature(&self, class: &str, func: &str) -> PscSignature {
-        let class = Lowercase::new(&*class);
-        let func = Lowercase::new(&*func);
-        let class = self.data.registry.class_by_name(&class).unwrap();
-        let func = class.functions.get(&func).unwrap();
+    pub fn compute_function_signature(
+        &self,
+        class_str: &str,
+        func_str: &str,
+    ) -> Result<PscSignature, UnknownFunctionError> {
+        let class = Lowercase::new(&*class_str);
+        let func = Lowercase::new(&*func_str);
+        let class =
+            self.data
+                .registry
+                .class_by_name(&class)
+                .ok_or_else(|| UnknownFunctionError {
+                    class: class_str.to_owned(),
+                    func: func_str.to_owned(),
+                })?;
+        let func = class
+            .functions
+            .get(&func)
+            .ok_or_else(|| UnknownFunctionError {
+                class: class_str.to_owned(),
+                func: func_str.to_owned(),
+            })?;
         let func = self.data.registry.function(func).unwrap();
-        function::translate_function_psc_signature(&self.data, func)
+        Ok(function::translate_function_psc_signature(&self.data, func))
     }
 }
 

@@ -18,6 +18,7 @@ use crate::compiler::codegen::CodegenPass;
 use crate::compiler::resources::Resources;
 use crate::compiler::validation::ValidationPass;
 use crate::engine::Options;
+use crate::{RegisterNativeError, UnknownFunctionError};
 
 #[derive(Clone, Debug, Error)]
 pub enum Error {
@@ -46,8 +47,13 @@ impl Context {
         Ok(())
     }
 
-    pub fn define_native_function(&mut self, class: &str, func: &str, f: NativeFunction) {
-        self.codegen.define_native_function(class, func, f);
+    pub fn define_native_function(
+        &mut self,
+        class: &str,
+        func: &str,
+        f: NativeFunction,
+    ) -> Result<(), RegisterNativeError> {
+        self.codegen.define_native_function(class, func, f)
     }
 
     pub fn compute_type_layouts(&mut self) {
@@ -63,7 +69,11 @@ impl Context {
         self.codegen.resources()
     }
 
-    pub fn compute_function_signature(&mut self, class: &str, func: &str) -> PscSignature {
+    pub fn compute_function_signature(
+        &mut self,
+        class: &str,
+        func: &str,
+    ) -> Result<PscSignature, UnknownFunctionError> {
         self.codegen.compute_type_layouts();
         self.codegen.compute_function_signature(class, func)
     }

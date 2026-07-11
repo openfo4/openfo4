@@ -75,7 +75,7 @@ fn return_wrong_type_from_native_func() {
     );
 
     engine.register(&module);
-    engine.register_native_function("test", "F", f);
+    engine.register_native_function("test", "F", f).unwrap();
 
     engine.compile("A", &Options::default());
     let b = engine.compile("B", &Options::default());
@@ -143,7 +143,7 @@ fn return_null_non_nullable_object() {
     );
 
     engine.register(&module);
-    engine.register_native_function("A", "F", f);
+    engine.register_native_function("A", "F", f).unwrap();
 
     let instance = engine.compile("A", &Options::default());
     let func = instance.get_func("G").unwrap();

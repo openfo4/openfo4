@@ -1,16 +1,18 @@
 use openfo4_script::engine::Engine;
 use openfo4_script::runtime::{Caller, Exception};
 
+use crate::systems::scripting::classes::EngineExt;
+
 use super::{Bool, Int, Object, State};
 
 pub fn register(engine: &mut Engine) {
-    engine.register_native_function("Form", "GetFormID", get_form_id);
-    engine.register_native_function("Form", "GetGoldValue", get_gold_value);
-    engine.register_native_function("Form", "HasKeyword", has_keyword);
-    engine.register_native_function("Form", "HasKeywordInFormList", has_keyword_in_form_list);
-    engine.register_native_function("Form", "PlayerKnows", player_knows);
-    engine.register_native_function("Form", "StartObjectProfiling", start_object_profiling);
-    engine.register_native_function("Form", "StopObjectProfiling", stop_object_profiling);
+    engine.register_if_exists("Form", "GetFormID", get_form_id);
+    engine.register_if_exists("Form", "GetGoldValue", get_gold_value);
+    engine.register_if_exists("Form", "HasKeyword", has_keyword);
+    engine.register_if_exists("Form", "HasKeywordInFormList", has_keyword_in_form_list);
+    engine.register_if_exists("Form", "PlayerKnows", player_knows);
+    engine.register_if_exists("Form", "StartObjectProfiling", start_object_profiling);
+    engine.register_if_exists("Form", "StopObjectProfiling", stop_object_profiling);
 }
 
 /// `GetFormID`

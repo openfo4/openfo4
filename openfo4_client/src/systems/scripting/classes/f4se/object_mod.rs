@@ -1,16 +1,16 @@
 use openfo4_script::engine::Engine;
 use openfo4_script::runtime::{Caller, Exception};
 
-use crate::systems::scripting::classes::{Object, State};
+use crate::systems::scripting::classes::{EngineExt, Object, State};
 
 #[rustfmt::skip]
 pub fn register(engine: &mut Engine) {
-    engine.register_native_function("ObjectMod", "GetPropertyModifiers", get_property_modifiers);
-    engine.register_native_function("ObjectMod", "GetMaxRank", get_max_rank);
-    engine.register_native_function("ObjectMod", "SetMaxRank", set_max_rank);
-    engine.register_native_function("ObjectMod", "GetPriority", get_priority);
-    engine.register_native_function("ObjectMod", "SetPriority", set_priority);
-    engine.register_native_function("ObjectMod", "GetLooseMod", get_loose_mod);
+    engine.register_if_exists("ObjectMod", "GetPropertyModifiers", get_property_modifiers);
+    engine.register_if_exists("ObjectMod", "GetMaxRank", get_max_rank);
+    engine.register_if_exists("ObjectMod", "SetMaxRank", set_max_rank);
+    engine.register_if_exists("ObjectMod", "GetPriority", get_priority);
+    engine.register_if_exists("ObjectMod", "SetPriority", set_priority);
+    engine.register_if_exists("ObjectMod", "GetLooseMod", get_loose_mod);
 }
 
 /// `GetPropertyModifiers`

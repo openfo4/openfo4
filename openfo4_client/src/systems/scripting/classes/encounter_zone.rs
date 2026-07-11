@@ -1,13 +1,13 @@
 use openfo4_script::engine::Engine;
 use openfo4_script::runtime::{Caller, Exception};
 
-use crate::systems::scripting::classes::{Object, State};
+use crate::systems::scripting::classes::{EngineExt, Object, State};
 
 #[rustfmt::skip]
 pub fn register(engine: &mut Engine) {
-    engine.register_native_function("EncounterZone", "CountActors", count_actors);
-    engine.register_native_function("EncounterZone", "GetActors", get_actors);
-    engine.register_native_function("EncounterZone", "Reset", reset);
+    engine.register_if_exists("EncounterZone", "CountActors", count_actors);
+    engine.register_if_exists("EncounterZone", "GetActors", get_actors);
+    engine.register_if_exists("EncounterZone", "Reset", reset);
 }
 
 /// `CountActors`

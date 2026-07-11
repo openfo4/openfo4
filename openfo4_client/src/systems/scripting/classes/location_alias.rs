@@ -3,13 +3,13 @@ use openfo4_script::{
     runtime::{Caller, Exception},
 };
 
-use crate::systems::scripting::classes::{Object, State};
+use crate::systems::scripting::classes::{EngineExt, Object, State};
 
 #[rustfmt::skip]
 pub fn register(engine: &mut Engine) {
-    engine.register_native_function("LocationAlias", "Clear", clear);
-    engine.register_native_function("LocationAlias", "GetLocation", get_location);
-    engine.register_native_function("LocationAlias", "ForceLocationTo", force_location_to);
+    engine.register_if_exists("LocationAlias", "Clear", clear);
+    engine.register_if_exists("LocationAlias", "GetLocation", get_location);
+    engine.register_if_exists("LocationAlias", "ForceLocationTo", force_location_to);
 }
 
 /// `Clear`

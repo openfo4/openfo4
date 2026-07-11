@@ -3,12 +3,12 @@ use openfo4_script::{
     runtime::{Caller, Exception},
 };
 
-use crate::systems::scripting::classes::{Object, State};
+use crate::systems::scripting::classes::{EngineExt, Object, State};
 
 #[rustfmt::skip]
 pub fn register(engine: &mut Engine) {
-    engine.register_native_function("Weapon", "GetEmbeddedMod", get_embedded_mod);
-    engine.register_native_function("Weapon", "SetEmbeddedMod", set_embedded_mod);
+    engine.register_if_exists("Weapon", "GetEmbeddedMod", get_embedded_mod);
+    engine.register_if_exists("Weapon", "SetEmbeddedMod", set_embedded_mod);
 }
 
 /// `GetEmbeddedMod`

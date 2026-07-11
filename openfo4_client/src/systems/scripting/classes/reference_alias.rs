@@ -1,14 +1,16 @@
 use openfo4_script::engine::Engine;
 use openfo4_script::runtime::{Caller, Exception};
 
+use crate::systems::scripting::classes::EngineExt;
+
 use super::{Object, State};
 
 pub fn register(engine: &mut Engine) {
-    engine.register_native_function("ReferenceAlias", "ApplyToRef", apply_to_ref);
-    engine.register_native_function("ReferenceAlias", "Clear", clear);
-    engine.register_native_function("ReferenceAlias", "ForceRefTo", force_ref_to);
-    engine.register_native_function("ReferenceAlias", "GetReference", get_reference);
-    engine.register_native_function("ReferenceAlias", "RemoveFromRef", remove_from_ref);
+    engine.register_if_exists("ReferenceAlias", "ApplyToRef", apply_to_ref);
+    engine.register_if_exists("ReferenceAlias", "Clear", clear);
+    engine.register_if_exists("ReferenceAlias", "ForceRefTo", force_ref_to);
+    engine.register_if_exists("ReferenceAlias", "GetReference", get_reference);
+    engine.register_if_exists("ReferenceAlias", "RemoveFromRef", remove_from_ref);
 }
 
 /// `ApplyToRef`

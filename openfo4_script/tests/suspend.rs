@@ -37,7 +37,9 @@ fn suspend() {
     );
 
     engine.register(&module);
-    engine.register_native_function("test", "YieldOnce", yield_once);
+    engine
+        .register_native_function("test", "YieldOnce", yield_once)
+        .unwrap();
 
     let instance = engine.compile("MyClass", &Options::default());
     let func = instance.get_func("MyFunc").unwrap();

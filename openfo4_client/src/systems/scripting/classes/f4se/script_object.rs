@@ -3,20 +3,20 @@ use openfo4_script::{
     runtime::{Caller, Exception},
 };
 
-use crate::systems::scripting::classes::{Object, State};
+use crate::systems::scripting::classes::{EngineExt, Object, State};
 
 #[rustfmt::skip]
 pub fn register(engine: &mut Engine) {
-    engine.register_native_function("ScriptObject", "RegisterForKey", register_for_key);
-    engine.register_native_function("ScriptObject", "UnregisterForKey", unregister_for_key);
-    engine.register_native_function("ScriptObject", "RegisterForControl", register_for_control);
-    engine.register_native_function("ScriptObject", "UnregisterForControl", unregister_for_control);
-    engine.register_native_function("ScriptObject", "RegisterForExternalEvent", register_for_external_event);
-    engine.register_native_function("ScriptObject", "UnregisterForExternalEvent", unregister_for_external_event);
-    engine.register_native_function("ScriptObject", "RegisterForCameraState", register_for_camera_state);
-    engine.register_native_function("ScriptObject", "UnregisterForCameraState", unregister_for_camera_state);
-    engine.register_native_function("ScriptObject", "RegisterForFurnitureEvent", register_for_furniture_event);
-    engine.register_native_function("ScriptObject", "UnregisterForFurnitureEvent", unregister_for_furniture_event);
+    engine.register_if_exists("ScriptObject", "RegisterForKey", register_for_key);
+    engine.register_if_exists("ScriptObject", "UnregisterForKey", unregister_for_key);
+    engine.register_if_exists("ScriptObject", "RegisterForControl", register_for_control);
+    engine.register_if_exists("ScriptObject", "UnregisterForControl", unregister_for_control);
+    engine.register_if_exists("ScriptObject", "RegisterForExternalEvent", register_for_external_event);
+    engine.register_if_exists("ScriptObject", "UnregisterForExternalEvent", unregister_for_external_event);
+    engine.register_if_exists("ScriptObject", "RegisterForCameraState", register_for_camera_state);
+    engine.register_if_exists("ScriptObject", "UnregisterForCameraState", unregister_for_camera_state);
+    engine.register_if_exists("ScriptObject", "RegisterForFurnitureEvent", register_for_furniture_event);
+    engine.register_if_exists("ScriptObject", "UnregisterForFurnitureEvent", unregister_for_furniture_event);
 }
 
 /// `RegisterForKey`

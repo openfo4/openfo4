@@ -1,18 +1,18 @@
 use openfo4_script::engine::Engine;
 use openfo4_script::runtime::{Caller, Exception};
 
-use crate::systems::scripting::classes::{Object, State};
+use crate::systems::scripting::classes::{EngineExt, Object, State};
 use crate::systems::scripting::effects::{StartQuestSceneEffect, StopQuestSceneEffect};
 
 #[rustfmt::skip]
 pub fn register(engine: &mut Engine) {
-    engine.register_native_function("Scene", "ForceStart", force_start);
-    engine.register_native_function("Scene", "Start", start);
-    engine.register_native_function("Scene", "Stop", stop);
-    engine.register_native_function("Scene", "IsPlaying", is_playing);
-    engine.register_native_function("Scene", "GetOwningQuest", get_owning_quest);
-    engine.register_native_function("Scene", "IsActionComplete", is_action_complete);
-    engine.register_native_function("Scene", "Pause", pause);
+    engine.register_if_exists("Scene", "ForceStart", force_start);
+    engine.register_if_exists("Scene", "Start", start);
+    engine.register_if_exists("Scene", "Stop", stop);
+    engine.register_if_exists("Scene", "IsPlaying", is_playing);
+    engine.register_if_exists("Scene", "GetOwningQuest", get_owning_quest);
+    engine.register_if_exists("Scene", "IsActionComplete", is_action_complete);
+    engine.register_if_exists("Scene", "Pause", pause);
 }
 
 /// `ForceStart`

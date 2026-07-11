@@ -3,16 +3,16 @@ use openfo4_script::{
     runtime::{Caller, Exception},
 };
 
-use crate::systems::scripting::classes::{Object, State};
+use crate::systems::scripting::classes::{EngineExt, Object, State};
 
 #[rustfmt::skip]
 pub fn register(engine: &mut Engine) {
-    engine.register_native_function("RefCollectionAlias", "AddRef", add_ref);
-    engine.register_native_function("RefCollectionAlias", "Find", find);
-    engine.register_native_function("RefCollectionAlias", "GetAt", get_at);
-    engine.register_native_function("RefCollectionAlias", "GetCount", get_count);
-    engine.register_native_function("RefCollectionAlias", "RemoveAll", remove_all);
-    engine.register_native_function("RefCollectionAlias", "RemoveRef", remove_ref);
+    engine.register_if_exists("RefCollectionAlias", "AddRef", add_ref);
+    engine.register_if_exists("RefCollectionAlias", "Find", find);
+    engine.register_if_exists("RefCollectionAlias", "GetAt", get_at);
+    engine.register_if_exists("RefCollectionAlias", "GetCount", get_count);
+    engine.register_if_exists("RefCollectionAlias", "RemoveAll", remove_all);
+    engine.register_if_exists("RefCollectionAlias", "RemoveRef", remove_ref);
 }
 
 /// `AddRef`

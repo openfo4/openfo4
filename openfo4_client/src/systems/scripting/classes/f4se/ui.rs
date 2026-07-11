@@ -1,19 +1,19 @@
 use openfo4_script::engine::Engine;
 use openfo4_script::runtime::{Caller, Exception};
 
-use crate::systems::scripting::classes::{Object, State};
+use crate::systems::scripting::classes::{EngineExt, Object, State};
 
 #[rustfmt::skip]
 pub fn register(engine: &mut Engine) {
-    engine.register_native_function("UI", "IsMenuOpen", is_menu_open);
-    engine.register_native_function("UI", "IsMenuRegistered", is_menu_registered);
-    engine.register_native_function("UI", "RegisterCustomMenu", register_custom_menu);
-    engine.register_native_function("UI", "OpenMenu", open_menu);
-    engine.register_native_function("UI", "CloseMenu", close_menu);
-    engine.register_native_function("UI", "Set", set);
-    engine.register_native_function("UI", "Get", get);
-    engine.register_native_function("UI", "Invoke", invoke);
-    engine.register_native_function("UI", "Load", load);
+    engine.register_if_exists("UI", "IsMenuOpen", is_menu_open);
+    engine.register_if_exists("UI", "IsMenuRegistered", is_menu_registered);
+    engine.register_if_exists("UI", "RegisterCustomMenu", register_custom_menu);
+    engine.register_if_exists("UI", "OpenMenu", open_menu);
+    engine.register_if_exists("UI", "CloseMenu", close_menu);
+    engine.register_if_exists("UI", "Set", set);
+    engine.register_if_exists("UI", "Get", get);
+    engine.register_if_exists("UI", "Invoke", invoke);
+    engine.register_if_exists("UI", "Load", load);
 }
 
 /// `IsMenuOpen`

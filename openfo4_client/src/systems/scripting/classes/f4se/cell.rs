@@ -3,10 +3,10 @@ use openfo4_script::{
     runtime::{Caller, Exception},
 };
 
-use crate::systems::scripting::classes::{Object, State};
+use crate::systems::scripting::classes::{EngineExt, Object, State};
 
 pub fn register(engine: &mut Engine) {
-    engine.register_native_function("Cell", "GetWaterType", get_water_type);
+    engine.register_if_exists("Cell", "GetWaterType", get_water_type);
 }
 
 /// `GetWaterType`

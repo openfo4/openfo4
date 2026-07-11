@@ -3,22 +3,22 @@ use openfo4_script::{
     runtime::{Caller, Exception},
 };
 
-use crate::systems::scripting::classes::{Object, State};
+use crate::systems::scripting::classes::{EngineExt, Object, State};
 
 pub fn register(engine: &mut Engine) {
-    engine.register_native_function("Cell", "EnableFastTravel", enable_fast_travel);
-    engine.register_native_function("Cell", "GetActorOwner", get_actor_owner);
-    engine.register_native_function("Cell", "GetFactionOwner", get_faction_owner);
-    engine.register_native_function("Cell", "IsAttached", is_attached);
-    engine.register_native_function("Cell", "IsInterior", is_interior);
-    engine.register_native_function("Cell", "IsLoaded", is_loaded);
-    engine.register_native_function("Cell", "Reset", reset);
-    engine.register_native_function("Cell", "SetActorOwner", set_actor_owner);
-    engine.register_native_function("Cell", "SetFogColor", set_fog_color);
-    engine.register_native_function("Cell", "SetFactionOwner", set_faction_owner);
-    engine.register_native_function("Cell", "SetFogPlanes", set_fog_planes);
-    engine.register_native_function("Cell", "SetFogPower", set_fog_power);
-    engine.register_native_function("Cell", "SetPublic", set_public);
+    engine.register_if_exists("Cell", "EnableFastTravel", enable_fast_travel);
+    engine.register_if_exists("Cell", "GetActorOwner", get_actor_owner);
+    engine.register_if_exists("Cell", "GetFactionOwner", get_faction_owner);
+    engine.register_if_exists("Cell", "IsAttached", is_attached);
+    engine.register_if_exists("Cell", "IsInterior", is_interior);
+    engine.register_if_exists("Cell", "IsLoaded", is_loaded);
+    engine.register_if_exists("Cell", "Reset", reset);
+    engine.register_if_exists("Cell", "SetActorOwner", set_actor_owner);
+    engine.register_if_exists("Cell", "SetFogColor", set_fog_color);
+    engine.register_if_exists("Cell", "SetFactionOwner", set_faction_owner);
+    engine.register_if_exists("Cell", "SetFogPlanes", set_fog_planes);
+    engine.register_if_exists("Cell", "SetFogPower", set_fog_power);
+    engine.register_if_exists("Cell", "SetPublic", set_public);
 }
 
 /// `EnableFastTravel`
