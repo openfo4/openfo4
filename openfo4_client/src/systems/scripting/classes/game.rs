@@ -120,9 +120,7 @@ pub fn register(engine: &mut Engine) {
 /// ```text
 /// Function(int aiAchievementID) native global
 /// ```
-fn add_achievement(_caller: Caller<'_, State>, _achievement_id: i32) -> Result<(), Exception> {
-    Ok(())
-}
+fn add_achievement(_caller: Caller<'_, State>, _achievement_id: i32) {}
 
 /// `AddPerkPoints`
 ///
@@ -347,10 +345,10 @@ fn force_first_person(caller: Caller<'_, State>) -> Result<(), Exception> {
 /// ```text
 /// int Function(int auiLevel) native global
 /// ```
-fn get_xp_for_level(_caller: Caller<'_, State>, level: i32) -> Result<i32, Exception> {
+fn get_xp_for_level(_caller: Caller<'_, State>, level: i32) -> i32 {
     let level = u32::try_from(level).unwrap_or_default();
     let xp = cumulative_xp_for_level(level);
-    Ok(xp.try_into().unwrap_or(i32::MAX))
+    xp.try_into().unwrap_or(i32::MAX)
 }
 
 /// `ShowFirstPersonGeometry`
@@ -376,8 +374,8 @@ fn show_all_map_markers(caller: Caller<'_, State>) -> Result<(), Exception> {
 /// ```text
 /// ActorValue Function() native global
 /// ```
-fn get_aggression_av(caller: Caller<'_, State>) -> Result<Object, Exception> {
-    Ok(caller.data().core_objects.aggression.addr())
+fn get_aggression_av(caller: Caller<'_, State>) -> Object {
+    caller.data().core_objects.aggression.addr()
 }
 
 /// `GetAgilityAV`
@@ -385,8 +383,8 @@ fn get_aggression_av(caller: Caller<'_, State>) -> Result<Object, Exception> {
 /// ```text
 /// ActorValue Function() native global
 /// ```
-fn get_agility_av(caller: Caller<'_, State>) -> Result<Object, Exception> {
-    Ok(caller.data().core_objects.agility.addr())
+fn get_agility_av(caller: Caller<'_, State>) -> Object {
+    caller.data().core_objects.agility.addr()
 }
 
 /// `GetCharismaAV`
@@ -394,8 +392,8 @@ fn get_agility_av(caller: Caller<'_, State>) -> Result<Object, Exception> {
 /// ```text
 /// ActorValue Function() native global
 /// ```
-fn get_charisma_av(caller: Caller<'_, State>) -> Result<Object, Exception> {
-    Ok(caller.data().core_objects.charisma.addr())
+fn get_charisma_av(caller: Caller<'_, State>) -> Object {
+    caller.data().core_objects.charisma.addr()
 }
 
 /// `GetConfidenceAV`
@@ -403,8 +401,8 @@ fn get_charisma_av(caller: Caller<'_, State>) -> Result<Object, Exception> {
 /// ```text
 /// ActorValue Function() native global
 /// ```
-fn get_confidence_av(caller: Caller<'_, State>) -> Result<Object, Exception> {
-    Ok(caller.data().core_objects.confidence.addr())
+fn get_confidence_av(caller: Caller<'_, State>) -> Object {
+    caller.data().core_objects.confidence.addr()
 }
 
 /// `GetDifficulty`
@@ -412,8 +410,8 @@ fn get_confidence_av(caller: Caller<'_, State>) -> Result<Object, Exception> {
 /// ```text
 /// int Function() native global
 /// ```
-fn get_difficulty(caller: Caller<'_, State>) -> Result<i32, Exception> {
-    Ok(caller.data().globals().game_rules.difficulty.to_i32())
+fn get_difficulty(caller: Caller<'_, State>) -> i32 {
+    caller.data().globals().game_rules.difficulty.to_i32()
 }
 
 /// `GetEnduranceAV`
@@ -421,8 +419,8 @@ fn get_difficulty(caller: Caller<'_, State>) -> Result<i32, Exception> {
 /// ```text
 /// ActorValue Function() native global
 /// ```
-fn get_endurance_av(caller: Caller<'_, State>) -> Result<Object, Exception> {
-    Ok(caller.data().core_objects.endurance.addr())
+fn get_endurance_av(caller: Caller<'_, State>) -> Object {
+    caller.data().core_objects.endurance.addr()
 }
 
 /// `GetForm`
@@ -488,8 +486,8 @@ fn get_game_setting_string(
 /// ```text
 /// ActorValue Function() native global
 /// ```
-fn get_health_av(caller: Caller<'_, State>) -> Result<Object, Exception> {
-    Ok(caller.data().core_objects.health.addr())
+fn get_health_av(caller: Caller<'_, State>) -> Object {
+    caller.data().core_objects.health.addr()
 }
 
 /// `GetIntelligenceAV`
@@ -497,8 +495,8 @@ fn get_health_av(caller: Caller<'_, State>) -> Result<Object, Exception> {
 /// ```text
 /// ActorValue Function() native global
 /// ```
-fn get_intelligence_av(caller: Caller<'_, State>) -> Result<Object, Exception> {
-    Ok(caller.data().core_objects.intelligence.addr())
+fn get_intelligence_av(caller: Caller<'_, State>) -> Object {
+    caller.data().core_objects.intelligence.addr()
 }
 
 /// `GetLuckAV`
@@ -506,8 +504,8 @@ fn get_intelligence_av(caller: Caller<'_, State>) -> Result<Object, Exception> {
 /// ```text
 /// ActorValue Function() native global
 /// ```
-fn get_luck_av(caller: Caller<'_, State>) -> Result<Object, Exception> {
-    Ok(caller.data().core_objects.luck.addr())
+fn get_luck_av(caller: Caller<'_, State>) -> Object {
+    caller.data().core_objects.luck.addr()
 }
 
 /// `GetPerceptionAV`
@@ -515,8 +513,8 @@ fn get_luck_av(caller: Caller<'_, State>) -> Result<Object, Exception> {
 /// ```text
 /// ActorValue Function() native global
 /// ```
-fn get_perception_av(caller: Caller<'_, State>) -> Result<Object, Exception> {
-    Ok(caller.data().core_objects.perception.addr())
+fn get_perception_av(caller: Caller<'_, State>) -> Object {
+    caller.data().core_objects.perception.addr()
 }
 
 /// `GetPlayer`
@@ -593,8 +591,8 @@ fn get_real_hours_passed(caller: Caller<'_, State>) -> Result<f32, Exception> {
 /// ```text
 /// ActorValue Function() native global
 /// ```
-fn get_suspicious_av(caller: Caller<'_, State>) -> Result<Object, Exception> {
-    Ok(caller.data().core_objects.suspicious.addr())
+fn get_suspicious_av(caller: Caller<'_, State>) -> Object {
+    caller.data().core_objects.suspicious.addr()
 }
 
 /// `GetStrengthAV`
@@ -602,8 +600,8 @@ fn get_suspicious_av(caller: Caller<'_, State>) -> Result<Object, Exception> {
 /// ```text
 /// ActorValue Function() native global
 /// ```
-fn get_strength_av(caller: Caller<'_, State>) -> Result<Object, Exception> {
-    Ok(caller.data().core_objects.strength.addr())
+fn get_strength_av(caller: Caller<'_, State>) -> Object {
+    caller.data().core_objects.strength.addr()
 }
 
 /// `IncrementSkill`
@@ -837,18 +835,14 @@ fn play_bink(
 /// ```text
 /// Function() native global
 /// ```
-fn precache_char_gen(_caller: Caller<'_, State>) -> Result<(), Exception> {
-    Ok(())
-}
+fn precache_char_gen(_caller: Caller<'_, State>) {}
 
 /// `PrecacheCharGenClear`
 ///
 /// ```text
 /// Function() native global
 /// ```
-fn precache_char_gen_clear(_caller: Caller<'_, State>) -> Result<(), Exception> {
-    Ok(())
-}
+fn precache_char_gen_clear(_caller: Caller<'_, State>) {}
 
 /// `QueryStat`
 ///
@@ -882,9 +876,7 @@ fn request_auto_save(caller: Caller<'_, State>) -> Result<(), Exception> {
 /// ```text
 /// Function(string asModelName) native global
 /// ```
-fn request_model(_caller: Caller<'_, State>, _model_name: Object) -> Result<(), Exception> {
-    Ok(())
-}
+fn request_model(_caller: Caller<'_, State>, _model_name: Object) {}
 
 /// `RequestSave`
 ///

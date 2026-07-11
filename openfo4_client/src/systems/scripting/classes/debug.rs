@@ -76,18 +76,14 @@ fn player_move_to_and_wait(
 /// ```text
 /// Function(string asLogName) native global
 /// ```
-fn close_user_log(_caller: Caller<'_, State>, _log_name: Object) -> Result<(), Exception> {
-    Ok(())
-}
+fn close_user_log(_caller: Caller<'_, State>, _log_name: Object) {}
 
 /// `DumpAliasData`
 ///
 /// ```text
 /// Function(Quest akQuest) native global
 /// ```
-fn dump_alias_data(_caller: Caller<'_, State>, _quest: Object) -> Result<(), Exception> {
-    Ok(())
-}
+fn dump_alias_data(_caller: Caller<'_, State>, _quest: Object) {}
 
 /// `DumpEventRegistrations`
 ///
@@ -184,8 +180,8 @@ fn notification(caller: Caller<'_, State>, as_notification_text: Object) -> Resu
 /// ```text
 /// bool Function(string asLogName) native global
 /// ```
-fn open_user_log(_caller: Caller<'_, State>, _log_name: Object) -> Result<bool, Exception> {
-    Ok(true)
+fn open_user_log(_caller: Caller<'_, State>, _log_name: Object) -> bool {
+    true
 }
 
 /// `QuitGame`
@@ -220,75 +216,49 @@ fn set_god_mode(caller: Caller<'_, State>, ab_god_mode: bool) -> Result<(), Exce
 /// ```text
 /// Function(string asScriptName) native global
 /// ```
-fn start_script_profiling(
-    _caller: Caller<'_, State>,
-    _script_name: Object,
-) -> Result<(), Exception> {
-    Ok(())
-}
+fn start_script_profiling(_caller: Caller<'_, State>, _script_name: Object) {}
 
 /// `StartStackProfiling`
 ///
 /// ```text
 /// Function() native global
 /// ```
-fn start_stack_profiling(_caller: Caller<'_, State>) -> Result<(), Exception> {
-    Ok(())
-}
+fn start_stack_profiling(_caller: Caller<'_, State>) {}
 
 /// `StartStackRootProfiling`
 ///
 /// ```text
 /// Function(string asScriptName, ScriptObject akObj) native global
 /// ```
-fn start_stack_root_profiling(
-    _caller: Caller<'_, State>,
-    _script_name: Object,
-    _object: Object,
-) -> Result<(), Exception> {
-    Ok(())
-}
+fn start_stack_root_profiling(_caller: Caller<'_, State>, _script_name: Object, _object: Object) {}
 
 /// `StopScriptProfiling`
 ///
 /// ```text
 /// Function(string asScriptName) native global
 /// ```
-fn stop_script_profiling(
-    _caller: Caller<'_, State>,
-    _script_name: Object,
-) -> Result<(), Exception> {
-    Ok(())
-}
+fn stop_script_profiling(_caller: Caller<'_, State>, _script_name: Object) {}
 
 /// `StopStackProfiling`
 ///
 /// ```text
 /// Function() native global
 /// ```
-fn stop_stack_profiling(_caller: Caller<'_, State>) -> Result<(), Exception> {
-    Ok(())
-}
+fn stop_stack_profiling(_caller: Caller<'_, State>) {}
 
 /// `StopStackRootProfiling`
 ///
 /// ```text
 /// Function(string asScriptName, ScriptObject akObj) native global
 /// ```
-fn stop_stack_root_profiling(
-    _caller: Caller<'_, State>,
-    _script_name: Object,
-    _object: Object,
-) -> Result<(), Exception> {
-    Ok(())
-}
+fn stop_stack_root_profiling(_caller: Caller<'_, State>, _script_name: Object, _object: Object) {}
 
 /// `Trace`
 ///
 /// ```text
 /// Function(string asTextToPrint, int aiSeverity) native global
 /// ```
-fn trace(caller: Caller<'_, State>, text: Object, severity: i32) -> Result<(), Exception> {
+fn trace(caller: Caller<'_, State>, text: Object, severity: i32) {
     let msg = caller.string(text);
 
     match severity {
@@ -305,8 +275,6 @@ fn trace(caller: Caller<'_, State>, text: Object, severity: i32) -> Result<(), E
             tracing::info!("[UNKNOWN SEVERITY] {}", msg);
         }
     }
-
-    Ok(())
 }
 
 /// `TraceFunction`
@@ -314,7 +282,7 @@ fn trace(caller: Caller<'_, State>, text: Object, severity: i32) -> Result<(), E
 /// ```text
 /// Function(string asTextToPrint, int aiSeverity) native global
 /// ```
-fn trace_function(caller: Caller<'_, State>, text: Object, severity: i32) -> Result<(), Exception> {
+fn trace_function(caller: Caller<'_, State>, text: Object, severity: i32) {
     trace(caller, text, severity)
 }
 
@@ -323,7 +291,7 @@ fn trace_function(caller: Caller<'_, State>, text: Object, severity: i32) -> Res
 /// ```text
 /// Function(string asTextToPrint, int aiSeverity) native global
 /// ```
-fn trace_stack(caller: Caller<'_, State>, text: Object, severity: i32) -> Result<(), Exception> {
+fn trace_stack(caller: Caller<'_, State>, text: Object, severity: i32) {
     trace(caller, text, severity)
 }
 
@@ -332,14 +300,9 @@ fn trace_stack(caller: Caller<'_, State>, text: Object, severity: i32) -> Result
 /// ```text
 /// bool Function(string asUserLog, string asTextToPrint, int aiSeverity) native global
 /// ```
-fn trace_user(
-    caller: Caller<'_, State>,
-    _user_log: Object,
-    text: Object,
-    severity: i32,
-) -> Result<bool, Exception> {
-    trace(caller, text, severity)?;
-    Ok(true)
+fn trace_user(caller: Caller<'_, State>, _user_log: Object, text: Object, severity: i32) -> bool {
+    trace(caller, text, severity);
+    true
 }
 
 /// `ShowRefPosition`
