@@ -1,7 +1,8 @@
 use std::sync::Arc;
 
-use async_lock::Mutex;
+use async_lock::Mutex as AsyncMutex;
 use game_common::string::Lowercase;
+use hashbrown::hash_map::Entry;
 use hashbrown::{HashMap, HashSet};
 use openfo4_core::record::RecordId;
 use openfo4_esp::vmad::{Property, Script, Value};
@@ -10,6 +11,7 @@ use openfo4_script::compiler::resources::{PropertyType, TypeId};
 use openfo4_script::engine::{Engine, Instance};
 use openfo4_script::runtime::object::{IntoValue, ObjectArrayBuilder, ObjectBuilder};
 use openfo4_script::runtime::{ObjectAddr, ObjectRef};
+use parking_lot::Mutex;
 use thiserror::Error;
 
 use crate::state::esp::EspLoader;
@@ -43,14 +45,29 @@ pub(super) struct ScriptObjectInner {
 
 #[derive(Debug)]
 pub struct ScriptLoader {
-    pub(super) engine: Arc<Mutex<Engine>>,
+    pub(super) engine: Arc<AsyncMutex<Engine>>,
     /// Cache of compiled classes.
-    pub(super) classes: Mutex<HashMap<String, Instance>>,
+    pub(super) classes: AsyncMutex<HashMap<String, Instance>>,
     pub(super) esp_loader: Arc<EspLoader>,
-    pub(super) state: Mutex<Option<State>>,
+    pub(super) state: AsyncMutex<Option<State>>,
+    load_events: Mutex<HashMap<RecordId, LoadEvent>>,
 }
 
 impl ScriptLoader {
+    pub(super) fn new(
+        engine: Arc<AsyncMutex<Engine>>,
+        esp_loader: Arc<EspLoader>,
+        state: State,
+    ) -> Self {
+        Self {
+            engine,
+            classes: AsyncMutex::default(),
+            esp_loader,
+            state: AsyncMutex::new(Some(state)),
+            load_events: Default::default(),
+        }
+    }
+
     /// Loads the script object attached to a record.
     ///
     /// Returns `None` if no script is attached to the record.
@@ -65,6 +82,7 @@ impl ScriptLoader {
         let res = instantiate_form(
             &mut engine,
             &self.esp_loader,
+            &self.load_events,
             record,
             &mut classes,
             state.as_mut().unwrap(),
@@ -89,6 +107,7 @@ impl ScriptLoader {
         let res = instantiate_form(
             &mut engine,
             &self.esp_loader,
+            &self.load_events,
             record,
             &mut classes,
             state.as_mut().unwrap(),
@@ -167,9 +186,23 @@ impl RecordInstantiationKind {
     }
 }
 
+#[derive(Debug, Default)]
+struct LoadEvent {
+    addrs: Option<HashMap<String, ObjectAddr>>,
+    /// Event triggered when the object has received an [`ObjectAddr`].
+    loaded: event_listener::Event,
+    /// Event triggered when the object has fully completed building.
+    ///
+    /// Accessing the [`ObjectAddr`] of the object before this event was received is invalid.
+    built: event_listener::Event,
+    // /// Number of references keeping this event alive, including the publisher.
+    // ref_count: NonZeroUsize,
+}
+
 async fn instantiate_form(
     engine: &mut Engine,
     esp_loader: &EspLoader,
+    load_events: &Mutex<HashMap<RecordId, LoadEvent>>,
     root: RecordId,
     compiled_classes: &mut HashMap<String, Instance>,
     state: &mut State,
@@ -195,17 +228,45 @@ async fn instantiate_form(
     let mut records = HashMap::new();
     let mut record_aliases = HashMap::new();
 
+    let mut publish_listeners = Vec::new();
+    let mut built_listeners = Vec::new();
+
     let mut queue = vec![root];
     while let Some(record) = queue.pop() {
-        tracing::debug!("loading script for {:?}", record);
-
         if state.objects.get_by_record(record).is_some() {
             continue;
         }
 
+        {
+            // Try to synchronize with another task that is already loading this record.
+            // If another task is already loading the record, we skip it locally and
+            // let the other task provide it to us later, otherwise we setup an event
+            // for another task to synchronize to.
+            let mut events = load_events.lock();
+            match events.entry(record) {
+                Entry::Occupied(event) => {
+                    publish_listeners.push((record, event.get().loaded.listen()));
+                    built_listeners.push((record, event.get().built.listen()));
+                    continue;
+                }
+                Entry::Vacant(event) => {
+                    event.insert(LoadEvent::default());
+                }
+            }
+        }
+
+        tracing::debug!("loading script for {:?}", record);
+
         let Ok(record) = esp_loader.lookup(None, record).await.inspect_err(|err| {
             tracing::warn!("failed to load {:?}: {}", record, err);
         }) else {
+            {
+                let mut events = load_events.lock();
+                let event = events.remove(&record).unwrap();
+                event.loaded.notify(event.loaded.total_listeners());
+                event.built.notify(event.built.total_listeners());
+            }
+
             continue;
         };
 
@@ -511,6 +572,47 @@ async fn instantiate_form(
         partial_alias_addrs.insert(*key, addrs);
     }
 
+    // At this point we are ready to build our objects, but we must wait for
+    // all objects that we synchronized with to become ready.
+    // Before this happens we MUST make our local addresses available,
+    // otherwise we may deadlock, since the other task may also wait for our
+    // local addresses.
+    {
+        let mut events = load_events.lock();
+
+        for (record, addrs) in &partial_object_addrs {
+            // This key must still exist, only we are allowed to remove it.
+            let event = events.get_mut(record).unwrap();
+            event.addrs = Some(addrs.clone());
+
+            // NOTE: The number of listeners cannot change, because we hold
+            // an exclusive lock.
+            event.loaded.notify(event.loaded.total_listeners());
+        }
+    }
+
+    for (_, listener) in &mut publish_listeners {
+        listener.await;
+    }
+
+    {
+        let mut events = load_events.lock();
+
+        for (record, _) in publish_listeners {
+            // If the event is already removed, this means that the loading
+            // has finished and the object is already fully loaded and available
+            // in the object pool.
+            let Some(event) = events.get_mut(&record) else {
+                continue;
+            };
+
+            let addrs = event.addrs.as_ref().unwrap();
+            partial_object_addrs.insert(record, addrs.clone());
+        }
+    }
+
+    let mut built_objects = Vec::new();
+
     for (record, scripts) in records {
         let mut final_instances = Vec::new();
 
@@ -561,11 +663,7 @@ async fn instantiate_form(
             debug_assert!(state.objects.get_by_record(record).is_none());
         }
 
-        let id = state.objects.insert(engine, final_instances, rid);
-
-        if record == root {
-            root_id = Some(id);
-        }
+        built_objects.push((final_instances, rid, None));
     }
 
     let mut compiled_aliases = HashMap::new();
@@ -608,11 +706,54 @@ async fn instantiate_form(
             });
         }
 
-        let id = state.objects.insert(engine, final_instances, None);
-        compiled_aliases.insert(
-            key,
-            ScriptObject(Arc::new(ScriptObjectInner { base: None, id })),
-        );
+        built_objects.push((final_instances, None, Some(key)));
+    }
+
+    {
+        let mut events = load_events.lock();
+
+        for (record, _) in &partial_object_addrs {
+            let event = events.get_mut(record).unwrap();
+            event.built.notify(event.built.total_listeners());
+        }
+    }
+
+    for (_, listener) in built_listeners {
+        listener.await;
+    }
+
+    // Once we insert the new objects into the object pool, they are allowed
+    // to immediately be used by another thread, so must wait until the objects
+    // are fully built.
+    for (instances, record, alias_key) in built_objects {
+        let id = state.objects.insert(engine, instances, record);
+
+        if record == Some(root) {
+            root_id = Some(id);
+        }
+
+        if let Some(key) = alias_key {
+            compiled_aliases.insert(
+                key,
+                ScriptObject(Arc::new(ScriptObjectInner { base: None, id })),
+            );
+        }
+    }
+
+    {
+        let mut events = load_events.lock();
+
+        // Signal all other tasks that have started waiting for our objects after
+        // we already signaled for the first time. Not doing so would cause them
+        // to deadlock.
+        for (record, _) in partial_object_addrs {
+            // We are the owner of the event, so only we are allowed to remove it.
+            let event = events.remove(&record).unwrap();
+
+            // The listener count cannot change, because we hold an exclusive lock.
+            event.loaded.notify(event.loaded.total_listeners());
+            event.built.notify(event.built.total_listeners());
+        }
     }
 
     let root_id = root_id?;
