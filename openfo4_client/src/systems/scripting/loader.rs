@@ -46,21 +46,20 @@ pub(super) struct ScriptObjectInner {
 #[derive(Debug)]
 pub struct ScriptLoader {
     pub(super) engine: Arc<Engine>,
-    /// Cache of compiled classes.
-    pub(super) classes: AsyncMutex<HashMap<String, Instance>>,
     pub(super) esp_loader: Arc<EspLoader>,
     pub(super) state: AsyncMutex<Option<State>>,
     load_events: Mutex<HashMap<RecordId, LoadEvent>>,
+    cache: CompilationCache,
 }
 
 impl ScriptLoader {
     pub(super) fn new(engine: Arc<Engine>, esp_loader: Arc<EspLoader>, state: State) -> Self {
         Self {
             engine,
-            classes: AsyncMutex::default(),
             esp_loader,
             state: AsyncMutex::new(Some(state)),
             load_events: Default::default(),
+            cache: Default::default(),
         }
     }
 
@@ -71,7 +70,6 @@ impl ScriptLoader {
     pub async fn load(&self, record: RecordId) -> Option<LoadResult> {
         tracing::debug!("loading script for {:?}", record);
 
-        let mut classes = self.classes.lock().await;
         let mut state = self.state.lock().await;
 
         let res = instantiate_form(
@@ -79,7 +77,7 @@ impl ScriptLoader {
             &self.esp_loader,
             &self.load_events,
             record,
-            &mut classes,
+            &self.cache,
             state.as_mut().unwrap(),
             RecordInstantiationKind::BaseObject,
         )
@@ -95,7 +93,6 @@ impl ScriptLoader {
     pub async fn load_instance(&self, record: RecordId) -> Option<ScriptObject> {
         tracing::debug!("loading script for {:?}", record);
 
-        let mut classes = self.classes.lock().await;
         let mut state = self.state.lock().await;
 
         let res = instantiate_form(
@@ -103,7 +100,7 @@ impl ScriptLoader {
             &self.esp_loader,
             &self.load_events,
             record,
-            &mut classes,
+            &self.cache,
             state.as_mut().unwrap(),
             RecordInstantiationKind::Instance,
         )
@@ -192,12 +189,39 @@ struct LoadEvent {
     // ref_count: NonZeroUsize,
 }
 
+#[derive(Debug, Default)]
+struct CompilationCache {
+    classes: Mutex<HashMap<String, Instance>>,
+}
+
+impl CompilationCache {
+    async fn get_or_compile(&self, engine: &Engine, class: &str) -> Instance {
+        {
+            if let Some(instance) = self.classes.lock().get(class) {
+                return instance.clone();
+            }
+        }
+
+        let instance = engine.compile(class, &COMPILER_OPTIONS).await;
+
+        let mut instances = self.classes.lock();
+
+        // If two threads compile the same class twice and overwrite
+        // each other that is okay.
+        // Engine::compile returns the same instance for both
+        // compilations.
+        instances.insert(class.to_owned(), instance.clone());
+
+        instance
+    }
+}
+
 async fn instantiate_form(
     engine: &Engine,
     esp_loader: &EspLoader,
     load_events: &Mutex<HashMap<RecordId, LoadEvent>>,
     root: RecordId,
-    compiled_classes: &mut HashMap<String, Instance>,
+    compiled_classes: &CompilationCache,
     state: &mut State,
     kind: RecordInstantiationKind,
 ) -> Option<LoadResult> {
@@ -465,14 +489,9 @@ async fn instantiate_form(
             record_script_name(&record.local.data).unwrap()
         };
 
-        let instance = match compiled_classes.get(base_class_name) {
-            Some(instance) => instance,
-            None => {
-                let instance = engine.compile(base_class_name, &COMPILER_OPTIONS).await;
-                compiled_classes.insert(base_class_name.to_owned(), instance);
-                compiled_classes.get(base_class_name).unwrap()
-            }
-        };
+        let instance = compiled_classes
+            .get_or_compile(engine, base_class_name)
+            .await;
         let layout = engine.get_type(base_class_name).unwrap();
         let builder = engine.object_pool().insert(layout.clone());
 
@@ -486,14 +505,7 @@ async fn instantiate_form(
         );
 
         for script in record_scripts.into_iter().flat_map(|v| v) {
-            let instance = match compiled_classes.get(&script.name) {
-                Some(instance) => instance,
-                None => {
-                    let instance = engine.compile(&script.name, &COMPILER_OPTIONS).await;
-                    compiled_classes.insert(script.name.clone(), instance);
-                    compiled_classes.get(&script.name).unwrap()
-                }
-            };
+            let instance = compiled_classes.get_or_compile(engine, &script.name).await;
             let layout = engine.get_type(&script.name).unwrap();
             let builder = engine.object_pool().insert(layout.clone());
 
@@ -514,14 +526,9 @@ async fn instantiate_form(
             let mut scripts = HashMap::new();
 
             let base_class_name = alias.ty.script_name();
-            let instance = match compiled_classes.get(base_class_name) {
-                Some(instance) => instance,
-                None => {
-                    let instance = engine.compile(base_class_name, &COMPILER_OPTIONS).await;
-                    compiled_classes.insert(base_class_name.to_owned(), instance);
-                    compiled_classes.get(base_class_name).unwrap()
-                }
-            };
+            let instance = compiled_classes
+                .get_or_compile(engine, base_class_name)
+                .await;
             let layout = engine.get_type(base_class_name).unwrap();
             let builder = engine.object_pool().insert(layout.clone());
 
@@ -535,14 +542,7 @@ async fn instantiate_form(
             );
 
             for script in alias.scripts.into_iter() {
-                let instance = match compiled_classes.get(&script.name) {
-                    Some(instance) => instance,
-                    None => {
-                        let instance = engine.compile(&script.name, &COMPILER_OPTIONS).await;
-                        compiled_classes.insert(script.name.clone(), instance);
-                        compiled_classes.get(&script.name).unwrap()
-                    }
-                };
+                let instance = compiled_classes.get_or_compile(engine, &script.name).await;
                 let layout = engine.get_type(&script.name).unwrap();
                 let builder = engine.object_pool().insert(layout.clone());
 
