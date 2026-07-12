@@ -281,39 +281,40 @@ impl Executor {
             // Dispatch one event for every script object.
             let scripts = state.objects.get_by_id(dispatch.receiver).unwrap();
             for script in scripts.iter() {
-                for (receiver, event) in state.registration.get(
+                state.registration.for_each(
                     &dispatch.kind,
                     &EventSender::Object(script.get().object.addr()),
-                ) {
-                    let receiver = state.objects.get_by_addr(*receiver).unwrap();
+                    |receiver, event| {
+                        let receiver = state.objects.get_by_addr(receiver).unwrap();
 
-                    if receiver.get().object.addr() == script.get().object.addr() {
-                        let tid = TaskId(self.tasks.insert(TaskState::default()));
+                        if receiver.get().object.addr() == script.get().object.addr() {
+                            let tid = TaskId(self.tasks.insert(TaskState::default()));
 
-                        self.queue.push_back(ScheduledTask {
-                            object: receiver.id(),
-                            script: receiver.name().to_owned(),
-                            invocation_id: None,
-                            func_name: event.kind.func_name().to_owned(),
-                            args: dispatch.args.to_vec(),
-                            id: tid,
-                        });
-                    } else {
-                        let mut args = dispatch.args.to_vec();
-                        args.insert(0, Value::ObjectRef(script.get().object.clone()));
+                            self.queue.push_back(ScheduledTask {
+                                object: receiver.id(),
+                                script: receiver.name().to_owned(),
+                                invocation_id: None,
+                                func_name: event.kind.func_name().to_owned(),
+                                args: dispatch.args.to_vec(),
+                                id: tid,
+                            });
+                        } else {
+                            let mut args = dispatch.args.to_vec();
+                            args.insert(0, Value::ObjectRef(script.get().object.clone()));
 
-                        let tid = TaskId(self.tasks.insert(TaskState::default()));
+                            let tid = TaskId(self.tasks.insert(TaskState::default()));
 
-                        self.queue.push_back(ScheduledTask {
-                            object: receiver.id(),
-                            script: receiver.name().to_owned(),
-                            invocation_id: None,
-                            func_name: event.kind.remote_func_name().to_owned(),
-                            args,
-                            id: tid,
-                        });
-                    }
-                }
+                            self.queue.push_back(ScheduledTask {
+                                object: receiver.id(),
+                                script: receiver.name().to_owned(),
+                                invocation_id: None,
+                                func_name: event.kind.remote_func_name().to_owned(),
+                                args,
+                                id: tid,
+                            });
+                        }
+                    },
+                );
 
                 for alias in state
                     .aliases

@@ -1,53 +1,105 @@
 use std::num::NonZeroU32;
 use std::str::FromStr;
 
-use hashbrown::HashMap;
 use hashbrown::hash_map::Entry;
+use hashbrown::{HashMap, HashSet};
 use openfo4_script::runtime::ObjectAddr;
+use parking_lot::Mutex;
 use slab::Slab;
 
-#[derive(Clone, Debug, Default)]
+#[derive(Debug, Default)]
 pub struct RegistrationSet {
-    events: Slab<(ObjectAddr, Event)>,
-    by_object: HashMap<ObjectAddr, Vec<usize>>,
+    events: Mutex<Slab<(ObjectAddr, Event)>>,
+    by_object: Mutex<HashMap<ObjectAddr, HashSet<usize>>>,
+    by_sender: Mutex<HashMap<EventSender, HashSet<usize>>>,
 }
 
 impl RegistrationSet {
-    pub fn register(&mut self, object: ObjectAddr, event: Event) {
-        // Only register for event once.
-        self.unregister(object, event.clone());
+    pub fn register(&self, object: ObjectAddr, event: Event) {
+        let mut events = self.events.lock();
+        let mut by_object = self.by_object.lock();
+        let mut by_sender = self.by_sender.lock();
 
-        let index = self.events.insert((object, event));
-        self.by_object.entry(object).or_default().push(index);
+        // Only register for event once.
+        if let Entry::Occupied(mut indices) = by_object.entry(object) {
+            indices.get_mut().retain(|index| {
+                let e = &events.get(*index).unwrap();
+
+                if e.1.kind == event.kind && e.1.sender == event.sender {
+                    let (_, event) = events.remove(*index);
+
+                    let events_of_sender = by_sender.get_mut(&event.sender).unwrap();
+                    events_of_sender.remove(index);
+                    if events_of_sender.is_empty() {
+                        by_sender.remove(&event.sender);
+                    }
+
+                    false
+                } else {
+                    true
+                }
+            });
+
+            if indices.get().is_empty() {
+                indices.remove();
+            }
+        };
+
+        let sender = event.sender;
+
+        let index = events.insert((object, event));
+        by_object.entry(object).or_default().insert(index);
+        by_sender.entry(sender).or_default().insert(index);
     }
 
-    pub fn unregister(&mut self, object: ObjectAddr, event: Event) {
+    pub fn unregister(&self, object: ObjectAddr, event: Event) {
         self.unregister_matching(object, |e| e.kind == event.kind && e.sender == event.sender);
     }
 
-    pub fn unregister_all(&mut self, object: ObjectAddr) {
-        let Some(indices) = self.by_object.remove(&object) else {
+    pub fn unregister_all(&self, object: ObjectAddr) {
+        let mut events = self.events.lock();
+        let mut by_object = self.by_object.lock();
+        let mut by_sender = self.by_sender.lock();
+
+        let Some(indices) = by_object.remove(&object) else {
             return;
         };
 
         for index in indices {
-            self.events.remove(index);
+            let (_, event) = events.remove(index);
+
+            let events_of_sender = by_sender.get_mut(&event.sender).unwrap();
+            events_of_sender.remove(&index);
+            if events_of_sender.is_empty() {
+                by_sender.remove(&event.sender);
+            }
         }
     }
 
-    pub fn unregister_matching<F>(&mut self, object: ObjectAddr, mut f: F)
+    pub fn unregister_matching<F>(&self, object: ObjectAddr, mut f: F)
     where
         F: FnMut(&Event) -> bool,
     {
-        let Entry::Occupied(mut indices) = self.by_object.entry(object) else {
+        let mut events = self.events.lock();
+        let mut by_object = self.by_object.lock();
+        let mut by_sender = self.by_sender.lock();
+
+        let Entry::Occupied(mut indices) = by_object.entry(object) else {
             return;
         };
 
         indices.get_mut().retain(|index| {
-            let e = &self.events[*index].1;
+            let e = &events.get(*index).unwrap();
 
-            if f(e) {
-                self.events.remove(*index);
+            if f(&e.1) {
+                let (_, event) = events.remove(*index);
+
+                let events_of_sender = by_sender.get_mut(&event.sender).unwrap();
+                events_of_sender.remove(index);
+                if events_of_sender.is_empty() {
+                    by_sender.remove(&event.sender);
+                }
+
                 false
             } else {
                 true
@@ -59,17 +111,28 @@ impl RegistrationSet {
         }
     }
 
-    pub fn get(
-        &mut self,
-        kind: &EventKind,
-        sender: &EventSender,
-    ) -> impl Iterator<Item = &(ObjectAddr, Event)> {
-        self.events
-            .iter()
-            .filter(|(_, v)| &v.1.kind == kind && &v.1.sender == sender)
-            .map(|(_, v)| v)
-            .collect::<Vec<_>>()
-            .into_iter()
+    pub fn for_each<F>(&mut self, kind: &EventKind, sender: &EventSender, mut f: F)
+    where
+        F: FnMut(ObjectAddr, &Event),
+    {
+        let events = self.events.lock();
+        let by_sender = self.by_sender.lock();
+
+        let Some(indices) = by_sender.get(sender) else {
+            return;
+        };
+
+        for index in indices {
+            let (object, event) = events.get(*index).unwrap();
+
+            debug_assert_eq!(event.sender, *sender);
+
+            if &event.kind != kind {
+                continue;
+            }
+
+            f(*object, event);
+        }
     }
 }
 
