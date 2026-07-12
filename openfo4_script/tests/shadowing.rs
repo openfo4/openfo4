@@ -1,3 +1,4 @@
+use futures_lite::future::block_on;
 use openfo4_script::assembler::assemble;
 use openfo4_script::compiler::CompilerOptions;
 use openfo4_script::engine::{Engine, Options};
@@ -41,7 +42,7 @@ fn variable_shadowing() {
 
     engine.register(&module);
 
-    let instance = engine.compile("SubSub", &Options::default());
+    let instance = block_on(engine.compile("SubSub", &Options::default()));
     let func = instance.get_func("GetA").unwrap();
 
     let type_id = engine.get_type("SubSub").unwrap();
@@ -81,7 +82,7 @@ fn load_property_from_parent_class() {
 
     engine.register(&module);
 
-    let instance = engine.compile("B", &Options::default());
+    let instance = block_on(engine.compile("B", &Options::default()));
     let func = instance.get_func("F").unwrap();
     let type_id = engine.get_type("B").unwrap();
 

@@ -1,3 +1,4 @@
+use futures_lite::future::block_on;
 use openfo4_script::assembler::assemble;
 use openfo4_script::compiler::CompilerOptions;
 use openfo4_script::engine::{Engine, Options};
@@ -28,7 +29,7 @@ fn default_class_values() {
     );
 
     engine.register(&module);
-    engine.compile("MyClass", &Options::default());
+    block_on(engine.compile("MyClass", &Options::default()));
     let layout = engine.get_type("MyClass").unwrap();
 
     let mut builder = engine.object_pool().insert(layout.clone());
@@ -89,7 +90,7 @@ fn field_without_property() {
 
     engine.register(&module);
 
-    let instance = engine.compile("B", &Options::default());
+    let instance = block_on(engine.compile("B", &Options::default()));
     let type_id = engine.get_type("B").unwrap();
 
     let mut builder = engine.object_pool().insert(type_id);

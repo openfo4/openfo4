@@ -1,3 +1,4 @@
+use futures_lite::future::block_on;
 use openfo4_script::assembler::assemble;
 use openfo4_script::compiler::CompilerOptions;
 use openfo4_script::engine::{Engine, Options};
@@ -21,7 +22,7 @@ fn pass_null_param() {
     );
     engine.register(&module);
 
-    let instance = engine.compile("A", &Options::default());
+    let instance = block_on(engine.compile("A", &Options::default()));
     let func = instance.get_func("F").unwrap();
     let func = func.typed::<ObjectAddr, ()>().unwrap();
 
@@ -55,7 +56,7 @@ fn host_function_returns_null() {
     engine.register(&module);
     engine.register_native_function("A", "F", f).unwrap();
 
-    let instance = engine.compile("A", &Options::default());
+    let instance = block_on(engine.compile("A", &Options::default()));
     let func = instance.get_func("G").unwrap();
     let func = func.typed::<(), ObjectAddr>().unwrap();
 

@@ -1,3 +1,4 @@
+use futures_lite::future::block_on;
 use openfo4_script::assembler::assemble;
 use openfo4_script::compiler::CompilerOptions;
 use openfo4_script::engine::{Engine, Options};
@@ -28,7 +29,7 @@ fn cast_array() {
 
     engine.register(&module);
 
-    let instance = engine.compile("MyClass", &Options::default());
+    let instance = block_on(engine.compile("MyClass", &Options::default()));
     let func = instance.get_func("MyFunction").unwrap();
     let layout = engine.get_type("MyClass").unwrap();
 
@@ -85,7 +86,7 @@ fn class_upcast() {
 
     engine.register(&module);
 
-    let instance = engine.compile("C", &Options::default());
+    let instance = block_on(engine.compile("C", &Options::default()));
     let func = instance.get_func("F").unwrap();
     let type_id = engine.get_type("C").unwrap();
 
@@ -121,7 +122,7 @@ fn class_downcast() {
 
     engine.register(&module);
 
-    let instance = engine.compile("C", &Options::default());
+    let instance = block_on(engine.compile("C", &Options::default()));
     let func = instance.get_func("F").unwrap();
     let type_id = engine.get_type("C").unwrap();
 
@@ -157,8 +158,8 @@ fn class_downcast_fail() {
 
     engine.register(&module);
 
-    engine.compile("A", &Options::default());
-    let instance = engine.compile("C", &Options::default());
+    block_on(engine.compile("A", &Options::default()));
+    let instance = block_on(engine.compile("C", &Options::default()));
     let func = instance.get_func("F").unwrap();
     let type_id = engine.get_type("A").unwrap();
 
@@ -287,7 +288,7 @@ where
 
     engine.register(&module);
 
-    let instance = engine.compile("MyClass", &Options::default());
+    let instance = block_on(engine.compile("MyClass", &Options::default()));
     let func = instance.get_func("MyFunc").unwrap();
 
     let mut stack = engine.create_stack();

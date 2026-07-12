@@ -1,14 +1,16 @@
 use std::fmt::Debug;
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
 
+use async_lock::Mutex;
 use game_common::cell::UnsafeRefCell;
 use game_common::string::Lowercase;
 use hashbrown::{HashMap, HashSet};
 use openfo4_jit::{CompilerConfig, Type};
 use openfo4_pex::{Class, Module};
+use parking_lot::RwLock;
 
 use crate::RegisterNativeError;
-use crate::compiler::resources::{TypeId, TypeInfo};
+use crate::compiler::resources::{Resources, TypeId, TypeInfo};
 use crate::compiler::{CompilationResult, CompilerOptions, Context, NativeFunction};
 use crate::runtime::func::Func;
 use crate::runtime::host_functions::call_host_trampoline;
@@ -23,9 +25,10 @@ pub enum Error {
 
 pub struct Engine {
     /// Compilation context.
-    ctx: Context,
+    ctx: Mutex<Context>,
+    resources: Arc<Resources>,
     pub(crate) shared: Arc<EngineShared>,
-    instances: HashMap<Lowercase<String>, Arc<InstanceShared>>,
+    instances: RwLock<HashMap<Lowercase<String>, Arc<InstanceShared>>>,
     classes: HashMap<Lowercase<String>, Class>,
     registered_native_funcs: HashSet<(Lowercase<String>, Lowercase<String>)>,
 }
@@ -39,7 +42,8 @@ impl Engine {
         let pool = ObjectPool::new(Arc::clone(ctx.resources()));
 
         Self {
-            ctx,
+            resources: Arc::clone(ctx.resources()),
+            ctx: Mutex::new(ctx),
             shared: Arc::new(EngineShared {
                 state: HostState {
                     call_table: UnsafeRefCell::new(CallTable::default()),
@@ -47,7 +51,7 @@ impl Engine {
                 },
                 call_table_lock: RwLock::default(),
             }),
-            instances: HashMap::new(),
+            instances: RwLock::new(HashMap::new()),
             classes: HashMap::new(),
             registered_native_funcs: HashSet::new(),
         }
@@ -55,7 +59,7 @@ impl Engine {
 
     /// Registers the given [`Module`] for the compiler of this `Engine`.
     pub fn register(&mut self, module: &Module) {
-        self.ctx.register_module(module).unwrap();
+        self.ctx.get_mut().register_module(module).unwrap();
 
         for class in &module.classes {
             self.classes
@@ -92,6 +96,7 @@ impl Engine {
 
         let sig = self
             .ctx
+            .get_mut()
             .compute_function_signature(class, func)
             .map_err(|err| RegisterNativeError::UnknownFunction(err))?;
 
@@ -107,7 +112,7 @@ impl Engine {
         // VM error
         signature.returns.push(Type::I32);
 
-        self.ctx.define_native_function(
+        self.ctx.get_mut().define_native_function(
             class,
             func,
             NativeFunction {
@@ -118,22 +123,24 @@ impl Engine {
         )
     }
 
-    pub fn compile(&mut self, class: &str, options: &Options) -> Instance {
+    pub async fn compile(&self, class: &str, options: &Options) -> Instance {
         let class_name = Lowercase::new(class);
 
-        if let Some(shared) = self.instances.get(&class_name) {
+        if let Some(shared) = self.instances.read().get(&class_name) {
             return Instance {
                 shared: shared.clone(),
             };
         }
 
-        self.ctx.compute_type_layouts();
+        let mut ctx = self.ctx.lock().await;
+
+        ctx.compute_type_layouts();
 
         let class = self.classes.get(&class_name).unwrap();
 
         let mut funcs = HashMap::new();
 
-        let res = self.ctx.compile(&class.name, options).unwrap();
+        let res = ctx.compile(&class.name, options).unwrap();
         for (name, res) in res.functions {
             let func = unsafe { Func::new(&res, Arc::downgrade(&self.shared)) };
             funcs.insert(name, (res, func));
@@ -141,7 +148,15 @@ impl Engine {
 
         let shared = Arc::new(InstanceShared { funcs });
 
-        self.instances.insert(class_name, shared.clone());
+        let mut instances = self.instances.write();
+
+        if let Some(shared) = instances.get(&class_name) {
+            return Instance {
+                shared: shared.clone(),
+            };
+        }
+
+        instances.insert(class_name, shared.clone());
         Instance { shared }
     }
 
@@ -164,40 +179,35 @@ impl Engine {
 
         // Even if the class already has a TypeId, it is not
         // safe to construct it before compiling the class first.
-        if self.instances.get(&name).is_none() && is_class(&name) {
+        if self.instances.read().get(&name).is_none() && is_class(&name) {
             return None;
         }
 
-        self.ctx
-            .resources()
-            .string_to_type
-            .lock()
-            .get(&name)
-            .copied()
+        self.resources.string_to_type.lock().get(&name).copied()
     }
 
     pub fn none_type(&self) -> TypeId {
-        self.ctx.resources().primitives.none
+        self.resources.primitives.none
     }
 
     pub fn bool_type(&self) -> TypeId {
-        self.ctx.resources().primitives.bool
+        self.resources.primitives.bool
     }
 
     pub fn int_type(&self) -> TypeId {
-        self.ctx.resources().primitives.int
+        self.resources.primitives.int
     }
 
     pub fn float_type(&self) -> TypeId {
-        self.ctx.resources().primitives.float
+        self.resources.primitives.float
     }
 
     pub fn ptr_type(&self) -> TypeId {
-        self.ctx.resources().primitives.pointer
+        self.resources.primitives.pointer
     }
 
     pub fn type_info(&self, id: TypeId) -> TypeInfo {
-        self.ctx.resources().types.get(id).unwrap().info.clone()
+        self.resources.types.get(id).unwrap().info.clone()
     }
 
     /// Creates a new empty [`Stack`] for function suspension and resumption.

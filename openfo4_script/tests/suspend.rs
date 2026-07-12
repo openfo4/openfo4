@@ -1,3 +1,4 @@
+use futures_lite::future::block_on;
 use openfo4_script::assembler::assemble;
 use openfo4_script::compiler::CompilerOptions;
 use openfo4_script::engine::{Engine, Options};
@@ -41,7 +42,7 @@ fn suspend() {
         .register_native_function("test", "YieldOnce", yield_once)
         .unwrap();
 
-    let instance = engine.compile("MyClass", &Options::default());
+    let instance = block_on(engine.compile("MyClass", &Options::default()));
     let func = instance.get_func("MyFunc").unwrap();
 
     let mut stack = engine.create_stack();

@@ -1,3 +1,4 @@
+use futures_lite::future::block_on;
 use openfo4_script::assembler::assemble;
 use openfo4_script::compiler::CompilerOptions;
 use openfo4_script::engine::{Engine, Options};
@@ -41,7 +42,7 @@ fn int_var() {
         .register_native_function("test", "assert_valid_result", assert_valid_result)
         .unwrap();
 
-    let instance = engine.compile("MyClass", &Options::default());
+    let instance = block_on(engine.compile("MyClass", &Options::default()));
     let func = instance.get_func("MyFunction").unwrap();
 
     let mut stack = engine.create_stack();
@@ -70,7 +71,7 @@ fn string_var() {
 
     engine.register(&module);
 
-    let instance = engine.compile("MyClass", &Options::default());
+    let instance = block_on(engine.compile("MyClass", &Options::default()));
     let func = instance.get_func("MyFunction").unwrap();
 
     let mut stack = engine.create_stack();
@@ -102,7 +103,7 @@ fn class_var() {
 
     engine.register(&module);
 
-    let instance = engine.compile("MyClass", &Options::default());
+    let instance = block_on(engine.compile("MyClass", &Options::default()));
     let func = instance.get_func("MyFunction").unwrap();
     let layout = engine.get_type("MyClass").unwrap();
 
@@ -139,7 +140,7 @@ fn struct_var() {
 
     engine.register(&module);
 
-    let instance = engine.compile("MyClass", &Options::default());
+    let instance = block_on(engine.compile("MyClass", &Options::default()));
     let func = instance.get_func("MyFunction").unwrap();
     let layout = engine.get_type("MyClass#MyStruct").unwrap();
 

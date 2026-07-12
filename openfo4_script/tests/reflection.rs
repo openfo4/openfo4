@@ -1,3 +1,4 @@
+use futures_lite::future::block_on;
 use game_common::string::Lowercase;
 use openfo4_script::assembler::assemble;
 use openfo4_script::compiler::CompilerOptions;
@@ -29,7 +30,7 @@ fn class_reflection() {
     );
 
     engine.register(&module);
-    engine.compile("MyClass", &Options::default());
+    block_on(engine.compile("MyClass", &Options::default()));
     let id = engine.get_type("MyClass").unwrap();
 
     let info = engine.type_info(id);
@@ -78,7 +79,7 @@ fn struct_reflection() {
     );
 
     engine.register(&module);
-    engine.compile("MyClass", &Options::default());
+    block_on(engine.compile("MyClass", &Options::default()));
     let class = engine.get_type("MyClass").unwrap();
     let id = engine.get_type("MyClass#MyStruct").unwrap();
 

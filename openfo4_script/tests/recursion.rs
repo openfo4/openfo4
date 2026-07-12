@@ -1,3 +1,4 @@
+use futures_lite::future::block_on;
 use openfo4_script::assembler::assemble;
 use openfo4_script::compiler::CompilerOptions;
 use openfo4_script::engine::{Engine, Options};
@@ -32,7 +33,7 @@ fn recursion() {
 
     engine.register(&module);
 
-    let instance = engine.compile("MyClass", &Options::default());
+    let instance = block_on(engine.compile("MyClass", &Options::default()));
     let func = instance.get_func("factorial").unwrap();
 
     let mut stack = engine.create_stack();
@@ -78,7 +79,7 @@ fn recursion_multiple_functions() {
     );
     engine.register(&module);
 
-    let instance = engine.compile("MyClass", &Options::default());
+    let instance = block_on(engine.compile("MyClass", &Options::default()));
     let func = instance.get_func("A").unwrap();
 
     let mut stack = engine.create_stack();

@@ -17,6 +17,7 @@ parking_lot = "0.12.5"
 hashbrown = { workspace = true }
 tracing = { workspace = true }
 pin-project = "1.1.13"
+async-lock = "3.4.0"
 
 capstone = "0.14.0"
 

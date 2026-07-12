@@ -2,7 +2,7 @@ use std::pin::pin;
 use std::sync::Arc;
 use std::task::{self, Poll, Wake, Waker};
 
-use futures_lite::future::yield_now;
+use futures_lite::future::{block_on, yield_now};
 use openfo4_script::assembler::assemble;
 use openfo4_script::compiler::CompilerOptions;
 use openfo4_script::engine::{Engine, Options};
@@ -142,7 +142,7 @@ where
     engine.register(&module);
     engine.register_native_function("test", "F", f).unwrap();
 
-    let instance = engine.compile("MyClass", &Options::default());
+    let instance = block_on(engine.compile("MyClass", &Options::default()));
     let func = instance.get_func("MyFunc").unwrap();
 
     let func = func.typed::<(), ()>().unwrap();

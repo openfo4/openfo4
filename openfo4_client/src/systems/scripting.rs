@@ -11,7 +11,7 @@ use std::collections::VecDeque;
 use std::sync::Arc;
 use std::time::Duration;
 
-use async_lock::Mutex;
+use futures_lite::future::block_on;
 use game_common::collections::arena::{Arena, Key};
 use game_common::collections::bimap::BiMap;
 use game_tasks::TaskPool;
@@ -89,14 +89,9 @@ impl Executor {
 
         let state = core_actor_values(&mut engine);
 
-        let engine = Arc::new(Mutex::new(engine));
+        let engine = Arc::new(engine);
 
-        let loader = Arc::new(ScriptLoader {
-            engine,
-            classes: Mutex::default(),
-            esp_loader,
-            state: Mutex::new(Some(state)),
-        });
+        let loader = Arc::new(ScriptLoader::new(engine, esp_loader, state));
 
         Self {
             loader,
@@ -123,7 +118,7 @@ impl Executor {
     }
 
     fn invoke_inner(&mut self, invocation: EventInvocation) -> InvocationId {
-        let state = futures_lite::future::block_on(self.loader.state.lock());
+        let state = block_on(self.loader.state.lock());
         let state = state.as_ref().unwrap();
 
         let scripts = state.objects.get_by_id(invocation.receiver.id()).unwrap();
@@ -168,8 +163,8 @@ impl Executor {
     ) {
         let _span = trace_span!("Executor::update").entered();
 
-        let engine = futures_lite::future::block_on(self.loader.engine.lock());
-        let mut state = futures_lite::future::block_on(self.loader.state.lock());
+        let engine = &self.loader.engine;
+        let mut state = block_on(self.loader.state.lock());
 
         state.as_mut().unwrap().world = world;
         state.as_mut().unwrap().globals = globals;
@@ -473,8 +468,8 @@ fn call_event_invocation_single(
 }
 
 fn core_actor_values(engine: &mut Engine) -> State {
-    let actor = engine.compile("Actor", &COMPILER_OPTIONS);
-    engine.compile("ActorValue", &COMPILER_OPTIONS);
+    let actor = block_on(engine.compile("Actor", &COMPILER_OPTIONS));
+    block_on(engine.compile("ActorValue", &COMPILER_OPTIONS));
 
     let actor_layout = engine.get_type("Actor").unwrap();
     let actor_value = engine.get_type("ActorValue").unwrap();

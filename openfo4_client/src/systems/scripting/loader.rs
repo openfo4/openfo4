@@ -45,7 +45,7 @@ pub(super) struct ScriptObjectInner {
 
 #[derive(Debug)]
 pub struct ScriptLoader {
-    pub(super) engine: Arc<AsyncMutex<Engine>>,
+    pub(super) engine: Arc<Engine>,
     /// Cache of compiled classes.
     pub(super) classes: AsyncMutex<HashMap<String, Instance>>,
     pub(super) esp_loader: Arc<EspLoader>,
@@ -54,11 +54,7 @@ pub struct ScriptLoader {
 }
 
 impl ScriptLoader {
-    pub(super) fn new(
-        engine: Arc<AsyncMutex<Engine>>,
-        esp_loader: Arc<EspLoader>,
-        state: State,
-    ) -> Self {
+    pub(super) fn new(engine: Arc<Engine>, esp_loader: Arc<EspLoader>, state: State) -> Self {
         Self {
             engine,
             classes: AsyncMutex::default(),
@@ -75,12 +71,11 @@ impl ScriptLoader {
     pub async fn load(&self, record: RecordId) -> Option<LoadResult> {
         tracing::debug!("loading script for {:?}", record);
 
-        let mut engine = self.engine.lock().await;
         let mut classes = self.classes.lock().await;
         let mut state = self.state.lock().await;
 
         let res = instantiate_form(
-            &mut engine,
+            &self.engine,
             &self.esp_loader,
             &self.load_events,
             record,
@@ -100,12 +95,11 @@ impl ScriptLoader {
     pub async fn load_instance(&self, record: RecordId) -> Option<ScriptObject> {
         tracing::debug!("loading script for {:?}", record);
 
-        let mut engine = self.engine.lock().await;
         let mut classes = self.classes.lock().await;
         let mut state = self.state.lock().await;
 
         let res = instantiate_form(
-            &mut engine,
+            &self.engine,
             &self.esp_loader,
             &self.load_events,
             record,
@@ -124,7 +118,6 @@ impl ScriptLoader {
     ///
     /// Only the top level properties are cloned.
     pub async fn clone_object(&self, object: &ScriptObject) -> ScriptObject {
-        let engine = self.engine.lock().await;
         let mut state = self.state.lock().await;
         let state = state.as_mut().unwrap();
 
@@ -137,7 +130,7 @@ impl ScriptLoader {
                 layout: script.get().layout.clone(),
                 stacks: script.get().stacks.clone(),
                 object: unsafe {
-                    engine
+                    self.engine
                         .object_pool()
                         .clone_object(&script.get().object)
                         .finalize()
@@ -145,7 +138,7 @@ impl ScriptLoader {
             })
             .collect();
 
-        let id = state.objects.insert(&engine, scripts, None);
+        let id = state.objects.insert(&self.engine, scripts, None);
 
         ScriptObject(Arc::new(ScriptObjectInner {
             base: object.0.base,
@@ -200,7 +193,7 @@ struct LoadEvent {
 }
 
 async fn instantiate_form(
-    engine: &mut Engine,
+    engine: &Engine,
     esp_loader: &EspLoader,
     load_events: &Mutex<HashMap<RecordId, LoadEvent>>,
     root: RecordId,
@@ -472,9 +465,14 @@ async fn instantiate_form(
             record_script_name(&record.local.data).unwrap()
         };
 
-        let instance = compiled_classes
-            .entry(base_class_name.to_owned())
-            .or_insert_with(|| engine.compile(base_class_name, &COMPILER_OPTIONS));
+        let instance = match compiled_classes.get(base_class_name) {
+            Some(instance) => instance,
+            None => {
+                let instance = engine.compile(base_class_name, &COMPILER_OPTIONS).await;
+                compiled_classes.insert(base_class_name.to_owned(), instance);
+                compiled_classes.get(base_class_name).unwrap()
+            }
+        };
         let layout = engine.get_type(base_class_name).unwrap();
         let builder = engine.object_pool().insert(layout.clone());
 
@@ -488,9 +486,14 @@ async fn instantiate_form(
         );
 
         for script in record_scripts.into_iter().flat_map(|v| v) {
-            let instance = compiled_classes
-                .entry(script.name.clone())
-                .or_insert_with(|| engine.compile(&script.name, &COMPILER_OPTIONS));
+            let instance = match compiled_classes.get(&script.name) {
+                Some(instance) => instance,
+                None => {
+                    let instance = engine.compile(&script.name, &COMPILER_OPTIONS).await;
+                    compiled_classes.insert(script.name.clone(), instance);
+                    compiled_classes.get(&script.name).unwrap()
+                }
+            };
             let layout = engine.get_type(&script.name).unwrap();
             let builder = engine.object_pool().insert(layout.clone());
 
@@ -511,9 +514,14 @@ async fn instantiate_form(
             let mut scripts = HashMap::new();
 
             let base_class_name = alias.ty.script_name();
-            let instance = compiled_classes
-                .entry(base_class_name.to_owned())
-                .or_insert_with(|| engine.compile(base_class_name, &COMPILER_OPTIONS));
+            let instance = match compiled_classes.get(base_class_name) {
+                Some(instance) => instance,
+                None => {
+                    let instance = engine.compile(base_class_name, &COMPILER_OPTIONS).await;
+                    compiled_classes.insert(base_class_name.to_owned(), instance);
+                    compiled_classes.get(base_class_name).unwrap()
+                }
+            };
             let layout = engine.get_type(base_class_name).unwrap();
             let builder = engine.object_pool().insert(layout.clone());
 
@@ -527,9 +535,14 @@ async fn instantiate_form(
             );
 
             for script in alias.scripts.into_iter() {
-                let instance = compiled_classes
-                    .entry(script.name.clone())
-                    .or_insert_with(|| engine.compile(&script.name, &COMPILER_OPTIONS));
+                let instance = match compiled_classes.get(&script.name) {
+                    Some(instance) => instance,
+                    None => {
+                        let instance = engine.compile(&script.name, &COMPILER_OPTIONS).await;
+                        compiled_classes.insert(script.name.clone(), instance);
+                        compiled_classes.get(&script.name).unwrap()
+                    }
+                };
                 let layout = engine.get_type(&script.name).unwrap();
                 let builder = engine.object_pool().insert(layout.clone());
 
@@ -1342,6 +1355,7 @@ fn is_primitive(engine: &Engine, ty: TypeId) -> bool {
 mod tests {
     use std::num::NonZeroU32;
 
+    use futures_lite::future::block_on;
     use hashbrown::HashMap;
     use openfo4_core::record::{ModuleId, RecordId};
     use openfo4_esp::FormId;
@@ -1432,7 +1446,7 @@ mod tests {
         );
 
         engine.register(&module);
-        engine.compile("test", &Options::default());
+        block_on(engine.compile("test", &Options::default()));
 
         let script = Script {
             name: "test".to_owned(),
@@ -1475,7 +1489,7 @@ mod tests {
         );
 
         engine.register(&module);
-        engine.compile("test", &Options::default());
+        block_on(engine.compile("test", &Options::default()));
 
         let script = Script {
             name: "test".to_owned(),
@@ -1545,7 +1559,7 @@ mod tests {
         );
 
         engine.register(&module);
-        engine.compile("test", &Options::default());
+        block_on(engine.compile("test", &Options::default()));
 
         let script = Script {
             name: "test".to_owned(),
@@ -1613,9 +1627,9 @@ mod tests {
         );
 
         engine.register(&module);
-        engine.compile("A", &Options::default());
-        engine.compile("B", &Options::default());
-        engine.compile("C", &Options::default());
+        block_on(engine.compile("A", &Options::default()));
+        block_on(engine.compile("B", &Options::default()));
+        block_on(engine.compile("C", &Options::default()));
 
         let script = Script {
             name: "C".to_owned(),

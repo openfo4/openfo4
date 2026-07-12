@@ -1,3 +1,4 @@
+use futures_lite::future::block_on;
 use openfo4_script::assembler::assemble;
 use openfo4_script::compiler::CompilerOptions;
 use openfo4_script::engine::{Engine, Options};
@@ -17,7 +18,7 @@ fn state() {
         class MyClass:
 
         state "":
-        
+
         function MyFunction() -> int:
         return 3
 
@@ -35,7 +36,7 @@ fn state() {
 
     engine.register(&module);
 
-    let instance = engine.compile("MyClass", &Options::default());
+    let instance = block_on(engine.compile("MyClass", &Options::default()));
     let func = instance.get_func("MyFunction").unwrap();
     let type_id = engine.get_type("MyClass").unwrap();
 
@@ -110,7 +111,7 @@ fn state_override_order() {
     );
 
     engine.register(&module);
-    let instance = engine.compile("B", &Options::default());
+    let instance = block_on(engine.compile("B", &Options::default()));
     let func = instance.get_func("MyFunction").unwrap();
     let type_id = engine.get_type("B").unwrap();
 
@@ -170,5 +171,5 @@ fn access_undeclared_state_builtin() {
         "#,
     );
     engine.register(&module);
-    engine.compile("A", &Options::default());
+    block_on(engine.compile("A", &Options::default()));
 }
