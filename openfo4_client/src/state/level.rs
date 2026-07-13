@@ -461,9 +461,71 @@ struct WorldspaceState {
     cells: HashMap<CellId, CellState>,
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 struct CellState {
+    /// ID of the cell record.
+    record: RecordId,
+    /// List of persistent records in this cell.
     persistent: Vec<RecordId>,
+}
+
+async fn resolve_cell_to_record(
+    esp_loader: &EspLoader,
+    state: &LoaderState,
+    req: Request,
+) -> RecordId {
+    // To resolve a CellId to a RecordId we need to load the worldspace record.
+    // Loading the worldspace record for each cell is costly, we want to avoid that.
+    // The first time we see a new worldspace we will build a CellId -> RecordId
+    // cache that we can reuse.
+    {
+        let worldspaces = state.worldspaces.read();
+        if let Some(ws) = worldspaces.get(&req.worldspace)
+            && let Some(s) = ws.cells.get(&req.cell)
+        {
+            return s.record;
+        }
+    }
+
+    let cells = esp_loader
+        .children(RecordChildren::Cells, req.worldspace)
+        .await
+        .unwrap();
+
+    let mut worldspaces = state.worldspaces.write();
+    let worldspace = worldspaces.entry(req.worldspace).or_default();
+
+    let mut searched_id = None;
+
+    for record in cells {
+        let RecordData::Cell(Cell {
+            grid: Some(grid), ..
+        }) = record.local.data
+        else {
+            continue;
+        };
+
+        let id = CellId::new(grid.x, grid.y);
+
+        if id == req.cell {
+            searched_id = Some(record.id);
+        }
+
+        // Don't overwrite cell state.
+        if worldspace.cells.contains_key(&id) {
+            continue;
+        }
+
+        worldspace.cells.insert(
+            id,
+            CellState {
+                record: record.id,
+                persistent: Vec::new(),
+            },
+        );
+    }
+
+    searched_id.unwrap()
 }
 
 async fn load_cells_task(
@@ -481,39 +543,36 @@ async fn load_cells_task(
         let is_interior = state.interiors.read().contains(&req.worldspace);
 
         let cell = if !is_interior {
-            let cells = esp_loader
-                .children(RecordChildren::Cells, req.worldspace)
-                .await
-                .unwrap();
-
-            cells
-                .iter()
-                .find_map(|record| match &record.local.data {
-                    RecordData::Cell(Cell {
-                        grid: Some(grid), ..
-                    }) if req.cell.0.x == grid.x && req.cell.0.y == grid.y => Some(record.id),
-                    _ => None,
-                })
-                .unwrap()
+            resolve_cell_to_record(esp_loader, state, req).await
         } else {
             req.worldspace
         };
 
-        load_cell(
-            loader,
-            esp_loader,
-            events,
-            pool,
-            file_loader,
-            shared,
-            cell,
-            req.worldspace,
-            false,
-            state,
-            is_interior,
-            script_loader,
-        )
-        .await;
+        let loader = loader.clone();
+        let esp_loader = esp_loader.clone();
+        let events = events.clone();
+        let pool2 = pool.clone();
+        let file_loader = file_loader.clone();
+        let script_loader = script_loader.clone();
+        let shared = shared.clone();
+        let state = state.clone();
+        pool.spawn(async move {
+            load_cell(
+                &loader,
+                &esp_loader,
+                &events,
+                &pool2,
+                &file_loader,
+                &shared,
+                cell,
+                req.worldspace,
+                false,
+                &state,
+                is_interior,
+                &script_loader,
+            )
+            .await;
+        });
     }
 }
 
@@ -700,7 +759,10 @@ async fn load_cell(
                         .or_default()
                         .cells
                         .entry(cell)
-                        .or_default()
+                        .or_insert_with(|| CellState {
+                            record: cell_form,
+                            persistent: Vec::new(),
+                        })
                         .persistent
                         .push(record.id);
                 }
