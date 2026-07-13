@@ -222,7 +222,7 @@ async fn instantiate_form(
     load_events: &Mutex<HashMap<RecordId, LoadEvent>>,
     root: RecordId,
     compiled_classes: &CompilationCache,
-    state: &mut State,
+    state: &State,
     kind: RecordInstantiationKind,
 ) -> Option<LoadResult> {
     if let Some(scripts) = state.objects.get_by_record(root)
@@ -845,7 +845,7 @@ impl AliasType {
     }
 }
 
-fn register_static_events(object: &PartialObject, state: &mut State) {
+fn register_static_events(object: &PartialObject, state: &State) {
     // FIXME: We should validate that the base object type is correct
     // and the function signature matches what we expect before we
     // register the event.
