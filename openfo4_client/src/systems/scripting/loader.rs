@@ -253,11 +253,17 @@ async fn instantiate_form(
 
     let mut queue = vec![root];
     while let Some(record) = queue.pop() {
+        // We want our own instance, don't sync with other tasks loading
+        // the same instance.
+        let is_instance_root = kind.is_instance() && record == root;
+
         if object_pool.get_by_record(record).is_some() {
-            continue;
+            if !is_instance_root {
+                continue;
+            }
         }
 
-        {
+        if !is_instance_root {
             // Try to synchronize with another task that is already loading this record.
             // If another task is already loading the record, we skip it locally and
             // let the other task provide it to us later, otherwise we setup an event
@@ -275,299 +281,33 @@ async fn instantiate_form(
             }
         }
 
-        tracing::debug!("loading script for {:?}", record);
-
-        let Ok(record) = esp_loader.lookup(None, record).await.inspect_err(|err| {
-            tracing::warn!("failed to load {:?}: {}", record, err);
-        }) else {
-            {
-                let mut events = load_events.lock();
-                let event = events.remove(&record).unwrap();
-                event.loaded.notify(event.loaded.total_listeners());
-                event.built.notify(event.built.total_listeners());
+        let kind = match kind {
+            RecordInstantiationKind::BaseObject => RecordInstantiationKind::BaseObject,
+            RecordInstantiationKind::Instance if record == root => {
+                RecordInstantiationKind::Instance
             }
+            RecordInstantiationKind::Instance => RecordInstantiationKind::BaseObject,
+        };
+
+        let Some(loaded_rec) =
+            load_record(esp_loader, record, engine, kind, compiled_classes).await
+        else {
+            let mut events = load_events.lock();
+            let event = events.remove(&record).unwrap();
+            event.loaded.notify(event.loaded.total_listeners());
+            event.built.notify(event.built.total_listeners());
 
             continue;
         };
 
-        let mut aliases = HashMap::new();
-
-        let record_scripts = match record.local.data.clone() {
-            RecordData::Activator(data) => data.virtual_machine_adapter.map(|v| v.scripts),
-            RecordData::Armor(data) => data.virtual_machine_adapter.map(|v| v.scripts),
-            RecordData::Book(data) => data.virtual_machine_adapter.map(|v| v.scripts),
-            RecordData::Container(data) => data.virtual_machine_adapter.map(|v| v.scripts),
-            RecordData::Door(data) => data.virtual_machine_adapter.map(|v| v.scripts),
-            RecordData::FLOR(data) => data.vmad.map(|v| v.scripts),
-            RecordData::Furniture(data) => data.virtual_machine_adapter.map(|v| v.scripts),
-            RecordData::INGR(data) => data.vmad.map(|v| v.scripts),
-            RecordData::Key(data) => data.virtual_machine_adapter.map(|v| v.scripts),
-            RecordData::Light(data) => data.virtual_machine_adapter.map(|v| v.scripts),
-            RecordData::MagicEffect(data) => data.virtual_machine_adpater.map(|v| v.scripts),
-            RecordData::MiscObject(data) => data.virtual_machine_adapter.map(|v| v.scripts),
-            RecordData::MSTT(data) => data.virtual_machine_adapter.map(|v| v.scripts),
-            RecordData::Npc(data) => data.virtual_machine_adapter.map(|v| v.scripts),
-            RecordData::Note(data) => data.virtual_machine_adapter.map(|v| v.scripts),
-            RecordData::Package(data) => data.virtual_machine_adapter.map(|v| v.scripts),
-            RecordData::Perk(data) => data.virtual_machine_adapter.map(|v| v.scripts),
-            RecordData::Quest(data) => {
-                for alias in &data.aliases.references {
-                    aliases.insert(
-                        (record.id, alias.id),
-                        AliasInfo {
-                            ty: AliasType::Reference,
-                            scripts: Vec::new(),
-                        },
-                    );
-                }
-
-                for alias in &data.aliases.locations {
-                    aliases.insert(
-                        (record.id, alias.id),
-                        AliasInfo {
-                            ty: AliasType::Location,
-                            scripts: Vec::new(),
-                        },
-                    );
-                }
-
-                for alias in &data.aliases.ref_collections {
-                    aliases.insert(
-                        (record.id, alias.id),
-                        AliasInfo {
-                            ty: AliasType::RefCollection,
-                            scripts: Vec::new(),
-                        },
-                    );
-                }
-
-                if let Some(vmad) = &data.virtual_machine_adapter {
-                    if let Some(frags) = &vmad.fragments {
-                        for alias in &frags.aliases {
-                            let alias_id = alias.object.alias.unwrap();
-
-                            let id = esp_loader
-                                .resolve_form(alias.object.form, record.id)
-                                .unwrap();
-
-                            match aliases.get_mut(&(id, alias_id as u32)) {
-                                Some(a) => {
-                                    a.scripts.extend(alias.scripts.clone());
-                                }
-                                None => {
-                                    let Some(ty) =
-                                        load_alias_type(esp_loader, id, alias_id as u32).await
-                                    else {
-                                        tracing::warn!(
-                                            "cannot found alias {} in quest {}, skipping",
-                                            alias_id,
-                                            id,
-                                        );
-                                        continue;
-                                    };
-
-                                    aliases.insert(
-                                        (id, alias_id as u32),
-                                        AliasInfo {
-                                            ty,
-                                            scripts: alias.scripts.clone(),
-                                        },
-                                    );
-                                }
-                            }
-                        }
-                    }
-                }
-
-                if let Some(vmad) = data.virtual_machine_adapter {
-                    let mut scripts = vmad.scripts;
-
-                    if let Some(frags) = vmad.fragments
-                        && let Some(script) = frags.script
-                    {
-                        scripts.push(script);
-                    }
-
-                    Some(scripts)
-                } else {
-                    None
-                }
-            }
-            RecordData::STAT(data) => data.virtual_machine_adapter.map(|v| v.scripts),
-            RecordData::TACT(data) => data.vmad.map(|v| v.scripts),
-            RecordData::Terminal(data) => data.virtual_machine_adapter.map(|v| v.scripts),
-            RecordData::Tree(data) => data.virtual_machine_adapter.map(|v| v.scripts),
-            RecordData::Weapon(data) => data.virtual_machine_adapter.map(|v| v.scripts),
-            RecordData::PlacedObject(data) => data.virtual_machine_adapter.map(|v| v.scripts),
-            RecordData::PlacedNpc(data) => data.virtual_machine_adapter.map(|v| v.scripts),
-            _ => None,
-        };
-
-        // Find all other forms that the scripts reference.
-        // Note that scripts may reference the same form multiple times, which
-        // is why we use a HashSet instead of a Vec or directly pushing to queue.
-        let mut depends = HashSet::new();
-
-        // FIXME: Avoid cloning here.
-        let aliases2 = aliases.clone();
-        let scripts_to_iter: Vec<&Script> = record_scripts
-            .iter()
-            .flat_map(|v| v)
-            .chain(aliases2.values().map(|a| a.scripts.iter()).flatten())
-            .collect();
-        for script in scripts_to_iter {
-            let mut values_queue: Vec<_> = script.properties.iter().map(|v| &v.value).collect();
-
-            while let Some(value) = values_queue.pop() {
-                match value {
-                    Value::Object(value) => {
-                        if value.form.is_null() {
-                            continue;
-                        }
-
-                        let id = esp_loader.resolve_form(value.form, record.id).unwrap();
-                        let is_loaded =
-                            object_pool.get_by_record(id).is_some() || records.contains_key(&id);
-
-                        // Even if an alias with another owner record is referenced here,
-                        // we still create a new object here.
-                        // The "local" alias (defined in this record) may still attach additional
-                        // scripts that are not attached to the alias in the owner record.
-                        // FIXME: We could in theory skip this, if no scripts are attached
-                        // locally, right?
-                        if let Some(alias) = &value.alias {
-                            if !aliases.contains_key(&(id, *alias as u32)) {
-                                let Some(ty) = load_alias_type(esp_loader, id, *alias as u32).await
-                                else {
-                                    tracing::warn!(
-                                        "cannot found alias {} in quest {}, skipping",
-                                        alias,
-                                        id,
-                                    );
-                                    continue;
-                                };
-
-                                aliases.insert(
-                                    (id, *alias as u32),
-                                    AliasInfo {
-                                        ty,
-                                        scripts: Vec::new(),
-                                    },
-                                );
-                            }
-                        } else {
-                            if is_loaded {
-                                continue;
-                            }
-
-                            depends.insert(id);
-                        }
-                    }
-                    Value::Struct(fields, _) => {
-                        for field in fields {
-                            values_queue.push(&field.value);
-                        }
-                    }
-                    Value::Array(values, _) => {
-                        values_queue.extend(values);
-                    }
-                    _ => {}
-                }
+        for id in loaded_rec.depends {
+            if object_pool.get_by_record(id).is_none() && !records.contains_key(&id) {
+                queue.push(id);
             }
         }
 
-        for id in depends {
-            debug_assert!(object_pool.get_by_record(id).is_none());
-            debug_assert!(!records.contains_key(&id));
-            queue.push(id);
-        }
-
-        let mut scripts = HashMap::new();
-
-        // We only want to create a new instance of the root object.
-        // The dependencies must remain regular base objects.
-        let base_class_name = if kind.is_instance() && record.id == root {
-            record_instance_script_name(&record.local.data).unwrap()
-        } else {
-            record_script_name(&record.local.data).unwrap()
-        };
-
-        let instance = compiled_classes
-            .get_or_compile(engine, base_class_name)
-            .await;
-        let layout = engine.get_type(base_class_name).unwrap();
-        let builder = engine.object_pool().insert(layout.clone());
-
-        scripts.insert(
-            base_class_name.to_owned(),
-            PartialObject {
-                instance: instance.clone(),
-                builder,
-                script: None,
-            },
-        );
-
-        for script in record_scripts.into_iter().flat_map(|v| v) {
-            let instance = compiled_classes.get_or_compile(engine, &script.name).await;
-            let layout = engine.get_type(&script.name).unwrap();
-            let builder = engine.object_pool().insert(layout.clone());
-
-            scripts.insert(
-                script.name.clone(),
-                PartialObject {
-                    instance: instance.clone(),
-                    builder,
-                    script: Some(script),
-                },
-            );
-        }
-
-        records.insert(record.id, scripts);
-
-        // Build alias objects
-        for ((alias_owner, alias_id), alias) in aliases {
-            let mut scripts = HashMap::new();
-
-            let base_class_name = alias.ty.script_name();
-            let instance = compiled_classes
-                .get_or_compile(engine, base_class_name)
-                .await;
-            let layout = engine.get_type(base_class_name).unwrap();
-            let builder = engine.object_pool().insert(layout.clone());
-
-            scripts.insert(
-                base_class_name.to_owned(),
-                PartialObject {
-                    instance: instance.clone(),
-                    builder,
-                    script: None,
-                },
-            );
-
-            for script in alias.scripts.into_iter() {
-                let instance = compiled_classes.get_or_compile(engine, &script.name).await;
-                let layout = engine.get_type(&script.name).unwrap();
-                let builder = engine.object_pool().insert(layout.clone());
-
-                scripts.insert(
-                    script.name.clone(),
-                    PartialObject {
-                        instance: instance.clone(),
-                        builder,
-                        script: Some(script),
-                    },
-                );
-            }
-
-            record_aliases.insert(
-                AliasKey {
-                    accessor: record.id,
-                    owner: alias_owner,
-                    id: alias_id,
-                },
-                scripts,
-            );
-        }
+        records.insert(record, loaded_rec.scripts);
+        record_aliases.extend(loaded_rec.aliases);
     }
 
     let mut partial_object_addrs = HashMap::new();
@@ -597,6 +337,12 @@ async fn instantiate_form(
         let mut events = load_events.lock();
 
         for (record, addrs) in &partial_object_addrs {
+            // We don't sync instance scripts.
+            let is_instance_root = kind.is_instance() && *record == root;
+            if is_instance_root {
+                continue;
+            }
+
             // This key must still exist, only we are allowed to remove it.
             let event = events.get_mut(record).unwrap();
             event.addrs = Some(addrs.clone());
@@ -615,6 +361,12 @@ async fn instantiate_form(
         let mut events = load_events.lock();
 
         for (record, _) in publish_listeners {
+            // We don't sync instance scripts.
+            let is_instance_root = kind.is_instance() && record == root;
+            if is_instance_root {
+                continue;
+            }
+
             // If the event is already removed, this means that the loading
             // has finished and the object is already fully loaded and available
             // in the object pool.
@@ -731,6 +483,12 @@ async fn instantiate_form(
         let mut events = load_events.lock();
 
         for (record, _) in &partial_object_addrs {
+            // We don't sync instance scripts.
+            let is_instance_root = kind.is_instance() && *record == root;
+            if is_instance_root {
+                continue;
+            }
+
             let event = events.get_mut(record).unwrap();
             event.built.notify(event.built.total_listeners());
         }
@@ -765,6 +523,12 @@ async fn instantiate_form(
         // we already signaled for the first time. Not doing so would cause them
         // to deadlock.
         for (record, _) in partial_object_addrs {
+            // We don't sync instance scripts.
+            let is_instance_root = kind.is_instance() && record == root;
+            if is_instance_root {
+                continue;
+            }
+
             // We are the owner of the event, so only we are allowed to remove it.
             let event = events.remove(&record).unwrap();
 
@@ -815,6 +579,301 @@ async fn load_alias_type(esp_loader: &EspLoader, id: RecordId, alias_id: u32) ->
     }
 
     None
+}
+
+async fn load_record(
+    esp_loader: &EspLoader,
+    record: RecordId,
+    engine: &Engine,
+    kind: RecordInstantiationKind,
+    compiled_classes: &CompilationCache,
+) -> Option<LoadedRecord> {
+    let Ok(record) = esp_loader.lookup(None, record).await.inspect_err(|err| {
+        tracing::warn!("failed to load {:?}: {}", record, err);
+    }) else {
+        return None;
+    };
+
+    let mut aliases = HashMap::new();
+
+    let record_scripts = match record.local.data.clone() {
+        RecordData::Activator(data) => data.virtual_machine_adapter.map(|v| v.scripts),
+        RecordData::Armor(data) => data.virtual_machine_adapter.map(|v| v.scripts),
+        RecordData::Book(data) => data.virtual_machine_adapter.map(|v| v.scripts),
+        RecordData::Container(data) => data.virtual_machine_adapter.map(|v| v.scripts),
+        RecordData::Door(data) => data.virtual_machine_adapter.map(|v| v.scripts),
+        RecordData::FLOR(data) => data.vmad.map(|v| v.scripts),
+        RecordData::Furniture(data) => data.virtual_machine_adapter.map(|v| v.scripts),
+        RecordData::INGR(data) => data.vmad.map(|v| v.scripts),
+        RecordData::Key(data) => data.virtual_machine_adapter.map(|v| v.scripts),
+        RecordData::Light(data) => data.virtual_machine_adapter.map(|v| v.scripts),
+        RecordData::MagicEffect(data) => data.virtual_machine_adpater.map(|v| v.scripts),
+        RecordData::MiscObject(data) => data.virtual_machine_adapter.map(|v| v.scripts),
+        RecordData::MSTT(data) => data.virtual_machine_adapter.map(|v| v.scripts),
+        RecordData::Npc(data) => data.virtual_machine_adapter.map(|v| v.scripts),
+        RecordData::Note(data) => data.virtual_machine_adapter.map(|v| v.scripts),
+        RecordData::Package(data) => data.virtual_machine_adapter.map(|v| v.scripts),
+        RecordData::Perk(data) => data.virtual_machine_adapter.map(|v| v.scripts),
+        RecordData::Quest(data) => {
+            for alias in &data.aliases.references {
+                aliases.insert(
+                    (record.id, alias.id),
+                    AliasInfo {
+                        ty: AliasType::Reference,
+                        scripts: Vec::new(),
+                    },
+                );
+            }
+
+            for alias in &data.aliases.locations {
+                aliases.insert(
+                    (record.id, alias.id),
+                    AliasInfo {
+                        ty: AliasType::Location,
+                        scripts: Vec::new(),
+                    },
+                );
+            }
+
+            for alias in &data.aliases.ref_collections {
+                aliases.insert(
+                    (record.id, alias.id),
+                    AliasInfo {
+                        ty: AliasType::RefCollection,
+                        scripts: Vec::new(),
+                    },
+                );
+            }
+
+            if let Some(vmad) = &data.virtual_machine_adapter {
+                if let Some(frags) = &vmad.fragments {
+                    for alias in &frags.aliases {
+                        let alias_id = alias.object.alias.unwrap();
+
+                        let id = esp_loader
+                            .resolve_form(alias.object.form, record.id)
+                            .unwrap();
+
+                        match aliases.get_mut(&(id, alias_id as u32)) {
+                            Some(a) => {
+                                a.scripts.extend(alias.scripts.clone());
+                            }
+                            None => {
+                                let Some(ty) =
+                                    load_alias_type(esp_loader, id, alias_id as u32).await
+                                else {
+                                    tracing::warn!(
+                                        "cannot found alias {} in quest {}, skipping",
+                                        alias_id,
+                                        id,
+                                    );
+                                    continue;
+                                };
+
+                                aliases.insert(
+                                    (id, alias_id as u32),
+                                    AliasInfo {
+                                        ty,
+                                        scripts: alias.scripts.clone(),
+                                    },
+                                );
+                            }
+                        }
+                    }
+                }
+            }
+
+            if let Some(vmad) = data.virtual_machine_adapter {
+                let mut scripts = vmad.scripts;
+
+                if let Some(frags) = vmad.fragments
+                    && let Some(script) = frags.script
+                {
+                    scripts.push(script);
+                }
+
+                Some(scripts)
+            } else {
+                None
+            }
+        }
+        RecordData::STAT(data) => data.virtual_machine_adapter.map(|v| v.scripts),
+        RecordData::TACT(data) => data.vmad.map(|v| v.scripts),
+        RecordData::Terminal(data) => data.virtual_machine_adapter.map(|v| v.scripts),
+        RecordData::Tree(data) => data.virtual_machine_adapter.map(|v| v.scripts),
+        RecordData::Weapon(data) => data.virtual_machine_adapter.map(|v| v.scripts),
+        RecordData::PlacedObject(data) => data.virtual_machine_adapter.map(|v| v.scripts),
+        RecordData::PlacedNpc(data) => data.virtual_machine_adapter.map(|v| v.scripts),
+        _ => None,
+    };
+
+    // Find all other forms that the scripts reference.
+    // Note that scripts may reference the same form multiple times, which
+    // is why we use a HashSet instead of a Vec or directly pushing to queue.
+    let mut depends = HashSet::new();
+
+    // FIXME: Avoid cloning here.
+    let aliases2 = aliases.clone();
+    let scripts_to_iter: Vec<&Script> = record_scripts
+        .iter()
+        .flat_map(|v| v)
+        .chain(aliases2.values().map(|a| a.scripts.iter()).flatten())
+        .collect();
+    for script in scripts_to_iter {
+        let mut values_queue: Vec<_> = script.properties.iter().map(|v| &v.value).collect();
+
+        while let Some(value) = values_queue.pop() {
+            match value {
+                Value::Object(value) => {
+                    if value.form.is_null() {
+                        continue;
+                    }
+
+                    let id = esp_loader.resolve_form(value.form, record.id).unwrap();
+
+                    // Even if an alias with another owner record is referenced here,
+                    // we still create a new object here.
+                    // The "local" alias (defined in this record) may still attach additional
+                    // scripts that are not attached to the alias in the owner record.
+                    // FIXME: We could in theory skip this, if no scripts are attached
+                    // locally, right?
+                    if let Some(alias) = &value.alias {
+                        if !aliases.contains_key(&(id, *alias as u32)) {
+                            let Some(ty) = load_alias_type(esp_loader, id, *alias as u32).await
+                            else {
+                                tracing::warn!(
+                                    "cannot found alias {} in quest {}, skipping",
+                                    alias,
+                                    id,
+                                );
+                                continue;
+                            };
+
+                            aliases.insert(
+                                (id, *alias as u32),
+                                AliasInfo {
+                                    ty,
+                                    scripts: Vec::new(),
+                                },
+                            );
+                        }
+                    } else {
+                        depends.insert(id);
+                    }
+                }
+                Value::Struct(fields, _) => {
+                    for field in fields {
+                        values_queue.push(&field.value);
+                    }
+                }
+                Value::Array(values, _) => {
+                    values_queue.extend(values);
+                }
+                _ => {}
+            }
+        }
+    }
+
+    let mut scripts = HashMap::new();
+
+    // We only want to create a new instance of the root object.
+    // The dependencies must remain regular base objects.
+    let base_class_name = if kind.is_instance() {
+        record_instance_script_name(&record.local.data).unwrap()
+    } else {
+        record_script_name(&record.local.data).unwrap()
+    };
+
+    let instance = compiled_classes
+        .get_or_compile(engine, base_class_name)
+        .await;
+    let layout = engine.get_type(base_class_name).unwrap();
+    let builder = engine.object_pool().insert(layout.clone());
+
+    scripts.insert(
+        base_class_name.to_owned(),
+        PartialObject {
+            instance: instance.clone(),
+            builder,
+            script: None,
+        },
+    );
+
+    for script in record_scripts.into_iter().flat_map(|v| v) {
+        let instance = compiled_classes.get_or_compile(engine, &script.name).await;
+        let layout = engine.get_type(&script.name).unwrap();
+        let builder = engine.object_pool().insert(layout.clone());
+
+        scripts.insert(
+            script.name.clone(),
+            PartialObject {
+                instance: instance.clone(),
+                builder,
+                script: Some(script),
+            },
+        );
+    }
+
+    let mut record_aliases = HashMap::new();
+
+    // Build alias objects
+    for ((alias_owner, alias_id), alias) in aliases {
+        let mut scripts = HashMap::new();
+
+        let base_class_name = alias.ty.script_name();
+        let instance = compiled_classes
+            .get_or_compile(engine, base_class_name)
+            .await;
+        let layout = engine.get_type(base_class_name).unwrap();
+        let builder = engine.object_pool().insert(layout.clone());
+
+        scripts.insert(
+            base_class_name.to_owned(),
+            PartialObject {
+                instance: instance.clone(),
+                builder,
+                script: None,
+            },
+        );
+
+        for script in alias.scripts.into_iter() {
+            let instance = compiled_classes.get_or_compile(engine, &script.name).await;
+            let layout = engine.get_type(&script.name).unwrap();
+            let builder = engine.object_pool().insert(layout.clone());
+
+            scripts.insert(
+                script.name.clone(),
+                PartialObject {
+                    instance: instance.clone(),
+                    builder,
+                    script: Some(script),
+                },
+            );
+        }
+
+        record_aliases.insert(
+            AliasKey {
+                accessor: record.id,
+                owner: alias_owner,
+                id: alias_id,
+            },
+            scripts,
+        );
+    }
+
+    Some(LoadedRecord {
+        depends,
+        scripts,
+        aliases: record_aliases,
+    })
+}
+
+#[derive(Debug)]
+struct LoadedRecord {
+    /// Records that this record depends upon.
+    pub depends: HashSet<RecordId>,
+    pub scripts: HashMap<String, PartialObject>,
+    pub aliases: HashMap<AliasKey, HashMap<String, PartialObject>>,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
