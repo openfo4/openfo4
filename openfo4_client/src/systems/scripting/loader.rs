@@ -104,7 +104,11 @@ impl ScriptLoader {
             state.as_mut().unwrap(),
             RecordInstantiationKind::Instance,
         )
-        .await?;
+        .await;
+
+        dbg!(res.is_some(), record);
+
+        let res = res?;
 
         tracing::trace!("script for {:?} is {:?}", record, res.object.id());
 
@@ -676,7 +680,9 @@ async fn instantiate_form(
             debug_assert!(state.objects.get_by_record(record).is_none());
         }
 
-        built_objects.push((final_instances, rid, None));
+        let is_root = record == root;
+
+        built_objects.push((final_instances, rid, None, is_root));
     }
 
     let mut compiled_aliases = HashMap::new();
@@ -719,7 +725,7 @@ async fn instantiate_form(
             });
         }
 
-        built_objects.push((final_instances, None, Some(key)));
+        built_objects.push((final_instances, None, Some(key), false));
     }
 
     {
@@ -738,10 +744,10 @@ async fn instantiate_form(
     // Once we insert the new objects into the object pool, they are allowed
     // to immediately be used by another thread, so must wait until the objects
     // are fully built.
-    for (instances, record, alias_key) in built_objects {
+    for (instances, record, alias_key, is_root) in built_objects {
         let id = state.objects.insert(engine, instances, record);
 
-        if record == Some(root) {
+        if is_root {
             root_id = Some(id);
         }
 
