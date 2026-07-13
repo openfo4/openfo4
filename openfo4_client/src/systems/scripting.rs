@@ -58,6 +58,7 @@ pub struct Executor {
     queue: VecDeque<ScheduledTask>,
     event_queue: EventQueue,
     tasks: Slab<TaskState>,
+    state: Option<State>,
 }
 
 impl Executor {
@@ -91,7 +92,12 @@ impl Executor {
 
         let engine = Arc::new(engine);
 
-        let loader = Arc::new(ScriptLoader::new(engine, esp_loader, state));
+        let loader = Arc::new(ScriptLoader::new(
+            engine,
+            esp_loader,
+            state.objects.clone(),
+            state.registration.clone(),
+        ));
 
         Self {
             loader,
@@ -100,6 +106,7 @@ impl Executor {
             queue: VecDeque::new(),
             event_queue: EventQueue::default(),
             tasks: Slab::new(),
+            state: Some(state),
         }
     }
 
@@ -118,8 +125,7 @@ impl Executor {
     }
 
     fn invoke_inner(&mut self, invocation: EventInvocation) -> InvocationId {
-        let state = block_on(self.loader.state.lock());
-        let state = state.as_ref().unwrap();
+        let state = self.state.as_ref().unwrap();
 
         let scripts = state.objects.get_by_id(invocation.receiver.id()).unwrap();
 
@@ -164,18 +170,18 @@ impl Executor {
         let _span = trace_span!("Executor::update").entered();
 
         let engine = &self.loader.engine;
-        let mut state = block_on(self.loader.state.lock());
 
-        state.as_mut().unwrap().world = world;
-        state.as_mut().unwrap().globals = globals;
-        state.as_mut().unwrap().entities = script_entities;
-        state.as_mut().unwrap().quests = quests;
+        self.state.as_mut().unwrap().world = world;
+        self.state.as_mut().unwrap().globals = globals;
+        self.state.as_mut().unwrap().entities = script_entities;
+        self.state.as_mut().unwrap().quests = quests;
 
         while let Some(task) = self.queue.pop_front() {
             let task_state = &mut self.tasks[task.id.0];
-            state.as_mut().unwrap().wait_on_effect = task_state.suspended_on;
+            self.state.as_mut().unwrap().wait_on_effect = task_state.suspended_on;
 
-            let scripts = state
+            let scripts = self
+                .state
                 .as_mut()
                 .unwrap()
                 .objects
@@ -187,7 +193,7 @@ impl Executor {
                 &engine,
                 script.id(),
                 &script.name().to_owned(),
-                &mut state,
+                &mut self.state,
                 &task.func_name,
                 &task.args,
                 task_state,
@@ -208,10 +214,10 @@ impl Executor {
             }
         }
 
-        let state = state.as_mut().unwrap();
+        let state = self.state.as_mut().unwrap();
         let completed_effects = state
             .effects
-            .run(pool, world, events, esp_loader, self.loader());
+            .run(pool, world, events, esp_loader, &self.loader);
 
         for effect in completed_effects {
             if let Some(task) = self.suspended_calls.remove(&effect) {
@@ -242,8 +248,7 @@ impl Executor {
     pub fn pump_events(&mut self, world: &mut World, events: &mut EventBus, pool: &TaskPool) {
         let _span = trace_span!("Executor::pump_events").entered();
 
-        let mut state = futures_lite::future::block_on(self.loader.state.lock());
-        let state = state.as_mut().unwrap();
+        let state = self.state.as_mut().unwrap();
 
         fn collect_event_dispatches<T: events::ExtractEvent + openfo4_core::events::Event>(
             queue: &mut EventQueue,
@@ -489,7 +494,7 @@ fn core_actor_values(engine: &mut Engine) -> State {
         suspicious,
     ] = std::array::from_fn(|_| engine.object_pool().insert(actor_value.clone()).finalize());
 
-    let mut objects = ScriptObjects::default();
+    let objects = ScriptObjects::default();
 
     State {
         core_objects: CoreObjects {
@@ -509,9 +514,9 @@ fn core_actor_values(engine: &mut Engine) -> State {
         game_timers: Default::default(),
         world: core::ptr::null_mut(),
         quests: core::ptr::null_mut(),
-        objects,
+        objects: Arc::new(objects),
         globals: core::ptr::null_mut(),
-        registration: RegistrationSet::default(),
+        registration: Arc::new(RegistrationSet::default()),
         entities: core::ptr::null(),
         aliases: AliasSet::default(),
         effects: Effects::default(),

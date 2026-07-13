@@ -49,6 +49,7 @@ mod weapon;
 mod weather;
 
 use std::collections::BTreeMap;
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use hashbrown::{HashMap, HashSet};
@@ -161,8 +162,8 @@ pub struct State {
     pub quests: *mut QuestManager,
     pub entities: *const ScriptEntities,
     pub globals: *mut GlobalProperties,
-    pub registration: RegistrationSet,
-    pub objects: ScriptObjects,
+    pub registration: Arc<RegistrationSet>,
+    pub objects: Arc<ScriptObjects>,
     pub object_data: HashMap<ObjectAddr, ObjectData>,
     pub aliases: AliasSet,
     pub effects: Effects,

@@ -111,7 +111,7 @@ impl RegistrationSet {
         }
     }
 
-    pub fn for_each<F>(&mut self, kind: &EventKind, sender: &EventSender, mut f: F)
+    pub fn for_each<F>(&self, kind: &EventKind, sender: &EventSender, mut f: F)
     where
         F: FnMut(ObjectAddr, &Event),
     {

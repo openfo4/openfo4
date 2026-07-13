@@ -1,6 +1,5 @@
 use std::sync::Arc;
 
-use async_lock::Mutex as AsyncMutex;
 use game_common::string::Lowercase;
 use hashbrown::hash_map::Entry;
 use hashbrown::{HashMap, HashSet};
@@ -15,9 +14,8 @@ use parking_lot::Mutex;
 use thiserror::Error;
 
 use crate::state::esp::EspLoader;
-use crate::systems::scripting::classes::State;
 use crate::systems::scripting::objects::ScriptObjects;
-use crate::systems::scripting::registration::{Event, EventKind, EventSender};
+use crate::systems::scripting::registration::{Event, EventKind, EventSender, RegistrationSet};
 use crate::systems::scripting::{COMPILER_OPTIONS, ScriptInstance};
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
@@ -47,19 +45,26 @@ pub(super) struct ScriptObjectInner {
 pub struct ScriptLoader {
     pub(super) engine: Arc<Engine>,
     pub(super) esp_loader: Arc<EspLoader>,
-    pub(super) state: AsyncMutex<Option<State>>,
     load_events: Mutex<HashMap<RecordId, LoadEvent>>,
     cache: CompilationCache,
+    objects: Arc<ScriptObjects>,
+    registration: Arc<RegistrationSet>,
 }
 
 impl ScriptLoader {
-    pub(super) fn new(engine: Arc<Engine>, esp_loader: Arc<EspLoader>, state: State) -> Self {
+    pub(super) fn new(
+        engine: Arc<Engine>,
+        esp_loader: Arc<EspLoader>,
+        objects: Arc<ScriptObjects>,
+        registration: Arc<RegistrationSet>,
+    ) -> Self {
         Self {
             engine,
             esp_loader,
-            state: AsyncMutex::new(Some(state)),
             load_events: Default::default(),
             cache: Default::default(),
+            objects,
+            registration,
         }
     }
 
@@ -70,15 +75,14 @@ impl ScriptLoader {
     pub async fn load(&self, record: RecordId) -> Option<LoadResult> {
         tracing::debug!("loading script for {:?}", record);
 
-        let mut state = self.state.lock().await;
-
         let res = instantiate_form(
             &self.engine,
             &self.esp_loader,
             &self.load_events,
             record,
             &self.cache,
-            state.as_mut().unwrap(),
+            &self.objects,
+            &self.registration,
             RecordInstantiationKind::BaseObject,
         )
         .await?;
@@ -93,20 +97,17 @@ impl ScriptLoader {
     pub async fn load_instance(&self, record: RecordId) -> Option<ScriptObject> {
         tracing::debug!("loading script for {:?}", record);
 
-        let mut state = self.state.lock().await;
-
         let res = instantiate_form(
             &self.engine,
             &self.esp_loader,
             &self.load_events,
             record,
             &self.cache,
-            state.as_mut().unwrap(),
+            &self.objects,
+            &self.registration,
             RecordInstantiationKind::Instance,
         )
         .await;
-
-        dbg!(res.is_some(), record);
 
         let res = res?;
 
@@ -119,10 +120,7 @@ impl ScriptLoader {
     ///
     /// Only the top level properties are cloned.
     pub async fn clone_object(&self, object: &ScriptObject) -> ScriptObject {
-        let mut state = self.state.lock().await;
-        let state = state.as_mut().unwrap();
-
-        let scripts = state.objects.get_by_id(object.id()).unwrap();
+        let scripts = self.objects.get_by_id(object.id()).unwrap();
 
         let scripts = scripts
             .iter()
@@ -139,7 +137,7 @@ impl ScriptLoader {
             })
             .collect();
 
-        let id = state.objects.insert(&self.engine, scripts, None);
+        let id = self.objects.insert(&self.engine, scripts, None);
 
         ScriptObject(Arc::new(ScriptObjectInner {
             base: object.0.base,
@@ -226,10 +224,11 @@ async fn instantiate_form(
     load_events: &Mutex<HashMap<RecordId, LoadEvent>>,
     root: RecordId,
     compiled_classes: &CompilationCache,
-    state: &State,
+    object_pool: &ScriptObjects,
+    registration: &RegistrationSet,
     kind: RecordInstantiationKind,
 ) -> Option<LoadResult> {
-    if let Some(scripts) = state.objects.get_by_record(root)
+    if let Some(scripts) = object_pool.get_by_record(root)
         // FIXME: We should still cache default instances here
         // and clone the object for each call.
         && kind.is_base_object()
@@ -254,7 +253,7 @@ async fn instantiate_form(
 
     let mut queue = vec![root];
     while let Some(record) = queue.pop() {
-        if state.objects.get_by_record(record).is_some() {
+        if object_pool.get_by_record(record).is_some() {
             continue;
         }
 
@@ -428,7 +427,7 @@ async fn instantiate_form(
 
                         let id = esp_loader.resolve_form(value.form, record.id).unwrap();
                         let is_loaded =
-                            state.objects.get_by_record(id).is_some() || records.contains_key(&id);
+                            object_pool.get_by_record(id).is_some() || records.contains_key(&id);
 
                         // Even if an alias with another owner record is referenced here,
                         // we still create a new object here.
@@ -478,7 +477,7 @@ async fn instantiate_form(
         }
 
         for id in depends {
-            debug_assert!(state.objects.get_by_record(id).is_none());
+            debug_assert!(object_pool.get_by_record(id).is_none());
             debug_assert!(!records.contains_key(&id));
             queue.push(id);
         }
@@ -634,7 +633,7 @@ async fn instantiate_form(
         let mut final_instances = Vec::new();
 
         for (name, mut object) in scripts {
-            register_static_events(&object, state);
+            register_static_events(&object, registration);
 
             if let Some(script) = &object.script {
                 tracing::debug!("instantiating script {:?} (record {:?})", name, record);
@@ -643,7 +642,7 @@ async fn instantiate_form(
                     |form| esp_loader.resolve_form(form, record).unwrap(),
                     engine,
                     script,
-                    &state.objects,
+                    object_pool,
                     &partial_object_addrs,
                     &partial_alias_addrs,
                     &mut object.builder,
@@ -677,7 +676,7 @@ async fn instantiate_form(
         };
 
         if rid.is_some() {
-            debug_assert!(state.objects.get_by_record(record).is_none());
+            debug_assert!(object_pool.get_by_record(record).is_none());
         }
 
         let is_root = record == root;
@@ -690,7 +689,7 @@ async fn instantiate_form(
         let mut final_instances = Vec::new();
 
         for (name, mut object) in scripts {
-            register_static_events(&object, state);
+            register_static_events(&object, registration);
 
             if let Some(script) = &object.script {
                 tracing::debug!("instantiating alias script {:?} for {:?}", name, key);
@@ -699,7 +698,7 @@ async fn instantiate_form(
                     |form| esp_loader.resolve_form(form, key.accessor).unwrap(),
                     engine,
                     script,
-                    &state.objects,
+                    object_pool,
                     &partial_object_addrs,
                     &partial_alias_addrs,
                     &mut object.builder,
@@ -745,7 +744,7 @@ async fn instantiate_form(
     // to immediately be used by another thread, so must wait until the objects
     // are fully built.
     for (instances, record, alias_key, is_root) in built_objects {
-        let id = state.objects.insert(engine, instances, record);
+        let id = object_pool.insert(engine, instances, record);
 
         if is_root {
             root_id = Some(id);
@@ -851,7 +850,7 @@ impl AliasType {
     }
 }
 
-fn register_static_events(object: &PartialObject, state: &State) {
+fn register_static_events(object: &PartialObject, registration: &RegistrationSet) {
     // FIXME: We should validate that the base object type is correct
     // and the function signature matches what we expect before we
     // register the event.
@@ -892,7 +891,7 @@ fn register_static_events(object: &PartialObject, state: &State) {
             continue;
         }
 
-        state.registration.register(
+        registration.register(
             object.builder.addr(),
             Event {
                 kind,
