@@ -191,6 +191,21 @@ struct LoadEvent {
     // ref_count: NonZeroUsize,
 }
 
+impl LoadEvent {
+    fn listen(&self) -> LoadEventListener {
+        LoadEventListener {
+            loaded: self.loaded.listen(),
+            built: self.built.listen(),
+        }
+    }
+}
+
+#[derive(Debug)]
+struct LoadEventListener {
+    loaded: event_listener::EventListener,
+    built: event_listener::EventListener,
+}
+
 #[derive(Debug, Default)]
 struct CompilationCache {
     classes: Mutex<HashMap<String, Instance>>,
@@ -248,8 +263,7 @@ async fn instantiate_form(
     let mut records = HashMap::new();
     let mut record_aliases = HashMap::new();
 
-    let mut publish_listeners = Vec::new();
-    let mut built_listeners = Vec::new();
+    let mut listeners = HashMap::new();
 
     let mut queue = vec![root];
     while let Some(record) = queue.pop() {
@@ -257,7 +271,10 @@ async fn instantiate_form(
         // the same instance.
         let is_instance_root = kind.is_instance() && record == root;
 
-        if object_pool.get_by_record(record).is_some() {
+        if object_pool.get_by_record(record).is_some()
+            || records.contains_key(&record)
+            || listeners.contains_key(&record)
+        {
             if !is_instance_root {
                 continue;
             }
@@ -271,8 +288,10 @@ async fn instantiate_form(
             let mut events = load_events.lock();
             match events.entry(record) {
                 Entry::Occupied(event) => {
-                    publish_listeners.push((record, event.get().loaded.listen()));
-                    built_listeners.push((record, event.get().built.listen()));
+                    debug_assert!(!records.contains_key(&record));
+                    debug_assert!(!listeners.contains_key(&record));
+
+                    listeners.insert(record, event.get().listen());
                     continue;
                 }
                 Entry::Vacant(event) => {
@@ -280,6 +299,8 @@ async fn instantiate_form(
                 }
             }
         }
+
+        tracing::debug!("loading attached scripts for record {:?}", record);
 
         let kind = match kind {
             RecordInstantiationKind::BaseObject => RecordInstantiationKind::BaseObject,
@@ -292,23 +313,24 @@ async fn instantiate_form(
         let Some(loaded_rec) =
             load_record(esp_loader, record, engine, kind, compiled_classes).await
         else {
-            let mut events = load_events.lock();
-            let event = events.remove(&record).unwrap();
-            event.loaded.notify(event.loaded.total_listeners());
-            event.built.notify(event.built.total_listeners());
+            if !is_instance_root {
+                let mut events = load_events.lock();
+                let event = events.remove(&record).unwrap();
+                event.loaded.notify(event.loaded.total_listeners());
+                event.built.notify(event.built.total_listeners());
+            }
 
             continue;
         };
 
-        for id in loaded_rec.depends {
-            if object_pool.get_by_record(id).is_none() && !records.contains_key(&id) {
-                queue.push(id);
-            }
-        }
+        debug_assert!(!listeners.contains_key(&record));
 
+        queue.extend(loaded_rec.depends);
         records.insert(record, loaded_rec.scripts);
         record_aliases.extend(loaded_rec.aliases);
     }
+
+    let local_records: Vec<_> = records.keys().copied().collect();
 
     let mut partial_object_addrs = HashMap::new();
     for (id, scripts) in &records {
@@ -343,6 +365,9 @@ async fn instantiate_form(
                 continue;
             }
 
+            debug_assert!(records.contains_key(record));
+            debug_assert!(!listeners.contains_key(record));
+
             // This key must still exist, only we are allowed to remove it.
             let event = events.get_mut(record).unwrap();
             event.addrs = Some(addrs.clone());
@@ -353,16 +378,16 @@ async fn instantiate_form(
         }
     }
 
-    for (_, listener) in &mut publish_listeners {
-        listener.await;
+    for (_, listener) in &mut listeners {
+        (&mut listener.loaded).await;
     }
 
     {
         let mut events = load_events.lock();
 
-        for (record, _) in publish_listeners {
+        for (record, _) in &listeners {
             // We don't sync instance scripts.
-            let is_instance_root = kind.is_instance() && record == root;
+            let is_instance_root = kind.is_instance() && *record == root;
             if is_instance_root {
                 continue;
             }
@@ -370,12 +395,12 @@ async fn instantiate_form(
             // If the event is already removed, this means that the loading
             // has finished and the object is already fully loaded and available
             // in the object pool.
-            let Some(event) = events.get_mut(&record) else {
+            let Some(event) = events.get_mut(record) else {
                 continue;
             };
 
             let addrs = event.addrs.as_ref().unwrap();
-            partial_object_addrs.insert(record, addrs.clone());
+            partial_object_addrs.insert(*record, addrs.clone());
         }
     }
 
@@ -482,20 +507,22 @@ async fn instantiate_form(
     {
         let mut events = load_events.lock();
 
-        for (record, _) in &partial_object_addrs {
+        for record in &local_records {
             // We don't sync instance scripts.
             let is_instance_root = kind.is_instance() && *record == root;
             if is_instance_root {
                 continue;
             }
 
+            debug_assert!(!listeners.contains_key(record));
+
             let event = events.get_mut(record).unwrap();
             event.built.notify(event.built.total_listeners());
         }
     }
 
-    for (_, listener) in built_listeners {
-        listener.await;
+    for (_, listener) in listeners {
+        listener.built.await;
     }
 
     // Once we insert the new objects into the object pool, they are allowed
@@ -522,7 +549,7 @@ async fn instantiate_form(
         // Signal all other tasks that have started waiting for our objects after
         // we already signaled for the first time. Not doing so would cause them
         // to deadlock.
-        for (record, _) in partial_object_addrs {
+        for record in local_records {
             // We don't sync instance scripts.
             let is_instance_root = kind.is_instance() && record == root;
             if is_instance_root {
