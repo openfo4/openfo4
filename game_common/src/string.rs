@@ -49,7 +49,9 @@ impl Lowercase<str> {
         let mut i = 0;
         while i < s.len() {
             if s.as_bytes()[i].is_ascii_uppercase() {
-                panic!("string passed to Lowercase::<str>::from_static is not ASCII lowercase (non-ascii is not yet supported)");
+                panic!(
+                    "string passed to Lowercase::<str>::from_static is not ASCII lowercase (non-ascii is not yet supported)"
+                );
             }
 
             i += 1;

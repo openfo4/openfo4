@@ -5,8 +5,8 @@ use std::marker::PhantomData;
 use bytemuck::NoUninit;
 
 use crate::api::{Buffer, BufferDescriptor, CommandQueue};
-use crate::backend::allocator::{BuddyAllocator, GrowableAllocator, Region, UsageFlags};
 use crate::backend::BufferUsage;
+use crate::backend::allocator::{BuddyAllocator, GrowableAllocator, Region, UsageFlags};
 
 /// A [`Buffer`] that supports insertion of a dynamic number of elements.
 #[derive(Debug)]

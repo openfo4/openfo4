@@ -8,8 +8,8 @@ use hashbrown::HashMap;
 use slab::Slab;
 use thiserror::Error;
 
-use crate::api::executor::{BufferAlloc, TextureAlloc};
 use crate::api::BufferDescriptor;
+use crate::api::executor::{BufferAlloc, TextureAlloc};
 use crate::backend::allocator::{
     AllocError, Allocator, BuddyAllocator, MemoryAllocation, MemoryManager, Region, UsageFlags,
 };

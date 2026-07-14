@@ -1,4 +1,4 @@
-use std::alloc::{handle_alloc_error, Layout};
+use std::alloc::{Layout, handle_alloc_error};
 use std::cell::Cell;
 use std::iter::FusedIterator;
 use std::marker::PhantomData;

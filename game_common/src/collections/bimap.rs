@@ -2,7 +2,7 @@ use std::borrow::Borrow;
 use std::hash::Hash;
 use std::iter::FusedIterator;
 
-use hashbrown::{hash_map, HashMap};
+use hashbrown::{HashMap, hash_map};
 
 /// A bidirectional hashmap.
 ///

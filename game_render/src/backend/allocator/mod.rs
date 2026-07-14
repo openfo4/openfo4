@@ -8,8 +8,8 @@ use game_tracing::trace_span;
 use std::alloc::Layout;
 use std::num::NonZeroU64;
 use std::ops::{Deref, DerefMut};
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use bitflags::bitflags;
 use thiserror::Error;
