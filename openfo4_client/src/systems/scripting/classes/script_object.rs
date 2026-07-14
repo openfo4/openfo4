@@ -157,12 +157,22 @@ fn get_property_value(
 /// ```text
 /// ScriptObject Function(string asScriptName) native
 /// ```
-fn cast_as(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    as_script_name: Object,
-) -> Result<Object, Exception> {
-    todo!()
+fn cast_as(caller: Caller<'_, State>, self_ptr: Object, script_name: Object) -> Object {
+    let script = caller.data().objects.get_by_addr(self_ptr).unwrap();
+    let scripts = caller.data().objects.get_by_id(script.id()).unwrap();
+
+    let name = caller.string(script_name);
+
+    // - CastAs is allowed to return completely different script hierarchy
+    //   than the current one (e.g. if an object has the scripts A->B and C->D
+    //   calling CastAs(B, "D") will return the C->D object).
+    // - If both hierarchies have the same script, which one is returned is not
+    //   specified (e.g. calling CastAs(B, "A") with scripts A->B A->C is allowed
+    //   to return either A->B or A->C).
+    match scripts.get(name) {
+        Some(target) => target.get().object.addr(),
+        None => Object::NULL,
+    }
 }
 
 /// `IsBoundGameObjectAvailable`
