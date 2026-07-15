@@ -2262,10 +2262,10 @@ impl<'a, 'b> RenderPass<'a, 'b> {
                 z,
             })));
     }
-}
 
-impl<'a, 'b> Drop for RenderPass<'a, 'b> {
-    fn drop(&mut self) {
+    fn commit(&mut self) {
+        let _span = trace_span!("RenderPass::commit").entered();
+
         self.ctx.executor.cmds.lock().push(
             &self.ctx.executor.resources,
             Command::RenderPass(RenderPassCmd {
@@ -2275,6 +2275,12 @@ impl<'a, 'b> Drop for RenderPass<'a, 'b> {
                 cmds: mem::take(&mut self.cmds),
             }),
         );
+    }
+}
+
+impl<'a, 'b> Drop for RenderPass<'a, 'b> {
+    fn drop(&mut self) {
+        self.commit();
     }
 }
 
@@ -2343,10 +2349,10 @@ impl<'a> ComputePass<'a> {
 
         self.cmds.push(ComputeCommand::Dispatch(x, y, z));
     }
-}
 
-impl<'a> Drop for ComputePass<'a> {
-    fn drop(&mut self) {
+    fn commit(&mut self) {
+        let _span = trace_span!("ComputePass::commit").entered();
+
         self.queue.executor.cmds.lock().push(
             &self.queue.executor.resources,
             Command::ComputePass(ComputePassCmd {
@@ -2354,6 +2360,12 @@ impl<'a> Drop for ComputePass<'a> {
                 cmds: mem::take(&mut self.cmds),
             }),
         );
+    }
+}
+
+impl<'a> Drop for ComputePass<'a> {
+    fn drop(&mut self) {
+        self.commit();
     }
 }
 

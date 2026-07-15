@@ -2,7 +2,6 @@ use std::num::NonZeroU64;
 
 use bumpalo::Bump;
 use game_common::utils::exclusive::Exclusive;
-use game_tracing::trace_span;
 use hashbrown::{HashMap, HashSet};
 use parking_lot::Mutex;
 
@@ -39,8 +38,6 @@ impl CommandStream {
 
     /// Pushes a new [`Command`] to the end of this `CommandStream`.
     pub fn push(&mut self, resources: &Resources, cmd: Command) {
-        let _span = trace_span!("CommandStream::push").entered();
-
         let allocator = self.allocator.get_mut();
         let offset = self.accesses.len();
         cmd.write_accesses(resources, &mut self.accesses, &allocator);
