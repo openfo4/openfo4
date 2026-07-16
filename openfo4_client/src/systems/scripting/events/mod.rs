@@ -2,7 +2,6 @@ pub mod queue;
 
 use openfo4_core::ecs::{Entity, World};
 use openfo4_core::record::RecordId;
-use openfo4_script::runtime::{ObjectAddr, ObjectRef};
 
 use crate::events::combat::{BleedoutStartEvent, BodyPartCrippleEvent};
 use crate::events::inventory::{ItemAddedEvent, ItemEquippedEvent};
@@ -39,28 +38,6 @@ pub enum QueuedEventValue {
     Object(ObjectValue),
     Bool(bool),
     Int(i32),
-}
-
-impl QueuedEventValue {
-    fn to_raw(
-        &self,
-        get_entity: impl Fn(Entity, &str) -> ObjectRef,
-        get_record: impl Fn(RecordId, &str) -> ObjectRef,
-        get_object: impl Fn(&ScriptObject, &str) -> ObjectRef,
-    ) -> Value {
-        match self {
-            Self::Object(ObjectValue::None) => Value::ObjectAddr(ObjectAddr::NULL),
-            Self::Object(ObjectValue::Entity(entity, name)) => {
-                Value::ObjectRef(get_entity(*entity, &name))
-            }
-            Self::Object(ObjectValue::Record(id, name)) => Value::ObjectRef(get_record(*id, &name)),
-            Self::Object(ObjectValue::Script(object, name)) => {
-                Value::ObjectRef(get_object(object, &name))
-            }
-            Self::Bool(val) => Value::Bool(*val),
-            Self::Int(val) => Value::Int(*val),
-        }
-    }
 }
 
 #[derive(Clone, Debug, Default)]

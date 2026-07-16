@@ -257,7 +257,7 @@ impl Executor {
         ) {
             for event in events.read::<T>() {
                 for event in event.extract(ctx) {
-                    queue.push(event);
+                    queue.push(ctx.world, event);
                 }
             }
         }
@@ -272,9 +272,7 @@ impl Executor {
         collect_event_dispatches::<BleedoutStartEvent>(&mut self.event_queue, events, ctx);
         collect_event_dispatches::<BodyPartCrippleEvent>(&mut self.event_queue, events, ctx);
 
-        let dispatches = self
-            .event_queue
-            .process(world, &state.objects, pool, &self.loader);
+        let dispatches = self.event_queue.process(&state.objects, pool, &self.loader);
 
         for dispatch in dispatches {
             tracing::debug!(
