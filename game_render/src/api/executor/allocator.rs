@@ -398,13 +398,18 @@ impl PagePool {
             Layout::from_size_align(req.size.get() as usize, req.align.get() as usize).unwrap();
 
         for (page_index, page) in &mut self.pages {
-            let Some(region) = page.allocator.alloc(layout) else {
+            // Allocation is not O(1). This precheck allows us to
+            // ignore pages where the allocation would never fit.
+            if page.free_size < layout.size() {
+                continue;
+            }
+
+            let Some(region) = page.alloc(layout) else {
                 continue;
             };
 
             let ptr = page.ptr.map(|ptr| unsafe { ptr.add(region.offset) });
 
-            page.num_allocs += 1;
             return Ok(PagePoolAllocation {
                 memory: page.memory.clone(),
                 page_index,
@@ -436,18 +441,16 @@ impl PagePool {
             host_visible,
         });
 
-        let page_index = self.pages.insert(Page {
-            memory: Arc::new(memory),
-            allocator: BuddyAllocator::new(Region::new(0, page_size.get() as usize)),
-            num_allocs: 0,
+        let page_index = self.pages.insert(Page::new(
+            Arc::new(memory),
+            page_size.get() as usize,
             ptr,
             stats_block_index,
-        });
+        ));
         let page = &mut self.pages[page_index];
 
-        let region = page.allocator.alloc(layout).unwrap();
+        let region = page.alloc(layout).unwrap();
         let ptr = page.ptr.map(|ptr| unsafe { ptr.add(region.offset) });
-        page.num_allocs += 1;
 
         Ok(PagePoolAllocation {
             memory: page.memory.clone(),
@@ -470,14 +473,13 @@ impl PagePool {
         // SAFETY: The caller guarantees that the index is valid.
         let page = unsafe { self.pages.get_unchecked_mut(page_index) };
 
+        debug_assert_ne!(page.num_allocs, 0);
+
         // SAFETY: The caller guarantees that the region was previously
         // allocated in this page.
         unsafe {
-            page.allocator.dealloc(region);
+            page.dealloc(region);
         }
-
-        debug_assert_ne!(page.num_allocs, 0);
-        page.num_allocs -= 1;
 
         if page.num_allocs == 0 {
             stats.memory.write().blocks.remove(page.stats_block_index);
@@ -492,8 +494,43 @@ struct Page {
     memory: Arc<MemoryAllocation>,
     allocator: BuddyAllocator,
     num_allocs: usize,
+    free_size: usize,
     ptr: Option<NonNull<u8>>,
     stats_block_index: usize,
+}
+
+impl Page {
+    fn new(
+        memory: Arc<MemoryAllocation>,
+        size: usize,
+        ptr: Option<NonNull<u8>>,
+        stats_block_index: usize,
+    ) -> Self {
+        Self {
+            memory,
+            allocator: BuddyAllocator::new(Region::new(0, size)),
+            ptr,
+            stats_block_index,
+            num_allocs: 0,
+            free_size: size,
+        }
+    }
+
+    fn alloc(&mut self, layout: Layout) -> Option<Region> {
+        let region = self.allocator.alloc(layout)?;
+        self.num_allocs += 1;
+        self.free_size -= region.size;
+        Some(region)
+    }
+
+    unsafe fn dealloc(&mut self, region: Region) {
+        unsafe {
+            self.allocator.dealloc(region);
+        }
+
+        self.num_allocs -= 1;
+        self.free_size += region.size;
+    }
 }
 
 unsafe impl Send for Page {}
