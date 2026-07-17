@@ -12,7 +12,6 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use futures_lite::future::block_on;
-use game_common::collections::arena::{Arena, Key};
 use game_common::collections::bimap::BiMap;
 use game_tasks::TaskPool;
 use game_tracing::trace_span;
@@ -23,7 +22,7 @@ use openfo4_pex::Module;
 use openfo4_script::compiler::CompilerOptions;
 use openfo4_script::compiler::resources::TypeId;
 use openfo4_script::engine::{Engine, Instance, Options};
-use openfo4_script::runtime::{ObjectRef, Stack};
+use openfo4_script::runtime::ObjectRef;
 
 use crate::config;
 use crate::events::combat::{BleedoutStartEvent, BodyPartCrippleEvent};
@@ -35,7 +34,6 @@ use crate::systems::DeathStartEvent;
 use crate::systems::global::GlobalProperties;
 use crate::systems::quests::QuestManager;
 use crate::systems::scripting::classes::{AliasSet, BorrowedState, CoreObjects, SharedBorrowCell};
-use crate::systems::scripting::effects::EffectId;
 use crate::systems::scripting::events::queue::EventQueueProducer;
 use crate::systems::scripting::invocations::EventInvocation;
 use crate::systems::scripting::loader::{ScriptLoader, ScriptObjectId};
@@ -55,7 +53,6 @@ const COMPILER_OPTIONS: Options = Options {
 
 pub struct Executor {
     loader: Arc<ScriptLoader>,
-    invocations: Arena<InvocationState>,
     handle: RunnerHandle,
 }
 
@@ -103,11 +100,7 @@ impl Executor {
         let handle = runner.handle();
         pool.spawn(async move { runner.run().await });
 
-        Self {
-            loader,
-            invocations: Arena::new(),
-            handle,
-        }
+        Self { loader, handle }
     }
 
     pub fn loader(&self) -> &Arc<ScriptLoader> {
@@ -182,32 +175,16 @@ impl Executor {
     }
 }
 
-/// Unique identifier for each script call.
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
-struct TaskId(usize);
-
-#[derive(Clone, Debug, Default)]
-struct TaskState {
-    stack: Option<Arc<parking_lot::Mutex<Stack>>>,
-    suspended_on: Option<EffectId>,
-}
-
-#[derive(Clone, Debug)]
-struct InvocationState {
-    /// Tasks that are not completed yet.
-    running_tasks: usize,
-}
-
 fn core_actor_values(
     engine: &Engine,
     objects: Arc<ScriptObjects>,
     registration: Arc<RegistrationSet>,
     loader: Arc<ScriptLoader>,
 ) -> State {
-    let actor = block_on(engine.compile("Actor", &COMPILER_OPTIONS));
+    block_on(engine.compile("Actor", &COMPILER_OPTIONS));
     block_on(engine.compile("ActorValue", &COMPILER_OPTIONS));
 
-    let actor_layout = engine.get_type("Actor").unwrap();
+    engine.get_type("Actor").unwrap();
     let actor_value = engine.get_type("ActorValue").unwrap();
 
     let [
@@ -256,7 +233,6 @@ struct ScriptInstance {
     instance: Instance,
     layout: TypeId,
     object: ObjectRef,
-    stacks: HashMap<String, Arc<parking_lot::Mutex<Stack>>>,
 }
 
 /// Maps [`ScriptObject`]s to game world [`Entity`].

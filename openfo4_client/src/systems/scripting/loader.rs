@@ -127,7 +127,6 @@ impl ScriptLoader {
             .map(|script| ScriptInstance {
                 instance: script.get().instance.clone(),
                 layout: script.get().layout.clone(),
-                stacks: script.get().stacks.clone(),
                 object: unsafe {
                     self.engine
                         .object_pool()
@@ -441,7 +440,6 @@ async fn instantiate_form(
                 instance: object.instance,
                 layout: layout.clone(),
                 object: object.builder.finalize(),
-                stacks: HashMap::new(),
             });
         }
 
@@ -497,7 +495,6 @@ async fn instantiate_form(
                 instance: object.instance,
                 layout: layout.clone(),
                 object: object.builder.finalize(),
-                stacks: HashMap::new(),
             });
         }
 
