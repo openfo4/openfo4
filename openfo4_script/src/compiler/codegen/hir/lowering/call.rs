@@ -9,6 +9,7 @@ use crate::compiler::codegen::function::translate_function_signature;
 use crate::compiler::codegen::hir::Literal;
 use crate::compiler::codegen::hir::Null;
 use crate::compiler::codegen::hir::Value;
+use crate::compiler::codegen::hir::lowering::PTR_TYPE;
 use crate::compiler::codegen::hir::lowering::RESULT_TYPE;
 use crate::compiler::codegen::hir::lowering::Translator;
 use crate::compiler::codegen::hir::lowering::stack::StackFrameInfo;
@@ -46,7 +47,17 @@ pub fn perform_checked_call(
     // We need to allocate a single usize tag frame at the stack top.
     // We need to set the tag to 0, which indicates to the callee
     // that the function is being called for the first time.
-    translator.stack_alloc(size_of::<usize>());
+
+    // The tag must be usize aligned.
+    let size_padded = stack_frame.size_aligned_to(align_of::<usize>());
+    let padding = size_padded - stack_frame.size;
+    translator.stack_alloc(size_of::<usize>() + padding);
+
+    let stack_ptr = translator.load_stack_ptr();
+    let zero_tag = translator.builder.iconst(PTR_TYPE, 0);
+    translator
+        .builder
+        .store(zero_tag, stack_ptr, size_padded as u32);
 
     translator.builder.jump(resume_call_block, &[]);
 
@@ -55,7 +66,7 @@ pub fn perform_checked_call(
     // Move the stack pointer over our current (caller) stack space.
     let new_stack_len = translator
         .builder
-        .iadd_imm(translator.stack_start_offset, stack_frame.size as i64);
+        .iadd_imm(translator.stack_start_offset, size_padded as i64);
     translator.builder.store(
         new_stack_len,
         translator.ctx_ptr,
@@ -112,7 +123,7 @@ pub fn perform_checked_call(
     translator.builder.switch_to_block(continue_block);
 
     // Release the tag for the callee frame.
-    translator.stack_free(size_of::<usize>());
+    translator.stack_free(size_of::<usize>() + padding);
 
     translator.current_block = continue_block;
 
