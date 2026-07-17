@@ -1,5 +1,5 @@
 use openfo4_script::engine::Engine;
-use openfo4_script::runtime::{Caller, Exception};
+use openfo4_script::runtime::{Caller, Error};
 
 use crate::systems::scripting::classes::{EngineExt, Object, State};
 
@@ -22,7 +22,7 @@ pub fn register(engine: &mut Engine) {
 /// ```text
 /// Function EnableAmbientParticles(bool abEnable) native global
 /// ```
-fn enable_ambient_particles(caller: Caller<'_, State>, ab_enable: bool) -> Result<(), Exception> {
+fn enable_ambient_particles(caller: Caller<'_, State>, ab_enable: bool) -> Result<(), Error> {
     todo!()
 }
 
@@ -31,7 +31,7 @@ fn enable_ambient_particles(caller: Caller<'_, State>, ab_enable: bool) -> Resul
 /// ```text
 /// Weather Function FindWeather(int auiType) native global
 /// ```
-fn find_weather(caller: Caller<'_, State>, aui_type: i32) -> Result<Object, Exception> {
+fn find_weather(caller: Caller<'_, State>, aui_type: i32) -> Result<Object, Error> {
     todo!()
 }
 
@@ -44,7 +44,7 @@ fn force_active(
     caller: Caller<'_, State>,
     self_ptr: Object,
     ab_override: bool,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -53,7 +53,7 @@ fn force_active(
 /// ```text
 /// int Function GetClassification() native
 /// ```
-fn get_classification(caller: Caller<'_, State>, self_ptr: Object) -> Result<i32, Exception> {
+fn get_classification(caller: Caller<'_, State>, self_ptr: Object) -> Result<i32, Error> {
     todo!()
 }
 
@@ -62,7 +62,7 @@ fn get_classification(caller: Caller<'_, State>, self_ptr: Object) -> Result<i32
 /// ```text
 /// Weather Function GetCurrentWeather() native global
 /// ```
-fn get_current_weather(caller: Caller<'_, State>) -> Result<Object, Exception> {
+fn get_current_weather(caller: Caller<'_, State>) -> Result<Object, Error> {
     todo!()
 }
 
@@ -71,7 +71,7 @@ fn get_current_weather(caller: Caller<'_, State>) -> Result<Object, Exception> {
 /// ```text
 /// float Function GetCurrentWeatherTransition() native global
 /// ```
-fn get_current_weather_transition(caller: Caller<'_, State>) -> Result<f32, Exception> {
+fn get_current_weather_transition(caller: Caller<'_, State>) -> Result<f32, Error> {
     todo!()
 }
 
@@ -80,7 +80,7 @@ fn get_current_weather_transition(caller: Caller<'_, State>) -> Result<f32, Exce
 /// ```text
 /// Weather Function GetOutgoingWeather() native global
 /// ```
-fn get_outgoing_weather(caller: Caller<'_, State>) -> Result<Object, Exception> {
+fn get_outgoing_weather(caller: Caller<'_, State>) -> Result<Object, Error> {
     todo!()
 }
 
@@ -89,7 +89,7 @@ fn get_outgoing_weather(caller: Caller<'_, State>) -> Result<Object, Exception> 
 /// ```text
 /// int Function GetSkyMode() native global
 /// ```
-fn get_sky_mode(caller: Caller<'_, State>) -> Result<i32, Exception> {
+fn get_sky_mode(caller: Caller<'_, State>) -> Result<i32, Error> {
     todo!()
 }
 
@@ -98,7 +98,7 @@ fn get_sky_mode(caller: Caller<'_, State>) -> Result<i32, Exception> {
 /// ```text
 /// Function ReleaseOverride() native global
 /// ```
-fn release_override(caller: Caller<'_, State>) -> Result<(), Exception> {
+fn release_override(caller: Caller<'_, State>) -> Result<(), Error> {
     todo!()
 }
 
@@ -112,6 +112,6 @@ fn set_active(
     self_ptr: Object,
     ab_override: bool,
     ab_accelerate: bool,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }

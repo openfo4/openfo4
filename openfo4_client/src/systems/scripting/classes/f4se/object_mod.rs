@@ -1,5 +1,5 @@
 use openfo4_script::engine::Engine;
-use openfo4_script::runtime::{Caller, Exception};
+use openfo4_script::runtime::{Caller, Error};
 
 use crate::systems::scripting::classes::{EngineExt, Object, State};
 
@@ -18,10 +18,7 @@ pub fn register(engine: &mut Engine) {
 /// ```text
 /// PropertyModifier[] Function GetPropertyModifiers() native
 /// ```
-fn get_property_modifiers(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-) -> Result<Object, Exception> {
+fn get_property_modifiers(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Error> {
     todo!()
 }
 
@@ -30,7 +27,7 @@ fn get_property_modifiers(
 /// ```text
 /// int Function GetMaxRank() native
 /// ```
-fn get_max_rank(caller: Caller<'_, State>, self_ptr: Object) -> Result<i32, Exception> {
+fn get_max_rank(caller: Caller<'_, State>, self_ptr: Object) -> Result<i32, Error> {
     todo!()
 }
 
@@ -39,7 +36,7 @@ fn get_max_rank(caller: Caller<'_, State>, self_ptr: Object) -> Result<i32, Exce
 /// ```text
 /// Function SetMaxRank(int rank) native
 /// ```
-fn set_max_rank(caller: Caller<'_, State>, self_ptr: Object, rank: i32) -> Result<(), Exception> {
+fn set_max_rank(caller: Caller<'_, State>, self_ptr: Object, rank: i32) -> Result<(), Error> {
     todo!()
 }
 
@@ -48,7 +45,7 @@ fn set_max_rank(caller: Caller<'_, State>, self_ptr: Object, rank: i32) -> Resul
 /// ```text
 /// int Function GetPriority() native
 /// ```
-fn get_priority(caller: Caller<'_, State>, self_ptr: Object) -> Result<i32, Exception> {
+fn get_priority(caller: Caller<'_, State>, self_ptr: Object) -> Result<i32, Error> {
     todo!()
 }
 
@@ -57,11 +54,7 @@ fn get_priority(caller: Caller<'_, State>, self_ptr: Object) -> Result<i32, Exce
 /// ```text
 /// Function SetPriority(int priority) native
 /// ```
-fn set_priority(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    priority: i32,
-) -> Result<(), Exception> {
+fn set_priority(caller: Caller<'_, State>, self_ptr: Object, priority: i32) -> Result<(), Error> {
     todo!()
 }
 
@@ -70,6 +63,6 @@ fn set_priority(
 /// ```text
 /// MiscObject Function GetLooseMod() native
 /// ```
-fn get_loose_mod(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Exception> {
+fn get_loose_mod(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Error> {
     todo!()
 }

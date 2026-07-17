@@ -272,13 +272,9 @@ impl GameState {
 
         self.executor.update(
             &mut self.world,
-            &mut self.event_bus,
             &mut self.globals,
             &mut self.script_entities,
             &mut self.quests,
-            &self.pool,
-            &self.esp_loader,
-            Duration::from_secs(1) / UPS,
         );
         self.quests
             .update(&mut self.world, &mut self.event_bus, &mut self.executor);
@@ -334,7 +330,7 @@ impl GameState {
         systems::nif_animation::start_nif_animation_sequences(&mut self.world, &self.event_bus);
 
         self.executor
-            .pump_events(&mut self.world, &mut self.event_bus, &self.pool);
+            .pump_events(&mut self.world, &mut self.event_bus);
 
         if self.physics_debug {
             self.physics.render_debug(gizmos);

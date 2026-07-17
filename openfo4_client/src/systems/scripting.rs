@@ -6,8 +6,8 @@ mod effects;
 mod events;
 mod objects;
 mod registration;
+mod runner;
 
-use std::collections::VecDeque;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -23,8 +23,7 @@ use openfo4_pex::Module;
 use openfo4_script::compiler::CompilerOptions;
 use openfo4_script::compiler::resources::TypeId;
 use openfo4_script::engine::{Engine, Instance, Options};
-use openfo4_script::runtime::{Context, Exception, ObjectRef, Stack, Val};
-use slab::Slab;
+use openfo4_script::runtime::{ObjectRef, Stack};
 
 use crate::config;
 use crate::events::combat::{BleedoutStartEvent, BodyPartCrippleEvent};
@@ -35,15 +34,18 @@ use crate::state::esp::EspLoader;
 use crate::systems::DeathStartEvent;
 use crate::systems::global::GlobalProperties;
 use crate::systems::quests::QuestManager;
-use crate::systems::scripting::classes::{AliasSet, CoreObjects};
-use crate::systems::scripting::effects::{EffectId, Effects};
-use crate::systems::scripting::events::queue::EventQueue;
-use crate::systems::scripting::invocations::{EventInvocation, Value};
+use crate::systems::scripting::classes::{AliasSet, BorrowedState, CoreObjects, SharedBorrowCell};
+use crate::systems::scripting::effects::EffectId;
+use crate::systems::scripting::events::queue::EventQueueProducer;
+use crate::systems::scripting::invocations::EventInvocation;
 use crate::systems::scripting::loader::{ScriptLoader, ScriptObjectId};
 use crate::systems::scripting::objects::ScriptObjects;
-use crate::systems::scripting::registration::{EventSender, RegistrationSet};
+use crate::systems::scripting::registration::RegistrationSet;
+use crate::systems::scripting::runner::{Runner, RunnerHandle};
 
 use classes::State;
+
+pub use runner::Invocation;
 
 const COMPILER_OPTIONS: Options = Options {
     skip_native: true,
@@ -54,11 +56,7 @@ const COMPILER_OPTIONS: Options = Options {
 pub struct Executor {
     loader: Arc<ScriptLoader>,
     invocations: Arena<InvocationState>,
-    suspended_calls: HashMap<EffectId, ScheduledTask>,
-    queue: VecDeque<ScheduledTask>,
-    event_queue: EventQueue,
-    tasks: Slab<TaskState>,
-    state: Option<State>,
+    handle: RunnerHandle,
 }
 
 impl Executor {
@@ -88,25 +86,27 @@ impl Executor {
 
         classes::register_builtins(&mut engine);
 
-        let state = core_actor_values(&mut engine);
-
         let engine = Arc::new(engine);
+        let objects = Arc::new(ScriptObjects::default());
+        let registration = Arc::new(RegistrationSet::default());
 
         let loader = Arc::new(ScriptLoader::new(
-            engine,
+            engine.clone(),
             esp_loader,
-            state.objects.clone(),
-            state.registration.clone(),
+            objects.clone(),
+            registration.clone(),
         ));
+
+        let state = core_actor_values(&engine, objects, registration, loader.clone());
+
+        let mut runner = Runner::new(state, pool.clone());
+        let handle = runner.handle();
+        pool.spawn(async move { runner.run().await });
 
         Self {
             loader,
             invocations: Arena::new(),
-            suspended_calls: HashMap::new(),
-            queue: VecDeque::new(),
-            event_queue: EventQueue::default(),
-            tasks: Slab::new(),
-            state: Some(state),
+            handle,
         }
     }
 
@@ -117,125 +117,35 @@ impl Executor {
     /// Spawns a new script invocation on the `Executor`.
     ///
     /// The script will be invoked when ready.
-    pub fn invoke<T>(&mut self, invocation: T) -> InvocationId
+    pub fn invoke<T>(&mut self, invocation: T) -> Invocation
     where
         T: Into<EventInvocation>,
     {
-        self.invoke_inner(invocation.into())
-    }
-
-    fn invoke_inner(&mut self, invocation: EventInvocation) -> InvocationId {
-        let state = self.state.as_ref().unwrap();
-
-        let scripts = state.objects.get_by_id(invocation.receiver.id()).unwrap();
-
-        let id = self.invocations.insert(InvocationState {
-            running_tasks: scripts.len(),
-        });
-
-        for script in scripts.iter() {
-            let tid = TaskId(self.tasks.insert(TaskState::default()));
-
-            self.queue.push_back(ScheduledTask {
-                object: invocation.receiver.id(),
-                script: script.name().to_owned(),
-                invocation_id: Some(InvocationId(id)),
-                func_name: invocation.name.to_string(),
-                args: invocation.args.clone(),
-                id: tid,
-            });
-        }
-
-        InvocationId(id)
-    }
-
-    /// Returns `true` if the previously spawned invocation via [`invoke`] has complted execution.
-    ///
-    /// [`invoke`]: Self::invoke
-    pub fn is_invocation_done(&self, id: InvocationId) -> bool {
-        !self.invocations.contains_key(id.0)
+        self.handle.push_invocation(invocation.into())
     }
 
     pub fn update(
         &mut self,
         world: &mut World,
-        events: &mut EventBus,
         globals: &mut GlobalProperties,
         script_entities: &mut ScriptEntities,
         quests: &mut QuestManager,
-        pool: &TaskPool,
-        esp_loader: &Arc<EspLoader>,
-        delta: Duration,
     ) {
         let _span = trace_span!("Executor::update").entered();
 
-        let engine = &self.loader.engine;
+        self.handle.tick();
 
-        self.state.as_mut().unwrap().world = world;
-        self.state.as_mut().unwrap().globals = globals;
-        self.state.as_mut().unwrap().entities = script_entities;
-        self.state.as_mut().unwrap().quests = quests;
+        self.handle.cell.set(BorrowedState {
+            world: world,
+            quests: quests,
+            entities: script_entities,
+            globals: globals,
+        });
 
-        while let Some(task) = self.queue.pop_front() {
-            let task_state = &mut self.tasks[task.id.0];
-            self.state.as_mut().unwrap().wait_on_effect = task_state.suspended_on;
+        std::thread::sleep(Duration::from_micros(100));
 
-            let scripts = self
-                .state
-                .as_mut()
-                .unwrap()
-                .objects
-                .get_by_id(task.object)
-                .unwrap();
-            let script = scripts.get(&task.script).unwrap();
-
-            if let Some(id) = call_event_invocation_single(
-                &engine,
-                script.id(),
-                &script.name().to_owned(),
-                &mut self.state,
-                &task.func_name,
-                &task.args,
-                task_state,
-            ) {
-                task_state.suspended_on = Some(id);
-                self.suspended_calls.insert(id, task);
-                continue;
-            }
-
-            self.tasks.remove(task.id.0);
-
-            if let Some(invocation_id) = task.invocation_id {
-                let invocation = self.invocations.get_mut(invocation_id.0).unwrap();
-                invocation.running_tasks -= 1;
-                if invocation.running_tasks == 0 {
-                    self.invocations.remove(invocation_id.0).unwrap();
-                }
-            }
-        }
-
-        let state = self.state.as_mut().unwrap();
-        let completed_effects = state
-            .effects
-            .run(pool, world, events, esp_loader, &self.loader);
-
-        for effect in completed_effects {
-            if let Some(task) = self.suspended_calls.remove(&effect) {
-                self.queue.push_back(task);
-            }
-        }
-
-        // FIXME: Not necessarly required, we can leave pointers dangling.
-        // state.world = core::ptr::null_mut();
-        // state.quests = core::ptr::null_mut();
-        // state.entities = core::ptr::null();
-
-        // for entry in real_timers.tick(delta) {
-        //     self.invocations.insert(Invocation::Timer {
-        //         object: entry.object,
-        //         timer: entry.id,
-        //     });
-        // }
+        let taken = self.handle.cell.take();
+        debug_assert!(taken.is_some());
     }
 
     /// Gathers all scripting events into the `Executor`.
@@ -245,13 +155,11 @@ impl Executor {
     /// called in the next frame.
     ///
     /// [`update`]: Self::update
-    pub fn pump_events(&mut self, world: &mut World, events: &mut EventBus, pool: &TaskPool) {
+    pub fn pump_events(&mut self, world: &mut World, events: &mut EventBus) {
         let _span = trace_span!("Executor::pump_events").entered();
 
-        let state = self.state.as_mut().unwrap();
-
         fn collect_event_dispatches<T: events::ExtractEvent + openfo4_core::events::Event>(
-            queue: &mut EventQueue,
+            queue: &mut EventQueueProducer,
             events: &EventBus,
             ctx: events::Context<'_>,
         ) {
@@ -264,105 +172,19 @@ impl Executor {
 
         let ctx = events::Context { world: &world };
 
-        collect_event_dispatches::<ItemAddedEvent>(&mut self.event_queue, events, ctx);
-        collect_event_dispatches::<ItemEquippedEvent>(&mut self.event_queue, events, ctx);
-        collect_event_dispatches::<TriggerEnter>(&mut self.event_queue, events, ctx);
-        collect_event_dispatches::<TriggerLeave>(&mut self.event_queue, events, ctx);
-        collect_event_dispatches::<DeathStartEvent>(&mut self.event_queue, events, ctx);
-        collect_event_dispatches::<BleedoutStartEvent>(&mut self.event_queue, events, ctx);
-        collect_event_dispatches::<BodyPartCrippleEvent>(&mut self.event_queue, events, ctx);
-
-        let dispatches = self.event_queue.process(&state.objects, pool, &self.loader);
-
-        for dispatch in dispatches {
-            tracing::debug!(
-                "dispatching event {:?} for {:?}",
-                dispatch.kind,
-                dispatch.receiver,
-            );
-
-            // Dispatch one event for every script object.
-            let scripts = state.objects.get_by_id(dispatch.receiver).unwrap();
-            for script in scripts.iter() {
-                state.registration.for_each(
-                    &dispatch.kind,
-                    &EventSender::Object(script.get().object.addr()),
-                    |receiver, event| {
-                        let receiver = state.objects.get_by_addr(receiver).unwrap();
-
-                        if receiver.get().object.addr() == script.get().object.addr() {
-                            let tid = TaskId(self.tasks.insert(TaskState::default()));
-
-                            self.queue.push_back(ScheduledTask {
-                                object: receiver.id(),
-                                script: receiver.name().to_owned(),
-                                invocation_id: None,
-                                func_name: event.kind.func_name().to_owned(),
-                                args: dispatch.args.to_vec(),
-                                id: tid,
-                            });
-                        } else {
-                            let mut args = dispatch.args.to_vec();
-                            args.insert(0, Value::ObjectRef(script.get().object.clone()));
-
-                            let tid = TaskId(self.tasks.insert(TaskState::default()));
-
-                            self.queue.push_back(ScheduledTask {
-                                object: receiver.id(),
-                                script: receiver.name().to_owned(),
-                                invocation_id: None,
-                                func_name: event.kind.remote_func_name().to_owned(),
-                                args,
-                                id: tid,
-                            });
-                        }
-                    },
-                );
-
-                for alias in state
-                    .aliases
-                    .get_alises_for_object(script.get().object.addr())
-                {
-                    let alias = state.objects.get_by_addr(alias).unwrap();
-
-                    let mut args = dispatch.args.to_vec();
-                    args.insert(0, Value::ObjectRef(script.get().object.clone()));
-
-                    let tid = TaskId(self.tasks.insert(TaskState::default()));
-
-                    self.queue.push_back(ScheduledTask {
-                        object: alias.id(),
-                        script: alias.name().to_owned(),
-                        invocation_id: None,
-                        func_name: dispatch.kind.remote_ref_alias_func_name().to_owned(),
-                        args,
-                        id: tid,
-                    });
-                }
-            }
-        }
-    }
-
-    fn poll_timers(&mut self, delta: Duration) {
-        let _span = trace_span!("Executor::poll_timers").entered();
-
-        // let state = self.state.as_mut().unwrap();
+        collect_event_dispatches::<ItemAddedEvent>(&mut self.handle.events, events, ctx);
+        collect_event_dispatches::<ItemEquippedEvent>(&mut self.handle.events, events, ctx);
+        collect_event_dispatches::<TriggerEnter>(&mut self.handle.events, events, ctx);
+        collect_event_dispatches::<TriggerLeave>(&mut self.handle.events, events, ctx);
+        collect_event_dispatches::<DeathStartEvent>(&mut self.handle.events, events, ctx);
+        collect_event_dispatches::<BleedoutStartEvent>(&mut self.handle.events, events, ctx);
+        collect_event_dispatches::<BodyPartCrippleEvent>(&mut self.handle.events, events, ctx);
     }
 }
 
 /// Unique identifier for each script call.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 struct TaskId(usize);
-
-#[derive(Clone, Debug)]
-struct ScheduledTask {
-    id: TaskId,
-    object: ScriptObjectId,
-    script: String,
-    invocation_id: Option<InvocationId>,
-    func_name: String,
-    args: Vec<Value>,
-}
 
 #[derive(Clone, Debug, Default)]
 struct TaskState {
@@ -376,102 +198,12 @@ struct InvocationState {
     running_tasks: usize,
 }
 
-fn call_event_invocation_single(
+fn core_actor_values(
     engine: &Engine,
-    id: ScriptObjectId,
-    script_name: &str,
-    state: &mut Option<State>,
-    func_name: &str,
-    args: &[Value],
-    task_state: &mut TaskState,
-) -> Option<EffectId> {
-    let script = state
-        .as_ref()
-        .unwrap()
-        .objects
-        .get_by_id(id)
-        .unwrap()
-        .get(script_name)
-        .unwrap();
-
-    let addr = script.get().object.addr();
-
-    let Some(func) = script.get().instance.get_func(func_name) else {
-        return None;
-    };
-
-    // FIXME: Can we avoid this clone?
-    let func = func.clone();
-
-    let is_resumed = task_state.stack.is_some();
-    let stack = task_state
-        .stack
-        .get_or_insert_with(|| Arc::new(parking_lot::Mutex::new(engine.create_stack())));
-
-    let mut args = args
-        .iter()
-        .map(|value| match value {
-            Value::Bool(v) => Val::Bool((*v).into()),
-            Value::Int(v) => Val::I32(*v),
-            Value::ObjectRef(object) => Val::Object(object.addr()),
-            Value::ObjectAddr(addr) => Val::Object(*addr),
-        })
-        .collect::<Vec<_>>();
-    args.insert(0, Val::Object(script.get().object.addr()));
-
-    let mut stack = stack.lock();
-
-    let s = state.take().unwrap();
-    let mut ctx = Context::new(engine, &mut stack, s);
-
-    if is_resumed {
-        tracing::debug!(
-            "calling {}.{} ({:?}) (resumed)",
-            script_name,
-            func_name,
-            addr,
-        );
-    } else {
-        tracing::debug!("calling {}.{} ({:?})", script_name, func_name, addr);
-    }
-
-    let res = func.call(&mut ctx, &args);
-
-    let mut data = ctx.into_data();
-    let mut wait_on_effect = None;
-    match res {
-        Ok(_) | Err(Exception::Error) => {
-            if res.is_err() {
-                tracing::error!("script returned with error");
-            }
-
-            debug_assert!(
-                data.wait_on_effect.is_none(),
-                "set effect without suspending"
-            );
-
-            // Execution is done, reset the stack.
-            drop(stack);
-            task_state.stack = None;
-        }
-        Err(Exception::Suspend) => {
-            debug_assert!(
-                data.wait_on_effect.is_some(),
-                "suspended script without waiting on effect"
-            );
-
-            tracing::debug!("suspending {}.{} ({:?})", script_name, func_name, addr);
-
-            wait_on_effect = data.wait_on_effect.take();
-        }
-    }
-
-    *state = Some(data);
-
-    wait_on_effect
-}
-
-fn core_actor_values(engine: &mut Engine) -> State {
+    objects: Arc<ScriptObjects>,
+    registration: Arc<RegistrationSet>,
+    loader: Arc<ScriptLoader>,
+) -> State {
     let actor = block_on(engine.compile("Actor", &COMPILER_OPTIONS));
     block_on(engine.compile("ActorValue", &COMPILER_OPTIONS));
 
@@ -492,8 +224,6 @@ fn core_actor_values(engine: &mut Engine) -> State {
         suspicious,
     ] = std::array::from_fn(|_| engine.object_pool().insert(actor_value.clone()).finalize());
 
-    let objects = ScriptObjects::default();
-
     State {
         core_objects: CoreObjects {
             health,
@@ -510,16 +240,14 @@ fn core_actor_values(engine: &mut Engine) -> State {
         },
         real_timers: Default::default(),
         game_timers: Default::default(),
-        world: core::ptr::null_mut(),
-        quests: core::ptr::null_mut(),
-        objects: Arc::new(objects),
-        globals: core::ptr::null_mut(),
-        registration: Arc::new(RegistrationSet::default()),
-        entities: core::ptr::null(),
+        objects,
+        registration,
         aliases: AliasSet::default(),
-        effects: Effects::default(),
+        effects: Arc::default(),
         wait_on_effect: None,
         object_data: HashMap::new(),
+        borrowed: Arc::new(SharedBorrowCell::new()),
+        loader,
     }
 }
 
@@ -530,9 +258,6 @@ struct ScriptInstance {
     object: ObjectRef,
     stacks: HashMap<String, Arc<parking_lot::Mutex<Stack>>>,
 }
-
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
-pub struct InvocationId(Key);
 
 /// Maps [`ScriptObject`]s to game world [`Entity`].
 #[derive(Clone, Debug, Default)]

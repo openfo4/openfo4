@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use openfo4_script::engine::Engine;
-use openfo4_script::runtime::{Caller, Exception};
+use openfo4_script::runtime::{Caller, Error};
 
 use crate::systems::scripting::classes::{EngineExt, Object, State};
 
@@ -49,7 +49,7 @@ fn call_global_function(
     as_script_name: Object,
     as_func_name: Object,
     a_params: Object,
-) -> Result<Object, Exception> {
+) -> Result<Object, Error> {
     todo!()
 }
 
@@ -63,7 +63,7 @@ fn call_global_function_no_wait(
     as_script_name: Object,
     as_func_name: Object,
     a_params: Object,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -72,7 +72,7 @@ fn call_global_function_no_wait(
 /// ```text
 /// string Function(float afGameTime) native global
 /// ```
-fn game_time_to_string(caller: Caller<'_, State>, af_game_time: f32) -> Result<Object, Exception> {
+fn game_time_to_string(caller: Caller<'_, State>, af_game_time: f32) -> Result<Object, Error> {
     todo!()
 }
 
@@ -81,7 +81,7 @@ fn game_time_to_string(caller: Caller<'_, State>, af_game_time: f32) -> Result<O
 /// ```text
 /// float Function() native global
 /// ```
-fn get_current_game_time(caller: Caller<'_, State>) -> Result<f32, Exception> {
+fn get_current_game_time(caller: Caller<'_, State>) -> Result<f32, Error> {
     todo!()
 }
 
@@ -90,7 +90,7 @@ fn get_current_game_time(caller: Caller<'_, State>) -> Result<f32, Exception> {
 /// ```text
 /// float Function() native global
 /// ```
-fn get_current_real_time(caller: Caller<'_, State>) -> Result<f32, Exception> {
+fn get_current_real_time(caller: Caller<'_, State>) -> Result<f32, Error> {
     todo!()
 }
 
@@ -99,7 +99,7 @@ fn get_current_real_time(caller: Caller<'_, State>) -> Result<f32, Exception> {
 /// ```text
 /// int Function() native global
 /// ```
-fn get_current_stack_id(_caller: Caller<'_, State>) -> Result<i32, Exception> {
+fn get_current_stack_id(_caller: Caller<'_, State>) -> Result<i32, Error> {
     Ok(0)
 }
 
@@ -108,7 +108,7 @@ fn get_current_stack_id(_caller: Caller<'_, State>) -> Result<i32, Exception> {
 /// ```text
 /// bool Function() native global
 /// ```
-fn is_in_menu_mode(caller: Caller<'_, State>) -> Result<bool, Exception> {
+fn is_in_menu_mode(caller: Caller<'_, State>) -> Result<bool, Error> {
     todo!()
 }
 
@@ -117,7 +117,7 @@ fn is_in_menu_mode(caller: Caller<'_, State>) -> Result<bool, Exception> {
 /// ```text
 /// int Function(int aiMin, int aiMax) native global
 /// ```
-fn random_int(_caller: Caller<'_, State>, min: i32, max: i32) -> Result<i32, Exception> {
+fn random_int(_caller: Caller<'_, State>, min: i32, max: i32) -> Result<i32, Error> {
     Ok(rand::random_range(min..=max))
 }
 
@@ -126,7 +126,7 @@ fn random_int(_caller: Caller<'_, State>, min: i32, max: i32) -> Result<i32, Exc
 /// ```text
 /// float Function(float afMin, float afMax) native global
 /// ```
-fn random_float(_caller: Caller<'_, State>, min: f32, max: f32) -> Result<f32, Exception> {
+fn random_float(_caller: Caller<'_, State>, min: f32, max: f32) -> Result<f32, Error> {
     Ok(rand::random_range(min..=max))
 }
 
@@ -135,7 +135,7 @@ fn random_float(_caller: Caller<'_, State>, min: f32, max: f32) -> Result<f32, E
 /// ```text
 /// Function(string ini, float value) native global
 /// ```
-fn set_ini_float(_caller: Caller<'_, State>, _ini: Object, _value: f32) -> Result<(), Exception> {
+fn set_ini_float(_caller: Caller<'_, State>, _ini: Object, _value: f32) -> Result<(), Error> {
     Ok(())
 }
 
@@ -144,7 +144,7 @@ fn set_ini_float(_caller: Caller<'_, State>, _ini: Object, _value: f32) -> Resul
 /// ```text
 /// Function(string ini, int value) native global
 /// ```
-fn set_ini_int(_caller: Caller<'_, State>, _ini: Object, _value: i32) -> Result<(), Exception> {
+fn set_ini_int(_caller: Caller<'_, State>, _ini: Object, _value: i32) -> Result<(), Error> {
     Ok(())
 }
 
@@ -153,7 +153,7 @@ fn set_ini_int(_caller: Caller<'_, State>, _ini: Object, _value: i32) -> Result<
 /// ```text
 /// Function(string ini, bool value) native global
 /// ```
-fn set_ini_bool(_caller: Caller<'_, State>, _ini: Object, _value: bool) -> Result<(), Exception> {
+fn set_ini_bool(_caller: Caller<'_, State>, _ini: Object, _value: bool) -> Result<(), Error> {
     Ok(())
 }
 
@@ -162,11 +162,7 @@ fn set_ini_bool(_caller: Caller<'_, State>, _ini: Object, _value: bool) -> Resul
 /// ```text
 /// Function(string ini, string value) native global
 /// ```
-fn set_ini_string(
-    _caller: Caller<'_, State>,
-    _ini: Object,
-    _value: Object,
-) -> Result<(), Exception> {
+fn set_ini_string(_caller: Caller<'_, State>, _ini: Object, _value: Object) -> Result<(), Error> {
     Ok(())
 }
 
@@ -175,7 +171,7 @@ fn set_ini_string(
 /// ```text
 /// Function(float afSeconds) native global
 /// ```
-fn wait(mut caller: Caller<'_, State>, seconds: f32) -> Result<(), Exception> {
+fn wait(mut caller: Caller<'_, State>, seconds: f32) -> Result<(), Error> {
     let duration = Duration::from_secs_f32(seconds);
     if duration.is_zero() {
         return Ok(());
@@ -189,7 +185,7 @@ fn wait(mut caller: Caller<'_, State>, seconds: f32) -> Result<(), Exception> {
 /// ```text
 /// Function(float afHours) native global
 /// ```
-fn wait_game_time(caller: Caller<'_, State>, af_hours: f32) -> Result<(), Exception> {
+fn wait_game_time(caller: Caller<'_, State>, af_hours: f32) -> Result<(), Error> {
     todo!()
 }
 
@@ -198,7 +194,7 @@ fn wait_game_time(caller: Caller<'_, State>, af_hours: f32) -> Result<(), Except
 /// ```text
 /// Function(float afSeconds) native global
 /// ```
-fn wait_menu_mode(caller: Caller<'_, State>, af_seconds: f32) -> Result<(), Exception> {
+fn wait_menu_mode(caller: Caller<'_, State>, af_seconds: f32) -> Result<(), Error> {
     todo!()
 }
 
@@ -207,7 +203,7 @@ fn wait_menu_mode(caller: Caller<'_, State>, af_seconds: f32) -> Result<(), Exce
 /// ```text
 /// string Function(int numFrames) native global
 /// ```
-fn capture_frame_rate(_caller: Caller<'_, State>, _num_frames: i32) -> Result<Object, Exception> {
+fn capture_frame_rate(_caller: Caller<'_, State>, _num_frames: i32) -> Result<Object, Error> {
     Ok(Object::NULL)
 }
 
@@ -223,7 +219,7 @@ fn enter_test_data(
     _astest_details: Object,
     _astest_result_context: Object,
     _astest_result: Object,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     Ok(())
 }
 
@@ -232,7 +228,7 @@ fn enter_test_data(
 /// ```text
 /// Function() native global
 /// ```
-fn post_start_up_times(_caller: Caller<'_, State>) -> Result<(), Exception> {
+fn post_start_up_times(_caller: Caller<'_, State>) -> Result<(), Error> {
     Ok(())
 }
 
@@ -241,7 +237,7 @@ fn post_start_up_times(_caller: Caller<'_, State>) -> Result<(), Exception> {
 /// ```text
 /// Function() native global
 /// ```
-fn start_frame_rate_capture(_caller: Caller<'_, State>) -> Result<(), Exception> {
+fn start_frame_rate_capture(_caller: Caller<'_, State>) -> Result<(), Error> {
     Ok(())
 }
 
@@ -250,7 +246,7 @@ fn start_frame_rate_capture(_caller: Caller<'_, State>) -> Result<(), Exception>
 /// ```text
 /// Function() native global
 /// ```
-fn end_frame_rate_capture(_caller: Caller<'_, State>) -> Result<(), Exception> {
+fn end_frame_rate_capture(_caller: Caller<'_, State>) -> Result<(), Error> {
     Ok(())
 }
 
@@ -259,7 +255,7 @@ fn end_frame_rate_capture(_caller: Caller<'_, State>) -> Result<(), Exception> {
 /// ```text
 /// float Function() native global
 /// ```
-fn get_average_frame_rate(_caller: Caller<'_, State>) -> Result<f32, Exception> {
+fn get_average_frame_rate(_caller: Caller<'_, State>) -> Result<f32, Error> {
     Ok(60.0)
 }
 
@@ -268,7 +264,7 @@ fn get_average_frame_rate(_caller: Caller<'_, State>) -> Result<f32, Exception> 
 /// ```text
 /// float Function() native global
 /// ```
-fn get_min_frame_rate(_caller: Caller<'_, State>) -> Result<f32, Exception> {
+fn get_min_frame_rate(_caller: Caller<'_, State>) -> Result<f32, Error> {
     Ok(60.0)
 }
 
@@ -277,7 +273,7 @@ fn get_min_frame_rate(_caller: Caller<'_, State>) -> Result<f32, Exception> {
 /// ```text
 /// float Function() native global
 /// ```
-fn get_max_frame_rate(_caller: Caller<'_, State>) -> Result<f32, Exception> {
+fn get_max_frame_rate(_caller: Caller<'_, State>) -> Result<f32, Error> {
     Ok(60.0)
 }
 
@@ -286,7 +282,7 @@ fn get_max_frame_rate(_caller: Caller<'_, State>) -> Result<f32, Exception> {
 /// ```text
 /// string Function() native global
 /// ```
-fn get_current_memory(_caller: Caller<'_, State>) -> Result<Object, Exception> {
+fn get_current_memory(_caller: Caller<'_, State>) -> Result<Object, Error> {
     Ok(Object::NULL)
 }
 
@@ -295,7 +291,7 @@ fn get_current_memory(_caller: Caller<'_, State>) -> Result<Object, Exception> {
 /// ```text
 /// int Function() native global
 /// ```
-fn get_budget_count(_caller: Caller<'_, State>) -> Result<i32, Exception> {
+fn get_budget_count(_caller: Caller<'_, State>) -> Result<i32, Error> {
     Ok(0)
 }
 
@@ -304,10 +300,7 @@ fn get_budget_count(_caller: Caller<'_, State>) -> Result<i32, Exception> {
 /// ```text
 /// string Function(int aiBudgetNumber) native global
 /// ```
-fn get_current_budget(
-    _caller: Caller<'_, State>,
-    _budget_number: i32,
-) -> Result<Object, Exception> {
+fn get_current_budget(_caller: Caller<'_, State>, _budget_number: i32) -> Result<Object, Error> {
     Ok(Object::NULL)
 }
 
@@ -316,7 +309,7 @@ fn get_current_budget(
 /// ```text
 /// string Function(int aiBudgetNumber) native global
 /// ```
-fn get_budget_limit(_caller: Caller<'_, State>, _budget_number: i32) -> Result<Object, Exception> {
+fn get_budget_limit(_caller: Caller<'_, State>, _budget_number: i32) -> Result<Object, Error> {
     Ok(Object::NULL)
 }
 
@@ -325,7 +318,7 @@ fn get_budget_limit(_caller: Caller<'_, State>, _budget_number: i32) -> Result<O
 /// ```text
 /// bool Function(int aiBudgetNumber) native global
 /// ```
-fn over_budget(_caller: Caller<'_, State>, _budget_number: i32) -> Result<bool, Exception> {
+fn over_budget(_caller: Caller<'_, State>, _budget_number: i32) -> Result<bool, Error> {
     Ok(false)
 }
 
@@ -334,6 +327,6 @@ fn over_budget(_caller: Caller<'_, State>, _budget_number: i32) -> Result<bool, 
 /// ```text
 /// string Function(int aiBudgetNumber) native global
 /// ```
-fn get_budget_name(_caller: Caller<'_, State>, _budget_number: i32) -> Result<Object, Exception> {
+fn get_budget_name(_caller: Caller<'_, State>, _budget_number: i32) -> Result<Object, Error> {
     Ok(Object::NULL)
 }

@@ -1,5 +1,5 @@
 use openfo4_script::engine::Engine;
-use openfo4_script::runtime::{Caller, Exception};
+use openfo4_script::runtime::{Caller, Error};
 
 use crate::systems::scripting::classes::{EngineExt, Object, State};
 
@@ -15,7 +15,7 @@ pub fn register(engine: &mut Engine) {
 /// ```text
 /// Form Function GetDefaultObject(string editorId) native global
 /// ```
-fn get_default_object(caller: Caller<'_, State>, editor_id: Object) -> Result<Object, Exception> {
+fn get_default_object(caller: Caller<'_, State>, editor_id: Object) -> Result<Object, Error> {
     todo!()
 }
 
@@ -24,7 +24,7 @@ fn get_default_object(caller: Caller<'_, State>, editor_id: Object) -> Result<Ob
 /// ```text
 /// Form Function Get() native
 /// ```
-fn get(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Exception> {
+fn get(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Error> {
     todo!()
 }
 
@@ -33,6 +33,6 @@ fn get(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Exception>
 /// ```text
 /// Function Set(Form newForm) native
 /// ```
-fn set(caller: Caller<'_, State>, self_ptr: Object, new_form: Object) -> Result<(), Exception> {
+fn set(caller: Caller<'_, State>, self_ptr: Object, new_form: Object) -> Result<(), Error> {
     todo!()
 }

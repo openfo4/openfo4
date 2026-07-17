@@ -49,6 +49,7 @@ mod weapon;
 mod weather;
 
 use std::collections::BTreeMap;
+use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -57,17 +58,18 @@ use openfo4_core::ecs::{Entity, World};
 use openfo4_core::record::RecordId;
 use openfo4_script::RegisterNativeError;
 use openfo4_script::engine::Engine;
-use openfo4_script::runtime::{Exception, IntoFunc, ObjectAddr, ObjectRef};
+use openfo4_script::runtime::{Error, IntoFunc, ObjectAddr, ObjectRef};
+use parking_lot::{
+    MappedRwLockReadGuard, MappedRwLockWriteGuard, Mutex, RwLock, RwLockReadGuard, RwLockWriteGuard,
+};
 use slab::Slab;
 
 use crate::components::BaseObject;
 use crate::systems::global::GlobalProperties;
 use crate::systems::quests::QuestManager;
 use crate::systems::scripting::ScriptEntities;
-use crate::systems::scripting::effects::{
-    Effect, EffectId, Effects, LoadEntityEffect, LoadRecordEffect,
-};
-use crate::systems::scripting::loader::{ScriptObject, ScriptObjectId};
+use crate::systems::scripting::effects::{Effect, EffectId, Effects};
+use crate::systems::scripting::loader::{ScriptLoader, ScriptObject};
 use crate::systems::scripting::objects::{ScriptObjects, ScriptsRef};
 use crate::systems::scripting::registration::RegistrationSet;
 
@@ -121,6 +123,8 @@ pub fn register_builtins(engine: &mut Engine) {
     effect_shader::register(engine);
     active_magic_effect::register(engine);
     terminal::register(engine);
+    global_variable::register(engine);
+    form_list::register(engine);
 
     engine.register_if_exists("Sound", "SetInstanceVolume", sound::set_instance_volume);
     engine.register_if_exists("Sound", "StopInstance", sound::stop_instance);
@@ -131,8 +135,6 @@ pub fn register_builtins(engine: &mut Engine) {
     engine.register_if_exists("Spell", "IsHostile", spell::is_hostile);
     engine.register_if_exists("Spell", "RemoteCast", spell::remote_cast);
 
-    engine.register_if_exists("GlobalVariable", "GetValue", global_variable::get_value);
-    engine.register_if_exists("GlobalVariable", "SetValue", global_variable::set_value);
 
     engine.register_if_exists("Keyword", "SendStoryEvent", keyword::send_story_event);
     engine.register_if_exists("Keyword", "SendStoryEventAndWait", keyword::send_story_event_and_wait);
@@ -141,33 +143,23 @@ pub fn register_builtins(engine: &mut Engine) {
 
     engine.register_if_exists("Potion", "IsHostile", potion::is_hostile);
 
-    engine.register_if_exists("FormList", "AddForm", form_list::add_form);
-    engine.register_if_exists("FormList", "Find", form_list::find);
-    engine.register_if_exists("FormList", "GetAt", form_list::get_at);
-    engine.register_if_exists("FormList", "GetSize", form_list::get_size);
-    engine.register_if_exists("FormList", "HasForm", form_list::has_form);
-    engine.register_if_exists("FormList", "RemoveAddedForm", form_list::remove_added_form);
-    engine.register_if_exists("FormList", "Revert", form_list::revert);
-
-
     f4se::register(engine);
     mcm::register(engine);
 }
 
+#[derive(Clone)]
 pub struct State {
     pub core_objects: CoreObjects,
     pub real_timers: TimerSet,
     pub game_timers: TimerSet,
-    pub world: *mut World,
-    pub quests: *mut QuestManager,
-    pub entities: *const ScriptEntities,
-    pub globals: *mut GlobalProperties,
+    pub borrowed: Arc<SharedBorrowCell<BorrowedState>>,
     pub registration: Arc<RegistrationSet>,
     pub objects: Arc<ScriptObjects>,
     pub object_data: HashMap<ObjectAddr, ObjectData>,
     pub aliases: AliasSet,
-    pub effects: Effects,
+    pub effects: Arc<Mutex<Effects>>,
     pub wait_on_effect: Option<EffectId>,
+    pub loader: Arc<ScriptLoader>,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -218,38 +210,35 @@ pub struct AliasState {
 }
 
 impl State {
-    fn world(&self) -> &World {
-        unsafe { &mut *self.world }
+    async fn world(&self) -> Borrow<'_, World> {
+        let s = self.borrowed.borrow().await;
+        Borrow::map(s, |state| unsafe { &*state.world })
     }
 
-    fn quests(&mut self) -> &mut QuestManager {
-        unsafe { &mut *self.quests }
+    async fn quests(&mut self) -> BorrowMut<'_, QuestManager> {
+        let s = self.borrowed.borrow_mut().await;
+        BorrowMut::map(s, |state| unsafe { &mut *state.quests })
     }
 
-    fn globals(&self) -> &GlobalProperties {
-        unsafe { &*self.globals }
+    async fn globals(&self) -> Borrow<'_, GlobalProperties> {
+        let s = self.borrowed.borrow().await;
+        Borrow::map(s, |state| unsafe { &*state.globals })
     }
 
-    fn globals_mut(&mut self) -> &mut GlobalProperties {
-        unsafe { &mut *self.globals }
+    async fn globals_mut(&mut self) -> BorrowMut<'_, GlobalProperties> {
+        let s = self.borrowed.borrow_mut().await;
+        BorrowMut::map(s, |state| unsafe { &mut *state.globals })
     }
 
-    fn entities(&self) -> &ScriptEntities {
-        unsafe { &*self.entities }
-    }
-
-    pub fn get_script_object(&self, entity: Entity) -> ScriptObject {
-        if let Ok(object) = self.world().get::<&ScriptObject>(entity) {
-            return ScriptObject::clone(&object);
-        }
-
-        todo!()
+    async fn entities(&self) -> Borrow<'_, ScriptEntities> {
+        let s = self.borrowed.borrow().await;
+        Borrow::map(s, |state| unsafe { &*state.entities })
     }
 
     /// Returns the game world entity associated with a script object, if any exists.
-    pub fn entity(&self, addr: ObjectAddr) -> Option<Entity> {
+    pub async fn entity(&self, addr: ObjectAddr) -> Option<Entity> {
         let id = self.objects.get_by_addr(addr)?.id();
-        self.entities().0.get_left(&id).copied()
+        self.entities().await.0.get_left(&id).copied()
     }
 
     /// Returns the scripts associated with the given [`RecordId`].
@@ -257,7 +246,7 @@ impl State {
     /// If the object with the associated [`RecordId`] is already loaded, this function returns
     /// immediately.
     /// Otherwise it will suspend and resume once the object has been loaded asynchronously.
-    pub fn get_or_create_record(&mut self, id: RecordId) -> Result<ScriptsRef<'_>, Exception> {
+    pub async fn get_or_create_record(&self, id: RecordId) -> Result<ScriptsRef<'_>, Error> {
         if let Some(object) = self.objects.get_by_record(id) {
             // The borrow checker is too conservative here and `self.objects` is
             // borrowed for '_ if `None` is returned.
@@ -269,43 +258,55 @@ impl State {
             return Ok(object);
         }
 
-        let object = self.run_effect_and_wait(LoadRecordEffect { record: id })?;
-        let object = object.unwrap();
-
-        let scripts = self.objects.get_by_id(object.id()).unwrap();
-        Ok(scripts)
-    }
-
-    pub fn get_or_create_entity(&mut self, entity: Entity) -> Result<ScriptsRef<'_>, Exception> {
-        if let Some(id) = self.entities().0.get_right(&entity)
-            && let Some(object) = self.objects.get_by_id(*id)
-        {
-            // The borrow checker is too conservative here and `self.objects` is
-            // borrowed for '_ if `None` is returned.
-            // We need to drop the lifetime here to keep using `self` mutable if this
-            // branch is not taken.
-            // This should not be necessary when the new borrow checker stabilizes:
-            // https://smallcultfollowing.com/babysteps/blog/2018/06/15/mir-based-borrow-check-nll-status-update/#polonius
-            let object = unsafe { core::mem::transmute::<ScriptsRef<'_>, ScriptsRef<'_>>(object) };
-            return Ok(object);
-        }
-
-        let Ok(base) = self.world().get::<&BaseObject>(entity).map(|v| v.record) else {
-            tracing::error!(
-                "failed to load script for entity {:?}: unknown base object",
-                entity
-            );
-            return Err(Exception::Error);
+        let Some(object) = self.loader.load(id).await else {
+            return Err(Error::msg(format!(
+                "failed to load scripts for record {}",
+                id
+            )));
         };
 
-        let object = self.run_effect_and_wait(LoadEntityEffect { base })?;
-        let object = object.unwrap();
-
-        let scripts = self.objects.get_by_id(object.id()).unwrap();
+        let scripts = self.objects.get_by_id(object.object.id()).unwrap();
         Ok(scripts)
     }
 
-    pub fn run_effect_and_wait<T>(&mut self, effect: T) -> Result<Option<T::Result>, Exception>
+    pub async fn get_or_create_entity(&self, entity: Entity) -> Result<ScriptsRef<'_>, Error> {
+        {
+            let entities = self.entities().await;
+
+            if let Some(id) = entities.0.get_right(&entity)
+                && let Some(object) = self.objects.get_by_id(*id)
+            {
+                // The borrow checker is too conservative here and `self.objects` is
+                // borrowed for '_ if `None` is returned.
+                // We need to drop the lifetime here to keep using `self` mutable if this
+                // branch is not taken.
+                // This should not be necessary when the new borrow checker stabilizes:
+                // https://smallcultfollowing.com/babysteps/blog/2018/06/15/mir-based-borrow-check-nll-status-update/#polonius
+                let object =
+                    unsafe { core::mem::transmute::<ScriptsRef<'_>, ScriptsRef<'_>>(object) };
+                return Ok(object);
+            }
+        }
+
+        let base = {
+            let world = self.world().await;
+            let Ok(base) = world.get::<&BaseObject>(entity).map(|v| v.record) else {
+                return Err(Error::msg(
+                    "failed to load script for entity {:?}: unknown base object",
+                ));
+            };
+
+            base
+        };
+
+        let obj = self.loader.load(base).await.unwrap().object;
+        let obj = self.loader.clone_object(&obj).await;
+
+        let scripts = self.objects.get_by_id(obj.id()).unwrap();
+        Ok(scripts)
+    }
+
+    pub async fn run_effect_and_wait<T>(&mut self, effect: T) -> Result<Option<T::Result>, Error>
     where
         T: Effect,
     {
@@ -313,19 +314,22 @@ impl State {
         if let Some(effect) = self.wait_on_effect.take() {
             let value = self
                 .effects
+                .lock()
                 .take_value(effect)
                 .map(|v| v.downcast().ok())
                 .flatten()
                 .map(|v| *v);
 
-            self.effects.discard(effect);
+            self.effects.lock().discard(effect);
 
             return Ok(value);
         }
 
-        let id = self.effects.push(effect);
+        let id = self.effects.lock().push(effect);
         self.wait_on_effect = Some(id);
-        Err(Exception::Suspend)
+        // todo!();
+        return Err(Error::msg("TODO"));
+        // Err(Exception::Suspend)
     }
 }
 
@@ -473,3 +477,159 @@ impl EngineExt for Engine {
         }
     }
 }
+
+/// A cell that allows a thread to provide a value to another thread temporarily.
+#[derive(Debug, Default)]
+pub struct SharedBorrowCell<T> {
+    value: RwLock<Option<T>>,
+    event: event_listener::Event,
+}
+
+impl<T> SharedBorrowCell<T> {
+    pub fn new() -> Self {
+        Self {
+            value: RwLock::new(None),
+            event: event_listener::Event::new(),
+        }
+    }
+
+    /// Sets the current value.
+    pub fn set(&self, value: T) {
+        *self.value.write() = Some(value);
+
+        // Notify all listeners that a value became available.
+        // Note that a thread must recheck the value after it has registered
+        // a listener, so it is not a problem that we may not wake up all listeners
+        // here.
+        self.event.notify(self.event.total_listeners());
+    }
+
+    pub fn take(&self) -> Option<T> {
+        self.value.write().take()
+    }
+
+    /// Borrows the current value. If not value currently exists, this function will wait until
+    /// some value is provided.
+    pub async fn borrow(&self) -> Borrow<'_, T> {
+        if let Some(guard) = self.try_borrow() {
+            return guard;
+        }
+
+        loop {
+            let listen = self.event.listen();
+
+            // We need to recheck whether a value became available
+            // between our last check and the time we registered the listener.
+            if let Some(guard) = self.try_borrow() {
+                return guard;
+            }
+
+            listen.await;
+        }
+    }
+
+    /// Borrows the current value, if it exists. Returns `None` if not value is set currently.
+    pub fn try_borrow(&self) -> Option<Borrow<'_, T>> {
+        let guard = self.value.read();
+        if guard.is_none() {
+            return None;
+        }
+
+        let guard = RwLockReadGuard::map(guard, |value| value.as_ref().unwrap());
+        Some(Borrow { guard })
+    }
+
+    /// Borrows the current value. If not value currently exists, this function will wait until
+    /// some value is provided.
+    pub async fn borrow_mut(&self) -> BorrowMut<'_, T> {
+        if let Some(guard) = self.try_borrow_mut() {
+            return guard;
+        }
+
+        loop {
+            let listen = self.event.listen();
+
+            // We need to recheck whether a value became available
+            // between our last check and the time we registered the listener.
+            if let Some(guard) = self.try_borrow_mut() {
+                return guard;
+            }
+
+            listen.await;
+        }
+    }
+
+    /// Borrows the current value, if it exists. Returns `None` if not value is set currently.
+    pub fn try_borrow_mut(&self) -> Option<BorrowMut<'_, T>> {
+        let guard = self.value.write();
+        if guard.is_none() {
+            return None;
+        }
+
+        let guard = RwLockWriteGuard::map(guard, |value| value.as_mut().unwrap());
+        Some(BorrowMut { guard })
+    }
+}
+
+#[derive(Debug)]
+pub struct Borrow<'a, T> {
+    guard: MappedRwLockReadGuard<'a, T>,
+}
+
+impl<'a, T> Borrow<'a, T> {
+    pub fn map<U, F>(s: Self, f: F) -> Borrow<'a, U>
+    where
+        F: FnOnce(&T) -> &U,
+    {
+        let guard = MappedRwLockReadGuard::map(s.guard, f);
+        Borrow { guard }
+    }
+}
+
+impl<'a, T> Deref for Borrow<'a, T> {
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        &*self.guard
+    }
+}
+
+#[derive(Debug)]
+pub struct BorrowMut<'a, T> {
+    guard: MappedRwLockWriteGuard<'a, T>,
+}
+
+impl<'a, T> BorrowMut<'a, T> {
+    pub fn map<U, F>(s: Self, f: F) -> BorrowMut<'a, U>
+    where
+        F: FnOnce(&mut T) -> &mut U,
+    {
+        let guard = MappedRwLockWriteGuard::map(s.guard, f);
+        BorrowMut { guard }
+    }
+}
+
+impl<'a, T> Deref for BorrowMut<'a, T> {
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        &*self.guard
+    }
+}
+
+impl<'a, T> DerefMut for BorrowMut<'a, T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut *self.guard
+    }
+}
+
+#[derive(Debug)]
+pub struct BorrowedState {
+    pub world: *const World,
+    pub quests: *mut QuestManager,
+    pub entities: *const ScriptEntities,
+    pub globals: *mut GlobalProperties,
+}
+
+unsafe impl Send for BorrowedState {}
+unsafe impl Sync for BorrowedState {}

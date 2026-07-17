@@ -1,4 +1,4 @@
-use openfo4_script::runtime::{Caller, Exception};
+use openfo4_script::runtime::{Caller, Error};
 
 use super::{Bool, Object, State};
 
@@ -7,6 +7,6 @@ use super::{Bool, Object, State};
 /// ```text
 /// bool Function IsHostile() native
 /// ```
-pub fn is_hostile(caller: Caller<'_, State>, self_ptr: Object) -> Result<Bool, Exception> {
+pub fn is_hostile(caller: Caller<'_, State>, self_ptr: Object) -> Result<Bool, Error> {
     todo!()
 }

@@ -1,13 +1,9 @@
-use std::sync::OnceLock;
-
 use openfo4_script::engine::Engine;
-use openfo4_script::runtime::{Caller, Exception};
+use openfo4_script::runtime::{Caller, Error};
 
 use crate::systems::scripting::classes::EngineExt;
 
 use super::{Float, Int, Object, State};
-
-static X: OnceLock<()> = OnceLock::new();
 
 pub fn register(engine: &mut Engine) {
     engine.register_if_exists("Message", "ClearHelpMessages", clear_help_messages);
@@ -22,7 +18,7 @@ pub fn register(engine: &mut Engine) {
 /// ```text
 /// Function ClearHelpMessages() native global
 /// ```
-pub fn clear_help_messages(caller: Caller<'_, State>) -> Result<(), Exception> {
+pub fn clear_help_messages(caller: Caller<'_, State>) -> Result<(), Error> {
     todo!()
 }
 
@@ -31,7 +27,7 @@ pub fn clear_help_messages(caller: Caller<'_, State>) -> Result<(), Exception> {
 /// ```text
 /// Function ResetHelpMessage(string asEvent) native global
 /// ```
-pub fn reset_help_message(caller: Caller<'_, State>, event: Object) -> Result<(), Exception> {
+pub fn reset_help_message(caller: Caller<'_, State>, event: Object) -> Result<(), Error> {
     todo!()
 }
 
@@ -47,14 +43,8 @@ pub fn show(
     arg7: Float,
     arg8: Float,
     arg9: Float,
-) -> Result<Int, Exception> {
-    if X.get().is_some() {
-        Ok(0)
-    } else {
-        X.set(()).unwrap();
-
-        Err(Exception::Suspend)
-    }
+) -> Result<Int, Error> {
+    todo!()
 }
 
 /// `ShowAsHelpMessage`
@@ -71,7 +61,7 @@ pub fn show_as_help_message(
     max_times: Int,
     context: Object,
     priority: Int,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -80,9 +70,6 @@ pub fn show_as_help_message(
 /// ```text
 /// Function UnshowAsHelpMessage() native
 /// ```
-pub fn unshow_as_help_message(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-) -> Result<(), Exception> {
+pub fn unshow_as_help_message(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Error> {
     todo!()
 }

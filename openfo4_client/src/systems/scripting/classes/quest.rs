@@ -1,5 +1,5 @@
 use openfo4_script::engine::Engine;
-use openfo4_script::runtime::{Caller, Exception};
+use openfo4_script::runtime::{Caller, Error};
 
 use crate::systems::quests::QuestState;
 use crate::systems::scripting::classes::EngineExt;
@@ -41,7 +41,7 @@ pub fn register(engine: &mut Engine) {
 /// ```text
 /// Function CompleteAllObjectives() native
 /// ```
-fn complete_all_objectives(caller: Caller<'_, State>, quest: Object) -> Result<(), Exception> {
+fn complete_all_objectives(caller: Caller<'_, State>, quest: Object) -> Result<(), Error> {
     todo!()
 }
 
@@ -50,7 +50,7 @@ fn complete_all_objectives(caller: Caller<'_, State>, quest: Object) -> Result<(
 /// ```text
 /// CompleteQuest
 /// ```
-fn complete_quest(caller: Caller<'_, State>, quest: Object) -> Result<(), Exception> {
+fn complete_quest(caller: Caller<'_, State>, quest: Object) -> Result<(), Error> {
     todo!()
 }
 
@@ -59,7 +59,7 @@ fn complete_quest(caller: Caller<'_, State>, quest: Object) -> Result<(), Except
 /// ```text
 /// Function FailAllObjectives() native
 /// ```
-fn fail_all_objectives(caller: Caller<'_, State>, quest: Object) -> Result<(), Exception> {
+fn fail_all_objectives(caller: Caller<'_, State>, quest: Object) -> Result<(), Error> {
     todo!()
 }
 
@@ -68,7 +68,7 @@ fn fail_all_objectives(caller: Caller<'_, State>, quest: Object) -> Result<(), E
 /// ```text
 /// Alias Function GetAlias(int aiAliasID) native
 /// ```
-fn get_alias(caller: Caller<'_, State>, quest: Object, alias_id: Int) -> Result<Object, Exception> {
+fn get_alias(caller: Caller<'_, State>, quest: Object, alias_id: Int) -> Result<Object, Error> {
     todo!()
 }
 
@@ -77,14 +77,16 @@ fn get_alias(caller: Caller<'_, State>, quest: Object, alias_id: Int) -> Result<
 /// ```text
 /// int Function GetCurrentStageID() native
 /// ```
-fn get_current_stage_id(mut caller: Caller<'_, State>, quest: Object) -> Result<Int, Exception> {
+async fn get_current_stage_id(mut caller: Caller<'_, State>, quest: Object) -> Result<Int, Error> {
     let id = caller
         .data()
         .objects
         .get_by_addr(quest)
         .and_then(|s| s.record())
-        .ok_or(Exception::Error)?;
-    let quest = caller.data_mut().quests().get(id).ok_or(Exception::Error)?;
+        .ok_or_else(|| todo!())?;
+
+    let quests = caller.data_mut().quests().await;
+    let quest = quests.get(id).ok_or_else(|| todo!())?;
     Ok(quest.active_stage.into())
 }
 
@@ -93,11 +95,7 @@ fn get_current_stage_id(mut caller: Caller<'_, State>, quest: Object) -> Result<
 /// ```text
 /// bool Function HasObjective(int aiObjective) native
 /// ```
-fn has_objective(
-    caller: Caller<'_, State>,
-    quest: Object,
-    objective: Int,
-) -> Result<bool, Exception> {
+fn has_objective(caller: Caller<'_, State>, quest: Object, objective: Int) -> Result<bool, Error> {
     todo!()
 }
 
@@ -106,7 +104,7 @@ fn has_objective(
 /// ```text
 /// bool Function IsActive() native
 /// ```
-fn is_active(caller: Caller<'_, State>, quest: Object) -> Result<bool, Exception> {
+fn is_active(caller: Caller<'_, State>, quest: Object) -> Result<bool, Error> {
     todo!()
 }
 
@@ -115,7 +113,7 @@ fn is_active(caller: Caller<'_, State>, quest: Object) -> Result<bool, Exception
 /// ```text
 /// bool Function IsCompleted() native
 /// ```
-fn is_completed(caller: Caller<'_, State>, quest: Object) -> Result<bool, Exception> {
+fn is_completed(caller: Caller<'_, State>, quest: Object) -> Result<bool, Error> {
     todo!()
 }
 
@@ -128,7 +126,7 @@ fn is_objective_completed(
     caller: Caller<'_, State>,
     quest: Object,
     objective: Int,
-) -> Result<bool, Exception> {
+) -> Result<bool, Error> {
     todo!()
 }
 
@@ -141,7 +139,7 @@ fn is_objective_displayed(
     caller: Caller<'_, State>,
     quest: Object,
     objective: Int,
-) -> Result<bool, Exception> {
+) -> Result<bool, Error> {
     todo!()
 }
 
@@ -154,7 +152,7 @@ fn is_objective_failed(
     caller: Caller<'_, State>,
     quest: Object,
     objective: Int,
-) -> Result<bool, Exception> {
+) -> Result<bool, Error> {
     todo!()
 }
 
@@ -163,14 +161,16 @@ fn is_objective_failed(
 /// ```text
 /// bool Function IsRunning() native
 /// ```
-fn is_running(mut caller: Caller<'_, State>, quest: Object) -> Result<bool, Exception> {
+async fn is_running(mut caller: Caller<'_, State>, quest: Object) -> Result<bool, Error> {
     let id = caller
         .data()
         .objects
         .get_by_addr(quest)
         .and_then(|s| s.record())
-        .ok_or(Exception::Error)?;
-    let quest = caller.data_mut().quests().get(id).ok_or(Exception::Error)?;
+        .ok_or_else(|| todo!())?;
+
+    let quests = caller.data_mut().quests().await;
+    let quest = quests.get(id).ok_or_else(|| todo!())?;
     Ok(matches!(quest.state, QuestState::Running))
 }
 
@@ -179,18 +179,20 @@ fn is_running(mut caller: Caller<'_, State>, quest: Object) -> Result<bool, Exce
 /// ```text
 /// bool Function IsStageDone(int aiStage) native
 /// ```
-fn is_stage_done(
+async fn is_stage_done(
     mut caller: Caller<'_, State>,
     quest: Object,
     stage: Int,
-) -> Result<bool, Exception> {
+) -> Result<bool, Error> {
     let id = caller
         .data()
         .objects
         .get_by_addr(quest)
         .and_then(|s| s.record())
-        .ok_or(Exception::Error)?;
-    let quest = caller.data_mut().quests().get(id).ok_or(Exception::Error)?;
+        .ok_or_else(|| todo!())?;
+
+    let quests = caller.data_mut().quests().await;
+    let quest = quests.get(id).ok_or_else(|| Error::msg("no quest"))?;
 
     let Ok(stage) = u16::try_from(stage) else {
         return Ok(false);
@@ -208,14 +210,16 @@ fn is_stage_done(
 /// ```text
 /// bool Function IsStarting() native
 /// ```
-fn is_starting(mut caller: Caller<'_, State>, quest: Object) -> Result<bool, Exception> {
+async fn is_starting(mut caller: Caller<'_, State>, quest: Object) -> Result<bool, Error> {
     let id = caller
         .data()
         .objects
         .get_by_addr(quest)
         .and_then(|s| s.record())
-        .ok_or(Exception::Error)?;
-    let quest = caller.data_mut().quests().get(id).ok_or(Exception::Error)?;
+        .ok_or_else(|| todo!())?;
+
+    let quests = caller.data_mut().quests().await;
+    let quest = quests.get(id).ok_or_else(|| todo!())?;
     Ok(matches!(quest.state, QuestState::Starting(_)))
 }
 
@@ -224,14 +228,16 @@ fn is_starting(mut caller: Caller<'_, State>, quest: Object) -> Result<bool, Exc
 /// ```text
 /// bool Function IsStopping() native
 /// ```
-fn is_stopping(mut caller: Caller<'_, State>, quest: Object) -> Result<bool, Exception> {
+async fn is_stopping(mut caller: Caller<'_, State>, quest: Object) -> Result<bool, Error> {
     let id = caller
         .data()
         .objects
         .get_by_addr(quest)
         .and_then(|s| s.record())
-        .ok_or(Exception::Error)?;
-    let quest = caller.data_mut().quests().get(id).ok_or(Exception::Error)?;
+        .ok_or_else(|| todo!())?;
+
+    let quests = caller.data_mut().quests().await;
+    let quest = quests.get(id).ok_or_else(|| todo!())?;
     Ok(matches!(quest.state, QuestState::Stopping(_)))
 }
 
@@ -240,14 +246,16 @@ fn is_stopping(mut caller: Caller<'_, State>, quest: Object) -> Result<bool, Exc
 /// ```text
 /// bool Function IsStopped() native
 /// ```
-fn is_stopped(mut caller: Caller<'_, State>, quest: Object) -> Result<bool, Exception> {
+async fn is_stopped(mut caller: Caller<'_, State>, quest: Object) -> Result<bool, Error> {
     let id = caller
         .data()
         .objects
         .get_by_addr(quest)
         .and_then(|s| s.record())
-        .ok_or(Exception::Error)?;
-    let quest = caller.data_mut().quests().get(id).ok_or(Exception::Error)?;
+        .ok_or_else(|| todo!())?;
+
+    let quests = caller.data_mut().quests().await;
+    let quest = quests.get(id).ok_or_else(|| todo!())?;
     Ok(matches!(quest.state, QuestState::Stopped))
 }
 
@@ -256,7 +264,7 @@ fn is_stopped(mut caller: Caller<'_, State>, quest: Object) -> Result<bool, Exce
 /// ```text
 /// Function Reset() native
 /// ```
-fn reset(caller: Caller<'_, State>, quest: Object) -> Result<(), Exception> {
+fn reset(caller: Caller<'_, State>, quest: Object) -> Result<(), Error> {
     todo!()
 }
 
@@ -265,7 +273,7 @@ fn reset(caller: Caller<'_, State>, quest: Object) -> Result<(), Exception> {
 /// ```text
 /// Function ResetSpeechChallenges() native
 /// ```
-fn reset_speech_challenges(caller: Caller<'_, State>, quest: Object) -> Result<(), Exception> {
+fn reset_speech_challenges(caller: Caller<'_, State>, quest: Object) -> Result<(), Error> {
     todo!()
 }
 
@@ -274,7 +282,7 @@ fn reset_speech_challenges(caller: Caller<'_, State>, quest: Object) -> Result<(
 /// ```text
 /// Function SetActive(bool abActive = true) native
 /// ```
-fn set_active(caller: Caller<'_, State>, quest: Object, active: bool) -> Result<(), Exception> {
+fn set_active(caller: Caller<'_, State>, quest: Object, active: bool) -> Result<(), Error> {
     todo!()
 }
 
@@ -283,11 +291,11 @@ fn set_active(caller: Caller<'_, State>, quest: Object, active: bool) -> Result<
 /// ```text
 /// bool Function SetCurrentStageID(int aiStageID) native
 /// ```
-fn set_current_stage_id(
+async fn set_current_stage_id(
     mut caller: Caller<'_, State>,
     quest: Object,
     stage: Int,
-) -> Result<bool, Exception> {
+) -> Result<bool, Error> {
     let Ok(stage_id) = stage.try_into() else {
         return Ok(false);
     };
@@ -297,13 +305,14 @@ fn set_current_stage_id(
         .objects
         .get_by_addr(quest)
         .and_then(|s| s.record())
-        .ok_or(Exception::Error)?;
-    let quest = caller.data_mut().quests().get(id).ok_or(Exception::Error)?;
+        .ok_or_else(|| todo!())?;
+    let mut quests = caller.data_mut().quests().await;
+    let quest = quests.get(id).ok_or_else(|| todo!())?;
     if !quest.stages.contains_key(&stage_id) {
         return Ok(false);
     }
 
-    caller.data_mut().quests().set_quest_stage(id, stage_id);
+    quests.set_quest_stage(id, stage_id);
     Ok(true)
 }
 
@@ -317,7 +326,7 @@ fn set_objective_completed(
     quest: Object,
     objective: Int,
     completed: bool,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -332,7 +341,7 @@ fn set_objective_displayed(
     objective: Int,
     displayed: bool,
     force: bool,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -346,7 +355,7 @@ fn set_objective_failed(
     quest: Object,
     objective: Int,
     failed: bool,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -355,14 +364,16 @@ fn set_objective_failed(
 /// ```text
 /// bool Function Start() native
 /// ```
-fn start(mut caller: Caller<'_, State>, quest: Object) -> Result<bool, Exception> {
+async fn start(mut caller: Caller<'_, State>, quest: Object) -> Result<bool, Error> {
     let id = caller
         .data()
         .objects
         .get_by_addr(quest)
         .and_then(|s| s.record())
-        .ok_or(Exception::Error)?;
-    caller.data_mut().quests().start_quest(id);
+        .ok_or_else(|| todo!())?;
+
+    let mut quests = caller.data_mut().quests().await;
+    quests.start_quest(id);
     // FIXME: Should we returns false if quest already running?
     Ok(true)
 }
@@ -372,14 +383,16 @@ fn start(mut caller: Caller<'_, State>, quest: Object) -> Result<bool, Exception
 /// ```text
 /// Function Stop() native
 /// ```
-fn stop(mut caller: Caller<'_, State>, quest: Object) -> Result<(), Exception> {
+async fn stop(mut caller: Caller<'_, State>, quest: Object) -> Result<(), Error> {
     let id = caller
         .data()
         .objects
         .get_by_addr(quest)
         .and_then(|s| s.record())
-        .ok_or(Exception::Error)?;
-    caller.data_mut().quests().stop_quest(id);
+        .ok_or_else(|| todo!())?;
+
+    let mut quests = caller.data_mut().quests().await;
+    quests.stop_quest(id);
     Ok(())
 }
 
@@ -392,6 +405,6 @@ fn update_current_instance_global(
     caller: Caller<'_, State>,
     quest: Object,
     gobal: Object,
-) -> Result<bool, Exception> {
+) -> Result<bool, Error> {
     todo!()
 }

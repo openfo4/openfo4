@@ -1,5 +1,5 @@
 use openfo4_script::engine::Engine;
-use openfo4_script::runtime::{Caller, Exception};
+use openfo4_script::runtime::{Caller, Error};
 
 use crate::systems::scripting::classes::EngineExt;
 
@@ -20,7 +20,7 @@ pub fn register(engine: &mut Engine) {
 /// ```text
 /// int Function GetFormID() native
 /// ```
-fn get_form_id(caller: Caller<'_, State>, self_ptr: Object) -> Result<Int, Exception> {
+fn get_form_id(caller: Caller<'_, State>, self_ptr: Object) -> Result<Int, Error> {
     todo!()
 }
 
@@ -29,7 +29,7 @@ fn get_form_id(caller: Caller<'_, State>, self_ptr: Object) -> Result<Int, Excep
 /// ```text
 /// int Function GetGoldValue() native
 /// ```
-fn get_gold_value(caller: Caller<'_, State>, self_ptr: Object) -> Result<Int, Exception> {
+fn get_gold_value(caller: Caller<'_, State>, self_ptr: Object) -> Result<Int, Error> {
     todo!()
 }
 
@@ -42,7 +42,7 @@ fn has_keyword(
     caller: Caller<'_, State>,
     self_ptr: Object,
     keyword: Object,
-) -> Result<Bool, Exception> {
+) -> Result<Bool, Error> {
     todo!()
 }
 
@@ -55,7 +55,7 @@ fn has_keyword_in_form_list(
     caller: Caller<'_, State>,
     self_ptr: Object,
     formlist: Object,
-) -> Result<Bool, Exception> {
+) -> Result<Bool, Error> {
     todo!()
 }
 
@@ -64,7 +64,7 @@ fn has_keyword_in_form_list(
 /// ```text
 /// bool Function PlayerKnows() native
 /// ```
-fn player_knows(caller: Caller<'_, State>, self_ptr: Object) -> Result<Bool, Exception> {
+fn player_knows(caller: Caller<'_, State>, self_ptr: Object) -> Result<Bool, Error> {
     todo!()
 }
 
@@ -73,7 +73,7 @@ fn player_knows(caller: Caller<'_, State>, self_ptr: Object) -> Result<Bool, Exc
 /// ```text
 /// Function StartObjectProfiling() native
 /// ```
-fn start_object_profiling(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<(), Exception> {
+fn start_object_profiling(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<(), Error> {
     Ok(())
 }
 
@@ -82,6 +82,6 @@ fn start_object_profiling(_caller: Caller<'_, State>, _self_ptr: Object) -> Resu
 /// ```text
 /// Function StopObjectProfiling() native
 /// ```
-fn stop_object_profiling(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<(), Exception> {
+fn stop_object_profiling(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<(), Error> {
     Ok(())
 }

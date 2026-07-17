@@ -1,4 +1,4 @@
-use openfo4_script::runtime::{Caller, Exception};
+use openfo4_script::runtime::{Caller, Error};
 
 use super::{Bool, Float, Int, Object, State};
 
@@ -11,7 +11,7 @@ pub fn set_instance_volume(
     caller: Caller<'_, State>,
     instance: Int,
     volume: Float,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -20,7 +20,7 @@ pub fn set_instance_volume(
 /// ```text
 /// Function StopInstance(int aiPlaybackInstance) native global
 /// ```
-pub fn stop_instance(caller: Caller<'_, State>, instance: Int) -> Result<(), Exception> {
+pub fn stop_instance(caller: Caller<'_, State>, instance: Int) -> Result<(), Error> {
     todo!()
 }
 
@@ -29,7 +29,7 @@ pub fn stop_instance(caller: Caller<'_, State>, instance: Int) -> Result<(), Exc
 /// ```text
 /// int Function Play(ObjectReference akSource) native
 /// ```
-pub fn play(caller: Caller<'_, State>, self_ptr: Object, source: Object) -> Result<Int, Exception> {
+pub fn play(caller: Caller<'_, State>, self_ptr: Object, source: Object) -> Result<Int, Error> {
     todo!();
 }
 
@@ -42,6 +42,6 @@ pub fn play_and_wait(
     caller: Caller<'_, State>,
     self_ptr: Object,
     source: Object,
-) -> Result<Bool, Exception> {
+) -> Result<Bool, Error> {
     todo!()
 }

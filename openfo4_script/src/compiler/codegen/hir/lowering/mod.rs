@@ -835,6 +835,7 @@ pub fn lower_function(
         &mut translator.builder,
         translator.abort_block,
         translator.return_block,
+        ctx_ptr,
     );
 
     translator.builder.finalize();
@@ -1129,10 +1130,13 @@ fn generate_abort_block(
     builder: &mut FunctionBuilder<'_>,
     block: Block,
     return_block: Block,
+    ctx_ptr: JitValue,
 ) {
     builder.switch_to_block(block);
 
     let result = builder.iconst(RESULT_TYPE, RESULT_ERROR);
+
+    builder.call(data.runtime_funcs.emit_error, &[ctx_ptr]);
 
     if let Some(ty) = function.returns {
         let ty = data.resources.types.get(ty).unwrap();

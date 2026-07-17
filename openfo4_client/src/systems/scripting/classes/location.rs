@@ -1,7 +1,5 @@
-use openfo4_script::{
-    engine::Engine,
-    runtime::{Caller, Exception},
-};
+use openfo4_script::engine::Engine;
+use openfo4_script::runtime::{Caller, Error};
 
 use crate::systems::scripting::classes::{EngineExt, Object, State};
 
@@ -35,7 +33,7 @@ fn add_linked_location(
     self_ptr: Object,
     ak_loc: Object,
     ak_keyword: Object,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -48,7 +46,7 @@ fn get_all_linked_locations(
     caller: Caller<'_, State>,
     self_ptr: Object,
     ak_keyword: Object,
-) -> Result<Object, Exception> {
+) -> Result<Object, Error> {
     todo!()
 }
 
@@ -61,7 +59,7 @@ fn get_keyword_data(
     caller: Caller<'_, State>,
     self_ptr: Object,
     ak_keyword: Object,
-) -> Result<f32, Exception> {
+) -> Result<f32, Error> {
     todo!()
 }
 
@@ -74,7 +72,7 @@ fn get_ref_type_alive_count(
     caller: Caller<'_, State>,
     self_ptr: Object,
     ak_ref_type: Object,
-) -> Result<i32, Exception> {
+) -> Result<i32, Error> {
     todo!()
 }
 
@@ -87,7 +85,7 @@ fn get_ref_type_dead_count(
     caller: Caller<'_, State>,
     self_ptr: Object,
     ak_ref_type: Object,
-) -> Result<i32, Exception> {
+) -> Result<i32, Error> {
     todo!()
 }
 
@@ -101,7 +99,7 @@ fn has_common_parent(
     self_ptr: Object,
     ak_other: Object,
     ak_filter: Object,
-) -> Result<bool, Exception> {
+) -> Result<bool, Error> {
     todo!()
 }
 
@@ -110,7 +108,7 @@ fn has_common_parent(
 /// ```text
 /// bool Function HasEverBeenCleared() native
 /// ```
-fn has_ever_been_cleared(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Exception> {
+fn has_ever_been_cleared(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Error> {
     todo!()
 }
 
@@ -123,7 +121,7 @@ fn has_ref_type(
     caller: Caller<'_, State>,
     self_ptr: Object,
     ak_ref_type: Object,
-) -> Result<bool, Exception> {
+) -> Result<bool, Error> {
     todo!()
 }
 
@@ -132,7 +130,7 @@ fn has_ref_type(
 /// ```text
 /// bool Function IsCleared() native
 /// ```
-fn is_cleared(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Exception> {
+fn is_cleared(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Error> {
     todo!()
 }
 
@@ -141,11 +139,7 @@ fn is_cleared(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Excep
 /// ```text
 /// bool Function IsChild(Location akOther) native
 /// ```
-fn is_child(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    ak_other: Object,
-) -> Result<bool, Exception> {
+fn is_child(caller: Caller<'_, State>, self_ptr: Object, ak_other: Object) -> Result<bool, Error> {
     todo!()
 }
 
@@ -159,7 +153,7 @@ fn is_linked_location(
     self_ptr: Object,
     ak_location: Object,
     ak_keyword: Object,
-) -> Result<bool, Exception> {
+) -> Result<bool, Error> {
     todo!()
 }
 
@@ -168,7 +162,7 @@ fn is_linked_location(
 /// ```text
 /// bool Function IsLoaded() native
 /// ```
-fn is_loaded(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Exception> {
+fn is_loaded(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Error> {
     todo!()
 }
 
@@ -182,7 +176,7 @@ fn remove_linked_location(
     self_ptr: Object,
     ak_loc: Object,
     ak_keyword: Object,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -191,7 +185,7 @@ fn remove_linked_location(
 /// ```text
 /// Function Reset() native
 /// ```
-fn reset(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Exception> {
+fn reset(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Error> {
     todo!()
 }
 
@@ -205,7 +199,7 @@ fn set_keyword_data(
     self_ptr: Object,
     ak_keyword: Object,
     af_data: f32,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -214,10 +208,6 @@ fn set_keyword_data(
 /// ```text
 /// Function SetCleared(bool abCleared) native
 /// ```
-fn set_cleared(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    ab_cleared: bool,
-) -> Result<(), Exception> {
+fn set_cleared(caller: Caller<'_, State>, self_ptr: Object, ab_cleared: bool) -> Result<(), Error> {
     todo!()
 }

@@ -1,5 +1,5 @@
 use openfo4_script::engine::Engine;
-use openfo4_script::runtime::{Caller, Exception};
+use openfo4_script::runtime::{Caller, Error};
 
 use crate::systems::scripting::classes::{EngineExt, Object, State};
 
@@ -12,6 +12,6 @@ pub fn register(engine: &mut Engine) {
 /// ```text
 /// Function ShowOnPipboy() native
 /// ```
-fn show_on_pipboy(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Exception> {
+fn show_on_pipboy(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Error> {
     todo!()
 }

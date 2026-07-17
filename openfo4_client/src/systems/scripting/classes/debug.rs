@@ -1,5 +1,5 @@
 use openfo4_script::engine::Engine;
-use openfo4_script::runtime::{Caller, Exception};
+use openfo4_script::runtime::{Caller, Error};
 
 use crate::systems::scripting::classes::{EngineExt, Object, State};
 
@@ -43,7 +43,7 @@ pub fn register(engine: &mut Engine) {
 /// ```text
 /// Function(string asCellname) native global
 /// ```
-fn center_on_cell(caller: Caller<'_, State>, as_cellname: Object) -> Result<(), Exception> {
+fn center_on_cell(caller: Caller<'_, State>, as_cellname: Object) -> Result<(), Error> {
     todo!()
 }
 
@@ -52,10 +52,7 @@ fn center_on_cell(caller: Caller<'_, State>, as_cellname: Object) -> Result<(), 
 /// ```text
 /// float Function(string asCellname) native global
 /// ```
-fn center_on_cell_and_wait(
-    caller: Caller<'_, State>,
-    as_cellname: Object,
-) -> Result<f32, Exception> {
+fn center_on_cell_and_wait(caller: Caller<'_, State>, as_cellname: Object) -> Result<f32, Error> {
     todo!()
 }
 
@@ -64,10 +61,7 @@ fn center_on_cell_and_wait(
 /// ```text
 /// float Function(string asDestRef) native global
 /// ```
-fn player_move_to_and_wait(
-    caller: Caller<'_, State>,
-    as_dest_ref: Object,
-) -> Result<f32, Exception> {
+fn player_move_to_and_wait(caller: Caller<'_, State>, as_dest_ref: Object) -> Result<f32, Error> {
     todo!()
 }
 
@@ -90,7 +84,7 @@ fn dump_alias_data(_caller: Caller<'_, State>, _quest: Object) {}
 /// ```text
 /// Function(ScriptObject akScript) native global
 /// ```
-fn dump_event_registrations(caller: Caller<'_, State>, ak_script: Object) -> Result<(), Exception> {
+fn dump_event_registrations(caller: Caller<'_, State>, ak_script: Object) -> Result<(), Error> {
     todo!()
 }
 
@@ -99,7 +93,7 @@ fn dump_event_registrations(caller: Caller<'_, State>, ak_script: Object) -> Res
 /// ```text
 /// Function(bool abEnable) native global
 /// ```
-fn enable_ai(caller: Caller<'_, State>, ab_enable: bool) -> Result<(), Exception> {
+fn enable_ai(caller: Caller<'_, State>, ab_enable: bool) -> Result<(), Error> {
     todo!()
 }
 
@@ -108,7 +102,7 @@ fn enable_ai(caller: Caller<'_, State>, ab_enable: bool) -> Result<(), Exception
 /// ```text
 /// Function(bool abEnable) native global
 /// ```
-fn enable_collisions(caller: Caller<'_, State>, ab_enable: bool) -> Result<(), Exception> {
+fn enable_collisions(caller: Caller<'_, State>, ab_enable: bool) -> Result<(), Error> {
     todo!()
 }
 
@@ -117,7 +111,7 @@ fn enable_collisions(caller: Caller<'_, State>, ab_enable: bool) -> Result<(), E
 /// ```text
 /// Function(bool abEnable) native global
 /// ```
-fn enable_detection(caller: Caller<'_, State>, ab_enable: bool) -> Result<(), Exception> {
+fn enable_detection(caller: Caller<'_, State>, ab_enable: bool) -> Result<(), Error> {
     todo!()
 }
 
@@ -126,7 +120,7 @@ fn enable_detection(caller: Caller<'_, State>, ab_enable: bool) -> Result<(), Ex
 /// ```text
 /// Function(bool abEnable) native global
 /// ```
-fn enable_menus(caller: Caller<'_, State>, ab_enable: bool) -> Result<(), Exception> {
+fn enable_menus(caller: Caller<'_, State>, ab_enable: bool) -> Result<(), Error> {
     todo!()
 }
 
@@ -135,7 +129,7 @@ fn enable_menus(caller: Caller<'_, State>, ab_enable: bool) -> Result<(), Except
 /// ```text
 /// string Function() native global
 /// ```
-fn get_config_name(caller: Caller<'_, State>) -> Result<Object, Exception> {
+fn get_config_name(caller: Caller<'_, State>) -> Result<Object, Error> {
     todo!()
 }
 
@@ -144,7 +138,7 @@ fn get_config_name(caller: Caller<'_, State>) -> Result<Object, Exception> {
 /// ```text
 /// string Function() native global
 /// ```
-fn get_platform_name(caller: Caller<'_, State>) -> Result<Object, Exception> {
+fn get_platform_name(caller: Caller<'_, State>) -> Result<Object, Error> {
     todo!()
 }
 
@@ -153,7 +147,7 @@ fn get_platform_name(caller: Caller<'_, State>) -> Result<Object, Exception> {
 /// ```text
 /// string Function() native global
 /// ```
-fn get_version_number(caller: Caller<'_, State>) -> Result<Object, Exception> {
+fn get_version_number(caller: Caller<'_, State>) -> Result<Object, Error> {
     todo!()
 }
 
@@ -162,7 +156,7 @@ fn get_version_number(caller: Caller<'_, State>) -> Result<Object, Exception> {
 /// ```text
 /// Function(string asMessageBoxText) native global
 /// ```
-fn message_box(caller: Caller<'_, State>, as_message_box_text: Object) -> Result<(), Exception> {
+fn message_box(caller: Caller<'_, State>, as_message_box_text: Object) -> Result<(), Error> {
     todo!()
 }
 
@@ -171,7 +165,7 @@ fn message_box(caller: Caller<'_, State>, as_message_box_text: Object) -> Result
 /// ```text
 /// Function(string asNotificationText) native global
 /// ```
-fn notification(caller: Caller<'_, State>, as_notification_text: Object) -> Result<(), Exception> {
+fn notification(caller: Caller<'_, State>, as_notification_text: Object) -> Result<(), Error> {
     todo!()
 }
 
@@ -189,7 +183,7 @@ fn open_user_log(_caller: Caller<'_, State>, _log_name: Object) -> bool {
 /// ```text
 /// Function() native global
 /// ```
-fn quit_game(caller: Caller<'_, State>) -> Result<(), Exception> {
+fn quit_game(caller: Caller<'_, State>) -> Result<(), Error> {
     todo!()
 }
 
@@ -198,7 +192,7 @@ fn quit_game(caller: Caller<'_, State>) -> Result<(), Exception> {
 /// ```text
 /// Function(bool abFootIK) native global
 /// ```
-fn set_foot_ik(caller: Caller<'_, State>, ab_foot_ik: bool) -> Result<(), Exception> {
+fn set_foot_ik(caller: Caller<'_, State>, ab_foot_ik: bool) -> Result<(), Error> {
     todo!()
 }
 
@@ -207,7 +201,7 @@ fn set_foot_ik(caller: Caller<'_, State>, ab_foot_ik: bool) -> Result<(), Except
 /// ```text
 /// Function(bool abGodMode) native global
 /// ```
-fn set_god_mode(caller: Caller<'_, State>, ab_god_mode: bool) -> Result<(), Exception> {
+fn set_god_mode(caller: Caller<'_, State>, ab_god_mode: bool) -> Result<(), Error> {
     todo!()
 }
 
@@ -310,7 +304,7 @@ fn trace_user(caller: Caller<'_, State>, _user_log: Object, text: Object, severi
 /// ```text
 /// Function(ObjectReference arRef) native global
 /// ```
-fn show_ref_position(caller: Caller<'_, State>, ar_ref: Object) -> Result<(), Exception> {
+fn show_ref_position(caller: Caller<'_, State>, ar_ref: Object) -> Result<(), Error> {
     todo!()
 }
 
@@ -319,6 +313,6 @@ fn show_ref_position(caller: Caller<'_, State>, ar_ref: Object) -> Result<(), Ex
 /// ```text
 /// Function() native global
 /// ```
-fn db_send_player_position(caller: Caller<'_, State>) -> Result<(), Exception> {
+fn db_send_player_position(caller: Caller<'_, State>) -> Result<(), Error> {
     todo!()
 }

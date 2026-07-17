@@ -1,7 +1,5 @@
-use openfo4_script::{
-    engine::Engine,
-    runtime::{Caller, Exception},
-};
+use openfo4_script::engine::Engine;
+use openfo4_script::runtime::{Caller, Error};
 
 use crate::systems::scripting::classes::{EngineExt, Object, State};
 
@@ -18,7 +16,7 @@ pub fn register(engine: &mut Engine) {
 /// ```text
 /// Spell Function GetConsumeSpell() native
 /// ```
-fn get_consume_spell(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Exception> {
+fn get_consume_spell(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Error> {
     todo!()
 }
 
@@ -27,11 +25,7 @@ fn get_consume_spell(caller: Caller<'_, State>, self_ptr: Object) -> Result<Obje
 /// ```text
 /// Function SetConsumeSpell(Spell sp) native
 /// ```
-fn set_consume_spell(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    sp: Object,
-) -> Result<(), Exception> {
+fn set_consume_spell(caller: Caller<'_, State>, self_ptr: Object, sp: Object) -> Result<(), Error> {
     todo!()
 }
 
@@ -40,7 +34,7 @@ fn set_consume_spell(
 /// ```text
 /// Spell Function GetContactSpell() native
 /// ```
-fn get_contact_spell(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Exception> {
+fn get_contact_spell(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Error> {
     todo!()
 }
 
@@ -49,10 +43,6 @@ fn get_contact_spell(caller: Caller<'_, State>, self_ptr: Object) -> Result<Obje
 /// ```text
 /// Function SetContactSpell(Spell sp) native
 /// ```
-fn set_contact_spell(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    sp: Object,
-) -> Result<(), Exception> {
+fn set_contact_spell(caller: Caller<'_, State>, self_ptr: Object, sp: Object) -> Result<(), Error> {
     todo!()
 }

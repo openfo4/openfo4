@@ -1,7 +1,5 @@
-use openfo4_script::{
-    engine::Engine,
-    runtime::{Caller, Exception},
-};
+use openfo4_script::engine::Engine;
+use openfo4_script::runtime::{Caller, Error};
 
 use crate::systems::scripting::classes::{EngineExt, Object, State};
 
@@ -21,7 +19,7 @@ fn fire(
     self_ptr: Object,
     ak_source: Object,
     ak_ammo: Object,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -30,6 +28,6 @@ fn fire(
 /// ```text
 /// Ammo Function GetAmmo() native
 /// ```
-fn get_ammo(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Exception> {
+fn get_ammo(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Error> {
     todo!()
 }

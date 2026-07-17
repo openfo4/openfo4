@@ -5,7 +5,7 @@ use game_common::utils::vec_ext::VecExt;
 use tracing::span::EnteredSpan;
 
 use crate::compiler::resources::TypeId;
-use crate::runtime::{ObjectAddr, RawContext, RawVal};
+use crate::runtime::{Error, ObjectAddr, RawContext, RawVal};
 
 pub unsafe extern "C" fn call_host_trampoline(
     ctx: *mut RawContext,
@@ -130,6 +130,13 @@ pub unsafe extern "C" fn stub() {
     abort_on_unwind(|| {
         panic!("Entered stub function");
     })
+}
+
+pub unsafe extern "C" fn emit_error(ctx: *mut RawContext) {
+    unsafe {
+        let ctx = &mut *ctx;
+        *ctx.error.borrow_mut() = Some(Box::new(Error::msg("internal error")));
+    }
 }
 
 fn abort_on_unwind<F, R>(f: F) -> R

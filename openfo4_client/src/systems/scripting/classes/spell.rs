@@ -1,6 +1,6 @@
-use openfo4_script::runtime::{Caller, Exception};
+use openfo4_script::runtime::{Caller, Error};
 
-use super::{Bool, Int, Object, State};
+use super::{Bool, Object, State};
 
 /// `Cast`
 ///
@@ -12,7 +12,7 @@ pub fn cast(
     self_ptr: Object,
     source: Object,
     target: Object,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -21,7 +21,7 @@ pub fn cast(
 /// ```text
 /// bool Function IsHostile() native
 /// ```
-pub fn is_hostile(caller: Caller<'_, State>, self_ptr: Object) -> Result<Bool, Exception> {
+pub fn is_hostile(caller: Caller<'_, State>, self_ptr: Object) -> Result<Bool, Error> {
     todo!()
 }
 
@@ -36,6 +36,6 @@ pub fn remote_cast(
     source: Object,
     blame_actor: Object,
     target: Object,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }

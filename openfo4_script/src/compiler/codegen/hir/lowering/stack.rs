@@ -32,6 +32,13 @@ impl StackFrameInfo {
             .find(|v| v.tag == tag)
             .or_else(|| self.points.values().find(|v| v.tag == tag))
     }
+
+    /// Returns the size of the entire stack frame, aligned up to `align`.
+    pub fn size_aligned_to(&self, align: usize) -> usize {
+        debug_assert_ne!(align, 0);
+        debug_assert!(align.is_power_of_two());
+        (self.size + align - 1) & !(align - 1)
+    }
 }
 
 #[derive(Clone, Debug)]

@@ -1,7 +1,5 @@
-use openfo4_script::{
-    engine::Engine,
-    runtime::{Caller, Exception},
-};
+use openfo4_script::engine::Engine;
+use openfo4_script::runtime::{Caller, Error};
 
 use crate::systems::scripting::classes::{EngineExt, Object, State};
 
@@ -24,11 +22,7 @@ pub fn register(engine: &mut Engine) {
 /// ```text
 /// Function RegisterForKey(int key) native
 /// ```
-fn register_for_key(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    key: i32,
-) -> Result<(), Exception> {
+fn register_for_key(caller: Caller<'_, State>, self_ptr: Object, key: i32) -> Result<(), Error> {
     todo!()
 }
 
@@ -37,11 +31,7 @@ fn register_for_key(
 /// ```text
 /// Function UnregisterForKey(int key) native
 /// ```
-fn unregister_for_key(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    key: i32,
-) -> Result<(), Exception> {
+fn unregister_for_key(caller: Caller<'_, State>, self_ptr: Object, key: i32) -> Result<(), Error> {
     todo!()
 }
 
@@ -54,7 +44,7 @@ fn register_for_control(
     caller: Caller<'_, State>,
     self_ptr: Object,
     control: Object,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -67,7 +57,7 @@ fn unregister_for_control(
     caller: Caller<'_, State>,
     self_ptr: Object,
     control: Object,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -81,7 +71,7 @@ fn register_for_external_event(
     self_ptr: Object,
     event_name: Object,
     callback: Object,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -94,7 +84,7 @@ fn unregister_for_external_event(
     caller: Caller<'_, State>,
     self_ptr: Object,
     event_name: Object,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -103,7 +93,7 @@ fn unregister_for_external_event(
 /// ```text
 /// Function RegisterForCameraState() native
 /// ```
-fn register_for_camera_state(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Exception> {
+fn register_for_camera_state(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Error> {
     todo!()
 }
 
@@ -112,10 +102,7 @@ fn register_for_camera_state(caller: Caller<'_, State>, self_ptr: Object) -> Res
 /// ```text
 /// Function UnregisterForCameraState() native
 /// ```
-fn unregister_for_camera_state(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-) -> Result<(), Exception> {
+fn unregister_for_camera_state(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Error> {
     todo!()
 }
 
@@ -128,7 +115,7 @@ fn register_for_furniture_event(
     caller: Caller<'_, State>,
     self_ptr: Object,
     filter: Object,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -141,6 +128,6 @@ fn unregister_for_furniture_event(
     caller: Caller<'_, State>,
     self_ptr: Object,
     filter: Object,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }

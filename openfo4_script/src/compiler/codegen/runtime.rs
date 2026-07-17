@@ -22,6 +22,8 @@ pub struct RuntimeFunctions {
     pub enter_span: FuncId,
     /// (ctx: *mut RawContext, span: usize)
     pub exit_span: FuncId,
+    /// (ctx: *mut RawContext)
+    pub emit_error: FuncId,
 }
 
 impl RuntimeFunctions {
@@ -98,6 +100,14 @@ impl RuntimeFunctions {
             },
             host_functions::exit_span as *const u8,
         );
+        let emit_error = declare_and_define(
+            compiler,
+            Signature {
+                params: vec![Type::Pointer],
+                returns: vec![],
+            },
+            host_functions::emit_error as *const u8,
+        );
 
         Self {
             alloc_zeroed,
@@ -109,6 +119,7 @@ impl RuntimeFunctions {
             object_to_string,
             enter_span,
             exit_span,
+            emit_error,
         }
     }
 }

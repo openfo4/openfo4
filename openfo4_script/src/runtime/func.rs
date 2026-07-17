@@ -5,6 +5,7 @@ use std::pin::Pin;
 use std::sync::{Arc, Weak};
 use std::task::{self, Poll, ready};
 
+use game_common::cell::UnsafeRefCell;
 use openfo4_jit::{Signature, Type};
 use pin_project::pin_project;
 use thiserror::Error;
@@ -12,8 +13,8 @@ use thiserror::Error;
 use crate::compiler::{CompilationResult, PscSignature};
 use crate::engine::EngineShared;
 use crate::runtime::{
-    Context, Exception, NativeFnPtr, NativeTuple, NativeType, ObjectAddr, ObjectPool, PanicMsg,
-    RESULT_OK, RESULT_SUSPEND, RawContext, RawStack, RawVal, TypeArray, TypeRef, Val,
+    Context, Error, NativeFnPtr, NativeTuple, NativeType, ObjectAddr, ObjectPool, PanicMsg,
+    RESULT_ERROR, RESULT_OK, RESULT_SUSPEND, RawContext, RawStack, RawVal, TypeArray, TypeRef, Val,
 };
 
 #[derive(Clone, Debug)]
@@ -48,7 +49,7 @@ impl Func {
         }
     }
 
-    pub fn call<T>(&self, ctx: &mut Context<'_, T>, params: &[Val]) -> Result<Vec<Val>, Exception>
+    pub fn call<T>(&self, ctx: &mut Context<'_, T>, params: &[Val]) -> Result<Vec<Val>, Error>
     where
         T: Send + 'static,
     {
@@ -174,7 +175,7 @@ impl Func {
         ctx: &mut Context<'_, T>,
         params: *const RawVal,
         returns: *mut RawVal,
-    ) -> Result<(), Exception>
+    ) -> Result<(), Error>
     where
         T: Send + 'static,
     {
@@ -215,6 +216,7 @@ impl Func {
             stack: ctx.stack,
             panic: PanicMsg::default(),
             waker: task::Waker::noop(),
+            error: UnsafeRefCell::new(None),
         };
 
         let res = unsafe { (self.ptr)(&raw_ctx, params, returns) };
@@ -229,18 +231,23 @@ impl Func {
         // The following code will not be executed.
         raw_ctx.panic.resume();
 
-        if res == RESULT_OK {
-            ctx.stack.free(size_of::<usize>());
-            debug_assert_eq!(ctx.stack.size(), 0);
+        match res {
+            RESULT_SUSPEND => {
+                panic!("suspended on non-async call");
+            }
+            RESULT_OK => {
+                ctx.stack.free(size_of::<usize>());
+                debug_assert_eq!(ctx.stack.size(), 0);
 
-            ctx.stack.func = None;
+                ctx.stack.func = None;
 
-            Ok(())
-        } else {
-            // SAFETY: The result parameter is only created as RESULT_OK from inside
-            // compiled functions. All other values are only produced by host functions
-            // that return a Exception, so we are doing a type roundtrip.
-            Err(unsafe { transmute::<i32, Exception>(res) })
+                Ok(())
+            }
+            RESULT_ERROR => {
+                let err = raw_ctx.error.get_mut().take().unwrap();
+                return Err(*err);
+            }
+            _ => unreachable!(),
         }
     }
 
@@ -324,7 +331,7 @@ where
     Params: NativeTuple,
     Returns: NativeTuple,
 {
-    pub fn call<T>(&self, ctx: &mut Context<'_, T>, params: Params) -> Result<Returns, Exception>
+    pub fn call<T>(&self, ctx: &mut Context<'_, T>, params: Params) -> Result<Returns, Error>
     where
         T: Send + 'static,
     {
@@ -454,7 +461,7 @@ impl<'a, 'b, T> Future for CallUnchecked<'a, 'b, T>
 where
     T: Send + 'static,
 {
-    type Output = Result<(), Exception>;
+    type Output = Result<(), Error>;
 
     fn poll(self: Pin<&mut Self>, cx: &mut task::Context<'_>) -> Poll<Self::Output> {
         let this = unsafe { self.get_unchecked_mut() };
@@ -477,6 +484,7 @@ where
                 stack: this.ctx.stack,
                 panic: PanicMsg::default(),
                 waker: core::ptr::null(),
+                error: UnsafeRefCell::new(None),
             }
         });
 
@@ -493,25 +501,32 @@ where
         // The following code will not be executed.
         raw_ctx.panic.resume();
 
-        if res == RESULT_SUSPEND {
-            return Poll::Pending;
-        }
+        match res {
+            RESULT_SUSPEND => Poll::Pending,
+            RESULT_OK => {
+                this.ctx.stack.free(size_of::<usize>());
+                debug_assert_eq!(this.ctx.stack.size(), 0);
 
-        if res == RESULT_OK {
-            this.ctx.stack.free(size_of::<usize>());
-            debug_assert_eq!(this.ctx.stack.size(), 0);
+                this.ctx.stack.func = None;
 
-            this.ctx.stack.func = None;
-
-            Poll::Ready(Ok(()))
-        } else {
-            // SAFETY: The result parameter is only created as RESULT_OK from inside
-            // compiled functions. All other values are only produced by host functions
-            // that return a Exception, so we are doing a type roundtrip.
-            Poll::Ready(Err(unsafe { transmute::<i32, Exception>(res) }))
+                Poll::Ready(Ok(()))
+            }
+            RESULT_ERROR => {
+                let err = raw_ctx.error.get_mut().take().unwrap();
+                return Poll::Ready(Err(*err));
+            }
+            _ => unreachable!(),
         }
     }
 }
+
+// All our fields are Send, only `*const/mut RawVal` must be sendable,
+// which is an unsafe requirement to construct this future.
+unsafe impl<'a, 'b, T> Send for CallUnchecked<'a, 'b, T> where T: Send {}
+
+// We only expose a &mut self method. No data can be accessed using a
+// shared reference, so the `Sync` is safe to implement unconditionally.
+unsafe impl<'a, 'b, T> Sync for CallUnchecked<'a, 'b, T> {}
 
 #[pin_project]
 pub struct Call<'a, 'b, T> {
@@ -525,7 +540,7 @@ impl<'a, 'b, T> Future for Call<'a, 'b, T>
 where
     T: Send + 'static,
 {
-    type Output = Result<Vec<Val>, Exception>;
+    type Output = Result<Vec<Val>, Error>;
 
     fn poll(self: Pin<&mut Self>, cx: &mut task::Context<'_>) -> Poll<Self::Output> {
         let mut this = self.project();
@@ -564,7 +579,7 @@ where
     T: Send + 'static,
     Returns: NativeTuple,
 {
-    type Output = Result<Returns, Exception>;
+    type Output = Result<Returns, Error>;
 
     fn poll(self: Pin<&mut Self>, cx: &mut task::Context<'_>) -> Poll<Self::Output> {
         let this = self.project();

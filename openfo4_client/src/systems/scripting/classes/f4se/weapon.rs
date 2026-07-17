@@ -1,7 +1,5 @@
-use openfo4_script::{
-    engine::Engine,
-    runtime::{Caller, Exception},
-};
+use openfo4_script::engine::Engine;
+use openfo4_script::runtime::{Caller, Error};
 
 use crate::systems::scripting::classes::{EngineExt, Object, State};
 
@@ -16,7 +14,7 @@ pub fn register(engine: &mut Engine) {
 /// ```text
 /// ObjectMod Function GetEmbeddedMod() native
 /// ```
-fn get_embedded_mod(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Exception> {
+fn get_embedded_mod(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Error> {
     todo!()
 }
 
@@ -29,6 +27,6 @@ fn set_embedded_mod(
     caller: Caller<'_, State>,
     self_ptr: Object,
     r#mod: Object,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }

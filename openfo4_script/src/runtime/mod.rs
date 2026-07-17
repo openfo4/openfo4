@@ -5,6 +5,7 @@ mod stack;
 pub(crate) mod host_functions;
 
 use std::any::Any;
+use std::fmt::Display;
 use std::marker::PhantomData;
 use std::sync::Arc;
 use std::task::{Poll, Waker};
@@ -22,13 +23,6 @@ use crate::engine::{Engine, EngineShared};
 pub(crate) const RESULT_OK: i32 = 0;
 pub(crate) const RESULT_ERROR: i32 = 1;
 pub(crate) const RESULT_SUSPEND: i32 = 2;
-
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
-#[repr(i32)]
-pub enum Exception {
-    Error = RESULT_ERROR,
-    Suspend = RESULT_SUSPEND,
-}
 
 type NativeFnPtr = unsafe extern "C" fn(*const RawContext, *const RawVal, *mut RawVal) -> i32;
 
@@ -73,6 +67,7 @@ pub(crate) struct RawContext {
     pub stack: *mut Stack,
     panic: PanicMsg,
     waker: *const Waker,
+    error: UnsafeRefCell<Option<Box<Error>>>,
 }
 
 unsafe impl Send for RawContext {}
@@ -287,6 +282,11 @@ impl<'a, T> Caller<'a, T> {
 // to be `Send`, as we only allow `Any + Send` types.
 unsafe impl<T> Send for Caller<'_, T> {}
 
+// Caller<'_, T> behaves as if we wrapped an &'_ mut RawContext, however
+// all functions that access fields mutable require an exclusive reference
+// to the Caller.
+unsafe impl<T> Sync for Caller<'_, T> {}
+
 pub(crate) struct HostState {
     pub call_table: UnsafeRefCell<CallTable>,
     pub pool: ObjectPool,
@@ -317,6 +317,9 @@ pub enum FalliableFnMarker {}
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Hash)]
 pub struct AsyncFnMarker<'a>(PhantomData<fn(&'a ())>);
 
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Hash)]
+pub struct FalliableAsyncFnMarker<'a>(PhantomData<fn(&'a ())>);
+
 /// A native host function that can be called from the guest.
 pub trait IntoFunc<T, Marker, Params, Returns> {
     #[doc(hidden)]
@@ -334,7 +337,7 @@ macro_rules! impl_into_func {
         #[allow(unused)]
         impl<F, T, $($params,)* $($returns,)*> IntoFunc<T, FnMarker, ($($params,)*), ($($returns,)*)> for F
         where
-            F: Fn(Caller<'_, T>, $($params),*) -> Result<($($returns),*), Exception> + Send + Sync + 'static,
+            F: Fn(Caller<'_, T>, $($params),*) -> Result<($($returns),*), Error> + Send + Sync + 'static,
             T: 'static,
             $(
                 $params: NativeType,
@@ -375,7 +378,13 @@ macro_rules! impl_into_func {
                         },
                         // When returning without RESULT_OK we can leave all return
                         // values uninitialized.
-                        Err(err) => err as i32,
+                        Err(err) => {
+                            unsafe {
+                                *ctx.error.borrow_mut() = Some(Box::new(err));
+                            }
+
+                            RESULT_ERROR
+                        },
                     }
                 };
 
@@ -512,6 +521,91 @@ macro_rules! impl_into_func {
                             )*
 
                             RESULT_OK
+                        }
+                        Poll::Pending => {
+                            RESULT_SUSPEND
+                        }
+                    }
+                };
+
+                call_table.insert(callback)
+            }
+
+            fn signature() -> Signature {
+                let mut params = Vec::new();
+                $(
+                    params.push($params::TYPE);
+                )*
+
+                let mut returns = Vec::new();
+                $(
+                    returns.push($returns::TYPE);
+                )*
+
+                Signature { params, returns }
+            }
+        }
+
+        #[allow(unused_assignments)]
+        #[allow(non_snake_case)]
+        #[allow(unused)]
+        impl<'a, F, Fut, T, $($params,)* $($returns,)*> IntoFunc<T, FalliableAsyncFnMarker<'a>, ($($params,)*), ($($returns,)*)> for F
+        where
+            F: Fn(Caller<'a, T>, $($params),*) -> Fut + Send + Sync + 'static,
+            Fut: IntoFuture<Output = Result<($($returns),*), Error>> + Send + 'a,
+            T: 'static,
+            $(
+                $params: NativeType,
+            )*
+            $(
+                $returns: NativeType,
+            )*
+        {
+            #[expect(private_interfaces)]
+            fn into_func(self, call_table: &mut CallTable, signature: PscSignature) -> usize {
+                let callback = move |ctx: *const RawContext, params: *const RawVal, returns: *mut RawVal| -> i32 {
+                    let ctx = unsafe { &*ctx };
+                    let stack = unsafe { &mut *ctx.stack };
+
+                    let waker = unsafe { &*ctx.waker };
+                    let mut cx = std::task::Context::from_waker(waker);
+
+                    if !stack.future.is_init() {
+                        let mut index = 0;
+                        $(
+                            let $params = unsafe { $params::from_raw(&*params.add(index)) };
+                            index += 1;
+                        )*
+
+                        let caller = Caller {
+                            ctx,
+                            _marker: PhantomData,
+                        };
+
+                        let future = self(caller, $($params),*).into_future();
+                        stack.future.set(future);
+                    }
+
+                    match unsafe { stack.future.poll::<Result<($($returns),*), Error>, Fut::IntoFuture>(&mut cx) } {
+                        Poll::Ready(Ok(($($returns),*))) => {
+                            validate_return_value_types(ctx, &($($returns,)*), &signature);
+
+                            let mut index = 0;
+                            $(
+                                unsafe {
+                                    returns.add(index).write($returns.to_raw());
+                                    index += 1;
+                                }
+                            )*
+
+                            RESULT_OK
+                        }
+                        Poll::Ready(Err(err)) => {
+                            unsafe {
+                                *ctx.error.borrow_mut() = Some(Box::new(err));
+                            }
+
+                            RESULT_ERROR
                         }
                         Poll::Pending => {
                             RESULT_SUSPEND
@@ -817,5 +911,38 @@ trait TypeArray {
 impl TypeArray for [Val] {
     fn type_ids(&self, pool: &ObjectPool) -> impl Iterator<Item = TypeRef> {
         self.iter().map(|v| v.get_type_id(pool))
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct Error {
+    msg: String,
+}
+
+impl Error {
+    pub fn msg<T>(msg: T) -> Self
+    where
+        T: ToString,
+    {
+        Self {
+            msg: msg.to_string(),
+        }
+    }
+}
+
+impl<E> From<E> for Error
+where
+    E: std::error::Error,
+{
+    fn from(value: E) -> Self {
+        Self {
+            msg: value.to_string(),
+        }
+    }
+}
+
+impl Display for Error {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        Display::fmt(&self.msg, f)
     }
 }

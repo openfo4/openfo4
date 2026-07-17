@@ -1,5 +1,5 @@
 use openfo4_script::engine::Engine;
-use openfo4_script::runtime::{Caller, Exception};
+use openfo4_script::runtime::{Caller, Error};
 
 use crate::systems::scripting::classes::{EngineExt, Object, State};
 
@@ -13,6 +13,6 @@ pub fn register(engine: &mut Engine) {
 /// ```text
 /// Form Function GetAssociatedForm() native
 /// ```
-fn get_associated_form(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Exception> {
+fn get_associated_form(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Error> {
     todo!()
 }

@@ -1,7 +1,5 @@
-use openfo4_script::{
-    engine::Engine,
-    runtime::{Caller, Exception, ObjectAddr},
-};
+use openfo4_script::engine::Engine;
+use openfo4_script::runtime::{Caller, Error, ObjectAddr};
 
 use crate::systems::scripting::classes::{EngineExt, State};
 
@@ -20,7 +18,7 @@ fn get_mapped_key(
     caller: Caller<'_, State>,
     control: ObjectAddr,
     device_type: i32,
-) -> Result<i32, Exception> {
+) -> Result<i32, Error> {
     todo!()
 }
 
@@ -29,6 +27,6 @@ fn get_mapped_key(
 /// ```text
 /// string Function GetMappedControl(int keycode) native global
 /// ```
-fn get_mapped_control(caller: Caller<'_, State>, keycode: i32) -> Result<ObjectAddr, Exception> {
+fn get_mapped_control(caller: Caller<'_, State>, keycode: i32) -> Result<ObjectAddr, Error> {
     todo!()
 }

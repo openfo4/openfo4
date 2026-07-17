@@ -1,5 +1,5 @@
 use openfo4_script::engine::Engine;
-use openfo4_script::runtime::{Caller, Exception};
+use openfo4_script::runtime::{Caller, Error};
 
 use crate::systems::scripting::classes::{EngineExt, Object, State};
 
@@ -20,7 +20,7 @@ fn play(
     ak_object: Object,
     af_time: f32,
     ak_facing_object: Object,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -29,6 +29,6 @@ fn play(
 /// ```text
 /// Function Stop(ObjectReference akObject) native
 /// ```
-fn stop(caller: Caller<'_, State>, self_ptr: Object, ak_object: Object) -> Result<(), Exception> {
+fn stop(caller: Caller<'_, State>, self_ptr: Object, ak_object: Object) -> Result<(), Error> {
     todo!()
 }

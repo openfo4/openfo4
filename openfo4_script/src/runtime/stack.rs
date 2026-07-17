@@ -14,9 +14,10 @@ pub struct Stack {
     ///
     /// If `None` the callstack is empty.
     pub(crate) func: Option<*const u8>,
-    memory: Vec<u8>,
+    pub(crate) memory: Vec<u8>,
     len: usize,
     pub(crate) future: ReusableFutureBox,
+    frames: Vec<Frame>,
 }
 
 impl Stack {
@@ -27,6 +28,7 @@ impl Stack {
             memory: Vec::new(),
             len: 0,
             future: ReusableFutureBox::new(),
+            frames: Vec::new(),
         }
     }
 
@@ -43,10 +45,23 @@ impl Stack {
         self.memory.resize(offset + size, 0);
         self.len += size;
 
+        self.frames.push(Frame { len: size });
+
         self.memory.as_mut_ptr()
     }
 
     pub(crate) fn free(&mut self, size: usize) -> *mut u8 {
+        let Some(frame) = self.frames.pop() else {
+            panic!("invalid free: no frame allocated");
+        };
+
+        if frame.len != size {
+            panic!(
+                "invalid free: attempted to free {} bytes, top stack frame is {} bytes",
+                size, frame.len
+            );
+        }
+
         self.len -= size;
         self.memory.as_mut_ptr()
     }
@@ -58,6 +73,11 @@ unsafe impl Send for Stack {}
 
 // SAFETY: Any access that reads or writes the Stack requires mutable access.
 unsafe impl Sync for Stack {}
+
+#[derive(Copy, Clone, Debug)]
+struct Frame {
+    len: usize,
+}
 
 /// A reusable allocation for dynamic futures.
 #[derive(Debug)]

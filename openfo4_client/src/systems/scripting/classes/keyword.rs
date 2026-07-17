@@ -1,4 +1,4 @@
-use openfo4_script::runtime::{Caller, Exception};
+use openfo4_script::runtime::{Caller, Error};
 
 use super::{Bool, Int, Object, State};
 
@@ -15,7 +15,7 @@ pub fn send_story_event(
     ref2: Object,
     value1: Int,
     value2: Int,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -32,6 +32,6 @@ pub fn send_story_event_and_wait(
     ref2: Object,
     value1: Int,
     value2: Int,
-) -> Result<Bool, Exception> {
+) -> Result<Bool, Error> {
     todo!()
 }

@@ -2,7 +2,7 @@ use futures_lite::future::block_on;
 use openfo4_script::assembler::assemble;
 use openfo4_script::compiler::CompilerOptions;
 use openfo4_script::engine::{Engine, Options};
-use openfo4_script::runtime::{Caller, Context, Exception, NativeTuple, ObjectAddr};
+use openfo4_script::runtime::{Caller, Context, Error, NativeTuple, ObjectAddr};
 
 const COMPILER_OPTIONS: CompilerOptions = CompilerOptions {
     validation: true,
@@ -402,7 +402,7 @@ fn array_add_on_null() {
         |_| {},
         (),
     );
-    assert_eq!(res, Err(Exception::Error));
+    assert!(res.is_err());
 }
 
 #[test]
@@ -424,7 +424,7 @@ fn array_insert_on_null() {
         |_| {},
         (),
     );
-    assert_eq!(res, Err(Exception::Error));
+    assert!(res.is_err());
 }
 
 #[test]
@@ -446,7 +446,7 @@ fn array_remove_on_null() {
         |_| {},
         (),
     );
-    assert_eq!(res, Err(Exception::Error));
+    assert!(res.is_err());
 }
 
 #[test]
@@ -466,7 +466,7 @@ fn array_clear_on_null() {
         |_| {},
         (),
     );
-    assert_eq!(res, Err(Exception::Error));
+    assert!(res.is_err());
 }
 
 #[test]
@@ -489,7 +489,7 @@ fn array_find_on_null() {
         |_| {},
         (),
     );
-    assert_eq!(res, Err(Exception::Error));
+    assert!(res.is_err());
 }
 
 #[test]
@@ -515,16 +515,10 @@ fn array_find_struct_on_null() {
         |_| {},
         (),
     );
-    assert_eq!(res, Err(Exception::Error));
+    assert!(res.is_err());
 }
 
-fn run_test<F, I, O>(
-    module: &str,
-    class: &str,
-    func: &str,
-    setup: F,
-    input: I,
-) -> Result<O, Exception>
+fn run_test<F, I, O>(module: &str, class: &str, func: &str, setup: F, input: I) -> Result<O, Error>
 where
     F: FnOnce(&mut Engine),
     I: NativeTuple,

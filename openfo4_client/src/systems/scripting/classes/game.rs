@@ -1,6 +1,6 @@
 use openfo4_core::ecs::Entity;
 use openfo4_script::engine::Engine;
-use openfo4_script::runtime::{Caller, Exception};
+use openfo4_script::runtime::{Caller, Error};
 
 use crate::components::{ActorProperties, Player};
 use crate::state::hardcoded::cumulative_xp_for_level;
@@ -127,7 +127,7 @@ fn add_achievement(_caller: Caller<'_, State>, _achievement_id: i32) {}
 /// ```text
 /// Function(int aiPerkPoints) native global
 /// ```
-fn add_perk_points(caller: Caller<'_, State>, perk_points: i32) -> Result<(), Exception> {
+async fn add_perk_points(caller: Caller<'_, State>, perk_points: i32) -> Result<(), Error> {
     // Cannot reduce perk points.
     let Ok(perk_points) = u32::try_from(perk_points) else {
         return Ok(());
@@ -136,6 +136,7 @@ fn add_perk_points(caller: Caller<'_, State>, perk_points: i32) -> Result<(), Ex
     with_player_props_mut(caller, |props| {
         props.perk_points = props.perk_points.saturating_add(perk_points);
     })
+    .await
 }
 
 /// `AdvanceSkill`
@@ -147,7 +148,7 @@ fn advance_skill(
     caller: Caller<'_, State>,
     as_skill_name: Object,
     af_magnitude: f32,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -156,7 +157,7 @@ fn advance_skill(
 /// ```text
 /// Function() native global
 /// ```
-fn clear_prison(caller: Caller<'_, State>) -> Result<(), Exception> {
+fn clear_prison(caller: Caller<'_, State>) -> Result<(), Error> {
     todo!()
 }
 
@@ -165,7 +166,7 @@ fn clear_prison(caller: Caller<'_, State>) -> Result<(), Exception> {
 /// ```text
 /// Function() native global
 /// ```
-fn clear_temp_effects(caller: Caller<'_, State>) -> Result<(), Exception> {
+fn clear_temp_effects(caller: Caller<'_, State>) -> Result<(), Error> {
     todo!()
 }
 
@@ -174,7 +175,7 @@ fn clear_temp_effects(caller: Caller<'_, State>) -> Result<(), Exception> {
 /// ```text
 /// Function(bool abEnable) native global
 /// ```
-fn enable_pipboy_hdr_mask(caller: Caller<'_, State>, ab_enable: bool) -> Result<(), Exception> {
+fn enable_pipboy_hdr_mask(caller: Caller<'_, State>, ab_enable: bool) -> Result<(), Error> {
     todo!()
 }
 
@@ -183,7 +184,7 @@ fn enable_pipboy_hdr_mask(caller: Caller<'_, State>, ab_enable: bool) -> Result<
 /// ```text
 /// Function(string asMessage) native global
 /// ```
-fn error(caller: Caller<'_, State>, msg: Object) -> Result<(), Exception> {
+fn error(caller: Caller<'_, State>, msg: Object) -> Result<(), Error> {
     let msg = caller.string(msg);
     tracing::error!("script message: {}", msg);
     Ok(())
@@ -201,7 +202,7 @@ fn fade_out_game(
     af_secs_before_fade: f32,
     af_fade_duration: f32,
     ab_stay_faded: bool,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -210,7 +211,7 @@ fn fade_out_game(
 /// ```text
 /// Function(ObjectReference akDestination) native global
 /// ```
-fn fast_travel(caller: Caller<'_, State>, ak_destination: Object) -> Result<(), Exception> {
+fn fast_travel(caller: Caller<'_, State>, ak_destination: Object) -> Result<(), Error> {
     todo!()
 }
 
@@ -226,7 +227,7 @@ fn find_closest_reference_of_type(
     af_y: f32,
     af_z: f32,
     af_radius: f32,
-) -> Result<Object, Exception> {
+) -> Result<Object, Error> {
     todo!()
 }
 
@@ -242,7 +243,7 @@ fn find_random_reference_of_type(
     af_y: f32,
     af_z: f32,
     af_radius: f32,
-) -> Result<Object, Exception> {
+) -> Result<Object, Error> {
     todo!()
 }
 
@@ -258,7 +259,7 @@ fn find_closest_reference_of_any_type_in_list(
     af_y: f32,
     af_z: f32,
     af_radius: f32,
-) -> Result<Object, Exception> {
+) -> Result<Object, Error> {
     todo!()
 }
 
@@ -274,7 +275,7 @@ fn find_random_reference_of_any_type_in_list(
     af_y: f32,
     af_z: f32,
     af_radius: f32,
-) -> Result<Object, Exception> {
+) -> Result<Object, Error> {
     todo!()
 }
 
@@ -289,7 +290,7 @@ fn find_closest_actor(
     af_y: f32,
     af_z: f32,
     af_radius: f32,
-) -> Result<Object, Exception> {
+) -> Result<Object, Error> {
     todo!()
 }
 
@@ -304,7 +305,7 @@ fn find_random_actor(
     af_y: f32,
     af_z: f32,
     af_radius: f32,
-) -> Result<Object, Exception> {
+) -> Result<Object, Error> {
     todo!()
 }
 
@@ -318,7 +319,7 @@ fn force_disable_ssr_godrays_dir_light(
     ab_disable_ssr: bool,
     ab_disable_godrays: bool,
     ab_disable_dir_light: bool,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -327,7 +328,7 @@ fn force_disable_ssr_godrays_dir_light(
 /// ```text
 /// Function() native global
 /// ```
-fn force_third_person(caller: Caller<'_, State>) -> Result<(), Exception> {
+fn force_third_person(caller: Caller<'_, State>) -> Result<(), Error> {
     todo!()
 }
 
@@ -336,7 +337,7 @@ fn force_third_person(caller: Caller<'_, State>) -> Result<(), Exception> {
 /// ```text
 /// Function() native global
 /// ```
-fn force_first_person(caller: Caller<'_, State>) -> Result<(), Exception> {
+fn force_first_person(caller: Caller<'_, State>) -> Result<(), Error> {
     todo!()
 }
 
@@ -356,7 +357,7 @@ fn get_xp_for_level(_caller: Caller<'_, State>, level: i32) -> i32 {
 /// ```text
 /// Function(bool abShow) native global
 /// ```
-fn show_first_person_geometry(caller: Caller<'_, State>, ab_show: bool) -> Result<(), Exception> {
+fn show_first_person_geometry(caller: Caller<'_, State>, ab_show: bool) -> Result<(), Error> {
     todo!()
 }
 
@@ -365,7 +366,7 @@ fn show_first_person_geometry(caller: Caller<'_, State>, ab_show: bool) -> Resul
 /// ```text
 /// Function() native global
 /// ```
-fn show_all_map_markers(caller: Caller<'_, State>) -> Result<(), Exception> {
+fn show_all_map_markers(caller: Caller<'_, State>) -> Result<(), Error> {
     todo!()
 }
 
@@ -410,8 +411,9 @@ fn get_confidence_av(caller: Caller<'_, State>) -> Object {
 /// ```text
 /// int Function() native global
 /// ```
-fn get_difficulty(caller: Caller<'_, State>) -> i32 {
-    caller.data().globals().game_rules.difficulty.to_i32()
+async fn get_difficulty(caller: Caller<'_, State>) -> i32 {
+    let globals = caller.data().globals().await;
+    globals.game_rules.difficulty.to_i32()
 }
 
 /// `GetEnduranceAV`
@@ -428,7 +430,7 @@ fn get_endurance_av(caller: Caller<'_, State>) -> Object {
 /// ```text
 /// Form Function(int aiFormID) native global
 /// ```
-fn get_form(caller: Caller<'_, State>, ai_form_id: i32) -> Result<Object, Exception> {
+fn get_form(caller: Caller<'_, State>, ai_form_id: i32) -> Result<Object, Error> {
     todo!()
 }
 
@@ -441,7 +443,7 @@ fn get_form_from_file(
     caller: Caller<'_, State>,
     ai_form_id: i32,
     as_filename: Object,
-) -> Result<Object, Exception> {
+) -> Result<Object, Error> {
     todo!()
 }
 
@@ -453,7 +455,7 @@ fn get_form_from_file(
 fn get_game_setting_float(
     caller: Caller<'_, State>,
     as_game_setting: Object,
-) -> Result<f32, Exception> {
+) -> Result<f32, Error> {
     todo!()
 }
 
@@ -462,10 +464,7 @@ fn get_game_setting_float(
 /// ```text
 /// int Function(string asGameSetting) native global
 /// ```
-fn get_game_setting_int(
-    caller: Caller<'_, State>,
-    as_game_setting: Object,
-) -> Result<i32, Exception> {
+fn get_game_setting_int(caller: Caller<'_, State>, as_game_setting: Object) -> Result<i32, Error> {
     todo!()
 }
 
@@ -477,7 +476,7 @@ fn get_game_setting_int(
 fn get_game_setting_string(
     caller: Caller<'_, State>,
     as_game_setting: Object,
-) -> Result<Object, Exception> {
+) -> Result<Object, Error> {
     todo!()
 }
 
@@ -522,21 +521,20 @@ fn get_perception_av(caller: Caller<'_, State>) -> Object {
 /// ```text
 /// Actor Function() native global
 /// ```
-fn get_player(mut caller: Caller<'_, State>) -> Result<Object, Exception> {
-    let Some((entity, _)) = caller
-        .data()
-        .world()
-        .query::<(Entity, &Player)>()
-        .iter()
-        .next()
-    else {
-        tracing::warn!("Game.GetPlayer found no player");
-        return Err(Exception::Error);
+async fn get_player(mut caller: Caller<'_, State>) -> Result<Object, Error> {
+    let entity = {
+        let world = caller.data().world().await;
+
+        let Some((entity, _)) = world.query::<(Entity, &Player)>().iter().next() else {
+            return Err(Error::msg("Game.GetPlayer found no player"));
+        };
+
+        entity
     };
 
     // We can assume here that the player always has a script attached here,
     // so we never need to suspend.
-    let scripts = caller.data_mut().get_or_create_entity(entity)?;
+    let scripts = caller.data_mut().get_or_create_entity(entity).await?;
     let actor = scripts.get("Actor").unwrap();
     Ok(actor.get().object.addr())
 }
@@ -546,7 +544,7 @@ fn get_player(mut caller: Caller<'_, State>) -> Result<Object, Exception> {
 /// ```text
 /// Actor[] Function() native global
 /// ```
-fn get_player_followers(caller: Caller<'_, State>) -> Result<Object, Exception> {
+fn get_player_followers(caller: Caller<'_, State>) -> Result<Object, Error> {
     todo!()
 }
 
@@ -555,7 +553,7 @@ fn get_player_followers(caller: Caller<'_, State>) -> Result<Object, Exception> 
 /// ```text
 /// ObjectReference Function() native global
 /// ```
-fn get_player_grabbed_ref(caller: Caller<'_, State>) -> Result<Object, Exception> {
+fn get_player_grabbed_ref(caller: Caller<'_, State>) -> Result<Object, Error> {
     todo!()
 }
 
@@ -564,7 +562,7 @@ fn get_player_grabbed_ref(caller: Caller<'_, State>) -> Result<Object, Exception
 /// ```text
 /// float Function() native global
 /// ```
-fn get_player_radio_frequency(caller: Caller<'_, State>) -> Result<f32, Exception> {
+fn get_player_radio_frequency(caller: Caller<'_, State>) -> Result<f32, Error> {
     todo!()
 }
 
@@ -573,7 +571,7 @@ fn get_player_radio_frequency(caller: Caller<'_, State>) -> Result<f32, Exceptio
 /// ```text
 /// Actor Function() native global
 /// ```
-fn get_players_last_ridden_horse(caller: Caller<'_, State>) -> Result<Object, Exception> {
+fn get_players_last_ridden_horse(caller: Caller<'_, State>) -> Result<Object, Error> {
     todo!()
 }
 
@@ -582,7 +580,7 @@ fn get_players_last_ridden_horse(caller: Caller<'_, State>) -> Result<Object, Ex
 /// ```text
 /// float Function() native global
 /// ```
-fn get_real_hours_passed(caller: Caller<'_, State>) -> Result<f32, Exception> {
+fn get_real_hours_passed(caller: Caller<'_, State>) -> Result<f32, Error> {
     todo!()
 }
 
@@ -613,7 +611,7 @@ fn increment_skill(
     caller: Caller<'_, State>,
     ak_actor_value: Object,
     ai_count: i32,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -626,7 +624,7 @@ fn increment_stat(
     caller: Caller<'_, State>,
     as_stat_name: Object,
     ai_mod_amount: i32,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -635,7 +633,7 @@ fn increment_stat(
 /// ```text
 /// Function() native global
 /// ```
-fn initialize_marker_distances(caller: Caller<'_, State>) -> Result<(), Exception> {
+fn initialize_marker_distances(caller: Caller<'_, State>) -> Result<(), Error> {
     todo!()
 }
 
@@ -644,8 +642,8 @@ fn initialize_marker_distances(caller: Caller<'_, State>) -> Result<(), Exceptio
 /// ```text
 /// bool Function() native global
 /// ```
-fn is_activate_controls_enabled(caller: Caller<'_, State>) -> Result<bool, Exception> {
-    with_player_control_mask(caller, |mask| mask.activate())
+async fn is_activate_controls_enabled(caller: Caller<'_, State>) -> Result<bool, Error> {
+    with_player_control_mask(caller, |mask| mask.activate()).await
 }
 
 /// `IsVATSControlsEnabled`
@@ -653,8 +651,8 @@ fn is_activate_controls_enabled(caller: Caller<'_, State>) -> Result<bool, Excep
 /// ```text
 /// bool Function() native global
 /// ```
-fn is_vats_controls_enabled(caller: Caller<'_, State>) -> Result<bool, Exception> {
-    with_player_control_mask(caller, |mask| mask.vats())
+async fn is_vats_controls_enabled(caller: Caller<'_, State>) -> Result<bool, Error> {
+    with_player_control_mask(caller, |mask| mask.vats()).await
 }
 
 /// `IsVATSPlaybackActive`
@@ -662,7 +660,7 @@ fn is_vats_controls_enabled(caller: Caller<'_, State>) -> Result<bool, Exception
 /// ```text
 /// bool Function() native global
 /// ```
-fn is_vats_playback_active(caller: Caller<'_, State>) -> Result<bool, Exception> {
+fn is_vats_playback_active(caller: Caller<'_, State>) -> Result<bool, Error> {
     todo!()
 }
 
@@ -671,8 +669,8 @@ fn is_vats_playback_active(caller: Caller<'_, State>) -> Result<bool, Exception>
 /// ```text
 /// bool Function() native global
 /// ```
-fn is_cam_switch_controls_enabled(caller: Caller<'_, State>) -> Result<bool, Exception> {
-    with_player_control_mask(caller, |mask| mask.camera_switch())
+async fn is_cam_switch_controls_enabled(caller: Caller<'_, State>) -> Result<bool, Error> {
+    with_player_control_mask(caller, |mask| mask.camera_switch()).await
 }
 
 /// `IsFastTravelControlsEnabled`
@@ -680,8 +678,8 @@ fn is_cam_switch_controls_enabled(caller: Caller<'_, State>) -> Result<bool, Exc
 /// ```text
 /// bool Function() native global
 /// ```
-fn is_fast_travel_controls_enabled(caller: Caller<'_, State>) -> Result<bool, Exception> {
-    with_player_control_mask(caller, |mask| mask.fast_travel())
+async fn is_fast_travel_controls_enabled(caller: Caller<'_, State>) -> Result<bool, Error> {
+    with_player_control_mask(caller, |mask| mask.fast_travel()).await
 }
 
 /// `IsFastTravelEnabled`
@@ -689,7 +687,7 @@ fn is_fast_travel_controls_enabled(caller: Caller<'_, State>) -> Result<bool, Ex
 /// ```text
 /// bool Function() native global
 /// ```
-fn is_fast_travel_enabled(caller: Caller<'_, State>) -> Result<bool, Exception> {
+fn is_fast_travel_enabled(caller: Caller<'_, State>) -> Result<bool, Error> {
     todo!()
 }
 
@@ -698,8 +696,8 @@ fn is_fast_travel_enabled(caller: Caller<'_, State>) -> Result<bool, Exception> 
 /// ```text
 /// bool Function() native global
 /// ```
-fn is_favorites_controls_enabled(caller: Caller<'_, State>) -> Result<bool, Exception> {
-    with_player_control_mask(caller, |mask| mask.favorites())
+async fn is_favorites_controls_enabled(caller: Caller<'_, State>) -> Result<bool, Error> {
+    with_player_control_mask(caller, |mask| mask.favorites()).await
 }
 
 /// `IsFightingControlsEnabled`
@@ -707,8 +705,8 @@ fn is_favorites_controls_enabled(caller: Caller<'_, State>) -> Result<bool, Exce
 /// ```text
 /// bool Function() native global
 /// ```
-fn is_fighting_controls_enabled(caller: Caller<'_, State>) -> Result<bool, Exception> {
-    with_player_control_mask(caller, |mask| mask.fighting())
+async fn is_fighting_controls_enabled(caller: Caller<'_, State>) -> Result<bool, Error> {
+    with_player_control_mask(caller, |mask| mask.fighting()).await
 }
 
 /// `IsJournalControlsEnabled`
@@ -716,8 +714,8 @@ fn is_fighting_controls_enabled(caller: Caller<'_, State>) -> Result<bool, Excep
 /// ```text
 /// bool Function() native global
 /// ```
-fn is_journal_controls_enabled(caller: Caller<'_, State>) -> Result<bool, Exception> {
-    with_player_control_mask(caller, |mask| mask.journal())
+async fn is_journal_controls_enabled(caller: Caller<'_, State>) -> Result<bool, Error> {
+    with_player_control_mask(caller, |mask| mask.journal()).await
 }
 
 /// `IsJumpingControlsEnabled`
@@ -725,8 +723,8 @@ fn is_journal_controls_enabled(caller: Caller<'_, State>) -> Result<bool, Except
 /// ```text
 /// bool Function() native global
 /// ```
-fn is_jumping_controls_enabled(caller: Caller<'_, State>) -> Result<bool, Exception> {
-    with_player_control_mask(caller, |mask| mask.jumping())
+async fn is_jumping_controls_enabled(caller: Caller<'_, State>) -> Result<bool, Error> {
+    with_player_control_mask(caller, |mask| mask.jumping()).await
 }
 
 /// `IsLookingControlsEnabled`
@@ -734,8 +732,8 @@ fn is_jumping_controls_enabled(caller: Caller<'_, State>) -> Result<bool, Except
 /// ```text
 /// bool Function() native global
 /// ```
-fn is_looking_controls_enabled(caller: Caller<'_, State>) -> Result<bool, Exception> {
-    with_player_control_mask(caller, |mask| mask.looking())
+async fn is_looking_controls_enabled(caller: Caller<'_, State>) -> Result<bool, Error> {
+    with_player_control_mask(caller, |mask| mask.looking()).await
 }
 
 /// `IsMenuControlsEnabled`
@@ -743,8 +741,8 @@ fn is_looking_controls_enabled(caller: Caller<'_, State>) -> Result<bool, Except
 /// ```text
 /// bool Function() native global
 /// ```
-fn is_menu_controls_enabled(caller: Caller<'_, State>) -> Result<bool, Exception> {
-    with_player_control_mask(caller, |mask| mask.menu())
+async fn is_menu_controls_enabled(caller: Caller<'_, State>) -> Result<bool, Error> {
+    with_player_control_mask(caller, |mask| mask.menu()).await
 }
 
 /// `IsMovementControlsEnabled`
@@ -752,8 +750,8 @@ fn is_menu_controls_enabled(caller: Caller<'_, State>) -> Result<bool, Exception
 /// ```text
 /// bool Function() native global
 /// ```
-fn is_movement_controls_enabled(caller: Caller<'_, State>) -> Result<bool, Exception> {
-    with_player_control_mask(caller, |mask| mask.movement())
+async fn is_movement_controls_enabled(caller: Caller<'_, State>) -> Result<bool, Error> {
+    with_player_control_mask(caller, |mask| mask.movement()).await
 }
 
 /// `IsPluginInstalled`
@@ -761,7 +759,7 @@ fn is_movement_controls_enabled(caller: Caller<'_, State>) -> Result<bool, Excep
 /// ```text
 /// bool Function(string asName) native global
 /// ```
-fn is_plugin_installed(caller: Caller<'_, State>, as_name: Object) -> Result<bool, Exception> {
+fn is_plugin_installed(caller: Caller<'_, State>, as_name: Object) -> Result<bool, Error> {
     todo!()
 }
 
@@ -770,10 +768,7 @@ fn is_plugin_installed(caller: Caller<'_, State>, as_name: Object) -> Result<boo
 /// ```text
 /// bool Function(float afFrequency) native global
 /// ```
-fn is_player_in_radio_range(
-    caller: Caller<'_, State>,
-    af_frequency: f32,
-) -> Result<bool, Exception> {
+fn is_player_in_radio_range(caller: Caller<'_, State>, af_frequency: f32) -> Result<bool, Error> {
     todo!()
 }
 
@@ -782,7 +777,7 @@ fn is_player_in_radio_range(
 /// ```text
 /// bool Function(float afFrequency) native global
 /// ```
-fn is_player_listening(caller: Caller<'_, State>, af_frequency: f32) -> Result<bool, Exception> {
+fn is_player_listening(caller: Caller<'_, State>, af_frequency: f32) -> Result<bool, Error> {
     todo!()
 }
 
@@ -791,7 +786,7 @@ fn is_player_listening(caller: Caller<'_, State>, af_frequency: f32) -> Result<b
 /// ```text
 /// bool Function() native global
 /// ```
-fn is_player_radio_on(caller: Caller<'_, State>) -> Result<bool, Exception> {
+fn is_player_radio_on(caller: Caller<'_, State>) -> Result<bool, Error> {
     todo!()
 }
 
@@ -800,8 +795,8 @@ fn is_player_radio_on(caller: Caller<'_, State>) -> Result<bool, Exception> {
 /// ```text
 /// bool Function() native global
 /// ```
-fn is_sneaking_controls_enabled(caller: Caller<'_, State>) -> Result<bool, Exception> {
-    with_player_control_mask(caller, |mask| mask.sneaking())
+async fn is_sneaking_controls_enabled(caller: Caller<'_, State>) -> Result<bool, Error> {
+    with_player_control_mask(caller, |mask| mask.sneaking()).await
 }
 
 /// `PassTime`
@@ -809,7 +804,7 @@ fn is_sneaking_controls_enabled(caller: Caller<'_, State>) -> Result<bool, Excep
 /// ```text
 /// Function(int aiHours) native global
 /// ```
-fn pass_time(caller: Caller<'_, State>, ai_hours: i32) -> Result<(), Exception> {
+fn pass_time(caller: Caller<'_, State>, ai_hours: i32) -> Result<(), Error> {
     todo!()
 }
 
@@ -826,7 +821,7 @@ fn play_bink(
     mute_music: bool,
     letterbox: bool,
     is_new_game_bink: bool,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -849,7 +844,7 @@ fn precache_char_gen_clear(_caller: Caller<'_, State>) {}
 /// ```text
 /// int Function(string asStat) native global
 /// ```
-fn query_stat(caller: Caller<'_, State>, as_stat: Object) -> Result<i32, Exception> {
+fn query_stat(caller: Caller<'_, State>, as_stat: Object) -> Result<i32, Error> {
     todo!()
 }
 
@@ -858,7 +853,7 @@ fn query_stat(caller: Caller<'_, State>, as_stat: Object) -> Result<i32, Excepti
 /// ```text
 /// Function() native global
 /// ```
-fn quit_to_main_menu(caller: Caller<'_, State>) -> Result<(), Exception> {
+fn quit_to_main_menu(caller: Caller<'_, State>) -> Result<(), Error> {
     todo!()
 }
 
@@ -867,7 +862,7 @@ fn quit_to_main_menu(caller: Caller<'_, State>) -> Result<(), Exception> {
 /// ```text
 /// Function() native global
 /// ```
-fn request_auto_save(caller: Caller<'_, State>) -> Result<(), Exception> {
+fn request_auto_save(caller: Caller<'_, State>) -> Result<(), Error> {
     todo!()
 }
 
@@ -883,7 +878,7 @@ fn request_model(_caller: Caller<'_, State>, _model_name: Object) {}
 /// ```text
 /// Function() native global
 /// ```
-fn request_save(caller: Caller<'_, State>) -> Result<(), Exception> {
+fn request_save(caller: Caller<'_, State>) -> Result<(), Error> {
     todo!()
 }
 
@@ -896,7 +891,7 @@ fn reward_player_xp(
     caller: Caller<'_, State>,
     aui_xp_amount: i32,
     ab_direct: bool,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -905,7 +900,7 @@ fn reward_player_xp(
 /// ```text
 /// Function() native global
 /// ```
-fn serve_time(caller: Caller<'_, State>) -> Result<(), Exception> {
+fn serve_time(caller: Caller<'_, State>) -> Result<(), Error> {
     todo!()
 }
 
@@ -914,7 +909,7 @@ fn serve_time(caller: Caller<'_, State>) -> Result<(), Exception> {
 /// ```text
 /// Function(Actor arTarget) native global
 /// ```
-fn set_camera_target(caller: Caller<'_, State>, ar_target: Object) -> Result<(), Exception> {
+fn set_camera_target(caller: Caller<'_, State>, ar_target: Object) -> Result<(), Error> {
     todo!()
 }
 
@@ -923,7 +918,7 @@ fn set_camera_target(caller: Caller<'_, State>, ar_target: Object) -> Result<(),
 /// ```text
 /// Function(int aiCGHUDMode) native global
 /// ```
-fn set_char_gen_hud_mode(caller: Caller<'_, State>, ai_cghud_mode: i32) -> Result<(), Exception> {
+fn set_char_gen_hud_mode(caller: Caller<'_, State>, ai_cghud_mode: i32) -> Result<(), Error> {
     todo!()
 }
 
@@ -935,7 +930,7 @@ fn set_char_gen_hud_mode(caller: Caller<'_, State>, ai_cghud_mode: i32) -> Resul
 fn set_inside_memory_hud_mode(
     caller: Caller<'_, State>,
     a_inside_memory: bool,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -948,7 +943,7 @@ fn show_perk_vault_boy_on_hud(
     caller: Caller<'_, State>,
     a_vault_boy_swf: Object,
     a_sound_descriptor: Object,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -962,7 +957,7 @@ fn set_in_chargen(
     ab_disable_saving: bool,
     ab_disable_waiting: bool,
     ab_show_controls_disabled_message: bool,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -971,7 +966,7 @@ fn set_in_chargen(
 /// ```text
 /// Function(bool abAIDriven) native global
 /// ```
-fn set_player_ai_driven(caller: Caller<'_, State>, ab_ai_driven: bool) -> Result<(), Exception> {
+fn set_player_ai_driven(caller: Caller<'_, State>, ab_ai_driven: bool) -> Result<(), Error> {
     todo!()
 }
 
@@ -980,10 +975,7 @@ fn set_player_ai_driven(caller: Caller<'_, State>, ab_ai_driven: bool) -> Result
 /// ```text
 /// Function(bool abOnElevator=) native global
 /// ```
-fn set_player_on_elevator(
-    caller: Caller<'_, State>,
-    ab_on_elevator: bool,
-) -> Result<(), Exception> {
+fn set_player_on_elevator(caller: Caller<'_, State>, ab_on_elevator: bool) -> Result<(), Error> {
     todo!()
 }
 
@@ -992,10 +984,7 @@ fn set_player_on_elevator(
 /// ```text
 /// Function(float afFrequency) native global
 /// ```
-fn set_player_radio_frequency(
-    caller: Caller<'_, State>,
-    af_frequency: f32,
-) -> Result<(), Exception> {
+fn set_player_radio_frequency(caller: Caller<'_, State>, af_frequency: f32) -> Result<(), Error> {
     todo!()
 }
 
@@ -1004,10 +993,7 @@ fn set_player_radio_frequency(
 /// ```text
 /// Function(bool abReportCrime) native global
 /// ```
-fn set_player_report_crime(
-    caller: Caller<'_, State>,
-    ab_report_crime: bool,
-) -> Result<(), Exception> {
+fn set_player_report_crime(caller: Caller<'_, State>, ab_report_crime: bool) -> Result<(), Error> {
     todo!()
 }
 
@@ -1016,7 +1002,7 @@ fn set_player_report_crime(
 /// ```text
 /// Function(float afValue) native global
 /// ```
-fn set_sitting_rotation(caller: Caller<'_, State>, af_value: f32) -> Result<(), Exception> {
+fn set_sitting_rotation(caller: Caller<'_, State>, af_value: f32) -> Result<(), Error> {
     todo!()
 }
 
@@ -1030,7 +1016,7 @@ fn shake_camera(
     ak_source: Object,
     af_strength: f32,
     af_duration: f32,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -1044,7 +1030,7 @@ fn shake_controller(
     af_small_motor_strength: f32,
     af_big_motor_streangth: f32,
     af_duration: f32,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -1053,7 +1039,7 @@ fn shake_controller(
 /// ```text
 /// Function() native global
 /// ```
-fn show_fatigue_warning_on_hud(caller: Caller<'_, State>) -> Result<(), Exception> {
+fn show_fatigue_warning_on_hud(caller: Caller<'_, State>) -> Result<(), Error> {
     todo!()
 }
 
@@ -1069,7 +1055,7 @@ fn show_race_menu(
     ak_menu_spouse_female: Object,
     ak_menu_spouse_male: Object,
     ak_vendor: Object,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -1078,7 +1064,7 @@ fn show_race_menu(
 /// ```text
 /// Function() native global
 /// ```
-fn show_special_menu(caller: Caller<'_, State>) -> Result<(), Exception> {
+fn show_special_menu(caller: Caller<'_, State>) -> Result<(), Error> {
     todo!()
 }
 
@@ -1087,7 +1073,7 @@ fn show_special_menu(caller: Caller<'_, State>) -> Result<(), Exception> {
 /// ```text
 /// Function() native global
 /// ```
-fn show_title_sequence_menu(caller: Caller<'_, State>) -> Result<(), Exception> {
+fn show_title_sequence_menu(caller: Caller<'_, State>) -> Result<(), Error> {
     todo!()
 }
 
@@ -1096,7 +1082,7 @@ fn show_title_sequence_menu(caller: Caller<'_, State>) -> Result<(), Exception> 
 /// ```text
 /// Function() native global
 /// ```
-fn hide_title_sequence_menu(caller: Caller<'_, State>) -> Result<(), Exception> {
+fn hide_title_sequence_menu(caller: Caller<'_, State>) -> Result<(), Error> {
     todo!()
 }
 
@@ -1105,10 +1091,7 @@ fn hide_title_sequence_menu(caller: Caller<'_, State>) -> Result<(), Exception> 
 /// ```text
 /// Function(string asSequenceName) native global
 /// ```
-fn start_title_sequence(
-    caller: Caller<'_, State>,
-    as_sequence_name: Object,
-) -> Result<(), Exception> {
+fn start_title_sequence(caller: Caller<'_, State>, as_sequence_name: Object) -> Result<(), Error> {
     todo!()
 }
 
@@ -1120,7 +1103,7 @@ fn start_title_sequence(
 fn show_pipboy_boot_sequence(
     caller: Caller<'_, State>,
     as_animation_name: Object,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -1129,7 +1112,7 @@ fn show_pipboy_boot_sequence(
 /// ```text
 /// Function() native global
 /// ```
-fn show_pipboy_plugin(caller: Caller<'_, State>) -> Result<(), Exception> {
+fn show_pipboy_plugin(caller: Caller<'_, State>) -> Result<(), Error> {
     todo!()
 }
 
@@ -1138,7 +1121,7 @@ fn show_pipboy_plugin(caller: Caller<'_, State>) -> Result<(), Exception> {
 /// ```text
 /// Function(Actor aTrainer) native global
 /// ```
-fn show_training_menu(caller: Caller<'_, State>, a_trainer: Object) -> Result<(), Exception> {
+fn show_training_menu(caller: Caller<'_, State>, a_trainer: Object) -> Result<(), Error> {
     todo!()
 }
 
@@ -1147,7 +1130,7 @@ fn show_training_menu(caller: Caller<'_, State>, a_trainer: Object) -> Result<()
 /// ```text
 /// Function(int aiValue) native global
 /// ```
-fn trigger_screen_blood(caller: Caller<'_, State>, ai_value: i32) -> Result<(), Exception> {
+fn trigger_screen_blood(caller: Caller<'_, State>, ai_value: i32) -> Result<(), Error> {
     todo!()
 }
 
@@ -1160,7 +1143,7 @@ fn play_event_camera(
     caller: Caller<'_, State>,
     ak_camera: Object,
     ak_ref: Object,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -1172,7 +1155,7 @@ fn play_event_camera(
 fn start_dialogue_camera_or_center_on_target(
     caller: Caller<'_, State>,
     ak_camera_target: Object,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -1185,7 +1168,7 @@ fn stop_dialogue_camera(
     caller: Caller<'_, State>,
     ab_consider_resume: bool,
     ab_switching_to1st_p: bool,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -1194,7 +1177,7 @@ fn stop_dialogue_camera(
 /// ```text
 /// Function(bool abRadioOn) native global
 /// ```
-fn turn_player_radio_on(caller: Caller<'_, State>, ab_radio_on: bool) -> Result<(), Exception> {
+fn turn_player_radio_on(caller: Caller<'_, State>, ab_radio_on: bool) -> Result<(), Error> {
     todo!()
 }
 
@@ -1203,7 +1186,7 @@ fn turn_player_radio_on(caller: Caller<'_, State>, ab_radio_on: bool) -> Result<
 /// ```text
 /// bool Function() native global
 /// ```
-fn using_gamepad(caller: Caller<'_, State>) -> Result<bool, Exception> {
+fn using_gamepad(caller: Caller<'_, State>) -> Result<bool, Error> {
     todo!()
 }
 
@@ -1212,45 +1195,37 @@ fn using_gamepad(caller: Caller<'_, State>) -> Result<bool, Exception> {
 /// ```text
 /// Function(string asMessage) native global
 /// ```
-fn warning(caller: Caller<'_, State>, msg: Object) -> Result<(), Exception> {
+fn warning(caller: Caller<'_, State>, msg: Object) -> Result<(), Error> {
     let msg = caller.string(msg);
     tracing::warn!("script message: {}", msg);
     Ok(())
 }
 
-fn with_player_control_mask<T, F>(caller: Caller<'_, State>, f: F) -> Result<T, Exception>
+async fn with_player_control_mask<T, F>(caller: Caller<'_, State>, f: F) -> Result<T, Error>
 where
     F: FnOnce(&InputControllerMask) -> T,
 {
-    let Some((entity, _)) = caller
-        .data()
-        .world()
-        .query::<(Entity, &Player)>()
-        .iter()
-        .next()
-    else {
-        tracing::error!("found no player");
-        return Err(Exception::Error);
+    let world = caller.data().world().await;
+    let Some((entity, _)) = world.query::<(Entity, &Player)>().iter().next() else {
+        return Err(Error::msg("found no player"));
     };
 
-    let Ok(mask) = caller.data().world().get::<&InputControllerMask>(entity) else {
-        return Err(Exception::Error);
+    let Ok(mask) = world.get::<&InputControllerMask>(entity) else {
+        return Err(Error::msg("player has no controller mask"));
     };
 
     Ok(f(&*mask))
 }
 
-fn with_player_props_mut<T, F>(caller: Caller<'_, State>, f: F) -> Result<T, Exception>
+async fn with_player_props_mut<T, F>(caller: Caller<'_, State>, f: F) -> Result<T, Error>
 where
     F: FnOnce(&mut ActorProperties) -> T,
 {
-    let mut query = caller
-        .data()
-        .world()
-        .query::<(&Player, &mut ActorProperties)>();
+    let world = caller.data().world().await;
+
+    let mut query = world.query::<(&Player, &mut ActorProperties)>();
     let Some((_, mut props)) = query.iter().next() else {
-        tracing::error!("found no player");
-        return Err(Exception::Error);
+        return Err(Error::msg("found no player"));
     };
 
     Ok(f(&mut *props))

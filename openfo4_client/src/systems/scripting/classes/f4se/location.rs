@@ -1,7 +1,5 @@
-use openfo4_script::{
-    engine::Engine,
-    runtime::{Caller, Exception},
-};
+use openfo4_script::engine::Engine;
+use openfo4_script::runtime::{Caller, Error};
 
 use crate::systems::scripting::classes::{EngineExt, Object, State};
 
@@ -18,7 +16,7 @@ pub fn register(engine: &mut Engine) {
 /// ```text
 /// Location Function GetParent() native
 /// ```
-fn get_parent(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Exception> {
+fn get_parent(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Error> {
     todo!()
 }
 
@@ -31,7 +29,7 @@ fn set_parent(
     caller: Caller<'_, State>,
     self_ptr: Object,
     ak_location: Object,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -44,7 +42,7 @@ fn get_encounter_zone(
     caller: Caller<'_, State>,
     self_ptr: Object,
     recursive: bool,
-) -> Result<Object, Exception> {
+) -> Result<Object, Error> {
     todo!()
 }
 
@@ -57,6 +55,6 @@ fn set_encounter_zone(
     caller: Caller<'_, State>,
     self_ptr: Object,
     ez: Object,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }

@@ -1,5 +1,5 @@
 use openfo4_script::engine::Engine;
-use openfo4_script::runtime::{Caller, Exception};
+use openfo4_script::runtime::{Caller, Error};
 
 use crate::systems::scripting::classes::{EngineExt, Object, State};
 
@@ -20,7 +20,7 @@ fn count_actors(
     self_ptr: Object,
     ap_required_linked_ref_keyword: Object,
     ap_exclude_linked_ref_keyword: Object,
-) -> Result<i32, Exception> {
+) -> Result<i32, Error> {
     todo!()
 }
 
@@ -34,7 +34,7 @@ fn get_actors(
     self_ptr: Object,
     ap_required_linked_ref_keyword: Object,
     ap_exclude_linked_ref_keyword: Object,
-) -> Result<Object, Exception> {
+) -> Result<Object, Error> {
     todo!()
 }
 
@@ -43,6 +43,6 @@ fn get_actors(
 /// ```text
 /// Function Reset() native
 /// ```
-fn reset(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Exception> {
+fn reset(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Error> {
     todo!()
 }

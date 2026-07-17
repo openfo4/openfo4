@@ -1,5 +1,5 @@
 use openfo4_script::engine::Engine;
-use openfo4_script::runtime::{Caller, Exception};
+use openfo4_script::runtime::{Caller, Error};
 
 use crate::systems::scripting::classes::{EngineExt, Object, State};
 
@@ -17,7 +17,7 @@ pub fn register(engine: &mut Engine) {
 /// ```text
 /// Function Apply(float afStrength) native
 /// ```
-fn apply(caller: Caller<'_, State>, self_ptr: Object, af_strength: f32) -> Result<(), Exception> {
+fn apply(caller: Caller<'_, State>, self_ptr: Object, af_strength: f32) -> Result<(), Error> {
     todo!()
 }
 
@@ -30,7 +30,7 @@ fn apply_cross_fade(
     caller: Caller<'_, State>,
     self_ptr: Object,
     af_fade_duration: f32,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -44,7 +44,7 @@ fn pop_to(
     self_ptr: Object,
     ak_new_modifier: Object,
     af_strength: f32,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -53,7 +53,7 @@ fn pop_to(
 /// ```text
 /// Function Remove() native
 /// ```
-fn remove(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Exception> {
+fn remove(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Error> {
     todo!()
 }
 
@@ -62,6 +62,6 @@ fn remove(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Exception> 
 /// ```text
 /// Function RemoveCrossFade(float afFadeDuration) native global
 /// ```
-fn remove_cross_fade(caller: Caller<'_, State>, af_fade_duration: f32) -> Result<(), Exception> {
+fn remove_cross_fade(caller: Caller<'_, State>, af_fade_duration: f32) -> Result<(), Error> {
     todo!()
 }

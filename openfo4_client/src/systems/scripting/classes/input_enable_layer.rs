@@ -1,5 +1,5 @@
 use openfo4_script::engine::Engine;
-use openfo4_script::runtime::{Caller, Exception};
+use openfo4_script::runtime::{Caller, Error};
 
 use crate::components::Player;
 use crate::systems::controller::{InputControllerLayer, InputControllerMask};
@@ -49,7 +49,7 @@ pub fn register(engine: &mut Engine) {
 /// ```text
 /// InputEnableLayer Function() native global
 /// ```
-fn create(caller: Caller<'_, State>) -> Result<Object, Exception> {
+fn create(caller: Caller<'_, State>) -> Result<Object, Error> {
     todo!()
 }
 
@@ -58,11 +58,11 @@ fn create(caller: Caller<'_, State>) -> Result<Object, Exception> {
 /// ```text
 /// Function() native
 /// ```
-fn delete(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Exception> {
+async fn delete(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Error> {
     // Reenable any controls that are still disabled on this layer.
     // The GC will cleanup the object and when that happens the
     // layer will be deleted.
-    reset(caller, self_ptr)
+    reset(caller, self_ptr).await
 }
 
 /// `DisablePlayerControls`
@@ -70,7 +70,7 @@ fn delete(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Exception> 
 /// ```text
 /// Function DisablePlayerControls(bool abMovement, bool abFighting, bool abCamSwitch, bool abLooking, bool abSneaking, bool abMenu, bool abActivate, bool abJournalTabs, bool abVATS, bool abFavorites, bool abRunning) native
 /// ```
-fn disable_player_controls(
+async fn disable_player_controls(
     caller: Caller<'_, State>,
     self_ptr: Object,
     movement: bool,
@@ -84,7 +84,7 @@ fn disable_player_controls(
     vats: bool,
     favorites: bool,
     running: bool,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     with_layer(caller, self_ptr, |layer| {
         layer.movement ^= movement;
         layer.fighting ^= fighting;
@@ -98,6 +98,7 @@ fn disable_player_controls(
         layer.favorites ^= favorites;
         layer.running ^= running;
     })
+    .await
 }
 
 /// `EnableActivate`
@@ -105,14 +106,15 @@ fn disable_player_controls(
 /// ```text
 /// Function(bool abEnable) native
 /// ```
-fn enable_activate(
+async fn enable_activate(
     caller: Caller<'_, State>,
     self_ptr: Object,
     enable: bool,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     with_layer(caller, self_ptr, |layer| {
         layer.activate = enable;
     })
+    .await
 }
 
 /// `EnableVATS`
@@ -120,10 +122,15 @@ fn enable_activate(
 /// ```text
 /// Function(bool abEnable) native
 /// ```
-fn enable_vats(caller: Caller<'_, State>, self_ptr: Object, enable: bool) -> Result<(), Exception> {
+async fn enable_vats(
+    caller: Caller<'_, State>,
+    self_ptr: Object,
+    enable: bool,
+) -> Result<(), Error> {
     with_layer(caller, self_ptr, |layer| {
         layer.vats = enable;
     })
+    .await
 }
 
 /// `EnableCamSwitch`
@@ -131,14 +138,15 @@ fn enable_vats(caller: Caller<'_, State>, self_ptr: Object, enable: bool) -> Res
 /// ```text
 /// Function(bool abEnable) native
 /// ```
-fn enable_cam_switch(
+async fn enable_cam_switch(
     caller: Caller<'_, State>,
     self_ptr: Object,
     enable: bool,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     with_layer(caller, self_ptr, |layer| {
         layer.camera_switch = enable;
     })
+    .await
 }
 
 /// `EnableFastTravel`
@@ -146,14 +154,15 @@ fn enable_cam_switch(
 /// ```text
 /// Function(bool abEnable) native
 /// ```
-fn enable_fast_travel(
+async fn enable_fast_travel(
     caller: Caller<'_, State>,
     self_ptr: Object,
     enable: bool,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     with_layer(caller, self_ptr, |layer| {
         layer.fast_travel = enable;
     })
+    .await
 }
 
 /// `EnableFavorites`
@@ -161,14 +170,15 @@ fn enable_fast_travel(
 /// ```text
 /// Function(bool abEnable) native
 /// ```
-fn enable_favorites(
+async fn enable_favorites(
     caller: Caller<'_, State>,
     self_ptr: Object,
     enable: bool,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     with_layer(caller, self_ptr, |layer| {
         layer.favorites = enable;
     })
+    .await
 }
 
 /// `EnableFighting`
@@ -176,14 +186,15 @@ fn enable_favorites(
 /// ```text
 /// Function(bool abEnable) native
 /// ```
-fn enable_fighting(
+async fn enable_fighting(
     caller: Caller<'_, State>,
     self_ptr: Object,
     enable: bool,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     with_layer(caller, self_ptr, |layer| {
         layer.fighting = enable;
     })
+    .await
 }
 
 /// `EnableJournal`
@@ -191,14 +202,15 @@ fn enable_fighting(
 /// ```text
 /// Function(bool abEnable) native
 /// ```
-fn enable_journal(
+async fn enable_journal(
     caller: Caller<'_, State>,
     self_ptr: Object,
     enable: bool,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     with_layer(caller, self_ptr, |layer| {
         layer.journal = enable;
     })
+    .await
 }
 
 /// `EnableJumping`
@@ -206,14 +218,15 @@ fn enable_journal(
 /// ```text
 /// Function(bool abEnable) native
 /// ```
-fn enable_jumping(
+async fn enable_jumping(
     caller: Caller<'_, State>,
     self_ptr: Object,
     enable: bool,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     with_layer(caller, self_ptr, |layer| {
         layer.jumping = enable;
     })
+    .await
 }
 
 /// `EnableLooking`
@@ -221,14 +234,15 @@ fn enable_jumping(
 /// ```text
 /// Function(bool abEnable) native
 /// ```
-fn enable_looking(
+async fn enable_looking(
     caller: Caller<'_, State>,
     self_ptr: Object,
     enable: bool,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     with_layer(caller, self_ptr, |layer| {
         layer.looking = enable;
     })
+    .await
 }
 
 /// `EnableMenu`
@@ -236,10 +250,15 @@ fn enable_looking(
 /// ```text
 /// Function(bool abEnable) native
 /// ```
-fn enable_menu(caller: Caller<'_, State>, self_ptr: Object, enable: bool) -> Result<(), Exception> {
+async fn enable_menu(
+    caller: Caller<'_, State>,
+    self_ptr: Object,
+    enable: bool,
+) -> Result<(), Error> {
     with_layer(caller, self_ptr, |layer| {
         layer.menu = enable;
     })
+    .await
 }
 
 /// `EnableMovement`
@@ -247,14 +266,15 @@ fn enable_menu(caller: Caller<'_, State>, self_ptr: Object, enable: bool) -> Res
 /// ```text
 /// Function(bool abEnable) native
 /// ```
-fn enable_movement(
+async fn enable_movement(
     caller: Caller<'_, State>,
     self_ptr: Object,
     enable: bool,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     with_layer(caller, self_ptr, |layer| {
         layer.movement = enable;
     })
+    .await
 }
 
 /// `EnableRunning`
@@ -262,14 +282,15 @@ fn enable_movement(
 /// ```text
 /// Function(bool abEnable) native
 /// ```
-fn enable_running(
+async fn enable_running(
     caller: Caller<'_, State>,
     self_ptr: Object,
     enable: bool,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     with_layer(caller, self_ptr, |layer| {
         layer.running = enable;
     })
+    .await
 }
 
 /// `EnableSprinting`
@@ -277,14 +298,15 @@ fn enable_running(
 /// ```text
 /// Function(bool abEnable) native
 /// ```
-fn enable_sprinting(
+async fn enable_sprinting(
     caller: Caller<'_, State>,
     self_ptr: Object,
     enable: bool,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     with_layer(caller, self_ptr, |layer| {
         layer.sprinting = enable;
     })
+    .await
 }
 
 /// `EnableZKey`
@@ -292,14 +314,15 @@ fn enable_sprinting(
 /// ```text
 /// Function(bool abEnable) native
 /// ```
-fn enable_z_key(
+async fn enable_z_key(
     caller: Caller<'_, State>,
     self_ptr: Object,
     enable: bool,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     with_layer(caller, self_ptr, |layer| {
         layer.z_key = enable;
     })
+    .await
 }
 
 /// `EnablePlayerControls`
@@ -307,7 +330,7 @@ fn enable_z_key(
 /// ```text
 /// Function EnablePlayerControls(bool abMovement, bool abFighting, bool abCamSwitch, bool abLooking, bool abSneaking, bool abMenu, bool abActivate, bool abJournalTabs, bool abVATS, bool abFavorites, bool abRunning) native
 /// ```
-fn enable_player_controls(
+async fn enable_player_controls(
     caller: Caller<'_, State>,
     self_ptr: Object,
     movement: bool,
@@ -321,7 +344,7 @@ fn enable_player_controls(
     vats: bool,
     favorites: bool,
     running: bool,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     with_layer(caller, self_ptr, |layer| {
         layer.movement |= movement;
         layer.fighting |= fighting;
@@ -335,6 +358,7 @@ fn enable_player_controls(
         layer.favorites |= favorites;
         layer.running |= running;
     })
+    .await
 }
 
 /// `EnableSneaking`
@@ -342,14 +366,15 @@ fn enable_player_controls(
 /// ```text
 /// Function(bool abEnable) native
 /// ```
-fn enable_sneaking(
+async fn enable_sneaking(
     caller: Caller<'_, State>,
     self_ptr: Object,
     enable: bool,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     with_layer(caller, self_ptr, |layer| {
         layer.sneaking = enable;
     })
+    .await
 }
 
 /// `IsActivateEnabled`
@@ -357,8 +382,8 @@ fn enable_sneaking(
 /// ```text
 /// bool Function() native
 /// ```
-fn is_activate_enabled(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Exception> {
-    with_layer(caller, self_ptr, |layer| layer.activate)
+async fn is_activate_enabled(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Error> {
+    with_layer(caller, self_ptr, |layer| layer.activate).await
 }
 
 /// `IsVATSEnabled`
@@ -366,8 +391,8 @@ fn is_activate_enabled(caller: Caller<'_, State>, self_ptr: Object) -> Result<bo
 /// ```text
 /// bool Function() native
 /// ```
-fn is_vats_enabled(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Exception> {
-    with_layer(caller, self_ptr, |layer| layer.vats)
+async fn is_vats_enabled(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Error> {
+    with_layer(caller, self_ptr, |layer| layer.vats).await
 }
 
 /// `IsCamSwitchEnabled`
@@ -375,8 +400,8 @@ fn is_vats_enabled(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, 
 /// ```text
 /// bool Function() native
 /// ```
-fn is_cam_switch_enabled(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Exception> {
-    with_layer(caller, self_ptr, |layer| layer.camera_switch)
+async fn is_cam_switch_enabled(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Error> {
+    with_layer(caller, self_ptr, |layer| layer.camera_switch).await
 }
 
 /// `IsFastTravelEnabled`
@@ -384,8 +409,11 @@ fn is_cam_switch_enabled(caller: Caller<'_, State>, self_ptr: Object) -> Result<
 /// ```text
 /// bool Function() native
 /// ```
-fn is_fast_travel_enabled(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Exception> {
-    with_layer(caller, self_ptr, |layer| layer.fast_travel)
+async fn is_fast_travel_enabled(
+    caller: Caller<'_, State>,
+    self_ptr: Object,
+) -> Result<bool, Error> {
+    with_layer(caller, self_ptr, |layer| layer.fast_travel).await
 }
 
 /// `IsFavoritesEnabled`
@@ -393,8 +421,8 @@ fn is_fast_travel_enabled(caller: Caller<'_, State>, self_ptr: Object) -> Result
 /// ```text
 /// bool Function() native
 /// ```
-fn is_favorites_enabled(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Exception> {
-    with_layer(caller, self_ptr, |layer| layer.favorites)
+async fn is_favorites_enabled(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Error> {
+    with_layer(caller, self_ptr, |layer| layer.favorites).await
 }
 
 /// `IsFightingEnabled`
@@ -402,8 +430,8 @@ fn is_favorites_enabled(caller: Caller<'_, State>, self_ptr: Object) -> Result<b
 /// ```text
 /// bool Function() native
 /// ```
-fn is_fighting_enabled(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Exception> {
-    with_layer(caller, self_ptr, |layer| layer.fighting)
+async fn is_fighting_enabled(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Error> {
+    with_layer(caller, self_ptr, |layer| layer.fighting).await
 }
 
 /// `IsJournalEnabled`
@@ -411,8 +439,8 @@ fn is_fighting_enabled(caller: Caller<'_, State>, self_ptr: Object) -> Result<bo
 /// ```text
 /// bool Function() native
 /// ```
-fn is_journal_enabled(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Exception> {
-    with_layer(caller, self_ptr, |layer| layer.journal)
+async fn is_journal_enabled(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Error> {
+    with_layer(caller, self_ptr, |layer| layer.journal).await
 }
 
 /// `IsJumpingEnabled`
@@ -420,8 +448,8 @@ fn is_journal_enabled(caller: Caller<'_, State>, self_ptr: Object) -> Result<boo
 /// ```text
 /// bool Function() native
 /// ```
-fn is_jumping_enabled(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Exception> {
-    with_layer(caller, self_ptr, |layer| layer.jumping)
+async fn is_jumping_enabled(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Error> {
+    with_layer(caller, self_ptr, |layer| layer.jumping).await
 }
 
 /// `IsLookingEnabled`
@@ -429,8 +457,8 @@ fn is_jumping_enabled(caller: Caller<'_, State>, self_ptr: Object) -> Result<boo
 /// ```text
 /// bool Function() native
 /// ```
-fn is_looking_enabled(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Exception> {
-    with_layer(caller, self_ptr, |layer| layer.looking)
+async fn is_looking_enabled(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Error> {
+    with_layer(caller, self_ptr, |layer| layer.looking).await
 }
 
 /// `IsMenuEnabled`
@@ -438,8 +466,8 @@ fn is_looking_enabled(caller: Caller<'_, State>, self_ptr: Object) -> Result<boo
 /// ```text
 /// bool Function() native
 /// ```
-fn is_menu_enabled(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Exception> {
-    with_layer(caller, self_ptr, |layer| layer.menu)
+async fn is_menu_enabled(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Error> {
+    with_layer(caller, self_ptr, |layer| layer.menu).await
 }
 
 /// `IsMovementEnabled`
@@ -447,8 +475,8 @@ fn is_menu_enabled(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, 
 /// ```text
 /// bool Function() native
 /// ```
-fn is_movement_enabled(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Exception> {
-    with_layer(caller, self_ptr, |layer| layer.movement)
+async fn is_movement_enabled(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Error> {
+    with_layer(caller, self_ptr, |layer| layer.movement).await
 }
 
 /// `IsRunningEnabled`
@@ -456,8 +484,8 @@ fn is_movement_enabled(caller: Caller<'_, State>, self_ptr: Object) -> Result<bo
 /// ```text
 /// bool Function() native
 /// ```
-fn is_running_enabled(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Exception> {
-    with_layer(caller, self_ptr, |layer| layer.running)
+async fn is_running_enabled(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Error> {
+    with_layer(caller, self_ptr, |layer| layer.running).await
 }
 
 /// `IsSprintingEnabled`
@@ -465,8 +493,8 @@ fn is_running_enabled(caller: Caller<'_, State>, self_ptr: Object) -> Result<boo
 /// ```text
 /// bool Function() native
 /// ```
-fn is_sprinting_enabled(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Exception> {
-    with_layer(caller, self_ptr, |layer| layer.sprinting)
+async fn is_sprinting_enabled(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Error> {
+    with_layer(caller, self_ptr, |layer| layer.sprinting).await
 }
 
 /// `IsZKeyEnabled`
@@ -474,8 +502,8 @@ fn is_sprinting_enabled(caller: Caller<'_, State>, self_ptr: Object) -> Result<b
 /// ```text
 /// bool Function() native
 /// ```
-fn is_z_key_enabled(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Exception> {
-    with_layer(caller, self_ptr, |layer| layer.z_key)
+async fn is_z_key_enabled(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Error> {
+    with_layer(caller, self_ptr, |layer| layer.z_key).await
 }
 
 /// `IsSneakingEnabled`
@@ -483,8 +511,8 @@ fn is_z_key_enabled(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool,
 /// ```text
 /// bool Function() native
 /// ```
-fn is_sneaking_enabled(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Exception> {
-    with_layer(caller, self_ptr, |layer| layer.sneaking)
+async fn is_sneaking_enabled(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Error> {
+    with_layer(caller, self_ptr, |layer| layer.sneaking).await
 }
 
 /// `Reset`
@@ -492,13 +520,14 @@ fn is_sneaking_enabled(caller: Caller<'_, State>, self_ptr: Object) -> Result<bo
 /// ```text
 /// Function() native
 /// ```
-fn reset(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Exception> {
+async fn reset(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Error> {
     with_layer(caller, self_ptr, |layer| {
         *layer = InputControllerLayer::default();
     })
+    .await
 }
 
-fn with_layer<T, F>(caller: Caller<'_, State>, object: Object, f: F) -> Result<T, Exception>
+async fn with_layer<T, F>(caller: Caller<'_, State>, object: Object, f: F) -> Result<T, Error>
 where
     F: FnOnce(&mut InputControllerLayer) -> T,
 {
@@ -506,19 +535,19 @@ where
         .data()
         .object_data
         .get(&object)
-        .ok_or(Exception::Error)?;
+        .ok_or_else(|| todo!())?;
 
     let ObjectData::InputEnableLayer { layer } = data else {
-        return Err(Exception::Error);
+        todo!();
     };
 
-    let mut q = caller
-        .data()
-        .world()
-        .query::<(&Player, &mut InputControllerMask)>();
+    let world = caller.data().world().await;
+
+    let mut q = world.query::<(&Player, &mut InputControllerMask)>();
     let Some((_, mut mask)) = q.iter().next() else {
         // Player is not loaded yet.
-        return Err(Exception::Error);
+        // return Err(Error::Error);
+        todo!();
     };
 
     let layer = mask.layers.get_mut(*layer).unwrap();

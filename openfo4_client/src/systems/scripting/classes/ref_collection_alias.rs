@@ -1,7 +1,5 @@
-use openfo4_script::{
-    engine::Engine,
-    runtime::{Caller, Exception},
-};
+use openfo4_script::engine::Engine;
+use openfo4_script::runtime::{Caller, Error};
 
 use crate::systems::scripting::classes::{EngineExt, Object, State};
 
@@ -20,11 +18,7 @@ pub fn register(engine: &mut Engine) {
 /// ```text
 /// Function AddRef(ObjectReference akNewRef) native
 /// ```
-fn add_ref(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    ak_new_ref: Object,
-) -> Result<(), Exception> {
+fn add_ref(caller: Caller<'_, State>, self_ptr: Object, ak_new_ref: Object) -> Result<(), Error> {
     todo!()
 }
 
@@ -33,11 +27,7 @@ fn add_ref(
 /// ```text
 /// int Function Find(ObjectReference akFindRef) native
 /// ```
-fn find(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    ak_find_ref: Object,
-) -> Result<i32, Exception> {
+fn find(caller: Caller<'_, State>, self_ptr: Object, ak_find_ref: Object) -> Result<i32, Error> {
     todo!()
 }
 
@@ -46,7 +36,7 @@ fn find(
 /// ```text
 /// ObjectReference Function GetAt(int aiIndex) native
 /// ```
-fn get_at(caller: Caller<'_, State>, self_ptr: Object, ai_index: i32) -> Result<Object, Exception> {
+fn get_at(caller: Caller<'_, State>, self_ptr: Object, ai_index: i32) -> Result<Object, Error> {
     todo!()
 }
 
@@ -55,7 +45,7 @@ fn get_at(caller: Caller<'_, State>, self_ptr: Object, ai_index: i32) -> Result<
 /// ```text
 /// int Function GetCount() native
 /// ```
-fn get_count(caller: Caller<'_, State>, self_ptr: Object) -> Result<i32, Exception> {
+fn get_count(caller: Caller<'_, State>, self_ptr: Object) -> Result<i32, Error> {
     todo!()
 }
 
@@ -64,7 +54,7 @@ fn get_count(caller: Caller<'_, State>, self_ptr: Object) -> Result<i32, Excepti
 /// ```text
 /// Function RemoveAll() native
 /// ```
-fn remove_all(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Exception> {
+fn remove_all(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Error> {
     todo!()
 }
 
@@ -77,6 +67,6 @@ fn remove_ref(
     caller: Caller<'_, State>,
     self_ptr: Object,
     ak_remove_ref: Object,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }

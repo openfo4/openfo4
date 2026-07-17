@@ -1,5 +1,5 @@
 use openfo4_script::engine::Engine;
-use openfo4_script::runtime::{Caller, Exception};
+use openfo4_script::runtime::{Caller, Error};
 
 use crate::systems::scripting::classes::EngineExt;
 
@@ -22,7 +22,7 @@ fn apply_to_ref(
     caller: Caller<'_, State>,
     self_ptr: Object,
     object_ref: Object,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -31,9 +31,8 @@ fn apply_to_ref(
 /// ```text
 /// Function Clear() native
 /// ```
-fn clear(mut caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Exception> {
+fn clear(mut caller: Caller<'_, State>, self_ptr: Object) {
     caller.data_mut().aliases.set(self_ptr, None);
-    Ok(())
 }
 
 /// `ForceRefTo`
@@ -45,7 +44,7 @@ fn force_ref_to(
     mut caller: Caller<'_, State>,
     self_ptr: Object,
     new_ref: Object,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     let new_ref = (!new_ref.is_null()).then_some(new_ref);
     caller.data_mut().aliases.set(self_ptr, new_ref);
     Ok(())
@@ -56,12 +55,8 @@ fn force_ref_to(
 /// ```text
 /// ObjectReference Function GetReference() native
 /// ```
-fn get_reference(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Exception> {
-    let alias = caller
-        .data()
-        .aliases
-        .get(self_ptr)
-        .ok_or(Exception::Error)?;
+fn get_reference(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Error> {
+    let alias = caller.data().aliases.get(self_ptr).ok_or_else(|| todo!())?;
 
     let Some(object) = alias.object else {
         return Ok(Object::NULL);
@@ -71,7 +66,7 @@ fn get_reference(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, 
         .data()
         .objects
         .get_by_addr(object)
-        .ok_or(Exception::Error)?;
+        .ok_or_else(|| todo!())?;
 
     Ok(script.get().object.addr())
 }
@@ -85,6 +80,6 @@ fn remove_from_ref(
     caller: Caller<'_, State>,
     self_ptr: Object,
     object_ref: Object,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }

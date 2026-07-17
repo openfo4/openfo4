@@ -1,5 +1,5 @@
 use openfo4_script::engine::Engine;
-use openfo4_script::runtime::{Caller, Exception};
+use openfo4_script::runtime::{Caller, Error};
 
 use crate::systems::scripting::classes::{EngineExt, Object, State};
 
@@ -17,6 +17,6 @@ fn get_object_component_count(
     caller: Caller<'_, State>,
     self_ptr: Object,
     ak_component: Object,
-) -> Result<i32, Exception> {
+) -> Result<i32, Error> {
     todo!()
 }

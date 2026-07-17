@@ -1,5 +1,5 @@
 use openfo4_script::engine::Engine;
-use openfo4_script::runtime::{Caller, Exception};
+use openfo4_script::runtime::{Caller, Error};
 
 use crate::systems::scripting::classes::{EngineExt, Object, State};
 
@@ -14,7 +14,7 @@ pub fn register(engine: &mut Engine) {
 /// ```text
 /// MiscComponent[] Function GetMiscComponents() native
 /// ```
-fn get_misc_components(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Exception> {
+fn get_misc_components(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Error> {
     todo!()
 }
 
@@ -27,6 +27,6 @@ fn set_misc_components(
     caller: Caller<'_, State>,
     self_ptr: Object,
     components: Object,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }

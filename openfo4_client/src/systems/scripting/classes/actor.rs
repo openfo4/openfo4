@@ -1,5 +1,5 @@
 use openfo4_script::engine::Engine;
-use openfo4_script::runtime::{Caller, Exception};
+use openfo4_script::runtime::{Caller, Error};
 
 use crate::components::{ActorProperties, ActorProtection, Player};
 use crate::state::hardcoded::fallout4::GOLD;
@@ -217,7 +217,7 @@ fn add_perk(
     self_ptr: Object,
     ak_perk: Object,
     ab_notify_false: bool,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     let entity = caller.data().entity(self_ptr);
 
     // todo!()
@@ -234,7 +234,7 @@ fn add_spell(
     self_ptr: Object,
     ak_spell: Object,
     ab_verbose_true: bool,
-) -> Result<bool, Exception> {
+) -> Result<bool, Error> {
     // todo!()
     Ok(true)
 }
@@ -248,7 +248,7 @@ fn allow_bleedout_dialogue(
     caller: Caller<'_, State>,
     self_ptr: Object,
     ab_can_talk: bool,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -261,7 +261,7 @@ fn allow_pc_dialogue(
     caller: Caller<'_, State>,
     self_ptr: Object,
     ab_talk: bool,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -274,7 +274,7 @@ fn attach_ash_pile(
     caller: Caller<'_, State>,
     self_ptr: Object,
     ak_ash_pile_base: Object,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -283,10 +283,7 @@ fn attach_ash_pile(
 /// ```text
 /// Function() native
 /// ```
-fn attempt_animation_set_switch(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-) -> Result<(), Exception> {
+fn attempt_animation_set_switch(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Error> {
     todo!()
 }
 
@@ -295,7 +292,7 @@ fn attempt_animation_set_switch(
 /// ```text
 /// bool Function() native
 /// ```
-fn can_fly_here(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Exception> {
+fn can_fly_here(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Error> {
     todo!()
 }
 
@@ -308,7 +305,7 @@ fn change_anim_archetype(
     caller: Caller<'_, State>,
     self_ptr: Object,
     ap_keyword: Object,
-) -> Result<bool, Exception> {
+) -> Result<bool, Error> {
     todo!()
 }
 
@@ -321,7 +318,7 @@ fn change_anim_flavor(
     caller: Caller<'_, State>,
     self_ptr: Object,
     ap_keyword: Object,
-) -> Result<bool, Exception> {
+) -> Result<bool, Error> {
     todo!()
 }
 
@@ -336,7 +333,7 @@ fn change_head_part(
     ap_head_part: Object,
     ab_remove_part: bool,
     ab_remove_extra_parts: bool,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -345,7 +342,7 @@ fn change_head_part(
 /// ```text
 /// Function() native
 /// ```
-fn clear_arrested(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Exception> {
+fn clear_arrested(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Error> {
     todo!()
 }
 
@@ -354,7 +351,7 @@ fn clear_arrested(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Exc
 /// ```text
 /// Function() native
 /// ```
-fn clear_expression_override(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Exception> {
+fn clear_expression_override(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Error> {
     todo!()
 }
 
@@ -363,7 +360,7 @@ fn clear_expression_override(caller: Caller<'_, State>, self_ptr: Object) -> Res
 /// ```text
 /// Function() native
 /// ```
-fn clear_extra_arrows(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Exception> {
+fn clear_extra_arrows(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Error> {
     todo!()
 }
 
@@ -372,7 +369,7 @@ fn clear_extra_arrows(caller: Caller<'_, State>, self_ptr: Object) -> Result<(),
 /// ```text
 /// Function() native
 /// ```
-fn clear_look_at(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Exception> {
+fn clear_look_at(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Error> {
     todo!()
 }
 
@@ -381,7 +378,7 @@ fn clear_look_at(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Exce
 /// ```text
 /// bool Function() native
 /// ```
-fn dismount(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Exception> {
+fn dismount(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Error> {
     todo!()
 }
 
@@ -390,7 +387,7 @@ fn dismount(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Excepti
 /// ```text
 /// Function() native
 /// ```
-fn dispel_all_spells(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Exception> {
+fn dispel_all_spells(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Error> {
     todo!()
 }
 
@@ -403,7 +400,7 @@ fn dispel_spell(
     caller: Caller<'_, State>,
     self_ptr: Object,
     ak_spell: Object,
-) -> Result<bool, Exception> {
+) -> Result<bool, Error> {
     todo!()
 }
 
@@ -417,7 +414,7 @@ fn do_combat_spell_apply(
     self_ptr: Object,
     ak_spell: Object,
     ak_target: Object,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -431,7 +428,7 @@ fn enable_ai(
     self_ptr: Object,
     ab_enable: bool,
     ab_pause_voice: bool,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -440,7 +437,7 @@ fn enable_ai(
 /// ```text
 /// Function() native
 /// ```
-fn end_deferred_kill(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Exception> {
+fn end_deferred_kill(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Error> {
     todo!()
 }
 
@@ -449,24 +446,29 @@ fn end_deferred_kill(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), 
 /// ```text
 /// Function(Form akItem, bool abPreventRemoval, bool abSilent) native
 /// ```
-fn equip_item(
+async fn equip_item(
     mut caller: Caller<'_, State>,
     self_ptr: Object,
     item: Object,
     prevent_removal: bool,
     silent: bool,
-) -> Result<(), Exception> {
-    let actor = caller.data().entity(self_ptr).ok_or(Exception::Error)?;
+) -> Result<(), Error> {
+    let actor = caller
+        .data()
+        .entity(self_ptr)
+        .await
+        .ok_or_else(|| todo!())?;
     let item = caller
         .data()
         .objects
         .get_by_addr(item)
         .and_then(|s| s.record())
-        .ok_or(Exception::Error)?;
+        .ok_or_else(|| todo!())?;
 
     caller
         .data_mut()
-        .run_effect_and_wait(EquipItemEffect { actor, item })?;
+        .run_effect_and_wait(EquipItemEffect { actor, item })
+        .await?;
 
     Ok(())
 }
@@ -481,7 +483,7 @@ fn equip_spell(
     self_ptr: Object,
     ak_spell: Object,
     ai_source: i32,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -494,7 +496,7 @@ fn evaluate_package(
     caller: Caller<'_, State>,
     self_ptr: Object,
     ab_reset_ai: bool,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -503,7 +505,7 @@ fn evaluate_package(
 /// ```text
 /// int Function() native
 /// ```
-fn get_bribe_amount(caller: Caller<'_, State>, self_ptr: Object) -> Result<i32, Exception> {
+fn get_bribe_amount(caller: Caller<'_, State>, self_ptr: Object) -> Result<i32, Error> {
     todo!()
 }
 
@@ -512,10 +514,7 @@ fn get_bribe_amount(caller: Caller<'_, State>, self_ptr: Object) -> Result<i32, 
 /// ```text
 /// Actor[] Function() native
 /// ```
-fn get_all_combat_targets(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-) -> Result<Object, Exception> {
+fn get_all_combat_targets(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Error> {
     todo!()
 }
 
@@ -524,7 +523,7 @@ fn get_all_combat_targets(
 /// ```text
 /// Faction Function() native
 /// ```
-fn get_crime_faction(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Exception> {
+fn get_crime_faction(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Error> {
     todo!()
 }
 
@@ -533,7 +532,7 @@ fn get_crime_faction(caller: Caller<'_, State>, self_ptr: Object) -> Result<Obje
 /// ```text
 /// int Function() native
 /// ```
-fn get_combat_state(caller: Caller<'_, State>, self_ptr: Object) -> Result<i32, Exception> {
+fn get_combat_state(caller: Caller<'_, State>, self_ptr: Object) -> Result<i32, Error> {
     todo!()
 }
 
@@ -542,7 +541,7 @@ fn get_combat_state(caller: Caller<'_, State>, self_ptr: Object) -> Result<i32, 
 /// ```text
 /// Actor Function() native
 /// ```
-fn get_combat_target(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Exception> {
+fn get_combat_target(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Error> {
     todo!()
 }
 
@@ -551,7 +550,7 @@ fn get_combat_target(caller: Caller<'_, State>, self_ptr: Object) -> Result<Obje
 /// ```text
 /// Package Function() native
 /// ```
-fn get_current_package(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Exception> {
+fn get_current_package(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Error> {
     todo!()
 }
 
@@ -560,7 +559,7 @@ fn get_current_package(caller: Caller<'_, State>, self_ptr: Object) -> Result<Ob
 /// ```text
 /// Actor Function() native
 /// ```
-fn get_dialogue_target(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Exception> {
+fn get_dialogue_target(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Error> {
     todo!()
 }
 
@@ -573,7 +572,7 @@ fn get_equipped_item_type(
     caller: Caller<'_, State>,
     self_ptr: Object,
     ai_equip_index: i32,
-) -> Result<i32, Exception> {
+) -> Result<i32, Error> {
     todo!()
 }
 
@@ -586,7 +585,7 @@ fn get_equipped_weapon(
     caller: Caller<'_, State>,
     self_ptr: Object,
     ai_equip_index: i32,
-) -> Result<Object, Exception> {
+) -> Result<Object, Error> {
     todo!()
 }
 
@@ -595,7 +594,7 @@ fn get_equipped_weapon(
 /// ```text
 /// Armor Function() native
 /// ```
-fn get_equipped_shield(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Exception> {
+fn get_equipped_shield(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Error> {
     todo!()
 }
 
@@ -608,7 +607,7 @@ fn get_equipped_spell(
     caller: Caller<'_, State>,
     self_ptr: Object,
     ai_source: i32,
-) -> Result<Object, Exception> {
+) -> Result<Object, Error> {
     todo!()
 }
 
@@ -617,11 +616,11 @@ fn get_equipped_spell(
 /// ```text
 /// int Function(Faction akFaction) native
 /// ```
-fn get_faction_rank(
+async fn get_faction_rank(
     caller: Caller<'_, State>,
     self_ptr: Object,
     faction: Object,
-) -> Result<i32, Exception> {
+) -> Result<i32, Error> {
     let Some(faction) = caller
         .data()
         .objects
@@ -634,12 +633,9 @@ fn get_faction_rank(
         return Ok(-2);
     };
 
-    let entity = caller.data().entity(self_ptr).unwrap();
-    let props = caller
-        .data()
-        .world()
-        .get::<&ActorProperties>(entity)
-        .unwrap();
+    let entity = caller.data().entity(self_ptr).await.unwrap();
+    let world = caller.data().world().await;
+    let props = world.get::<&ActorProperties>(entity).unwrap();
 
     match props.factions.iter().find(|f| f.faction == faction) {
         Some(faction) => Ok(faction.rank.into()),
@@ -657,7 +653,7 @@ fn get_faction_reaction(
     caller: Caller<'_, State>,
     self_ptr: Object,
     ak_other: Object,
-) -> Result<i32, Exception> {
+) -> Result<i32, Error> {
     todo!()
 }
 
@@ -666,7 +662,7 @@ fn get_faction_reaction(
 /// ```text
 /// int Function() native
 /// ```
-fn get_flying_state(caller: Caller<'_, State>, self_ptr: Object) -> Result<i32, Exception> {
+fn get_flying_state(caller: Caller<'_, State>, self_ptr: Object) -> Result<i32, Error> {
     todo!()
 }
 
@@ -675,10 +671,7 @@ fn get_flying_state(caller: Caller<'_, State>, self_ptr: Object) -> Result<i32, 
 /// ```text
 /// ObjectReference Function() native
 /// ```
-fn get_forced_landing_marker(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-) -> Result<Object, Exception> {
+fn get_forced_landing_marker(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Error> {
     todo!()
 }
 
@@ -687,7 +680,7 @@ fn get_forced_landing_marker(
 /// ```text
 /// int Function() native
 /// ```
-fn get_gold_amount(caller: Caller<'_, State>, self_ptr: Object) -> Result<i32, Exception> {
+async fn get_gold_amount(caller: Caller<'_, State>, self_ptr: Object) -> Result<i32, Error> {
     with_inventory(caller, self_ptr, |inventory| {
         let mut sum: i32 = 0;
         for (_, item) in inventory.get_by_form(GOLD) {
@@ -696,6 +689,7 @@ fn get_gold_amount(caller: Caller<'_, State>, self_ptr: Object) -> Result<i32, E
 
         sum
     })
+    .await
 }
 
 /// `GetHighestRelationshipRank`
@@ -706,7 +700,7 @@ fn get_gold_amount(caller: Caller<'_, State>, self_ptr: Object) -> Result<i32, E
 fn get_highest_relationship_rank(
     caller: Caller<'_, State>,
     self_ptr: Object,
-) -> Result<i32, Exception> {
+) -> Result<i32, Error> {
     todo!()
 }
 
@@ -715,7 +709,7 @@ fn get_highest_relationship_rank(
 /// ```text
 /// Actor Function() native
 /// ```
-fn get_killer(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Exception> {
+fn get_killer(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Error> {
     todo!()
 }
 
@@ -724,10 +718,15 @@ fn get_killer(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Exc
 /// ```text
 /// int Function() native
 /// ```
-fn get_level(caller: Caller<'_, State>, self_ptr: Object) -> Result<i32, Exception> {
-    let entity = caller.data().entity(self_ptr).ok_or(Exception::Error)?;
+async fn get_level(caller: Caller<'_, State>, self_ptr: Object) -> Result<i32, Error> {
+    let entity = caller
+        .data()
+        .entity(self_ptr)
+        .await
+        .ok_or_else(|| todo!())?;
 
-    let Ok(props) = caller.data().world().get::<&ActorProperties>(entity) else {
+    let world = caller.data().world().await;
+    let Ok(props) = world.get::<&ActorProperties>(entity) else {
         return Ok(0);
     };
 
@@ -739,7 +738,7 @@ fn get_level(caller: Caller<'_, State>, self_ptr: Object) -> Result<i32, Excepti
 /// ```text
 /// float Function() native
 /// ```
-fn get_light_level(caller: Caller<'_, State>, self_ptr: Object) -> Result<f32, Exception> {
+fn get_light_level(caller: Caller<'_, State>, self_ptr: Object) -> Result<f32, Error> {
     todo!()
 }
 
@@ -748,10 +747,7 @@ fn get_light_level(caller: Caller<'_, State>, self_ptr: Object) -> Result<f32, E
 /// ```text
 /// int Function() native
 /// ```
-fn get_lowest_relationship_rank(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-) -> Result<i32, Exception> {
+fn get_lowest_relationship_rank(caller: Caller<'_, State>, self_ptr: Object) -> Result<i32, Error> {
     todo!()
 }
 
@@ -760,10 +756,7 @@ fn get_lowest_relationship_rank(
 /// ```text
 /// ActorBase Function() native
 /// ```
-fn get_leveled_actor_base(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-) -> Result<Object, Exception> {
+fn get_leveled_actor_base(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Error> {
     todo!()
 }
 
@@ -772,12 +765,17 @@ fn get_leveled_actor_base(
 /// ```text
 /// bool Function() native
 /// ```
-fn get_no_bleedout_recovery(
+async fn get_no_bleedout_recovery(
     caller: Caller<'_, State>,
     self_ptr: Object,
-) -> Result<bool, Exception> {
-    let entity = caller.data().entity(self_ptr).ok_or(Exception::Error)?;
-    let Ok(props) = caller.data().world().get::<&ActorProperties>(entity) else {
+) -> Result<bool, Error> {
+    let entity = caller
+        .data()
+        .entity(self_ptr)
+        .await
+        .ok_or_else(|| todo!())?;
+    let world = caller.data().world().await;
+    let Ok(props) = world.get::<&ActorProperties>(entity) else {
         return Ok(false);
     };
 
@@ -790,13 +788,14 @@ fn get_no_bleedout_recovery(
 /// ```text
 /// bool Function() native
 /// ```
-fn get_player_controls(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Exception> {
-    let entity = caller.data().entity(self_ptr).ok_or(Exception::Error)?;
-    let is_player = caller
+async fn get_player_controls(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Error> {
+    let entity = caller
         .data()
-        .world()
-        .entity(entity)
-        .is_ok_and(|e| e.has::<Player>());
+        .entity(self_ptr)
+        .await
+        .ok_or_else(|| todo!())?;
+    let world = caller.data().world().await;
+    let is_player = world.entity(entity).is_ok_and(|e| e.has::<Player>());
     Ok(is_player)
 }
 
@@ -805,7 +804,7 @@ fn get_player_controls(caller: Caller<'_, State>, self_ptr: Object) -> Result<bo
 /// ```text
 /// Race Function() native
 /// ```
-fn get_race(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Exception> {
+fn get_race(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Error> {
     todo!()
 }
 
@@ -818,7 +817,7 @@ fn get_relationship_rank(
     caller: Caller<'_, State>,
     self_ptr: Object,
     ak_other: Object,
-) -> Result<i32, Exception> {
+) -> Result<i32, Error> {
     todo!()
 }
 
@@ -827,7 +826,7 @@ fn get_relationship_rank(
 /// ```text
 /// int Function() native
 /// ```
-fn get_sit_state(caller: Caller<'_, State>, self_ptr: Object) -> Result<i32, Exception> {
+fn get_sit_state(caller: Caller<'_, State>, self_ptr: Object) -> Result<i32, Error> {
     todo!()
 }
 
@@ -836,7 +835,7 @@ fn get_sit_state(caller: Caller<'_, State>, self_ptr: Object) -> Result<i32, Exc
 /// ```text
 /// int Function() native
 /// ```
-fn get_sleep_state(caller: Caller<'_, State>, self_ptr: Object) -> Result<i32, Exception> {
+fn get_sleep_state(caller: Caller<'_, State>, self_ptr: Object) -> Result<i32, Error> {
     todo!()
 }
 
@@ -850,7 +849,7 @@ fn has_association(
     self_ptr: Object,
     ak_association: Object,
     ak_other: Object,
-) -> Result<bool, Exception> {
+) -> Result<bool, Error> {
     todo!()
 }
 
@@ -863,7 +862,7 @@ fn has_family_relationship(
     caller: Caller<'_, State>,
     self_ptr: Object,
     ak_other: Object,
-) -> Result<bool, Exception> {
+) -> Result<bool, Error> {
     todo!()
 }
 
@@ -876,7 +875,7 @@ fn has_detection_los(
     caller: Caller<'_, State>,
     self_ptr: Object,
     ak_other: Object,
-) -> Result<bool, Exception> {
+) -> Result<bool, Error> {
     todo!()
 }
 
@@ -889,7 +888,7 @@ fn has_magic_effect(
     caller: Caller<'_, State>,
     self_ptr: Object,
     ak_effect: Object,
-) -> Result<bool, Exception> {
+) -> Result<bool, Error> {
     todo!()
 }
 
@@ -902,7 +901,7 @@ fn has_magic_effect_with_keyword(
     caller: Caller<'_, State>,
     self_ptr: Object,
     ak_keyword: Object,
-) -> Result<bool, Exception> {
+) -> Result<bool, Error> {
     todo!()
 }
 
@@ -915,7 +914,7 @@ fn has_parent_relationship(
     caller: Caller<'_, State>,
     self_ptr: Object,
     ak_other: Object,
-) -> Result<bool, Exception> {
+) -> Result<bool, Error> {
     todo!()
 }
 
@@ -924,11 +923,7 @@ fn has_parent_relationship(
 /// ```text
 /// bool Function(Perk akPerk) native
 /// ```
-fn has_perk(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    ak_perk: Object,
-) -> Result<bool, Exception> {
+fn has_perk(caller: Caller<'_, State>, self_ptr: Object, ak_perk: Object) -> Result<bool, Error> {
     todo!()
 }
 
@@ -937,11 +932,7 @@ fn has_perk(
 /// ```text
 /// bool Function(Form akForm) native
 /// ```
-fn has_spell(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    ak_form: Object,
-) -> Result<bool, Exception> {
+fn has_spell(caller: Caller<'_, State>, self_ptr: Object, ak_form: Object) -> Result<bool, Error> {
     todo!()
 }
 
@@ -950,7 +941,7 @@ fn has_spell(
 /// ```text
 /// bool Function() native
 /// ```
-fn is_ai_enabled(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Exception> {
+fn is_ai_enabled(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Error> {
     todo!()
 }
 
@@ -959,7 +950,7 @@ fn is_ai_enabled(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Ex
 /// ```text
 /// bool Function() native
 /// ```
-fn is_alarmed(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Exception> {
+fn is_alarmed(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Error> {
     todo!()
 }
 
@@ -968,7 +959,7 @@ fn is_alarmed(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Excep
 /// ```text
 /// bool Function() native
 /// ```
-fn is_alerted(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Exception> {
+fn is_alerted(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Error> {
     todo!()
 }
 
@@ -977,7 +968,7 @@ fn is_alerted(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Excep
 /// ```text
 /// bool Function() native
 /// ```
-fn is_allowed_to_fly(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Exception> {
+fn is_allowed_to_fly(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Error> {
     todo!()
 }
 
@@ -986,7 +977,7 @@ fn is_allowed_to_fly(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool
 /// ```text
 /// bool Function() native
 /// ```
-fn is_arrested(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Exception> {
+fn is_arrested(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Error> {
     todo!()
 }
 
@@ -995,7 +986,7 @@ fn is_arrested(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Exce
 /// ```text
 /// bool Function() native
 /// ```
-fn is_arresting_target(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Exception> {
+fn is_arresting_target(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Error> {
     todo!()
 }
 
@@ -1004,7 +995,7 @@ fn is_arresting_target(caller: Caller<'_, State>, self_ptr: Object) -> Result<bo
 /// ```text
 /// bool Function() native
 /// ```
-fn is_being_ridden(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Exception> {
+fn is_being_ridden(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Error> {
     todo!()
 }
 
@@ -1017,7 +1008,7 @@ fn is_being_ridden_by(
     caller: Caller<'_, State>,
     self_ptr: Object,
     ak_actor: Object,
-) -> Result<bool, Exception> {
+) -> Result<bool, Error> {
     todo!()
 }
 
@@ -1026,7 +1017,7 @@ fn is_being_ridden_by(
 /// ```text
 /// bool Function() native
 /// ```
-fn is_bleeding_out(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Exception> {
+fn is_bleeding_out(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Error> {
     todo!()
 }
 
@@ -1035,7 +1026,7 @@ fn is_bleeding_out(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, 
 /// ```text
 /// bool Function() native
 /// ```
-fn is_bribed(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Exception> {
+fn is_bribed(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Error> {
     todo!()
 }
 
@@ -1044,8 +1035,8 @@ fn is_bribed(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Except
 /// ```text
 /// bool Function() native
 /// ```
-fn is_child(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Exception> {
-    with_actor_props(caller, self_ptr, |actor| actor.is_child)
+async fn is_child(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Error> {
+    with_actor_props(caller, self_ptr, |actor| actor.is_child).await
 }
 
 /// `IsCommandedActor`
@@ -1053,7 +1044,7 @@ fn is_child(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Excepti
 /// ```text
 /// bool Function() native
 /// ```
-fn is_commanded_actor(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Exception> {
+fn is_commanded_actor(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Error> {
     todo!()
 }
 
@@ -1062,8 +1053,8 @@ fn is_commanded_actor(caller: Caller<'_, State>, self_ptr: Object) -> Result<boo
 /// ```text
 /// bool Function() native
 /// ```
-fn is_dead(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Exception> {
-    with_actor_props(caller, self_ptr, |actor| actor.is_dead)
+async fn is_dead(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Error> {
+    with_actor_props(caller, self_ptr, |actor| actor.is_dead).await
 }
 
 /// `IsDetectedBy`
@@ -1075,7 +1066,7 @@ fn is_detected_by(
     caller: Caller<'_, State>,
     self_ptr: Object,
     ak_other: Object,
-) -> Result<bool, Exception> {
+) -> Result<bool, Error> {
     todo!()
 }
 
@@ -1088,7 +1079,7 @@ fn is_dismembered(
     caller: Caller<'_, State>,
     self_ptr: Object,
     as_body_part: Object,
-) -> Result<bool, Exception> {
+) -> Result<bool, Error> {
     todo!()
 }
 
@@ -1097,7 +1088,7 @@ fn is_dismembered(
 /// ```text
 /// bool Function() native
 /// ```
-fn is_doing_favor(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Exception> {
+fn is_doing_favor(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Error> {
     todo!()
 }
 
@@ -1106,20 +1097,25 @@ fn is_doing_favor(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, E
 /// ```text
 /// bool Function(Form akItem) native
 /// ```
-fn is_equipped(
+async fn is_equipped(
     caller: Caller<'_, State>,
     self_ptr: Object,
     item: Object,
-) -> Result<bool, Exception> {
-    let actor = caller.data().entity(self_ptr).ok_or(Exception::Error)?;
+) -> Result<bool, Error> {
+    let actor = caller
+        .data()
+        .entity(self_ptr)
+        .await
+        .ok_or_else(|| todo!())?;
     let item = caller
         .data()
         .objects
         .get_by_addr(item)
         .and_then(|s| s.record())
-        .ok_or(Exception::Error)?;
+        .ok_or_else(|| todo!())?;
 
-    let Ok(inventory) = caller.data().world().get::<&Inventory>(actor) else {
+    let world = caller.data().world().await;
+    let Ok(inventory) = world.get::<&Inventory>(actor) else {
         return Ok(false);
     };
 
@@ -1137,10 +1133,11 @@ fn is_equipped(
 /// ```text
 /// bool Function() native
 /// ```
-fn is_essential(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Exception> {
+async fn is_essential(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Error> {
     with_actor_props(caller, self_ptr, |actor| {
         actor.protection == ActorProtection::Essential
     })
+    .await
 }
 
 /// `IsFlying`
@@ -1148,7 +1145,7 @@ fn is_essential(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Exc
 /// ```text
 /// bool Function() native
 /// ```
-fn is_flying(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Exception> {
+fn is_flying(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Error> {
     todo!()
 }
 
@@ -1157,7 +1154,7 @@ fn is_flying(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Except
 /// ```text
 /// bool Function() native
 /// ```
-fn is_guard(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Exception> {
+fn is_guard(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Error> {
     todo!()
 }
 
@@ -1166,7 +1163,7 @@ fn is_guard(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Excepti
 /// ```text
 /// bool Function() native
 /// ```
-fn is_ghost(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Exception> {
+fn is_ghost(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Error> {
     todo!()
 }
 
@@ -1179,7 +1176,7 @@ fn is_hostile_to_actor(
     caller: Caller<'_, State>,
     self_ptr: Object,
     ak_actor: Object,
-) -> Result<bool, Exception> {
+) -> Result<bool, Error> {
     todo!()
 }
 
@@ -1188,7 +1185,7 @@ fn is_hostile_to_actor(
 /// ```text
 /// bool Function() native
 /// ```
-fn is_in_combat(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Exception> {
+fn is_in_combat(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Error> {
     todo!()
 }
 
@@ -1197,11 +1194,11 @@ fn is_in_combat(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Exc
 /// ```text
 /// bool Function(Faction akFaction) native
 /// ```
-fn is_in_faction(
+async fn is_in_faction(
     caller: Caller<'_, State>,
     self_ptr: Object,
     faction: Object,
-) -> Result<bool, Exception> {
+) -> Result<bool, Error> {
     let Some(faction) = caller
         .data()
         .objects
@@ -1212,12 +1209,9 @@ fn is_in_faction(
         return Ok(false);
     };
 
-    let entity = caller.data().entity(self_ptr).unwrap();
-    let props = caller
-        .data()
-        .world()
-        .get::<&ActorProperties>(entity)
-        .unwrap();
+    let entity = caller.data().entity(self_ptr).await.unwrap();
+    let world = caller.data().world().await;
+    let props = world.get::<&ActorProperties>(entity).unwrap();
 
     Ok(props
         .factions
@@ -1231,7 +1225,7 @@ fn is_in_faction(
 /// ```text
 /// bool Function() native
 /// ```
-fn is_in_iron_sights(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Exception> {
+fn is_in_iron_sights(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Error> {
     todo!()
 }
 
@@ -1240,7 +1234,7 @@ fn is_in_iron_sights(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool
 /// ```text
 /// bool Function() native
 /// ```
-fn is_in_kill_move(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Exception> {
+fn is_in_kill_move(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Error> {
     todo!()
 }
 
@@ -1249,7 +1243,7 @@ fn is_in_kill_move(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, 
 /// ```text
 /// bool Function() native
 /// ```
-fn is_in_scene(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Exception> {
+fn is_in_scene(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Error> {
     todo!()
 }
 
@@ -1258,7 +1252,7 @@ fn is_in_scene(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Exce
 /// ```text
 /// bool Function() native
 /// ```
-fn is_intimidated(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Exception> {
+fn is_intimidated(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Error> {
     todo!()
 }
 
@@ -1267,7 +1261,7 @@ fn is_intimidated(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, E
 /// ```text
 /// bool Function() native
 /// ```
-fn is_on_mount(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Exception> {
+fn is_on_mount(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Error> {
     todo!()
 }
 
@@ -1276,7 +1270,7 @@ fn is_on_mount(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Exce
 /// ```text
 /// bool Function() native
 /// ```
-fn is_over_encumbered(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Exception> {
+fn is_over_encumbered(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Error> {
     todo!()
 }
 
@@ -1288,7 +1282,7 @@ fn is_over_encumbered(caller: Caller<'_, State>, self_ptr: Object) -> Result<boo
 fn is_players_last_ridden_horse(
     caller: Caller<'_, State>,
     self_ptr: Object,
-) -> Result<bool, Exception> {
+) -> Result<bool, Error> {
     todo!()
 }
 
@@ -1297,7 +1291,7 @@ fn is_players_last_ridden_horse(
 /// ```text
 /// bool Function() native
 /// ```
-fn is_player_teammate(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Exception> {
+fn is_player_teammate(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Error> {
     todo!()
 }
 
@@ -1306,7 +1300,7 @@ fn is_player_teammate(caller: Caller<'_, State>, self_ptr: Object) -> Result<boo
 /// ```text
 /// bool Function() native
 /// ```
-fn is_running(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Exception> {
+fn is_running(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Error> {
     todo!()
 }
 
@@ -1319,7 +1313,7 @@ fn is_seat_occupied(
     caller: Caller<'_, State>,
     self_ptr: Object,
     ap_keyword: Object,
-) -> Result<bool, Exception> {
+) -> Result<bool, Error> {
     todo!()
 }
 
@@ -1328,7 +1322,7 @@ fn is_seat_occupied(
 /// ```text
 /// bool Function() native
 /// ```
-fn is_sneaking(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Exception> {
+fn is_sneaking(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Error> {
     todo!()
 }
 
@@ -1337,7 +1331,7 @@ fn is_sneaking(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Exce
 /// ```text
 /// bool Function() native
 /// ```
-fn is_sprinting(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Exception> {
+fn is_sprinting(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Error> {
     todo!()
 }
 
@@ -1346,7 +1340,7 @@ fn is_sprinting(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Exc
 /// ```text
 /// bool Function() native
 /// ```
-fn is_talking(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Exception> {
+fn is_talking(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Error> {
     todo!()
 }
 
@@ -1355,7 +1349,7 @@ fn is_talking(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Excep
 /// ```text
 /// bool Function() native
 /// ```
-fn is_trespassing(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Exception> {
+fn is_trespassing(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Error> {
     todo!()
 }
 
@@ -1364,7 +1358,7 @@ fn is_trespassing(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, E
 /// ```text
 /// bool Function() native
 /// ```
-fn is_unconscious(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Exception> {
+fn is_unconscious(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Error> {
     todo!()
 }
 
@@ -1373,7 +1367,7 @@ fn is_unconscious(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, E
 /// ```text
 /// bool Function() native
 /// ```
-fn is_weapon_drawn(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Exception> {
+async fn is_weapon_drawn(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Error> {
     with_inventory(caller, self_ptr, |inventory| {
         inventory.items().any(|(_, item)| {
             item.equipped
@@ -1383,6 +1377,7 @@ fn is_weapon_drawn(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, 
                 )
         })
     })
+    .await
 }
 
 /// `Kill`
@@ -1390,7 +1385,7 @@ fn is_weapon_drawn(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, 
 /// ```text
 /// Function(Actor akKiller) native
 /// ```
-fn kill(caller: Caller<'_, State>, self_ptr: Object, ak_killer: Object) -> Result<(), Exception> {
+fn kill(caller: Caller<'_, State>, self_ptr: Object, ak_killer: Object) -> Result<(), Error> {
     todo!()
 }
 
@@ -1403,7 +1398,7 @@ fn kill_silent(
     caller: Caller<'_, State>,
     self_ptr: Object,
     ak_killer: Object,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -1419,7 +1414,7 @@ fn dismember(
     ab_force_explode: bool,
     ab_force_dismember: bool,
     ab_force_bloody_mess: bool,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -1433,7 +1428,7 @@ fn mark_item_as_favorite(
     self_ptr: Object,
     ak_item: Object,
     ai_slot_1: i32,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -1447,7 +1442,7 @@ fn mod_faction_rank(
     self_ptr: Object,
     ak_faction: Object,
     ai_mod: i32,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -1456,7 +1451,7 @@ fn mod_faction_rank(
 /// ```text
 /// Function() native
 /// ```
-fn move_to_package_location(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Exception> {
+fn move_to_package_location(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Error> {
     todo!()
 }
 
@@ -1469,7 +1464,7 @@ fn open_inventory(
     caller: Caller<'_, State>,
     self_ptr: Object,
     ab_force_open: bool,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -1483,7 +1478,7 @@ fn path_to_reference(
     self_ptr: Object,
     a_target: Object,
     af_walk_run_percent: f32,
-) -> Result<bool, Exception> {
+) -> Result<bool, Error> {
     todo!()
 }
 
@@ -1492,11 +1487,7 @@ fn path_to_reference(
 /// ```text
 /// bool Function(Idle akIdle) native
 /// ```
-fn play_idle(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    ak_idle: Object,
-) -> Result<bool, Exception> {
+fn play_idle(caller: Caller<'_, State>, self_ptr: Object, ak_idle: Object) -> Result<bool, Error> {
     todo!()
 }
 
@@ -1510,7 +1501,7 @@ fn play_idle_action(
     self_ptr: Object,
     a_action: Object,
     a_target: Object,
-) -> Result<bool, Exception> {
+) -> Result<bool, Error> {
     todo!()
 }
 
@@ -1524,7 +1515,7 @@ fn play_idle_with_target(
     self_ptr: Object,
     ak_idle: Object,
     ak_target: Object,
-) -> Result<bool, Exception> {
+) -> Result<bool, Error> {
     todo!()
 }
 
@@ -1537,7 +1528,7 @@ fn play_sub_graph_animation(
     caller: Caller<'_, State>,
     self_ptr: Object,
     as_event_name: Object,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -1546,11 +1537,11 @@ fn play_sub_graph_animation(
 /// ```text
 /// Function(Faction akFaction) native
 /// ```
-fn remove_from_faction(
+async fn remove_from_faction(
     caller: Caller<'_, State>,
     self_ptr: Object,
     faction: Object,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     let Some(faction) = caller
         .data()
         .objects
@@ -1561,12 +1552,9 @@ fn remove_from_faction(
         return Ok(());
     };
 
-    let entity = caller.data().entity(self_ptr).unwrap();
-    let mut props = caller
-        .data()
-        .world()
-        .get::<&mut ActorProperties>(entity)
-        .unwrap();
+    let entity = caller.data().entity(self_ptr).await.unwrap();
+    let world = caller.data().world().await;
+    let mut props = world.get::<&mut ActorProperties>(entity).unwrap();
 
     props.factions.retain(|v| v.faction != faction);
     Ok(())
@@ -1577,13 +1565,13 @@ fn remove_from_faction(
 /// ```text
 /// Function() native
 /// ```
-fn remove_from_all_factions(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Exception> {
-    let entity = caller.data().entity(self_ptr).unwrap();
-    let mut props = caller
-        .data()
-        .world()
-        .get::<&mut ActorProperties>(entity)
-        .unwrap();
+async fn remove_from_all_factions(
+    caller: Caller<'_, State>,
+    self_ptr: Object,
+) -> Result<(), Error> {
+    let entity = caller.data().entity(self_ptr).await.unwrap();
+    let world = caller.data().world().await;
+    let mut props = world.get::<&mut ActorProperties>(entity).unwrap();
 
     props.factions.clear();
     Ok(())
@@ -1594,11 +1582,7 @@ fn remove_from_all_factions(caller: Caller<'_, State>, self_ptr: Object) -> Resu
 /// ```text
 /// Function(Perk akPerk) native
 /// ```
-fn remove_perk(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    ak_perk: Object,
-) -> Result<(), Exception> {
+fn remove_perk(caller: Caller<'_, State>, self_ptr: Object, ak_perk: Object) -> Result<(), Error> {
     todo!()
 }
 
@@ -1611,7 +1595,7 @@ fn remove_spell(
     caller: Caller<'_, State>,
     self_ptr: Object,
     ak_spell: Object,
-) -> Result<bool, Exception> {
+) -> Result<bool, Error> {
     todo!()
 }
 
@@ -1620,7 +1604,7 @@ fn remove_spell(
 /// ```text
 /// Function() native
 /// ```
-fn reset_health_and_limbs(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Exception> {
+fn reset_health_and_limbs(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Error> {
     todo!()
 }
 
@@ -1629,7 +1613,7 @@ fn reset_health_and_limbs(caller: Caller<'_, State>, self_ptr: Object) -> Result
 /// ```text
 /// Function() native
 /// ```
-fn resurrect(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Exception> {
+fn resurrect(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Error> {
     todo!()
 }
 
@@ -1638,7 +1622,7 @@ fn resurrect(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Exceptio
 /// ```text
 /// Function() native
 /// ```
-fn send_assault_alarm(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Exception> {
+fn send_assault_alarm(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Error> {
     todo!()
 }
 
@@ -1651,7 +1635,7 @@ fn send_trespass_alarm(
     caller: Caller<'_, State>,
     self_ptr: Object,
     ak_criminal: Object,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -1660,11 +1644,7 @@ fn send_trespass_alarm(
 /// ```text
 /// Function(bool abAlerted) native
 /// ```
-fn set_alert(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    ab_alerted: bool,
-) -> Result<(), Exception> {
+fn set_alert(caller: Caller<'_, State>, self_ptr: Object, ab_alerted: bool) -> Result<(), Error> {
     todo!()
 }
 
@@ -1679,7 +1659,7 @@ fn set_allow_flying(
     ab_allowed: bool,
     ab_allow_crash: bool,
     ab_allow_search: bool,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -1693,7 +1673,7 @@ fn set_alpha(
     self_ptr: Object,
     af_target_alpha: f32,
     ab_fade: bool,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -1706,7 +1686,7 @@ fn set_attack_actor_on_sight(
     caller: Caller<'_, State>,
     self_ptr: Object,
     ab_attack_on_sight: bool,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -1719,7 +1699,7 @@ fn set_avoid_player(
     caller: Caller<'_, State>,
     self_ptr: Object,
     ab_avoid: bool,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -1732,7 +1712,7 @@ fn set_command_state(
     caller: Caller<'_, State>,
     self_ptr: Object,
     ab_start_command_mode: bool,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -1741,11 +1721,7 @@ fn set_command_state(
 /// ```text
 /// Function(bool abBribe) native
 /// ```
-fn set_bribed(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    ab_bribe: bool,
-) -> Result<(), Exception> {
+fn set_bribed(caller: Caller<'_, State>, self_ptr: Object, ab_bribe: bool) -> Result<(), Error> {
     todo!()
 }
 
@@ -1758,7 +1734,7 @@ fn set_can_do_command(
     caller: Caller<'_, State>,
     self_ptr: Object,
     ab_can_command: bool,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -1771,7 +1747,7 @@ fn set_combat_style(
     caller: Caller<'_, State>,
     self_ptr: Object,
     ak_combat_style: Object,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -1784,7 +1760,7 @@ fn set_crime_faction(
     caller: Caller<'_, State>,
     self_ptr: Object,
     ak_faction: Object,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -1797,7 +1773,7 @@ fn set_critical_stage(
     caller: Caller<'_, State>,
     self_ptr: Object,
     ai_stage: i32,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -1811,7 +1787,7 @@ fn set_doing_favor(
     self_ptr: Object,
     ab_doing_favor: bool,
     ab_work_shop_mode_false: bool,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -1824,7 +1800,7 @@ fn change_anim_face_archetype(
     caller: Caller<'_, State>,
     self_ptr: Object,
     ap_keyword: Object,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -1837,7 +1813,7 @@ fn set_eye_texture(
     caller: Caller<'_, State>,
     self_ptr: Object,
     ak_new_texture: Object,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -1846,17 +1822,20 @@ fn set_eye_texture(
 /// ```text
 /// Function(bool abEssential) native
 /// ```
-fn set_essential(
+async fn set_essential(
     caller: Caller<'_, State>,
     self_ptr: Object,
     essential: bool,
-) -> Result<(), Exception> {
-    let entity = caller.data().entity(self_ptr).ok_or(Exception::Error)?;
-    let mut props = caller
+) -> Result<(), Error> {
+    let entity = caller
         .data()
-        .world()
+        .entity(self_ptr)
+        .await
+        .ok_or_else(|| todo!())?;
+    let world = caller.data().world().await;
+    let mut props = world
         .get::<&mut ActorProperties>(entity)
-        .map_err(|_| Exception::Error)?;
+        .map_err(|_| todo!())?;
 
     if essential {
         // Overwrite the protected flag if set.
@@ -1882,7 +1861,7 @@ fn set_faction_rank(
     self_ptr: Object,
     faction: Object,
     ai_rank: i32,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -1895,7 +1874,7 @@ fn set_forced_landing_marker(
     caller: Caller<'_, State>,
     self_ptr: Object,
     a_marker: Object,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -1904,11 +1883,7 @@ fn set_forced_landing_marker(
 /// ```text
 /// Function(bool abIsGhost) native
 /// ```
-fn set_ghost(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    ab_is_ghost: bool,
-) -> Result<(), Exception> {
+fn set_ghost(caller: Caller<'_, State>, self_ptr: Object, ab_is_ghost: bool) -> Result<(), Error> {
     todo!()
 }
 
@@ -1921,7 +1896,7 @@ fn set_has_char_gen_skeleton(
     caller: Caller<'_, State>,
     self_ptr: Object,
     ab_char_gen: bool,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -1934,7 +1909,7 @@ fn set_head_tracking(
     caller: Caller<'_, State>,
     self_ptr: Object,
     ab_enable: bool,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -1947,7 +1922,7 @@ fn set_intimidated(
     caller: Caller<'_, State>,
     self_ptr: Object,
     ab_intimidate: bool,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -1961,7 +1936,7 @@ fn set_look_at(
     self_ptr: Object,
     ak_target: Object,
     ab_pathing_look_at: bool,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -1970,16 +1945,21 @@ fn set_look_at(
 /// ```text
 /// Function(bool abAllowed) native
 /// ```
-fn set_no_bleedout_recovery(
+async fn set_no_bleedout_recovery(
     caller: Caller<'_, State>,
     self_ptr: Object,
     not_allowed: bool,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     // The function sets whether bleedout recovery is disabled.
     let allowed = !not_allowed;
 
-    let entity = caller.data().entity(self_ptr).ok_or(Exception::Error)?;
-    let Ok(mut props) = caller.data().world().get::<&mut ActorProperties>(entity) else {
+    let entity = caller
+        .data()
+        .entity(self_ptr)
+        .await
+        .ok_or_else(|| todo!())?;
+    let world = caller.data().world().await;
+    let Ok(mut props) = world.get::<&mut ActorProperties>(entity) else {
         return Ok(());
     };
 
@@ -1996,7 +1976,7 @@ fn set_not_show_on_stealth_meter(
     caller: Caller<'_, State>,
     self_ptr: Object,
     ab_not_show: bool,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -2010,7 +1990,7 @@ fn set_outfit(
     self_ptr: Object,
     ak_outfit: Object,
     ab_sleep_outfit: bool,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -2023,7 +2003,7 @@ fn set_override_voice_type(
     caller: Caller<'_, State>,
     self_ptr: Object,
     ak_voice_type: Object,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -2036,7 +2016,7 @@ fn set_player_controls(
     caller: Caller<'_, State>,
     self_ptr: Object,
     ab_controls: bool,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -2045,10 +2025,7 @@ fn set_player_controls(
 /// ```text
 /// Function() native
 /// ```
-fn set_player_resisting_arrest(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-) -> Result<(), Exception> {
+fn set_player_resisting_arrest(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Error> {
     todo!()
 }
 
@@ -2063,7 +2040,7 @@ fn set_player_teammate(
     ab_teammate: bool,
     ab_can_do_favor_true: bool,
     ab_give_player_xp_false: bool,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -2076,7 +2053,7 @@ fn set_protected(
     caller: Caller<'_, State>,
     self_ptr: Object,
     ab_protected: bool,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -2085,7 +2062,7 @@ fn set_protected(
 /// ```text
 /// Function(Race akRace) native
 /// ```
-fn set_race(caller: Caller<'_, State>, self_ptr: Object, ak_race: Object) -> Result<(), Exception> {
+fn set_race(caller: Caller<'_, State>, self_ptr: Object, ak_race: Object) -> Result<(), Error> {
     todo!()
 }
 
@@ -2099,7 +2076,7 @@ fn set_relationship_rank(
     self_ptr: Object,
     ak_other: Object,
     ai_rank: i32,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -2112,7 +2089,7 @@ fn set_restrained(
     caller: Caller<'_, State>,
     self_ptr: Object,
     ab_restrained: bool,
-) -> Result<bool, Exception> {
+) -> Result<bool, Error> {
     todo!()
 }
 
@@ -2126,7 +2103,7 @@ fn set_sub_graph_float_variable(
     self_ptr: Object,
     as_variable_name: Object,
     af_value: f32,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -2139,7 +2116,7 @@ fn set_unconscious(
     caller: Caller<'_, State>,
     self_ptr: Object,
     ab_unconscious: bool,
-) -> Result<bool, Exception> {
+) -> Result<bool, Error> {
     todo!()
 }
 
@@ -2152,7 +2129,7 @@ fn set_vehicle(
     caller: Caller<'_, State>,
     self_ptr: Object,
     ak_vehicle: Object,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -2161,7 +2138,7 @@ fn set_vehicle(
 /// ```text
 /// Function() native
 /// ```
-fn show_barter_menu(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Exception> {
+fn show_barter_menu(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Error> {
     todo!()
 }
 
@@ -2174,7 +2151,7 @@ fn start_cannibal(
     caller: Caller<'_, State>,
     self_ptr: Object,
     ak_target: Object,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -2188,7 +2165,7 @@ fn start_combat(
     self_ptr: Object,
     ak_target: Object,
     ab_preferred_target: bool,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -2197,7 +2174,7 @@ fn start_combat(
 /// ```text
 /// Function() native
 /// ```
-fn start_deferred_kill(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Exception> {
+fn start_deferred_kill(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Error> {
     todo!()
 }
 
@@ -2210,7 +2187,7 @@ fn start_vampire_feed(
     caller: Caller<'_, State>,
     self_ptr: Object,
     ak_target: Object,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -2224,7 +2201,7 @@ fn start_frenzy_attack(
     self_ptr: Object,
     a_chance: f32,
     a_interval: f32,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -2233,7 +2210,7 @@ fn start_frenzy_attack(
 /// ```text
 /// Function() native
 /// ```
-fn stop_combat(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Exception> {
+fn stop_combat(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Error> {
     todo!()
 }
 
@@ -2242,7 +2219,7 @@ fn stop_combat(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Except
 /// ```text
 /// Function() native
 /// ```
-fn stop_combat_alarm(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Exception> {
+fn stop_combat_alarm(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Error> {
     todo!()
 }
 
@@ -2255,7 +2232,7 @@ fn switch_to_power_armor(
     caller: Caller<'_, State>,
     self_ptr: Object,
     a_armor_furniture: Object,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -2268,7 +2245,7 @@ fn snap_into_interaction(
     caller: Caller<'_, State>,
     self_ptr: Object,
     ak_target: Object,
-) -> Result<bool, Exception> {
+) -> Result<bool, Error> {
     todo!()
 }
 
@@ -2281,7 +2258,7 @@ fn trap_soul(
     caller: Caller<'_, State>,
     self_ptr: Object,
     ak_target: Object,
-) -> Result<bool, Exception> {
+) -> Result<bool, Error> {
     todo!()
 }
 
@@ -2290,7 +2267,7 @@ fn trap_soul(
 /// ```text
 /// Function() native
 /// ```
-fn unequip_all(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Exception> {
+fn unequip_all(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Error> {
     todo!()
 }
 
@@ -2299,34 +2276,42 @@ fn unequip_all(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Except
 /// ```text
 /// Function(Form akItem, bool abPreventEquip, bool abSilent) native
 /// ```
-fn unequip_item(
+async fn unequip_item(
     mut caller: Caller<'_, State>,
     self_ptr: Object,
     item: Object,
     prevent_equip: bool,
     silent: bool,
-) -> Result<(), Exception> {
-    let actor = caller.data().entity(self_ptr).ok_or(Exception::Error)?;
+) -> Result<(), Error> {
+    let actor = caller
+        .data()
+        .entity(self_ptr)
+        .await
+        .ok_or_else(|| todo!())?;
     let item = caller
         .data()
         .objects
         .get_by_addr(item)
         .and_then(|s| s.record())
-        .ok_or(Exception::Error)?;
+        .ok_or_else(|| todo!())?;
 
-    let Ok(inventory) = caller.data().world().get::<&Inventory>(actor) else {
-        return Ok(());
+    let slot = {
+        let world = caller.data().world().await;
+        let Ok(inventory) = world.get::<&Inventory>(actor) else {
+            return Ok(());
+        };
+
+        let Some((slot, _)) = inventory.get_by_form(item).next() else {
+            return Ok(());
+        };
+
+        slot
     };
-
-    let Some((slot, _)) = inventory.get_by_form(item).next() else {
-        return Ok(());
-    };
-
-    drop(inventory);
 
     caller
         .data_mut()
-        .run_effect_and_wait(UnequipItemEffect { actor, slot })?;
+        .run_effect_and_wait(UnequipItemEffect { actor, slot })
+        .await?;
 
     Ok(())
 }
@@ -2340,7 +2325,7 @@ fn unequip_item_slot(
     caller: Caller<'_, State>,
     self_ptr: Object,
     ai_slot: i32,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -2354,7 +2339,7 @@ fn unequip_spell(
     self_ptr: Object,
     ak_spell: Object,
     ai_source: i32,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -2363,10 +2348,7 @@ fn unequip_spell(
 /// ```text
 /// Function() native
 /// ```
-fn un_lock_owned_doors_in_cell(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-) -> Result<(), Exception> {
+fn un_lock_owned_doors_in_cell(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Error> {
     todo!()
 }
 
@@ -2375,7 +2357,7 @@ fn un_lock_owned_doors_in_cell(
 /// ```text
 /// bool Function() native
 /// ```
-fn will_intimidate_succeed(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Exception> {
+fn will_intimidate_succeed(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Error> {
     todo!()
 }
 
@@ -2388,7 +2370,7 @@ fn worn_has_keyword(
     caller: Caller<'_, State>,
     self_ptr: Object,
     ak_keyword: Object,
-) -> Result<bool, Exception> {
+) -> Result<bool, Error> {
     todo!()
 }
 
@@ -2401,7 +2383,7 @@ fn would_be_stealing(
     caller: Caller<'_, State>,
     self_ptr: Object,
     ak_object: Object,
-) -> Result<bool, Exception> {
+) -> Result<bool, Error> {
     todo!()
 }
 
@@ -2414,7 +2396,7 @@ fn would_refuse_command(
     caller: Caller<'_, State>,
     self_ptr: Object,
     ak_object: Object,
-) -> Result<i32, Exception> {
+) -> Result<i32, Error> {
     todo!()
 }
 
@@ -2423,7 +2405,7 @@ fn would_refuse_command(
 /// ```text
 /// Function() native
 /// ```
-fn start_sneaking(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Exception> {
+fn start_sneaking(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Error> {
     todo!()
 }
 
@@ -2432,7 +2414,7 @@ fn start_sneaking(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Exc
 /// ```text
 /// Function() native
 /// ```
-fn draw_weapon(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Exception> {
+fn draw_weapon(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Error> {
     todo!()
 }
 
@@ -2445,7 +2427,7 @@ fn dog_place_in_mouth(
     caller: Caller<'_, State>,
     self_ptr: Object,
     ak_item: Object,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -2454,7 +2436,7 @@ fn dog_place_in_mouth(
 /// ```text
 /// Function() native
 /// ```
-fn dog_drop_items(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Exception> {
+fn dog_drop_items(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Error> {
     todo!()
 }
 
@@ -2469,7 +2451,7 @@ fn force_movement_direction(
     af_x_angle: f32,
     af_y_angle: f32,
     af_z_angle: f32,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -2482,7 +2464,7 @@ fn force_movement_speed(
     caller: Caller<'_, State>,
     self_ptr: Object,
     af_speed_mult: f32,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -2497,7 +2479,7 @@ fn force_movement_rotation_speed(
     af_x_mult: f32,
     af_y_mult: f32,
     af_z_mult: f32,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -2513,7 +2495,7 @@ fn force_movement_direction_ramp(
     af_y_angle: f32,
     af_z_angle: f32,
     af_ramp_time: f32,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -2527,7 +2509,7 @@ fn force_movement_speed_ramp(
     self_ptr: Object,
     af_speed_mult: f32,
     af_ramp_time: f32,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -2543,7 +2525,7 @@ fn force_movement_rotation_speed_ramp(
     af_y_mult: f32,
     af_z_mult: f32,
     af_ramp_time: f32,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -2558,7 +2540,7 @@ fn force_target_direction(
     af_x_angle: f32,
     af_y_angle: f32,
     af_z_angle: f32,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -2571,7 +2553,7 @@ fn force_target_speed(
     caller: Caller<'_, State>,
     self_ptr: Object,
     af_speed: f32,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -2586,7 +2568,7 @@ fn force_target_angle(
     af_x_angle: f32,
     af_y_angle: f32,
     af_z_angle: f32,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -2595,7 +2577,7 @@ fn force_target_angle(
 /// ```text
 /// Function() native
 /// ```
-fn clear_forced_movement(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Exception> {
+fn clear_forced_movement(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Error> {
     todo!()
 }
 
@@ -2604,7 +2586,7 @@ fn clear_forced_movement(caller: Caller<'_, State>, self_ptr: Object) -> Result<
 /// ```text
 /// bool Function() native
 /// ```
-fn can_move_vertical(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Exception> {
+fn can_move_vertical(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Error> {
     todo!()
 }
 
@@ -2613,7 +2595,7 @@ fn can_move_vertical(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool
 /// ```text
 /// bool Function() native
 /// ```
-fn can_strafe(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Exception> {
+fn can_strafe(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Error> {
     todo!()
 }
 
@@ -2627,7 +2609,7 @@ fn get_worn_item(
     self_ptr: Object,
     slot_index: i32,
     first_person: bool,
-) -> Result<Object, Exception> {
+) -> Result<Object, Error> {
     todo!()
 }
 
@@ -2640,7 +2622,7 @@ fn get_worn_item_mods(
     caller: Caller<'_, State>,
     self_ptr: Object,
     slot_index: i32,
-) -> Result<Object, Exception> {
+) -> Result<Object, Error> {
     todo!()
 }
 
@@ -2654,7 +2636,7 @@ fn queue_update(
     self_ptr: Object,
     b_do_equipment: bool,
     flags: i32,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -2663,10 +2645,7 @@ fn queue_update(
 /// ```text
 /// ObjectReference Function() native
 /// ```
-fn get_furniture_reference(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-) -> Result<Object, Exception> {
+fn get_furniture_reference(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Error> {
     todo!()
 }
 
@@ -2675,34 +2654,41 @@ fn get_furniture_reference(
 /// ```text
 /// bool Function() native
 /// ```
-fn is_protected(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Exception> {
+async fn is_protected(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Error> {
     with_actor_props(caller, self_ptr, |actor| {
         actor.protection == ActorProtection::Protected
     })
+    .await
 }
 
-fn with_actor_props<T, F>(caller: Caller<'_, State>, self_ptr: Object, f: F) -> Result<T, Exception>
+async fn with_actor_props<T, F>(
+    caller: Caller<'_, State>,
+    self_ptr: Object,
+    f: F,
+) -> Result<T, Error>
 where
     F: FnOnce(&ActorProperties) -> T,
 {
-    let entity = caller.data().entity(self_ptr).ok_or(Exception::Error)?;
-    let props = caller
+    let entity = caller
         .data()
-        .world()
-        .get::<&ActorProperties>(entity)
-        .map_err(|_| Exception::Error)?;
+        .entity(self_ptr)
+        .await
+        .ok_or_else(|| todo!())?;
+    let world = caller.data().world().await;
+    let props = world.get::<&ActorProperties>(entity).map_err(|_| todo!())?;
     Ok(f(&props))
 }
 
-fn with_inventory<T, F>(caller: Caller<'_, State>, self_ptr: Object, f: F) -> Result<T, Exception>
+async fn with_inventory<T, F>(caller: Caller<'_, State>, self_ptr: Object, f: F) -> Result<T, Error>
 where
     F: FnOnce(&Inventory) -> T,
 {
-    let entity = caller.data().entity(self_ptr).ok_or(Exception::Error)?;
-    let inventory = caller
+    let entity = caller
         .data()
-        .world()
-        .get::<&Inventory>(entity)
-        .map_err(|_| Exception::Error)?;
+        .entity(self_ptr)
+        .await
+        .ok_or_else(|| todo!())?;
+    let world = caller.data().world().await;
+    let inventory = world.get::<&Inventory>(entity).map_err(|_| todo!())?;
     Ok(f(&inventory))
 }

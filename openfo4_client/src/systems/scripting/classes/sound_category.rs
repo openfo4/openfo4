@@ -1,5 +1,5 @@
 use openfo4_script::engine::Engine;
-use openfo4_script::runtime::{Caller, Exception};
+use openfo4_script::runtime::{Caller, Error};
 
 use crate::systems::scripting::classes::{EngineExt, Object, State};
 
@@ -17,7 +17,7 @@ pub fn register(engine: &mut Engine) {
 /// ```text
 /// Function Mute() native
 /// ```
-fn mute(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Exception> {
+fn mute(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Error> {
     todo!()
 }
 
@@ -26,7 +26,7 @@ fn mute(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Exception> {
 /// ```text
 /// Function Pause() native
 /// ```
-fn pause(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Exception> {
+fn pause(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Error> {
     todo!()
 }
 
@@ -39,7 +39,7 @@ fn set_frequency(
     caller: Caller<'_, State>,
     self_ptr: Object,
     af_frequency_coeffecient: f32,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -48,11 +48,7 @@ fn set_frequency(
 /// ```text
 /// Function SetVolume(float afVolume) native
 /// ```
-fn set_volume(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    af_volume: f32,
-) -> Result<(), Exception> {
+fn set_volume(caller: Caller<'_, State>, self_ptr: Object, af_volume: f32) -> Result<(), Error> {
     todo!()
 }
 
@@ -61,7 +57,7 @@ fn set_volume(
 /// ```text
 /// Function UnMute() native
 /// ```
-fn un_mute(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Exception> {
+fn un_mute(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Error> {
     todo!()
 }
 
@@ -70,6 +66,6 @@ fn un_mute(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Exception>
 /// ```text
 /// Function UnPause() native
 /// ```
-fn un_pause(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Exception> {
+fn un_pause(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Error> {
     todo!()
 }

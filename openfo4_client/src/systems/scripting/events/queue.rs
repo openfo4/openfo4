@@ -1,7 +1,7 @@
-use std::collections::VecDeque;
 use std::fmt::{self, Display, Formatter};
 use std::sync::Arc;
 
+use crossbeam::queue::SegQueue;
 use game_tasks::{TaskPool, TaskQueue};
 use game_tracing::trace_span;
 use hashbrown::hash_map::Entry;
@@ -21,7 +21,7 @@ use super::{DispatchEvent, ObjectValue, QueuedEvent, QueuedEventValue};
 #[derive(Debug, Default)]
 pub struct EventQueue {
     events: Slab<EventEntry>,
-    queue: VecDeque<EventQueueEntry>,
+    queue: Arc<SegQueue<EventQueueEntry>>,
     loading: HashMap<RecordId, LoadEntry>,
     tasks: TaskQueue<(RecordId, Option<ScriptObject>)>,
     ready_events: Vec<usize>,
@@ -36,7 +36,7 @@ impl EventQueue {
     ) -> Vec<DispatchEvent> {
         let _span = trace_span!("EventQueue::process").entered();
 
-        while let Some(event) = self.queue.pop_front() {
+        while let Some(event) = self.queue.pop() {
             let entry = self.events.vacant_entry();
             let index = entry.key();
             let mut loading = HashSet::new();
@@ -205,6 +205,19 @@ impl EventQueue {
         events
     }
 
+    pub fn producer(&self) -> EventQueueProducer {
+        EventQueueProducer {
+            queue: self.queue.clone(),
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct EventQueueProducer {
+    queue: Arc<SegQueue<EventQueueEntry>>,
+}
+
+impl EventQueueProducer {
     pub fn push(&mut self, world: &World, mut event: QueuedEvent) {
         let mut records_visited = HashSet::new();
 
@@ -256,7 +269,7 @@ impl EventQueue {
             objects.push(object);
         }
 
-        self.queue.push_back(EventQueueEntry {
+        self.queue.push(EventQueueEntry {
             event,
             objects,
             entities,

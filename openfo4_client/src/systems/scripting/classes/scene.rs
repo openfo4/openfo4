@@ -1,5 +1,5 @@
 use openfo4_script::engine::Engine;
-use openfo4_script::runtime::{Caller, Exception};
+use openfo4_script::runtime::{Caller, Error};
 
 use crate::systems::scripting::classes::{EngineExt, Object, State};
 use crate::systems::scripting::effects::{StartQuestSceneEffect, StopQuestSceneEffect};
@@ -20,7 +20,7 @@ pub fn register(engine: &mut Engine) {
 /// ```text
 /// Function() native
 /// ```
-fn force_start(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Exception> {
+fn force_start(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Error> {
     todo!()
 }
 
@@ -29,17 +29,18 @@ fn force_start(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Except
 /// ```text
 /// Function() native
 /// ```
-fn start(mut caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Exception> {
+async fn start(mut caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Error> {
     let scene = caller
         .data()
         .objects
         .get_by_addr(self_ptr)
         .and_then(|s| s.record())
-        .ok_or(Exception::Error)?;
+        .ok_or_else(|| todo!())?;
 
     caller
         .data_mut()
-        .run_effect_and_wait(StartQuestSceneEffect { scene })?;
+        .run_effect_and_wait(StartQuestSceneEffect { scene })
+        .await?;
 
     Ok(())
 }
@@ -49,17 +50,18 @@ fn start(mut caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Exceptio
 /// ```text
 /// Function() native
 /// ```
-fn stop(mut caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Exception> {
+async fn stop(mut caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Error> {
     let scene = caller
         .data()
         .objects
         .get_by_addr(self_ptr)
         .and_then(|s| s.record())
-        .ok_or(Exception::Error)?;
+        .ok_or_else(|| todo!())?;
 
     caller
         .data_mut()
-        .run_effect_and_wait(StopQuestSceneEffect { scene })?;
+        .run_effect_and_wait(StopQuestSceneEffect { scene })
+        .await?;
 
     Ok(())
 }
@@ -69,7 +71,7 @@ fn stop(mut caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Exception
 /// ```text
 /// bool Function() native
 /// ```
-fn is_playing(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Exception> {
+fn is_playing(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Error> {
     todo!()
 }
 
@@ -78,23 +80,29 @@ fn is_playing(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Excep
 /// ```text
 /// Quest Function() native
 /// ```
-fn get_owning_quest(mut caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Exception> {
+async fn get_owning_quest(
+    mut caller: Caller<'_, State>,
+    self_ptr: Object,
+) -> Result<Object, Error> {
     let data = caller.data_mut();
 
     let scene = data
         .objects
         .get_by_addr(self_ptr)
         .and_then(|s| s.record())
-        .ok_or(Exception::Error)?;
+        .ok_or_else(|| todo!())?;
 
-    let scene = data.quests().get_scene(scene).ok_or(Exception::Error)?;
+    let quests = data.quests().await;
+    let scene = quests.get_scene(scene).ok_or_else(|| todo!())?;
     let quest = scene.quest;
+
+    drop(quests);
 
     let quest = data
         .objects
         .get_by_record(quest)
         .and_then(|s| s.get("Quest"))
-        .ok_or(Exception::Error)?;
+        .ok_or_else(|| todo!())?;
 
     Ok(quest.get().object.addr())
 }
@@ -108,7 +116,7 @@ fn is_action_complete(
     caller: Caller<'_, State>,
     self_ptr: Object,
     ai_action_id: i32,
-) -> Result<bool, Exception> {
+) -> Result<bool, Error> {
     todo!()
 }
 
@@ -117,6 +125,6 @@ fn is_action_complete(
 /// ```text
 /// Function(bool abPause) native
 /// ```
-fn pause(caller: Caller<'_, State>, self_ptr: Object, ab_pause: bool) -> Result<(), Exception> {
+fn pause(caller: Caller<'_, State>, self_ptr: Object, ab_pause: bool) -> Result<(), Error> {
     todo!()
 }

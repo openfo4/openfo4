@@ -1,7 +1,5 @@
-use openfo4_script::{
-    engine::Engine,
-    runtime::{Caller, Exception},
-};
+use openfo4_script::engine::Engine;
+use openfo4_script::runtime::{Caller, Error};
 
 use crate::systems::scripting::classes::{EngineExt, Object, State};
 
@@ -17,7 +15,7 @@ pub fn register(engine: &mut Engine) {
 /// ```text
 /// Function Clear() native
 /// ```
-fn clear(mut caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Exception> {
+fn clear(mut caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Error> {
     caller.data_mut().aliases.set(self_ptr, None);
     Ok(())
 }
@@ -27,12 +25,8 @@ fn clear(mut caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Exceptio
 /// ```text
 /// Location Function GetLocation() native
 /// ```
-fn get_location(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Exception> {
-    let alias = caller
-        .data()
-        .aliases
-        .get(self_ptr)
-        .ok_or(Exception::Error)?;
+fn get_location(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Error> {
+    let alias = caller.data().aliases.get(self_ptr).ok_or_else(|| todo!())?;
 
     let Some(object) = alias.object else {
         return Ok(Object::NULL);
@@ -42,7 +36,7 @@ fn get_location(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, E
         .data()
         .objects
         .get_by_addr(object)
-        .ok_or(Exception::Error)?;
+        .ok_or_else(|| todo!())?;
 
     Ok(script.get().object.addr())
 }
@@ -56,7 +50,7 @@ fn force_location_to(
     mut caller: Caller<'_, State>,
     self_ptr: Object,
     new_location: Object,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     let new_location = (!new_location.is_null()).then_some(new_location);
     caller.data_mut().aliases.set(self_ptr, new_location);
     Ok(())

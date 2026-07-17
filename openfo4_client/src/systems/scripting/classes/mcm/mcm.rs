@@ -1,4 +1,4 @@
-use openfo4_script::runtime::{Caller, Exception, ObjectAddr};
+use openfo4_script::runtime::{Caller, Error, ObjectAddr};
 
 use crate::systems::scripting::classes::State;
 
@@ -7,7 +7,7 @@ use crate::systems::scripting::classes::State;
 /// ```text
 /// bool Function IsInstalled() native global
 /// ```
-pub fn is_installed(caller: Caller<'_, State>) -> Result<bool, Exception> {
+pub fn is_installed(caller: Caller<'_, State>) -> Result<bool, Error> {
     todo!()
 }
 
@@ -16,7 +16,7 @@ pub fn is_installed(caller: Caller<'_, State>) -> Result<bool, Exception> {
 /// ```text
 /// int Function GetVersionCode() native global
 /// ```
-pub fn get_version_code(caller: Caller<'_, State>) -> Result<i32, Exception> {
+pub fn get_version_code(caller: Caller<'_, State>) -> Result<i32, Error> {
     todo!()
 }
 
@@ -25,7 +25,7 @@ pub fn get_version_code(caller: Caller<'_, State>) -> Result<i32, Exception> {
 /// ```text
 /// Function RefreshMenu() native global
 /// ```
-pub fn refresh_menu(caller: Caller<'_, State>) -> Result<(), Exception> {
+pub fn refresh_menu(caller: Caller<'_, State>) -> Result<(), Error> {
     todo!()
 }
 
@@ -38,7 +38,7 @@ pub fn get_mod_setting_int(
     caller: Caller<'_, State>,
     mod_name: ObjectAddr,
     setting: ObjectAddr,
-) -> Result<i32, Exception> {
+) -> Result<i32, Error> {
     todo!()
 }
 
@@ -51,7 +51,7 @@ pub fn get_mod_setting_bool(
     caller: Caller<'_, State>,
     mod_name: ObjectAddr,
     setting: ObjectAddr,
-) -> Result<bool, Exception> {
+) -> Result<bool, Error> {
     todo!()
 }
 
@@ -64,7 +64,7 @@ pub fn get_mod_setting_float(
     caller: Caller<'_, State>,
     mod_name: ObjectAddr,
     setting: ObjectAddr,
-) -> Result<f32, Exception> {
+) -> Result<f32, Error> {
     todo!()
 }
 
@@ -77,7 +77,7 @@ pub fn get_mod_setting_string(
     caller: Caller<'_, State>,
     mod_name: ObjectAddr,
     setting: ObjectAddr,
-) -> Result<ObjectAddr, Exception> {
+) -> Result<ObjectAddr, Error> {
     todo!()
 }
 
@@ -91,7 +91,7 @@ pub fn set_mod_setting_int(
     mod_name: ObjectAddr,
     setting: ObjectAddr,
     value: i32,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -105,7 +105,7 @@ pub fn set_mod_setting_bool(
     mod_name: ObjectAddr,
     setting: ObjectAddr,
     value: bool,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -119,7 +119,7 @@ pub fn set_mod_setting_float(
     mod_name: ObjectAddr,
     setting: ObjectAddr,
     value: f32,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -133,6 +133,6 @@ pub fn set_mod_setting_string(
     mod_name: ObjectAddr,
     setting: ObjectAddr,
     value: ObjectAddr,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }

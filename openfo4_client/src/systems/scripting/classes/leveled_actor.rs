@@ -1,5 +1,5 @@
 use openfo4_script::engine::Engine;
-use openfo4_script::runtime::{Caller, Exception};
+use openfo4_script::runtime::{Caller, Error};
 
 use crate::systems::scripting::classes::{EngineExt, Object, State};
 
@@ -19,7 +19,7 @@ fn add_form(
     self_ptr: Object,
     ap_form: Object,
     ai_level: i32,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -28,6 +28,6 @@ fn add_form(
 /// ```text
 /// Function Revert() native
 /// ```
-fn revert(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Exception> {
+fn revert(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Error> {
     todo!()
 }

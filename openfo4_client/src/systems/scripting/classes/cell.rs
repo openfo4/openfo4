@@ -1,7 +1,5 @@
-use openfo4_script::{
-    engine::Engine,
-    runtime::{Caller, Exception},
-};
+use openfo4_script::engine::Engine;
+use openfo4_script::runtime::{Caller, Error};
 
 use crate::systems::scripting::classes::{EngineExt, Object, State};
 
@@ -30,7 +28,7 @@ fn enable_fast_travel(
     caller: Caller<'_, State>,
     self_ptr: Object,
     ab_enable: bool,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -39,7 +37,7 @@ fn enable_fast_travel(
 /// ```text
 /// ActorBase Function GetActorOwner() native
 /// ```
-fn get_actor_owner(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Exception> {
+fn get_actor_owner(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Error> {
     todo!()
 }
 
@@ -48,7 +46,7 @@ fn get_actor_owner(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object
 /// ```text
 /// Faction Function GetFactionOwner() native
 /// ```
-fn get_faction_owner(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Exception> {
+fn get_faction_owner(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Error> {
     todo!()
 }
 
@@ -57,7 +55,7 @@ fn get_faction_owner(caller: Caller<'_, State>, self_ptr: Object) -> Result<Obje
 /// ```text
 /// bool Function IsAttached() native
 /// ```
-fn is_attached(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Exception> {
+fn is_attached(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Error> {
     todo!()
 }
 
@@ -66,7 +64,7 @@ fn is_attached(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Exce
 /// ```text
 /// bool Function IsInterior() native
 /// ```
-fn is_interior(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Exception> {
+fn is_interior(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Error> {
     todo!()
 }
 
@@ -75,7 +73,7 @@ fn is_interior(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Exce
 /// ```text
 /// bool Function IsLoaded() native
 /// ```
-fn is_loaded(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Exception> {
+fn is_loaded(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Error> {
     todo!()
 }
 
@@ -84,7 +82,7 @@ fn is_loaded(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Except
 /// ```text
 /// Function Reset() native
 /// ```
-fn reset(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Exception> {
+fn reset(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Error> {
     todo!()
 }
 
@@ -97,7 +95,7 @@ fn set_actor_owner(
     caller: Caller<'_, State>,
     self_ptr: Object,
     ak_actor: Object,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -110,7 +108,7 @@ fn set_faction_owner(
     caller: Caller<'_, State>,
     self_ptr: Object,
     ak_faction: Object,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -128,7 +126,7 @@ fn set_fog_color(
     far_red: i32,
     far_green: i32,
     far_blue: i32,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -142,7 +140,7 @@ fn set_fog_planes(
     self_ptr: Object,
     af_near: f32,
     af_far: f32,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -151,11 +149,7 @@ fn set_fog_planes(
 /// ```text
 /// Function SetFogPower(float afPower) native
 /// ```
-fn set_fog_power(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    af_power: f32,
-) -> Result<(), Exception> {
+fn set_fog_power(caller: Caller<'_, State>, self_ptr: Object, af_power: f32) -> Result<(), Error> {
     todo!()
 }
 
@@ -164,10 +158,6 @@ fn set_fog_power(
 /// ```text
 /// Function SetPublic(bool abPublic) native
 /// ```
-fn set_public(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    ab_public: bool,
-) -> Result<(), Exception> {
+fn set_public(caller: Caller<'_, State>, self_ptr: Object, ab_public: bool) -> Result<(), Error> {
     todo!()
 }

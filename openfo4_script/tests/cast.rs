@@ -3,7 +3,7 @@ use openfo4_script::assembler::assemble;
 use openfo4_script::compiler::CompilerOptions;
 use openfo4_script::engine::{Engine, Options};
 use openfo4_script::runtime::func::TypedFunc;
-use openfo4_script::runtime::{ArrayObject, Context, Exception, NativeTuple, ObjectAddr};
+use openfo4_script::runtime::{ArrayObject, Context, NativeTuple, ObjectAddr};
 
 const COMPILER_OPTIONS: CompilerOptions = CompilerOptions {
     validation: true,
@@ -169,7 +169,7 @@ fn class_downcast_fail() {
     let addr = engine.object_pool().insert(type_id).finalize().addr();
 
     let func = func.typed::<ObjectAddr, ObjectAddr>().unwrap();
-    assert_eq!(func.call(&mut ctx, addr), Err(Exception::Error));
+    assert!(func.call(&mut ctx, addr).is_err());
 }
 
 #[test]

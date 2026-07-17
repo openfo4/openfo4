@@ -1,5 +1,5 @@
 use openfo4_script::engine::Engine;
-use openfo4_script::runtime::{Caller, Exception};
+use openfo4_script::runtime::{Caller, Error};
 
 use crate::systems::scripting::classes::{EngineExt, Object, State};
 
@@ -13,7 +13,7 @@ pub fn register(engine: &mut Engine) {
 /// ```text
 /// Quest Function GetOwningQuest() native
 /// ```
-fn get_owning_quest(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Exception> {
+fn get_owning_quest(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Error> {
     todo!()
 }
 
@@ -22,6 +22,6 @@ fn get_owning_quest(caller: Caller<'_, State>, self_ptr: Object) -> Result<Objec
 /// ```text
 /// Package Function GetTemplate() native
 /// ```
-fn get_template(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Exception> {
+fn get_template(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Error> {
     todo!()
 }

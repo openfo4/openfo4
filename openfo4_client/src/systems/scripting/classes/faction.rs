@@ -1,5 +1,5 @@
 use openfo4_script::engine::Engine;
-use openfo4_script::runtime::{Caller, Exception};
+use openfo4_script::runtime::{Caller, Error};
 
 use crate::systems::global::{Faction, FactionReaction};
 use crate::systems::scripting::classes::{EngineExt, Object, State};
@@ -36,7 +36,7 @@ pub fn register(engine: &mut Engine) {
 /// ```text
 /// bool Function CanPayCrimeGold() native
 /// ```
-fn can_pay_crime_gold(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Exception> {
+fn can_pay_crime_gold(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Error> {
     todo!()
 }
 
@@ -45,7 +45,7 @@ fn can_pay_crime_gold(caller: Caller<'_, State>, self_ptr: Object) -> Result<boo
 /// ```text
 /// int Function GetCrimeGold() native
 /// ```
-fn get_crime_gold(caller: Caller<'_, State>, self_ptr: Object) -> Result<i32, Exception> {
+fn get_crime_gold(caller: Caller<'_, State>, self_ptr: Object) -> Result<i32, Error> {
     todo!()
 }
 
@@ -54,10 +54,7 @@ fn get_crime_gold(caller: Caller<'_, State>, self_ptr: Object) -> Result<i32, Ex
 /// ```text
 /// int Function GetCrimeGoldNonViolent() native
 /// ```
-fn get_crime_gold_non_violent(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-) -> Result<i32, Exception> {
+fn get_crime_gold_non_violent(caller: Caller<'_, State>, self_ptr: Object) -> Result<i32, Error> {
     todo!()
 }
 
@@ -66,7 +63,7 @@ fn get_crime_gold_non_violent(
 /// ```text
 /// int Function GetCrimeGoldViolent() native
 /// ```
-fn get_crime_gold_violent(caller: Caller<'_, State>, self_ptr: Object) -> Result<i32, Exception> {
+fn get_crime_gold_violent(caller: Caller<'_, State>, self_ptr: Object) -> Result<i32, Error> {
     todo!()
 }
 
@@ -75,7 +72,7 @@ fn get_crime_gold_violent(caller: Caller<'_, State>, self_ptr: Object) -> Result
 /// ```text
 /// int Function GetInfamy() native
 /// ```
-fn get_infamy(caller: Caller<'_, State>, self_ptr: Object) -> Result<i32, Exception> {
+fn get_infamy(caller: Caller<'_, State>, self_ptr: Object) -> Result<i32, Error> {
     todo!()
 }
 
@@ -84,7 +81,7 @@ fn get_infamy(caller: Caller<'_, State>, self_ptr: Object) -> Result<i32, Except
 /// ```text
 /// int Function GetInfamyNonViolent() native
 /// ```
-fn get_infamy_non_violent(caller: Caller<'_, State>, self_ptr: Object) -> Result<i32, Exception> {
+fn get_infamy_non_violent(caller: Caller<'_, State>, self_ptr: Object) -> Result<i32, Error> {
     todo!()
 }
 
@@ -93,7 +90,7 @@ fn get_infamy_non_violent(caller: Caller<'_, State>, self_ptr: Object) -> Result
 /// ```text
 /// int Function GetInfamyViolent() native
 /// ```
-fn get_infamy_violent(caller: Caller<'_, State>, self_ptr: Object) -> Result<i32, Exception> {
+fn get_infamy_violent(caller: Caller<'_, State>, self_ptr: Object) -> Result<i32, Error> {
     todo!()
 }
 
@@ -106,7 +103,7 @@ fn get_faction_reaction(
     caller: Caller<'_, State>,
     self_ptr: Object,
     ak_other: Object,
-) -> Result<i32, Exception> {
+) -> Result<i32, Error> {
     todo!()
 }
 
@@ -115,10 +112,7 @@ fn get_faction_reaction(
 /// ```text
 /// int Function GetStolenItemValueCrime() native
 /// ```
-fn get_stolen_item_value_crime(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-) -> Result<i32, Exception> {
+fn get_stolen_item_value_crime(caller: Caller<'_, State>, self_ptr: Object) -> Result<i32, Error> {
     todo!()
 }
 
@@ -130,7 +124,7 @@ fn get_stolen_item_value_crime(
 fn get_stolen_item_value_no_crime(
     caller: Caller<'_, State>,
     self_ptr: Object,
-) -> Result<i32, Exception> {
+) -> Result<i32, Error> {
     todo!()
 }
 
@@ -143,7 +137,7 @@ fn is_faction_in_crime_group(
     caller: Caller<'_, State>,
     self_ptr: Object,
     ak_other: Object,
-) -> Result<bool, Exception> {
+) -> Result<bool, Error> {
     todo!()
 }
 
@@ -152,8 +146,12 @@ fn is_faction_in_crime_group(
 /// ```text
 /// bool Function IsPlayerEnemy() native
 /// ```
-fn is_player_enemy(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Exception> {
-    Ok(with_faction(&caller, self_ptr, |faction| faction.player_enemy).unwrap_or(false))
+async fn is_player_enemy(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Error> {
+    Ok(
+        with_faction(&caller, self_ptr, |faction| faction.player_enemy)
+            .await
+            .unwrap_or(false),
+    )
 }
 
 /// `IsPlayerExpelled`
@@ -161,8 +159,12 @@ fn is_player_enemy(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, 
 /// ```text
 /// bool Function IsPlayerExpelled() native
 /// ```
-fn is_player_expelled(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Exception> {
-    Ok(with_faction(&caller, self_ptr, |faction| faction.player_expelled).unwrap_or(false))
+async fn is_player_expelled(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Error> {
+    Ok(
+        with_faction(&caller, self_ptr, |faction| faction.player_expelled)
+            .await
+            .unwrap_or(false),
+    )
 }
 
 /// `ModCrimeGold`
@@ -175,7 +177,7 @@ fn mod_crime_gold(
     self_ptr: Object,
     ai_amount: i32,
     ab_violent: bool,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -189,7 +191,7 @@ fn player_pay_crime_gold(
     self_ptr: Object,
     ab_remove_stolen_items: bool,
     ab_go_to_jail: bool,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -198,7 +200,7 @@ fn player_pay_crime_gold(
 /// ```text
 /// Function SendAssaultAlarm() native
 /// ```
-fn send_assault_alarm(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Exception> {
+fn send_assault_alarm(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Error> {
     todo!()
 }
 
@@ -212,7 +214,7 @@ fn send_player_to_jail(
     self_ptr: Object,
     ab_remove_inventory: bool,
     ab_real_jail: bool,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -221,13 +223,13 @@ fn send_player_to_jail(
 /// ```text
 /// Function SetAlly(Faction akOther, bool abSelfIsFriendToOther, bool abOtherIsFriendToSelf) native
 /// ```
-fn set_ally(
+async fn set_ally(
     mut caller: Caller<'_, State>,
     self_ptr: Object,
     other: Object,
     self_is_friend_to_other: bool,
     other_is_friend_to_self: bool,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     let Some(self_faction) = caller
         .data()
         .objects
@@ -255,7 +257,8 @@ fn set_ally(
         };
 
         faction.relations.insert(other_faction, reaction);
-    });
+    })
+    .await;
 
     with_faction_mut(&mut caller, other, |faction| {
         let reaction = if other_is_friend_to_self {
@@ -265,7 +268,8 @@ fn set_ally(
         };
 
         faction.relations.insert(self_faction, reaction);
-    });
+    })
+    .await;
 
     Ok(())
 }
@@ -275,11 +279,7 @@ fn set_ally(
 /// ```text
 /// Function SetCrimeGold(int aiGold) native
 /// ```
-fn set_crime_gold(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    ai_gold: i32,
-) -> Result<(), Exception> {
+fn set_crime_gold(caller: Caller<'_, State>, self_ptr: Object, ai_gold: i32) -> Result<(), Error> {
     todo!()
 }
 
@@ -292,7 +292,7 @@ fn set_crime_gold_violent(
     caller: Caller<'_, State>,
     self_ptr: Object,
     ai_gold: i32,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -301,13 +301,13 @@ fn set_crime_gold_violent(
 /// ```text
 /// Function SetEnemy(Faction akOther, bool abSelfIsNeutralToOther, bool abOtherIsNeutralToSelf) native
 /// ```
-fn set_enemy(
+async fn set_enemy(
     mut caller: Caller<'_, State>,
     self_ptr: Object,
     other: Object,
     self_is_neutral_to_other: bool,
     other_is_neutral_to_self: bool,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     let Some(self_faction) = caller
         .data()
         .objects
@@ -335,7 +335,8 @@ fn set_enemy(
         };
 
         faction.relations.insert(other_faction, reaction);
-    });
+    })
+    .await;
 
     with_faction_mut(&mut caller, other, |faction| {
         let reaction = if other_is_neutral_to_self {
@@ -345,7 +346,8 @@ fn set_enemy(
         };
 
         faction.relations.insert(self_faction, reaction);
-    });
+    })
+    .await;
 
     Ok(())
 }
@@ -355,14 +357,15 @@ fn set_enemy(
 /// ```text
 /// Function SetPlayerEnemy(bool abIsEnemy) native
 /// ```
-fn set_player_enemy(
+async fn set_player_enemy(
     mut caller: Caller<'_, State>,
     self_ptr: Object,
     is_enemy: bool,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     with_faction_mut(&mut caller, self_ptr, |faction| {
         faction.player_enemy = is_enemy;
-    });
+    })
+    .await;
     Ok(())
 }
 
@@ -371,18 +374,19 @@ fn set_player_enemy(
 /// ```text
 /// Function SetPlayerExpelled(bool abIsExpelled) native
 /// ```
-fn set_player_expelled(
+async fn set_player_expelled(
     mut caller: Caller<'_, State>,
     self_ptr: Object,
     is_expelled: bool,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     with_faction_mut(&mut caller, self_ptr, |faction| {
         faction.player_expelled = is_expelled;
-    });
+    })
+    .await;
     Ok(())
 }
 
-fn with_faction<T, F>(caller: &Caller<'_, State>, faction: Object, f: F) -> Option<T>
+async fn with_faction<T, F>(caller: &Caller<'_, State>, faction: Object, f: F) -> Option<T>
 where
     F: FnOnce(&Faction) -> T,
 {
@@ -391,11 +395,12 @@ where
         .objects
         .get_by_addr(faction)
         .and_then(|s| s.record())?;
-    let faction = caller.data().globals().factions.get(&faction)?;
+    let globals = caller.data().globals().await;
+    let faction = globals.factions.get(&faction)?;
     Some(f(faction))
 }
 
-fn with_faction_mut<T, F>(caller: &mut Caller<'_, State>, faction: Object, f: F) -> Option<T>
+async fn with_faction_mut<T, F>(caller: &mut Caller<'_, State>, faction: Object, f: F) -> Option<T>
 where
     F: FnOnce(&mut Faction) -> T,
 {
@@ -404,6 +409,7 @@ where
         .objects
         .get_by_addr(faction)
         .and_then(|s| s.record())?;
-    let faction = caller.data_mut().globals_mut().factions.get_mut(&faction)?;
+    let mut globals = caller.data_mut().globals_mut().await;
+    let faction = globals.factions.get_mut(&faction)?;
     Some(f(faction))
 }

@@ -1,3 +1,4 @@
+use std::assert_matches;
 use std::pin::pin;
 use std::sync::Arc;
 use std::task::{self, Poll, Wake, Waker};
@@ -7,7 +8,7 @@ use openfo4_script::assembler::assemble;
 use openfo4_script::compiler::CompilerOptions;
 use openfo4_script::engine::{Engine, Options};
 use openfo4_script::runtime::func::TypedFunc;
-use openfo4_script::runtime::{Caller, Context, IntoFunc};
+use openfo4_script::runtime::{Caller, Context, IntoFunc, ObjectAddr};
 use parking_lot::Mutex;
 
 const COMPILER_OPTIONS: CompilerOptions = CompilerOptions {
@@ -27,8 +28,8 @@ fn suspend_async() {
 
         let mut fut = pin!(func.call_async(&mut ctx, ()));
 
-        assert_eq!(fut.as_mut().poll(&mut cx), Poll::Pending);
-        assert_eq!(fut.as_mut().poll(&mut cx), Poll::Ready(Ok(())));
+        assert_matches!(fut.as_mut().poll(&mut cx), Poll::Pending);
+        assert_matches!(fut.as_mut().poll(&mut cx), Poll::Ready(Ok(())));
     });
 }
 
@@ -55,7 +56,7 @@ fn drop_async_fn() {
 
         let mut fut = pin!(func.call_async(&mut ctx, ()));
 
-        assert_eq!(fut.as_mut().poll(&mut cx), Poll::Pending);
+        assert_matches!(fut.as_mut().poll(&mut cx), Poll::Pending);
 
         drop(stack);
         assert_eq!(*dropped.lock(), true);
@@ -86,7 +87,7 @@ fn async_fn_waker() {
 
         let fut = pin!(func.call_async(&mut ctx, ()));
 
-        assert_eq!(fut.poll(&mut cx), Poll::Pending);
+        assert_matches!(fut.poll(&mut cx), Poll::Pending);
 
         assert_eq!(*woken.lock(), true);
     });
@@ -110,10 +111,10 @@ fn async_fn_use_data_across_await_point() {
         let mut fut = pin!(func.call_async(&mut ctx, ()));
 
         for _ in 0..3 {
-            assert_eq!(fut.as_mut().poll(&mut cx,), Poll::Pending);
+            assert_matches!(fut.as_mut().poll(&mut cx,), Poll::Pending);
         }
 
-        assert_eq!(fut.poll(&mut cx), Poll::Ready(Ok(())));
+        assert_matches!(fut.poll(&mut cx), Poll::Ready(Ok(())));
     });
 }
 
@@ -151,4 +152,86 @@ where
     let cx = task::Context::from_waker(waker);
 
     test(&engine, func, cx);
+}
+
+#[test]
+fn suspend_in_callstack() {
+    let mut engine = Engine::new(COMPILER_OPTIONS);
+
+    async fn f(mut caller: Caller<'_, i32>) -> i32 {
+        let data = caller.data_mut();
+
+        for _ in 0..3 {
+            dbg!("call");
+            yield_now().await;
+            *data += 1;
+        }
+
+        *data
+    }
+
+    let module = assemble(
+        r#"
+        class test:
+
+        function F() -> int static native:
+
+        class A:
+
+        function X() -> int:
+        local res: int
+        res = call_static test F
+        return res
+
+        class B:
+
+        function Y() -> int:
+        local res: int
+        res = call_static test F
+        return res
+
+        class C:
+
+        function Z(a: A, b: B) -> int:
+        local x: int
+        local y: int
+        local z: int
+        x = call_method X a
+        y = call_method Y b
+        z = iadd x y
+        return z
+        "#,
+    );
+
+    engine.register(&module);
+    engine.register_native_function("test", "F", f).unwrap();
+
+    block_on(engine.compile("A", &Options::default()));
+    block_on(engine.compile("B", &Options::default()));
+    let instance = block_on(engine.compile("C", &Options::default()));
+    let func = instance.get_func("Z").unwrap();
+
+    let a = engine.get_type("A").unwrap();
+    let b = engine.get_type("B").unwrap();
+    let c = engine.get_type("C").unwrap();
+
+    let a = engine.object_pool().insert(a).finalize();
+    let b = engine.object_pool().insert(b).finalize();
+    let c = engine.object_pool().insert(c).finalize();
+
+    let func = func
+        .typed::<(ObjectAddr, ObjectAddr, ObjectAddr), i32>()
+        .unwrap();
+
+    let waker = Waker::noop();
+    let mut cx = task::Context::from_waker(waker);
+
+    let mut stack = engine.create_stack();
+    let mut ctx = Context::new(&engine, &mut stack, 0);
+
+    let mut fut = pin!(func.call_async(&mut ctx, (c.addr(), a.addr(), b.addr())));
+    for _ in 0..6 {
+        assert_matches!(fut.as_mut().poll(&mut cx), Poll::Pending);
+    }
+    assert_matches!(fut.poll(&mut cx), Poll::Ready(Ok(9)));
 }

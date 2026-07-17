@@ -1,5 +1,5 @@
 use openfo4_script::engine::Engine;
-use openfo4_script::runtime::{Caller, Exception};
+use openfo4_script::runtime::{Caller, Error};
 
 use crate::systems::scripting::classes::{EngineExt, Object, State};
 
@@ -22,7 +22,7 @@ pub fn register(engine: &mut Engine) {
 /// ```text
 /// ObjectReference Function GetCurrentConsoleRef() native global
 /// ```
-fn get_current_console_ref(caller: Caller<'_, State>) -> Result<Object, Exception> {
+fn get_current_console_ref(caller: Caller<'_, State>) -> Result<Object, Error> {
     todo!()
 }
 
@@ -31,7 +31,7 @@ fn get_current_console_ref(caller: Caller<'_, State>) -> Result<Object, Exceptio
 /// ```text
 /// PluginInfo[] Function GetInstalledPlugins() native global
 /// ```
-fn get_installed_plugins(caller: Caller<'_, State>) -> Result<Object, Exception> {
+fn get_installed_plugins(caller: Caller<'_, State>) -> Result<Object, Error> {
     todo!()
 }
 
@@ -40,7 +40,7 @@ fn get_installed_plugins(caller: Caller<'_, State>) -> Result<Object, Exception>
 /// ```text
 /// PluginInfo[] Function GetInstalledLightPlugins() native global
 /// ```
-fn get_installed_light_plugins(caller: Caller<'_, State>) -> Result<Object, Exception> {
+fn get_installed_light_plugins(caller: Caller<'_, State>) -> Result<Object, Error> {
     todo!()
 }
 
@@ -49,7 +49,7 @@ fn get_installed_light_plugins(caller: Caller<'_, State>) -> Result<Object, Exce
 /// ```text
 /// string[] Function GetPluginDependencies(string plugin) native global
 /// ```
-fn get_plugin_dependencies(caller: Caller<'_, State>, plugin: Object) -> Result<Object, Exception> {
+fn get_plugin_dependencies(caller: Caller<'_, State>, plugin: Object) -> Result<Object, Error> {
     todo!()
 }
 
@@ -62,7 +62,7 @@ fn set_game_setting_float(
     caller: Caller<'_, State>,
     setting: Object,
     value: f32,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -75,7 +75,7 @@ fn set_game_setting_int(
     caller: Caller<'_, State>,
     setting: Object,
     value: i32,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -88,7 +88,7 @@ fn set_game_setting_bool(
     caller: Caller<'_, State>,
     setting: Object,
     value: bool,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -101,7 +101,7 @@ fn set_game_setting_string(
     caller: Caller<'_, State>,
     setting: Object,
     value: Object,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -110,7 +110,7 @@ fn set_game_setting_string(
 /// ```text
 /// Function UpdateThirdPerson() native global
 /// ```
-fn update_third_person(caller: Caller<'_, State>) -> Result<(), Exception> {
+fn update_third_person(caller: Caller<'_, State>) -> Result<(), Error> {
     todo!()
 }
 
@@ -119,6 +119,6 @@ fn update_third_person(caller: Caller<'_, State>) -> Result<(), Exception> {
 /// ```text
 /// int Function GetCameraState() native global
 /// ```
-fn get_camera_state(caller: Caller<'_, State>) -> Result<i32, Exception> {
+fn get_camera_state(caller: Caller<'_, State>) -> Result<i32, Error> {
     todo!()
 }

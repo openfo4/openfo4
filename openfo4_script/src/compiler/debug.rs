@@ -286,6 +286,7 @@ fn format_instruction(ins: &Insn<'_>) -> String {
             (host_functions::enter_span as usize, "enter_span"),
             (host_functions::exit_span as usize, "exit_span"),
             (host_functions::stub as usize, "stub"),
+            (host_functions::emit_error as usize, "emit_error"),
         ])
     });
 

@@ -2,7 +2,7 @@ use futures_lite::future::block_on;
 use openfo4_script::assembler::assemble;
 use openfo4_script::compiler::CompilerOptions;
 use openfo4_script::engine::{Engine, Options};
-use openfo4_script::runtime::{Context, Exception};
+use openfo4_script::runtime::Context;
 
 const COMPILER_OPTIONS: CompilerOptions = CompilerOptions {
     validation: true,
@@ -39,7 +39,7 @@ fn call_method_on_null() {
     let mut ctx = Context::new(&engine, &mut stack, ());
 
     let func = func.typed::<(), ()>().unwrap();
-    assert_eq!(func.call(&mut ctx, ()), Err(Exception::Error));
+    assert!(func.call(&mut ctx, ()).is_err());
 }
 
 #[test]
@@ -69,7 +69,7 @@ fn array_get_on_null() {
     let mut ctx = Context::new(&engine, &mut stack, ());
 
     let func = func.typed::<(), ()>().unwrap();
-    assert_eq!(func.call(&mut ctx, ()), Err(Exception::Error));
+    assert!(func.call(&mut ctx, ()).is_err());
 }
 
 #[test]
@@ -101,5 +101,5 @@ fn array_get_out_of_bounds() {
     let mut ctx = Context::new(&engine, &mut stack, ());
 
     let func = func.typed::<(), ()>().unwrap();
-    assert_eq!(func.call(&mut ctx, ()), Err(Exception::Error));
+    assert!(func.call(&mut ctx, ()).is_err());
 }

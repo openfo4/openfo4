@@ -1,5 +1,5 @@
 use openfo4_script::engine::Engine;
-use openfo4_script::runtime::{Caller, Exception};
+use openfo4_script::runtime::{Caller, Error};
 
 use crate::systems::scripting::classes::{EngineExt, Object, State};
 
@@ -18,7 +18,7 @@ pub fn register(engine: &mut Engine) {
 /// ```text
 /// Function Dispel() native
 /// ```
-fn dispel(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Exception> {
+fn dispel(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Error> {
     todo!()
 }
 
@@ -27,7 +27,7 @@ fn dispel(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Exception> 
 /// ```text
 /// MagicEffect Function GetBaseObject() native
 /// ```
-fn get_base_object(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Exception> {
+fn get_base_object(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Error> {
     todo!()
 }
 
@@ -36,7 +36,7 @@ fn get_base_object(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object
 /// ```text
 /// Actor Function GetCasterActor() native
 /// ```
-fn get_caster_actor(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Exception> {
+fn get_caster_actor(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Error> {
     todo!()
 }
 
@@ -45,7 +45,7 @@ fn get_caster_actor(caller: Caller<'_, State>, self_ptr: Object) -> Result<Objec
 /// ```text
 /// Actor Function GetTargetActor() native
 /// ```
-fn get_target_actor(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Exception> {
+fn get_target_actor(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Error> {
     todo!()
 }
 
@@ -54,7 +54,7 @@ fn get_target_actor(caller: Caller<'_, State>, self_ptr: Object) -> Result<Objec
 /// ```text
 /// Function StartObjectProfiling() native
 /// ```
-fn start_object_profiling(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Exception> {
+fn start_object_profiling(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Error> {
     todo!()
 }
 
@@ -63,6 +63,6 @@ fn start_object_profiling(caller: Caller<'_, State>, self_ptr: Object) -> Result
 /// ```text
 /// Function StopObjectProfiling() native
 /// ```
-fn stop_object_profiling(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Exception> {
+fn stop_object_profiling(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Error> {
     todo!()
 }

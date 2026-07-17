@@ -1,4 +1,4 @@
-use openfo4_script::runtime::{Caller, Exception};
+use openfo4_script::runtime::{Caller, Error};
 
 use super::{Object, State};
 
@@ -7,9 +7,6 @@ use super::{Object, State};
 /// ```text
 /// string Function GetAssociatedSkill() native
 /// ```
-pub fn get_assocaited_skill(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-) -> Result<Object, Exception> {
+pub fn get_assocaited_skill(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Error> {
     todo!()
 }

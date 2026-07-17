@@ -1,7 +1,5 @@
-use openfo4_script::{
-    engine::Engine,
-    runtime::{Caller, Exception},
-};
+use openfo4_script::engine::Engine;
+use openfo4_script::runtime::{Caller, Error};
 
 use crate::systems::scripting::classes::{EngineExt, Object, State};
 
@@ -20,7 +18,7 @@ pub fn register(engine: &mut Engine) {
 /// ```text
 /// Form[] Function GetTaggedForms() native global
 /// ```
-fn get_tagged_forms(caller: Caller<'_, State>) -> Result<Object, Exception> {
+fn get_tagged_forms(caller: Caller<'_, State>) -> Result<Object, Error> {
     todo!()
 }
 
@@ -29,7 +27,7 @@ fn get_tagged_forms(caller: Caller<'_, State>) -> Result<Object, Exception> {
 /// ```text
 /// Function AddTaggedForms(Form[] forms) native global
 /// ```
-fn add_tagged_forms(caller: Caller<'_, State>, forms: Object) -> Result<(), Exception> {
+fn add_tagged_forms(caller: Caller<'_, State>, forms: Object) -> Result<(), Error> {
     todo!()
 }
 
@@ -38,7 +36,7 @@ fn add_tagged_forms(caller: Caller<'_, State>, forms: Object) -> Result<(), Exce
 /// ```text
 /// Function RemoveTaggedForms(Form[] forms) native global
 /// ```
-fn remove_tagged_forms(caller: Caller<'_, State>, forms: Object) -> Result<(), Exception> {
+fn remove_tagged_forms(caller: Caller<'_, State>, forms: Object) -> Result<(), Error> {
     todo!()
 }
 
@@ -47,7 +45,7 @@ fn remove_tagged_forms(caller: Caller<'_, State>, forms: Object) -> Result<(), E
 /// ```text
 /// bool Function IsTaggedForm(Form akForm) native global
 /// ```
-fn is_tagged_form(caller: Caller<'_, State>, ak_form: Object) -> Result<bool, Exception> {
+fn is_tagged_form(caller: Caller<'_, State>, ak_form: Object) -> Result<bool, Error> {
     todo!()
 }
 
@@ -56,7 +54,7 @@ fn is_tagged_form(caller: Caller<'_, State>, ak_form: Object) -> Result<bool, Ex
 /// ```text
 /// Form[] Function GetFavorites() native global
 /// ```
-fn get_favorites(caller: Caller<'_, State>) -> Result<Object, Exception> {
+fn get_favorites(caller: Caller<'_, State>) -> Result<Object, Error> {
     todo!()
 }
 
@@ -65,6 +63,6 @@ fn get_favorites(caller: Caller<'_, State>) -> Result<Object, Exception> {
 /// ```text
 /// Function SetFavorites(Form[] favorites) native global
 /// ```
-fn set_favorites(caller: Caller<'_, State>, favorites: Object) -> Result<(), Exception> {
+fn set_favorites(caller: Caller<'_, State>, favorites: Object) -> Result<(), Error> {
     todo!()
 }

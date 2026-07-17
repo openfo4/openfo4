@@ -2,7 +2,7 @@ use std::num::NonZeroU32;
 use std::time::Duration;
 
 use openfo4_script::engine::Engine;
-use openfo4_script::runtime::{Caller, Exception};
+use openfo4_script::runtime::{Caller, Error};
 
 use crate::systems::scripting::classes::{EngineExt, Object, State, TimerId};
 use crate::systems::scripting::registration::{Event, EventKind, EventSender};
@@ -77,7 +77,7 @@ fn add_inventory_event_filter(
     caller: Caller<'_, State>,
     self_ptr: Object,
     ak_filter: Object,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -91,7 +91,7 @@ fn call_function(
     self_ptr: Object,
     as_func_name: Object,
     a_params: Object,
-) -> Result<Object, Exception> {
+) -> Result<Object, Error> {
     todo!()
 }
 
@@ -105,7 +105,7 @@ fn call_function_no_wait(
     self_ptr: Object,
     as_func_name: Object,
     a_params: Object,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -118,7 +118,7 @@ fn cancel_timer(
     mut caller: Caller<'_, State>,
     self_ptr: Object,
     timer_id: i32,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     let timer_id = TimerId(timer_id);
     caller.data_mut().real_timers.remove(self_ptr, timer_id);
     Ok(())
@@ -133,7 +133,7 @@ fn cancel_timer_game_time(
     mut caller: Caller<'_, State>,
     self_ptr: Object,
     timer_id: i32,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     let timer_id = TimerId(timer_id);
     caller.data_mut().game_timers.remove(self_ptr, timer_id);
     Ok(())
@@ -148,7 +148,7 @@ fn get_property_value(
     caller: Caller<'_, State>,
     self_ptr: Object,
     as_property_name: Object,
-) -> Result<Object, Exception> {
+) -> Result<Object, Error> {
     todo!()
 }
 
@@ -183,7 +183,7 @@ fn cast_as(caller: Caller<'_, State>, self_ptr: Object, script_name: Object) -> 
 fn is_bound_game_object_available(
     caller: Caller<'_, State>,
     self_ptr: Object,
-) -> Result<bool, Exception> {
+) -> Result<bool, Error> {
     todo!()
 }
 
@@ -197,7 +197,7 @@ fn register_for_animation_event(
     self_ptr: Object,
     sender: Object,
     event_name: Object,
-) -> Result<bool, Exception> {
+) -> Result<bool, Error> {
     if sender.is_null() {
         return Ok(false);
     }
@@ -226,7 +226,7 @@ fn register_for_custom_event(
     self_ptr: Object,
     sender: Object,
     event_name: Object,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     if sender.is_null() {
         return Ok(());
     }
@@ -255,7 +255,7 @@ fn register_for_detection_los_gain(
     self_ptr: Object,
     viewer: Object,
     target: Object,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     if viewer.is_null() || target.is_null() {
         return Ok(());
     }
@@ -283,7 +283,7 @@ fn register_for_detection_los_lost(
     self_ptr: Object,
     viewer: Object,
     target: Object,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     if viewer.is_null() || target.is_null() {
         return Ok(());
     }
@@ -313,7 +313,7 @@ fn register_for_direct_los_gain(
     target: Object,
     viewer_node: Object,
     target_node: Object,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     if viewer.is_null() || target.is_null() {
         return Ok(());
     }
@@ -351,7 +351,7 @@ fn register_for_direct_los_lost(
     target: Object,
     viewer_node: Object,
     target_node: Object,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     if viewer.is_null() || target.is_null() {
         return Ok(());
     }
@@ -388,7 +388,7 @@ fn register_for_distance_less_than_event(
     object1: Object,
     object2: Object,
     distance: f32,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     if object1.is_null() || object2.is_null() || !distance.is_finite() {
         return Ok(());
     }
@@ -421,7 +421,7 @@ fn register_for_distance_greater_than_event(
     object1: Object,
     object2: Object,
     distance: f32,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     if object1.is_null() || object2.is_null() || !distance.is_finite() {
         return Ok(());
     }
@@ -460,7 +460,7 @@ fn register_for_hit_event(
     bash_filter: i32,
     block_filter: i32,
     must_match: bool,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     if target.is_null() {
         return Ok(());
     }
@@ -503,7 +503,7 @@ fn register_for_magic_effect_apply_event(
     caster_filter: Object,
     effect_filter: Object,
     must_match: bool,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     if target.is_null() {
         return Ok(());
     }
@@ -537,7 +537,7 @@ fn register_for_menu_open_close_event(
     mut caller: Caller<'_, State>,
     self_ptr: Object,
     menu_name: Object,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     let menu_name = caller.string(menu_name).to_owned();
 
     caller.data_mut().registration.register(
@@ -557,10 +557,7 @@ fn register_for_menu_open_close_event(
 /// ```text
 /// Function() native
 /// ```
-fn register_for_player_sleep(
-    mut caller: Caller<'_, State>,
-    self_ptr: Object,
-) -> Result<(), Exception> {
+fn register_for_player_sleep(mut caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Error> {
     caller.data_mut().registration.register(
         self_ptr,
         Event {
@@ -581,7 +578,7 @@ fn register_for_player_sleep(
 fn register_for_player_teleport(
     mut caller: Caller<'_, State>,
     self_ptr: Object,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     caller.data_mut().registration.register(
         self_ptr,
         Event {
@@ -599,10 +596,7 @@ fn register_for_player_teleport(
 /// ```text
 /// Function() native
 /// ```
-fn register_for_player_wait(
-    mut caller: Caller<'_, State>,
-    self_ptr: Object,
-) -> Result<(), Exception> {
+fn register_for_player_wait(mut caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Error> {
     caller.data_mut().registration.register(
         self_ptr,
         Event {
@@ -624,7 +618,7 @@ fn register_for_radiation_damage_event(
     mut caller: Caller<'_, State>,
     self_ptr: Object,
     target: Object,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     if target.is_null() {
         return Ok(());
     }
@@ -652,7 +646,7 @@ fn register_for_remote_event(
     self_ptr: Object,
     event_source: Object,
     event_name: Object,
-) -> Result<bool, Exception> {
+) -> Result<bool, Error> {
     if event_source.is_null() {
         return Ok(false);
     }
@@ -685,7 +679,7 @@ fn register_for_tracked_stats_event(
     self_ptr: Object,
     stat: Object,
     threshold: i32,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     let stat = caller.string(stat).to_owned();
 
     caller.data_mut().registration.register(
@@ -709,7 +703,7 @@ fn register_for_tracked_stats_event(
 fn register_for_looks_menu_event(
     mut caller: Caller<'_, State>,
     self_ptr: Object,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     caller.data_mut().registration.register(
         self_ptr,
         Event {
@@ -731,7 +725,7 @@ fn register_for_tutorial_event(
     mut caller: Caller<'_, State>,
     self_ptr: Object,
     event_name: Object,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     let name = caller.string(event_name).to_owned();
 
     caller.data_mut().registration.register(
@@ -755,7 +749,7 @@ fn register_for_tutorial_event(
 fn remove_all_inventory_event_filters(
     caller: Caller<'_, State>,
     self_ptr: Object,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -768,7 +762,7 @@ fn remove_inventory_event_filter(
     caller: Caller<'_, State>,
     self_ptr: Object,
     ak_filter: Object,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -782,7 +776,7 @@ fn send_custom_event(
     self_ptr: Object,
     as_event: Object,
     ak_args: Object,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -796,7 +790,7 @@ fn set_property_value(
     self_ptr: Object,
     as_property_name: Object,
     a_value: Object,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -810,7 +804,7 @@ fn set_property_value_no_wait(
     self_ptr: Object,
     as_property_name: Object,
     a_value: Object,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -824,13 +818,13 @@ fn start_timer(
     self_ptr: Object,
     interval: f32,
     timer_id: i32,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     let duration = Duration::from_secs_f32(interval);
     let timer_id = TimerId(timer_id);
 
     caller
         .data_mut()
-        .game_timers
+        .real_timers
         .insert(self_ptr, timer_id, duration);
     Ok(())
 }
@@ -845,7 +839,7 @@ fn start_timer_game_time(
     self_ptr: Object,
     interval: f32,
     timer_id: i32,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     // interval is in game-hours.
     let duration = Duration::from_secs_f32(interval * 3600.0);
     let timer_id = TimerId(timer_id);
@@ -862,10 +856,7 @@ fn start_timer_game_time(
 /// ```text
 /// Function() native
 /// ```
-fn unregister_for_all_events(
-    mut caller: Caller<'_, State>,
-    self_ptr: Object,
-) -> Result<(), Exception> {
+fn unregister_for_all_events(mut caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Error> {
     caller.data_mut().registration.unregister_all(self_ptr);
     Ok(())
 }
@@ -878,7 +869,7 @@ fn unregister_for_all_events(
 fn unregister_for_all_custom_events(
     mut caller: Caller<'_, State>,
     self_ptr: Object,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     caller
         .data_mut()
         .registration
@@ -895,7 +886,7 @@ fn unregister_for_all_hit_events(
     mut caller: Caller<'_, State>,
     self_ptr: Object,
     target: Object,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     let all_targets = target.is_null();
 
     caller
@@ -937,7 +928,7 @@ fn unregister_for_all_magic_effect_apply_events(
     mut caller: Caller<'_, State>,
     self_ptr: Object,
     target: Object,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     let all_targets = target.is_null();
 
     caller
@@ -973,7 +964,7 @@ fn unregister_for_all_magic_effect_apply_events(
 fn unregister_for_all_menu_open_close_events(
     mut caller: Caller<'_, State>,
     self_ptr: Object,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     caller
         .data_mut()
         .registration
@@ -991,7 +982,7 @@ fn unregister_for_all_menu_open_close_events(
 fn unregister_for_all_radiation_damage_events(
     mut caller: Caller<'_, State>,
     self_ptr: Object,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     caller
         .data_mut()
         .registration
@@ -1010,7 +1001,7 @@ fn unregister_for_all_radiation_damage_events(
 fn unregister_for_all_remote_events(
     mut caller: Caller<'_, State>,
     self_ptr: Object,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     caller
         .data_mut()
         .registration
@@ -1029,7 +1020,7 @@ fn unregister_for_all_remote_events(
 fn unregister_for_all_tracked_stats_events(
     mut caller: Caller<'_, State>,
     self_ptr: Object,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     caller
         .data_mut()
         .registration
@@ -1055,7 +1046,7 @@ fn unregister_for_animation_event(
     self_ptr: Object,
     sender: Object,
     event_name: Object,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     if sender.is_null() {
         return Ok(());
     }
@@ -1084,7 +1075,7 @@ fn unregister_for_custom_event(
     self_ptr: Object,
     sender: Object,
     event_name: Object,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     if sender.is_null() {
         return Ok(());
     }
@@ -1113,7 +1104,7 @@ fn unregister_for_distance_events(
     self_ptr: Object,
     object1: Object,
     object2: Object,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     if object1.is_null() || object2.is_null() {
         return Ok(());
     }
@@ -1149,7 +1140,7 @@ fn unregister_for_los(
     self_ptr: Object,
     viewer: Object,
     target: Object,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     if viewer.is_null() || target.is_null() {
         return Ok(());
     }
@@ -1193,7 +1184,7 @@ fn unregister_for_magic_effect_apply_event(
     caster_filter: Object,
     effect_filter: Object,
     must_match: bool,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     if target.is_null() {
         return Ok(());
     }
@@ -1230,7 +1221,7 @@ fn unregister_for_menu_open_close_event(
     mut caller: Caller<'_, State>,
     self_ptr: Object,
     menu_name: Object,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     let menu_name = caller.string(menu_name).to_owned();
 
     caller.data_mut().registration.register(
@@ -1253,7 +1244,7 @@ fn unregister_for_menu_open_close_event(
 fn unregister_for_player_sleep(
     mut caller: Caller<'_, State>,
     self_ptr: Object,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     caller.data_mut().registration.unregister(
         self_ptr,
         Event {
@@ -1274,7 +1265,7 @@ fn unregister_for_player_sleep(
 fn unregister_for_player_teleport(
     mut caller: Caller<'_, State>,
     self_ptr: Object,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     caller.data_mut().registration.unregister(
         self_ptr,
         Event {
@@ -1295,7 +1286,7 @@ fn unregister_for_player_teleport(
 fn unregister_for_player_wait(
     mut caller: Caller<'_, State>,
     self_ptr: Object,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     caller.data_mut().registration.unregister(
         self_ptr,
         Event {
@@ -1317,7 +1308,7 @@ fn unregister_for_radiation_damage_event(
     mut caller: Caller<'_, State>,
     self_ptr: Object,
     target: Object,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     if target.is_null() {
         return Ok(());
     }
@@ -1344,7 +1335,7 @@ fn unregister_for_remote_event(
     self_ptr: Object,
     event_source: Object,
     event_name: Object,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     if event_source.is_null() {
         return Ok(());
     }
@@ -1376,7 +1367,7 @@ fn unregister_for_tracked_stats_event(
     mut caller: Caller<'_, State>,
     self_ptr: Object,
     stat: Object,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     let name = caller.string(stat).to_owned();
 
     caller
@@ -1398,7 +1389,7 @@ fn unregister_for_tracked_stats_event(
 fn unregister_for_looks_menu_event(
     mut caller: Caller<'_, State>,
     self_ptr: Object,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     caller.data_mut().registration.unregister(
         self_ptr,
         Event {
@@ -1427,7 +1418,7 @@ fn unregister_for_hit_event(
     bash_filter: i32,
     block_filter: i32,
     must_match: bool,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -1440,7 +1431,7 @@ fn unregister_for_tutorial_event(
     mut caller: Caller<'_, State>,
     self_ptr: Object,
     event_name: Object,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     let name = caller.string(event_name).to_owned();
 
     caller.data_mut().registration.register(

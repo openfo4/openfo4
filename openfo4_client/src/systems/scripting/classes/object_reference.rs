@@ -6,7 +6,7 @@ use openfo4_core::ecs::Entity;
 use openfo4_core::record::RecordId;
 use openfo4_core::transform::ConvertCoordinateSystem;
 use openfo4_script::engine::Engine;
-use openfo4_script::runtime::{Caller, Exception};
+use openfo4_script::runtime::{Caller, Error};
 
 use crate::components::{Disabled, ObjectBounds, ObjectLockLevel, ObjectProperties, TriggerBox};
 use crate::state::npc::ObjectKeywords;
@@ -249,7 +249,7 @@ fn activate(
     self_ptr: Object,
     ak_activator: Object,
     ab_default_processing_only: bool,
-) -> Result<bool, Exception> {
+) -> Result<bool, Error> {
     todo!()
 }
 
@@ -262,7 +262,7 @@ fn add_dependent_animated_object_reference(
     caller: Caller<'_, State>,
     self_ptr: Object,
     ak_dependent: Object,
-) -> Result<bool, Exception> {
+) -> Result<bool, Error> {
     todo!()
 }
 
@@ -271,14 +271,18 @@ fn add_dependent_animated_object_reference(
 /// ```text
 /// Function(Form akItemToAdd, int aiCount, bool abSilent) native
 /// ```
-fn add_item(
+async fn add_item(
     mut caller: Caller<'_, State>,
     self_ptr: Object,
     item: Object,
     count: i32,
     silent: bool,
-) -> Result<(), Exception> {
-    let entity = caller.data().entity(self_ptr).ok_or(Exception::Error)?;
+) -> Result<(), Error> {
+    let entity = caller
+        .data()
+        .entity(self_ptr)
+        .await
+        .ok_or_else(|| todo!())?;
 
     let item = caller
         .data()
@@ -286,18 +290,21 @@ fn add_item(
         .get_by_addr(item)
         .map(|s| s.record())
         .flatten()
-        .ok_or(Exception::Error)?;
+        .ok_or_else(|| todo!())?;
 
     // Ignore negative item counts.
     let Ok(count) = u64::try_from(count) else {
         return Ok(());
     };
 
-    caller.data_mut().run_effect_and_wait(AddItemEffect {
-        entity,
-        item,
-        count,
-    })?;
+    caller
+        .data_mut()
+        .run_effect_and_wait(AddItemEffect {
+            entity,
+            item,
+            count,
+        })
+        .await?;
 
     Ok(())
 }
@@ -307,24 +314,25 @@ fn add_item(
 /// ```text
 /// Function(Keyword apKeyword) native
 /// ```
-fn add_keyword(
+async fn add_keyword(
     caller: Caller<'_, State>,
     self_ptr: Object,
     keyword: Object,
-) -> Result<(), Exception> {
-    let entity = caller.data().entity(self_ptr).ok_or(Exception::Error)?;
+) -> Result<(), Error> {
+    let entity = caller
+        .data()
+        .entity(self_ptr)
+        .await
+        .ok_or_else(|| todo!())?;
     let keyword = caller
         .data()
         .objects
         .get_by_addr(keyword)
         .and_then(|s| s.record())
-        .ok_or(Exception::Error)?;
+        .ok_or_else(|| todo!())?;
 
-    let mut keywords = caller
-        .data()
-        .world()
-        .get::<&mut ObjectKeywords>(entity)
-        .unwrap();
+    let world = caller.data().world().await;
+    let mut keywords = world.get::<&mut ObjectKeywords>(entity).unwrap();
     keywords.add(keyword);
 
     Ok(())
@@ -340,7 +348,7 @@ fn add_text_replacement_data(
     self_ptr: Object,
     as_token_label: Object,
     ak_form: Object,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -353,7 +361,7 @@ fn add_to_map(
     caller: Caller<'_, State>,
     self_ptr: Object,
     ab_allow_fast_travel: bool,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -371,7 +379,7 @@ fn apply_conveyor_belt(
     a_lin_vel_z: f32,
     ab_on: bool,
     ab_reverse: bool,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -387,7 +395,7 @@ fn apply_havok_impulse(
     af_y: f32,
     af_z: f32,
     af_magnitude: f32,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -405,7 +413,7 @@ fn apply_fan_motor(
     a_axis_z: f32,
     a_force: f32,
     ab_on: bool,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -414,7 +422,7 @@ fn apply_fan_motor(
 /// ```text
 /// Function(bool abOn) native
 /// ```
-fn fan_motor_on(caller: Caller<'_, State>, self_ptr: Object, ab_on: bool) -> Result<(), Exception> {
+fn fan_motor_on(caller: Caller<'_, State>, self_ptr: Object, ab_on: bool) -> Result<(), Error> {
     todo!()
 }
 
@@ -423,7 +431,7 @@ fn fan_motor_on(caller: Caller<'_, State>, self_ptr: Object, ab_on: bool) -> Res
 /// ```text
 /// bool Function() native
 /// ```
-fn is_fan_motor_on(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Exception> {
+fn is_fan_motor_on(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Error> {
     todo!()
 }
 
@@ -437,7 +445,7 @@ fn attach_mod(
     self_ptr: Object,
     ak_mod: Object,
     ai_attach_index: i32,
-) -> Result<bool, Exception> {
+) -> Result<bool, Error> {
     todo!()
 }
 
@@ -451,7 +459,7 @@ fn attach_mod_to_inventory_item(
     self_ptr: Object,
     ak_item: Object,
     ak_mod: Object,
-) -> Result<bool, Exception> {
+) -> Result<bool, Error> {
     todo!()
 }
 
@@ -460,11 +468,7 @@ fn attach_mod_to_inventory_item(
 /// ```text
 /// Function(ObjectReference akParent) native
 /// ```
-fn attach_to(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    ak_parent: Object,
-) -> Result<(), Exception> {
+fn attach_to(caller: Caller<'_, State>, self_ptr: Object, ak_parent: Object) -> Result<(), Error> {
     todo!()
 }
 
@@ -478,7 +482,7 @@ fn block_activation(
     self_ptr: Object,
     ab_blocked: bool,
     ab_hide_activate_text: bool,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -491,7 +495,7 @@ fn calculate_encounter_level(
     caller: Caller<'_, State>,
     self_ptr: Object,
     ai_difficulty: i32,
-) -> Result<i32, Exception> {
+) -> Result<i32, Error> {
     todo!()
 }
 
@@ -500,10 +504,7 @@ fn calculate_encounter_level(
 /// ```text
 /// bool Function() native
 /// ```
-fn can_fast_travel_to_marker(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-) -> Result<bool, Exception> {
+fn can_fast_travel_to_marker(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Error> {
     todo!()
 }
 
@@ -512,10 +513,7 @@ fn can_fast_travel_to_marker(
 /// ```text
 /// bool Function() native
 /// ```
-fn can_produce_for_workshop(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-) -> Result<bool, Exception> {
+fn can_produce_for_workshop(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Error> {
     todo!()
 }
 
@@ -524,7 +522,7 @@ fn can_produce_for_workshop(
 /// ```text
 /// Function() native
 /// ```
-fn clear_destruction(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Exception> {
+fn clear_destruction(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Error> {
     todo!()
 }
 
@@ -533,7 +531,7 @@ fn clear_destruction(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), 
 /// ```text
 /// Function() native
 /// ```
-fn clear_from_old_locations(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Exception> {
+fn clear_from_old_locations(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Error> {
     todo!()
 }
 
@@ -542,11 +540,7 @@ fn clear_from_old_locations(caller: Caller<'_, State>, self_ptr: Object) -> Resu
 /// ```text
 /// Function(bool abOn) native
 /// ```
-fn conveyor_belt_on(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    ab_on: bool,
-) -> Result<(), Exception> {
+fn conveyor_belt_on(caller: Caller<'_, State>, self_ptr: Object, ab_on: bool) -> Result<(), Error> {
     todo!()
 }
 
@@ -560,7 +554,7 @@ fn count_actors_linked_to_me(
     self_ptr: Object,
     ap_link_keyword: Object,
     ap_exclude_keyword: Object,
-) -> Result<i32, Exception> {
+) -> Result<i32, Error> {
     todo!()
 }
 
@@ -569,18 +563,28 @@ fn count_actors_linked_to_me(
 /// ```text
 /// int Function(keyword apKeyword, int maxExpectedLinkedRefs) native
 /// ```
-fn count_linked_ref_chain(
+async fn count_linked_ref_chain(
     caller: Caller<'_, State>,
     self_ptr: Object,
     keyword: Object,
     max_expected_linked_refs: i32,
-) -> Result<i32, Exception> {
+) -> Result<i32, Error> {
     let Ok(max_count) = usize::try_from(max_expected_linked_refs) else {
         return Ok(0);
     };
 
-    let iter = LinkedRefChainIter::new(&caller, self_ptr, keyword).ok_or(Exception::Error)?;
-    Ok(iter.take(max_count).count().try_into().unwrap_or(i32::MAX))
+    let mut iter = LinkedRefChainIter::new(&caller, self_ptr, keyword)
+        .await
+        .ok_or_else(|| todo!())?;
+
+    let mut count = 0;
+    while let Some(_) = iter.next().await
+        && count != max_count
+    {
+        count += 1;
+    }
+
+    Ok(count.try_into().unwrap_or(i32::MAX))
 }
 
 /// `CountRefsLinkedToMe`
@@ -593,7 +597,7 @@ fn count_refs_linked_to_me(
     self_ptr: Object,
     ap_link_keyword: Object,
     ap_exclude_keyword: Object,
-) -> Result<i32, Exception> {
+) -> Result<i32, Error> {
     todo!()
 }
 
@@ -607,7 +611,7 @@ fn create_detection_event(
     self_ptr: Object,
     ak_owner: Object,
     ai_sound_level: i32,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -616,11 +620,7 @@ fn create_detection_event(
 /// ```text
 /// Function(float afDamage) native
 /// ```
-fn damage_object(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    af_damage: f32,
-) -> Result<(), Exception> {
+fn damage_object(caller: Caller<'_, State>, self_ptr: Object, af_damage: f32) -> Result<(), Error> {
     todo!()
 }
 
@@ -629,25 +629,26 @@ fn damage_object(
 /// ```text
 /// Function(ActorValue akAV, float afDamage) native
 /// ```
-fn damage_value(
+async fn damage_value(
     caller: Caller<'_, State>,
     self_ptr: Object,
     actor_value: Object,
     damage: f32,
-) -> Result<(), Exception> {
-    let entity = caller.data().entity(self_ptr).ok_or(Exception::Error)?;
+) -> Result<(), Error> {
+    let entity = caller
+        .data()
+        .entity(self_ptr)
+        .await
+        .ok_or_else(|| todo!())?;
     let actor_value = caller
         .data()
         .objects
         .get_by_addr(actor_value)
         .and_then(|s| s.record())
-        .ok_or(Exception::Error)?;
+        .ok_or_else(|| todo!())?;
 
-    let Ok(mut props) = caller
-        .data()
-        .world()
-        .get::<&mut ActorValueProperties>(entity)
-    else {
+    let world = caller.data().world().await;
+    let Ok(mut props) = world.get::<&mut ActorValueProperties>(entity) else {
         return Ok(());
     };
 
@@ -667,7 +668,7 @@ fn damage_value(
 /// ```text
 /// Function() native
 /// ```
-fn delete(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Exception> {
+fn delete(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Error> {
     todo!()
 }
 
@@ -676,19 +677,20 @@ fn delete(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Exception> 
 /// ```text
 /// Function(bool abFadeOut) native
 /// ```
-fn disable(
+async fn disable(
     mut caller: Caller<'_, State>,
     self_ptr: Object,
     fade_out: bool,
-) -> Result<(), Exception> {
-    let entity = caller.data().entity(self_ptr).unwrap();
+) -> Result<(), Error> {
+    let entity = caller.data().entity(self_ptr).await.unwrap();
     caller
         .data_mut()
         .run_effect_and_wait(DisableEntitiesEffect {
             entities: vec![entity],
             fade: fade_out,
             wait_until_faded: true,
-        })?;
+        })
+        .await?;
     Ok(())
 }
 
@@ -697,19 +699,21 @@ fn disable(
 /// ```text
 /// Function(Keyword apKeyword, bool abFadeOut) native
 /// ```
-fn disable_link_chain(
+async fn disable_link_chain(
     mut caller: Caller<'_, State>,
     self_ptr: Object,
     keyword: Object,
     fade_out: bool,
-) -> Result<(), Exception> {
-    let Some(objects) = LinkedRefChainIter::new(&caller, self_ptr, keyword) else {
+) -> Result<(), Error> {
+    let Some(mut objects) = LinkedRefChainIter::new(&caller, self_ptr, keyword).await else {
         return Ok(());
     };
 
-    let entities = objects
-        .map(|object| caller.data().entity(object).unwrap())
-        .collect();
+    let mut entities = Vec::new();
+    while let Some(object) = objects.next().await {
+        let entity = caller.data().entity(object).await.unwrap();
+        entities.push(entity);
+    }
 
     caller
         .data_mut()
@@ -717,7 +721,8 @@ fn disable_link_chain(
             entities,
             fade: fade_out,
             wait_until_faded: false,
-        })?;
+        })
+        .await?;
     Ok(())
 }
 
@@ -726,19 +731,20 @@ fn disable_link_chain(
 /// ```text
 /// Function(bool abFadeOut) native
 /// ```
-fn disable_no_wait(
+async fn disable_no_wait(
     mut caller: Caller<'_, State>,
     self_ptr: Object,
     fade_out: bool,
-) -> Result<(), Exception> {
-    let entity = caller.data().entity(self_ptr).unwrap();
+) -> Result<(), Error> {
+    let entity = caller.data().entity(self_ptr).await.unwrap();
     caller
         .data_mut()
         .run_effect_and_wait(DisableEntitiesEffect {
             entities: vec![entity],
             fade: fade_out,
             wait_until_faded: false,
-        })?;
+        })
+        .await?;
     Ok(())
 }
 
@@ -747,7 +753,7 @@ fn disable_no_wait(
 /// ```text
 /// Function(bool abSilent) native
 /// ```
-fn drop(caller: Caller<'_, State>, self_ptr: Object, ab_silent: bool) -> Result<(), Exception> {
+fn drop(caller: Caller<'_, State>, self_ptr: Object, ab_silent: bool) -> Result<(), Error> {
     todo!()
 }
 
@@ -760,7 +766,7 @@ fn drop_first_object(
     caller: Caller<'_, State>,
     self_ptr: Object,
     ab_initially_disabled: bool,
-) -> Result<Object, Exception> {
+) -> Result<Object, Error> {
     todo!()
 }
 
@@ -774,7 +780,7 @@ fn drop_object(
     self_ptr: Object,
     ak_object: Object,
     ai_count: i32,
-) -> Result<Object, Exception> {
+) -> Result<Object, Error> {
     todo!()
 }
 
@@ -783,15 +789,20 @@ fn drop_object(
 /// ```text
 /// Function(bool abFadeIn) native
 /// ```
-fn enable(mut caller: Caller<'_, State>, self_ptr: Object, fade_in: bool) -> Result<(), Exception> {
-    let entity = caller.data().entity(self_ptr).unwrap();
+async fn enable(
+    mut caller: Caller<'_, State>,
+    self_ptr: Object,
+    fade_in: bool,
+) -> Result<(), Error> {
+    let entity = caller.data().entity(self_ptr).await.unwrap();
     caller
         .data_mut()
         .run_effect_and_wait(EnableEntitiesEffect {
             entities: vec![entity],
             fade: fade_in,
             wait_until_faded: true,
-        })?;
+        })
+        .await?;
     Ok(())
 }
 
@@ -804,7 +815,7 @@ fn enable_fast_travel(
     caller: Caller<'_, State>,
     self_ptr: Object,
     ab_enable: bool,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -813,19 +824,21 @@ fn enable_fast_travel(
 /// ```text
 /// Function(Keyword apKeyword, bool abFadeIn) native
 /// ```
-fn enable_link_chain(
+async fn enable_link_chain(
     mut caller: Caller<'_, State>,
     self_ptr: Object,
     keyword: Object,
     fade_in: bool,
-) -> Result<(), Exception> {
-    let Some(objects) = LinkedRefChainIter::new(&caller, self_ptr, keyword) else {
+) -> Result<(), Error> {
+    let Some(mut objects) = LinkedRefChainIter::new(&caller, self_ptr, keyword).await else {
         return Ok(());
     };
 
-    let entities = objects
-        .map(|object| caller.data().entity(object).unwrap())
-        .collect();
+    let mut entities = Vec::new();
+    while let Some(object) = objects.next().await {
+        let entity = caller.data().entity(object).await.unwrap();
+        entities.push(entity);
+    }
 
     caller
         .data_mut()
@@ -833,7 +846,8 @@ fn enable_link_chain(
             entities,
             fade: fade_in,
             wait_until_faded: false,
-        })?;
+        })
+        .await?;
 
     Ok(())
 }
@@ -843,19 +857,20 @@ fn enable_link_chain(
 /// ```text
 /// Function(bool abFadeIn) native
 /// ```
-fn enable_no_wait(
+async fn enable_no_wait(
     mut caller: Caller<'_, State>,
     self_ptr: Object,
     fade_in: bool,
-) -> Result<(), Exception> {
-    let entity = caller.data().entity(self_ptr).unwrap();
+) -> Result<(), Error> {
+    let entity = caller.data().entity(self_ptr).await.unwrap();
     caller
         .data_mut()
         .run_effect_and_wait(EnableEntitiesEffect {
             entities: vec![entity],
             fade: fade_in,
             wait_until_faded: false,
-        })?;
+        })
+        .await?;
     Ok(())
 }
 
@@ -869,7 +884,7 @@ fn find_all_references_of_type(
     self_ptr: Object,
     ak_object_or_list: Object,
     af_radius: f32,
-) -> Result<Object, Exception> {
+) -> Result<Object, Error> {
     todo!()
 }
 
@@ -883,7 +898,7 @@ fn find_all_references_with_keyword(
     self_ptr: Object,
     ak_keyword_or_list: Object,
     af_radius: f32,
-) -> Result<Object, Exception> {
+) -> Result<Object, Error> {
     todo!()
 }
 
@@ -892,10 +907,7 @@ fn find_all_references_with_keyword(
 /// ```text
 /// Function() native
 /// ```
-fn force_add_ragdoll_to_world(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-) -> Result<(), Exception> {
+fn force_add_ragdoll_to_world(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Error> {
     todo!()
 }
 
@@ -907,7 +919,7 @@ fn force_add_ragdoll_to_world(
 fn force_remove_ragdoll_from_world(
     caller: Caller<'_, State>,
     self_ptr: Object,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -916,7 +928,7 @@ fn force_remove_ragdoll_from_world(
 /// ```text
 /// ActorBase Function() native
 /// ```
-fn get_actor_owner(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Exception> {
+fn get_actor_owner(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Error> {
     todo!()
 }
 
@@ -925,7 +937,7 @@ fn get_actor_owner(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object
 /// ```text
 /// Actor Function() native
 /// ```
-fn get_actor_ref_owner(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Exception> {
+fn get_actor_ref_owner(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Error> {
     todo!()
 }
 
@@ -939,7 +951,7 @@ fn get_actors_linked_to_me(
     self_ptr: Object,
     ap_link_keyword: Object,
     ap_exclude_keyword: Object,
-) -> Result<Object, Exception> {
+) -> Result<Object, Error> {
     todo!()
 }
 
@@ -948,7 +960,7 @@ fn get_actors_linked_to_me(
 /// ```text
 /// float Function() native
 /// ```
-fn get_angle_x(caller: Caller<'_, State>, self_ptr: Object) -> Result<f32, Exception> {
+fn get_angle_x(caller: Caller<'_, State>, self_ptr: Object) -> Result<f32, Error> {
     todo!()
 }
 
@@ -957,7 +969,7 @@ fn get_angle_x(caller: Caller<'_, State>, self_ptr: Object) -> Result<f32, Excep
 /// ```text
 /// float Function() native
 /// ```
-fn get_angle_y(caller: Caller<'_, State>, self_ptr: Object) -> Result<f32, Exception> {
+fn get_angle_y(caller: Caller<'_, State>, self_ptr: Object) -> Result<f32, Error> {
     todo!()
 }
 
@@ -966,7 +978,7 @@ fn get_angle_y(caller: Caller<'_, State>, self_ptr: Object) -> Result<f32, Excep
 /// ```text
 /// float Function() native
 /// ```
-fn get_angle_z(caller: Caller<'_, State>, self_ptr: Object) -> Result<f32, Exception> {
+fn get_angle_z(caller: Caller<'_, State>, self_ptr: Object) -> Result<f32, Error> {
     todo!()
 }
 
@@ -975,15 +987,20 @@ fn get_angle_z(caller: Caller<'_, State>, self_ptr: Object) -> Result<f32, Excep
 /// ```text
 /// bool Function(string arVariableName) native
 /// ```
-fn get_animation_variable_bool(
+async fn get_animation_variable_bool(
     caller: Caller<'_, State>,
     self_ptr: Object,
     variable_name: Object,
-) -> Result<bool, Exception> {
+) -> Result<bool, Error> {
     let name = caller.string(variable_name);
 
-    let entity = caller.data().entity(self_ptr).ok_or(Exception::Error)?;
-    let Ok(driver) = caller.data().world().get::<&AnimationDriver>(entity) else {
+    let entity = caller
+        .data()
+        .entity(self_ptr)
+        .await
+        .ok_or_else(|| todo!())?;
+    let world = caller.data().world().await;
+    let Ok(driver) = world.get::<&AnimationDriver>(entity) else {
         return Ok(false);
     };
 
@@ -999,15 +1016,20 @@ fn get_animation_variable_bool(
 /// ```text
 /// int Function(string arVariableName) native
 /// ```
-fn get_animation_variable_int(
+async fn get_animation_variable_int(
     caller: Caller<'_, State>,
     self_ptr: Object,
     variable_name: Object,
-) -> Result<i32, Exception> {
+) -> Result<i32, Error> {
     let name = caller.string(variable_name);
 
-    let entity = caller.data().entity(self_ptr).ok_or(Exception::Error)?;
-    let Ok(driver) = caller.data().world().get::<&AnimationDriver>(entity) else {
+    let entity = caller
+        .data()
+        .entity(self_ptr)
+        .await
+        .ok_or_else(|| todo!())?;
+    let world = caller.data().world().await;
+    let Ok(driver) = world.get::<&AnimationDriver>(entity) else {
         return Ok(0);
     };
 
@@ -1023,15 +1045,20 @@ fn get_animation_variable_int(
 /// ```text
 /// float Function(string arVariableName) native
 /// ```
-fn get_animation_variable_float(
+async fn get_animation_variable_float(
     caller: Caller<'_, State>,
     self_ptr: Object,
     variable_name: Object,
-) -> Result<f32, Exception> {
+) -> Result<f32, Error> {
     let name = caller.string(variable_name);
 
-    let entity = caller.data().entity(self_ptr).ok_or(Exception::Error)?;
-    let Ok(driver) = caller.data().world().get::<&AnimationDriver>(entity) else {
+    let entity = caller
+        .data()
+        .entity(self_ptr)
+        .await
+        .ok_or_else(|| todo!())?;
+    let world = caller.data().world().await;
+    let Ok(driver) = world.get::<&AnimationDriver>(entity) else {
         return Ok(0.0);
     };
 
@@ -1047,7 +1074,7 @@ fn get_animation_variable_float(
 /// ```text
 /// Form Function() native
 /// ```
-fn get_base_object(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Exception> {
+fn get_base_object(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Error> {
     todo!()
 }
 
@@ -1060,7 +1087,7 @@ fn get_base_value(
     caller: Caller<'_, State>,
     self_ptr: Object,
     ak_av: Object,
-) -> Result<f32, Exception> {
+) -> Result<f32, Error> {
     todo!()
 }
 
@@ -1072,7 +1099,7 @@ fn get_base_value(
 fn get_current_destruction_stage(
     caller: Caller<'_, State>,
     self_ptr: Object,
-) -> Result<i32, Exception> {
+) -> Result<i32, Error> {
     todo!()
 }
 
@@ -1081,7 +1108,7 @@ fn get_current_destruction_stage(
 /// ```text
 /// Location Function() native
 /// ```
-fn get_current_location(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Exception> {
+fn get_current_location(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Error> {
     todo!()
 }
 
@@ -1090,7 +1117,7 @@ fn get_current_location(caller: Caller<'_, State>, self_ptr: Object) -> Result<O
 /// ```text
 /// Scene Function() native
 /// ```
-fn get_current_scene(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Exception> {
+fn get_current_scene(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Error> {
     todo!()
 }
 
@@ -1099,17 +1126,23 @@ fn get_current_scene(caller: Caller<'_, State>, self_ptr: Object) -> Result<Obje
 /// ```text
 /// float Function(ObjectReference akOther) native
 /// ```
-fn get_distance(
+async fn get_distance(
     caller: Caller<'_, State>,
     self_ptr: Object,
     other: Object,
-) -> Result<f32, Exception> {
-    let this = caller.data().entity(self_ptr).ok_or(Exception::Error)?;
-    let other = caller.data().entity(other).ok_or(Exception::Error)?;
+) -> Result<f32, Error> {
+    let this = caller
+        .data()
+        .entity(self_ptr)
+        .await
+        .ok_or_else(|| todo!())?;
+    let other = caller.data().entity(other).await.ok_or_else(|| todo!())?;
+
+    let world = caller.data().world().await;
 
     // Entities are guaranteed to exist, otherwise `entity()` would return `None`.
-    let this_transform = caller.data().world().get::<&Transform>(this).unwrap();
-    let other_transform = caller.data().world().get::<&Transform>(other).unwrap();
+    let this_transform = world.get::<&Transform>(this).unwrap();
+    let other_transform = world.get::<&Transform>(other).unwrap();
 
     let a = this_transform.to_nif();
     let b = other_transform.to_nif();
@@ -1122,7 +1155,7 @@ fn get_distance(
 /// ```text
 /// Location Function() native
 /// ```
-fn get_editor_location(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Exception> {
+fn get_editor_location(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Error> {
     todo!()
 }
 
@@ -1131,7 +1164,7 @@ fn get_editor_location(caller: Caller<'_, State>, self_ptr: Object) -> Result<Ob
 /// ```text
 /// EncounterZone Function() native
 /// ```
-fn get_encounter_zone(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Exception> {
+fn get_encounter_zone(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Error> {
     todo!()
 }
 
@@ -1140,7 +1173,7 @@ fn get_encounter_zone(caller: Caller<'_, State>, self_ptr: Object) -> Result<Obj
 /// ```text
 /// Faction Function() native
 /// ```
-fn get_faction_owner(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Exception> {
+fn get_faction_owner(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Error> {
     todo!()
 }
 
@@ -1153,7 +1186,7 @@ fn get_heading_angle(
     caller: Caller<'_, State>,
     self_ptr: Object,
     ak_other: Object,
-) -> Result<f32, Exception> {
+) -> Result<f32, Error> {
     todo!()
 }
 
@@ -1162,8 +1195,8 @@ fn get_heading_angle(
 /// ```text
 /// float Function() native
 /// ```
-fn get_height(caller: Caller<'_, State>, self_ptr: Object) -> Result<f32, Exception> {
-    let bounds = get_bounds(caller, self_ptr).ok_or(Exception::Error)?;
+async fn get_height(caller: Caller<'_, State>, self_ptr: Object) -> Result<f32, Error> {
+    let bounds = get_bounds(caller, self_ptr).await.ok_or_else(|| todo!())?;
     Ok(bounds.min.z.abs_diff(bounds.max.z) as f32)
 }
 
@@ -1172,7 +1205,7 @@ fn get_height(caller: Caller<'_, State>, self_ptr: Object) -> Result<f32, Except
 /// ```text
 /// int Function() native
 /// ```
-fn get_inventory_value(caller: Caller<'_, State>, self_ptr: Object) -> Result<i32, Exception> {
+fn get_inventory_value(caller: Caller<'_, State>, self_ptr: Object) -> Result<i32, Error> {
     todo!()
 }
 
@@ -1181,14 +1214,19 @@ fn get_inventory_value(caller: Caller<'_, State>, self_ptr: Object) -> Result<i3
 /// ```text
 /// int Function(Form akItem) native
 /// ```
-fn get_item_count(
+async fn get_item_count(
     caller: Caller<'_, State>,
     self_ptr: Object,
     item: Object,
-) -> Result<i32, Exception> {
-    let entity = caller.data().entity(self_ptr).ok_or(Exception::Error)?;
+) -> Result<i32, Error> {
+    let entity = caller
+        .data()
+        .entity(self_ptr)
+        .await
+        .ok_or_else(|| todo!())?;
 
-    let Ok(inventory) = caller.data().world().get::<&Inventory>(entity) else {
+    let world = caller.data().world().await;
+    let Ok(inventory) = world.get::<&Inventory>(entity) else {
         return Ok(0);
     };
 
@@ -1202,7 +1240,7 @@ fn get_item_count(
             .objects
             .get_by_addr(item)
             .and_then(|s| s.record())
-            .ok_or(Exception::Error)?;
+            .ok_or_else(|| todo!())?;
         inventory
             .get_by_form(id)
             .fold(0_u64, |sum, (_, stack)| sum.saturating_add(stack.count))
@@ -1220,7 +1258,7 @@ fn get_component_count(
     caller: Caller<'_, State>,
     self_ptr: Object,
     ak_item: Object,
-) -> Result<i32, Exception> {
+) -> Result<i32, Error> {
     todo!()
 }
 
@@ -1229,7 +1267,7 @@ fn get_component_count(
 /// ```text
 /// ObjectReference Function() native
 /// ```
-fn get_container(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Exception> {
+fn get_container(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Error> {
     todo!()
 }
 
@@ -1238,7 +1276,7 @@ fn get_container(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, 
 /// ```text
 /// float Function() native
 /// ```
-fn get_item_health_percent(caller: Caller<'_, State>, self_ptr: Object) -> Result<f32, Exception> {
+fn get_item_health_percent(caller: Caller<'_, State>, self_ptr: Object) -> Result<f32, Error> {
     todo!()
 }
 
@@ -1247,21 +1285,28 @@ fn get_item_health_percent(caller: Caller<'_, State>, self_ptr: Object) -> Resul
 /// ```text
 /// Key Function() native
 /// ```
-fn get_key(mut caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Exception> {
-    let entity = caller.data().entity(self_ptr).ok_or(Exception::Error)?;
+async fn get_key(mut caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Error> {
+    let entity = caller
+        .data()
+        .entity(self_ptr)
+        .await
+        .ok_or_else(|| todo!())?;
 
-    let Ok(props) = caller.data().world().get::<&ObjectProperties>(entity) else {
-        return Ok(Object::NULL);
+    let key = {
+        let world = caller.data().world().await;
+        let Ok(props) = world.get::<&ObjectProperties>(entity) else {
+            return Ok(Object::NULL);
+        };
+
+        let Some(key) = props.lock.and_then(|lock| lock.key) else {
+            return Ok(Object::NULL);
+        };
+
+        key
     };
 
-    let Some(key) = props.lock.and_then(|lock| lock.key) else {
-        return Ok(Object::NULL);
-    };
-
-    core::mem::drop(props);
-
-    let scripts = caller.data_mut().get_or_create_record(key)?;
-    let script = scripts.get("Key").ok_or(Exception::Error)?;
+    let scripts = caller.data_mut().get_or_create_record(key).await?;
+    let script = scripts.get("Key").ok_or_else(|| todo!())?;
 
     Ok(script.get().object.addr())
 }
@@ -1271,8 +1316,8 @@ fn get_key(mut caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Ex
 /// ```text
 /// float Function() native
 /// ```
-fn get_length(caller: Caller<'_, State>, self_ptr: Object) -> Result<f32, Exception> {
-    let bounds = get_bounds(caller, self_ptr).ok_or(Exception::Error)?;
+async fn get_length(caller: Caller<'_, State>, self_ptr: Object) -> Result<f32, Error> {
+    let bounds = get_bounds(caller, self_ptr).await.ok_or_else(|| todo!())?;
     Ok(bounds.min.y.abs_diff(bounds.max.y) as f32)
 }
 
@@ -1281,13 +1326,15 @@ fn get_length(caller: Caller<'_, State>, self_ptr: Object) -> Result<f32, Except
 /// ```text
 /// ObjectReference Function(Keyword apKeyword) native
 /// ```
-fn get_linked_ref(
+async fn get_linked_ref(
     caller: Caller<'_, State>,
     self_ptr: Object,
     keyword: Object,
-) -> Result<Object, Exception> {
-    let mut iter = LinkedRefChainIter::new(&caller, self_ptr, keyword).ok_or(Exception::Error)?;
-    let addr = iter.next().unwrap_or(Object::NULL);
+) -> Result<Object, Error> {
+    let mut iter = LinkedRefChainIter::new(&caller, self_ptr, keyword)
+        .await
+        .ok_or_else(|| todo!())?;
+    let addr = iter.next().await.unwrap_or(Object::NULL);
     Ok(addr)
 }
 
@@ -1301,7 +1348,7 @@ fn get_linked_ref_chain(
     self_ptr: Object,
     keyword: Object,
     max_linked_refs: i32,
-) -> Result<Object, Exception> {
+) -> Result<Object, Error> {
     todo!()
 }
 
@@ -1314,7 +1361,7 @@ fn get_linked_ref_children(
     caller: Caller<'_, State>,
     self_ptr: Object,
     ap_keyword: Object,
-) -> Result<Object, Exception> {
+) -> Result<Object, Error> {
     todo!()
 }
 
@@ -1323,10 +1370,15 @@ fn get_linked_ref_children(
 /// ```text
 /// int Function() native
 /// ```
-fn get_lock_level(caller: Caller<'_, State>, self_ptr: Object) -> Result<i32, Exception> {
-    let entity = caller.data().entity(self_ptr).ok_or(Exception::Error)?;
+async fn get_lock_level(caller: Caller<'_, State>, self_ptr: Object) -> Result<i32, Error> {
+    let entity = caller
+        .data()
+        .entity(self_ptr)
+        .await
+        .ok_or_else(|| todo!())?;
 
-    let Ok(props) = caller.data().world().get::<&ObjectProperties>(entity) else {
+    let world = caller.data().world().await;
+    let Ok(props) = world.get::<&ObjectProperties>(entity) else {
         return Ok(0);
     };
 
@@ -1352,7 +1404,7 @@ fn get_lock_level(caller: Caller<'_, State>, self_ptr: Object) -> Result<i32, Ex
 /// ```text
 /// LocationRefType[] Function() native
 /// ```
-fn get_loc_ref_types(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Exception> {
+fn get_loc_ref_types(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Error> {
     todo!()
 }
 
@@ -1361,17 +1413,28 @@ fn get_loc_ref_types(caller: Caller<'_, State>, self_ptr: Object) -> Result<Obje
 /// ```text
 /// ObjectReference Function(int aiLinkedRef, Keyword apKeyword) native
 /// ```
-fn get_nth_linked_ref(
+async fn get_nth_linked_ref(
     caller: Caller<'_, State>,
     self_ptr: Object,
     index: i32,
     keyword: Object,
-) -> Result<Object, Exception> {
-    let index = usize::try_from(index).map_err(|_| Exception::Error)?;
+) -> Result<Object, Error> {
+    let index = usize::try_from(index).map_err(|_| todo!())?;
 
-    let mut iter = LinkedRefChainIter::new(&caller, self_ptr, keyword).ok_or(Exception::Error)?;
-    let addr = iter.nth(index).unwrap_or(Object::NULL);
-    Ok(addr)
+    let mut iter = LinkedRefChainIter::new(&caller, self_ptr, keyword)
+        .await
+        .ok_or_else(|| todo!())?;
+
+    let mut i = 0;
+    while let Some(object) = iter.next().await {
+        if i == index {
+            return Ok(object);
+        }
+
+        i += 1;
+    }
+
+    Ok(Object::NULL)
 }
 
 /// `GetMass`
@@ -1379,7 +1442,7 @@ fn get_nth_linked_ref(
 /// ```text
 /// float Function() native
 /// ```
-fn get_mass(caller: Caller<'_, State>, self_ptr: Object) -> Result<f32, Exception> {
+fn get_mass(caller: Caller<'_, State>, self_ptr: Object) -> Result<f32, Error> {
     todo!()
 }
 
@@ -1388,7 +1451,7 @@ fn get_mass(caller: Caller<'_, State>, self_ptr: Object) -> Result<f32, Exceptio
 /// ```text
 /// int Function() native
 /// ```
-fn get_open_state(caller: Caller<'_, State>, self_ptr: Object) -> Result<i32, Exception> {
+fn get_open_state(caller: Caller<'_, State>, self_ptr: Object) -> Result<i32, Error> {
     todo!()
 }
 
@@ -1397,7 +1460,7 @@ fn get_open_state(caller: Caller<'_, State>, self_ptr: Object) -> Result<i32, Ex
 /// ```text
 /// Cell Function() native
 /// ```
-fn get_parent_cell(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Exception> {
+fn get_parent_cell(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Error> {
     todo!()
 }
 
@@ -1406,8 +1469,10 @@ fn get_parent_cell(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object
 /// ```text
 /// float Function() native
 /// ```
-fn get_position_x(caller: Caller<'_, State>, self_ptr: Object) -> Result<f32, Exception> {
-    let transform = get_transform(caller, self_ptr).ok_or(Exception::Error)?;
+async fn get_position_x(caller: Caller<'_, State>, self_ptr: Object) -> Result<f32, Error> {
+    let transform = get_transform(caller, self_ptr)
+        .await
+        .ok_or_else(|| todo!())?;
     Ok(transform.translation.x)
 }
 
@@ -1416,8 +1481,10 @@ fn get_position_x(caller: Caller<'_, State>, self_ptr: Object) -> Result<f32, Ex
 /// ```text
 /// float Function() native
 /// ```
-fn get_position_y(caller: Caller<'_, State>, self_ptr: Object) -> Result<f32, Exception> {
-    let transform = get_transform(caller, self_ptr).ok_or(Exception::Error)?;
+async fn get_position_y(caller: Caller<'_, State>, self_ptr: Object) -> Result<f32, Error> {
+    let transform = get_transform(caller, self_ptr)
+        .await
+        .ok_or_else(|| todo!())?;
     Ok(transform.translation.y)
 }
 
@@ -1426,8 +1493,10 @@ fn get_position_y(caller: Caller<'_, State>, self_ptr: Object) -> Result<f32, Ex
 /// ```text
 /// float Function() native
 /// ```
-fn get_position_z(caller: Caller<'_, State>, self_ptr: Object) -> Result<f32, Exception> {
-    let transform = get_transform(caller, self_ptr).ok_or(Exception::Error)?;
+async fn get_position_z(caller: Caller<'_, State>, self_ptr: Object) -> Result<f32, Error> {
+    let transform = get_transform(caller, self_ptr)
+        .await
+        .ok_or_else(|| todo!())?;
     Ok(transform.translation.z)
 }
 
@@ -1436,7 +1505,7 @@ fn get_position_z(caller: Caller<'_, State>, self_ptr: Object) -> Result<f32, Ex
 /// ```text
 /// float Function() native
 /// ```
-fn get_radio_frequency(caller: Caller<'_, State>, self_ptr: Object) -> Result<f32, Exception> {
+fn get_radio_frequency(caller: Caller<'_, State>, self_ptr: Object) -> Result<f32, Error> {
     todo!()
 }
 
@@ -1445,7 +1514,7 @@ fn get_radio_frequency(caller: Caller<'_, State>, self_ptr: Object) -> Result<f3
 /// ```text
 /// float Function() native
 /// ```
-fn get_radio_volume(caller: Caller<'_, State>, self_ptr: Object) -> Result<f32, Exception> {
+fn get_radio_volume(caller: Caller<'_, State>, self_ptr: Object) -> Result<f32, Error> {
     todo!()
 }
 
@@ -1458,7 +1527,7 @@ fn get_resource_damage(
     caller: Caller<'_, State>,
     self_ptr: Object,
     ak_value_none: Object,
-) -> Result<f32, Exception> {
+) -> Result<f32, Error> {
     todo!()
 }
 
@@ -1472,7 +1541,7 @@ fn get_safe_position(
     self_ptr: Object,
     a_search_radius: f32,
     a_safe_radius: f32,
-) -> Result<Object, Exception> {
+) -> Result<Object, Error> {
     todo!()
 }
 
@@ -1486,7 +1555,7 @@ fn get_refs_linked_to_me(
     self_ptr: Object,
     ap_link_keyword: Object,
     ap_exclude_keyword: Object,
-) -> Result<Object, Exception> {
+) -> Result<Object, Error> {
     todo!()
 }
 
@@ -1499,7 +1568,7 @@ fn get_workshop_owned_objects(
     caller: Caller<'_, State>,
     self_ptr: Object,
     ak_actor: Object,
-) -> Result<Object, Exception> {
+) -> Result<Object, Error> {
     todo!()
 }
 
@@ -1512,7 +1581,7 @@ fn get_workshop_resource_damage(
     caller: Caller<'_, State>,
     self_ptr: Object,
     ak_value: Object,
-) -> Result<f32, Exception> {
+) -> Result<f32, Error> {
     todo!()
 }
 
@@ -1526,7 +1595,7 @@ fn get_workshop_resource_objects(
     self_ptr: Object,
     ak_av: Object,
     ai_option: i32,
-) -> Result<Object, Exception> {
+) -> Result<Object, Error> {
     todo!()
 }
 
@@ -1535,8 +1604,10 @@ fn get_workshop_resource_objects(
 /// ```text
 /// float Function() native
 /// ```
-fn get_scale(caller: Caller<'_, State>, self_ptr: Object) -> Result<f32, Exception> {
-    let transform = get_transform(caller, self_ptr).ok_or(Exception::Error)?;
+async fn get_scale(caller: Caller<'_, State>, self_ptr: Object) -> Result<f32, Error> {
+    let transform = get_transform(caller, self_ptr)
+        .await
+        .ok_or_else(|| todo!())?;
     // Assume we have uniform scale.
     Ok(transform.scale.x)
 }
@@ -1546,7 +1617,7 @@ fn get_scale(caller: Caller<'_, State>, self_ptr: Object) -> Result<f32, Excepti
 /// ```text
 /// Cell Function() native
 /// ```
-fn get_teleport_cell(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Exception> {
+fn get_teleport_cell(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Error> {
     todo!()
 }
 
@@ -1555,7 +1626,7 @@ fn get_teleport_cell(caller: Caller<'_, State>, self_ptr: Object) -> Result<Obje
 /// ```text
 /// Cell Function() native
 /// ```
-fn get_transition_cell(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Exception> {
+fn get_transition_cell(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Error> {
     todo!()
 }
 
@@ -1564,7 +1635,7 @@ fn get_transition_cell(caller: Caller<'_, State>, self_ptr: Object) -> Result<Ob
 /// ```text
 /// float Function() native
 /// ```
-fn get_transmitter_distance(caller: Caller<'_, State>, self_ptr: Object) -> Result<f32, Exception> {
+fn get_transmitter_distance(caller: Caller<'_, State>, self_ptr: Object) -> Result<f32, Error> {
     todo!()
 }
 
@@ -1573,14 +1644,18 @@ fn get_transmitter_distance(caller: Caller<'_, State>, self_ptr: Object) -> Resu
 /// ```text
 /// int Function() native
 /// ```
-fn get_trigger_object_count(caller: Caller<'_, State>, self_ptr: Object) -> Result<i32, Exception> {
-    let entity = caller.data().entity(self_ptr).ok_or(Exception::Error)?;
-
-    let tbox = caller
+async fn get_trigger_object_count(
+    caller: Caller<'_, State>,
+    self_ptr: Object,
+) -> Result<i32, Error> {
+    let entity = caller
         .data()
-        .world()
-        .get::<&TriggerBox>(entity)
-        .map_err(|_| Exception::Error)?;
+        .entity(self_ptr)
+        .await
+        .ok_or_else(|| todo!())?;
+
+    let world = caller.data().world().await;
+    let tbox = world.get::<&TriggerBox>(entity).map_err(|_| todo!())?;
 
     let count = tbox.entities_inside.len().try_into().unwrap_or(i32::MAX);
     Ok(count)
@@ -1591,20 +1666,25 @@ fn get_trigger_object_count(caller: Caller<'_, State>, self_ptr: Object) -> Resu
 /// ```text
 /// float Function(ActorValue akAV) native
 /// ```
-fn get_value(
+async fn get_value(
     caller: Caller<'_, State>,
     self_ptr: Object,
     actor_value: Object,
-) -> Result<f32, Exception> {
-    let entity = caller.data().entity(self_ptr).ok_or(Exception::Error)?;
+) -> Result<f32, Error> {
+    let entity = caller
+        .data()
+        .entity(self_ptr)
+        .await
+        .ok_or_else(|| todo!())?;
     let actor_value = caller
         .data()
         .objects
         .get_by_addr(actor_value)
         .and_then(|s| s.record())
-        .ok_or(Exception::Error)?;
+        .ok_or_else(|| todo!())?;
 
-    let Ok(props) = caller.data().world().get::<&ActorValueProperties>(entity) else {
+    let world = caller.data().world().await;
+    let Ok(props) = world.get::<&ActorValueProperties>(entity) else {
         // Returns 0.0 when the actor value is not present.
         return Ok(0.0);
     };
@@ -1623,20 +1703,25 @@ fn get_value(
 /// ```text
 /// float Function(ActorValue akAV) native
 /// ```
-fn get_value_percentage(
+async fn get_value_percentage(
     caller: Caller<'_, State>,
     self_ptr: Object,
     actor_value: Object,
-) -> Result<f32, Exception> {
-    let entity = caller.data().entity(self_ptr).ok_or(Exception::Error)?;
+) -> Result<f32, Error> {
+    let entity = caller
+        .data()
+        .entity(self_ptr)
+        .await
+        .ok_or_else(|| todo!())?;
     let actor_value = caller
         .data()
         .objects
         .get_by_addr(actor_value)
         .and_then(|s| s.record())
-        .ok_or(Exception::Error)?;
+        .ok_or_else(|| todo!())?;
 
-    let Ok(props) = caller.data().world().get::<&ActorValueProperties>(entity) else {
+    let world = caller.data().world().await;
+    let Ok(props) = world.get::<&ActorValueProperties>(entity) else {
         return Ok(0.0);
     };
 
@@ -1662,7 +1747,7 @@ fn get_value_percentage(
 /// ```text
 /// VoiceType Function() native
 /// ```
-fn get_voice_type(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Exception> {
+fn get_voice_type(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Error> {
     todo!()
 }
 
@@ -1671,8 +1756,8 @@ fn get_voice_type(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object,
 /// ```text
 /// float Function() native
 /// ```
-fn get_width(caller: Caller<'_, State>, self_ptr: Object) -> Result<f32, Exception> {
-    let bounds = get_bounds(caller, self_ptr).ok_or(Exception::Error)?;
+async fn get_width(caller: Caller<'_, State>, self_ptr: Object) -> Result<f32, Error> {
+    let bounds = get_bounds(caller, self_ptr).await.ok_or_else(|| todo!())?;
     Ok(bounds.min.x.abs_diff(bounds.max.x) as f32)
 }
 
@@ -1681,7 +1766,7 @@ fn get_width(caller: Caller<'_, State>, self_ptr: Object) -> Result<f32, Excepti
 /// ```text
 /// WorldSpace Function() native
 /// ```
-fn get_world_space(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Exception> {
+fn get_world_space(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Error> {
     todo!()
 }
 
@@ -1690,7 +1775,7 @@ fn get_world_space(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object
 /// ```text
 /// bool Function() native
 /// ```
-fn has_actor_ref_owner(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Exception> {
+fn has_actor_ref_owner(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Error> {
     todo!()
 }
 
@@ -1705,7 +1790,7 @@ fn has_direct_los(
     ak_target: Object,
     as_source_node: Object,
     as_target_node: Object,
-) -> Result<bool, Exception> {
+) -> Result<bool, Error> {
     todo!()
 }
 
@@ -1718,7 +1803,7 @@ fn has_effect_keyword(
     caller: Caller<'_, State>,
     self_ptr: Object,
     ak_keyword: Object,
-) -> Result<bool, Exception> {
+) -> Result<bool, Error> {
     todo!()
 }
 
@@ -1727,24 +1812,25 @@ fn has_effect_keyword(
 /// ```text
 /// bool Function(Keyword apKeyword) native
 /// ```
-fn has_keyword(
+async fn has_keyword(
     caller: Caller<'_, State>,
     self_ptr: Object,
     keyword: Object,
-) -> Result<bool, Exception> {
-    let entity = caller.data().entity(self_ptr).ok_or(Exception::Error)?;
+) -> Result<bool, Error> {
+    let entity = caller
+        .data()
+        .entity(self_ptr)
+        .await
+        .ok_or_else(|| todo!())?;
     let keyword = caller
         .data()
         .objects
         .get_by_addr(keyword)
         .and_then(|s| s.record())
-        .ok_or(Exception::Error)?;
+        .ok_or_else(|| todo!())?;
 
-    let keywords = caller
-        .data()
-        .world()
-        .get::<&ObjectKeywords>(entity)
-        .unwrap();
+    let world = caller.data().world().await;
+    let keywords = world.get::<&ObjectKeywords>(entity).unwrap();
     Ok(keywords.contains(keyword))
 }
 
@@ -1753,30 +1839,32 @@ fn has_keyword(
 /// ```text
 /// bool Function(FormList akKeywordList) native
 /// ```
-fn has_keyword_in_form_list(
+async fn has_keyword_in_form_list(
     caller: Caller<'_, State>,
     self_ptr: Object,
     keyword_list: Object,
-) -> Result<bool, Exception> {
-    let entity = caller.data().entity(self_ptr).ok_or(Exception::Error)?;
+) -> Result<bool, Error> {
+    let entity = caller
+        .data()
+        .entity(self_ptr)
+        .await
+        .ok_or_else(|| todo!())?;
     let form_list = caller
         .data()
         .objects
         .get_by_addr(keyword_list)
         .and_then(|s| s.record())
-        .ok_or(Exception::Error)?;
-    let form_list = caller
-        .data()
-        .globals()
-        .form_lists
-        .get(&form_list)
-        .ok_or(Exception::Error)?;
+        .ok_or_else(|| todo!())?;
 
-    let keywords = caller
-        .data()
-        .world()
-        .get::<&ObjectKeywords>(entity)
-        .unwrap();
+    let keywords = {
+        let world = caller.data().world().await;
+        let keywords = world.get::<&ObjectKeywords>(entity).unwrap();
+        // FIXME: Avoid the clone here.
+        keywords.clone()
+    };
+
+    let globals = caller.data().globals().await;
+    let form_list = globals.form_lists.get(&form_list).ok_or_else(|| todo!())?;
 
     for id in form_list.iter() {
         if keywords.contains(id) {
@@ -1796,7 +1884,7 @@ fn has_loc_ref_type(
     caller: Caller<'_, State>,
     self_ptr: Object,
     ak_ref_type: Object,
-) -> Result<bool, Exception> {
+) -> Result<bool, Error> {
     todo!()
 }
 
@@ -1809,7 +1897,7 @@ fn has_node(
     caller: Caller<'_, State>,
     self_ptr: Object,
     as_node_name: Object,
-) -> Result<bool, Exception> {
+) -> Result<bool, Error> {
     todo!()
 }
 
@@ -1822,7 +1910,7 @@ fn has_shared_power_grid(
     caller: Caller<'_, State>,
     self_ptr: Object,
     ak_compare: Object,
-) -> Result<bool, Exception> {
+) -> Result<bool, Error> {
     todo!()
 }
 
@@ -1835,7 +1923,7 @@ fn ignore_friendly_hits(
     caller: Caller<'_, State>,
     self_ptr: Object,
     ab_ignore: bool,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -1844,7 +1932,7 @@ fn ignore_friendly_hits(
 /// ```text
 /// Function() native
 /// ```
-fn interrupt_cast(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Exception> {
+fn interrupt_cast(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Error> {
     todo!()
 }
 
@@ -1857,7 +1945,7 @@ fn is_activate_child(
     caller: Caller<'_, State>,
     self_ptr: Object,
     ak_child: Object,
-) -> Result<bool, Exception> {
+) -> Result<bool, Error> {
     todo!()
 }
 
@@ -1866,7 +1954,7 @@ fn is_activate_child(
 /// ```text
 /// bool Function() native
 /// ```
-fn is_activation_blocked(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Exception> {
+fn is_activation_blocked(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Error> {
     todo!()
 }
 
@@ -1875,7 +1963,7 @@ fn is_activation_blocked(caller: Caller<'_, State>, self_ptr: Object) -> Result<
 /// ```text
 /// bool Function() native
 /// ```
-fn is3_d_loaded(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Exception> {
+fn is3_d_loaded(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Error> {
     todo!()
 }
 
@@ -1884,7 +1972,7 @@ fn is3_d_loaded(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Exc
 /// ```text
 /// bool Function() native
 /// ```
-fn is_conveyor_belt_on(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Exception> {
+fn is_conveyor_belt_on(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Error> {
     todo!()
 }
 
@@ -1893,12 +1981,12 @@ fn is_conveyor_belt_on(caller: Caller<'_, State>, self_ptr: Object) -> Result<bo
 /// ```text
 /// bool Function() native
 /// ```
-fn is_created(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Exception> {
+fn is_created(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Error> {
     let script = caller
         .data()
         .objects
         .get_by_addr(self_ptr)
-        .ok_or(Exception::Error)?;
+        .ok_or_else(|| todo!())?;
 
     // Dynamically created objects have no RecordId.
     Ok(script.record().is_none())
@@ -1909,7 +1997,7 @@ fn is_created(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Excep
 /// ```text
 /// bool Function() native
 /// ```
-fn is_deleted(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Exception> {
+fn is_deleted(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Error> {
     todo!()
 }
 
@@ -1918,7 +2006,7 @@ fn is_deleted(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Excep
 /// ```text
 /// bool Function() native
 /// ```
-fn is_destroyed(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Exception> {
+fn is_destroyed(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Error> {
     todo!()
 }
 
@@ -1927,9 +2015,10 @@ fn is_destroyed(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Exc
 /// ```text
 /// bool Function() native
 /// ```
-fn is_disabled(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Exception> {
-    let entity = caller.data().entity(self_ptr).unwrap();
-    let entity = caller.data().world().entity(entity).unwrap();
+async fn is_disabled(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Error> {
+    let entity = caller.data().entity(self_ptr).await.unwrap();
+    let world = caller.data().world().await;
+    let entity = world.entity(entity).unwrap();
     Ok(entity.has::<Disabled>())
 }
 
@@ -1942,7 +2031,7 @@ fn is_furniture_in_use(
     caller: Caller<'_, State>,
     self_ptr: Object,
     ab_ignore_reserved: bool,
-) -> Result<bool, Exception> {
+) -> Result<bool, Error> {
     todo!()
 }
 
@@ -1956,7 +2045,7 @@ fn is_furniture_marker_in_use(
     self_ptr: Object,
     ai_marker: i32,
     ab_ignore_reserved: bool,
-) -> Result<bool, Exception> {
+) -> Result<bool, Error> {
     todo!()
 }
 
@@ -1965,10 +2054,7 @@ fn is_furniture_marker_in_use(
 /// ```text
 /// bool Function() native
 /// ```
-fn is_ignoring_friendly_hits(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-) -> Result<bool, Exception> {
+fn is_ignoring_friendly_hits(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Error> {
     todo!()
 }
 
@@ -1977,10 +2063,7 @@ fn is_ignoring_friendly_hits(
 /// ```text
 /// bool Function() native
 /// ```
-fn is_in_dialogue_with_player(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-) -> Result<bool, Exception> {
+fn is_in_dialogue_with_player(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Error> {
     todo!()
 }
 
@@ -1989,7 +2072,7 @@ fn is_in_dialogue_with_player(
 /// ```text
 /// bool Function() native
 /// ```
-fn is_lock_broken(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Exception> {
+fn is_lock_broken(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Error> {
     todo!()
 }
 
@@ -1998,7 +2081,7 @@ fn is_lock_broken(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, E
 /// ```text
 /// bool Function() native
 /// ```
-fn is_locked(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Exception> {
+fn is_locked(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Error> {
     todo!()
 }
 
@@ -2007,7 +2090,7 @@ fn is_locked(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Except
 /// ```text
 /// bool Function() native
 /// ```
-fn is_map_marker_visible(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Exception> {
+fn is_map_marker_visible(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Error> {
     todo!()
 }
 
@@ -2020,7 +2103,7 @@ fn is_owned_by(
     caller: Caller<'_, State>,
     self_ptr: Object,
     ak_owner: Object,
-) -> Result<bool, Exception> {
+) -> Result<bool, Error> {
     todo!()
 }
 
@@ -2029,7 +2112,7 @@ fn is_owned_by(
 /// ```text
 /// bool Function() native
 /// ```
-fn is_powered(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Exception> {
+fn is_powered(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Error> {
     todo!()
 }
 
@@ -2038,7 +2121,7 @@ fn is_powered(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Excep
 /// ```text
 /// bool Function() native
 /// ```
-fn is_quest_item(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Exception> {
+fn is_quest_item(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Error> {
     todo!()
 }
 
@@ -2047,7 +2130,7 @@ fn is_quest_item(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Ex
 /// ```text
 /// bool Function() native
 /// ```
-fn is_radio_on(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Exception> {
+fn is_radio_on(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Error> {
     todo!()
 }
 
@@ -2060,7 +2143,7 @@ fn is_ref_in_transition_cell(
     caller: Caller<'_, State>,
     self_ptr: Object,
     ak_ref: Object,
-) -> Result<bool, Exception> {
+) -> Result<bool, Error> {
     todo!()
 }
 
@@ -2069,7 +2152,7 @@ fn is_ref_in_transition_cell(
 /// ```text
 /// bool Function() native
 /// ```
-fn is_teleport_area_loaded(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Exception> {
+fn is_teleport_area_loaded(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Error> {
     todo!()
 }
 
@@ -2082,7 +2165,7 @@ fn is_within_buildable_area(
     caller: Caller<'_, State>,
     self_ptr: Object,
     ak_ref: Object,
-) -> Result<bool, Exception> {
+) -> Result<bool, Error> {
     todo!()
 }
 
@@ -2096,7 +2179,7 @@ fn knock_area_effect(
     self_ptr: Object,
     af_magnitude: f32,
     af_radius: f32,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -2110,7 +2193,7 @@ fn lock(
     self_ptr: Object,
     ab_lock: bool,
     ab_as_owner: bool,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -2127,7 +2210,7 @@ fn make_radio_receiver(
     a_override_model: Object,
     ab_active: bool,
     ab_no_static: bool,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -2143,7 +2226,7 @@ fn make_transmitter_repeater(
     af_inner_radius: f32,
     af_outer_radius: f32,
     ab_unlimited_range: bool,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -2152,25 +2235,26 @@ fn make_transmitter_repeater(
 /// ```text
 /// Function(ActorValue akAV, float afAmount) native
 /// ```
-fn mod_value(
+async fn mod_value(
     caller: Caller<'_, State>,
     self_ptr: Object,
     actor_value: Object,
     amount: f32,
-) -> Result<(), Exception> {
-    let entity = caller.data().entity(self_ptr).ok_or(Exception::Error)?;
+) -> Result<(), Error> {
+    let entity = caller
+        .data()
+        .entity(self_ptr)
+        .await
+        .ok_or_else(|| todo!())?;
     let actor_value = caller
         .data()
         .objects
         .get_by_addr(actor_value)
         .and_then(|s| s.record())
-        .ok_or(Exception::Error)?;
+        .ok_or_else(|| todo!())?;
 
-    let Ok(mut props) = caller
-        .data()
-        .world()
-        .get::<&mut ActorValueProperties>(entity)
-    else {
+    let world = caller.data().world().await;
+    let Ok(mut props) = world.get::<&mut ActorValueProperties>(entity) else {
         return Ok(());
     };
 
@@ -2196,7 +2280,7 @@ fn move_to(
     af_y_offset: f32,
     af_z_offset: f32,
     ab_match_rotation: bool,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -2205,10 +2289,7 @@ fn move_to(
 /// ```text
 /// Function() native
 /// ```
-fn move_to_my_editor_location(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-) -> Result<(), Exception> {
+fn move_to_my_editor_location(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Error> {
     todo!()
 }
 
@@ -2220,7 +2301,7 @@ fn move_to_my_editor_location(
 fn move_to_nearest_navmesh_location(
     caller: Caller<'_, State>,
     self_ptr: Object,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -2235,7 +2316,7 @@ fn move_to_node(
     ak_target: Object,
     as_node_name: Object,
     as_match_node_name: Object,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -2250,7 +2331,7 @@ fn open_workshop_settlement_menu(
     ak_action_kw: Object,
     astr_confirm: Object,
     a_loc_to_highlight: Object,
-) -> Result<Object, Exception> {
+) -> Result<Object, Error> {
     todo!()
 }
 
@@ -2272,7 +2353,7 @@ fn open_workshop_settlement_menu_ex(
     ab_turn_off_header: bool,
     ab_only_potential_vassal_settlements: bool,
     ab_disable_reserved_by_quests: bool,
-) -> Result<Object, Exception> {
+) -> Result<Object, Error> {
     todo!()
 }
 
@@ -2294,7 +2375,7 @@ fn raid_targets_available(
     ab_turn_off_header: bool,
     ab_only_potential_vassal_settlements: bool,
     ab_disable_reserved_by_quests: bool,
-) -> Result<i32, Exception> {
+) -> Result<i32, Error> {
     todo!()
 }
 
@@ -2311,7 +2392,7 @@ fn place_at_me(
     ab_force_persist: bool,
     ab_initially_disabled: bool,
     ab_delete_when_able: bool,
-) -> Result<Object, Exception> {
+) -> Result<Object, Error> {
     todo!()
 }
 
@@ -2326,7 +2407,7 @@ fn place_actor_at_me(
     ak_actor_to_place: Object,
     ai_level_mod: i32,
     ak_zone: Object,
-) -> Result<Object, Exception> {
+) -> Result<Object, Error> {
     todo!()
 }
 
@@ -2345,7 +2426,7 @@ fn place_at_node(
     ab_initially_disabled: bool,
     ab_delete_when_able: bool,
     ab_attach: bool,
-) -> Result<Object, Exception> {
+) -> Result<Object, Error> {
     todo!()
 }
 
@@ -2358,7 +2439,7 @@ fn play_animation(
     caller: Caller<'_, State>,
     self_ptr: Object,
     as_animation: Object,
-) -> Result<bool, Exception> {
+) -> Result<bool, Error> {
     todo!()
 }
 
@@ -2372,7 +2453,7 @@ fn play_animation_and_wait(
     self_ptr: Object,
     as_animation: Object,
     as_event_name: Object,
-) -> Result<bool, Exception> {
+) -> Result<bool, Error> {
     todo!()
 }
 
@@ -2387,7 +2468,7 @@ fn play_gamebryo_animation(
     as_animation: Object,
     ab_start_over: bool,
     af_ease_in_time: f32,
-) -> Result<bool, Exception> {
+) -> Result<bool, Error> {
     todo!()
 }
 
@@ -2407,7 +2488,7 @@ fn play_impact_effect(
     af_pick_length: f32,
     ab_apply_node_rotation: bool,
     ab_use_node_local_rotation: bool,
-) -> Result<bool, Exception> {
+) -> Result<bool, Error> {
     todo!()
 }
 
@@ -2422,7 +2503,7 @@ fn play_synced_animation_ss(
     as_animation1: Object,
     ak_obj2: Object,
     as_animation2: Object,
-) -> Result<bool, Exception> {
+) -> Result<bool, Error> {
     todo!()
 }
 
@@ -2439,7 +2520,7 @@ fn play_synced_animation_and_wait_ss(
     ak_obj2: Object,
     as_animation2: Object,
     as_event2: Object,
-) -> Result<bool, Exception> {
+) -> Result<bool, Error> {
     todo!()
 }
 
@@ -2453,7 +2534,7 @@ fn play_terrain_effect(
     self_ptr: Object,
     as_effect_model_name: Object,
     as_attach_bone_name: Object,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -2462,7 +2543,7 @@ fn play_terrain_effect(
 /// ```text
 /// Function() native
 /// ```
-fn pause_audio(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Exception> {
+fn pause_audio(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Error> {
     todo!()
 }
 
@@ -2471,7 +2552,7 @@ fn pause_audio(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Except
 /// ```text
 /// Function() native
 /// ```
-fn preload_exterior_cell(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<(), Exception> {
+fn preload_exterior_cell(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<(), Error> {
     Ok(())
 }
 
@@ -2480,7 +2561,7 @@ fn preload_exterior_cell(_caller: Caller<'_, State>, _self_ptr: Object) -> Resul
 /// ```text
 /// Function() native
 /// ```
-fn preload_target_area(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<(), Exception> {
+fn preload_target_area(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<(), Error> {
     Ok(())
 }
 
@@ -2503,7 +2584,7 @@ fn process_trap_hit(
     af_z_pos: f32,
     ae_material: i32,
     af_stagger: f32,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -2517,7 +2598,7 @@ fn push_actor_away(
     self_ptr: Object,
     ak_actor_to_push: Object,
     ai_knockback_force: f32,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -2526,7 +2607,7 @@ fn push_actor_away(
 /// ```text
 /// Function() native
 /// ```
-fn recalculate_resources(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<(), Exception> {
+fn recalculate_resources(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<(), Error> {
     Ok(())
 }
 
@@ -2540,7 +2621,7 @@ fn remove_all_items(
     self_ptr: Object,
     ak_transfer_to: Object,
     ab_keep_ownership: bool,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -2555,7 +2636,7 @@ fn remove_components(
     ak_component: Object,
     ai_count: i32,
     ab_silent: bool,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -2571,7 +2652,7 @@ fn remove_item(
     ai_count: i32,
     ab_silent: bool,
     ak_other_container: Object,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -2587,7 +2668,7 @@ fn remove_item_by_component(
     ai_count: i32,
     ab_silent: bool,
     ak_other_container: Object,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -2596,24 +2677,25 @@ fn remove_item_by_component(
 /// ```text
 /// Function(Keyword apKeyword) native
 /// ```
-fn remove_keyword(
+async fn remove_keyword(
     caller: Caller<'_, State>,
     self_ptr: Object,
     keyword: Object,
-) -> Result<(), Exception> {
-    let entity = caller.data().entity(self_ptr).ok_or(Exception::Error)?;
+) -> Result<(), Error> {
+    let entity = caller
+        .data()
+        .entity(self_ptr)
+        .await
+        .ok_or_else(|| todo!())?;
     let keyword = caller
         .data()
         .objects
         .get_by_addr(keyword)
         .and_then(|s| s.record())
-        .ok_or(Exception::Error)?;
+        .ok_or_else(|| todo!())?;
 
-    let mut keywords = caller
-        .data()
-        .world()
-        .get::<&mut ObjectKeywords>(entity)
-        .unwrap();
+    let world = caller.data().world().await;
+    let mut keywords = world.get::<&mut ObjectKeywords>(entity).unwrap();
     keywords.remove(keyword);
 
     Ok(())
@@ -2624,7 +2706,7 @@ fn remove_keyword(
 /// ```text
 /// Function() native
 /// ```
-fn remove_all_mods(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Exception> {
+fn remove_all_mods(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Error> {
     todo!()
 }
 
@@ -2637,7 +2719,7 @@ fn remove_all_mods_from_inventory_item(
     caller: Caller<'_, State>,
     self_ptr: Object,
     ak_item: Object,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -2646,11 +2728,7 @@ fn remove_all_mods_from_inventory_item(
 /// ```text
 /// Function(ObjectMod akMod) native
 /// ```
-fn remove_mod(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    ak_mod: Object,
-) -> Result<(), Exception> {
+fn remove_mod(caller: Caller<'_, State>, self_ptr: Object, ak_mod: Object) -> Result<(), Error> {
     todo!()
 }
 
@@ -2664,7 +2742,7 @@ fn remove_mod_from_inventory_item(
     self_ptr: Object,
     ak_item: Object,
     ak_mod: Object,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -2677,7 +2755,7 @@ fn remove_dependent_animated_object_reference(
     caller: Caller<'_, State>,
     self_ptr: Object,
     ak_dependent: Object,
-) -> Result<bool, Exception> {
+) -> Result<bool, Error> {
     todo!()
 }
 
@@ -2686,7 +2764,7 @@ fn remove_dependent_animated_object_reference(
 /// ```text
 /// Function() native
 /// ```
-fn repair(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Exception> {
+fn repair(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Error> {
     todo!()
 }
 
@@ -2695,7 +2773,7 @@ fn repair(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Exception> 
 /// ```text
 /// Function(ObjectReference akTarget) native
 /// ```
-fn reset(caller: Caller<'_, State>, self_ptr: Object, ak_target: Object) -> Result<(), Exception> {
+fn reset(caller: Caller<'_, State>, self_ptr: Object, ak_target: Object) -> Result<(), Error> {
     todo!()
 }
 
@@ -2704,24 +2782,25 @@ fn reset(caller: Caller<'_, State>, self_ptr: Object, ak_target: Object) -> Resu
 /// ```text
 /// Function(Keyword apKeyword) native
 /// ```
-fn reset_keyword(
+async fn reset_keyword(
     caller: Caller<'_, State>,
     self_ptr: Object,
     keyword: Object,
-) -> Result<(), Exception> {
-    let entity = caller.data().entity(self_ptr).ok_or(Exception::Error)?;
+) -> Result<(), Error> {
+    let entity = caller
+        .data()
+        .entity(self_ptr)
+        .await
+        .ok_or_else(|| todo!())?;
     let keyword = caller
         .data()
         .objects
         .get_by_addr(keyword)
         .and_then(|s| s.record())
-        .ok_or(Exception::Error)?;
+        .ok_or_else(|| todo!())?;
 
-    let mut keywords = caller
-        .data()
-        .world()
-        .get::<&mut ObjectKeywords>(entity)
-        .unwrap();
+    let world = caller.data().world().await;
+    let mut keywords = world.get::<&mut ObjectKeywords>(entity).unwrap();
     keywords.reset(keyword);
 
     Ok(())
@@ -2732,25 +2811,26 @@ fn reset_keyword(
 /// ```text
 /// Function(ActorValue akAV, float afAmount) native
 /// ```
-fn restore_value(
+async fn restore_value(
     caller: Caller<'_, State>,
     self_ptr: Object,
     actor_value: Object,
     amount: f32,
-) -> Result<(), Exception> {
-    let entity = caller.data().entity(self_ptr).ok_or(Exception::Error)?;
+) -> Result<(), Error> {
+    let entity = caller
+        .data()
+        .entity(self_ptr)
+        .await
+        .ok_or_else(|| todo!())?;
     let actor_value = caller
         .data()
         .objects
         .get_by_addr(actor_value)
         .and_then(|s| s.record())
-        .ok_or(Exception::Error)?;
+        .ok_or_else(|| todo!())?;
 
-    let Ok(mut props) = caller
-        .data()
-        .world()
-        .get::<&mut ActorValueProperties>(entity)
-    else {
+    let world = caller.data().world().await;
+    let Ok(mut props) = world.get::<&mut ActorValueProperties>(entity) else {
         return Ok(());
     };
 
@@ -2769,7 +2849,7 @@ fn restore_value(
 /// ```text
 /// Function() native
 /// ```
-fn resume_audio(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Exception> {
+fn resume_audio(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Error> {
     todo!()
 }
 
@@ -2782,7 +2862,7 @@ fn reverse_conveyor_belt(
     caller: Caller<'_, State>,
     self_ptr: Object,
     ab_reverse: bool,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -2798,7 +2878,7 @@ fn say(
     ak_actor_to_speak_as: Object,
     ab_speak_in_players_head: bool,
     ak_target: Object,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -2814,7 +2894,7 @@ fn say_custom(
     ak_actor_to_speak_as: Object,
     ab_speak_in_players_head: bool,
     ak_target: Object,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -2827,7 +2907,7 @@ fn send_steal_alarm(
     caller: Caller<'_, State>,
     self_ptr: Object,
     ak_thief: Object,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -2840,7 +2920,7 @@ fn set_activate_text_override(
     caller: Caller<'_, State>,
     self_ptr: Object,
     ak_text: Object,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -2853,7 +2933,7 @@ fn set_actor_cause(
     caller: Caller<'_, State>,
     self_ptr: Object,
     ak_actor: Object,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -2867,7 +2947,7 @@ fn set_actor_owner(
     self_ptr: Object,
     ak_actor_base: Object,
     ab_no_crime: bool,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -2881,7 +2961,7 @@ fn set_actor_ref_owner(
     self_ptr: Object,
     ak_actor: Object,
     ab_no_crime: bool,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -2896,7 +2976,7 @@ fn set_angle(
     af_x_angle: f32,
     af_y_angle: f32,
     af_z_angle: f32,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -2905,16 +2985,21 @@ fn set_angle(
 /// ```text
 /// Function(string arVariableName, bool abNewValue) native
 /// ```
-fn set_animation_variable_bool(
+async fn set_animation_variable_bool(
     caller: Caller<'_, State>,
     self_ptr: Object,
     variable_name: Object,
     new_value: bool,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     let variable_name = caller.string(variable_name);
 
-    let entity = caller.data().entity(self_ptr).ok_or(Exception::Error)?;
-    let Ok(mut driver) = caller.data().world().get::<&mut AnimationDriver>(entity) else {
+    let entity = caller
+        .data()
+        .entity(self_ptr)
+        .await
+        .ok_or_else(|| todo!())?;
+    let world = caller.data().world().await;
+    let Ok(mut driver) = world.get::<&mut AnimationDriver>(entity) else {
         return Ok(());
     };
 
@@ -2930,16 +3015,21 @@ fn set_animation_variable_bool(
 /// ```text
 /// Function(string arVariableName, int aiNewValue) native
 /// ```
-fn set_animation_variable_int(
+async fn set_animation_variable_int(
     caller: Caller<'_, State>,
     self_ptr: Object,
     variable_name: Object,
     new_value: i32,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     let variable_name = caller.string(variable_name);
 
-    let entity = caller.data().entity(self_ptr).ok_or(Exception::Error)?;
-    let Ok(mut driver) = caller.data().world().get::<&mut AnimationDriver>(entity) else {
+    let entity = caller
+        .data()
+        .entity(self_ptr)
+        .await
+        .ok_or_else(|| todo!())?;
+    let world = caller.data().world().await;
+    let Ok(mut driver) = world.get::<&mut AnimationDriver>(entity) else {
         return Ok(());
     };
 
@@ -2955,16 +3045,21 @@ fn set_animation_variable_int(
 /// ```text
 /// Function(string arVariableName, float afNewValue) native
 /// ```
-fn set_animation_variable_float(
+async fn set_animation_variable_float(
     caller: Caller<'_, State>,
     self_ptr: Object,
     variable_name: Object,
     new_value: f32,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     let variable_name = caller.string(variable_name);
 
-    let entity = caller.data().entity(self_ptr).ok_or(Exception::Error)?;
-    let Ok(mut driver) = caller.data().world().get::<&mut AnimationDriver>(entity) else {
+    let entity = caller
+        .data()
+        .entity(self_ptr)
+        .await
+        .ok_or_else(|| todo!())?;
+    let world = caller.data().world().await;
+    let Ok(mut driver) = world.get::<&mut AnimationDriver>(entity) else {
         return Ok(());
     };
 
@@ -2985,7 +3080,7 @@ fn set_attraction_active(
     self_ptr: Object,
     ap_keyword: Object,
     ab_active: bool,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -3000,7 +3095,7 @@ fn set_conveyor_belt_velocity(
     af_lin_vel_x: f32,
     af_lin_vel_y: f32,
     af_lin_vel_z: f32,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -3013,7 +3108,7 @@ fn set_destroyed(
     caller: Caller<'_, State>,
     self_ptr: Object,
     ab_destroyed: bool,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -3026,7 +3121,7 @@ fn set_direct_at_target(
     caller: Caller<'_, State>,
     self_ptr: Object,
     ak_target: Object,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -3040,7 +3135,7 @@ fn set_faction_owner(
     self_ptr: Object,
     ak_faction: Object,
     ab_no_crime: bool,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -3053,7 +3148,7 @@ fn set_harvested(
     caller: Caller<'_, State>,
     self_ptr: Object,
     ab_harvested: bool,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -3062,12 +3157,12 @@ fn set_harvested(
 /// ```text
 /// Function(ObjectReference akLinkedRef, Keyword apKeyword) native
 /// ```
-fn set_linked_ref(
+async fn set_linked_ref(
     caller: Caller<'_, State>,
     self_ptr: Object,
     linked_ref: Object,
     keyword: Object,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     let keyword = (!keyword.is_null())
         .then(|| {
             caller
@@ -3076,19 +3171,22 @@ fn set_linked_ref(
                 .get_by_addr(keyword)
                 .and_then(|s| s.record())
         })
-        .ok_or(Exception::Error)?;
+        .ok_or_else(|| todo!())?;
 
-    let entity = caller.data().entity(self_ptr).ok_or(Exception::Error)?;
-    let mut linked_refs = caller
+    let linked_ref_entity = caller.data().entity(linked_ref).await;
+
+    let entity = caller
         .data()
-        .world()
-        .get::<&mut LinkedRefs>(entity)
-        .unwrap();
+        .entity(self_ptr)
+        .await
+        .ok_or_else(|| todo!())?;
+    let world = caller.data().world().await;
+    let mut linked_refs = world.get::<&mut LinkedRefs>(entity).unwrap();
 
     if linked_ref.is_null() {
         linked_refs.remove(keyword);
     } else {
-        let linked_ref = caller.data().entity(linked_ref).ok_or(Exception::Error)?;
+        let linked_ref = linked_ref_entity.ok_or_else(|| todo!())?;
         linked_refs.set(keyword, linked_ref);
     }
 
@@ -3104,7 +3202,7 @@ fn set_lock_level(
     caller: Caller<'_, State>,
     self_ptr: Object,
     ai_lock_level: i32,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -3118,7 +3216,7 @@ fn set_loc_ref_type(
     self_ptr: Object,
     ak_loc: Object,
     ak_ref_type: Object,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -3132,7 +3230,7 @@ fn set_motion_type(
     self_ptr: Object,
     ae_motion_type: i32,
     ab_allow_activate: bool,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -3145,7 +3243,7 @@ fn set_no_favor_allowed(
     caller: Caller<'_, State>,
     self_ptr: Object,
     ab_no_favor: bool,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -3154,7 +3252,7 @@ fn set_no_favor_allowed(
 /// ```text
 /// Function(bool abOpen) native
 /// ```
-fn set_open(caller: Caller<'_, State>, self_ptr: Object, ab_open: bool) -> Result<(), Exception> {
+fn set_open(caller: Caller<'_, State>, self_ptr: Object, ab_open: bool) -> Result<(), Error> {
     todo!()
 }
 
@@ -3167,7 +3265,7 @@ fn set_persist_loc(
     caller: Caller<'_, State>,
     self_ptr: Object,
     ak_loc: Object,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -3180,7 +3278,7 @@ fn set_player_has_taken(
     caller: Caller<'_, State>,
     self_ptr: Object,
     ab_taken: bool,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -3195,7 +3293,7 @@ fn set_position(
     af_x: f32,
     af_y: f32,
     af_z: f32,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -3204,7 +3302,7 @@ fn set_position(
 /// ```text
 /// Function(bool abOn) native
 /// ```
-fn set_radio_on(caller: Caller<'_, State>, self_ptr: Object, ab_on: bool) -> Result<(), Exception> {
+fn set_radio_on(caller: Caller<'_, State>, self_ptr: Object, ab_on: bool) -> Result<(), Error> {
     todo!()
 }
 
@@ -3217,7 +3315,7 @@ fn set_radio_frequency(
     caller: Caller<'_, State>,
     self_ptr: Object,
     af_frequency: f32,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -3230,7 +3328,7 @@ fn set_radio_volume(
     caller: Caller<'_, State>,
     self_ptr: Object,
     af_volume: f32,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -3239,7 +3337,7 @@ fn set_radio_volume(
 /// ```text
 /// Function(float afScale) native
 /// ```
-fn set_scale(caller: Caller<'_, State>, self_ptr: Object, af_scale: f32) -> Result<(), Exception> {
+fn set_scale(caller: Caller<'_, State>, self_ptr: Object, af_scale: f32) -> Result<(), Error> {
     todo!()
 }
 
@@ -3248,25 +3346,26 @@ fn set_scale(caller: Caller<'_, State>, self_ptr: Object, af_scale: f32) -> Resu
 /// ```text
 /// Function(ActorValue akAV, float afValue) native
 /// ```
-fn set_value(
+async fn set_value(
     caller: Caller<'_, State>,
     self_ptr: Object,
     actor_value: Object,
     new_value: f32,
-) -> Result<(), Exception> {
-    let entity = caller.data().entity(self_ptr).ok_or(Exception::Error)?;
+) -> Result<(), Error> {
+    let entity = caller
+        .data()
+        .entity(self_ptr)
+        .await
+        .ok_or_else(|| todo!())?;
     let actor_value = caller
         .data()
         .objects
         .get_by_addr(self_ptr)
         .and_then(|s| s.record())
-        .ok_or(Exception::Error)?;
+        .ok_or_else(|| todo!())?;
 
-    let Ok(mut props) = caller
-        .data()
-        .world()
-        .get::<&mut ActorValueProperties>(entity)
-    else {
+    let world = caller.data().world().await;
+    let Ok(mut props) = world.get::<&mut ActorValueProperties>(entity) else {
         return Ok(());
     };
 
@@ -3297,7 +3396,7 @@ fn translate_to(
     af_z_angle: f32,
     af_speed: f32,
     af_max_rotation_speed: f32,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -3318,7 +3417,7 @@ fn spline_translate_to(
     af_tangent_magnitude: f32,
     af_speed: f32,
     af_max_rotation_speed: f32,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -3335,7 +3434,7 @@ fn spline_translate_to_ref_node(
     af_tangent_magnitude: f32,
     af_speed: f32,
     af_max_rotation_speed: f32,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -3348,7 +3447,7 @@ fn start_workshop(
     caller: Caller<'_, State>,
     self_ptr: Object,
     ab_start: bool,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -3357,7 +3456,7 @@ fn start_workshop(
 /// ```text
 /// Function() native
 /// ```
-fn stop_translation(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Exception> {
+fn stop_translation(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Error> {
     todo!()
 }
 
@@ -3371,7 +3470,7 @@ fn store_in_workshop(
     self_ptr: Object,
     ak_base_item: Object,
     ai_count_1: i32,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -3384,7 +3483,7 @@ fn tether_to_horse(
     caller: Caller<'_, State>,
     self_ptr: Object,
     ak_horse: Object,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -3397,7 +3496,7 @@ fn wait_for_animation_event(
     caller: Caller<'_, State>,
     self_ptr: Object,
     as_event_name: Object,
-) -> Result<bool, Exception> {
+) -> Result<bool, Error> {
     todo!()
 }
 
@@ -3406,7 +3505,7 @@ fn wait_for_animation_event(
 /// ```text
 /// bool Function() native
 /// ```
-fn wait_for3_d_load(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Exception> {
+fn wait_for3_d_load(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Error> {
     todo!()
 }
 
@@ -3418,7 +3517,7 @@ fn wait_for3_d_load(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool,
 fn wait_for_workshop_resource_recalc(
     caller: Caller<'_, State>,
     self_ptr: Object,
-) -> Result<(), Exception> {
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -3427,27 +3526,24 @@ fn wait_for_workshop_resource_recalc(
 /// ```text
 /// bool Function(ObjectReference akWorkshop) native
 /// ```
-fn scrap(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    ak_workshop: Object,
-) -> Result<bool, Exception> {
+fn scrap(caller: Caller<'_, State>, self_ptr: Object, ak_workshop: Object) -> Result<bool, Error> {
     todo!()
 }
 
-fn get_transform(caller: Caller<'_, State>, object: Object) -> Option<Transform> {
-    let entity = caller.data().entity(object)?;
-    let transform = caller.data().world().get::<&Transform>(entity).ok()?;
+async fn get_transform(caller: Caller<'_, State>, object: Object) -> Option<Transform> {
+    let entity = caller.data().entity(object).await?;
+    let world = caller.data().world().await;
+    let transform = world.get::<&Transform>(entity).ok()?;
     Some(transform.to_nif())
 }
 
-fn get_bounds(caller: Caller<'_, State>, object: Object) -> Option<ObjectBounds> {
-    let entity = caller.data().entity(object)?;
-    let bounds = caller.data().world().get::<&ObjectBounds>(entity).ok()?;
+async fn get_bounds(caller: Caller<'_, State>, object: Object) -> Option<ObjectBounds> {
+    let entity = caller.data().entity(object).await?;
+    let world = caller.data().world().await;
+    let bounds = world.get::<&ObjectBounds>(entity).ok()?;
     Some(*bounds)
 }
 
-#[derive(Clone, Debug)]
 struct LinkedRefChainIter<'a> {
     state: &'a State,
     entity: Entity,
@@ -3457,8 +3553,10 @@ struct LinkedRefChainIter<'a> {
 }
 
 impl<'a> LinkedRefChainIter<'a> {
-    fn new(caller: &'a Caller<'_, State>, self_ptr: Object, keyword: Object) -> Option<Self> {
+    async fn new(caller: &'a Caller<'_, State>, self_ptr: Object, keyword: Object) -> Option<Self> {
         let state = caller.data();
+
+        let entity = state.entity(self_ptr).await?;
 
         let keyword = if keyword.is_null() {
             None
@@ -3471,8 +3569,6 @@ impl<'a> LinkedRefChainIter<'a> {
             )
         };
 
-        let entity = state.entity(self_ptr)?;
-
         Some(Self {
             state,
             keyword,
@@ -3480,22 +3576,28 @@ impl<'a> LinkedRefChainIter<'a> {
             visited: HashSet::new(),
         })
     }
-}
 
-impl<'a> Iterator for LinkedRefChainIter<'a> {
-    type Item = Object;
-
-    fn next(&mut self) -> Option<Self::Item> {
+    async fn next(&mut self) -> Option<Object> {
         if self.visited.contains(&self.entity) {
             return None;
         }
         self.visited.insert(self.entity);
 
-        let linked_refs = self.state.world().get::<&LinkedRefs>(self.entity).ok()?;
-        let entity = linked_refs.get(self.keyword)?;
+        let entity = {
+            let world = self.state.world().await;
+            let linked_refs = world.get::<&LinkedRefs>(self.entity).ok()?;
+            let entity = linked_refs.get(self.keyword)?;
 
-        let script = self.state.get_script_object(entity);
-        let scripts = self.state.objects.get_by_id(script.id())?;
+            entity
+        };
+
+        let scripts = match self.state.get_or_create_entity(entity).await {
+            Ok(scripts) => scripts,
+            Err(err) => {
+                todo!("{}", err);
+            }
+        };
+
         let script = scripts.get("ObjectReference")?;
         let addr = script.get().object.addr();
 
