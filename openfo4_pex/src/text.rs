@@ -189,7 +189,7 @@ where
         }
         Instruction::Is(op) => {
             let object = for_value(&op.object);
-            let class = for_value(&op.class);
+            let class = &op.class;
             let dst = for_value(&op.return_assignment);
             write!(text, "{dst} = is {object} {class}")?;
         }
@@ -239,7 +239,7 @@ where
         }
         Instruction::StructGet(op) => {
             let struct_value = for_value(&op.struct_value);
-            let member_name = for_value(&op.member_name);
+            let member_name = &op.member_name;
             let dst = for_value(&op.return_assignment);
             write!(text, "{dst} = struct_get {struct_value} {member_name}")?;
         }
@@ -249,7 +249,7 @@ where
         }
         Instruction::StructSet(op) => {
             let struct_value = for_value(&op.struct_value);
-            let member_name = for_value(&op.member_name);
+            let member_name = &op.member_name;
             let value = for_value(&op.value);
             write!(text, "struct_set {struct_value} {member_name} {value}")?;
         }
@@ -300,7 +300,7 @@ where
             let return_index = for_value(&op.return_index);
             let start_index = for_value(&op.start_index);
             let value = for_value(&op.value);
-            let member_name = for_value(&op.member_name);
+            let member_name = &op.member_name;
 
             if matches!(instruction, Instruction::ArrayRFindStruct(_)) {
                 write!(

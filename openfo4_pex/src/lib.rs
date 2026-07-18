@@ -861,14 +861,22 @@ pub struct Is {
     /// The object that will be checked.
     pub object: Value,
     /// The class name that will be checked for.
-    pub class: Value,
+    pub class: String,
 }
 
 impl Is {
     fn from_raw(instruction: &raw::Instruction, strings: &[String]) -> Result<Self, Error> {
         let return_assignment = Value::convert(&instruction.args[0], strings)?;
         let object = Value::convert(&instruction.args[1], strings)?;
+
         let class = Value::convert(&instruction.args[2], strings)?;
+        let Value::Ident(class) = class else {
+            return Err(Error::InvalidValue {
+                op: Opcode::Is,
+                operand: "class",
+                value: class,
+            });
+        };
 
         Ok(Self {
             return_assignment,
@@ -898,14 +906,22 @@ pub struct StructGet {
     /// The value in which the loaded member value will be stored.
     pub return_assignment: Value,
     /// The name of the member value to load.
-    pub member_name: Value,
+    pub member_name: String,
 }
 
 impl StructGet {
     fn from_raw(instruction: &raw::Instruction, strings: &[String]) -> Result<Self, Error> {
         let return_assignment = Value::convert(&instruction.args[0], strings)?;
         let struct_value = Value::convert(&instruction.args[1], strings)?;
+
         let member_name = Value::convert(&instruction.args[2], strings)?;
+        let Value::Ident(member_name) = member_name else {
+            return Err(Error::InvalidValue {
+                op: Opcode::StructGet,
+                operand: "member_name",
+                value: member_name,
+            });
+        };
 
         Ok(Self {
             struct_value,
@@ -920,7 +936,7 @@ pub struct StructSet {
     /// The struct value.
     pub struct_value: Value,
     /// The name of the member.
-    pub member_name: Value,
+    pub member_name: String,
     /// The new value.
     pub value: Value,
 }
@@ -928,8 +944,16 @@ pub struct StructSet {
 impl StructSet {
     fn from_raw(instruction: &raw::Instruction, strings: &[String]) -> Result<Self, Error> {
         let struct_value = Value::convert(&instruction.args[0], strings)?;
-        let member_name = Value::convert(&instruction.args[1], strings)?;
         let value = Value::convert(&instruction.args[2], strings)?;
+
+        let member_name = Value::convert(&instruction.args[1], strings)?;
+        let Value::Ident(member_name) = member_name else {
+            return Err(Error::InvalidValue {
+                op: Opcode::StructGet,
+                operand: "member_name",
+                value: member_name,
+            });
+        };
 
         Ok(Self {
             struct_value,
@@ -948,7 +972,7 @@ pub struct ArrayFindStruct {
     /// `-1` should be written if the value is not found.
     pub return_index: Value,
     /// The name of the member to search.
-    pub member_name: Value,
+    pub member_name: String,
     /// The value to search for in the given member.
     pub value: Value,
     /// The starting index within the array.
@@ -959,7 +983,16 @@ impl ArrayFindStruct {
     fn from_raw(instruction: &raw::Instruction, strings: &[String]) -> Result<Self, Error> {
         let array_value = Value::convert(&instruction.args[0], strings)?;
         let return_index = Value::convert(&instruction.args[1], strings)?;
+
         let member_name = Value::convert(&instruction.args[2], strings)?;
+        let Value::String(member_name) = member_name else {
+            return Err(Error::InvalidValue {
+                op: Opcode::StructGet,
+                operand: "member_name",
+                value: member_name,
+            });
+        };
+
         let value = Value::convert(&instruction.args[3], strings)?;
         let start_index = Value::convert(&instruction.args[4], strings)?;
 
