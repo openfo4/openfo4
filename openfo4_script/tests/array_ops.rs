@@ -42,7 +42,7 @@ fn array_create() {
         .register_native_function("test", "test_valid_array", test_valid_array)
         .unwrap();
 
-    let instance = block_on(engine.compile("MyClass", &Options::default()));
+    let instance = block_on(engine.compile("MyClass", &Options::default())).unwrap();
     let func = instance.get_func("MyFunction").unwrap();
 
     let mut stack = engine.create_stack();
@@ -88,7 +88,7 @@ fn array_get() {
 
     let array_ptr = builder.finalize();
 
-    let instance = block_on(engine.compile("MyClass", &Options::default()));
+    let instance = block_on(engine.compile("MyClass", &Options::default())).unwrap();
     let func = instance.get_func("MyFunction").unwrap();
 
     let mut stack = engine.create_stack();
@@ -133,7 +133,7 @@ fn array_add() {
 
     let array_ptr = builder.finalize();
 
-    let instance = block_on(engine.compile("MyClass", &Options::default()));
+    let instance = block_on(engine.compile("MyClass", &Options::default())).unwrap();
     let func = instance.get_func("MyFunction").unwrap();
 
     let mut stack = engine.create_stack();
@@ -178,7 +178,7 @@ fn array_insert() {
 
     let array_ptr = builder.finalize();
 
-    let instance = block_on(engine.compile("MyClass", &Options::default()));
+    let instance = block_on(engine.compile("MyClass", &Options::default())).unwrap();
     let func = instance.get_func("MyFunction").unwrap();
 
     let mut stack = engine.create_stack();
@@ -224,7 +224,7 @@ fn array_clear() {
 
     let array_ptr = builder.finalize();
 
-    let instance = block_on(engine.compile("MyClass", &Options::default()));
+    let instance = block_on(engine.compile("MyClass", &Options::default())).unwrap();
     let func = instance.get_func("MyFunction").unwrap();
 
     let mut stack = engine.create_stack();
@@ -274,7 +274,7 @@ fn array_find_int() {
 
     let array_ptr = builder.finalize();
 
-    let instance = block_on(engine.compile("MyClass", &Options::default()));
+    let instance = block_on(engine.compile("MyClass", &Options::default())).unwrap();
     let func = instance.get_func("MyFunction").unwrap();
 
     let mut stack = engine.create_stack();
@@ -314,7 +314,7 @@ fn array_find_struct() {
         function MyFunction(arr: MyClass#MyStruct[]) static:
         local res: int
         local nonevar: none
-        res = array_find_struct arr "y" 42.0f 10
+        res = array_find_struct arr y 42.0f 10
         nonevar = call_static test assert_valid_result arr res
         "#,
     );
@@ -324,7 +324,7 @@ fn array_find_struct() {
         .register_native_function("test", "assert_valid_result", assert_valid_result)
         .unwrap();
 
-    let instance = block_on(engine.compile("MyClass", &Options::default()));
+    let instance = block_on(engine.compile("MyClass", &Options::default())).unwrap();
     let func = instance.get_func("MyFunction").unwrap();
 
     let struct_layout = engine.get_type("MyClass#MyStruct").unwrap();
@@ -373,7 +373,7 @@ fn array_len_on_null() {
 
     engine.register(&module);
 
-    let instance = block_on(engine.compile("MyClass", &Options::default()));
+    let instance = block_on(engine.compile("MyClass", &Options::default())).unwrap();
     let func = instance.get_func("MyFunction").unwrap();
 
     let mut stack = engine.create_stack();
@@ -507,7 +507,7 @@ fn array_find_struct_on_null() {
         local start_index: int
         local dst: int
         local nonevar: none
-        dst = array_find_struct array "x" value start_index
+        dst = array_find_struct array x value start_index
         return nonevar
         "#,
         "MyClass",
@@ -529,7 +529,7 @@ where
     let module = assemble(module);
     engine.register(&module);
 
-    let instance = block_on(engine.compile(class, &Options::default()));
+    let instance = block_on(engine.compile(class, &Options::default())).unwrap();
     let func = instance.get_func(func).unwrap();
 
     setup(&mut engine);

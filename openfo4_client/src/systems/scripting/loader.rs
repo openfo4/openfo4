@@ -218,7 +218,7 @@ impl CompilationCache {
             }
         }
 
-        let instance = engine.compile(class, &COMPILER_OPTIONS).await;
+        let instance = engine.compile(class, &COMPILER_OPTIONS).await.unwrap();
 
         let mut instances = self.classes.lock();
 

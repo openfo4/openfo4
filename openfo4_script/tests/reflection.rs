@@ -30,7 +30,7 @@ fn class_reflection() {
     );
 
     engine.register(&module);
-    block_on(engine.compile("MyClass", &Options::default()));
+    block_on(engine.compile("MyClass", &Options::default())).unwrap();
     let id = engine.get_type("MyClass").unwrap();
 
     let info = engine.type_info(id);
@@ -79,7 +79,7 @@ fn struct_reflection() {
     );
 
     engine.register(&module);
-    block_on(engine.compile("MyClass", &Options::default()));
+    block_on(engine.compile("MyClass", &Options::default())).unwrap();
     let class = engine.get_type("MyClass").unwrap();
     let id = engine.get_type("MyClass#MyStruct").unwrap();
 

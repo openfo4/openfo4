@@ -135,7 +135,7 @@ impl Executor {
             globals: globals,
         });
 
-        std::thread::sleep(Duration::from_micros(100));
+        std::thread::sleep(Duration::from_millis(1));
 
         let taken = self.handle.cell.take();
         debug_assert!(taken.is_some());
@@ -181,8 +181,8 @@ fn core_actor_values(
     registration: Arc<RegistrationSet>,
     loader: Arc<ScriptLoader>,
 ) -> State {
-    block_on(engine.compile("Actor", &COMPILER_OPTIONS));
-    block_on(engine.compile("ActorValue", &COMPILER_OPTIONS));
+    block_on(engine.compile("Actor", &COMPILER_OPTIONS)).unwrap();
+    block_on(engine.compile("ActorValue", &COMPILER_OPTIONS)).unwrap();
 
     engine.get_type("Actor").unwrap();
     let actor_value = engine.get_type("ActorValue").unwrap();

@@ -32,7 +32,7 @@ fn call_method_on_null() {
 
     engine.register(&module);
 
-    let instance = block_on(engine.compile("MyClass", &Options::default()));
+    let instance = block_on(engine.compile("MyClass", &Options::default())).unwrap();
     let func = instance.get_func("MyFunction").unwrap();
 
     let mut stack = engine.create_stack();
@@ -62,7 +62,7 @@ fn array_get_on_null() {
 
     engine.register(&module);
 
-    let instance = block_on(engine.compile("MyClass", &Options::default()));
+    let instance = block_on(engine.compile("MyClass", &Options::default())).unwrap();
     let func = instance.get_func("MyFunction").unwrap();
 
     let mut stack = engine.create_stack();
@@ -94,7 +94,7 @@ fn array_get_out_of_bounds() {
 
     engine.register(&module);
 
-    let instance = block_on(engine.compile("MyClass", &Options::default()));
+    let instance = block_on(engine.compile("MyClass", &Options::default())).unwrap();
     let func = instance.get_func("MyFunction").unwrap();
 
     let mut stack = engine.create_stack();

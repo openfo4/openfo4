@@ -143,7 +143,7 @@ where
     engine.register(&module);
     engine.register_native_function("test", "F", f).unwrap();
 
-    let instance = block_on(engine.compile("MyClass", &Options::default()));
+    let instance = block_on(engine.compile("MyClass", &Options::default())).unwrap();
     let func = instance.get_func("MyFunc").unwrap();
 
     let func = func.typed::<(), ()>().unwrap();
@@ -206,9 +206,9 @@ fn suspend_in_callstack() {
     engine.register(&module);
     engine.register_native_function("test", "F", f).unwrap();
 
-    block_on(engine.compile("A", &Options::default()));
-    block_on(engine.compile("B", &Options::default()));
-    let instance = block_on(engine.compile("C", &Options::default()));
+    block_on(engine.compile("A", &Options::default())).unwrap();
+    block_on(engine.compile("B", &Options::default())).unwrap();
+    let instance = block_on(engine.compile("C", &Options::default())).unwrap();
     let func = instance.get_func("Z").unwrap();
 
     let a = engine.get_type("A").unwrap();

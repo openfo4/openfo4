@@ -56,8 +56,10 @@ impl Context {
         self.codegen.define_native_function(class, func, f)
     }
 
-    pub fn compute_type_layouts(&mut self) {
+    pub fn compute_type_layouts(&mut self) -> Result<(), Error> {
+        self.validation.validate().map_err(Error::Validation)?;
         self.codegen.compute_type_layouts();
+        Ok(())
     }
 
     pub fn compile(&mut self, class: &str, options: &Options) -> Result<CompiledClass, Error> {

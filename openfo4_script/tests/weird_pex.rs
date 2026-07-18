@@ -65,34 +65,10 @@ fn pex_out_of_bounds_jump() {
     );
 }
 
-// #[test]
-// fn states_with_different_bindings() {
-//     let mut engine = Engine::new(COMPILER_OPTIONS);
-
-//     let module = assemble(
-//         r#"
-//         class MyClass:
-
-//         state "A":
-
-//         function F(a: bool, b: int, c: float) static:
-//         local d: int
-
-//         state "B":
-
-//         function F(b: bool, a: int, d: bool) static:
-//         local c: bool
-//         "#,
-//     );
-
-//     engine.register(&module);
-//     engine.compile("MyClass", &Options::default());
-// }
-
 fn compile_test(module: &str, class: &str) {
     let module = assemble(module);
 
     let mut engine = Engine::new(COMPILER_OPTIONS);
     engine.register(&module);
-    block_on(engine.compile(class, &Options::default()));
+    block_on(engine.compile(class, &Options::default())).unwrap();
 }

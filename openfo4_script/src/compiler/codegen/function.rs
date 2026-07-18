@@ -691,10 +691,7 @@ fn translate_state_body(
                     perform_cast(&mut translator, &op.src, &op.dst);
                 }
                 Instruction::Is(op) => {
-                    let Value::Ident(class) = &op.class else {
-                        unreachable!();
-                    };
-                    let class = Lowercase::new(class.as_str());
+                    let class = Lowercase::new(op.class.as_str());
                     let class = translator.data.registry.class_by_name(&class).unwrap();
 
                     let src = translator.load(&op.object);
@@ -709,14 +706,11 @@ fn translate_state_body(
                     translator.builder.struct_create(dst, ty);
                 }
                 Instruction::StructGet(op) => {
-                    let Value::Ident(member) = &op.member_name else {
-                        unreachable!()
-                    };
                     let Type::Struct(id) = translator.type_of_value(&op.struct_value) else {
                         unreachable!();
                     };
 
-                    let field_name = Lowercase::new(&**member);
+                    let field_name = Lowercase::new(&*op.member_name);
 
                     let object = translator.load(&op.struct_value);
                     let dst = translator.load(&op.return_assignment);
@@ -724,14 +718,11 @@ fn translate_state_body(
                     translator.builder.struct_load(object, dst, id, field_name);
                 }
                 Instruction::StructSet(op) => {
-                    let Value::Ident(member) = &op.member_name else {
-                        unreachable!()
-                    };
                     let Type::Struct(id) = translator.type_of_value(&op.struct_value) else {
                         unreachable!();
                     };
 
-                    let field_name = Lowercase::new(&**member);
+                    let field_name = Lowercase::new(&*op.member_name);
 
                     let object = translator.load(&op.struct_value);
                     let value = translator.load(&op.value);
@@ -844,10 +835,7 @@ fn translate_state_body(
                         unreachable!();
                     };
 
-                    let Value::String(member_name) = &op.member_name else {
-                        unreachable!();
-                    };
-                    let member_name = Lowercase::new(&**member_name);
+                    let member_name = Lowercase::new(&*op.member_name);
 
                     let array = translator.load(&op.array_value);
                     let start_index = translator.load(&op.start_index);

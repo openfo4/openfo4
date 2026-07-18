@@ -1,0 +1,415 @@
+mod instruction;
+
+use std::fmt::{self, Display, Formatter};
+
+use game_tracing::trace_span;
+use hashbrown::{HashMap, HashSet};
+use indexmap::IndexSet;
+use openfo4_pex::{Class, Function, Instruction, Module, Value};
+use thiserror::Error;
+
+use crate::compiler::validation::instruction::InvalidInstructionError;
+
+#[derive(Clone, Debug, Error)]
+pub enum Error {
+    #[error("undefined type: {0}")]
+    UndefinedType(String),
+    #[error("classes {0:?} cause inheritance cycle")]
+    InheritanceCycle(Vec<String>),
+    #[error("class {class} inherits from non-class type {parent}")]
+    ClassParentIsNotClassType { class: String, parent: String },
+    #[error("duplicate variable name {variable} in class {class}")]
+    DuplicateClassVariableName { class: String, variable: String },
+    #[error("cannot assign {value:?} to variable of type {ty}")]
+    IncomptabileAssignment { ty: String, value: Value },
+    #[error("unknown variable {variable} in function {class}.{function}")]
+    UnknownVariable {
+        class: String,
+        function: String,
+        variable: String,
+    },
+    #[error("duplicate state name {state} in class {class}")]
+    DuplicateStateName { class: String, state: String },
+    #[error("default state {class} for class {default_state} does not exist")]
+    NoDefaultState {
+        class: String,
+        default_state: String,
+    },
+    #[error("mismatching function signatures accross states")]
+    MismatchingFunctionSignaturesAcrossStates,
+    #[error("invalid operands: expected {expected:?}, found {found:?}")]
+    InvalidOperands {
+        expected: Vec<Type>,
+        found: Vec<Type>,
+    },
+    #[error("branch offset goes out of bounds")]
+    BranchOffsetOutOfBounds,
+    #[error("undefined function {class}.{function}")]
+    UndefinedFunction { class: String, function: String },
+    #[error(transparent)]
+    InvalidInstruction(InvalidInstruction),
+}
+
+#[derive(Clone, Debug, Error)]
+#[error("invalid instruction in {class}.{function} at position {index}: {error}")]
+pub struct InvalidInstruction {
+    class: String,
+    function: String,
+    index: usize,
+    inst: Instruction,
+    error: InvalidInstructionError,
+}
+
+#[derive(Clone, Debug)]
+pub enum OperandKey {
+    Named(&'static str),
+    Unnamed(usize),
+}
+
+impl Display for OperandKey {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Named(v) => Display::fmt(v, f),
+            Self::Unnamed(v) => Display::fmt(v, f),
+        }
+    }
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct ValidationPass {
+    classes: HashMap<String, Class>,
+    structs: HashMap<String, Type>,
+    unvalidated_classes: IndexSet<String>,
+}
+
+impl ValidationPass {
+    pub fn register_module(&mut self, module: &Module) {
+        for class in &module.classes {
+            self.classes
+                .insert(class.name.to_lowercase(), class.clone());
+
+            for st in &class.structs {
+                let name = format!("{}#{}", class.name.to_lowercase(), st.name.to_lowercase());
+
+                let mut members = Vec::new();
+                for member in &st.members {
+                    members.push((member.name.to_lowercase(), member.ty.to_lowercase()));
+                }
+
+                self.structs
+                    .insert(name.to_lowercase(), Type::Struct(st.name.clone(), members));
+            }
+
+            self.unvalidated_classes.insert(class.name.to_lowercase());
+        }
+    }
+
+    fn resolve_ty(&self, mut ty: &str) -> Result<Type, Error> {
+        let mut array_depth = 0;
+        while let Some(p) = ty.strip_suffix("[]") {
+            ty = p;
+            array_depth += 1;
+        }
+
+        let mut typ = match &*ty.to_lowercase() {
+            "none" => Type::None,
+            "bool" => Type::Bool,
+            "int" => Type::Int,
+            "float" => Type::Float,
+            "string" => Type::String,
+            "var" => Type::Var,
+            name if self.structs.contains_key(name) => self.structs[name].clone(),
+            name if self.classes.contains_key(name) => Type::Class(name.to_owned()),
+            _ => return Err(Error::UndefinedType(ty.to_owned())),
+        };
+
+        for _ in 0..array_depth {
+            typ = Type::Array(Box::new(typ));
+        }
+
+        Ok(typ)
+    }
+
+    fn validate_class(&self, class: &Class) -> Result<(), Error> {
+        // - If the class inherits from another type it must exist.
+        // - The parent type must be class.
+        // - The class hierarchy must not form a cycle.
+        if !class.parent.is_empty() && class.parent.to_lowercase() != "none" {
+            let parent = self.resolve_ty(&class.parent)?;
+            let Type::Class(parent) = parent else {
+                return Err(Error::ClassParentIsNotClassType {
+                    class: class.name.to_owned(),
+                    parent: class.parent.to_owned(),
+                });
+            };
+
+            let mut cur_class = parent;
+            loop {
+                let parent = self.classes.get(&cur_class).unwrap();
+
+                if parent.name == class.name {
+                    // TODO: Fill class names.
+                    return Err(Error::InheritanceCycle(vec![]));
+                }
+
+                if parent.parent.is_empty() || parent.parent.to_lowercase() == "none" {
+                    break;
+                }
+
+                // Note: We ignore any errors here. When the parent class is resolved it
+                // will already produce an error.
+                let Ok(Type::Class(ty)) = self.resolve_ty(&parent.parent) else {
+                    break;
+                };
+
+                cur_class = ty;
+            }
+        }
+
+        // - Each variable name must not occur more than once.
+        // - Each variable type must exist.
+        // - If an initial value exists, it must be compatible.
+        let mut variable_names = HashSet::new();
+        for var in &class.variables {
+            if !variable_names.insert(&var.definition.name) {
+                return Err(Error::DuplicateClassVariableName {
+                    class: class.name.clone(),
+                    variable: var.definition.name.clone(),
+                });
+            }
+
+            let ty = self.resolve_ty(&var.definition.ty)?;
+            let is_ok = match (ty, &var.value) {
+                (Type::None, Value::Null) => true,
+                (Type::Bool, Value::Null | Value::Bool(_)) => true,
+                (Type::Int, Value::Null | Value::Int(_)) => true,
+                (Type::Float, Value::Null | Value::Float(_)) => true,
+                (Type::String, Value::Null | Value::String(_)) => true,
+                (Type::Array(_), Value::Null) => true,
+                (Type::Class(_), Value::Null) => true,
+                (Type::Struct(_, _), Value::Null) => true,
+                _ => false,
+            };
+
+            if !is_ok {
+                return Err(Error::IncomptabileAssignment {
+                    ty: var.definition.ty.clone(),
+                    value: var.value.clone(),
+                });
+            }
+        }
+
+        // - If a function with the same name exists in multiple states,
+        //   all must have the same signature.
+        // - Each state name must no occur more than once.
+        let mut state_names = HashSet::new();
+        let mut function_signatures = HashMap::new();
+
+        for state in &class.states {
+            if !state_names.insert(&state.name) {
+                return Err(Error::DuplicateStateName {
+                    class: class.name.clone(),
+                    state: state.name.clone(),
+                });
+            }
+
+            for func in &state.functions {
+                let signature = FuncSignature {
+                    is_static: func.is_static,
+                    is_native: func.is_native,
+                    params: func
+                        .params
+                        .iter()
+                        .map(|var| self.resolve_ty(&var.ty))
+                        .collect::<Result<_, _>>()?,
+                    returns: self.resolve_ty(&func.return_ty)?,
+                };
+
+                match function_signatures.get(&func.name) {
+                    Some(sig) if sig != &signature => {
+                        return Err(Error::MismatchingFunctionSignaturesAcrossStates);
+                    }
+                    Some(_) => {}
+                    None => {
+                        function_signatures.insert(&func.name, signature);
+                    }
+                }
+
+                self.validate_function(class, func)?;
+            }
+        }
+
+        if !state_names.contains(&class.default_state) {
+            return Err(Error::NoDefaultState {
+                class: class.name.clone(),
+                default_state: class.default_state.clone(),
+            });
+        }
+
+        Ok(())
+    }
+
+    fn function_signature(
+        &self,
+        class: &str,
+        func: &str,
+        visit_parents: bool,
+    ) -> Option<FuncSignature> {
+        let mut class_name = class.to_lowercase();
+
+        let func = loop {
+            let class = self.classes.get(&class_name.to_lowercase()).unwrap();
+
+            if let Some(func) = class.states.iter().find_map(|state| {
+                state
+                    .functions
+                    .iter()
+                    .find(|f| f.name.to_lowercase() == func.to_lowercase())
+            }) {
+                break func;
+            }
+
+            class_name = class.parent.to_lowercase();
+
+            if !visit_parents || class_name.is_empty() {
+                return None;
+            }
+        };
+
+        let mut params = Vec::new();
+        for param in &func.params {
+            let ty = self.resolve_ty(&param.ty).unwrap();
+            params.push(ty);
+        }
+
+        let returns = self.resolve_ty(&func.return_ty).unwrap();
+
+        Some(FuncSignature {
+            is_static: func.is_static,
+            is_native: func.is_native,
+            params,
+            returns,
+        })
+    }
+
+    fn validate_function(&self, class: &Class, func: &Function) -> Result<(), Error> {
+        let mut variables = HashMap::new();
+
+        // A class can access any fields defined by its parents,
+        // however if both child and parent have the same field defined
+        // the child field takes precedence.
+        {
+            let mut current_class = class;
+            loop {
+                for var in &current_class.variables {
+                    let name = var.definition.name.to_lowercase();
+                    if variables.contains_key(&name) {
+                        continue;
+                    }
+
+                    let ty = self.resolve_ty(&var.definition.ty)?;
+                    variables.insert(name, ty);
+                }
+
+                let parent = current_class.parent.to_lowercase();
+                if matches!(parent.as_str(), "" | "none") {
+                    break;
+                }
+
+                current_class = self.classes.get(&parent).unwrap();
+            }
+        }
+
+        for param in &func.params {
+            let ty = self.resolve_ty(&param.ty)?;
+            variables.insert(param.name.to_lowercase(), ty);
+        }
+
+        for local in &func.locals {
+            let ty = self.resolve_ty(&local.ty)?;
+            variables.insert(local.name.to_lowercase(), ty);
+        }
+
+        // Non-static functions have a magic "self" variable for the self object.
+        // The type is equal to the class of the function.
+        if !func.is_static {
+            let ty = self.resolve_ty(&class.name)?;
+            variables.insert("self".to_owned(), ty);
+        }
+
+        for (index, instruction) in func.instructions.iter().enumerate() {
+            if let Err(error) = self.validate_instruction(class, func, instruction, &variables) {
+                return Err(Error::InvalidInstruction(InvalidInstruction {
+                    class: class.name.clone(),
+                    function: func.name.clone(),
+                    index,
+                    error,
+                    inst: instruction.clone(),
+                }));
+            }
+        }
+
+        Ok(())
+    }
+
+    pub fn validate(&mut self) -> Result<(), Error> {
+        let _span = trace_span!("ValidationPass::validate").entered();
+
+        while let Some(class_name) = self.unvalidated_classes.pop() {
+            let class = self.classes.get(&class_name).unwrap();
+            self.validate_class(&class)?;
+
+            for state in &class.states {
+                for func in &state.functions {
+                    self.validate_function(class, func)?;
+                }
+            }
+        }
+
+        Ok(())
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub enum Type {
+    None,
+    Bool,
+    Int,
+    Float,
+    String,
+    Var,
+    Array(Box<Type>),
+    Class(String),
+    Struct(String, Vec<(String, String)>),
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct FuncSignature {
+    pub is_static: bool,
+    pub is_native: bool,
+    pub params: Vec<Type>,
+    pub returns: Type,
+}
+
+#[derive(Clone, Debug)]
+pub enum GenericType {
+    Concrete(Type),
+    /// Any array type.
+    Array,
+    /// Any struct type.
+    Struct,
+    /// Any class type.
+    Class,
+}
+
+impl PartialEq<Type> for GenericType {
+    fn eq(&self, other: &Type) -> bool {
+        match (self, other) {
+            (Self::Concrete(ty), other) => ty == other,
+            (Self::Array, Type::Array(_)) => true,
+            (Self::Struct, Type::Struct(_, _)) => true,
+            (Self::Class, Type::Class(_)) => true,
+            _ => false,
+        }
+    }
+}

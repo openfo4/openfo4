@@ -9,12 +9,12 @@ use openfo4_jit::{CompilerConfig, Type};
 use openfo4_pex::{Class, Module};
 use parking_lot::RwLock;
 
-use crate::RegisterNativeError;
 use crate::compiler::resources::{Resources, TypeId, TypeInfo};
 use crate::compiler::{CompilationResult, CompilerOptions, Context, NativeFunction};
 use crate::runtime::func::Func;
 use crate::runtime::host_functions::call_host_trampoline;
 use crate::runtime::{CallTable, HostState, IntoFunc, ObjectPool, Stack};
+use crate::{RegisterNativeError, compiler};
 
 #[derive(Clone, Debug)]
 pub enum Error {
@@ -123,24 +123,28 @@ impl Engine {
         )
     }
 
-    pub async fn compile(&self, class: &str, options: &Options) -> Instance {
+    pub async fn compile(
+        &self,
+        class: &str,
+        options: &Options,
+    ) -> Result<Instance, compiler::Error> {
         let class_name = Lowercase::new(class);
 
         if let Some(shared) = self.instances.read().get(&class_name) {
-            return Instance {
+            return Ok(Instance {
                 shared: shared.clone(),
-            };
+            });
         }
 
         let mut ctx = self.ctx.lock().await;
 
-        ctx.compute_type_layouts();
+        ctx.compute_type_layouts()?;
 
         let class = self.classes.get(&class_name).unwrap();
 
         let mut funcs = HashMap::new();
 
-        let res = ctx.compile(&class.name, options).unwrap();
+        let res = ctx.compile(&class.name, options)?;
         for (name, res) in res.functions {
             let func = unsafe { Func::new(&res, Arc::downgrade(&self.shared)) };
             funcs.insert(name, (res, func));
@@ -151,13 +155,13 @@ impl Engine {
         let mut instances = self.instances.write();
 
         if let Some(shared) = instances.get(&class_name) {
-            return Instance {
+            return Ok(Instance {
                 shared: shared.clone(),
-            };
+            });
         }
 
         instances.insert(class_name, shared.clone());
-        Instance { shared }
+        Ok(Instance { shared })
     }
 
     pub fn object_pool(&self) -> &ObjectPool {

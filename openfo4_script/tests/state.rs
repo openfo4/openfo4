@@ -36,7 +36,7 @@ fn state() {
 
     engine.register(&module);
 
-    let instance = block_on(engine.compile("MyClass", &Options::default()));
+    let instance = block_on(engine.compile("MyClass", &Options::default())).unwrap();
     let func = instance.get_func("MyFunction").unwrap();
     let type_id = engine.get_type("MyClass").unwrap();
 
@@ -111,7 +111,7 @@ fn state_override_order() {
     );
 
     engine.register(&module);
-    let instance = block_on(engine.compile("B", &Options::default()));
+    let instance = block_on(engine.compile("B", &Options::default())).unwrap();
     let func = instance.get_func("MyFunction").unwrap();
     let type_id = engine.get_type("B").unwrap();
 
@@ -171,5 +171,5 @@ fn access_undeclared_state_builtin() {
         "#,
     );
     engine.register(&module);
-    block_on(engine.compile("A", &Options::default()));
+    block_on(engine.compile("A", &Options::default())).unwrap();
 }

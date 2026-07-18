@@ -33,7 +33,7 @@ fn recursion() {
 
     engine.register(&module);
 
-    let instance = block_on(engine.compile("MyClass", &Options::default()));
+    let instance = block_on(engine.compile("MyClass", &Options::default())).unwrap();
     let func = instance.get_func("factorial").unwrap();
 
     let mut stack = engine.create_stack();
@@ -79,7 +79,7 @@ fn recursion_multiple_functions() {
     );
     engine.register(&module);
 
-    let instance = block_on(engine.compile("MyClass", &Options::default()));
+    let instance = block_on(engine.compile("MyClass", &Options::default())).unwrap();
     let func = instance.get_func("A").unwrap();
 
     let mut stack = engine.create_stack();

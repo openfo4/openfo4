@@ -39,7 +39,7 @@ fn string_constant() {
         .register_native_function("test", "assert_valid_result", assert_valid_result)
         .unwrap();
 
-    let instance = block_on(engine.compile("MyClass", &Options::default()));
+    let instance = block_on(engine.compile("MyClass", &Options::default())).unwrap();
     let func = instance.get_func("MyFunction").unwrap();
 
     let mut stack = engine.create_stack();
@@ -82,7 +82,7 @@ fn string_concat() {
     let a = engine.object_pool().insert_string("Hello");
     let b = engine.object_pool().insert_string(" World");
 
-    let instance = block_on(engine.compile("MyClass", &Options::default()));
+    let instance = block_on(engine.compile("MyClass", &Options::default())).unwrap();
     let func = instance.get_func("MyFunction").unwrap();
 
     let mut stack = engine.create_stack();
@@ -111,7 +111,7 @@ fn string_cmpeq() {
 
     engine.register(&module);
 
-    let instance = block_on(engine.compile("MyClass", &Options::default()));
+    let instance = block_on(engine.compile("MyClass", &Options::default())).unwrap();
     let func = instance.get_func("IsHello").unwrap();
 
     let mut stack = engine.create_stack();

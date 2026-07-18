@@ -36,7 +36,7 @@ fn method_resolution_external() {
 
     engine.register(&module);
 
-    let instance = block_on(engine.compile("B", &Options::default()));
+    let instance = block_on(engine.compile("B", &Options::default())).unwrap();
     let type_id = engine.get_type("B").unwrap();
 
     let addr = engine.object_pool().insert(type_id).finalize().addr();
@@ -99,7 +99,7 @@ fn method_resolution_internal() {
 
     engine.register(&module);
 
-    let instance = block_on(engine.compile("B", &Options::default()));
+    let instance = block_on(engine.compile("B", &Options::default())).unwrap();
     let type_id = engine.get_type("B").unwrap();
 
     let addr = engine.object_pool().insert(type_id).finalize().addr();
@@ -148,7 +148,7 @@ fn method_resolution_call_parent() {
     );
     engine.register(&module);
 
-    let instance = block_on(engine.compile("C", &Options::default()));
+    let instance = block_on(engine.compile("C", &Options::default())).unwrap();
     let type_id = engine.get_type("C").unwrap();
 
     let addr = engine.object_pool().insert(type_id).finalize().addr();
@@ -183,7 +183,7 @@ fn skip_static_only_vtable() {
     );
 
     engine.register(&module);
-    block_on(engine.compile("B", &Options::default()));
+    block_on(engine.compile("B", &Options::default())).unwrap();
 }
 
 #[test]
@@ -202,7 +202,7 @@ fn class_without_methods() {
     );
 
     engine.register(&module);
-    let instance = block_on(engine.compile("B", &Options::default()));
+    let instance = block_on(engine.compile("B", &Options::default())).unwrap();
     let type_id = engine.get_type("B").unwrap();
 
     let addr = engine.object_pool().insert(type_id).finalize().addr();
@@ -234,7 +234,7 @@ fn class_without_methods_twice() {
     );
 
     engine.register(&module);
-    let instance = block_on(engine.compile("C", &Options::default()));
+    let instance = block_on(engine.compile("C", &Options::default())).unwrap();
     let type_id = engine.get_type("C").unwrap();
 
     let addr = engine.object_pool().insert(type_id).finalize().addr();

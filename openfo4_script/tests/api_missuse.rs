@@ -29,10 +29,10 @@ fn call_with_incorrect_object_type() {
 
     engine.register(&module);
 
-    block_on(engine.compile("B", &Options::default()));
+    block_on(engine.compile("B", &Options::default())).unwrap();
     let b = engine.get_type("B").unwrap();
 
-    let a = block_on(engine.compile("A", &Options::default()));
+    let a = block_on(engine.compile("A", &Options::default())).unwrap();
     let func = a.get_func("F").unwrap();
 
     let mut stack = engine.create_stack();
@@ -78,8 +78,8 @@ fn return_wrong_type_from_native_func() {
     engine.register(&module);
     engine.register_native_function("test", "F", f).unwrap();
 
-    block_on(engine.compile("A", &Options::default()));
-    let b = block_on(engine.compile("B", &Options::default()));
+    block_on(engine.compile("A", &Options::default())).unwrap();
+    let b = block_on(engine.compile("B", &Options::default())).unwrap();
     let func = b.get_func("MyFunc").unwrap();
 
     let mut stack = engine.create_stack();
@@ -112,7 +112,7 @@ fn call_with_incorrect_parameter_count() {
 
     engine.register(&module);
 
-    let a = block_on(engine.compile("A", &Options::default()));
+    let a = block_on(engine.compile("A", &Options::default())).unwrap();
     let func = a.get_func("F").unwrap();
 
     let mut stack = engine.create_stack();
@@ -146,7 +146,7 @@ fn return_null_non_nullable_object() {
     engine.register(&module);
     engine.register_native_function("A", "F", f).unwrap();
 
-    let instance = block_on(engine.compile("A", &Options::default()));
+    let instance = block_on(engine.compile("A", &Options::default())).unwrap();
     let func = instance.get_func("G").unwrap();
     let func = func.typed::<(), ObjectAddr>().unwrap();
 

@@ -365,7 +365,7 @@ fn parse_instruction(cursor: &mut Cursor<'_>) -> Instruction {
             }
             "array_find_struct" => {
                 let array_value = parse_value(cursor);
-                let member_name = parse_value(cursor);
+                let member_name = cursor.consume_ident().to_owned();
                 let value = parse_value(cursor);
                 let start_index = parse_value(cursor);
 

@@ -22,7 +22,7 @@ fn pass_null_param() {
     );
     engine.register(&module);
 
-    let instance = block_on(engine.compile("A", &Options::default()));
+    let instance = block_on(engine.compile("A", &Options::default())).unwrap();
     let func = instance.get_func("F").unwrap();
     let func = func.typed::<ObjectAddr, ()>().unwrap();
 
@@ -56,7 +56,7 @@ fn host_function_returns_null() {
     engine.register(&module);
     engine.register_native_function("A", "F", f).unwrap();
 
-    let instance = block_on(engine.compile("A", &Options::default()));
+    let instance = block_on(engine.compile("A", &Options::default())).unwrap();
     let func = instance.get_func("G").unwrap();
     let func = func.typed::<(), ObjectAddr>().unwrap();
 
