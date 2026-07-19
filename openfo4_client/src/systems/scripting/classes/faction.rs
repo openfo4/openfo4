@@ -395,8 +395,8 @@ where
         .objects
         .get_by_addr(faction)
         .and_then(|s| s.record())?;
-    let globals = caller.data().globals().await;
-    let faction = globals.factions.get(&faction)?;
+    let factions = caller.data().globals.factions.lock();
+    let faction = factions.get(&faction)?;
     Some(f(faction))
 }
 
@@ -409,7 +409,7 @@ where
         .objects
         .get_by_addr(faction)
         .and_then(|s| s.record())?;
-    let mut globals = caller.data_mut().globals_mut().await;
-    let faction = globals.factions.get_mut(&faction)?;
+    let mut factions = caller.data().globals.factions.lock();
+    let faction = factions.get_mut(&faction)?;
     Some(f(faction))
 }

@@ -411,9 +411,8 @@ fn get_confidence_av(caller: Caller<'_, State>) -> Object {
 /// ```text
 /// int Function() native global
 /// ```
-async fn get_difficulty(caller: Caller<'_, State>) -> i32 {
-    let globals = caller.data().globals().await;
-    globals.game_rules.difficulty.to_i32()
+fn get_difficulty(caller: Caller<'_, State>) -> i32 {
+    caller.data().globals.game_rules.difficulty.to_i32()
 }
 
 /// `GetEnduranceAV`

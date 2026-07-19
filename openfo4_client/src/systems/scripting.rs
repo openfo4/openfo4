@@ -62,6 +62,7 @@ impl Executor {
         file_loader: Arc<FileLoader>,
         pool: Arc<TaskPool>,
         config: config::Scripting,
+        globals: Arc<GlobalProperties>,
     ) -> Self {
         let _span = trace_span!("Executor::new").entered();
 
@@ -94,7 +95,7 @@ impl Executor {
             registration.clone(),
         ));
 
-        let state = core_actor_values(&engine, objects, registration, loader.clone());
+        let state = core_actor_values(&engine, objects, registration, loader.clone(), globals);
 
         let mut runner = Runner::new(state, pool.clone());
         let handle = runner.handle();
@@ -120,7 +121,6 @@ impl Executor {
     pub fn update(
         &mut self,
         world: &mut World,
-        globals: &mut GlobalProperties,
         script_entities: &mut ScriptEntities,
         quests: &mut QuestManager,
     ) {
@@ -132,7 +132,6 @@ impl Executor {
             world: world,
             quests: quests,
             entities: script_entities,
-            globals: globals,
         });
 
         std::thread::sleep(Duration::from_millis(1));
@@ -180,6 +179,7 @@ fn core_actor_values(
     objects: Arc<ScriptObjects>,
     registration: Arc<RegistrationSet>,
     loader: Arc<ScriptLoader>,
+    globals: Arc<GlobalProperties>,
 ) -> State {
     block_on(engine.compile("Actor", &COMPILER_OPTIONS)).unwrap();
     block_on(engine.compile("ActorValue", &COMPILER_OPTIONS)).unwrap();
@@ -225,6 +225,7 @@ fn core_actor_values(
         object_data: HashMap::new(),
         borrowed: Arc::new(SharedBorrowCell::new()),
         loader,
+        globals,
     }
 }
 

@@ -3,15 +3,17 @@ use std::iter::FusedIterator;
 use hashbrown::{HashMap, HashSet};
 use indexmap::IndexSet;
 use openfo4_core::record::RecordId;
+use parking_lot::Mutex;
 
 /// Globals valid across the entire game state.
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct GlobalProperties {
     pub game_rules: GameRules,
     /// Global variables / Globals / `GLOB`
-    pub variables: HashMap<RecordId, f32>,
-    pub form_lists: HashMap<RecordId, FormList>,
-    pub factions: HashMap<RecordId, Faction>,
+    pub variables: Mutex<HashMap<RecordId, f32>>,
+    pub form_lists: Mutex<HashMap<RecordId, FormList>>,
+    pub factions: Mutex<HashMap<RecordId, Faction>>,
+    pub mods: RecordModifications,
 }
 
 /// Set of game rules.
@@ -151,4 +153,10 @@ pub enum FactionReaction {
     Ally,
     Friend,
     Enemy,
+}
+
+#[derive(Debug, Default)]
+pub struct RecordModifications {
+    /// Dynamically added leveled list additions.
+    pub leveled_list: Mutex<HashMap<RecordId, FormList>>,
 }

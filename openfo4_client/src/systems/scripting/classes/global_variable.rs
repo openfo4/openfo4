@@ -15,15 +15,15 @@ pub fn register(engine: &mut Engine) {
 /// ```text
 /// float Function GetValue() native
 /// ```
-async fn get_value(caller: Caller<'_, State>, self_ptr: Object) -> Result<Float, Error> {
+fn get_value(caller: Caller<'_, State>, self_ptr: Object) -> Result<Float, Error> {
     let id = caller
         .data()
         .objects
         .get_by_addr(self_ptr)
         .and_then(|s| s.record())
         .ok_or_else(|| todo!())?;
-    let globals = caller.data().globals().await;
-    let value = *globals.variables.get(&id).ok_or_else(|| todo!())?;
+    let variables = caller.data().globals.variables.lock();
+    let value = *variables.get(&id).ok_or_else(|| todo!())?;
     Ok(value)
 }
 
@@ -32,18 +32,15 @@ async fn get_value(caller: Caller<'_, State>, self_ptr: Object) -> Result<Float,
 /// ```text
 /// Function SetValue(float afNewValue) native
 /// ```
-async fn set_value(
-    mut caller: Caller<'_, State>,
-    self_ptr: Object,
-    value: Float,
-) -> Result<(), Error> {
+fn set_value(mut caller: Caller<'_, State>, self_ptr: Object, value: Float) -> Result<(), Error> {
     let id = caller
         .data()
         .objects
         .get_by_addr(self_ptr)
         .and_then(|s| s.record())
         .ok_or_else(|| todo!())?;
-    let mut globals = caller.data_mut().globals_mut().await;
-    globals.variables.insert(id, value);
+
+    let mut variables = caller.data().globals.variables.lock();
+    variables.insert(id, value);
     Ok(())
 }

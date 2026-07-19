@@ -1863,8 +1863,8 @@ async fn has_keyword_in_form_list(
         keywords.clone()
     };
 
-    let globals = caller.data().globals().await;
-    let form_list = globals.form_lists.get(&form_list).ok_or_else(|| todo!())?;
+    let form_lists = caller.data().globals.form_lists.lock();
+    let form_list = form_lists.get(&form_list).ok_or_else(|| todo!())?;
 
     for id in form_list.iter() {
         if keywords.contains(id) {

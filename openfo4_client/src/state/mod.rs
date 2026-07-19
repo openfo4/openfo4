@@ -37,6 +37,7 @@ use openfo4_core::object_ref_set::ObjectReferenceSet;
 use openfo4_physics::PhysicsPipeline;
 use openfo4_physics::components::{CollisionLayer, RigidBody};
 use openfo4_physics::controller::CharacterController;
+use parking_lot::Mutex;
 
 use crate::assets::animation::AnimationSet;
 use crate::assets::init_asset_loader;
@@ -97,7 +98,7 @@ pub struct GameState {
     inventory: InventorySystem,
     executor: Executor,
     quests: QuestManager,
-    globals: GlobalProperties,
+    globals: Arc<GlobalProperties>,
     script_entities: ScriptEntities,
     pub ai: AiSystem,
     real_time_elapsed: Duration,
@@ -151,11 +152,27 @@ impl GameState {
 
         let animation = AnimationSystem::new(&loader);
 
+        let global_variables =
+            futures_lite::future::block_on(globals::load_global_variables(&loader));
+        let form_lists = futures_lite::future::block_on(globals::load_form_lists(&loader));
+        let factions = futures_lite::future::block_on(globals::load_factions(&loader));
+        let globals = Arc::new(GlobalProperties {
+            variables: Mutex::new(global_variables),
+            form_lists: Mutex::new(form_lists),
+            game_rules: GameRules {
+                difficulty: Difficulty::Survival,
+                fast_travel_enabled: true,
+            },
+            factions: Mutex::new(factions),
+            mods: Default::default(),
+        });
+
         let mut executor = futures_lite::future::block_on(Executor::new(
             loader.clone(),
             file_loader.clone(),
             pool.clone(),
             config.scripting,
+            globals.clone(),
         ));
 
         let level = Level::new(
@@ -172,11 +189,6 @@ impl GameState {
         init_time(&mut world);
 
         let quests = QuestManager::new(pool.clone(), &loader, &mut executor, &level.loader());
-
-        let global_variables =
-            futures_lite::future::block_on(globals::load_global_variables(&loader));
-        let form_lists = futures_lite::future::block_on(globals::load_form_lists(&loader));
-        let factions = futures_lite::future::block_on(globals::load_factions(&loader));
 
         Self {
             weather: WeatherSystem::new(loader.clone(), pool.clone(), &asset_loader, &shared),
@@ -198,15 +210,7 @@ impl GameState {
             object_ref_set: ObjectReferenceSet::default(),
             executor,
             quests,
-            globals: GlobalProperties {
-                variables: global_variables,
-                form_lists,
-                game_rules: GameRules {
-                    difficulty: Difficulty::Survival,
-                    fast_travel_enabled: true,
-                },
-                factions,
-            },
+            globals,
             script_entities: ScriptEntities::default(),
             ai: AiSystem::default(),
             real_time_elapsed: Duration::ZERO,
@@ -270,12 +274,8 @@ impl GameState {
 
         self.animation.update(&mut self.world);
 
-        self.executor.update(
-            &mut self.world,
-            &mut self.globals,
-            &mut self.script_entities,
-            &mut self.quests,
-        );
+        self.executor
+            .update(&mut self.world, &mut self.script_entities, &mut self.quests);
         self.quests
             .update(&mut self.world, &mut self.event_bus, &mut self.executor);
 

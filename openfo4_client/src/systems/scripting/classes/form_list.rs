@@ -174,10 +174,7 @@ where
         .get_by_addr(addr)
         .and_then(|s| s.record())
         .ok_or_else(|| todo!())?;
-    let mut globals = caller.data_mut().globals_mut().await;
-    let list = globals
-        .form_lists
-        .get_mut(&form_list)
-        .ok_or_else(|| todo!())?;
+    let mut form_lists = caller.data().globals.form_lists.lock();
+    let list = form_lists.get_mut(&form_list).ok_or_else(|| todo!())?;
     Ok(f(list))
 }

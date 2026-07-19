@@ -69,7 +69,7 @@ use crate::systems::global::GlobalProperties;
 use crate::systems::quests::QuestManager;
 use crate::systems::scripting::ScriptEntities;
 use crate::systems::scripting::effects::{Effect, EffectId, Effects};
-use crate::systems::scripting::loader::{ScriptLoader, ScriptObject};
+use crate::systems::scripting::loader::ScriptLoader;
 use crate::systems::scripting::objects::{ScriptObjects, ScriptsRef};
 use crate::systems::scripting::registration::RegistrationSet;
 
@@ -160,6 +160,7 @@ pub struct State {
     pub effects: Arc<Mutex<Effects>>,
     pub wait_on_effect: Option<EffectId>,
     pub loader: Arc<ScriptLoader>,
+    pub globals: Arc<GlobalProperties>,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -218,16 +219,6 @@ impl State {
     async fn quests(&mut self) -> BorrowMut<'_, QuestManager> {
         let s = self.borrowed.borrow_mut().await;
         BorrowMut::map(s, |state| unsafe { &mut *state.quests })
-    }
-
-    async fn globals(&self) -> Borrow<'_, GlobalProperties> {
-        let s = self.borrowed.borrow().await;
-        Borrow::map(s, |state| unsafe { &*state.globals })
-    }
-
-    async fn globals_mut(&mut self) -> BorrowMut<'_, GlobalProperties> {
-        let s = self.borrowed.borrow_mut().await;
-        BorrowMut::map(s, |state| unsafe { &mut *state.globals })
     }
 
     async fn entities(&self) -> Borrow<'_, ScriptEntities> {
@@ -628,7 +619,6 @@ pub struct BorrowedState {
     pub world: *const World,
     pub quests: *mut QuestManager,
     pub entities: *const ScriptEntities,
-    pub globals: *mut GlobalProperties,
 }
 
 unsafe impl Send for BorrowedState {}
