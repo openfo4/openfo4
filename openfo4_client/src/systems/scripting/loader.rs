@@ -401,6 +401,7 @@ impl ScriptLoader {
                 debug_assert!(!listeners.contains_key(record));
 
                 let event = events.get_mut(record).unwrap();
+                event.loaded.notify(event.loaded.total_listeners());
                 event.built.notify(event.built.total_listeners());
             }
         }
