@@ -75,17 +75,9 @@ impl ScriptLoader {
     pub async fn load(&self, record: RecordId) -> Option<LoadResult> {
         tracing::debug!("loading script for {:?}", record);
 
-        let res = instantiate_form(
-            &self.engine,
-            &self.esp_loader,
-            &self.load_events,
-            record,
-            &self.cache,
-            &self.objects,
-            &self.registration,
-            RecordInstantiationKind::BaseObject,
-        )
-        .await?;
+        let res = self
+            .load_in(record, RecordInstantiationKind::BaseObject)
+            .await?;
 
         tracing::trace!("script for {:?} is {:?}", record, res.object.id());
 
@@ -97,17 +89,9 @@ impl ScriptLoader {
     pub async fn load_instance(&self, record: RecordId) -> Option<ScriptObject> {
         tracing::debug!("loading script for {:?}", record);
 
-        let res = instantiate_form(
-            &self.engine,
-            &self.esp_loader,
-            &self.load_events,
-            record,
-            &self.cache,
-            &self.objects,
-            &self.registration,
-            RecordInstantiationKind::Instance,
-        )
-        .await;
+        let res = self
+            .load_in(record, RecordInstantiationKind::Instance)
+            .await;
 
         let res = res?;
 
@@ -142,6 +126,338 @@ impl ScriptLoader {
             base: object.0.base,
             id,
         }))
+    }
+
+    async fn load_in(&self, root: RecordId, kind: RecordInstantiationKind) -> Option<LoadResult> {
+        if let Some(scripts) = self.objects.get_by_record(root)
+        // FIXME: We should still cache default instances here
+        // and clone the object for each call.
+        && kind.is_base_object()
+        {
+            return Some(LoadResult {
+                object: ScriptObject(Arc::new(ScriptObjectInner {
+                    base: Some(root),
+                    id: scripts.id(),
+                })),
+                // FIXME: What should we do here?
+                aliases: HashMap::new(),
+            });
+        }
+
+        let mut root_id = None;
+
+        let mut records = HashMap::new();
+        let mut record_aliases = HashMap::new();
+
+        let mut listeners = HashMap::new();
+
+        let mut queue = vec![root];
+        while let Some(record) = queue.pop() {
+            // We want our own instance, don't sync with other tasks loading
+            // the same instance.
+            let is_instance_root = kind.is_instance() && record == root;
+
+            if self.objects.get_by_record(record).is_some()
+                || records.contains_key(&record)
+                || listeners.contains_key(&record)
+            {
+                if !is_instance_root {
+                    continue;
+                }
+            }
+
+            if !is_instance_root {
+                // Try to synchronize with another task that is already loading this record.
+                // If another task is already loading the record, we skip it locally and
+                // let the other task provide it to us later, otherwise we setup an event
+                // for another task to synchronize to.
+                let mut events = self.load_events.lock();
+                match events.entry(record) {
+                    Entry::Occupied(event) => {
+                        debug_assert!(!records.contains_key(&record));
+                        debug_assert!(!listeners.contains_key(&record));
+
+                        listeners.insert(record, event.get().listen());
+                        continue;
+                    }
+                    Entry::Vacant(event) => {
+                        event.insert(LoadEvent::default());
+                    }
+                }
+            }
+
+            tracing::debug!("loading attached scripts for record {:?}", record);
+
+            let kind = match kind {
+                RecordInstantiationKind::BaseObject => RecordInstantiationKind::BaseObject,
+                RecordInstantiationKind::Instance if record == root => {
+                    RecordInstantiationKind::Instance
+                }
+                RecordInstantiationKind::Instance => RecordInstantiationKind::BaseObject,
+            };
+
+            let Some(loaded_rec) =
+                load_record(&self.esp_loader, record, &self.engine, kind, &self.cache).await
+            else {
+                if !is_instance_root {
+                    let mut events = self.load_events.lock();
+                    let event = events.remove(&record).unwrap();
+                    event.loaded.notify(event.loaded.total_listeners());
+                    event.built.notify(event.built.total_listeners());
+                }
+
+                continue;
+            };
+
+            debug_assert!(!listeners.contains_key(&record));
+
+            queue.extend(loaded_rec.depends);
+            records.insert(record, loaded_rec.scripts);
+            record_aliases.extend(loaded_rec.aliases);
+        }
+
+        let local_records: Vec<_> = records.keys().copied().collect();
+
+        let mut partial_object_addrs = HashMap::new();
+        for (id, scripts) in &records {
+            let mut addrs = HashMap::new();
+            for (name, script) in scripts {
+                addrs.insert(name.clone(), script.builder.addr());
+            }
+            partial_object_addrs.insert(*id, addrs);
+        }
+
+        let mut partial_alias_addrs = HashMap::new();
+        for (key, alias) in &record_aliases {
+            let mut addrs = HashMap::new();
+            for (name, script) in alias {
+                addrs.insert(name.clone(), script.builder.addr());
+            }
+            partial_alias_addrs.insert(*key, addrs);
+        }
+
+        // At this point we are ready to build our objects, but we must wait for
+        // all objects that we synchronized with to become ready.
+        // Before this happens we MUST make our local addresses available,
+        // otherwise we may deadlock, since the other task may also wait for our
+        // local addresses.
+        {
+            let mut events = self.load_events.lock();
+
+            for (record, addrs) in &partial_object_addrs {
+                // We don't sync instance scripts.
+                let is_instance_root = kind.is_instance() && *record == root;
+                if is_instance_root {
+                    continue;
+                }
+
+                debug_assert!(records.contains_key(record));
+                debug_assert!(!listeners.contains_key(record));
+
+                // This key must still exist, only we are allowed to remove it.
+                let event = events.get_mut(record).unwrap();
+                event.addrs = Some(addrs.clone());
+
+                // NOTE: The number of listeners cannot change, because we hold
+                // an exclusive lock.
+                event.loaded.notify(event.loaded.total_listeners());
+            }
+        }
+
+        for (_, listener) in &mut listeners {
+            (&mut listener.loaded).await;
+        }
+
+        {
+            let mut events = self.load_events.lock();
+
+            for (record, _) in &listeners {
+                // We don't sync instance scripts.
+                let is_instance_root = kind.is_instance() && *record == root;
+                if is_instance_root {
+                    continue;
+                }
+
+                // If the event is already removed, this means that the loading
+                // has finished and the object is already fully loaded and available
+                // in the object pool.
+                let Some(event) = events.get_mut(record) else {
+                    continue;
+                };
+
+                let addrs = event.addrs.as_ref().unwrap();
+                partial_object_addrs.insert(*record, addrs.clone());
+            }
+        }
+
+        let mut built_objects = Vec::new();
+
+        for (record, scripts) in records {
+            let mut final_instances = Vec::new();
+
+            for (name, mut object) in scripts {
+                register_static_events(&object, &self.registration);
+
+                if let Some(script) = &object.script {
+                    tracing::debug!("instantiating script {:?} (record {:?})", name, record);
+
+                    let (_, warnings) = build_script_object(
+                        |form| self.esp_loader.resolve_form(form, record).unwrap(),
+                        &self.engine,
+                        script,
+                        &self.objects,
+                        &partial_object_addrs,
+                        &partial_alias_addrs,
+                        &mut object.builder,
+                        record,
+                    );
+
+                    for warning in warnings {
+                        tracing::warn!(
+                            "warning while building script {} for object {:?}: {}",
+                            &script.name,
+                            record,
+                            warning,
+                        );
+                    }
+                }
+
+                let layout = self.engine.get_type(&name).unwrap();
+                final_instances.push(ScriptInstance {
+                    instance: object.instance,
+                    layout: layout.clone(),
+                    object: object.builder.finalize(),
+                });
+            }
+
+            let rid = match kind {
+                RecordInstantiationKind::BaseObject => Some(record),
+                // Always register dependencies as base objects.
+                RecordInstantiationKind::Instance if record != root => Some(record),
+                RecordInstantiationKind::Instance => None,
+            };
+
+            if rid.is_some() {
+                debug_assert!(self.objects.get_by_record(record).is_none());
+            }
+
+            let is_root = record == root;
+
+            built_objects.push((final_instances, rid, None, is_root));
+        }
+
+        let mut compiled_aliases = HashMap::new();
+        for (key, scripts) in record_aliases {
+            let mut final_instances = Vec::new();
+
+            for (name, mut object) in scripts {
+                register_static_events(&object, &self.registration);
+
+                if let Some(script) = &object.script {
+                    tracing::debug!("instantiating alias script {:?} for {:?}", name, key);
+
+                    let (_, warnings) = build_script_object(
+                        |form| self.esp_loader.resolve_form(form, key.accessor).unwrap(),
+                        &self.engine,
+                        script,
+                        &self.objects,
+                        &partial_object_addrs,
+                        &partial_alias_addrs,
+                        &mut object.builder,
+                        key.accessor,
+                    );
+
+                    for warning in warnings {
+                        tracing::warn!(
+                            "warning while building script {} for alias {:?}: {}",
+                            &script.name,
+                            key,
+                            warning,
+                        );
+                    }
+                }
+
+                let layout = self.engine.get_type(&name).unwrap();
+                final_instances.push(ScriptInstance {
+                    instance: object.instance,
+                    layout: layout.clone(),
+                    object: object.builder.finalize(),
+                });
+            }
+
+            built_objects.push((final_instances, None, Some(key), false));
+        }
+
+        {
+            let mut events = self.load_events.lock();
+
+            for record in &local_records {
+                // We don't sync instance scripts.
+                let is_instance_root = kind.is_instance() && *record == root;
+                if is_instance_root {
+                    continue;
+                }
+
+                debug_assert!(!listeners.contains_key(record));
+
+                let event = events.get_mut(record).unwrap();
+                event.built.notify(event.built.total_listeners());
+            }
+        }
+
+        for (_, listener) in listeners {
+            listener.built.await;
+        }
+
+        // Once we insert the new objects into the object pool, they are allowed
+        // to immediately be used by another thread, so must wait until the objects
+        // are fully built.
+        for (instances, record, alias_key, is_root) in built_objects {
+            let id = self.objects.insert(&self.engine, instances, record);
+
+            if is_root {
+                root_id = Some(id);
+            }
+
+            if let Some(key) = alias_key {
+                compiled_aliases.insert(
+                    key,
+                    ScriptObject(Arc::new(ScriptObjectInner { base: None, id })),
+                );
+            }
+        }
+
+        {
+            let mut events = self.load_events.lock();
+
+            // Signal all other tasks that have started waiting for our objects after
+            // we already signaled for the first time. Not doing so would cause them
+            // to deadlock.
+            for record in local_records {
+                // We don't sync instance scripts.
+                let is_instance_root = kind.is_instance() && record == root;
+                if is_instance_root {
+                    continue;
+                }
+
+                // We are the owner of the event, so only we are allowed to remove it.
+                let event = events.remove(&record).unwrap();
+
+                // The listener count cannot change, because we hold an exclusive lock.
+                event.loaded.notify(event.loaded.total_listeners());
+                event.built.notify(event.built.total_listeners());
+            }
+        }
+
+        let root_id = root_id?;
+
+        Some(LoadResult {
+            object: ScriptObject(Arc::new(ScriptObjectInner {
+                base: Some(root),
+                id: root_id,
+            })),
+            aliases: compiled_aliases,
+        })
     }
 }
 
@@ -230,347 +546,6 @@ impl CompilationCache {
 
         instance
     }
-}
-
-async fn instantiate_form(
-    engine: &Engine,
-    esp_loader: &EspLoader,
-    load_events: &Mutex<HashMap<RecordId, LoadEvent>>,
-    root: RecordId,
-    compiled_classes: &CompilationCache,
-    object_pool: &ScriptObjects,
-    registration: &RegistrationSet,
-    kind: RecordInstantiationKind,
-) -> Option<LoadResult> {
-    if let Some(scripts) = object_pool.get_by_record(root)
-        // FIXME: We should still cache default instances here
-        // and clone the object for each call.
-        && kind.is_base_object()
-    {
-        return Some(LoadResult {
-            object: ScriptObject(Arc::new(ScriptObjectInner {
-                base: Some(root),
-                id: scripts.id(),
-            })),
-            // FIXME: What should we do here?
-            aliases: HashMap::new(),
-        });
-    }
-
-    let mut root_id = None;
-
-    let mut records = HashMap::new();
-    let mut record_aliases = HashMap::new();
-
-    let mut listeners = HashMap::new();
-
-    let mut queue = vec![root];
-    while let Some(record) = queue.pop() {
-        // We want our own instance, don't sync with other tasks loading
-        // the same instance.
-        let is_instance_root = kind.is_instance() && record == root;
-
-        if object_pool.get_by_record(record).is_some()
-            || records.contains_key(&record)
-            || listeners.contains_key(&record)
-        {
-            if !is_instance_root {
-                continue;
-            }
-        }
-
-        if !is_instance_root {
-            // Try to synchronize with another task that is already loading this record.
-            // If another task is already loading the record, we skip it locally and
-            // let the other task provide it to us later, otherwise we setup an event
-            // for another task to synchronize to.
-            let mut events = load_events.lock();
-            match events.entry(record) {
-                Entry::Occupied(event) => {
-                    debug_assert!(!records.contains_key(&record));
-                    debug_assert!(!listeners.contains_key(&record));
-
-                    listeners.insert(record, event.get().listen());
-                    continue;
-                }
-                Entry::Vacant(event) => {
-                    event.insert(LoadEvent::default());
-                }
-            }
-        }
-
-        tracing::debug!("loading attached scripts for record {:?}", record);
-
-        let kind = match kind {
-            RecordInstantiationKind::BaseObject => RecordInstantiationKind::BaseObject,
-            RecordInstantiationKind::Instance if record == root => {
-                RecordInstantiationKind::Instance
-            }
-            RecordInstantiationKind::Instance => RecordInstantiationKind::BaseObject,
-        };
-
-        let Some(loaded_rec) =
-            load_record(esp_loader, record, engine, kind, compiled_classes).await
-        else {
-            if !is_instance_root {
-                let mut events = load_events.lock();
-                let event = events.remove(&record).unwrap();
-                event.loaded.notify(event.loaded.total_listeners());
-                event.built.notify(event.built.total_listeners());
-            }
-
-            continue;
-        };
-
-        debug_assert!(!listeners.contains_key(&record));
-
-        queue.extend(loaded_rec.depends);
-        records.insert(record, loaded_rec.scripts);
-        record_aliases.extend(loaded_rec.aliases);
-    }
-
-    let local_records: Vec<_> = records.keys().copied().collect();
-
-    let mut partial_object_addrs = HashMap::new();
-    for (id, scripts) in &records {
-        let mut addrs = HashMap::new();
-        for (name, script) in scripts {
-            addrs.insert(name.clone(), script.builder.addr());
-        }
-        partial_object_addrs.insert(*id, addrs);
-    }
-
-    let mut partial_alias_addrs = HashMap::new();
-    for (key, alias) in &record_aliases {
-        let mut addrs = HashMap::new();
-        for (name, script) in alias {
-            addrs.insert(name.clone(), script.builder.addr());
-        }
-        partial_alias_addrs.insert(*key, addrs);
-    }
-
-    // At this point we are ready to build our objects, but we must wait for
-    // all objects that we synchronized with to become ready.
-    // Before this happens we MUST make our local addresses available,
-    // otherwise we may deadlock, since the other task may also wait for our
-    // local addresses.
-    {
-        let mut events = load_events.lock();
-
-        for (record, addrs) in &partial_object_addrs {
-            // We don't sync instance scripts.
-            let is_instance_root = kind.is_instance() && *record == root;
-            if is_instance_root {
-                continue;
-            }
-
-            debug_assert!(records.contains_key(record));
-            debug_assert!(!listeners.contains_key(record));
-
-            // This key must still exist, only we are allowed to remove it.
-            let event = events.get_mut(record).unwrap();
-            event.addrs = Some(addrs.clone());
-
-            // NOTE: The number of listeners cannot change, because we hold
-            // an exclusive lock.
-            event.loaded.notify(event.loaded.total_listeners());
-        }
-    }
-
-    for (_, listener) in &mut listeners {
-        (&mut listener.loaded).await;
-    }
-
-    {
-        let mut events = load_events.lock();
-
-        for (record, _) in &listeners {
-            // We don't sync instance scripts.
-            let is_instance_root = kind.is_instance() && *record == root;
-            if is_instance_root {
-                continue;
-            }
-
-            // If the event is already removed, this means that the loading
-            // has finished and the object is already fully loaded and available
-            // in the object pool.
-            let Some(event) = events.get_mut(record) else {
-                continue;
-            };
-
-            let addrs = event.addrs.as_ref().unwrap();
-            partial_object_addrs.insert(*record, addrs.clone());
-        }
-    }
-
-    let mut built_objects = Vec::new();
-
-    for (record, scripts) in records {
-        let mut final_instances = Vec::new();
-
-        for (name, mut object) in scripts {
-            register_static_events(&object, registration);
-
-            if let Some(script) = &object.script {
-                tracing::debug!("instantiating script {:?} (record {:?})", name, record);
-
-                let (_, warnings) = build_script_object(
-                    |form| esp_loader.resolve_form(form, record).unwrap(),
-                    engine,
-                    script,
-                    object_pool,
-                    &partial_object_addrs,
-                    &partial_alias_addrs,
-                    &mut object.builder,
-                    record,
-                );
-
-                for warning in warnings {
-                    tracing::warn!(
-                        "warning while building script {} for object {:?}: {}",
-                        &script.name,
-                        record,
-                        warning,
-                    );
-                }
-            }
-
-            let layout = engine.get_type(&name).unwrap();
-            final_instances.push(ScriptInstance {
-                instance: object.instance,
-                layout: layout.clone(),
-                object: object.builder.finalize(),
-            });
-        }
-
-        let rid = match kind {
-            RecordInstantiationKind::BaseObject => Some(record),
-            // Always register dependencies as base objects.
-            RecordInstantiationKind::Instance if record != root => Some(record),
-            RecordInstantiationKind::Instance => None,
-        };
-
-        if rid.is_some() {
-            debug_assert!(object_pool.get_by_record(record).is_none());
-        }
-
-        let is_root = record == root;
-
-        built_objects.push((final_instances, rid, None, is_root));
-    }
-
-    let mut compiled_aliases = HashMap::new();
-    for (key, scripts) in record_aliases {
-        let mut final_instances = Vec::new();
-
-        for (name, mut object) in scripts {
-            register_static_events(&object, registration);
-
-            if let Some(script) = &object.script {
-                tracing::debug!("instantiating alias script {:?} for {:?}", name, key);
-
-                let (_, warnings) = build_script_object(
-                    |form| esp_loader.resolve_form(form, key.accessor).unwrap(),
-                    engine,
-                    script,
-                    object_pool,
-                    &partial_object_addrs,
-                    &partial_alias_addrs,
-                    &mut object.builder,
-                    key.accessor,
-                );
-
-                for warning in warnings {
-                    tracing::warn!(
-                        "warning while building script {} for alias {:?}: {}",
-                        &script.name,
-                        key,
-                        warning,
-                    );
-                }
-            }
-
-            let layout = engine.get_type(&name).unwrap();
-            final_instances.push(ScriptInstance {
-                instance: object.instance,
-                layout: layout.clone(),
-                object: object.builder.finalize(),
-            });
-        }
-
-        built_objects.push((final_instances, None, Some(key), false));
-    }
-
-    {
-        let mut events = load_events.lock();
-
-        for record in &local_records {
-            // We don't sync instance scripts.
-            let is_instance_root = kind.is_instance() && *record == root;
-            if is_instance_root {
-                continue;
-            }
-
-            debug_assert!(!listeners.contains_key(record));
-
-            let event = events.get_mut(record).unwrap();
-            event.built.notify(event.built.total_listeners());
-        }
-    }
-
-    for (_, listener) in listeners {
-        listener.built.await;
-    }
-
-    // Once we insert the new objects into the object pool, they are allowed
-    // to immediately be used by another thread, so must wait until the objects
-    // are fully built.
-    for (instances, record, alias_key, is_root) in built_objects {
-        let id = object_pool.insert(engine, instances, record);
-
-        if is_root {
-            root_id = Some(id);
-        }
-
-        if let Some(key) = alias_key {
-            compiled_aliases.insert(
-                key,
-                ScriptObject(Arc::new(ScriptObjectInner { base: None, id })),
-            );
-        }
-    }
-
-    {
-        let mut events = load_events.lock();
-
-        // Signal all other tasks that have started waiting for our objects after
-        // we already signaled for the first time. Not doing so would cause them
-        // to deadlock.
-        for record in local_records {
-            // We don't sync instance scripts.
-            let is_instance_root = kind.is_instance() && record == root;
-            if is_instance_root {
-                continue;
-            }
-
-            // We are the owner of the event, so only we are allowed to remove it.
-            let event = events.remove(&record).unwrap();
-
-            // The listener count cannot change, because we hold an exclusive lock.
-            event.loaded.notify(event.loaded.total_listeners());
-            event.built.notify(event.built.total_listeners());
-        }
-    }
-
-    let root_id = root_id?;
-
-    Some(LoadResult {
-        object: ScriptObject(Arc::new(ScriptObjectInner {
-            base: Some(root),
-            id: root_id,
-        })),
-        aliases: compiled_aliases,
-    })
 }
 
 async fn load_alias_type(esp_loader: &EspLoader, id: RecordId, alias_id: u32) -> Option<AliasType> {
@@ -1534,7 +1509,7 @@ mod tests {
         );
 
         engine.register(&module);
-        block_on(engine.compile("test", &Options::default()));
+        block_on(engine.compile("test", &Options::default())).unwrap();
 
         let script = Script {
             name: "test".to_owned(),
@@ -1577,7 +1552,7 @@ mod tests {
         );
 
         engine.register(&module);
-        block_on(engine.compile("test", &Options::default()));
+        block_on(engine.compile("test", &Options::default())).unwrap();
 
         let script = Script {
             name: "test".to_owned(),
@@ -1647,7 +1622,7 @@ mod tests {
         );
 
         engine.register(&module);
-        block_on(engine.compile("test", &Options::default()));
+        block_on(engine.compile("test", &Options::default())).unwrap();
 
         let script = Script {
             name: "test".to_owned(),
@@ -1715,9 +1690,9 @@ mod tests {
         );
 
         engine.register(&module);
-        block_on(engine.compile("A", &Options::default()));
-        block_on(engine.compile("B", &Options::default()));
-        block_on(engine.compile("C", &Options::default()));
+        block_on(engine.compile("A", &Options::default())).unwrap();
+        block_on(engine.compile("B", &Options::default())).unwrap();
+        block_on(engine.compile("C", &Options::default())).unwrap();
 
         let script = Script {
             name: "C".to_owned(),
