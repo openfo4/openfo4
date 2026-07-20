@@ -72,26 +72,26 @@ binary_struct! {
     pub struct Header {
         pub major_version: u8,
         pub minor_version: u8,
-        pub game_id: u16,
-        pub compilation_time: u64,
-        pub source_filename: String,
-        pub username: String,
-        pub machine_name: String,
+        _game_id: u16,
+        _compilation_time: u64,
+        _source_filename: String,
+        _username: String,
+        _machine_name: String,
     }
 }
 
 binary_struct! {
     #[derive(Copy, Clone, Debug)]
     pub struct UserFlag {
-        pub name_index: u16,
-        pub flag_index: u8,
+        _name_index: u16,
+        _flag_index: u8,
     }
 }
 
 binary_struct! {
     #[derive(Clone, Debug)]
     pub struct DebugInfo {
-        pub modification_time: u64,
+        _modification_time: u64,
         pub functions: Vec<FunctionDebugInfo>,
         pub property_groups: Vec<PropertyGroupDebugInfo>,
         pub structs: Vec<StructDebugInfo>,
