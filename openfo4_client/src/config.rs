@@ -126,6 +126,7 @@ impl Scripting {
 #[serde(default)]
 pub struct Streaming {
     pub active: u32,
+    pub visible: u32,
 }
 
 impl Streaming {
@@ -140,12 +141,22 @@ impl Streaming {
             for gameplay.
             "#,
         );
+        insert_if_missing(
+            table,
+            "visible",
+            i64::from(default.visible),
+            r#"The radius around the player's current cell which are rendered.
+            "#,
+        );
     }
 }
 
 impl Default for Streaming {
     fn default() -> Self {
-        Self { active: 2 }
+        Self {
+            active: 2,
+            visible: 3,
+        }
     }
 }
 

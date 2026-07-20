@@ -40,7 +40,7 @@ use crate::systems::scripting::ScriptEntities;
 use crate::systems::scripting::loader::ScriptObject;
 
 // FIXME: Unhardcode this guy.
-pub const PLAYER_LEVEL: u16 = 1000;
+const PLAYER_LEVEL: u16 = 1000;
 
 #[derive(Debug, Default)]
 pub struct SpawnEntity {
@@ -535,7 +535,9 @@ impl SpawnEntity {
             max: (Vec3::new(b.max_x as f32, b.max_y as f32, b.max_z as f32) * scale).as_ivec3(),
         });
 
-        let script = if record.local.data.virtual_machine_adapter().is_some() {
+        let script = if record.local.data.virtual_machine_adapter().is_some()
+            && flags.contains(PartialEntityFlags::SCRIPT)
+        {
             ctx.script_loader.load(record.id).await.map(|v| v.object)
         } else {
             None

@@ -49,17 +49,12 @@ const INTERIOR_CELL: CellId = CellId::new(0, 0);
 
 /// A streamer is an entity that causes a region around it to be loaded (i.e. streamed in).
 #[derive(Copy, Clone, Debug)]
-pub struct Streamer {
-    pub distance: u32,
-}
+pub struct Streamer;
 
 pub struct Level {
     events: Arc<SegQueue<Event>>,
     tx: async_channel::Sender<Request>,
-    // Worldspace, Cell, fully loaded
-    cells_loaded: HashMap<(RecordId, CellId), bool>,
-    // Worldspace, Cell
-    cells_to_unload_next_tick: HashSet<(RecordId, CellId)>,
+    cells_loaded: HashMap<CellKey, CellActivityMode>,
     terrain_manager: TerrainManager,
     loader: Arc<EntityLoader>,
     alive_entities: HashSet<Entity>,
@@ -137,7 +132,6 @@ impl Level {
             events: events.clone(),
             tx,
             cells_loaded: HashMap::new(),
-            cells_to_unload_next_tick: HashSet::new(),
             terrain_manager,
             alive_entities: HashSet::new(),
             loader: Arc::new(EntityLoader::new(
@@ -166,56 +160,66 @@ impl Level {
     ) {
         let _span = trace_span!("Level::update").entered();
 
-        self.unload_cells(world);
+        let radius = self.config.active.max(self.config.visible);
 
-        let mut prev_cells_loaded = core::mem::take(&mut self.cells_loaded);
-        for (transform, streamer, worldspace) in
-            world.query_mut::<(&Transform, &Streamer, &WorldSpace)>()
+        let mut cells_to_unload = self.cells_loaded.keys().copied().collect::<HashSet<_>>();
+        let mut cells_to_load = HashMap::new();
+
+        for (transform, worldspace, _) in world.query_mut::<(&Transform, &WorldSpace, &Streamer)>()
         {
-            let cells = if worldspace.is_interior {
-                vec![INTERIOR_CELL]
+            let (center, cells) = if worldspace.is_interior {
+                (INTERIOR_CELL, vec![INTERIOR_CELL])
             } else {
                 let cell = CellId::from(NiTransform::from(*transform));
-                cell.square(streamer.distance)
+                (cell, cell.square(radius))
             };
 
             for cell in cells {
-                // Start streaming in the cell if it was not already
-                // loaded in the previous tick and we have not already started
-                // loading it this tick.
-                // This should happen at most once in the current tick.
-                if !prev_cells_loaded.contains_key(&(worldspace.record, cell))
-                    && !self.cells_loaded.contains_key(&(worldspace.record, cell))
-                {
-                    tracing::debug!("loading cell {:?}", cell);
-                    self.tx
-                        .try_send(Request {
-                            worldspace: worldspace.record,
-                            cell,
-                        })
-                        .unwrap();
-                }
+                let key = CellKey {
+                    worldspace: worldspace.record,
+                    cell,
+                };
 
-                let is_fully_loaded = prev_cells_loaded
-                    .get(&(worldspace.record, cell))
-                    .is_some_and(|v| *v);
+                cells_to_unload.remove(&key);
 
-                self.cells_loaded
-                    .insert((worldspace.record, cell), is_fully_loaded);
-                prev_cells_loaded.remove(&(worldspace.record, cell));
+                let distance = cell.distance_max(center);
+                let new_mode = if distance <= self.config.active {
+                    CellActivityMode::Active
+                } else if distance <= self.config.visible {
+                    CellActivityMode::VisibleDistant
+                } else {
+                    todo!();
+                };
+
+                let entry = cells_to_load.entry(key).or_insert(new_mode);
+                *entry = (*entry).max(new_mode);
             }
         }
 
-        self.instantiate_new_entities(world, event_bus, object_ref_set, script_entities);
+        for (cell, new_mode) in cells_to_load {
+            if let Some(mode) = self.cells_loaded.get(&cell) {
+                if *mode == new_mode {
+                    continue;
+                }
 
-        for cell in prev_cells_loaded.into_keys() {
-            tracing::debug!("unloading cell {:?}", cell);
+                // Reload the cell with a different mode.
+                cells_to_unload.insert(cell);
+            }
 
-            // Mark the cell for removal in the next tick.
-            // We cannot immediately unload the cell so that
-            // entities can be notified that they are about to be unloaded.
-            self.cells_to_unload_next_tick.insert(cell);
+            tracing::debug!("loading cell {:?}", cell);
+
+            self.cells_loaded.insert(cell, new_mode);
+            self.tx
+                .try_send(Request {
+                    worldspace: cell.worldspace,
+                    cell: cell.cell,
+                    mode: new_mode,
+                })
+                .unwrap();
         }
+
+        self.unload_cells(world, &cells_to_unload);
+        self.instantiate_new_entities(world, event_bus, object_ref_set, script_entities);
 
         self.terrain_manager.update(world);
         self.update_frozen_entities(world);
@@ -248,8 +252,10 @@ impl Level {
                     // was already unloaded again.
                     // In this case we must not spawn the new entity to prevent
                     // duplicating entities when the cell gets loaded again.
-                    if !self.cells_loaded.contains_key(&(worldspace.record, cell))
-                        && !entity.persistent
+                    if !self.cells_loaded.contains_key(&CellKey {
+                        worldspace: worldspace.record,
+                        cell,
+                    }) && !entity.persistent
                         && !make_ref
                     {
                         continue;
@@ -301,9 +307,13 @@ impl Level {
                         self.alive_entities.insert(entity);
                     }
                 }
-                Event::CellLoadDone { worldspace, cell } => {
-                    if let Some(loaded) = self.cells_loaded.get_mut(&(worldspace, cell)) {
-                        *loaded = true;
+                Event::CellLoadDone {
+                    worldspace,
+                    cell,
+                    mode,
+                } => {
+                    if let Some(loaded) = self.cells_loaded.get_mut(&CellKey { worldspace, cell }) {
+                        *loaded = mode;
                     }
                 }
                 Event::CreateRef(entity) => {
@@ -334,10 +344,15 @@ impl Level {
         self.loader.tick.notify(self.loader.tick.total_listeners());
     }
 
-    #[instrument(name = "Level::unload_cells", skip_all)]
-    fn unload_cells(&mut self, world: &mut World) {
-        if self.cells_to_unload_next_tick.is_empty() {
+    fn unload_cells(&mut self, world: &mut World, cells: &HashSet<CellKey>) {
+        let _span = trace_span!("Level::unload_cells").entered();
+
+        if cells.is_empty() {
             return;
+        }
+
+        for cell in cells {
+            tracing::debug!("unloading cell {:?}", cell);
         }
 
         let mut entities = Vec::new();
@@ -359,10 +374,10 @@ impl Level {
                 CellId::from(NiTransform::from(*transform))
             };
 
-            if !self
-                .cells_to_unload_next_tick
-                .contains(&(worldspace.record, cell))
-            {
+            if !cells.contains(&CellKey {
+                worldspace: worldspace.record,
+                cell,
+            }) {
                 continue;
             }
 
@@ -381,8 +396,6 @@ impl Level {
         for entity in entities {
             world.despawn_recursive(entity);
         }
-
-        self.cells_to_unload_next_tick.clear();
     }
 
     fn update_frozen_entities(&self, world: &mut World) {
@@ -399,8 +412,11 @@ impl Level {
 
             if self
                 .cells_loaded
-                .get(&(worldspace.record, cell))
-                .is_some_and(|v| *v)
+                .get(&CellKey {
+                    worldspace: worldspace.record,
+                    cell,
+                })
+                .is_some_and(|mode| *mode == CellActivityMode::Active)
             {
                 // Unfreeze
                 if !frozen.is_any_frozen() {
@@ -444,10 +460,24 @@ impl Level {
     }
 }
 
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+struct CellKey {
+    worldspace: RecordId,
+    cell: CellId,
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+enum CellActivityMode {
+    VisibleDistant,
+    /// The cell is fully loaded.
+    Active,
+}
+
 #[derive(Copy, Clone, Debug)]
 struct Request {
     worldspace: RecordId,
     cell: CellId,
+    mode: CellActivityMode,
 }
 
 #[derive(Debug, Default)]
@@ -570,6 +600,7 @@ async fn load_cells_task(
                 &state,
                 is_interior,
                 &script_loader,
+                req.mode,
             )
             .await;
         });
@@ -586,6 +617,7 @@ async fn load_persistent(
     shared: &Arc<SharedState>,
     state: &Arc<LoaderState>,
     script_loader: &Arc<ScriptLoader>,
+    mode: CellActivityMode,
 ) {
     let mut worldspace_cells = HashSet::new();
 
@@ -618,6 +650,7 @@ async fn load_persistent(
                 state,
                 false,
                 script_loader,
+                mode,
             )
             .await;
         }
@@ -643,6 +676,7 @@ async fn load_persistent(
             state,
             true,
             script_loader,
+            mode,
         )
         .await;
     }
@@ -661,6 +695,7 @@ async fn load_cell(
     state: &Arc<LoaderState>,
     is_interior: bool,
     script_loader: &Arc<ScriptLoader>,
+    mode: CellActivityMode,
 ) {
     let cell = match loader.lookup(Some(RecordKind::Cell), cell_form).await {
         Ok(record) => match record.local.data {
@@ -712,6 +747,14 @@ async fn load_cell(
         persistent
     };
 
+    let flags = match mode {
+        CellActivityMode::Active if persistent_only => PartialEntityFlags::SCRIPT,
+        CellActivityMode::Active => PartialEntityFlags::all(),
+        CellActivityMode::VisibleDistant => {
+            PartialEntityFlags::GRAPHICS | PartialEntityFlags::SCENE
+        }
+    };
+
     let mut tasks = FuturesUnordered::new();
     for record in records {
         let loader = loader.clone();
@@ -722,6 +765,21 @@ async fn load_cell(
         let state = state.clone();
         let script_loader = script_loader.clone();
 
+        // Skip loading these if we're loading distant objects,
+        // they are either too inconsenquential or too expensive
+        // to have loaded at long distance.
+        if mode == CellActivityMode::VisibleDistant
+            && matches!(
+                record.local.data,
+                RecordData::PlacedGrenade(_)
+                    | RecordData::PlacedHazard(_)
+                    | RecordData::PlacedMissile(_)
+                    | RecordData::PlacedNpc(_)
+            )
+        {
+            continue;
+        }
+
         let task = pool.spawn(async move {
             let ctx = LoadContext {
                 cell: cell_id,
@@ -730,12 +788,6 @@ async fn load_cell(
                 file_loader: &file_loader,
                 script_loader: &script_loader,
                 shared: &shared,
-            };
-
-            let flags = if persistent_only {
-                PartialEntityFlags::empty()
-            } else {
-                PartialEntityFlags::all()
             };
 
             if let Some(mut entity) = SpawnEntity::load(&ctx, &record, flags).await {
@@ -782,6 +834,7 @@ async fn load_cell(
     events.push(Event::CellLoadDone {
         worldspace,
         cell: cell_id,
+        mode,
     });
 }
 
@@ -813,6 +866,7 @@ enum Event {
     CellLoadDone {
         worldspace: RecordId,
         cell: CellId,
+        mode: CellActivityMode,
     },
     /// Create a ref count for an existing entity.
     CreateRef(Entity),

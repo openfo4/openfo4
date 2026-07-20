@@ -9,5 +9,6 @@ bitflags! {
         const PHYSICS = 1 << 2;
         const ACTOR = 1 << 3;
         const SCENE = 1 << 4;
+        const SCRIPT = 1 << 5;
     }
 }
