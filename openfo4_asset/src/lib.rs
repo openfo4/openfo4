@@ -368,18 +368,6 @@ impl AssetRegistry {
 
         Some(unsafe { &*ptr })
     }
-
-    fn get_mut<T>(&mut self) -> Option<&mut Assets<T>>
-    where
-        T: Asset,
-    {
-        let type_id = TypeId::of::<T>();
-
-        let ptr = *self.assets.get(&type_id)?;
-        let ptr = ptr.cast::<Assets<T>>();
-
-        Some(unsafe { &mut *ptr })
-    }
 }
 
 impl Drop for AssetRegistry {
@@ -443,23 +431,26 @@ where
             return;
         }
 
-        let mut registry = self.registry.write();
+        let registry = self.registry.read();
+        let assets = unsafe { registry.get::<T>().unwrap_unchecked() };
 
-        // Note that it is possible for another thread to
-        // increment the refcount just after it hit 0.
-        // This is because unlike a Arc we have an additional "weak"
-        // reference in the AssetLoader that is not counted.
-        // As such we need to check the refcount again AFTER we have
-        // acquired the lock, preventing access from the AssetLoader.
-        // Only if the refcount is still zero are we able to delete
-        // the asset.
-        let state = self.asset.ref_count.load(Ordering::Acquire);
-        if state != 0 {
-            return;
-        }
+        // Exclusively lock the bucket while we check the refcount.
+        assets.assets.remove_if(&self.asset.key, |_, _| {
+            // Note that it is possible for another thread to
+            // increment the refcount just after it hit 0.
+            // This is because unlike a Arc we have an additional "weak"
+            // reference in the AssetLoader that is not counted.
+            // As such we need to check the refcount again AFTER we have
+            // acquired the lock, preventing access from the AssetLoader.
+            // Only if the refcount is still zero are we able to delete
+            // the asset.
+            let state = self.asset.ref_count.load(Ordering::Acquire);
+            if state != 0 {
+                return false;
+            }
 
-        let assets = unsafe { registry.get_mut::<T>().unwrap_unchecked() };
-        assets.assets.remove(&self.asset.key);
+            true
+        });
     }
 }
 
