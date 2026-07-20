@@ -238,9 +238,6 @@ enum FileHeader {
 
 #[derive(Clone, Debug)]
 struct Dx10FileHeader {
-    file_hash: u32,
-    extension: u32,
-    directory_hash: u32,
     chunks: Vec<Chunk>,
     width: u16,
     height: u16,
@@ -335,13 +332,13 @@ impl Decode for Dx10FileHeader {
     where
         R: AsyncReadAt,
     {
-        let file_hash = u32::decode(&mut reader).await?;
-        let extension = u32::decode(&mut reader).await?;
-        let directory_hash = u32::decode(&mut reader).await?;
+        let _file_hash = u32::decode(&mut reader).await?;
+        let _extension = u32::decode(&mut reader).await?;
+        let _directory_hash = u32::decode(&mut reader).await?;
 
         u8::decode(&mut reader).await?;
         let chunk_count = u8::decode(&mut reader).await?;
-        let chunk_size = u16::decode(&mut reader).await?;
+        let _chunk_size = u16::decode(&mut reader).await?;
 
         let height = u16::decode(&mut reader).await?;
         let width = u16::decode(&mut reader).await?;
@@ -371,9 +368,6 @@ impl Decode for Dx10FileHeader {
         }
 
         Ok(Self {
-            file_hash,
-            extension,
-            directory_hash,
             chunks,
             width,
             height,
@@ -385,9 +379,6 @@ impl Decode for Dx10FileHeader {
 
 #[derive(Clone, Debug)]
 struct GnrlFileHeader {
-    file_hash: u32,
-    extension: u32,
-    directory_hash: u32,
     chunks: Vec<Chunk>,
 }
 
@@ -396,13 +387,13 @@ impl Decode for GnrlFileHeader {
     where
         R: AsyncReadAt,
     {
-        let file_hash = u32::decode(&mut reader).await?;
-        let extension = u32::decode(&mut reader).await?;
-        let directory_hash = u32::decode(&mut reader).await?;
+        let _file_hash = u32::decode(&mut reader).await?;
+        let _extension = u32::decode(&mut reader).await?;
+        let _directory_hash = u32::decode(&mut reader).await?;
 
         u8::decode(&mut reader).await?;
         let chunk_count = u8::decode(&mut reader).await?;
-        let chunk_size = u16::decode(&mut reader).await?;
+        let _chunk_size = u16::decode(&mut reader).await?;
 
         let mut chunks = Vec::new();
         for _ in 0..chunk_count {
@@ -420,12 +411,7 @@ impl Decode for GnrlFileHeader {
             });
         }
 
-        Ok(Self {
-            file_hash,
-            directory_hash,
-            extension,
-            chunks,
-        })
+        Ok(Self { chunks })
     }
 }
 
