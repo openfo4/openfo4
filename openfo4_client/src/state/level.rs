@@ -748,11 +748,27 @@ async fn load_cell(
     };
 
     let flags = match mode {
-        CellActivityMode::Active if persistent_only => PartialEntityFlags::SCRIPT,
-        CellActivityMode::Active => PartialEntityFlags::all(),
-        CellActivityMode::VisibleDistant => {
-            PartialEntityFlags::GRAPHICS | PartialEntityFlags::SCENE
-        }
+        CellActivityMode::Active if persistent_only => PartialEntityFlags {
+            graphics: false,
+            physics: false,
+            actor: false,
+            scene: false,
+            script: true,
+        },
+        CellActivityMode::Active => PartialEntityFlags {
+            graphics: true,
+            physics: true,
+            actor: true,
+            scene: true,
+            script: true,
+        },
+        CellActivityMode::VisibleDistant => PartialEntityFlags {
+            graphics: true,
+            scene: true,
+            physics: false,
+            actor: false,
+            script: false,
+        },
     };
 
     let mut tasks = FuturesUnordered::new();

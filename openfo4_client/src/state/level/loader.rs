@@ -185,7 +185,13 @@ impl EntityLoader {
             shared: &self.shared,
         };
 
-        let flags = PartialEntityFlags::empty();
+        let flags = PartialEntityFlags {
+            graphics: false,
+            physics: false,
+            actor: false,
+            scene: false,
+            script: false,
+        };
 
         let mut entity = SpawnEntity::load(&ctx, &record, flags).await.unwrap();
         // FIXME: We need to either:

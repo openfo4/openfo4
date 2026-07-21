@@ -1,14 +1,10 @@
-use bitflags::bitflags;
-
-bitflags! {
-    #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
-    pub struct PartialEntityFlags: u32 {
-        /// Graphics related components.
-        const GRAPHICS = 1 << 1;
-        /// Physics related components.
-        const PHYSICS = 1 << 2;
-        const ACTOR = 1 << 3;
-        const SCENE = 1 << 4;
-        const SCRIPT = 1 << 5;
-    }
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub struct PartialEntityFlags {
+    /// Graphics related components.
+    pub graphics: bool,
+    /// Physics related components.
+    pub physics: bool,
+    pub actor: bool,
+    pub scene: bool,
+    pub script: bool,
 }

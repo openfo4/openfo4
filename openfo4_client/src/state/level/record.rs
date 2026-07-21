@@ -365,6 +365,14 @@ impl SpawnEntity {
 
         let item = load_item(ctx, &base).await;
 
+        if base
+            .local
+            .flags
+            .contains(RecordHeaderFlags::HAS_DISTANT_LOD)
+        {
+            return None;
+        }
+
         match base.local.data {
             RecordData::STAT(data) => {
                 model = data.modl.model;
@@ -422,7 +430,7 @@ impl SpawnEntity {
                 object_bounds = Some(data.object_bounds);
             }
             RecordData::Npc(_) => {
-                if flags.contains(PartialEntityFlags::ACTOR) {
+                if flags.actor {
                     let props = ActorInstanceProps {
                         dead: record.local.flags.contains(RecordHeaderFlags::STARTS_DEAD),
                     };
@@ -499,16 +507,16 @@ impl SpawnEntity {
         }
 
         let mut nif_flags = LoadNifFlags::empty();
-        if flags.contains(PartialEntityFlags::GRAPHICS) {
+        if flags.graphics {
             nif_flags |= LoadNifFlags::RENDER_OBJECTS;
             nif_flags |= LoadNifFlags::ANIMATIONS;
         }
-        if flags.contains(PartialEntityFlags::PHYSICS) {
+        if flags.graphics {
             nif_flags |= LoadNifFlags::COLLIDERS;
         }
 
         let scene = match model {
-            Some(model) if flags.contains(PartialEntityFlags::SCENE) => {
+            Some(model) if flags.scene => {
                 let mut path = DataPathBuf::new(model.as_bytes());
                 path.push_front("meshes");
 
@@ -535,9 +543,7 @@ impl SpawnEntity {
             max: (Vec3::new(b.max_x as f32, b.max_y as f32, b.max_z as f32) * scale).as_ivec3(),
         });
 
-        let script = if record.local.data.virtual_machine_adapter().is_some()
-            && flags.contains(PartialEntityFlags::SCRIPT)
-        {
+        let script = if record.local.data.virtual_machine_adapter().is_some() && flags.script {
             ctx.script_loader.load(record.id).await.map(|v| v.object)
         } else {
             None
@@ -546,18 +552,10 @@ impl SpawnEntity {
         Some(SpawnEntity {
             transform: NiTransform::from_ni_transform(transform),
             scene,
-            light: flags
-                .contains(PartialEntityFlags::GRAPHICS)
-                .then_some(light)
-                .flatten(),
-            light_flicker: flags
-                .contains(PartialEntityFlags::GRAPHICS)
-                .then_some(light_flicker)
-                .flatten(),
+            light: flags.graphics.then_some(light).flatten(),
+            light_flicker: flags.graphics.then_some(light_flicker).flatten(),
             actor,
-            rigid_body: flags
-                .contains(PartialEntityFlags::PHYSICS)
-                .then_some(RigidBody::FIXED),
+            rigid_body: flags.physics.then_some(RigidBody::FIXED),
             door,
             inventory,
             placed_item: item.map(PlacedItem),
