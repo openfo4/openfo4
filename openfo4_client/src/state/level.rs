@@ -754,6 +754,7 @@ async fn load_cell(
             actor: false,
             scene: false,
             script: true,
+            require_distant_lod: false,
         },
         CellActivityMode::Active => PartialEntityFlags {
             graphics: true,
@@ -761,6 +762,7 @@ async fn load_cell(
             actor: true,
             scene: true,
             script: true,
+            require_distant_lod: false,
         },
         CellActivityMode::VisibleDistant => PartialEntityFlags {
             graphics: true,
@@ -768,6 +770,7 @@ async fn load_cell(
             physics: false,
             actor: false,
             script: false,
+            require_distant_lod: true,
         },
     };
 

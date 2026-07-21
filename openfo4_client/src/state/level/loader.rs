@@ -191,6 +191,7 @@ impl EntityLoader {
             actor: false,
             scene: false,
             script: false,
+            require_distant_lod: false,
         };
 
         let mut entity = SpawnEntity::load(&ctx, &record, flags).await.unwrap();

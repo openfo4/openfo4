@@ -1540,6 +1540,8 @@ bitflags::bitflags! {
 
         // ACHR
         const STARTS_DEAD = 0x00000200;
+
+        const HAS_DISTANT_LOD = 1 << 15;
     }
 }
 

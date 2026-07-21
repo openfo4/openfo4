@@ -365,10 +365,15 @@ impl SpawnEntity {
 
         let item = load_item(ctx, &base).await;
 
-        if base
-            .local
-            .flags
-            .contains(RecordHeaderFlags::HAS_DISTANT_LOD)
+        if flags.require_distant_lod
+            && !base
+                .local
+                .flags
+                .contains(RecordHeaderFlags::HAS_DISTANT_LOD)
+            // FIXME: Lights don't have a distant lod flag and seem
+            // to be visible at distance, sometimes. Sometimes they
+            // are not visible.
+            && !matches!(base.local.data, RecordData::Light(_))
         {
             return None;
         }
