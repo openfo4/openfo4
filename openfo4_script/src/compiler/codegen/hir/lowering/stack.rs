@@ -311,10 +311,10 @@ pub fn resume(translator: &mut Translator<'_>, frame: &StackFrameInfo, start_blo
                 break;
             }
 
-            let wanted_tag = translator.builder.iconst(PTR_TYPE, wanted_tag.get());
+            let wanted_tag = wanted_tag.get();
             let tag_matches = translator
                 .builder
-                .icmp(tag, wanted_tag, IntCompareOp::Equal);
+                .icmp_imm(tag, wanted_tag, IntCompareOp::Equal);
 
             translator
                 .builder
@@ -338,10 +338,11 @@ pub fn resume(translator: &mut Translator<'_>, frame: &StackFrameInfo, start_blo
             } else {
                 let mut any_tag_matches = translator.builder.iconst(JitType::I8, 0);
                 for wanted_tag in tags {
-                    let wanted_tag = translator.builder.iconst(PTR_TYPE, wanted_tag.get());
-                    let tag_matches = translator
-                        .builder
-                        .icmp(tag, wanted_tag, IntCompareOp::Equal);
+                    let wanted_tag = wanted_tag.get();
+                    let tag_matches =
+                        translator
+                            .builder
+                            .icmp_imm(tag, wanted_tag, IntCompareOp::Equal);
                     any_tag_matches = translator.builder.bor(any_tag_matches, tag_matches);
                 }
 

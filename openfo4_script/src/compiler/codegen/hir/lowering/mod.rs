@@ -719,14 +719,14 @@ pub fn lower_function(
                             src_ty,
                             dst_ty,
                             |translator, value| {
-                                let zero = translator.builder.iconst(INT_TYPE, 0);
-                                translator.builder.icmp(value, zero, IntCompareOp::NotEqual)
+                                translator
+                                    .builder
+                                    .icmp_imm(value, 0, IntCompareOp::NotEqual)
                             },
                         );
                     } else {
                         let src = translator.load(src);
-                        let zero = translator.builder.iconst(INT_TYPE, 0);
-                        let res = translator.builder.icmp(src, zero, IntCompareOp::NotEqual);
+                        let res = translator.builder.icmp_imm(src, 0, IntCompareOp::NotEqual);
                         translator.store(dst, res);
                     }
                 }

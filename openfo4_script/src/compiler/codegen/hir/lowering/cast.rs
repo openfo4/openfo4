@@ -15,7 +15,6 @@ use crate::runtime::object::{ObjectTag, VarObject};
 /// - `src` must be of type [`PTR_TYPE`] and must point to a class object, or be null.
 pub fn is_class(translator: &mut Translator<'_>, src: JitValue, class: ClassId) -> JitValue {
     let dst_id = translator.data.class_types.get(&class).unwrap();
-    let dst_id = translator.builder.iconst(PTR_TYPE, dst_id.as_bits());
 
     let type_info_ptr = translator.builder.load(PTR_TYPE, src, 0);
 
@@ -48,7 +47,7 @@ pub fn is_class(translator: &mut Translator<'_>, src: JitValue, class: ClassId) 
 
     let is_eq = translator
         .builder
-        .icmp(type_id, dst_id, IntCompareOp::Equal);
+        .icmp_imm(type_id, dst_id.as_bits(), IntCompareOp::Equal);
 
     // Increment index.
     let next_index = translator.builder.iadd_imm(index, 1);
@@ -93,7 +92,7 @@ pub fn extract_var(
     tag: ObjectTag,
     class: Option<ClassId>,
 ) -> JitValue {
-    let wanted_tag = translator.builder.iconst(PTR_TYPE, tag.to_bits());
+    let wanted_tag = tag.to_bits();
 
     // Abort if object == null.
     translator.assert_true(object);
@@ -103,7 +102,7 @@ pub fn extract_var(
         .load(PTR_TYPE, object, offset_of!(VarObject, tag));
     let is_eq = translator
         .builder
-        .icmp(actual_tag, wanted_tag, IntCompareOp::Equal);
+        .icmp_imm(actual_tag, wanted_tag, IntCompareOp::Equal);
 
     // Abort if the actual tag doesn't match the requested tag.
     translator.assert_true(is_eq);

@@ -575,6 +575,31 @@ impl CraneliftModule {
                         values[dst.0] = Some(res);
                         added_inst_count += 1;
                     }
+                    Instruction::ICmpImm { lhs, rhs, dst, op } => {
+                        let lhs = values[lhs.0].unwrap();
+
+                        let cond = match op {
+                            IntCompareOp::Equal => IntCC::Equal,
+                            IntCompareOp::NotEqual => IntCC::NotEqual,
+                            IntCompareOp::SignedGreaterThan => IntCC::SignedGreaterThan,
+                            IntCompareOp::SignedGreaterThanOrEqual => {
+                                IntCC::SignedGreaterThanOrEqual
+                            }
+                            IntCompareOp::SignedLessThan => IntCC::SignedLessThan,
+                            IntCompareOp::SignedLessThanOrEqual => IntCC::SignedLessThanOrEqual,
+                            IntCompareOp::UnsignedGreaterThan => IntCC::UnsignedGreaterThan,
+                            IntCompareOp::UnsignedGreaterThanOrEqual => {
+                                IntCC::UnsignedGreaterThanOrEqual
+                            }
+                            IntCompareOp::UnsignedLessThan => IntCC::UnsignedLessThan,
+                            IntCompareOp::UnsignedLessThanOrEqual => IntCC::UnsignedLessThanOrEqual,
+                        };
+
+                        let res = builder.ins().icmp_imm(cond, lhs, i64::from(*rhs));
+                        values[dst.0] = Some(res);
+                        added_inst_count += 1;
+                    }
+
                     Instruction::FCmp { lhs, rhs, dst, op } => {
                         let lhs = values[lhs.0].unwrap();
                         let rhs = values[rhs.0].unwrap();

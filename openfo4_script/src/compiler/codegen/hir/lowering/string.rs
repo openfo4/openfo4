@@ -103,10 +103,9 @@ pub fn string_cmpeq(translator: &mut Translator<'_>, lhs: JitValue, rhs: JitValu
     let bytes_to_memcmp = translator.builder.imul(lhs_len, len_is_eq_wide);
 
     let bytes_not_eq = translator.builder.memcmp(lhs_ptr, rhs_ptr, bytes_to_memcmp);
-    let zero = translator.builder.iconst(INT_TYPE, 0);
     let bytes_eq = translator
         .builder
-        .icmp(bytes_not_eq, zero, IntCompareOp::Equal);
+        .icmp_imm(bytes_not_eq, 0, IntCompareOp::Equal);
 
     translator.builder.band(len_is_eq, bytes_eq)
 }

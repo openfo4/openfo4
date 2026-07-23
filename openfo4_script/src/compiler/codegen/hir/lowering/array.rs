@@ -113,10 +113,9 @@ pub fn array_add(translator: &mut Translator<'_>, op: &ArrayAdd) {
 
     // Abort if count < 0.
     {
-        let zero = translator.builder.iconst(INT_TYPE, 0);
         let is_negative = translator
             .builder
-            .icmp(count, zero, IntCompareOp::SignedLessThan);
+            .icmp_imm(count, 0, IntCompareOp::SignedLessThan);
         translator.assert_false(is_negative);
     }
 
@@ -408,7 +407,7 @@ where
     let negative_one = translator.builder.iconst(INT_TYPE, -1);
     let start_at_end = translator
         .builder
-        .icmp(start_index, negative_one, IntCompareOp::Equal);
+        .icmp_imm(start_index, -1, IntCompareOp::Equal);
 
     // If len == 0, then len - 1 will be usize::MAX and be out of bounds
     // immediately.
@@ -525,12 +524,10 @@ fn emit_array_bounds_check(
     let index_plus_count = translator.builder.iadd(index_wide, count_wide);
 
     // Negative indices are always out of bounds.
-    let zero = translator.builder.iconst(PTR_TYPE, 0);
-    let is_not_negative = translator.builder.icmp(
-        index_plus_count,
-        zero,
-        IntCompareOp::SignedGreaterThanOrEqual,
-    );
+    let is_not_negative =
+        translator
+            .builder
+            .icmp_imm(index_plus_count, 0, IntCompareOp::SignedGreaterThanOrEqual);
 
     // index + count <= len
     let is_within_len = translator.builder.icmp(

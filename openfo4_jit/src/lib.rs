@@ -788,6 +788,28 @@ impl<'a> FunctionBuilder<'a> {
         dst
     }
 
+    /// Integer comparision with immediate operand.
+    ///
+    /// Returns a value of type [`I8`].
+    ///
+    /// [`I8`]: Type::I8
+    pub fn icmp_imm<T>(&mut self, lhs: Value, rhs: T, op: IntCompareOp) -> Value
+    where
+        T: Into<Imm>,
+    {
+        self.assert_block_not_filled();
+
+        let dst = self.produce_value();
+
+        self.instructions.push(Instruction::ICmpImm {
+            lhs,
+            rhs: rhs.into().to_word(),
+            dst,
+            op,
+        });
+        dst
+    }
+
     /// Floating point comparison.
     ///
     /// Performs the floating point comparison of `lhs $op rhs`. If the comparison evaluates to
@@ -807,6 +829,12 @@ impl<'a> FunctionBuilder<'a> {
         dst
     }
 
+    /// Loads a value from memory address `addr + offset`.
+    ///
+    /// # Codegen Safety
+    ///
+    /// - The section `addr + offset..addr + offset + ty.size()` must be mapped as readable memory.
+    /// - `addr + offset` must be aligned to `ty`.
     #[track_caller]
     pub fn load<T>(&mut self, ty: Type, addr: Value, offset: T) -> Value
     where
@@ -824,6 +852,12 @@ impl<'a> FunctionBuilder<'a> {
         dst
     }
 
+    /// Stores a value to memory address `addr + offset`.
+    ///
+    /// # Codegen Safety
+    ///
+    /// - Section `addr + offset..addr + offset + ty.size()` must be mapped as writable memory.
+    /// - `addr + offset` must be aligned to `ty`.
     #[track_caller]
     pub fn store<T>(&mut self, value: Value, addr: Value, offset: T)
     where
@@ -1148,6 +1182,12 @@ enum Instruction {
     ICmp {
         lhs: Value,
         rhs: Value,
+        dst: Value,
+        op: IntCompareOp,
+    },
+    ICmpImm {
+        lhs: Value,
+        rhs: Word,
         dst: Value,
         op: IntCompareOp,
     },

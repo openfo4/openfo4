@@ -10,7 +10,6 @@ use crate::compiler::codegen::hir::Literal;
 use crate::compiler::codegen::hir::Null;
 use crate::compiler::codegen::hir::Value;
 use crate::compiler::codegen::hir::lowering::PTR_TYPE;
-use crate::compiler::codegen::hir::lowering::RESULT_TYPE;
 use crate::compiler::codegen::hir::lowering::Translator;
 use crate::compiler::codegen::hir::lowering::stack::StackFrameInfo;
 use crate::compiler::codegen::hir::lowering::stack::SuspensionPoint;
@@ -106,10 +105,9 @@ pub fn perform_checked_call(
     let continue_block = translator.builder.create_block(&[]);
     let suspend_block = translator.builder.create_block(&[]);
 
-    let result_ok = translator.builder.iconst(RESULT_TYPE, RESULT_OK);
     let is_ok = translator
         .builder
-        .icmp(*result, result_ok, IntCompareOp::Equal);
+        .icmp_imm(*result, RESULT_OK, IntCompareOp::Equal);
 
     translator
         .builder
