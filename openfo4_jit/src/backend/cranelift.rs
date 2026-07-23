@@ -10,8 +10,8 @@ use cranelift_codegen::control::ControlPlane;
 use cranelift_codegen::ir::condcodes::{FloatCC, IntCC};
 use cranelift_codegen::ir::{
     self, ArgumentExtension, ArgumentPurpose, BlockArg, ExtFuncData, ExternalName, Function,
-    InstBuilder, InstBuilderBase, MemFlags, StackSlotData, StackSlotKind, UserExternalName,
-    UserExternalNameRef, UserFuncName,
+    InstBuilder, MemFlags, StackSlotData, StackSlotKind, UserExternalName, UserExternalNameRef,
+    UserFuncName,
 };
 use cranelift_codegen::isa::OwnedTargetIsa;
 use cranelift_codegen::settings::Configurable;
@@ -255,12 +255,6 @@ impl CraneliftModule {
                         let rhs = values[op.rhs.0].unwrap();
 
                         let res = builder.ins().isub(lhs, rhs);
-                        values[op.dst.0] = Some(res);
-                        added_inst_count += 1;
-                    }
-                    Instruction::ISubImm(op) => {
-                        let lhs = values[op.lhs.0].unwrap();
-                        let res = builder.ins().iadd_imm(lhs, -i64::from(op.rhs));
                         values[op.dst.0] = Some(res);
                         added_inst_count += 1;
                     }
@@ -575,31 +569,6 @@ impl CraneliftModule {
                         values[dst.0] = Some(res);
                         added_inst_count += 1;
                     }
-                    Instruction::ICmpImm { lhs, rhs, dst, op } => {
-                        let lhs = values[lhs.0].unwrap();
-
-                        let cond = match op {
-                            IntCompareOp::Equal => IntCC::Equal,
-                            IntCompareOp::NotEqual => IntCC::NotEqual,
-                            IntCompareOp::SignedGreaterThan => IntCC::SignedGreaterThan,
-                            IntCompareOp::SignedGreaterThanOrEqual => {
-                                IntCC::SignedGreaterThanOrEqual
-                            }
-                            IntCompareOp::SignedLessThan => IntCC::SignedLessThan,
-                            IntCompareOp::SignedLessThanOrEqual => IntCC::SignedLessThanOrEqual,
-                            IntCompareOp::UnsignedGreaterThan => IntCC::UnsignedGreaterThan,
-                            IntCompareOp::UnsignedGreaterThanOrEqual => {
-                                IntCC::UnsignedGreaterThanOrEqual
-                            }
-                            IntCompareOp::UnsignedLessThan => IntCC::UnsignedLessThan,
-                            IntCompareOp::UnsignedLessThanOrEqual => IntCC::UnsignedLessThanOrEqual,
-                        };
-
-                        let res = builder.ins().icmp_imm(cond, lhs, i64::from(*rhs));
-                        values[dst.0] = Some(res);
-                        added_inst_count += 1;
-                    }
-
                     Instruction::FCmp { lhs, rhs, dst, op } => {
                         let lhs = values[lhs.0].unwrap();
                         let rhs = values[rhs.0].unwrap();
@@ -781,18 +750,6 @@ impl CraneliftModule {
                         values[dst.0] = Some(res);
                         added_inst_count += 1;
                     }
-                    Instruction::IAddImm(op) => {
-                        let lhs = values[op.lhs.0].unwrap();
-                        let res = builder.ins().iadd_imm(lhs, i64::from(op.rhs));
-                        values[op.dst.0] = Some(res);
-                        added_inst_count += 1;
-                    }
-                    Instruction::IMulImm(op) => {
-                        let lhs = values[op.lhs.0].unwrap();
-                        let res = builder.ins().imul_imm(lhs, i64::from(op.rhs));
-                        values[op.dst.0] = Some(res);
-                        added_inst_count += 1;
-                    }
                     Instruction::SMin(op) => {
                         let lhs = values[op.lhs.0].unwrap();
                         let rhs = values[op.rhs.0].unwrap();
@@ -817,39 +774,6 @@ impl CraneliftModule {
                     Instruction::UMax(op) => {
                         let lhs = values[op.lhs.0].unwrap();
                         let rhs = values[op.rhs.0].unwrap();
-                        let res = builder.ins().umax(lhs, rhs);
-                        values[op.dst.0] = Some(res);
-                        added_inst_count += 1;
-                    }
-                    // Cranelift has no immediate min/max.
-                    Instruction::SMinImm(op) => {
-                        let lhs = values[op.lhs.0].unwrap();
-                        let ty = builder.ins().data_flow_graph().value_type(lhs);
-                        let rhs = builder.ins().iconst(ty, i64::from(op.rhs));
-                        let res = builder.ins().smin(lhs, rhs);
-                        values[op.dst.0] = Some(res);
-                        added_inst_count += 1;
-                    }
-                    Instruction::SMaxImm(op) => {
-                        let lhs = values[op.lhs.0].unwrap();
-                        let ty = builder.ins().data_flow_graph().value_type(lhs);
-                        let rhs = builder.ins().iconst(ty, i64::from(op.rhs));
-                        let res = builder.ins().smax(lhs, rhs);
-                        values[op.dst.0] = Some(res);
-                        added_inst_count += 1;
-                    }
-                    Instruction::UMinImm(op) => {
-                        let lhs = values[op.lhs.0].unwrap();
-                        let ty = builder.ins().data_flow_graph().value_type(lhs);
-                        let rhs = builder.ins().iconst(ty, i64::from(op.rhs));
-                        let res = builder.ins().umin(lhs, rhs);
-                        values[op.dst.0] = Some(res);
-                        added_inst_count += 1;
-                    }
-                    Instruction::UMaxImm(op) => {
-                        let lhs = values[op.lhs.0].unwrap();
-                        let ty = builder.ins().data_flow_graph().value_type(lhs);
-                        let rhs = builder.ins().iconst(ty, i64::from(op.rhs));
                         let res = builder.ins().umax(lhs, rhs);
                         values[op.dst.0] = Some(res);
                         added_inst_count += 1;

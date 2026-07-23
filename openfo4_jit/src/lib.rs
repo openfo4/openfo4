@@ -83,6 +83,8 @@ impl Compiler {
             blocks_filled: Vec::new(),
             current_srcloc: None,
             srclocs: SourceLocMap::default(),
+            value_types: Vec::new(),
+            variable_types: Vec::new(),
         }
     }
 
@@ -215,22 +217,29 @@ pub struct FunctionBuilder<'a> {
     current_block: Option<Block>,
     current_srcloc: Option<(SourceLoc, usize)>,
     srclocs: SourceLocMap,
+    value_types: Vec<Type>,
+    variable_types: Vec<Type>,
 }
 
 impl<'a> FunctionBuilder<'a> {
     #[track_caller]
-    fn produce_value(&mut self) -> Value {
+    fn produce_value(&mut self, ty: Type) -> Value {
         debug_assert!(!self.current_block_full);
+        self.produce_value_maybe_full(ty)
+    }
 
+    fn produce_value_maybe_full(&mut self, ty: Type) -> Value {
         let id = self.next_value;
         self.next_value += 1;
+
+        self.value_types.push(ty);
+        debug_assert_eq!(self.value_types.len(), self.next_value);
+
         Value(id)
     }
 
-    fn produce_value_maybe_full(&mut self) -> Value {
-        let id = self.next_value;
-        self.next_value += 1;
-        Value(id)
+    fn value_type(&self, value: Value) -> Type {
+        self.value_types[value.0]
     }
 
     #[track_caller]
@@ -242,7 +251,9 @@ impl<'a> FunctionBuilder<'a> {
         debug_assert!(!self.current_block_full);
         self.assert_block_not_filled();
 
-        let dst = self.produce_value();
+        let dst_ty = self.value_type(src);
+
+        let dst = self.produce_value(dst_ty);
         self.instructions.push(op(Unop { src, dst }));
         dst
     }
@@ -256,21 +267,27 @@ impl<'a> FunctionBuilder<'a> {
         debug_assert!(rhs.0 < self.next_value);
         debug_assert!(!self.current_block_full);
 
-        let dst = self.produce_value();
+        debug_assert_eq!(self.value_type(lhs), self.value_type(rhs));
+        let dst_ty = self.value_type(lhs);
+
+        let dst = self.produce_value(dst_ty);
         self.instructions.push(op(Binop { lhs, rhs, dst }));
         dst
     }
 
     fn binop_imm<F>(&mut self, lhs: Value, rhs: Imm, op: F) -> Value
     where
-        F: FnOnce(BinopImm) -> Instruction,
+        F: FnOnce(Binop) -> Instruction,
     {
         debug_assert!(lhs.0 < self.next_value);
         debug_assert!(!self.current_block_full);
 
-        let dst = self.produce_value();
-        let rhs = rhs.to_word();
-        self.instructions.push(op(BinopImm { lhs, rhs, dst }));
+        let ty = self.value_type(lhs);
+
+        let rhs = self.iconst(ty, rhs);
+
+        let dst = self.produce_value(ty);
+        self.instructions.push(op(Binop { lhs, rhs, dst }));
         dst
     }
 
@@ -281,8 +298,13 @@ impl<'a> FunctionBuilder<'a> {
         self.next_block += 1;
 
         let params = state.signature.params.clone();
-        let values = (0..state.signature.params.len())
-            .map(|_| self.produce_value_maybe_full())
+        let values = state
+            .signature
+            .params
+            // FIXME: Don't clone.
+            .clone()
+            .iter()
+            .map(|ty| self.produce_value_maybe_full(*ty))
             .collect::<Vec<_>>();
 
         self.instructions.push(Instruction::CreateBlock {
@@ -303,8 +325,9 @@ impl<'a> FunctionBuilder<'a> {
         let block = self.next_block;
         self.next_block += 1;
 
-        let values = (0..params.len())
-            .map(|_| self.produce_value_maybe_full())
+        let values = params
+            .iter()
+            .map(|ty| self.produce_value_maybe_full(*ty))
             .collect::<Vec<_>>();
 
         self.instructions.push(Instruction::CreateBlock {
@@ -359,7 +382,7 @@ impl<'a> FunctionBuilder<'a> {
     {
         self.assert_block_not_filled();
 
-        let id = self.produce_value();
+        let id = self.produce_value(ty);
         let value = value.into().to_word();
 
         self.instructions.push(Instruction::IConst(ty, value, id));
@@ -381,7 +404,7 @@ impl<'a> FunctionBuilder<'a> {
     pub fn fconst<T: Into<f64>>(&mut self, ty: Type, value: T) -> Value {
         self.assert_block_not_filled();
 
-        let id = self.produce_value();
+        let id = self.produce_value(ty);
         self.instructions
             .push(Instruction::FConst(ty, value.into(), id));
         id
@@ -393,13 +416,23 @@ impl<'a> FunctionBuilder<'a> {
         self.binop(lhs, rhs, Instruction::IAdd)
     }
 
+    /// Integer addition with immediate value.
+    ///
+    /// Computes and returns `lhs + rhs`.
+    pub fn iadd_imm<T>(&mut self, lhs: Value, rhs: T) -> Value
+    where
+        T: Into<Imm>,
+    {
+        self.binop_imm(lhs, rhs.into(), Instruction::IAdd)
+    }
+
     /// Integer subtraction
     #[track_caller]
     pub fn isub(&mut self, lhs: Value, rhs: Value) -> Value {
         self.binop(lhs, rhs, Instruction::ISub)
     }
 
-    /// Integer subtraction with immediate.
+    /// Integer subtraction with immediate value.
     ///
     /// Computes and returns `lhs - rhs`.
     #[track_caller]
@@ -407,13 +440,23 @@ impl<'a> FunctionBuilder<'a> {
     where
         T: Into<Imm>,
     {
-        self.binop_imm(lhs, rhs.into(), Instruction::ISubImm)
+        self.binop_imm(lhs, rhs.into(), Instruction::ISub)
     }
 
     /// Integer multiplication
     #[track_caller]
     pub fn imul(&mut self, lhs: Value, rhs: Value) -> Value {
         self.binop(lhs, rhs, Instruction::IMul)
+    }
+
+    /// Integer multiplication with immediate value.
+    ///
+    /// Computes and returns `lhs * rhs`.
+    pub fn imul_imm<T>(&mut self, lhs: Value, rhs: T) -> Value
+    where
+        T: Into<Imm>,
+    {
+        self.binop_imm(lhs, rhs.into(), Instruction::IMul)
     }
 
     /// Unsigned integer division.
@@ -459,7 +502,7 @@ impl<'a> FunctionBuilder<'a> {
     where
         T: Into<Imm>,
     {
-        self.binop_imm(lhs, rhs.into(), Instruction::SMinImm)
+        self.binop_imm(lhs, rhs.into(), Instruction::SMin)
     }
 
     /// Signed integer maximum.
@@ -478,7 +521,7 @@ impl<'a> FunctionBuilder<'a> {
     where
         T: Into<Imm>,
     {
-        self.binop_imm(lhs, rhs.into(), Instruction::SMaxImm)
+        self.binop_imm(lhs, rhs.into(), Instruction::SMax)
     }
 
     /// Unsigned integer minumum.
@@ -497,7 +540,7 @@ impl<'a> FunctionBuilder<'a> {
     where
         T: Into<Imm>,
     {
-        self.binop_imm(lhs, rhs.into(), Instruction::UMinImm)
+        self.binop_imm(lhs, rhs.into(), Instruction::UMin)
     }
 
     /// Unsigned integer maximum.
@@ -516,7 +559,7 @@ impl<'a> FunctionBuilder<'a> {
     where
         T: Into<Imm>,
     {
-        self.binop_imm(lhs, rhs.into(), Instruction::UMaxImm)
+        self.binop_imm(lhs, rhs.into(), Instruction::UMax)
     }
 
     /// Floating point addition.
@@ -614,8 +657,13 @@ impl<'a> FunctionBuilder<'a> {
 
         debug_assert_eq!(state.signature.params.len(), args.len());
 
-        let returns: Vec<_> = (0..state.signature.returns.len())
-            .map(|_| self.produce_value())
+        let returns: Vec<_> = state
+            .signature
+            .returns
+            // FIXME: Don't clone.
+            .clone()
+            .iter()
+            .map(|ty| self.produce_value(*ty))
             .collect();
 
         self.instructions
@@ -634,8 +682,10 @@ impl<'a> FunctionBuilder<'a> {
         self.assert_block_not_filled();
         debug_assert_eq!(signature.params.len(), args.len());
 
-        let returns: Vec<_> = (0..signature.returns.len())
-            .map(|_| self.produce_value())
+        let returns: Vec<_> = signature
+            .returns
+            .iter()
+            .map(|ty| self.produce_value(*ty))
             .collect();
 
         self.instructions.push(Instruction::CallIndirect(
@@ -726,7 +776,7 @@ impl<'a> FunctionBuilder<'a> {
     {
         self.assert_block_not_filled();
 
-        let dst = self.produce_value();
+        let dst = self.produce_value(ty);
         self.instructions.push(Instruction::StackLoad {
             ty,
             slot,
@@ -759,7 +809,7 @@ impl<'a> FunctionBuilder<'a> {
         debug_assert!(self.stack_slots.contains(slot.0));
         self.assert_block_not_filled();
 
-        let dst = self.produce_value();
+        let dst = self.produce_value(ty);
         self.instructions.push(Instruction::StackAddr {
             slot,
             ty,
@@ -781,7 +831,7 @@ impl<'a> FunctionBuilder<'a> {
     pub fn icmp(&mut self, lhs: Value, rhs: Value, op: IntCompareOp) -> Value {
         self.assert_block_not_filled();
 
-        let dst = self.produce_value();
+        let dst = self.produce_value(Type::I8);
 
         self.instructions
             .push(Instruction::ICmp { lhs, rhs, dst, op });
@@ -799,14 +849,12 @@ impl<'a> FunctionBuilder<'a> {
     {
         self.assert_block_not_filled();
 
-        let dst = self.produce_value();
+        let ty = self.value_type(lhs);
+        let rhs = self.iconst(ty, rhs);
+        let dst = self.produce_value(Type::I8);
 
-        self.instructions.push(Instruction::ICmpImm {
-            lhs,
-            rhs: rhs.into().to_word(),
-            dst,
-            op,
-        });
+        self.instructions
+            .push(Instruction::ICmp { lhs, rhs, dst, op });
         dst
     }
 
@@ -822,7 +870,7 @@ impl<'a> FunctionBuilder<'a> {
     pub fn fcmp(&mut self, lhs: Value, rhs: Value, op: FloatCompareOp) -> Value {
         self.assert_block_not_filled();
 
-        let dst = self.produce_value();
+        let dst = self.produce_value(Type::I8);
 
         self.instructions
             .push(Instruction::FCmp { lhs, rhs, dst, op });
@@ -842,7 +890,7 @@ impl<'a> FunctionBuilder<'a> {
     {
         self.assert_block_not_filled();
 
-        let dst = self.produce_value();
+        let dst = self.produce_value(ty);
         self.instructions.push(Instruction::Load {
             ty,
             addr,
@@ -884,7 +932,7 @@ impl<'a> FunctionBuilder<'a> {
     pub fn convert_float_to_uint(&mut self, value: Value, ty: Type) -> Value {
         self.assert_block_not_filled();
 
-        let dst = self.produce_value();
+        let dst = self.produce_value(ty);
 
         self.instructions.push(Instruction::FToU { value, ty, dst });
         dst
@@ -902,7 +950,7 @@ impl<'a> FunctionBuilder<'a> {
     pub fn convert_float_to_sint(&mut self, value: Value, ty: Type) -> Value {
         self.assert_block_not_filled();
 
-        let dst = self.produce_value();
+        let dst = self.produce_value(ty);
 
         self.instructions.push(Instruction::FToS { value, ty, dst });
         dst
@@ -918,7 +966,7 @@ impl<'a> FunctionBuilder<'a> {
     pub fn convert_uint_to_float(&mut self, value: Value, ty: Type) -> Value {
         self.assert_block_not_filled();
 
-        let dst = self.produce_value();
+        let dst = self.produce_value(ty);
 
         self.instructions.push(Instruction::UToF { value, ty, dst });
         dst
@@ -934,7 +982,7 @@ impl<'a> FunctionBuilder<'a> {
     pub fn convert_sint_to_float(&mut self, value: Value, ty: Type) -> Value {
         self.assert_block_not_filled();
 
-        let dst = self.produce_value();
+        let dst = self.produce_value(ty);
 
         self.instructions.push(Instruction::SToF { value, ty, dst });
         dst
@@ -963,7 +1011,7 @@ impl<'a> FunctionBuilder<'a> {
 
     #[track_caller]
     pub fn uextend(&mut self, value: Value, ty: Type) -> Value {
-        let dst = self.produce_value();
+        let dst = self.produce_value(ty);
         self.instructions
             .push(Instruction::UExtend { value, dst, ty });
         dst
@@ -973,7 +1021,7 @@ impl<'a> FunctionBuilder<'a> {
     pub fn sextend(&mut self, value: Value, ty: Type) -> Value {
         self.assert_block_not_filled();
 
-        let dst = self.produce_value();
+        let dst = self.produce_value(ty);
         self.instructions
             .push(Instruction::SExtend { value, dst, ty });
         dst
@@ -984,7 +1032,7 @@ impl<'a> FunctionBuilder<'a> {
     pub fn ireduce(&mut self, value: Value, ty: Type) -> Value {
         self.assert_block_not_filled();
 
-        let dst = self.produce_value();
+        let dst = self.produce_value(ty);
         self.instructions
             .push(Instruction::IReduce { value, dst, ty });
         dst
@@ -1000,7 +1048,7 @@ impl<'a> FunctionBuilder<'a> {
     pub fn bitcast(&mut self, value: Value, ty: Type) -> Value {
         self.assert_block_not_filled();
 
-        let dst = self.produce_value();
+        let dst = self.produce_value(ty);
         self.instructions
             .push(Instruction::Bitcast { value, dst, ty });
         dst
@@ -1017,6 +1065,9 @@ impl<'a> FunctionBuilder<'a> {
         let var = Variable(self.next_variable);
         self.next_variable += 1;
 
+        self.variable_types.push(ty);
+        debug_assert_eq!(self.variable_types.len(), self.next_variable);
+
         self.instructions
             .push(Instruction::DefVar { ty, var, value });
 
@@ -1030,7 +1081,8 @@ impl<'a> FunctionBuilder<'a> {
 
     #[track_caller]
     pub fn get_var(&mut self, var: Variable) -> Value {
-        let dst = self.produce_value();
+        let ty = self.variable_types[var.0];
+        let dst = self.produce_value(ty);
 
         self.instructions.push(Instruction::GetVar { var, dst });
         dst
@@ -1045,7 +1097,8 @@ impl<'a> FunctionBuilder<'a> {
     }
 
     pub fn memcmp(&mut self, lhs: Value, rhs: Value, size: Value) -> Value {
-        let dst = self.produce_value();
+        // FIXME: We likely should return a I8 here aswell for consistency.
+        let dst = self.produce_value(Type::I32);
 
         self.instructions.push(Instruction::Memcmp {
             lhs,
@@ -1054,20 +1107,6 @@ impl<'a> FunctionBuilder<'a> {
             dst,
         });
         dst
-    }
-
-    pub fn iadd_imm<T>(&mut self, lhs: Value, rhs: T) -> Value
-    where
-        T: Into<Imm>,
-    {
-        self.binop_imm(lhs, rhs.into(), Instruction::IAddImm)
-    }
-
-    pub fn imul_imm<T>(&mut self, lhs: Value, rhs: T) -> Value
-    where
-        T: Into<Imm>,
-    {
-        self.binop_imm(lhs, rhs.into(), Instruction::IMulImm)
     }
 
     /// Finalize the function definition.
@@ -1185,12 +1224,6 @@ enum Instruction {
         dst: Value,
         op: IntCompareOp,
     },
-    ICmpImm {
-        lhs: Value,
-        rhs: Word,
-        dst: Value,
-        op: IntCompareOp,
-    },
     FCmp {
         lhs: Value,
         rhs: Value,
@@ -1282,17 +1315,10 @@ enum Instruction {
         dst: Value,
         size: Value,
     },
-    IAddImm(BinopImm),
-    IMulImm(BinopImm),
     SMin(Binop),
     SMax(Binop),
     UMin(Binop),
     UMax(Binop),
-    SMinImm(BinopImm),
-    SMaxImm(BinopImm),
-    UMinImm(BinopImm),
-    UMaxImm(BinopImm),
-    ISubImm(BinopImm),
 }
 
 #[derive(Copy, Clone, Debug)]
@@ -1305,13 +1331,6 @@ struct Unop {
 struct Binop {
     lhs: Value,
     rhs: Value,
-    dst: Value,
-}
-
-#[derive(Copy, Clone, Debug)]
-struct BinopImm {
-    lhs: Value,
-    rhs: Word,
     dst: Value,
 }
 
