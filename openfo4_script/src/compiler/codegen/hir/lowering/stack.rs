@@ -200,7 +200,7 @@ pub fn generate_suspension_blocks(
             let value = values.remove(0);
 
             offset = (offset + local.ty.align() - 1) & !(local.ty.align() - 1);
-            translator.builder.store(value, stack_ptr, offset as u32);
+            translator.builder.store(value, stack_ptr, offset);
 
             offset += local.ty.size();
         }
@@ -288,7 +288,7 @@ pub fn resume(translator: &mut Translator<'_>, frame: &StackFrameInfo, start_blo
 
             offset = (offset + local.ty.align() - 1) & !(local.ty.align() - 1);
 
-            let value = translator.builder.load(local.ty, stack_ptr, offset as u32);
+            let value = translator.builder.load(local.ty, stack_ptr, offset);
             vars.push(value);
 
             offset += local.ty.size();

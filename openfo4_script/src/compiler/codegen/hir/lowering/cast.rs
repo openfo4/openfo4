@@ -15,7 +15,7 @@ use crate::runtime::object::{ObjectTag, VarObject};
 /// - `src` must be of type [`PTR_TYPE`] and must point to a class object, or be null.
 pub fn is_class(translator: &mut Translator<'_>, src: JitValue, class: ClassId) -> JitValue {
     let dst_id = translator.data.class_types.get(&class).unwrap();
-    let dst_id = translator.builder.iconst(PTR_TYPE, dst_id.as_bits() as i64);
+    let dst_id = translator.builder.iconst(PTR_TYPE, dst_id.as_bits());
 
     let type_info_ptr = translator.builder.load(PTR_TYPE, src, 0);
 
@@ -78,11 +78,11 @@ pub fn create_var(translator: &mut Translator<'_>, value: JitValue, tag: ObjectT
     let tag = translator.builder.iconst(PTR_TYPE, tag.to_bits());
     translator
         .builder
-        .store(tag, ptr, offset_of!(VarObject, tag) as u32);
+        .store(tag, ptr, offset_of!(VarObject, tag));
 
     translator
         .builder
-        .store(value, ptr, offset_of!(VarObject, data) as u32);
+        .store(value, ptr, offset_of!(VarObject, data));
 
     ptr
 }
@@ -100,7 +100,7 @@ pub fn extract_var(
 
     let actual_tag = translator
         .builder
-        .load(PTR_TYPE, object, offset_of!(VarObject, tag) as u32);
+        .load(PTR_TYPE, object, offset_of!(VarObject, tag));
     let is_eq = translator
         .builder
         .icmp(actual_tag, wanted_tag, IntCompareOp::Equal);
@@ -109,32 +109,30 @@ pub fn extract_var(
     translator.assert_true(is_eq);
 
     let data = match tag {
-        ObjectTag::Class => {
-            translator
-                .builder
-                .load(PTR_TYPE, object, offset_of!(VarObject, data) as u32)
-        }
+        ObjectTag::Class => translator
+            .builder
+            .load(PTR_TYPE, object, offset_of!(VarObject, data)),
         ObjectTag::TypeId(id) => match translator.data.resources.types.get(id).unwrap().repr {
             TypeRepr::Unit => translator.builder.iconst(PTR_TYPE, 0),
             TypeRepr::Int { bits } if bits == 8 => {
                 translator
                     .builder
-                    .load(BOOL_TYPE, object, offset_of!(VarObject, data) as u32)
+                    .load(BOOL_TYPE, object, offset_of!(VarObject, data))
             }
             TypeRepr::Int { bits } if bits == 32 => {
                 translator
                     .builder
-                    .load(INT_TYPE, object, offset_of!(VarObject, data) as u32)
+                    .load(INT_TYPE, object, offset_of!(VarObject, data))
             }
             TypeRepr::Float { bits } if bits == 32 => {
                 translator
                     .builder
-                    .load(FLOAT_TYPE, object, offset_of!(VarObject, data) as u32)
+                    .load(FLOAT_TYPE, object, offset_of!(VarObject, data))
             }
             TypeRepr::Composite(_) => {
                 translator
                     .builder
-                    .load(PTR_TYPE, object, offset_of!(VarObject, data) as u32)
+                    .load(PTR_TYPE, object, offset_of!(VarObject, data))
             }
             _ => unreachable!(),
         },

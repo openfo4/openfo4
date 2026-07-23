@@ -513,7 +513,10 @@ impl CraneliftModule {
                         let slot = stack_slots[slot.0].unwrap();
                         let ty = map_type(*ty);
 
-                        let res = builder.ins().stack_load(ty, slot, *offset as i32);
+                        // TODO: We can do manual address calcuation when offset is too big.
+                        let offset = i32::try_from(*offset).unwrap_or_else(|_| todo!());
+
+                        let res = builder.ins().stack_load(ty, slot, offset);
                         values[dst.0] = Some(res);
                         added_inst_count += 1;
                     }
@@ -525,7 +528,10 @@ impl CraneliftModule {
                         let value = values[value.0].unwrap();
                         let slot = stack_slots[slot.0].unwrap();
 
-                        builder.ins().stack_store(value, slot, *offset as i32);
+                        // TODO: We can do manual address calcuation when offset is too big.
+                        let offset = i32::try_from(*offset).unwrap_or_else(|_| todo!());
+
+                        builder.ins().stack_store(value, slot, offset);
                         added_inst_count += 1;
                     }
                     Instruction::StackAddr {
@@ -537,7 +543,10 @@ impl CraneliftModule {
                         let slot = stack_slots[slot.0].unwrap();
                         let ty = map_type(*ty);
 
-                        let res = builder.ins().stack_addr(ty, slot, *offset as i32);
+                        // TODO: We can do manual address calcuation when offset is too big.
+                        let offset = i32::try_from(*offset).unwrap_or_else(|_| todo!());
+
+                        let res = builder.ins().stack_addr(ty, slot, offset);
                         values[dst.0] = Some(res);
                         added_inst_count += 1;
                     }
@@ -592,9 +601,10 @@ impl CraneliftModule {
                         let ty = map_type(*ty);
                         let addr = values[addr.0].unwrap();
 
-                        let res = builder
-                            .ins()
-                            .load(ty, MemFlags::trusted(), addr, *offset as i32);
+                        // TODO: We can do manual address calcuation when offset is too big.
+                        let offset = i32::try_from(*offset).unwrap_or_else(|_| todo!());
+
+                        let res = builder.ins().load(ty, MemFlags::trusted(), addr, offset);
                         values[dst.0] = Some(res);
                         added_inst_count += 1;
                     }
@@ -606,9 +616,12 @@ impl CraneliftModule {
                         let value = values[value.0].unwrap();
                         let addr = values[addr.0].unwrap();
 
+                        // TODO: We can do manual address calcuation when offset is too big.
+                        let offset = i32::try_from(*offset).unwrap_or_else(|_| todo!());
+
                         builder
                             .ins()
-                            .store(MemFlags::trusted(), value, addr, *offset as i32);
+                            .store(MemFlags::trusted(), value, addr, offset);
                         added_inst_count += 1;
                     }
                     Instruction::FToU { value, ty, dst } => {

@@ -720,7 +720,10 @@ impl<'a> FunctionBuilder<'a> {
     }
 
     #[track_caller]
-    pub fn stack_load(&mut self, slot: StackSlot, ty: Type, offset: u32) -> Value {
+    pub fn stack_load<T>(&mut self, slot: StackSlot, ty: Type, offset: T) -> Value
+    where
+        T: Into<Imm>,
+    {
         self.assert_block_not_filled();
 
         let dst = self.produce_value();
@@ -728,25 +731,31 @@ impl<'a> FunctionBuilder<'a> {
             ty,
             slot,
             dst,
-            offset,
+            offset: offset.into().to_word(),
         });
         dst
     }
 
     #[track_caller]
-    pub fn stack_store(&mut self, slot: StackSlot, value: Value, offset: u32) {
+    pub fn stack_store<T>(&mut self, slot: StackSlot, value: Value, offset: T)
+    where
+        T: Into<Imm>,
+    {
         debug_assert!(value.0 < self.next_value);
         self.assert_block_not_filled();
 
         self.instructions.push(Instruction::StackStore {
             slot,
             value,
-            offset,
+            offset: offset.into().to_word(),
         });
     }
 
     #[track_caller]
-    pub fn stack_addr(&mut self, slot: StackSlot, ty: Type, offset: u32) -> Value {
+    pub fn stack_addr<T>(&mut self, slot: StackSlot, ty: Type, offset: T) -> Value
+    where
+        T: Into<Imm>,
+    {
         debug_assert!(self.stack_slots.contains(slot.0));
         self.assert_block_not_filled();
 
@@ -754,7 +763,7 @@ impl<'a> FunctionBuilder<'a> {
         self.instructions.push(Instruction::StackAddr {
             slot,
             ty,
-            offset,
+            offset: offset.into().to_word(),
             dst,
         });
         dst
@@ -799,7 +808,10 @@ impl<'a> FunctionBuilder<'a> {
     }
 
     #[track_caller]
-    pub fn load(&mut self, ty: Type, addr: Value, offset: u32) -> Value {
+    pub fn load<T>(&mut self, ty: Type, addr: Value, offset: T) -> Value
+    where
+        T: Into<Imm>,
+    {
         self.assert_block_not_filled();
 
         let dst = self.produce_value();
@@ -807,19 +819,22 @@ impl<'a> FunctionBuilder<'a> {
             ty,
             addr,
             dst,
-            offset,
+            offset: offset.into().to_word(),
         });
         dst
     }
 
     #[track_caller]
-    pub fn store(&mut self, value: Value, addr: Value, offset: u32) {
+    pub fn store<T>(&mut self, value: Value, addr: Value, offset: T)
+    where
+        T: Into<Imm>,
+    {
         self.assert_block_not_filled();
 
         self.instructions.push(Instruction::Store {
             value,
             addr,
-            offset,
+            offset: offset.into().to_word(),
         });
     }
 
@@ -1117,18 +1132,18 @@ enum Instruction {
         ty: Type,
         slot: StackSlot,
         dst: Value,
-        offset: u32,
+        offset: Word,
     },
     StackStore {
         slot: StackSlot,
         value: Value,
-        offset: u32,
+        offset: Word,
     },
     StackAddr {
         slot: StackSlot,
         ty: Type,
         dst: Value,
-        offset: u32,
+        offset: Word,
     },
     ICmp {
         lhs: Value,
@@ -1151,12 +1166,12 @@ enum Instruction {
         ty: Type,
         addr: Value,
         dst: Value,
-        offset: u32,
+        offset: Word,
     },
     Store {
         value: Value,
         addr: Value,
-        offset: u32,
+        offset: Word,
     },
     FToU {
         value: Value,
@@ -1439,5 +1454,13 @@ struct Word(i64);
 impl From<Word> for i64 {
     fn from(value: Word) -> Self {
         value.0
+    }
+}
+
+impl TryFrom<Word> for i32 {
+    type Error = ();
+
+    fn try_from(value: Word) -> Result<Self, Self::Error> {
+        i32::try_from(value.0).map_err(|_| ())
     }
 }

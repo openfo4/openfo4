@@ -98,7 +98,7 @@ pub fn lower_function(
     let stack_start_offset = builder.load(
         PTR_TYPE,
         ctx_ptr,
-        (offset_of!(RawContext, stack_ptr) + offset_of!(RawStack, len)) as u32,
+        (offset_of!(RawContext, stack_ptr) + offset_of!(RawStack, len)),
     );
 
     let mut translator = Translator {
@@ -389,7 +389,7 @@ pub fn lower_function(
                     // Abort if struct == null
                     translator.assert_true(st);
 
-                    let res = translator.builder.load(ty, st, offset as u32);
+                    let res = translator.builder.load(ty, st, offset);
                     translator.store(dst, res);
                 }
                 Instruction::StructStore {
@@ -412,7 +412,7 @@ pub fn lower_function(
                     // Abort if struct == null
                     translator.assert_true(st);
 
-                    translator.builder.store(value, st, offset as u32);
+                    translator.builder.store(value, st, offset);
                 }
                 Instruction::ClassLoad {
                     object,
@@ -435,7 +435,7 @@ pub fn lower_function(
                     // Abort if object == null.
                     translator.assert_true(object);
 
-                    let value = translator.builder.load(ty, object, *offset as u32);
+                    let value = translator.builder.load(ty, object, *offset);
                     translator.store(dst, value);
                 }
                 Instruction::ClassStore {
@@ -457,7 +457,7 @@ pub fn lower_function(
                     // Abort if object == null.
                     translator.assert_true(object);
 
-                    translator.builder.store(value, object, *offset as u32);
+                    translator.builder.store(value, object, *offset);
                 }
                 Instruction::ClassUpcast {
                     src,
@@ -887,7 +887,7 @@ impl<'a> Translator<'a> {
                     .get(field)
                     .unwrap();
 
-                self.builder.load(ty, object, *offset as u32)
+                self.builder.load(ty, object, *offset)
             }
         }
     }
@@ -976,7 +976,7 @@ impl<'a> Translator<'a> {
         self.builder.store(
             stack_base,
             self.ctx_ptr,
-            (offset_of!(RawContext, stack_ptr) + offset_of!(RawStack, ptr)) as u32,
+            (offset_of!(RawContext, stack_ptr) + offset_of!(RawStack, ptr)),
         );
     }
 
@@ -999,7 +999,7 @@ impl<'a> Translator<'a> {
         self.builder.store(
             stack_base,
             self.ctx_ptr,
-            (offset_of!(RawContext, stack_ptr) + offset_of!(RawStack, ptr)) as u32,
+            (offset_of!(RawContext, stack_ptr) + offset_of!(RawStack, ptr)),
         );
     }
 
@@ -1008,7 +1008,7 @@ impl<'a> Translator<'a> {
         self.builder.load(
             PTR_TYPE,
             self.ctx_ptr,
-            (offset_of!(RawContext, stack_ptr) + offset_of!(RawStack, ptr)) as u32,
+            (offset_of!(RawContext, stack_ptr) + offset_of!(RawStack, ptr)),
         )
     }
 

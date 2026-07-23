@@ -68,10 +68,10 @@ fn string_from_ptr_len(translator: &mut Translator<'_>, ptr: JitValue, len: JitV
 
     translator
         .builder
-        .store(ptr, string_ptr, offset_of!(ArrayObject, ptr) as u32);
+        .store(ptr, string_ptr, offset_of!(ArrayObject, ptr));
     translator
         .builder
-        .store(len, string_ptr, offset_of!(ArrayObject, len) as u32);
+        .store(len, string_ptr, offset_of!(ArrayObject, len));
 
     string_ptr
 }
@@ -79,10 +79,10 @@ fn string_from_ptr_len(translator: &mut Translator<'_>, ptr: JitValue, len: JitV
 fn load_string_ptr_len(translator: &mut Translator<'_>, object: JitValue) -> (JitValue, JitValue) {
     let ptr = translator
         .builder
-        .load(PTR_TYPE, object, offset_of!(ArrayObject, ptr) as u32);
+        .load(PTR_TYPE, object, offset_of!(ArrayObject, ptr));
     let len = translator
         .builder
-        .load(PTR_TYPE, object, offset_of!(ArrayObject, len) as u32);
+        .load(PTR_TYPE, object, offset_of!(ArrayObject, len));
     (ptr, len)
 }
 

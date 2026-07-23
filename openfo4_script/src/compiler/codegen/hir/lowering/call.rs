@@ -55,9 +55,7 @@ pub fn perform_checked_call(
 
     let stack_ptr = translator.load_stack_ptr();
     let zero_tag = translator.builder.iconst(PTR_TYPE, 0);
-    translator
-        .builder
-        .store(zero_tag, stack_ptr, size_padded as u32);
+    translator.builder.store(zero_tag, stack_ptr, size_padded);
 
     translator.builder.jump(resume_call_block, &[]);
 
@@ -70,7 +68,7 @@ pub fn perform_checked_call(
     translator.builder.store(
         new_stack_len,
         translator.ctx_ptr,
-        (offset_of!(RawContext, stack_ptr) + offset_of!(RawStack, len)) as u32,
+        (offset_of!(RawContext, stack_ptr) + offset_of!(RawStack, len)),
     );
 
     let mut args: Vec<_> = args.iter().map(|arg| translator.load(arg)).collect();
@@ -167,15 +165,14 @@ pub fn load_function_addr(
     let byte_class_offset =
         size_of::<usize>() + size_of::<usize>() * 2 * class_index + size_of::<usize>();
 
-    let vtable_ptr =
-        translator
-            .builder
-            .load(JitType::Pointer, header_ptr, byte_class_offset as u32);
+    let vtable_ptr = translator
+        .builder
+        .load(JitType::Pointer, header_ptr, byte_class_offset);
 
     let byte_func_offset = size_of::<*const u8>() * func_index;
     let fn_ptr = translator
         .builder
-        .load(JitType::Pointer, vtable_ptr, byte_func_offset as u32);
+        .load(JitType::Pointer, vtable_ptr, byte_func_offset);
 
     fn_ptr
 }
