@@ -239,7 +239,7 @@ pub fn generate_suspension_blocks(
         }
 
         // Store tag at offset 0.
-        let tag = translator.builder.iconst(PTR_TYPE, point.tag.get() as i64);
+        let tag = translator.builder.iconst(PTR_TYPE, point.tag.get());
         translator.builder.store(tag, stack_ptr, 0);
 
         let dst_block = block_per_tag.get(&point.tag).unwrap();
@@ -311,7 +311,7 @@ pub fn resume(translator: &mut Translator<'_>, frame: &StackFrameInfo, start_blo
                 break;
             }
 
-            let wanted_tag = translator.builder.iconst(PTR_TYPE, wanted_tag.get() as i64);
+            let wanted_tag = translator.builder.iconst(PTR_TYPE, wanted_tag.get());
             let tag_matches = translator
                 .builder
                 .icmp(tag, wanted_tag, IntCompareOp::Equal);
@@ -338,7 +338,7 @@ pub fn resume(translator: &mut Translator<'_>, frame: &StackFrameInfo, start_blo
             } else {
                 let mut any_tag_matches = translator.builder.iconst(JitType::I8, 0);
                 for wanted_tag in tags {
-                    let wanted_tag = translator.builder.iconst(PTR_TYPE, wanted_tag.get() as i64);
+                    let wanted_tag = translator.builder.iconst(PTR_TYPE, wanted_tag.get());
                     let tag_matches = translator
                         .builder
                         .icmp(tag, wanted_tag, IntCompareOp::Equal);

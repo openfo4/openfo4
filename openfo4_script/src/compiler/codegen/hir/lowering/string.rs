@@ -23,7 +23,7 @@ pub fn string_create(translator: &mut Translator<'_>, s: &str) -> JitValue {
 
     translator
         .builder
-        .iconst(PTR_TYPE, object_ptr.expose_provenance() as i64)
+        .iconst(PTR_TYPE, object_ptr.expose_provenance())
 }
 
 /// Concats two strings.

@@ -8,9 +8,7 @@ pub fn call_malloc(
     type_id: TypeId,
     array_len: JitValue,
 ) -> JitValue {
-    let type_id = translator
-        .builder
-        .iconst(PTR_TYPE, type_id.as_bits() as i64);
+    let type_id = translator.builder.iconst(PTR_TYPE, type_id.as_bits());
 
     translator.builder.call(
         translator.data.runtime_funcs.alloc_zeroed,

@@ -967,7 +967,7 @@ impl<'a> Translator<'a> {
             return;
         }
 
-        let size = self.builder.iconst(PTR_TYPE, size as i64);
+        let size = self.builder.iconst(PTR_TYPE, size);
         let stack_base = self.builder.call(
             self.data.runtime_funcs.stack_frame_alloc,
             &[self.ctx_ptr, size],
@@ -990,7 +990,7 @@ impl<'a> Translator<'a> {
             return;
         }
 
-        let size = self.builder.iconst(PTR_TYPE, size as i64);
+        let size = self.builder.iconst(PTR_TYPE, size);
         let stack_base = self.builder.call(
             self.data.runtime_funcs.stack_frame_free,
             &[self.ctx_ptr, size],

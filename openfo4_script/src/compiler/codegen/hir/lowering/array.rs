@@ -146,7 +146,7 @@ pub fn array_add(translator: &mut Translator<'_>, op: &ArrayAdd) {
 
     let ty = translator.lowered_ty(&op.value);
     let stride = ty.size();
-    let bytes_len = translator.builder.imul_imm(len, stride as i64);
+    let bytes_len = translator.builder.imul_imm(len, stride);
     translator.builder.memcpy(ptr, new_ptr, bytes_len);
 
     translator.builder.jump(loop_block, &[len]);
@@ -159,7 +159,7 @@ pub fn array_add(translator: &mut Translator<'_>, op: &ArrayAdd) {
 
         let ty = translator.lowered_ty(&op.value);
         let stride = ty.size();
-        let offset = translator.builder.imul_imm(index, stride as i64);
+        let offset = translator.builder.imul_imm(index, stride);
         let addr = translator.builder.iadd(new_ptr, offset);
 
         translator.builder.store(value, addr, 0);
@@ -213,7 +213,7 @@ pub fn array_insert(translator: &mut Translator<'_>, op: &ArrayInsert) {
 
     let index_wide = translator.builder.uextend(index, PTR_TYPE);
     let ty = translator.lowered_ty(&op.value);
-    let stride = ty.size() as i64;
+    let stride = ty.size();
 
     // Copy left region (all elements 0..index).
     let copy_leading_elems = index_wide;
@@ -278,7 +278,7 @@ pub fn array_remove(translator: &mut Translator<'_>, op: &ArrayRemove) {
     let index_plus_count = translator.builder.iadd(index_wide, count_wide);
 
     let ty = translator.lowered_ty_from_id(op.elem_ty);
-    let stride = ty.size() as i64;
+    let stride = ty.size();
 
     // Cannot overflow due to previous bounds check.
     let new_len = translator.builder.isub(old_len, count_wide);
@@ -318,7 +318,7 @@ pub fn array_remove(translator: &mut Translator<'_>, op: &ArrayRemove) {
 
 pub fn array_find(translator: &mut Translator<'_>, op: &ArrayFind) {
     let ty = translator.lowered_ty_from_id(op.elem_ty);
-    let stride = ty.size() as i64;
+    let stride = ty.size();
 
     array_find_inner(translator, op, |translator, base_addr, index| {
         let offset = translator.builder.imul_imm(index, stride);
@@ -345,7 +345,7 @@ pub fn array_find_struct(translator: &mut Translator<'_>, op: &ArrayFindStruct) 
         .get(struct_ty)
         .unwrap()
         .repr
-        .size_padded() as i64;
+        .size_padded();
 
     let (_, member_ty) = struct_
         .fields
@@ -489,7 +489,7 @@ fn array_addr_at_index(
         .load(PTR_TYPE, array, offset_of!(ArrayObject, ptr) as u32);
 
     let index = translator.builder.uextend(index, PTR_TYPE);
-    let offset = translator.builder.imul_imm(index, elem_ty.size() as i64);
+    let offset = translator.builder.imul_imm(index, elem_ty.size());
 
     let addr = translator.builder.iadd(ptr, offset);
     addr
@@ -657,13 +657,13 @@ pub fn array_cast<F>(
         translator.current_block = loop_body_block;
         let index = translator.builder.block_params(loop_body_block)[0];
 
-        let src_offset = translator.builder.imul_imm(index, src_stride as i64);
+        let src_offset = translator.builder.imul_imm(index, src_stride);
         let src_addr = translator.builder.iadd(src_base_ptr, src_offset);
         let src_value = translator.builder.load(src_ty, src_addr, 0);
 
         let dst_value = map_elem(translator, src_value);
 
-        let dst_offset = translator.builder.imul_imm(index, dst_stride as i64);
+        let dst_offset = translator.builder.imul_imm(index, dst_stride);
         let dst_addr = translator.builder.iadd(dst_base_ptr, dst_offset);
         translator.builder.store(dst_value, dst_addr, 0);
 

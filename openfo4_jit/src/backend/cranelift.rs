@@ -228,7 +228,7 @@ impl CraneliftModule {
                         current_block = Some(block);
                     }
                     Instruction::IConst(ty, value, dst) => {
-                        let res = builder.ins().iconst(map_type(*ty), *value);
+                        let res = builder.ins().iconst(map_type(*ty), i64::from(*value));
                         values[dst.0] = Some(res);
                         added_inst_count += 1;
                     }
@@ -260,7 +260,7 @@ impl CraneliftModule {
                     }
                     Instruction::ISubImm(op) => {
                         let lhs = values[op.lhs.0].unwrap();
-                        let res = builder.ins().iadd_imm(lhs, -op.rhs);
+                        let res = builder.ins().iadd_imm(lhs, -i64::from(op.rhs));
                         values[op.dst.0] = Some(res);
                         added_inst_count += 1;
                     }
@@ -745,13 +745,13 @@ impl CraneliftModule {
                     }
                     Instruction::IAddImm(op) => {
                         let lhs = values[op.lhs.0].unwrap();
-                        let res = builder.ins().iadd_imm(lhs, op.rhs);
+                        let res = builder.ins().iadd_imm(lhs, i64::from(op.rhs));
                         values[op.dst.0] = Some(res);
                         added_inst_count += 1;
                     }
                     Instruction::IMulImm(op) => {
                         let lhs = values[op.lhs.0].unwrap();
-                        let res = builder.ins().imul_imm(lhs, op.rhs);
+                        let res = builder.ins().imul_imm(lhs, i64::from(op.rhs));
                         values[op.dst.0] = Some(res);
                         added_inst_count += 1;
                     }
@@ -787,7 +787,7 @@ impl CraneliftModule {
                     Instruction::SMinImm(op) => {
                         let lhs = values[op.lhs.0].unwrap();
                         let ty = builder.ins().data_flow_graph().value_type(lhs);
-                        let rhs = builder.ins().iconst(ty, op.rhs);
+                        let rhs = builder.ins().iconst(ty, i64::from(op.rhs));
                         let res = builder.ins().smin(lhs, rhs);
                         values[op.dst.0] = Some(res);
                         added_inst_count += 1;
@@ -795,7 +795,7 @@ impl CraneliftModule {
                     Instruction::SMaxImm(op) => {
                         let lhs = values[op.lhs.0].unwrap();
                         let ty = builder.ins().data_flow_graph().value_type(lhs);
-                        let rhs = builder.ins().iconst(ty, op.rhs);
+                        let rhs = builder.ins().iconst(ty, i64::from(op.rhs));
                         let res = builder.ins().smax(lhs, rhs);
                         values[op.dst.0] = Some(res);
                         added_inst_count += 1;
@@ -803,7 +803,7 @@ impl CraneliftModule {
                     Instruction::UMinImm(op) => {
                         let lhs = values[op.lhs.0].unwrap();
                         let ty = builder.ins().data_flow_graph().value_type(lhs);
-                        let rhs = builder.ins().iconst(ty, op.rhs);
+                        let rhs = builder.ins().iconst(ty, i64::from(op.rhs));
                         let res = builder.ins().umin(lhs, rhs);
                         values[op.dst.0] = Some(res);
                         added_inst_count += 1;
@@ -811,7 +811,7 @@ impl CraneliftModule {
                     Instruction::UMaxImm(op) => {
                         let lhs = values[op.lhs.0].unwrap();
                         let ty = builder.ins().data_flow_graph().value_type(lhs);
-                        let rhs = builder.ins().iconst(ty, op.rhs);
+                        let rhs = builder.ins().iconst(ty, i64::from(op.rhs));
                         let res = builder.ins().umax(lhs, rhs);
                         values[op.dst.0] = Some(res);
                         added_inst_count += 1;

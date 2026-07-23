@@ -261,7 +261,7 @@ impl<'a> FunctionBuilder<'a> {
         dst
     }
 
-    fn binop_imm<F>(&mut self, lhs: Value, rhs: i64, op: F) -> Value
+    fn binop_imm<F>(&mut self, lhs: Value, rhs: Imm, op: F) -> Value
     where
         F: FnOnce(BinopImm) -> Instruction,
     {
@@ -269,6 +269,7 @@ impl<'a> FunctionBuilder<'a> {
         debug_assert!(!self.current_block_full);
 
         let dst = self.produce_value();
+        let rhs = rhs.to_word();
         self.instructions.push(op(BinopImm { lhs, rhs, dst }));
         dst
     }
@@ -352,12 +353,16 @@ impl<'a> FunctionBuilder<'a> {
 
     /// Create an integer constant.
     #[track_caller]
-    pub fn iconst<T: Into<i64>>(&mut self, ty: Type, value: T) -> Value {
+    pub fn iconst<T>(&mut self, ty: Type, value: T) -> Value
+    where
+        T: Into<Imm>,
+    {
         self.assert_block_not_filled();
 
         let id = self.produce_value();
-        self.instructions
-            .push(Instruction::IConst(ty, value.into(), id));
+        let value = value.into().to_word();
+
+        self.instructions.push(Instruction::IConst(ty, value, id));
         id
     }
 
@@ -400,7 +405,7 @@ impl<'a> FunctionBuilder<'a> {
     #[track_caller]
     pub fn isub_imm<T>(&mut self, lhs: Value, rhs: T) -> Value
     where
-        T: Into<i64>,
+        T: Into<Imm>,
     {
         self.binop_imm(lhs, rhs.into(), Instruction::ISubImm)
     }
@@ -452,7 +457,7 @@ impl<'a> FunctionBuilder<'a> {
     #[track_caller]
     pub fn smin_imm<T>(&mut self, lhs: Value, rhs: T) -> Value
     where
-        T: Into<i64>,
+        T: Into<Imm>,
     {
         self.binop_imm(lhs, rhs.into(), Instruction::SMinImm)
     }
@@ -471,7 +476,7 @@ impl<'a> FunctionBuilder<'a> {
     #[track_caller]
     pub fn smax_imm<T>(&mut self, lhs: Value, rhs: T) -> Value
     where
-        T: Into<i64>,
+        T: Into<Imm>,
     {
         self.binop_imm(lhs, rhs.into(), Instruction::SMaxImm)
     }
@@ -490,7 +495,7 @@ impl<'a> FunctionBuilder<'a> {
     #[track_caller]
     pub fn umin_imm<T>(&mut self, lhs: Value, rhs: T) -> Value
     where
-        T: Into<i64>,
+        T: Into<Imm>,
     {
         self.binop_imm(lhs, rhs.into(), Instruction::UMinImm)
     }
@@ -509,7 +514,7 @@ impl<'a> FunctionBuilder<'a> {
     #[track_caller]
     pub fn umax_imm<T>(&mut self, lhs: Value, rhs: T) -> Value
     where
-        T: Into<i64>,
+        T: Into<Imm>,
     {
         self.binop_imm(lhs, rhs.into(), Instruction::UMaxImm)
     }
@@ -1002,12 +1007,18 @@ impl<'a> FunctionBuilder<'a> {
         dst
     }
 
-    pub fn iadd_imm(&mut self, lhs: Value, rhs: i64) -> Value {
-        self.binop_imm(lhs, rhs, Instruction::IAddImm)
+    pub fn iadd_imm<T>(&mut self, lhs: Value, rhs: T) -> Value
+    where
+        T: Into<Imm>,
+    {
+        self.binop_imm(lhs, rhs.into(), Instruction::IAddImm)
     }
 
-    pub fn imul_imm(&mut self, lhs: Value, rhs: i64) -> Value {
-        self.binop_imm(lhs, rhs, Instruction::IMulImm)
+    pub fn imul_imm<T>(&mut self, lhs: Value, rhs: T) -> Value
+    where
+        T: Into<Imm>,
+    {
+        self.binop_imm(lhs, rhs.into(), Instruction::IMulImm)
     }
 
     /// Finalize the function definition.
@@ -1076,7 +1087,7 @@ enum Instruction {
         is_entry: bool,
     },
     SwitchBlock(Block),
-    IConst(Type, i64, Value),
+    IConst(Type, Word, Value),
     FConst(Type, f64, Value),
     IAdd(Binop),
     ISub(Binop),
@@ -1245,7 +1256,7 @@ struct Binop {
 #[derive(Copy, Clone, Debug)]
 struct BinopImm {
     lhs: Value,
-    rhs: i64,
+    rhs: Word,
     dst: Value,
 }
 
@@ -1363,5 +1374,70 @@ pub struct SourceLoc(u32);
 impl SourceLoc {
     pub fn new(loc: u32) -> Self {
         Self(loc + 1)
+    }
+}
+
+/// An immediate integer value.
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub enum Imm {
+    I8(i8),
+    I16(i16),
+    I32(i32),
+    I64(i64),
+    Isize(isize),
+}
+
+impl Imm {
+    fn to_word(&self) -> Word {
+        Word(match *self {
+            Self::I8(v) => v.into(),
+            Self::I16(v) => v.into(),
+            Self::I32(v) => v.into(),
+            Self::I64(v) => v.into(),
+            Self::Isize(v) => {
+                // Ensure our isize always fits into Word,
+                // meaning the following cast will be guaranteed
+                // to be lossless.
+                const {
+                    assert!(size_of::<isize>() <= size_of::<Word>());
+                }
+
+                v as _
+            }
+        })
+    }
+}
+
+macro_rules! impl_int_imm_from {
+    ($signed:ty, $unsigned:ty, $variant:ident) => {
+        impl From<$signed> for Imm {
+            #[inline]
+            fn from(value: $signed) -> Self {
+                Self::$variant(value)
+            }
+        }
+
+        impl From<$unsigned> for Imm {
+            #[inline]
+            fn from(value: $unsigned) -> Self {
+                Self::$variant(value.cast_signed())
+            }
+        }
+    };
+}
+
+impl_int_imm_from!(i8, u8, I8);
+impl_int_imm_from!(i16, u16, I16);
+impl_int_imm_from!(i32, u32, I32);
+impl_int_imm_from!(i64, u64, I64);
+impl_int_imm_from!(isize, usize, Isize);
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+#[repr(transparent)]
+struct Word(i64);
+
+impl From<Word> for i64 {
+    fn from(value: Word) -> Self {
+        value.0
     }
 }

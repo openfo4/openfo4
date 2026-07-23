@@ -40,10 +40,8 @@ pub fn is_class(translator: &mut Translator<'_>, src: JitValue, class: ClassId) 
 
     // Load and check current offset.
     let stride = size_of::<usize>() * 2;
-    let offset = translator.builder.imul_imm(index, stride as i64);
-    let offset = translator
-        .builder
-        .iadd_imm(offset, size_of::<usize>() as i64);
+    let offset = translator.builder.imul_imm(index, stride);
+    let offset = translator.builder.iadd_imm(offset, size_of::<usize>());
 
     let addr = translator.builder.iadd(type_info_ptr, offset);
     let type_id = translator.builder.load(PTR_TYPE, addr, 0);
@@ -77,7 +75,7 @@ pub fn create_var(translator: &mut Translator<'_>, value: JitValue, tag: ObjectT
     let one = translator.builder.iconst(PTR_TYPE, 1);
     let ptr = call_malloc(translator, translator.data.resources.primitives.var, one);
 
-    let tag = translator.builder.iconst(PTR_TYPE, tag.to_bits() as i64);
+    let tag = translator.builder.iconst(PTR_TYPE, tag.to_bits());
     translator
         .builder
         .store(tag, ptr, offset_of!(VarObject, tag) as u32);
@@ -95,7 +93,7 @@ pub fn extract_var(
     tag: ObjectTag,
     class: Option<ClassId>,
 ) -> JitValue {
-    let wanted_tag = translator.builder.iconst(PTR_TYPE, tag.to_bits() as i64);
+    let wanted_tag = translator.builder.iconst(PTR_TYPE, tag.to_bits());
 
     // Abort if object == null.
     translator.assert_true(object);

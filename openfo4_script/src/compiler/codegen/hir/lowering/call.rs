@@ -66,7 +66,7 @@ pub fn perform_checked_call(
     // Move the stack pointer over our current (caller) stack space.
     let new_stack_len = translator
         .builder
-        .iadd_imm(translator.stack_start_offset, size_padded as i64);
+        .iadd_imm(translator.stack_start_offset, size_padded);
     translator.builder.store(
         new_stack_len,
         translator.ctx_ptr,
