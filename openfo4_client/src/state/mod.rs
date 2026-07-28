@@ -272,7 +272,8 @@ impl GameState {
         // systems::ni_transform::compute_cell_ids_from_ni_transform(&mut self.world);
         // systems::hierarchy::compute_global_transform(&mut self.world);
 
-        self.animation.update(&mut self.world);
+        self.animation
+            .update(&mut self.world, &self.esp_loader, &self.globals);
 
         self.executor.update(
             &mut self.world,

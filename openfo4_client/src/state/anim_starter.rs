@@ -2,12 +2,15 @@ use std::collections::VecDeque;
 
 use hashbrown::HashMap;
 use openfo4_animation::driver::AnimationDriver;
-use openfo4_core::ecs::World;
+use openfo4_core::ecs::{Entity, World};
 use openfo4_core::path::DataPathBuf;
 use openfo4_core::record::RecordId;
+use openfo4_esp::conditions::Condition;
 use openfo4_esp::{RecordData, RecordKind};
 
 use crate::state::esp::EspLoader;
+use crate::systems::conditions;
+use crate::systems::global::GlobalProperties;
 
 #[derive(Clone, Debug)]
 struct Reaction {
@@ -16,6 +19,7 @@ struct Reaction {
     behavior_graph: DataPathBuf,
     /// The event that is sent to the animation graph when this reaction is triggered.
     event: Option<String>,
+    conditions: Vec<Condition>,
 }
 
 #[derive(Clone, Debug)]
@@ -30,8 +34,8 @@ impl AnimationSystem {
 
         let mut reactions: HashMap<RecordId, Vec<Reaction>> = HashMap::new();
 
-        for record in &animations {
-            let RecordData::Animation(anim) = &record.local.data else {
+        for record in animations {
+            let RecordData::Animation(anim) = record.local.data else {
                 continue;
             };
 
@@ -56,18 +60,25 @@ impl AnimationSystem {
                 id: record.id,
                 behavior_graph: DataPathBuf::new(behavior_graph),
                 event,
+                conditions: anim.conditions.conditions,
             });
         }
 
         Self { reactions }
     }
 
-    pub fn update(&mut self, world: &mut World) {
-        for (active_graphs, mut events, mut driver) in world.query_mut::<(
-            &ActiveBehaviorGraphs,
-            &mut AnimationEventQueue,
-            &mut AnimationDriver,
-        )>() {
+    pub fn update(
+        &mut self,
+        world: &mut World,
+        esp_loader: &EspLoader,
+        globals: &GlobalProperties,
+    ) {
+        let mut events_to_send = Vec::new();
+
+        for (entity, active_graphs, mut events) in world
+            .query::<(Entity, &ActiveBehaviorGraphs, &mut AnimationEventQueue)>()
+            .iter()
+        {
             while let Some(id) = events.0.pop_front() {
                 let Some(reactions) = self.reactions.get(&id) else {
                     continue;
@@ -78,14 +89,30 @@ impl AnimationSystem {
                         continue;
                     }
 
+                    if !conditions::evaluate(
+                        world,
+                        esp_loader,
+                        globals,
+                        reaction.id,
+                        &reaction.conditions,
+                        entity,
+                        entity,
+                    ) {
+                        continue;
+                    }
+
                     if let Some(event) = &reaction.event {
-                        if !event.to_lowercase().contains("injured") {
-                            driver.send_event(event);
-                        }
+                        events_to_send.push((entity, event));
                     }
 
                     events.0.push_back(reaction.id);
                 }
+            }
+        }
+
+        for (entity, event) in events_to_send {
+            if let Ok(mut driver) = world.get::<&mut AnimationDriver>(entity) {
+                driver.send_event(event);
             }
         }
     }

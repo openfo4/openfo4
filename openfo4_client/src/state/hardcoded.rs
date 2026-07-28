@@ -77,6 +77,12 @@ pub fn load_hardcoded_forms() -> HashMap<FormId, Record> {
                 flags: RecordHeaderFlags::empty(),
                 data: RecordData::ActorValueInfo(ActorValueInfo {
                     id: Some(ZString::new(name.as_bytes().to_vec())),
+                    full_name: None,
+                    description: None,
+                    abbreviation: None,
+                    default_value: None,
+                    flags: None,
+                    ty: None,
                 }),
             },
         )

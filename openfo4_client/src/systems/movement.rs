@@ -33,6 +33,10 @@ impl MovementDirection {
         debug_assert!(dir.is_normalized() || dir == Vec3::ZERO);
         Self(dir)
     }
+
+    pub fn get(&self) -> Vec3 {
+        self.0
+    }
 }
 
 #[derive(Copy, Clone, Debug)]

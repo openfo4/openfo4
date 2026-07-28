@@ -12,6 +12,7 @@ pub mod aim;
 pub mod animation_sync;
 pub mod camera;
 pub mod combat;
+pub mod conditions;
 pub mod controller;
 pub mod door;
 pub mod equipment;
