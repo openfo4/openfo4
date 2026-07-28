@@ -274,8 +274,12 @@ impl GameState {
 
         self.animation.update(&mut self.world);
 
-        self.executor
-            .update(&mut self.world, &mut self.script_entities, &mut self.quests);
+        self.executor.update(
+            &mut self.world,
+            &mut self.event_bus,
+            &mut self.script_entities,
+            &mut self.quests,
+        );
         self.quests
             .update(&mut self.world, &mut self.event_bus, &mut self.executor);
 

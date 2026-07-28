@@ -82,7 +82,10 @@ impl Effects {
             };
 
             match effect.run(ctx) {
-                EffectResult::Done => {}
+                EffectResult::Done => {
+                    let effect = self.effects.get_mut(id.0).unwrap();
+                    effect.value = Some(Box::new(()));
+                }
                 EffectResult::Forked(tasks) => {
                     let effect = self.effects.get_mut(id.0).unwrap();
                     effect.num_children += tasks.len();

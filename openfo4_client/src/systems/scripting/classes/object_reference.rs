@@ -668,7 +668,7 @@ async fn damage_value(
 /// ```text
 /// Function() native
 /// ```
-fn delete(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Error> {
+async fn delete(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Error> {
     todo!()
 }
 

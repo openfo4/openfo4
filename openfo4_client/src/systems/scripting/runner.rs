@@ -100,6 +100,25 @@ impl Runner {
                     }
                 }
             }
+
+            if let Some(state) = self.state.borrowed.try_borrow() {
+                let world = unsafe { &mut *state.world };
+                let events = unsafe { &mut *state.events };
+
+                let ready = self.state.effects.lock().run(
+                    &self.pool,
+                    world,
+                    events,
+                    &self.loader.esp_loader,
+                    &self.loader,
+                );
+
+                let mut wait = self.state.wait_for_effects.lock();
+                for id in ready {
+                    let event = wait.remove(&id).unwrap();
+                    event.notify(event.total_listeners());
+                }
+            }
         }
     }
 

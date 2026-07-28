@@ -53,8 +53,10 @@ use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+use event_listener::Event;
 use hashbrown::{HashMap, HashSet};
 use openfo4_core::ecs::{Entity, World};
+use openfo4_core::events::EventBus;
 use openfo4_core::record::RecordId;
 use openfo4_script::RegisterNativeError;
 use openfo4_script::engine::Engine;
@@ -158,9 +160,9 @@ pub struct State {
     pub object_data: HashMap<ObjectAddr, ObjectData>,
     pub aliases: AliasSet,
     pub effects: Arc<Mutex<Effects>>,
-    pub wait_on_effect: Option<EffectId>,
     pub loader: Arc<ScriptLoader>,
     pub globals: Arc<GlobalProperties>,
+    pub wait_for_effects: Arc<Mutex<HashMap<EffectId, Event>>>,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -297,30 +299,34 @@ impl State {
         Ok(scripts)
     }
 
-    pub async fn run_effect_and_wait<T>(&mut self, effect: T) -> Result<Option<T::Result>, Error>
+    pub async fn run_effect_and_wait<T>(&mut self, effect: T) -> Result<T::Result, Error>
     where
         T: Effect,
     {
-        // Previous effect complete, wake up.
-        if let Some(effect) = self.wait_on_effect.take() {
-            let value = self
-                .effects
-                .lock()
-                .take_value(effect)
-                .map(|v| v.downcast().ok())
-                .flatten()
-                .map(|v| *v);
+        let id = self.effects.lock().push(effect);
 
-            self.effects.lock().discard(effect);
+        let event = Event::new();
+        let listen = event.listen();
 
-            return Ok(value);
+        {
+            let mut wait = self.wait_for_effects.lock();
+            let exits = wait.insert(id, event);
+            debug_assert!(exits.is_none());
         }
 
-        let id = self.effects.lock().push(effect);
-        self.wait_on_effect = Some(id);
-        // todo!();
-        return Err(Error::msg("TODO"));
-        // Err(Exception::Suspend)
+        listen.await;
+
+        let mut effects = self.effects.lock();
+
+        let value = effects
+            .take_value(id)
+            .map(|v| v.downcast().ok())
+            .flatten()
+            .map(|v| *v)
+            .unwrap();
+
+        effects.discard(id);
+        Ok(value)
     }
 }
 
@@ -473,14 +479,14 @@ impl EngineExt for Engine {
 #[derive(Debug, Default)]
 pub struct SharedBorrowCell<T> {
     value: RwLock<Option<T>>,
-    event: event_listener::Event,
+    event: Event,
 }
 
 impl<T> SharedBorrowCell<T> {
     pub fn new() -> Self {
         Self {
             value: RwLock::new(None),
-            event: event_listener::Event::new(),
+            event: Event::new(),
         }
     }
 
@@ -616,9 +622,10 @@ impl<'a, T> DerefMut for BorrowMut<'a, T> {
 
 #[derive(Debug)]
 pub struct BorrowedState {
-    pub world: *const World,
+    pub world: *mut World,
     pub quests: *mut QuestManager,
     pub entities: *const ScriptEntities,
+    pub events: *mut EventBus,
 }
 
 unsafe impl Send for BorrowedState {}

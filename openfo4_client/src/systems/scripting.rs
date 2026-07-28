@@ -121,6 +121,7 @@ impl Executor {
     pub fn update(
         &mut self,
         world: &mut World,
+        events: &mut EventBus,
         script_entities: &mut ScriptEntities,
         quests: &mut QuestManager,
     ) {
@@ -132,6 +133,7 @@ impl Executor {
             world: world,
             quests: quests,
             entities: script_entities,
+            events,
         });
 
         std::thread::sleep(Duration::from_millis(1));
@@ -221,11 +223,11 @@ fn core_actor_values(
         registration,
         aliases: AliasSet::default(),
         effects: Arc::default(),
-        wait_on_effect: None,
         object_data: HashMap::new(),
         borrowed: Arc::new(SharedBorrowCell::new()),
         loader,
         globals,
+        wait_for_effects: Arc::default(),
     }
 }
 
