@@ -285,6 +285,33 @@ pub async fn spawn_actor(
         _ => unreachable!(),
     };
 
+    for condition in data.biped_object_conditions.iter().flatten() {
+        if condition.is_null() {
+            continue;
+        }
+
+        let condition = esp_loader.resolve_form(*condition, race.id).unwrap();
+
+        // If this exists it was either overwritten to a custom value, or a
+        // previous condition already set this.
+        if properties.get(condition).is_some() {
+            continue;
+        }
+
+        let value = esp_loader
+            .lookup(Some(RecordKind::ActorValueInfo), condition)
+            .await
+            .unwrap();
+
+        let RecordData::ActorValueInfo(value) = value.local.data else {
+            todo!();
+        };
+        dbg!(&value);
+
+        let value = value.default_value.unwrap_or_default();
+        properties.set(condition, ActorValue::new(value));
+    }
+
     let mut character = load_character(data, props.female, &loader).await.unwrap();
 
     let mut actor_body_parts = Vec::new();

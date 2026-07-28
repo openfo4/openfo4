@@ -4416,9 +4416,27 @@ pub struct NavMeshGeometryTriangle {
     pub edges: [u16; 3],
     pub height: f32,
     _unknown0: u8,
-    pub flags: u16,
+    pub flags: NavMeshTriangleFlags,
     pub cover_flags: u16,
 }
+
+bitflags! {
+    #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+    pub struct NavMeshTriangleFlags: u16 {
+        const F0 = 1 << 0;
+        const F1 = 1 << 1;
+        const F2 = 1 << 2;
+        const DELETED = 1 << 3;
+        const NO_LARGE_CREATURES = 1 << 4;
+        const OVERLAPPING = 1 << 5;
+        const PREFERRED = 1 << 6;
+        const WATER = 1 << 9;
+        const DOOR = 1 << 10;
+        const FOUND = 1 << 11;
+    }
+}
+
+impl_decode_bitflags!(NavMeshTriangleFlags: u16);
 
 #[derive(Copy, Clone, Debug, BinaryStruct)]
 pub struct NavMeshGeometryEdgeLink {
@@ -6577,6 +6595,18 @@ pub struct AddonNode {
 pub struct ActorValueInfo {
     #[record("EDID")]
     pub id: Option<ZString>,
+    #[record("FULL")]
+    pub full_name: Option<LString>,
+    #[record("DESC")]
+    pub description: Option<ZString>,
+    #[record("ANAM")]
+    pub abbreviation: Option<LString>,
+    #[record("NAM0")]
+    pub default_value: Option<f32>,
+    #[record("AVFL")]
+    pub flags: Option<u32>,
+    #[record("NAM1")]
+    pub ty: Option<u32>,
 }
 
 #[derive(Clone, Debug, Record)]
