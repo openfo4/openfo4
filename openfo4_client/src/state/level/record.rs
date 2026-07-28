@@ -516,7 +516,7 @@ impl SpawnEntity {
             nif_flags |= LoadNifFlags::RENDER_OBJECTS;
             nif_flags |= LoadNifFlags::ANIMATIONS;
         }
-        if flags.graphics {
+        if flags.physics {
             nif_flags |= LoadNifFlags::COLLIDERS;
         }
 
