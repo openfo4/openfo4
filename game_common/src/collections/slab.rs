@@ -24,9 +24,31 @@ where
 
 impl<K, V> Slab<K, V> {
     /// Creates a new empty `Slab`.
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
+        Self::new_in(Global)
+    }
+
+    pub fn with_capacity(capacity: usize) -> Self {
+        Self::with_capacity_in(capacity, Global)
+    }
+}
+
+impl<K, V, A> Slab<K, V, A>
+where
+    A: Allocator,
+{
+    pub const fn new_in(alloc: A) -> Self {
         Self {
-            buckets: Vec::new(),
+            buckets: Vec::new_in(alloc),
+            len: 0,
+            next_free: 0,
+            _marker: PhantomData,
+        }
+    }
+
+    pub fn with_capacity_in(capacity: usize, alloc: A) -> Self {
+        Self {
+            buckets: Vec::with_capacity_in(capacity, alloc),
             len: 0,
             next_free: 0,
             _marker: PhantomData,
@@ -59,9 +81,10 @@ impl<K, V> Slab<K, V> {
     }
 }
 
-impl<K, V> Slab<K, V>
+impl<K, V, A> Slab<K, V, A>
 where
     K: SlabKey,
+    A: Allocator,
 {
     /// Returns `true` if a value with the give `key` exists in the `Slab`.
     pub fn contains(&self, key: K) -> bool {
@@ -248,6 +271,12 @@ where
     /// The order of returned items is not specified.
     pub fn values(&self) -> Values<'_, K, V> {
         Values { iter: self.iter() }
+    }
+}
+
+impl<K, V> Default for Slab<K, V> {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
