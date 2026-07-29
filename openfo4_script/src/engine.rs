@@ -5,6 +5,7 @@ use async_lock::Mutex;
 use game_common::cell::UnsafeRefCell;
 use game_common::string::Lowercase;
 use hashbrown::{HashMap, HashSet};
+use openfo4_jit::func::IntoHostFunc;
 use openfo4_jit::{CompilerConfig, Type};
 use openfo4_pex::{Class, Module};
 use parking_lot::RwLock;
@@ -103,7 +104,6 @@ impl Engine {
         let _lock = self.shared.call_table_lock.write();
         let mut call_table = unsafe { self.shared.state.call_table.borrow_mut() };
 
-        let ptr = call_host_trampoline as *const u8;
         let index = f.into_func(&mut call_table, sig);
 
         let mut signature = F::signature();
@@ -116,7 +116,7 @@ impl Engine {
             class,
             func,
             NativeFunction {
-                ptr,
+                ptr: call_host_trampoline.into_host_func(),
                 index,
                 signature,
             },

@@ -1,3 +1,5 @@
+pub mod func;
+
 mod backend;
 
 use std::fmt::{self, Debug, Formatter};
@@ -9,6 +11,7 @@ use crate::backend::cranelift::{self, CraneliftModule};
 use crate::backend::{FunctionDefinitionDesc, StackSlotDesc, TextWithSrcLocs};
 
 pub use crate::backend::SourceLocMap;
+use crate::func::IntoHostFunc;
 
 /// Main driver for the JIT compiler.
 pub struct Compiler {
@@ -51,15 +54,16 @@ impl Compiler {
     ///
     /// # Codegen safety
     ///
-    /// - `ptr` must reference a mapped, executable code section that contains the start of a
-    ///   function.
-    /// - The function must have been defined as `extern "C"`.
-    /// - The function must only use `extern "C"`-safe ABI types in parameters and return positions.
     /// - The function must match the [`Signature`] that was passed in [`declare_function`].
     ///
     /// [`declare_function`]: Self::declare_function
-    pub fn define_native_function(&mut self, id: FuncId, ptr: *const u8) {
-        self.inner.define_native_function(id, ptr);
+    pub fn define_native_function<F, Params, Returns>(&mut self, id: FuncId, func: F)
+    where
+        F: IntoHostFunc<Params, Returns>,
+    {
+        let func = func.into_host_func();
+
+        self.inner.define_native_function(id, func);
     }
 
     /// Defines a function.

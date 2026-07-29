@@ -548,7 +548,7 @@ impl CodegenPass {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 struct CodegenData {
     resources: Arc<Resources>,
     runtime_funcs: RuntimeFunctions,

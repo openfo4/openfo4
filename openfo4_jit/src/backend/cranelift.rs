@@ -2,6 +2,7 @@ mod debug;
 mod libcall;
 mod memory;
 mod relocs;
+mod trampoline;
 
 use std::alloc::Layout;
 use std::sync::Arc;
@@ -24,6 +25,7 @@ use slab::Slab;
 use crate::backend::cranelift::memory::{Allocation, MemoryAllocator};
 use crate::backend::cranelift::relocs::perform_relocations;
 use crate::backend::{FunctionDefinitionDesc, SourceLocMap, StackSlotDesc, TextWithSrcLocs};
+use crate::func::HostFunc;
 use crate::{FloatCompareOp, FuncId, Instruction, IntCompareOp, Signature, SourceLoc, Type, Value};
 
 #[derive(Clone, Debug)]
@@ -37,6 +39,7 @@ pub struct CraneliftModule {
     ctx: Context,
     func_ctx: FunctionBuilderContext,
     debug: bool,
+    call_host_trampoline_signature: ir::Signature,
 }
 
 impl CraneliftModule {
@@ -56,6 +59,28 @@ impl CraneliftModule {
         let builder = cranelift_native::builder().unwrap();
         let isa = builder.finish(settings::Flags::new(flags)).unwrap();
 
+        let call_host_trampoline_signature = ir::Signature {
+            params: vec![
+                ir::AbiParam {
+                    value_type: isa.pointer_type(),
+                    purpose: ArgumentPurpose::Normal,
+                    extension: ArgumentExtension::None,
+                },
+                ir::AbiParam {
+                    value_type: isa.pointer_type(),
+                    purpose: ArgumentPurpose::Normal,
+                    extension: ArgumentExtension::None,
+                },
+                ir::AbiParam {
+                    value_type: isa.pointer_type(),
+                    purpose: ArgumentPurpose::Normal,
+                    extension: ArgumentExtension::None,
+                },
+            ],
+            returns: Vec::new(),
+            call_conv: isa.default_call_conv(),
+        };
+
         Self {
             functions: Slab::new(),
             compiled_functions: HashMap::new(),
@@ -64,6 +89,7 @@ impl CraneliftModule {
             isa,
             func_ctx: FunctionBuilderContext::new(),
             debug,
+            call_host_trampoline_signature,
         }
     }
 
@@ -77,11 +103,13 @@ impl CraneliftModule {
         Ok(FuncId(id))
     }
 
-    pub fn define_native_function(&mut self, id: FuncId, ptr: *const u8) {
+    pub fn define_native_function(&mut self, id: FuncId, func: HostFunc) {
         let state = self.functions.get_mut(id.0).unwrap();
         assert!(state.definition.is_none(), "cannot redefine function");
 
-        state.definition = Some(FunctionDefinition::Host(HostFunctionDefinition { ptr }));
+        let data = Box::into_raw(Box::new(func));
+
+        state.definition = Some(FunctionDefinition::Host(HostFunctionDefinition { data }));
     }
 
     pub fn define_function(&mut self, id: FuncId, definition: FunctionDefinitionDesc) {
@@ -146,8 +174,8 @@ impl CraneliftModule {
         let mut compiled_funcs = HashSet::new();
 
         while let Some(id) = funcs_to_compile.pop() {
-            let func = &self.functions[id.0];
-            if func.compiled.is_some() {
+            let func_def = &self.functions[id.0];
+            if func_def.compiled.is_some() {
                 continue;
             }
 
@@ -156,14 +184,9 @@ impl CraneliftModule {
             let mut callees = HashMap::new();
             let mut refs_to_funcs = HashMap::new();
 
-            let func_def = match func.definition.as_ref().unwrap() {
-                FunctionDefinition::Host(_) => continue,
-                FunctionDefinition::Guest(def) => def,
-            };
-
             self.ctx.clear();
 
-            let signature = convert_signature(&func.signature);
+            let signature = convert_signature(&func_def.signature);
 
             let mut func = Function::with_name_signature(
                 UserFuncName::User(UserExternalName::new(0, id.0.try_into().unwrap())),
@@ -172,629 +195,678 @@ impl CraneliftModule {
 
             let mut builder = FunctionBuilder::new(&mut func, &mut self.func_ctx);
 
-            let mut values = vec![const { None }; func_def.num_values];
-            let mut blocks = vec![const { None }; func_def.num_blocks];
-            let mut stack_slots = vec![const { None }; func_def.stack_slots.len()];
-            let mut variables = vec![const { None }; func_def.num_variables];
+            match func_def.definition.as_ref().unwrap() {
+                FunctionDefinition::Host(def) => {
+                    let block = builder.create_block();
+                    builder.append_block_params_for_function_params(block);
+                    let params = builder.block_params(block).to_vec();
 
-            // Create stack slots
-            for (id, slot) in &func_def.stack_slots {
-                let res = builder.create_sized_stack_slot(StackSlotData {
-                    kind: StackSlotKind::ExplicitSlot,
-                    size: slot.size.try_into().unwrap(),
-                    // `slot.align` already must be a power of two.
-                    // FIXME: we can do better than ilog2.
-                    align_shift: slot.align.ilog2() as u8,
-                    key: None,
-                });
+                    let returns = trampoline::call_host_trampoline(
+                        &mut builder,
+                        ptr_type,
+                        &self.call_host_trampoline_signature,
+                        func_def,
+                        def,
+                        &params,
+                        &mut refs_to_funcs,
+                    );
 
-                stack_slots[id] = Some(res);
-            }
+                    builder.ins().return_(&returns);
+                }
+                FunctionDefinition::Guest(func_def) => {
+                    let mut values = vec![const { None }; func_def.num_values];
+                    let mut blocks = vec![const { None }; func_def.num_blocks];
+                    let mut stack_slots = vec![const { None }; func_def.stack_slots.len()];
+                    let mut variables = vec![const { None }; func_def.num_variables];
 
-            let mut current_block = None;
+                    // Create stack slots
+                    for (id, slot) in &func_def.stack_slots {
+                        let res = builder.create_sized_stack_slot(StackSlotData {
+                            kind: StackSlotKind::ExplicitSlot,
+                            size: slot.size.try_into().unwrap(),
+                            // `slot.align` already must be a power of two.
+                            // FIXME: we can do better than ilog2.
+                            align_shift: slot.align.ilog2() as u8,
+                            key: None,
+                        });
 
-            for (index, instruction) in func_def.instructions.iter().enumerate() {
-                let current_block_on_entry = current_block;
-                let mut added_inst_count = 0;
+                        stack_slots[id] = Some(res);
+                    }
 
-                match instruction {
-                    Instruction::CreateBlock {
-                        id,
-                        params,
-                        values: dst,
-                        is_entry,
-                    } => {
-                        let block = builder.create_block();
+                    let mut current_block = None;
 
-                        if *is_entry {
-                            builder.append_block_params_for_function_params(block);
-                            builder.switch_to_block(block);
-                            builder.seal_block(block);
-                        } else {
-                            for param in params {
-                                builder.append_block_param(block, map_type(*param));
+                    for (index, instruction) in func_def.instructions.iter().enumerate() {
+                        let current_block_on_entry = current_block;
+                        let mut added_inst_count = 0;
+
+                        match instruction {
+                            Instruction::CreateBlock {
+                                id,
+                                params,
+                                values: dst,
+                                is_entry,
+                            } => {
+                                let block = builder.create_block();
+
+                                if *is_entry {
+                                    builder.append_block_params_for_function_params(block);
+                                    builder.switch_to_block(block);
+                                    builder.seal_block(block);
+                                } else {
+                                    for param in params {
+                                        builder.append_block_param(block, map_type(*param));
+                                    }
+                                }
+
+                                for (block_param, param) in
+                                    builder.block_params(block).iter().zip(dst)
+                                {
+                                    values[param.0] = Some(*block_param);
+                                }
+
+                                blocks[id.0] = Some(block);
                             }
-                        }
+                            Instruction::SwitchBlock(block) => {
+                                let block = blocks[block.0].unwrap();
+                                builder.switch_to_block(block);
+                                current_block = Some(block);
+                            }
+                            Instruction::IConst(ty, value, dst) => {
+                                let res = builder.ins().iconst(map_type(*ty), i64::from(*value));
+                                values[dst.0] = Some(res);
+                                added_inst_count += 1;
+                            }
+                            Instruction::FConst(ty, value, dst) => {
+                                let res = match ty {
+                                    Type::F32 => builder.ins().f32const(*value as f32),
+                                    Type::F64 => builder.ins().f64const(*value),
+                                    _ => unreachable!(),
+                                };
 
-                        for (block_param, param) in builder.block_params(block).iter().zip(dst) {
-                            values[param.0] = Some(*block_param);
-                        }
+                                values[dst.0] = Some(res);
+                                added_inst_count += 1;
+                            }
+                            Instruction::IAdd(op) => {
+                                let lhs = values[op.lhs.0].unwrap();
+                                let rhs = values[op.rhs.0].unwrap();
 
-                        blocks[id.0] = Some(block);
-                    }
-                    Instruction::SwitchBlock(block) => {
-                        let block = blocks[block.0].unwrap();
-                        builder.switch_to_block(block);
-                        current_block = Some(block);
-                    }
-                    Instruction::IConst(ty, value, dst) => {
-                        let res = builder.ins().iconst(map_type(*ty), i64::from(*value));
-                        values[dst.0] = Some(res);
-                        added_inst_count += 1;
-                    }
-                    Instruction::FConst(ty, value, dst) => {
-                        let res = match ty {
-                            Type::F32 => builder.ins().f32const(*value as f32),
-                            Type::F64 => builder.ins().f64const(*value),
-                            _ => unreachable!(),
-                        };
+                                let res = builder.ins().iadd(lhs, rhs);
+                                values[op.dst.0] = Some(res);
+                                added_inst_count += 1;
+                            }
+                            Instruction::ISub(op) => {
+                                let lhs = values[op.lhs.0].unwrap();
+                                let rhs = values[op.rhs.0].unwrap();
 
-                        values[dst.0] = Some(res);
-                        added_inst_count += 1;
-                    }
-                    Instruction::IAdd(op) => {
-                        let lhs = values[op.lhs.0].unwrap();
-                        let rhs = values[op.rhs.0].unwrap();
+                                let res = builder.ins().isub(lhs, rhs);
+                                values[op.dst.0] = Some(res);
+                                added_inst_count += 1;
+                            }
+                            Instruction::IMul(op) => {
+                                let lhs = values[op.lhs.0].unwrap();
+                                let rhs = values[op.rhs.0].unwrap();
 
-                        let res = builder.ins().iadd(lhs, rhs);
-                        values[op.dst.0] = Some(res);
-                        added_inst_count += 1;
-                    }
-                    Instruction::ISub(op) => {
-                        let lhs = values[op.lhs.0].unwrap();
-                        let rhs = values[op.rhs.0].unwrap();
+                                let res = builder.ins().imul(lhs, rhs);
+                                values[op.dst.0] = Some(res);
+                                added_inst_count += 1;
+                            }
+                            Instruction::UDiv(op) => {
+                                let lhs = values[op.lhs.0].unwrap();
+                                let rhs = values[op.rhs.0].unwrap();
 
-                        let res = builder.ins().isub(lhs, rhs);
-                        values[op.dst.0] = Some(res);
-                        added_inst_count += 1;
-                    }
-                    Instruction::IMul(op) => {
-                        let lhs = values[op.lhs.0].unwrap();
-                        let rhs = values[op.rhs.0].unwrap();
+                                let res = builder.ins().udiv(lhs, rhs);
+                                values[op.dst.0] = Some(res);
+                                added_inst_count += 1;
+                            }
+                            Instruction::SDiv(op) => {
+                                let lhs = values[op.lhs.0].unwrap();
+                                let rhs = values[op.rhs.0].unwrap();
 
-                        let res = builder.ins().imul(lhs, rhs);
-                        values[op.dst.0] = Some(res);
-                        added_inst_count += 1;
-                    }
-                    Instruction::UDiv(op) => {
-                        let lhs = values[op.lhs.0].unwrap();
-                        let rhs = values[op.rhs.0].unwrap();
+                                let res = builder.ins().sdiv(lhs, rhs);
+                                values[op.dst.0] = Some(res);
+                                added_inst_count += 1;
+                            }
+                            Instruction::URem(op) => {
+                                let lhs = values[op.lhs.0].unwrap();
+                                let rhs = values[op.rhs.0].unwrap();
 
-                        let res = builder.ins().udiv(lhs, rhs);
-                        values[op.dst.0] = Some(res);
-                        added_inst_count += 1;
-                    }
-                    Instruction::SDiv(op) => {
-                        let lhs = values[op.lhs.0].unwrap();
-                        let rhs = values[op.rhs.0].unwrap();
+                                let res = builder.ins().urem(lhs, rhs);
+                                values[op.dst.0] = Some(res);
+                                added_inst_count += 1;
+                            }
+                            Instruction::SRem(op) => {
+                                let lhs = values[op.lhs.0].unwrap();
+                                let rhs = values[op.rhs.0].unwrap();
 
-                        let res = builder.ins().sdiv(lhs, rhs);
-                        values[op.dst.0] = Some(res);
-                        added_inst_count += 1;
-                    }
-                    Instruction::URem(op) => {
-                        let lhs = values[op.lhs.0].unwrap();
-                        let rhs = values[op.rhs.0].unwrap();
+                                let res = builder.ins().srem(lhs, rhs);
+                                values[op.dst.0] = Some(res);
+                                added_inst_count += 1;
+                            }
+                            Instruction::FAdd(op) => {
+                                let lhs = values[op.lhs.0].unwrap();
+                                let rhs = values[op.rhs.0].unwrap();
 
-                        let res = builder.ins().urem(lhs, rhs);
-                        values[op.dst.0] = Some(res);
-                        added_inst_count += 1;
-                    }
-                    Instruction::SRem(op) => {
-                        let lhs = values[op.lhs.0].unwrap();
-                        let rhs = values[op.rhs.0].unwrap();
+                                let res = builder.ins().fadd(lhs, rhs);
+                                values[op.dst.0] = Some(res);
+                                added_inst_count += 1;
+                            }
+                            Instruction::FSub(op) => {
+                                let lhs = values[op.lhs.0].unwrap();
+                                let rhs = values[op.rhs.0].unwrap();
 
-                        let res = builder.ins().srem(lhs, rhs);
-                        values[op.dst.0] = Some(res);
-                        added_inst_count += 1;
-                    }
-                    Instruction::FAdd(op) => {
-                        let lhs = values[op.lhs.0].unwrap();
-                        let rhs = values[op.rhs.0].unwrap();
+                                let res = builder.ins().fsub(lhs, rhs);
+                                values[op.dst.0] = Some(res);
+                                added_inst_count += 1;
+                            }
+                            Instruction::FMul(op) => {
+                                let lhs = values[op.lhs.0].unwrap();
+                                let rhs = values[op.rhs.0].unwrap();
 
-                        let res = builder.ins().fadd(lhs, rhs);
-                        values[op.dst.0] = Some(res);
-                        added_inst_count += 1;
-                    }
-                    Instruction::FSub(op) => {
-                        let lhs = values[op.lhs.0].unwrap();
-                        let rhs = values[op.rhs.0].unwrap();
+                                let res = builder.ins().fmul(lhs, rhs);
+                                values[op.dst.0] = Some(res);
+                                added_inst_count += 1;
+                            }
+                            Instruction::FDiv(op) => {
+                                let lhs = values[op.lhs.0].unwrap();
+                                let rhs = values[op.rhs.0].unwrap();
 
-                        let res = builder.ins().fsub(lhs, rhs);
-                        values[op.dst.0] = Some(res);
-                        added_inst_count += 1;
-                    }
-                    Instruction::FMul(op) => {
-                        let lhs = values[op.lhs.0].unwrap();
-                        let rhs = values[op.rhs.0].unwrap();
+                                let res = builder.ins().fdiv(lhs, rhs);
+                                values[op.dst.0] = Some(res);
+                                added_inst_count += 1;
+                            }
+                            Instruction::FMin(op) => {
+                                let lhs = values[op.lhs.0].unwrap();
+                                let rhs = values[op.rhs.0].unwrap();
 
-                        let res = builder.ins().fmul(lhs, rhs);
-                        values[op.dst.0] = Some(res);
-                        added_inst_count += 1;
-                    }
-                    Instruction::FDiv(op) => {
-                        let lhs = values[op.lhs.0].unwrap();
-                        let rhs = values[op.rhs.0].unwrap();
+                                let res = builder.ins().fmin(lhs, rhs);
+                                values[op.dst.0] = Some(res);
+                                added_inst_count += 1;
+                            }
+                            Instruction::FMax(op) => {
+                                let lhs = values[op.lhs.0].unwrap();
+                                let rhs = values[op.rhs.0].unwrap();
 
-                        let res = builder.ins().fdiv(lhs, rhs);
-                        values[op.dst.0] = Some(res);
-                        added_inst_count += 1;
-                    }
-                    Instruction::FMin(op) => {
-                        let lhs = values[op.lhs.0].unwrap();
-                        let rhs = values[op.rhs.0].unwrap();
+                                let res = builder.ins().fmax(lhs, rhs);
+                                values[op.dst.0] = Some(res);
+                                added_inst_count += 1;
+                            }
+                            Instruction::INeg(op) => {
+                                let src = values[op.src.0].unwrap();
 
-                        let res = builder.ins().fmin(lhs, rhs);
-                        values[op.dst.0] = Some(res);
-                        added_inst_count += 1;
-                    }
-                    Instruction::FMax(op) => {
-                        let lhs = values[op.lhs.0].unwrap();
-                        let rhs = values[op.rhs.0].unwrap();
+                                let res = builder.ins().ineg(src);
+                                values[op.dst.0] = Some(res);
+                                added_inst_count += 1;
+                            }
+                            Instruction::FNeg(op) => {
+                                let src = values[op.src.0].unwrap();
 
-                        let res = builder.ins().fmax(lhs, rhs);
-                        values[op.dst.0] = Some(res);
-                        added_inst_count += 1;
-                    }
-                    Instruction::INeg(op) => {
-                        let src = values[op.src.0].unwrap();
+                                let res = builder.ins().fneg(src);
+                                values[op.dst.0] = Some(res);
+                                added_inst_count += 1;
+                            }
+                            Instruction::FAbs(op) => {
+                                let src = values[op.src.0].unwrap();
 
-                        let res = builder.ins().ineg(src);
-                        values[op.dst.0] = Some(res);
-                        added_inst_count += 1;
-                    }
-                    Instruction::FNeg(op) => {
-                        let src = values[op.src.0].unwrap();
+                                let res = builder.ins().fabs(src);
+                                values[op.dst.0] = Some(res);
+                                added_inst_count += 1;
+                            }
+                            Instruction::Floor(op) => {
+                                let src = values[op.src.0].unwrap();
 
-                        let res = builder.ins().fneg(src);
-                        values[op.dst.0] = Some(res);
-                        added_inst_count += 1;
-                    }
-                    Instruction::FAbs(op) => {
-                        let src = values[op.src.0].unwrap();
+                                let res = builder.ins().floor(src);
+                                values[op.dst.0] = Some(res);
+                                added_inst_count += 1;
+                            }
+                            Instruction::Ceil(op) => {
+                                let src = values[op.src.0].unwrap();
 
-                        let res = builder.ins().fabs(src);
-                        values[op.dst.0] = Some(res);
-                        added_inst_count += 1;
-                    }
-                    Instruction::Floor(op) => {
-                        let src = values[op.src.0].unwrap();
+                                let res = builder.ins().ceil(src);
+                                values[op.dst.0] = Some(res);
+                                added_inst_count += 1;
+                            }
+                            Instruction::CallIndirect(signature, callee, params, returns) => {
+                                let args = params
+                                    .iter()
+                                    .map(|v| values[v.0].unwrap())
+                                    .collect::<Vec<_>>();
 
-                        let res = builder.ins().floor(src);
-                        values[op.dst.0] = Some(res);
-                        added_inst_count += 1;
-                    }
-                    Instruction::Ceil(op) => {
-                        let src = values[op.src.0].unwrap();
-
-                        let res = builder.ins().ceil(src);
-                        values[op.dst.0] = Some(res);
-                        added_inst_count += 1;
-                    }
-                    Instruction::CallIndirect(signature, callee, params, returns) => {
-                        let args = params
-                            .iter()
-                            .map(|v| values[v.0].unwrap())
-                            .collect::<Vec<_>>();
-
-                        let signature = convert_signature(signature);
-                        let sig_ref = builder.import_signature(signature);
-
-                        let callee = values[callee.0].unwrap();
-
-                        let inst = builder.ins().call_indirect(sig_ref, callee, &args);
-                        added_inst_count += 1;
-
-                        let return_values = builder.inst_results(inst);
-                        debug_assert_eq!(returns.len(), return_values.len());
-
-                        for (lhs, rhs) in returns.iter().zip(return_values) {
-                            values[lhs.0] = Some(*rhs);
-                        }
-                    }
-                    Instruction::Call(func_id, params, returns) => {
-                        let args = params
-                            .iter()
-                            .map(|v| values[v.0].unwrap())
-                            .collect::<Vec<_>>();
-
-                        let func = &self.functions[func_id.0];
-
-                        let compile_func = match func.definition {
-                            Some(FunctionDefinition::Host(_)) => false,
-                            Some(FunctionDefinition::Guest(_)) => func.compiled.is_none(),
-                            None => unreachable!(),
-                        };
-
-                        if compile_func {
-                            funcs_to_compile.push(*func_id);
-                        }
-
-                        let func_ref =
-                            *callees.entry(*func_id).or_insert_with(|| {
-                                let name = builder.func.declare_imported_user_function(
-                                    UserExternalName::new(0, func_id.0.try_into().unwrap()),
-                                );
-
-                                refs_to_funcs.insert(name, *func_id);
-
-                                let signature = convert_signature(&func.signature);
+                                let signature = convert_signature(signature);
                                 let sig_ref = builder.import_signature(signature);
 
-                                builder.import_function(ExtFuncData {
-                                    name: ExternalName::User(name),
-                                    signature: sig_ref,
-                                    colocated: false,
-                                    patchable: false,
-                                })
-                            });
+                                let callee = values[callee.0].unwrap();
 
-                        let inst = builder.ins().call(func_ref, &args);
-                        added_inst_count += 1;
+                                let inst = builder.ins().call_indirect(sig_ref, callee, &args);
+                                added_inst_count += 1;
 
-                        let return_values = builder.inst_results(inst);
-                        debug_assert_eq!(returns.len(), return_values.len());
+                                let return_values = builder.inst_results(inst);
+                                debug_assert_eq!(returns.len(), return_values.len());
 
-                        for (lhs, rhs) in returns.iter().zip(return_values) {
-                            values[lhs.0] = Some(*rhs);
+                                for (lhs, rhs) in returns.iter().zip(return_values) {
+                                    values[lhs.0] = Some(*rhs);
+                                }
+                            }
+                            Instruction::Call(func_id, params, returns) => {
+                                let args = params
+                                    .iter()
+                                    .map(|v| values[v.0].unwrap())
+                                    .collect::<Vec<_>>();
+
+                                let func = &self.functions[func_id.0];
+
+                                let return_values = match &func.definition {
+                                    Some(FunctionDefinition::Guest(_)) => {
+                                        if func.compiled.is_none() {
+                                            funcs_to_compile.push(*func_id);
+                                        }
+
+                                        let func_ref =
+                                            *callees.entry(*func_id).or_insert_with(|| {
+                                                let name =
+                                                    builder.func.declare_imported_user_function(
+                                                        UserExternalName::new(
+                                                            0,
+                                                            func_id.0.try_into().unwrap(),
+                                                        ),
+                                                    );
+
+                                                refs_to_funcs.insert(name, Callee::Id(*func_id));
+
+                                                let signature = convert_signature(&func.signature);
+                                                let sig_ref = builder.import_signature(signature);
+
+                                                builder.import_function(ExtFuncData {
+                                                    name: ExternalName::User(name),
+                                                    signature: sig_ref,
+                                                    colocated: false,
+                                                    patchable: false,
+                                                })
+                                            });
+
+                                        let inst = builder.ins().call(func_ref, &args);
+                                        let return_values = builder.inst_results(inst);
+                                        return_values.to_vec()
+                                    }
+                                    Some(FunctionDefinition::Host(def)) => {
+                                        // All host functions need to go through the host-call trampoline
+                                        // first. We generally benefit from inlining this directly since
+                                        // the trampoline only unpacks and repacks stack memory.
+                                        trampoline::call_host_trampoline(
+                                            &mut builder,
+                                            ptr_type,
+                                            &self.call_host_trampoline_signature,
+                                            func,
+                                            def,
+                                            &args,
+                                            &mut refs_to_funcs,
+                                        )
+                                    }
+                                    None => unreachable!(),
+                                };
+
+                                added_inst_count += 1;
+
+                                debug_assert_eq!(returns.len(), return_values.len());
+
+                                for (lhs, rhs) in returns.iter().zip(return_values) {
+                                    values[lhs.0] = Some(rhs);
+                                }
+                            }
+                            Instruction::Return(rvals) => {
+                                let rvals = rvals
+                                    .into_iter()
+                                    .map(|v| values[v.0].unwrap())
+                                    .collect::<Vec<_>>();
+
+                                builder.ins().return_(&rvals);
+                                added_inst_count += 1;
+                            }
+                            Instruction::Jump(block, block_args) => {
+                                let block = blocks[block.0].unwrap();
+
+                                let args = block_args
+                                    .iter()
+                                    .map(|v| BlockArg::Value(values[v.0].unwrap()))
+                                    .collect::<Vec<_>>();
+
+                                builder.ins().jump(block, &args);
+                                added_inst_count += 1;
+                            }
+                            Instruction::Brif {
+                                condition,
+                                true_block,
+                                true_block_args,
+                                false_block,
+                                false_block_args,
+                            } => {
+                                let condition = values[condition.0].unwrap();
+                                let then_block = blocks[true_block.0].unwrap();
+                                let else_block = blocks[false_block.0].unwrap();
+
+                                let then_block_args = true_block_args
+                                    .iter()
+                                    .map(|v| BlockArg::Value(values[v.0].unwrap()))
+                                    .collect::<Vec<_>>();
+                                let else_block_args = false_block_args
+                                    .iter()
+                                    .map(|v| BlockArg::Value(values[v.0].unwrap()))
+                                    .collect::<Vec<_>>();
+
+                                builder.ins().brif(
+                                    condition,
+                                    then_block,
+                                    &then_block_args,
+                                    else_block,
+                                    &else_block_args,
+                                );
+                                added_inst_count += 1;
+                            }
+                            Instruction::StackLoad {
+                                slot,
+                                dst,
+                                ty,
+                                offset,
+                            } => {
+                                let slot = stack_slots[slot.0].unwrap();
+                                let ty = map_type(*ty);
+
+                                // TODO: We can do manual address calcuation when offset is too big.
+                                let offset = i32::try_from(*offset).unwrap_or_else(|_| todo!());
+
+                                let res = builder.ins().stack_load(ty, slot, offset);
+                                values[dst.0] = Some(res);
+                                added_inst_count += 1;
+                            }
+                            Instruction::StackStore {
+                                slot,
+                                value,
+                                offset,
+                            } => {
+                                let value = values[value.0].unwrap();
+                                let slot = stack_slots[slot.0].unwrap();
+
+                                // TODO: We can do manual address calcuation when offset is too big.
+                                let offset = i32::try_from(*offset).unwrap_or_else(|_| todo!());
+
+                                builder.ins().stack_store(value, slot, offset);
+                                added_inst_count += 1;
+                            }
+                            Instruction::StackAddr {
+                                slot,
+                                ty,
+                                dst,
+                                offset,
+                            } => {
+                                let slot = stack_slots[slot.0].unwrap();
+                                let ty = map_type(*ty);
+
+                                // TODO: We can do manual address calcuation when offset is too big.
+                                let offset = i32::try_from(*offset).unwrap_or_else(|_| todo!());
+
+                                let res = builder.ins().stack_addr(ty, slot, offset);
+                                values[dst.0] = Some(res);
+                                added_inst_count += 1;
+                            }
+                            Instruction::ICmp { lhs, rhs, dst, op } => {
+                                let lhs = values[lhs.0].unwrap();
+                                let rhs = values[rhs.0].unwrap();
+
+                                let cond = match op {
+                                    IntCompareOp::Equal => IntCC::Equal,
+                                    IntCompareOp::NotEqual => IntCC::NotEqual,
+                                    IntCompareOp::SignedGreaterThan => IntCC::SignedGreaterThan,
+                                    IntCompareOp::SignedGreaterThanOrEqual => {
+                                        IntCC::SignedGreaterThanOrEqual
+                                    }
+                                    IntCompareOp::SignedLessThan => IntCC::SignedLessThan,
+                                    IntCompareOp::SignedLessThanOrEqual => {
+                                        IntCC::SignedLessThanOrEqual
+                                    }
+                                    IntCompareOp::UnsignedGreaterThan => IntCC::UnsignedGreaterThan,
+                                    IntCompareOp::UnsignedGreaterThanOrEqual => {
+                                        IntCC::UnsignedGreaterThanOrEqual
+                                    }
+                                    IntCompareOp::UnsignedLessThan => IntCC::UnsignedLessThan,
+                                    IntCompareOp::UnsignedLessThanOrEqual => {
+                                        IntCC::UnsignedLessThanOrEqual
+                                    }
+                                };
+
+                                let res = builder.ins().icmp(cond, lhs, rhs);
+                                values[dst.0] = Some(res);
+                                added_inst_count += 1;
+                            }
+                            Instruction::FCmp { lhs, rhs, dst, op } => {
+                                let lhs = values[lhs.0].unwrap();
+                                let rhs = values[rhs.0].unwrap();
+
+                                let cond = match op {
+                                    FloatCompareOp::Equal => FloatCC::Equal,
+                                    FloatCompareOp::NotEqual => FloatCC::NotEqual,
+                                    FloatCompareOp::LessThan => FloatCC::LessThan,
+                                    FloatCompareOp::LessThanOrEqual => FloatCC::LessThanOrEqual,
+                                    FloatCompareOp::GreaterThan => FloatCC::GreaterThan,
+                                    FloatCompareOp::GreaterThanOrEqual => {
+                                        FloatCC::GreaterThanOrEqual
+                                    }
+                                };
+
+                                let res = builder.ins().fcmp(cond, lhs, rhs);
+                                values[dst.0] = Some(res);
+                                added_inst_count += 1;
+                            }
+                            Instruction::Load {
+                                ty,
+                                addr,
+                                dst,
+                                offset,
+                            } => {
+                                let ty = map_type(*ty);
+                                let addr = values[addr.0].unwrap();
+
+                                // TODO: We can do manual address calcuation when offset is too big.
+                                let offset = i32::try_from(*offset).unwrap_or_else(|_| todo!());
+
+                                let res = builder.ins().load(ty, MemFlags::trusted(), addr, offset);
+                                values[dst.0] = Some(res);
+                                added_inst_count += 1;
+                            }
+                            Instruction::Store {
+                                value,
+                                addr,
+                                offset,
+                            } => {
+                                let value = values[value.0].unwrap();
+                                let addr = values[addr.0].unwrap();
+
+                                // TODO: We can do manual address calcuation when offset is too big.
+                                let offset = i32::try_from(*offset).unwrap_or_else(|_| todo!());
+
+                                builder
+                                    .ins()
+                                    .store(MemFlags::trusted(), value, addr, offset);
+                                added_inst_count += 1;
+                            }
+                            Instruction::FToU { value, ty, dst } => {
+                                let value = values[value.0].unwrap();
+                                let ty = map_type(*ty);
+
+                                let res = builder.ins().fcvt_to_uint_sat(ty, value);
+                                values[dst.0] = Some(res);
+                                added_inst_count += 1;
+                            }
+                            Instruction::FToS { value, ty, dst } => {
+                                let value = values[value.0].unwrap();
+                                let ty = map_type(*ty);
+
+                                let res = builder.ins().fcvt_to_sint_sat(ty, value);
+                                values[dst.0] = Some(res);
+                                added_inst_count += 1;
+                            }
+                            Instruction::UToF { value, ty, dst } => {
+                                let value = values[value.0].unwrap();
+                                let ty = map_type(*ty);
+
+                                let res = builder.ins().fcvt_from_uint(ty, value);
+                                values[dst.0] = Some(res);
+                                added_inst_count += 1;
+                            }
+                            Instruction::SToF { value, ty, dst } => {
+                                let value = values[value.0].unwrap();
+                                let ty = map_type(*ty);
+
+                                let res = builder.ins().fcvt_from_sint(ty, value);
+                                values[dst.0] = Some(res);
+                                added_inst_count += 1;
+                            }
+                            Instruction::BAnd(op) => {
+                                let lhs = values[op.lhs.0].unwrap();
+                                let rhs = values[op.rhs.0].unwrap();
+
+                                let res = builder.ins().band(lhs, rhs);
+                                values[op.dst.0] = Some(res);
+                                added_inst_count += 1;
+                            }
+                            Instruction::BOr(op) => {
+                                let lhs = values[op.lhs.0].unwrap();
+                                let rhs = values[op.rhs.0].unwrap();
+
+                                let res = builder.ins().bor(lhs, rhs);
+                                values[op.dst.0] = Some(res);
+                                added_inst_count += 1;
+                            }
+                            Instruction::BXor(op) => {
+                                let lhs = values[op.lhs.0].unwrap();
+                                let rhs = values[op.rhs.0].unwrap();
+
+                                let res = builder.ins().bxor(lhs, rhs);
+                                values[op.dst.0] = Some(res);
+                                added_inst_count += 1;
+                            }
+                            Instruction::BNot(op) => {
+                                let src = values[op.src.0].unwrap();
+                                let res = builder.ins().bnot(src);
+                                values[op.dst.0] = Some(res);
+                                added_inst_count += 1;
+                            }
+                            Instruction::UExtend { value, dst, ty } => {
+                                let src = values[value.0].unwrap();
+                                let res = builder.ins().uextend(map_type(*ty), src);
+                                values[dst.0] = Some(res);
+                                added_inst_count += 1;
+                            }
+                            Instruction::SExtend { value, dst, ty } => {
+                                let src = values[value.0].unwrap();
+                                let res = builder.ins().sextend(map_type(*ty), src);
+                                values[dst.0] = Some(res);
+                                added_inst_count += 1;
+                            }
+                            Instruction::IReduce { value, dst, ty } => {
+                                let src = values[value.0].unwrap();
+                                let res = builder.ins().ireduce(map_type(*ty), src);
+                                values[dst.0] = Some(res);
+                                added_inst_count += 1;
+                            }
+                            Instruction::Bitcast { value, dst, ty } => {
+                                let src = values[value.0].unwrap();
+                                let ty = map_type(*ty);
+                                let res = builder.ins().bitcast(ty, MemFlags::new(), src);
+                                values[dst.0] = Some(res);
+                                added_inst_count += 1;
+                            }
+                            Instruction::Popcnt(op) => {
+                                let src = values[op.src.0].unwrap();
+                                let res = builder.ins().popcnt(src);
+                                values[op.dst.0] = Some(res);
+                                added_inst_count += 1;
+                            }
+                            Instruction::DefVar { ty, var, value } => {
+                                let res = builder.declare_var(map_type(*ty));
+                                let value = values[value.0].unwrap();
+                                builder.def_var(res, value);
+                                variables[var.0] = Some(res);
+                                added_inst_count += 1;
+                            }
+                            Instruction::GetVar { var, dst } => {
+                                let var = variables[var.0].unwrap();
+                                let res = builder.use_var(var);
+                                values[dst.0] = Some(res);
+                                added_inst_count += 1;
+                            }
+                            Instruction::SetVar { var, value } => {
+                                let var = variables[var.0].unwrap();
+                                let value = values[value.0].unwrap();
+                                builder.def_var(var, value);
+                                added_inst_count += 1;
+                            }
+                            Instruction::Memcpy { src, dst, size } => {
+                                let src = values[src.0].unwrap();
+                                let dst = values[dst.0].unwrap();
+                                let size = values[size.0].unwrap();
+                                builder.call_memcpy(self.isa.frontend_config(), dst, src, size);
+                                added_inst_count += 1;
+                            }
+                            Instruction::Memcmp {
+                                lhs,
+                                rhs,
+                                dst,
+                                size,
+                            } => {
+                                let lhs = values[lhs.0].unwrap();
+                                let rhs = values[rhs.0].unwrap();
+                                let size = values[size.0].unwrap();
+                                let res =
+                                    builder.call_memcmp(self.isa.frontend_config(), lhs, rhs, size);
+                                values[dst.0] = Some(res);
+                                added_inst_count += 1;
+                            }
+                            Instruction::SMin(op) => {
+                                let lhs = values[op.lhs.0].unwrap();
+                                let rhs = values[op.rhs.0].unwrap();
+                                let res = builder.ins().smin(lhs, rhs);
+                                values[op.dst.0] = Some(res);
+                                added_inst_count += 1;
+                            }
+                            Instruction::SMax(op) => {
+                                let lhs = values[op.lhs.0].unwrap();
+                                let rhs = values[op.rhs.0].unwrap();
+                                let res = builder.ins().smax(lhs, rhs);
+                                values[op.dst.0] = Some(res);
+                                added_inst_count += 1;
+                            }
+                            Instruction::UMin(op) => {
+                                let lhs = values[op.lhs.0].unwrap();
+                                let rhs = values[op.rhs.0].unwrap();
+                                let res = builder.ins().umin(lhs, rhs);
+                                values[op.dst.0] = Some(res);
+                                added_inst_count += 1;
+                            }
+                            Instruction::UMax(op) => {
+                                let lhs = values[op.lhs.0].unwrap();
+                                let rhs = values[op.rhs.0].unwrap();
+                                let res = builder.ins().umax(lhs, rhs);
+                                values[op.dst.0] = Some(res);
+                                added_inst_count += 1;
+                            }
                         }
-                    }
-                    Instruction::Return(rvals) => {
-                        let rvals = rvals
-                            .into_iter()
-                            .map(|v| values[v.0].unwrap())
-                            .collect::<Vec<_>>();
 
-                        builder.ins().return_(&rvals);
-                        added_inst_count += 1;
-                    }
-                    Instruction::Jump(block, block_args) => {
-                        let block = blocks[block.0].unwrap();
+                        if self.debug
+                            && let Some(block) = current_block_on_entry
+                            && added_inst_count != 0
+                            && let Some(srcloc) = func_def.srcloc.get(index)
+                        {
+                            let insts: Vec<_> = builder
+                                .func
+                                .layout
+                                .block_insts(block)
+                                .rev()
+                                .take(added_inst_count)
+                                .collect();
 
-                        let args = block_args
-                            .iter()
-                            .map(|v| BlockArg::Value(values[v.0].unwrap()))
-                            .collect::<Vec<_>>();
-
-                        builder.ins().jump(block, &args);
-                        added_inst_count += 1;
-                    }
-                    Instruction::Brif {
-                        condition,
-                        true_block,
-                        true_block_args,
-                        false_block,
-                        false_block_args,
-                    } => {
-                        let condition = values[condition.0].unwrap();
-                        let then_block = blocks[true_block.0].unwrap();
-                        let else_block = blocks[false_block.0].unwrap();
-
-                        let then_block_args = true_block_args
-                            .iter()
-                            .map(|v| BlockArg::Value(values[v.0].unwrap()))
-                            .collect::<Vec<_>>();
-                        let else_block_args = false_block_args
-                            .iter()
-                            .map(|v| BlockArg::Value(values[v.0].unwrap()))
-                            .collect::<Vec<_>>();
-
-                        builder.ins().brif(
-                            condition,
-                            then_block,
-                            &then_block_args,
-                            else_block,
-                            &else_block_args,
-                        );
-                        added_inst_count += 1;
-                    }
-                    Instruction::StackLoad {
-                        slot,
-                        dst,
-                        ty,
-                        offset,
-                    } => {
-                        let slot = stack_slots[slot.0].unwrap();
-                        let ty = map_type(*ty);
-
-                        // TODO: We can do manual address calcuation when offset is too big.
-                        let offset = i32::try_from(*offset).unwrap_or_else(|_| todo!());
-
-                        let res = builder.ins().stack_load(ty, slot, offset);
-                        values[dst.0] = Some(res);
-                        added_inst_count += 1;
-                    }
-                    Instruction::StackStore {
-                        slot,
-                        value,
-                        offset,
-                    } => {
-                        let value = values[value.0].unwrap();
-                        let slot = stack_slots[slot.0].unwrap();
-
-                        // TODO: We can do manual address calcuation when offset is too big.
-                        let offset = i32::try_from(*offset).unwrap_or_else(|_| todo!());
-
-                        builder.ins().stack_store(value, slot, offset);
-                        added_inst_count += 1;
-                    }
-                    Instruction::StackAddr {
-                        slot,
-                        ty,
-                        dst,
-                        offset,
-                    } => {
-                        let slot = stack_slots[slot.0].unwrap();
-                        let ty = map_type(*ty);
-
-                        // TODO: We can do manual address calcuation when offset is too big.
-                        let offset = i32::try_from(*offset).unwrap_or_else(|_| todo!());
-
-                        let res = builder.ins().stack_addr(ty, slot, offset);
-                        values[dst.0] = Some(res);
-                        added_inst_count += 1;
-                    }
-                    Instruction::ICmp { lhs, rhs, dst, op } => {
-                        let lhs = values[lhs.0].unwrap();
-                        let rhs = values[rhs.0].unwrap();
-
-                        let cond = match op {
-                            IntCompareOp::Equal => IntCC::Equal,
-                            IntCompareOp::NotEqual => IntCC::NotEqual,
-                            IntCompareOp::SignedGreaterThan => IntCC::SignedGreaterThan,
-                            IntCompareOp::SignedGreaterThanOrEqual => {
-                                IntCC::SignedGreaterThanOrEqual
+                            for inst in insts {
+                                builder.func.set_srcloc(inst, ir::SourceLoc::new(srcloc.0));
                             }
-                            IntCompareOp::SignedLessThan => IntCC::SignedLessThan,
-                            IntCompareOp::SignedLessThanOrEqual => IntCC::SignedLessThanOrEqual,
-                            IntCompareOp::UnsignedGreaterThan => IntCC::UnsignedGreaterThan,
-                            IntCompareOp::UnsignedGreaterThanOrEqual => {
-                                IntCC::UnsignedGreaterThanOrEqual
-                            }
-                            IntCompareOp::UnsignedLessThan => IntCC::UnsignedLessThan,
-                            IntCompareOp::UnsignedLessThanOrEqual => IntCC::UnsignedLessThanOrEqual,
-                        };
-
-                        let res = builder.ins().icmp(cond, lhs, rhs);
-                        values[dst.0] = Some(res);
-                        added_inst_count += 1;
-                    }
-                    Instruction::FCmp { lhs, rhs, dst, op } => {
-                        let lhs = values[lhs.0].unwrap();
-                        let rhs = values[rhs.0].unwrap();
-
-                        let cond = match op {
-                            FloatCompareOp::Equal => FloatCC::Equal,
-                            FloatCompareOp::NotEqual => FloatCC::NotEqual,
-                            FloatCompareOp::LessThan => FloatCC::LessThan,
-                            FloatCompareOp::LessThanOrEqual => FloatCC::LessThanOrEqual,
-                            FloatCompareOp::GreaterThan => FloatCC::GreaterThan,
-                            FloatCompareOp::GreaterThanOrEqual => FloatCC::GreaterThanOrEqual,
-                        };
-
-                        let res = builder.ins().fcmp(cond, lhs, rhs);
-                        values[dst.0] = Some(res);
-                        added_inst_count += 1;
-                    }
-                    Instruction::Load {
-                        ty,
-                        addr,
-                        dst,
-                        offset,
-                    } => {
-                        let ty = map_type(*ty);
-                        let addr = values[addr.0].unwrap();
-
-                        // TODO: We can do manual address calcuation when offset is too big.
-                        let offset = i32::try_from(*offset).unwrap_or_else(|_| todo!());
-
-                        let res = builder.ins().load(ty, MemFlags::trusted(), addr, offset);
-                        values[dst.0] = Some(res);
-                        added_inst_count += 1;
-                    }
-                    Instruction::Store {
-                        value,
-                        addr,
-                        offset,
-                    } => {
-                        let value = values[value.0].unwrap();
-                        let addr = values[addr.0].unwrap();
-
-                        // TODO: We can do manual address calcuation when offset is too big.
-                        let offset = i32::try_from(*offset).unwrap_or_else(|_| todo!());
-
-                        builder
-                            .ins()
-                            .store(MemFlags::trusted(), value, addr, offset);
-                        added_inst_count += 1;
-                    }
-                    Instruction::FToU { value, ty, dst } => {
-                        let value = values[value.0].unwrap();
-                        let ty = map_type(*ty);
-
-                        let res = builder.ins().fcvt_to_uint_sat(ty, value);
-                        values[dst.0] = Some(res);
-                        added_inst_count += 1;
-                    }
-                    Instruction::FToS { value, ty, dst } => {
-                        let value = values[value.0].unwrap();
-                        let ty = map_type(*ty);
-
-                        let res = builder.ins().fcvt_to_sint_sat(ty, value);
-                        values[dst.0] = Some(res);
-                        added_inst_count += 1;
-                    }
-                    Instruction::UToF { value, ty, dst } => {
-                        let value = values[value.0].unwrap();
-                        let ty = map_type(*ty);
-
-                        let res = builder.ins().fcvt_from_uint(ty, value);
-                        values[dst.0] = Some(res);
-                        added_inst_count += 1;
-                    }
-                    Instruction::SToF { value, ty, dst } => {
-                        let value = values[value.0].unwrap();
-                        let ty = map_type(*ty);
-
-                        let res = builder.ins().fcvt_from_sint(ty, value);
-                        values[dst.0] = Some(res);
-                        added_inst_count += 1;
-                    }
-                    Instruction::BAnd(op) => {
-                        let lhs = values[op.lhs.0].unwrap();
-                        let rhs = values[op.rhs.0].unwrap();
-
-                        let res = builder.ins().band(lhs, rhs);
-                        values[op.dst.0] = Some(res);
-                        added_inst_count += 1;
-                    }
-                    Instruction::BOr(op) => {
-                        let lhs = values[op.lhs.0].unwrap();
-                        let rhs = values[op.rhs.0].unwrap();
-
-                        let res = builder.ins().bor(lhs, rhs);
-                        values[op.dst.0] = Some(res);
-                        added_inst_count += 1;
-                    }
-                    Instruction::BXor(op) => {
-                        let lhs = values[op.lhs.0].unwrap();
-                        let rhs = values[op.rhs.0].unwrap();
-
-                        let res = builder.ins().bxor(lhs, rhs);
-                        values[op.dst.0] = Some(res);
-                        added_inst_count += 1;
-                    }
-                    Instruction::BNot(op) => {
-                        let src = values[op.src.0].unwrap();
-                        let res = builder.ins().bnot(src);
-                        values[op.dst.0] = Some(res);
-                        added_inst_count += 1;
-                    }
-                    Instruction::UExtend { value, dst, ty } => {
-                        let src = values[value.0].unwrap();
-                        let res = builder.ins().uextend(map_type(*ty), src);
-                        values[dst.0] = Some(res);
-                        added_inst_count += 1;
-                    }
-                    Instruction::SExtend { value, dst, ty } => {
-                        let src = values[value.0].unwrap();
-                        let res = builder.ins().sextend(map_type(*ty), src);
-                        values[dst.0] = Some(res);
-                        added_inst_count += 1;
-                    }
-                    Instruction::IReduce { value, dst, ty } => {
-                        let src = values[value.0].unwrap();
-                        let res = builder.ins().ireduce(map_type(*ty), src);
-                        values[dst.0] = Some(res);
-                        added_inst_count += 1;
-                    }
-                    Instruction::Bitcast { value, dst, ty } => {
-                        let src = values[value.0].unwrap();
-                        let ty = map_type(*ty);
-                        let res = builder.ins().bitcast(ty, MemFlags::new(), src);
-                        values[dst.0] = Some(res);
-                        added_inst_count += 1;
-                    }
-                    Instruction::Popcnt(op) => {
-                        let src = values[op.src.0].unwrap();
-                        let res = builder.ins().popcnt(src);
-                        values[op.dst.0] = Some(res);
-                        added_inst_count += 1;
-                    }
-                    Instruction::DefVar { ty, var, value } => {
-                        let res = builder.declare_var(map_type(*ty));
-                        let value = values[value.0].unwrap();
-                        builder.def_var(res, value);
-                        variables[var.0] = Some(res);
-                        added_inst_count += 1;
-                    }
-                    Instruction::GetVar { var, dst } => {
-                        let var = variables[var.0].unwrap();
-                        let res = builder.use_var(var);
-                        values[dst.0] = Some(res);
-                        added_inst_count += 1;
-                    }
-                    Instruction::SetVar { var, value } => {
-                        let var = variables[var.0].unwrap();
-                        let value = values[value.0].unwrap();
-                        builder.def_var(var, value);
-                        added_inst_count += 1;
-                    }
-                    Instruction::Memcpy { src, dst, size } => {
-                        let src = values[src.0].unwrap();
-                        let dst = values[dst.0].unwrap();
-                        let size = values[size.0].unwrap();
-                        builder.call_memcpy(self.isa.frontend_config(), dst, src, size);
-                        added_inst_count += 1;
-                    }
-                    Instruction::Memcmp {
-                        lhs,
-                        rhs,
-                        dst,
-                        size,
-                    } => {
-                        let lhs = values[lhs.0].unwrap();
-                        let rhs = values[rhs.0].unwrap();
-                        let size = values[size.0].unwrap();
-                        let res = builder.call_memcmp(self.isa.frontend_config(), lhs, rhs, size);
-                        values[dst.0] = Some(res);
-                        added_inst_count += 1;
-                    }
-                    Instruction::SMin(op) => {
-                        let lhs = values[op.lhs.0].unwrap();
-                        let rhs = values[op.rhs.0].unwrap();
-                        let res = builder.ins().smin(lhs, rhs);
-                        values[op.dst.0] = Some(res);
-                        added_inst_count += 1;
-                    }
-                    Instruction::SMax(op) => {
-                        let lhs = values[op.lhs.0].unwrap();
-                        let rhs = values[op.rhs.0].unwrap();
-                        let res = builder.ins().smax(lhs, rhs);
-                        values[op.dst.0] = Some(res);
-                        added_inst_count += 1;
-                    }
-                    Instruction::UMin(op) => {
-                        let lhs = values[op.lhs.0].unwrap();
-                        let rhs = values[op.rhs.0].unwrap();
-                        let res = builder.ins().umin(lhs, rhs);
-                        values[op.dst.0] = Some(res);
-                        added_inst_count += 1;
-                    }
-                    Instruction::UMax(op) => {
-                        let lhs = values[op.lhs.0].unwrap();
-                        let rhs = values[op.rhs.0].unwrap();
-                        let res = builder.ins().umax(lhs, rhs);
-                        values[op.dst.0] = Some(res);
-                        added_inst_count += 1;
-                    }
-                }
-
-                if self.debug
-                    && let Some(block) = current_block_on_entry
-                    && added_inst_count != 0
-                    && let Some(srcloc) = func_def.srcloc.get(index)
-                {
-                    let insts: Vec<_> = builder
-                        .func
-                        .layout
-                        .block_insts(block)
-                        .rev()
-                        .take(added_inst_count)
-                        .collect();
-
-                    for inst in insts {
-                        builder.func.set_srcloc(inst, ir::SourceLoc::new(srcloc.0));
+                        }
                     }
                 }
             }
@@ -869,9 +941,15 @@ impl CraneliftModule {
 struct CompilationResult {
     code: CompiledCode,
     allocation: Arc<Allocation>,
-    callees: HashMap<UserExternalNameRef, FuncId>,
+    callees: HashMap<UserExternalNameRef, Callee>,
     clif: Option<TextWithSrcLocs<String>>,
     srclocs: SourceLocMap,
+}
+
+#[derive(Copy, Clone, Debug)]
+enum Callee {
+    Id(FuncId),
+    HostCallTrampoline,
 }
 
 struct FuncState {
@@ -888,7 +966,8 @@ enum FunctionDefinition {
 
 #[derive(Clone, Debug)]
 struct HostFunctionDefinition {
-    ptr: *const u8,
+    /// The `data` value to pass to the host shim.
+    data: *const HostFunc,
 }
 
 unsafe impl Send for HostFunctionDefinition {}
@@ -939,3 +1018,15 @@ impl CompiledFunction {
 // and can be called from any thread.
 unsafe impl Send for CompiledFunction {}
 unsafe impl Sync for CompiledFunction {}
+
+fn map_type(ptr_type: ir::Type, ty: Type) -> ir::Type {
+    match ty {
+        Type::I8 => ir::types::I8,
+        Type::I16 => ir::types::I16,
+        Type::I32 => ir::types::I32,
+        Type::I64 => ir::types::I64,
+        Type::F32 => ir::types::F32,
+        Type::F64 => ir::types::F64,
+        Type::Pointer => ptr_type,
+    }
+}

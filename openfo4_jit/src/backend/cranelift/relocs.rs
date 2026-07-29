@@ -4,7 +4,7 @@ use cranelift_codegen::ir::ExternalName;
 use slab::Slab;
 
 use crate::FuncId;
-use crate::backend::cranelift::{FuncState, FunctionDefinition, libcall};
+use crate::backend::cranelift::{Callee, FuncState, libcall, trampoline};
 
 pub fn perform_relocations(id: FuncId, funcs: &mut Slab<FuncState>) {
     let func = &funcs[id.0].compiled.as_ref().unwrap();
@@ -19,15 +19,13 @@ pub fn perform_relocations(id: FuncId, funcs: &mut Slab<FuncState>) {
     for reloc in func.code.buffer.relocs() {
         let base = match reloc.target {
             FinalizedRelocTarget::ExternalName(ExternalName::User(name)) => {
-                let id = func.callees.get(&name).unwrap();
-                let callee = &funcs[id.0];
-
-                match &callee.definition {
-                    Some(FunctionDefinition::Host(def)) => def.ptr,
-                    Some(FunctionDefinition::Guest(_)) => {
+                let callee = func.callees.get(&name).unwrap();
+                match callee {
+                    Callee::Id(id) => {
+                        let callee = &funcs[id.0];
                         callee.compiled.as_ref().unwrap().allocation.as_exec_ptr()
                     }
-                    None => unreachable!(),
+                    Callee::HostCallTrampoline => trampoline::host_call_trampoline as *const u8,
                 }
             }
             FinalizedRelocTarget::ExternalName(ExternalName::LibCall(name)) => {

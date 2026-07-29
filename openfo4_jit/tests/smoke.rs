@@ -27,7 +27,7 @@ fn call_return_value() {
 
 #[test]
 fn call_native() {
-    unsafe extern "C" fn my_native_func(x: *mut i32) {
+    fn my_native_func(x: *mut i32) {
         unsafe {
             *x += 1;
         }
@@ -43,7 +43,7 @@ fn call_native() {
         returns: vec![],
     });
 
-    compiler.define_native_function(host_fn, my_native_func as *const u8);
+    compiler.define_native_function(host_fn, my_native_func);
     let mut builder = compiler.define_function(guest_fn);
 
     let entry = builder.create_entry_block();

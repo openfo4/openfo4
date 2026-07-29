@@ -2,12 +2,16 @@ use std::cell::RefCell;
 use std::panic::{AssertUnwindSafe, catch_unwind};
 
 use game_common::utils::vec_ext::VecExt;
+use openfo4_jit::func::HostType;
 use tracing::span::EnteredSpan;
 
 use crate::compiler::resources::TypeId;
 use crate::runtime::{Error, ObjectAddr, RawContext, RawVal};
 
-pub unsafe extern "C" fn call_host_trampoline(
+unsafe impl HostType for TypeId {}
+unsafe impl HostType for ObjectAddr {}
+
+pub fn call_host_trampoline(
     ctx: *mut RawContext,
     index: usize,
     params: *const RawVal,
@@ -34,18 +38,14 @@ pub unsafe extern "C" fn call_host_trampoline(
     }
 }
 
-pub unsafe extern "C" fn alloc_zeroed(
-    ctx: *mut RawContext,
-    ty: TypeId,
-    array_len: usize,
-) -> *mut u8 {
+pub fn alloc_zeroed(ctx: *mut RawContext, ty: TypeId, array_len: usize) -> *mut u8 {
     abort_on_unwind(|| {
         let object_ref = unsafe { (*(*ctx).state).pool.alloc(ty, array_len) };
         object_ref.addr().to_raw() as *mut u8
     })
 }
 
-pub unsafe extern "C" fn alloc_stack_frame(ctx: *mut RawContext, size: usize) -> *mut u8 {
+pub fn alloc_stack_frame(ctx: *mut RawContext, size: usize) -> *mut u8 {
     abort_on_unwind(|| {
         let ctx = unsafe { &mut *ctx };
         let ptr = unsafe { (*ctx.stack).alloc(size) };
@@ -53,14 +53,14 @@ pub unsafe extern "C" fn alloc_stack_frame(ctx: *mut RawContext, size: usize) ->
     })
 }
 
-pub unsafe extern "C" fn free_stack_frame(ctx: *mut RawContext, size: usize) -> *mut u8 {
+pub fn free_stack_frame(ctx: *mut RawContext, size: usize) -> *mut u8 {
     abort_on_unwind(|| {
         let ctx = unsafe { &mut *ctx };
         unsafe { (*ctx.stack).free(size) }
     })
 }
 
-pub unsafe extern "C" fn bool_to_string(ctx: *mut RawContext, value: bool) -> ObjectAddr {
+pub fn bool_to_string(ctx: *mut RawContext, value: bool) -> ObjectAddr {
     abort_on_unwind(|| {
         let ctx = unsafe { &mut *ctx };
 
@@ -69,7 +69,7 @@ pub unsafe extern "C" fn bool_to_string(ctx: *mut RawContext, value: bool) -> Ob
     })
 }
 
-pub unsafe extern "C" fn i32_to_string(ctx: *mut RawContext, value: i32) -> ObjectAddr {
+pub fn i32_to_string(ctx: *mut RawContext, value: i32) -> ObjectAddr {
     abort_on_unwind(|| {
         let ctx = unsafe { &mut *ctx };
 
@@ -78,7 +78,7 @@ pub unsafe extern "C" fn i32_to_string(ctx: *mut RawContext, value: i32) -> Obje
     })
 }
 
-pub unsafe extern "C" fn f32_to_string(ctx: *mut RawContext, value: f32) -> ObjectAddr {
+pub fn f32_to_string(ctx: *mut RawContext, value: f32) -> ObjectAddr {
     abort_on_unwind(|| {
         let ctx = unsafe { &mut *ctx };
 
@@ -87,7 +87,7 @@ pub unsafe extern "C" fn f32_to_string(ctx: *mut RawContext, value: f32) -> Obje
     })
 }
 
-pub unsafe extern "C" fn object_to_string(ctx: *mut RawContext, addr: *mut u8) -> ObjectAddr {
+pub fn object_to_string(ctx: *mut RawContext, addr: *mut u8) -> ObjectAddr {
     abort_on_unwind(|| {
         let ctx = unsafe { &mut *ctx };
 
@@ -100,7 +100,7 @@ thread_local! {
     static SPANS: RefCell<Vec<EnteredSpan>> = RefCell::new(Vec::new());
 }
 
-pub unsafe extern "C" fn enter_span(_ctx: *mut RawContext, ptr: *const u8, len: usize) -> usize {
+pub fn enter_span(_ctx: *mut RawContext, ptr: *const u8, len: usize) -> usize {
     abort_on_unwind(|| unsafe {
         let bytes = core::slice::from_raw_parts(ptr, len);
         let s = core::str::from_utf8_unchecked(bytes);
@@ -114,7 +114,7 @@ pub unsafe extern "C" fn enter_span(_ctx: *mut RawContext, ptr: *const u8, len: 
     })
 }
 
-pub unsafe extern "C" fn exit_span(_ctx: *mut RawContext, index: usize) {
+pub fn exit_span(_ctx: *mut RawContext, index: usize) {
     abort_on_unwind(|| {
         SPANS.with_borrow_mut(|spans| {
             if index >= spans.len() {
@@ -126,13 +126,13 @@ pub unsafe extern "C" fn exit_span(_ctx: *mut RawContext, index: usize) {
     });
 }
 
-pub unsafe extern "C" fn stub() {
+pub fn stub() {
     abort_on_unwind(|| {
         panic!("Entered stub function");
     })
 }
 
-pub unsafe extern "C" fn emit_error(ctx: *mut RawContext) {
+pub fn emit_error(ctx: *mut RawContext) {
     unsafe {
         let ctx = &mut *ctx;
         *ctx.error.borrow_mut() = Some(Box::new(Error::msg("internal error")));

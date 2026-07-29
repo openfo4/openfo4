@@ -65,7 +65,7 @@ pub fn generate_guest_to_host_trampoline(
         returns: vec![Type::I32],
     });
 
-    compiler.define_native_function(trampoline_func_id, native.ptr);
+    compiler.define_native_function(trampoline_func_id, native.ptr.clone());
 
     let func_id = compiler.declare_function(target_signature.clone());
 

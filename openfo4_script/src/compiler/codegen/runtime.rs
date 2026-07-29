@@ -1,3 +1,4 @@
+use openfo4_jit::func::IntoHostFunc;
 use openfo4_jit::{Compiler, FuncId, Signature, Type};
 
 use crate::runtime::host_functions;
@@ -34,7 +35,7 @@ impl RuntimeFunctions {
                 params: vec![Type::Pointer, Type::Pointer, Type::Pointer],
                 returns: vec![Type::Pointer],
             },
-            host_functions::alloc_zeroed as *const u8,
+            host_functions::alloc_zeroed,
         );
         let stack_frame_alloc = declare_and_define(
             compiler,
@@ -42,7 +43,7 @@ impl RuntimeFunctions {
                 params: vec![Type::Pointer, Type::Pointer],
                 returns: vec![Type::Pointer],
             },
-            host_functions::alloc_stack_frame as *const u8,
+            host_functions::alloc_stack_frame,
         );
         let stack_frame_free = declare_and_define(
             compiler,
@@ -50,7 +51,7 @@ impl RuntimeFunctions {
                 params: vec![Type::Pointer, Type::Pointer],
                 returns: vec![Type::Pointer],
             },
-            host_functions::free_stack_frame as *const u8,
+            host_functions::free_stack_frame,
         );
         let bool_to_string = declare_and_define(
             compiler,
@@ -58,7 +59,7 @@ impl RuntimeFunctions {
                 params: vec![Type::Pointer, Type::I8],
                 returns: vec![Type::Pointer],
             },
-            host_functions::bool_to_string as *const u8,
+            host_functions::bool_to_string,
         );
         let i32_to_string = declare_and_define(
             compiler,
@@ -66,7 +67,7 @@ impl RuntimeFunctions {
                 params: vec![Type::Pointer, Type::I32],
                 returns: vec![Type::Pointer],
             },
-            host_functions::i32_to_string as *const u8,
+            host_functions::i32_to_string,
         );
         let f32_to_string = declare_and_define(
             compiler,
@@ -74,7 +75,7 @@ impl RuntimeFunctions {
                 params: vec![Type::Pointer, Type::F32],
                 returns: vec![Type::Pointer],
             },
-            host_functions::f32_to_string as *const u8,
+            host_functions::f32_to_string,
         );
         let object_to_string = declare_and_define(
             compiler,
@@ -82,7 +83,7 @@ impl RuntimeFunctions {
                 params: vec![Type::Pointer, Type::Pointer],
                 returns: vec![Type::Pointer],
             },
-            host_functions::object_to_string as *const u8,
+            host_functions::object_to_string,
         );
         let enter_span = declare_and_define(
             compiler,
@@ -90,7 +91,7 @@ impl RuntimeFunctions {
                 params: vec![Type::Pointer, Type::Pointer, Type::Pointer],
                 returns: vec![Type::Pointer],
             },
-            host_functions::enter_span as *const u8,
+            host_functions::enter_span,
         );
         let exit_span = declare_and_define(
             compiler,
@@ -98,7 +99,7 @@ impl RuntimeFunctions {
                 params: vec![Type::Pointer, Type::Pointer],
                 returns: vec![],
             },
-            host_functions::exit_span as *const u8,
+            host_functions::exit_span,
         );
         let emit_error = declare_and_define(
             compiler,
@@ -106,7 +107,7 @@ impl RuntimeFunctions {
                 params: vec![Type::Pointer],
                 returns: vec![],
             },
-            host_functions::emit_error as *const u8,
+            host_functions::emit_error,
         );
 
         Self {
@@ -124,8 +125,15 @@ impl RuntimeFunctions {
     }
 }
 
-fn declare_and_define(compiler: &mut Compiler, signature: Signature, ptr: *const u8) -> FuncId {
+fn declare_and_define<F, Params, Returns>(
+    compiler: &mut Compiler,
+    signature: Signature,
+    func: F,
+) -> FuncId
+where
+    F: IntoHostFunc<Params, Returns>,
+{
     let id = compiler.declare_function(signature);
-    compiler.define_native_function(id, ptr);
+    compiler.define_native_function(id, func);
     id
 }

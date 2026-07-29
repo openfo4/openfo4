@@ -1,5 +1,6 @@
 use game_common::string::Lowercase;
 use hashbrown::HashMap;
+use openfo4_jit::func::IntoHostFunc;
 use openfo4_jit::{Compiler, FuncId, Signature, Type as JitType};
 use openfo4_pex::{Instruction, Value};
 
@@ -59,7 +60,7 @@ pub fn declare_function(
             None if use_native_stubs => NativeFunction {
                 signature: signature.clone(),
                 index: 0,
-                ptr: crate::runtime::host_functions::stub as *const u8,
+                ptr: IntoHostFunc::into_host_func(crate::runtime::host_functions::stub),
             },
             None => {
                 return Err(Error::UndefNativeFunc(format!(

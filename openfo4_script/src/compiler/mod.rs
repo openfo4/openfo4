@@ -5,6 +5,7 @@ mod validation;
 pub mod resources;
 
 pub use codegen::PscSignature;
+use openfo4_jit::func::HostFunc;
 
 use std::sync::Arc;
 
@@ -83,7 +84,7 @@ impl Context {
 
 #[derive(Clone, Debug)]
 pub struct NativeFunction {
-    pub ptr: *const u8,
+    pub ptr: HostFunc,
     pub index: usize,
     pub signature: Signature,
 }
