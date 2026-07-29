@@ -1,8 +1,9 @@
+use game_common::string::Lowercase;
 use hashbrown::HashMap;
-use openfo4_pex::{Class, Function, Instruction, Value};
+use openfo4_pex::{Function, Instruction, Value};
 use thiserror::Error;
 
-use crate::compiler::validation::{GenericType, OperandKey, Type, ValidationPass};
+use crate::compiler::validation::{ClassDef, GenericType, OperandKey, Type, ValidationPass};
 
 #[derive(Clone, Debug, Error)]
 pub enum InvalidInstructionError {
@@ -47,10 +48,10 @@ pub enum InvalidInstructionError {
 impl ValidationPass {
     pub fn validate_instruction(
         &self,
-        class: &Class,
+        class: &ClassDef,
         function: &Function,
         instruction: &Instruction,
-        variables: &HashMap<String, Type>,
+        variables: &HashMap<Lowercase<String>, Type>,
     ) -> Result<(), InvalidInstructionError> {
         let variable_type = |value: &Value| -> Result<Type, InvalidInstructionError> {
             match value {
@@ -59,33 +60,26 @@ impl ValidationPass {
                 Value::Int(_) => Ok(Type::Int),
                 Value::Float(_) => Ok(Type::Float),
                 Value::String(_) => Ok(Type::String),
-                Value::Ident(name) => {
-                    let name = name.to_lowercase();
-                    match &*name {
-                        // Magic variable that holds the current state as a string.
-                        "::state" => Ok(Type::String),
-                        _ => variables
-                            .get(&name)
-                            .cloned()
-                            .ok_or_else(|| InvalidInstructionError::UnknownVariable(name.clone())),
-                    }
-                }
+                Value::Ident(name) => variables
+                    .get(&Lowercase::new(&**name))
+                    .cloned()
+                    .ok_or_else(|| InvalidInstructionError::UnknownVariable(name.clone())),
             }
         };
 
         let extract_struct_member_type =
             |operand: OperandKey, ty: Type, name: &str| -> Result<Type, InvalidInstructionError> {
+                let name_lower = Lowercase::new(name);
+
                 match ty {
-                    Type::Struct(st, members) => {
-                        for (n, ty) in members {
-                            if n.to_lowercase() == name.to_lowercase() {
-                                let ty = self.resolve_ty(&ty).unwrap();
-                                return Ok(ty);
-                            }
+                    Type::Struct(st) => {
+                        if let Some(member) = st.members.get(&name_lower) {
+                            let ty = self.resolve_ty(&member.ty).unwrap();
+                            return Ok(ty);
                         }
 
                         Err(InvalidInstructionError::UnknownStructMember {
-                            st: st.to_owned(),
+                            st: st.name,
                             member: name.to_owned(),
                         })
                     }
@@ -101,26 +95,28 @@ impl ValidationPass {
                                      ty: Type,
                                      prop_name: &str|
          -> Result<Type, InvalidInstructionError> {
+            let prop_name_lower = Lowercase::new(prop_name);
+
             match ty {
                 Type::Class(name) => {
                     let mut class = self.classes.get(&name).unwrap();
+
                     loop {
-                        for prop in &class.properties {
-                            if prop.name.to_lowercase() == prop_name.to_lowercase() {
-                                let ty = self.resolve_ty(&prop.ty).unwrap();
-                                return Ok(ty);
-                            }
+                        if let Some(ty) = class.properties.get(&prop_name_lower) {
+                            let ty = self.resolve_ty(ty).unwrap();
+                            return Ok(ty);
                         }
 
-                        if let Some(parent) = self.classes.get(&class.parent.to_lowercase()) {
-                            class = parent;
+                        if let Some(parent) = &class.parent {
+                            // Unwrap cannot fail since the class is validated.
+                            class = self.classes.get(parent).unwrap();
                         } else {
                             break;
                         }
                     }
 
                     Err(InvalidInstructionError::UnknownClassProperty {
-                        class: name.clone(),
+                        class: class.class.name.clone(),
                         property: prop_name.to_owned(),
                     })
                 }
@@ -178,7 +174,9 @@ impl ValidationPass {
             }
         }
 
-        let return_ty = self.resolve_ty(&function.return_ty).unwrap();
+        let return_ty = self
+            .resolve_ty(&Lowercase::new(&*function.return_ty))
+            .unwrap();
 
         match instruction {
             Instruction::Nop => {}
@@ -294,7 +292,7 @@ impl ValidationPass {
                         .assert_coercible(OperandKey::Named("lhs"), &rhs, &lhs)
                         .is_err()
                 {
-                    return Err(err)?;
+                    return Err(err);
                 }
             }
             Instruction::Branch(_) => {}
@@ -325,9 +323,11 @@ impl ValidationPass {
                     });
                 };
 
-                let Some(sig) = self.function_signature(&class, &op.function_name, true) else {
+                let func = Lowercase::new(&*op.function_name);
+                let Some(sig) = self.function_signature(&class, &func, true) else {
+                    let class = self.classes.get(&class).unwrap();
                     return Err(InvalidInstructionError::UndefinedFunction {
-                        class,
+                        class: class.class.name.clone(),
                         func: op.function_name.clone(),
                     });
                 };
@@ -352,13 +352,15 @@ impl ValidationPass {
                 self.assert_coercible(OperandKey::Named("dst"), &sig.returns, &dst)?;
             }
             Instruction::CallParent(op) => {
-                let Some(parent) = self.classes.get(&class.parent.to_lowercase()) else {
+                let Some(parent) = &class.parent else {
                     return Err(InvalidInstructionError::CallParentOnRoot);
                 };
 
-                let Some(sig) = self.function_signature(&parent.name, &op.function, true) else {
+                let func = Lowercase::new(&*op.function);
+                let Some(sig) = self.function_signature(parent, &func, true) else {
+                    let parent = self.classes.get(parent).unwrap();
                     return Err(InvalidInstructionError::UndefinedFunction {
-                        class: parent.name.clone(),
+                        class: parent.class.name.clone(),
                         func: op.function.clone(),
                     });
                 };
@@ -387,7 +389,9 @@ impl ValidationPass {
                 self.assert_coercible(OperandKey::Named("dst"), &sig.returns, &dst)?;
             }
             Instruction::CallStatic(op) => {
-                let Some(sig) = self.function_signature(&op.class, &op.function, false) else {
+                let class = Lowercase::new(&*op.class);
+                let func = Lowercase::new(&*op.function);
+                let Some(sig) = self.function_signature(&class, &func, false) else {
                     return Err(InvalidInstructionError::UndefinedFunction {
                         class: op.class.clone(),
                         func: op.function.clone(),
@@ -598,24 +602,28 @@ impl ValidationPass {
         match (&src_ty, &dst_ty) {
             // None can be assigned to any object.
             (Type::None, Type::Class(_)) => Ok(()),
-            (Type::None, Type::Struct(_, _)) => Ok(()),
+            (Type::None, Type::Struct(_)) => Ok(()),
             (Type::None, Type::Array(_)) => Ok(()),
             // Storing an object is possible if src > dst,
             // i.e. dst is a parent of src.
             // Try to upcast until we have a match.
             (Type::Class(src), Type::Class(dst)) => {
-                let mut src = src.to_lowercase();
-                let dst = dst.to_lowercase();
+                let mut src = src;
 
                 loop {
-                    if src == *dst {
+                    if src == dst {
                         return Ok(());
                     }
 
-                    let Some(class) = self.classes.get(&src) else {
+                    let Some(class) = self.classes.get(src) else {
                         break;
                     };
-                    src = class.parent.to_lowercase();
+
+                    if let Some(parent) = &class.parent {
+                        src = parent;
+                    } else {
+                        break;
+                    }
                 }
 
                 Err(InvalidInstructionError::InvalidCast {
@@ -643,29 +651,31 @@ impl ValidationPass {
                 (Type::Float, Type::Int) => return true,
                 (Type::Class(src), Type::Class(dst)) => {
                     // Try downcasting.
-                    let mut class_name = src.to_lowercase();
+                    let mut class_name = &src;
                     loop {
-                        if class_name == dst.to_lowercase() {
+                        if *class_name == dst {
                             return true;
                         }
 
-                        let class = self.classes.get(&class_name).unwrap();
-                        class_name = class.parent.to_lowercase();
-                        if class_name.is_empty() {
+                        let class = self.classes.get(class_name).unwrap();
+                        if let Some(parent) = &class.parent {
+                            class_name = parent;
+                        } else {
                             break;
                         }
                     }
 
                     // Try upcasting.
-                    let mut class_name = dst.to_lowercase();
+                    let mut class_name = &dst;
                     loop {
-                        if class_name == src.to_lowercase() {
+                        if *class_name == src {
                             return true;
                         }
 
-                        let class = self.classes.get(&class_name).unwrap();
-                        class_name = class.parent.to_lowercase();
-                        if class_name.is_empty() {
+                        let class = self.classes.get(class_name).unwrap();
+                        if let Some(parent) = &class.parent {
+                            class_name = parent;
+                        } else {
                             break;
                         }
                     }
@@ -678,12 +688,12 @@ impl ValidationPass {
                     | Type::String
                     | Type::Class(_)
                     | Type::Array(_)
-                    | Type::Struct(_, _),
+                    | Type::Struct(_),
                     Type::Bool,
                 ) => return true,
                 (Type::Bool, Type::Int | Type::Float | Type::String) => return true,
                 (
-                    Type::Int | Type::Float | Type::Class(_) | Type::Array(_) | Type::Struct(_, _),
+                    Type::Int | Type::Float | Type::Class(_) | Type::Array(_) | Type::Struct(_),
                     Type::String,
                 ) => return true,
                 (Type::Array(src_elem), Type::Array(dst_elem)) => {

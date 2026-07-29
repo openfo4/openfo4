@@ -3,6 +3,12 @@ use std::fmt::{self, Debug, Display, Formatter};
 use std::ops::Deref;
 
 /// A string value that is guaranteed to be lowercase.
+///
+/// Note that `Lowercase<T>` does not expose a [`Deref`] implementation, as this would make it easy
+/// to accidently compare to `T`. `Lowercase<T>` is only meant to be compared to itself. To access
+/// to inner `T` use [`as_inner`] instead.
+///
+/// [`as_inner`]: Self::as_inner
 #[derive(Clone, PartialEq, Eq, Hash)]
 #[repr(transparent)]
 pub struct Lowercase<T>(T)
@@ -61,6 +67,16 @@ impl Lowercase<str> {
         unsafe { Self::from_str(s) }
     }
 
+    /// Returns the number of bytes in this string.
+    pub const fn len(&self) -> usize {
+        self.0.len()
+    }
+
+    /// Returns `true` if the string is empty.
+    pub const fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
     /// Returns a string slice with the prefix removed.
     pub fn strip_prefix(&self, prefix: &str) -> Option<&Self> {
         let s = self.0.strip_prefix(prefix)?;
@@ -73,7 +89,7 @@ impl Lowercase<str> {
         Some(unsafe { Self::from_str(s) })
     }
 
-    /// Creates a nwe `Lowercast<str>`.
+    /// Creates a new `Lowercase<str>`.
     ///
     /// # Safety
     ///

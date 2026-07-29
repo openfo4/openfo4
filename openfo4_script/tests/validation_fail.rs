@@ -18,6 +18,40 @@ fn run_test(module: &str, class: &str) {
 }
 
 #[test]
+fn class_inheritance_cycle() {
+    run_test(
+        r#"
+        class A:
+        parent: B
+
+        class B:
+        parent: A
+        "#,
+        "A",
+    );
+}
+
+#[test]
+fn class_inheritance_cycle_indirect() {
+    run_test(
+        r#"
+        class A:
+        parent: B
+
+        class B:
+        parent: C
+
+        class C:
+        parent: D
+
+        class D:
+        parent: B
+        "#,
+        "A",
+    );
+}
+
+#[test]
 fn undefined_local() {
     run_test(
         r#"
