@@ -4415,10 +4415,20 @@ pub struct NavMeshGeometryTriangle {
     pub vertices: [u16; 3],
     pub edges: [u16; 3],
     pub height: f32,
-    _unknown0: u8,
+    pub flags2: NavMeshTriangleFlags2,
     pub flags: NavMeshTriangleFlags,
     pub cover_flags: u16,
 }
+
+bitflags! {
+    #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+    pub struct NavMeshTriangleFlags2: u8 {
+        /// Triangle is only accessible to floating actors.
+        const FLOAT = 1 << 4;
+    }
+}
+
+impl_decode_bitflags!(NavMeshTriangleFlags2: u8);
 
 bitflags! {
     #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]

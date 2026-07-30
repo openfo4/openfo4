@@ -1,5 +1,5 @@
 use openfo4_core::transform::ConvertCoordinateSystem;
-use openfo4_esp::records::NavMesh;
+use openfo4_esp::records::{NavMesh, NavMeshTriangleFlags2};
 
 use crate::assets::nif::NIF_TO_METERS;
 use crate::components::NiTransform;
@@ -17,6 +17,10 @@ pub async fn load_navmesh(ctx: &LoadContext<'_>, data: &NavMesh) -> SpawnEntity 
     let mut indices = Vec::new();
 
     for tri in &data.geometry.triangles {
+        if tri.flags2.contains(NavMeshTriangleFlags2::FLOAT) {
+            continue;
+        }
+
         for index in tri.vertices {
             assert!((index as usize) < vertices.len());
             indices.push(index.into());
