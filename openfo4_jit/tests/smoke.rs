@@ -19,10 +19,12 @@ fn call_return_value() {
 
     let compiled_fn = compiler.compile_function(guest_fn);
 
-    let fn_ptr =
-        unsafe { core::mem::transmute::<*const u8, extern "C" fn() -> i32>(compiled_fn.as_ptr()) };
+    let mut returns: i32 = 0;
+    unsafe {
+        compiled_fn.call(core::ptr::dangling(), (&raw mut returns).cast::<u8>());
+    }
 
-    assert_eq!(fn_ptr(), 1);
+    assert_eq!(returns, 1);
 }
 
 #[test]
@@ -57,11 +59,17 @@ fn call_native() {
 
     let compiled_fn = compiler.compile_function(guest_fn);
 
-    let fn_ptr =
-        unsafe { core::mem::transmute::<*const u8, extern "C" fn(*mut i32)>(compiled_fn.as_ptr()) };
+    let mut value: i32 = 0;
+    let value_ptr = &raw mut value;
 
-    let mut value = 0;
-    fn_ptr(&mut value);
+    dbg!(value_ptr);
+
+    unsafe {
+        compiled_fn.call(
+            (&raw const value_ptr).cast::<u8>(),
+            core::ptr::dangling_mut(),
+        );
+    }
 
     assert_eq!(value, 1);
 }

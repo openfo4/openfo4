@@ -24,8 +24,6 @@ pub(crate) const RESULT_OK: i32 = 0;
 pub(crate) const RESULT_ERROR: i32 = 1;
 pub(crate) const RESULT_SUSPEND: i32 = 2;
 
-type NativeFnPtr = unsafe extern "C" fn(*const RawContext, *const RawVal, *mut RawVal) -> i32;
-
 /// Context passed to guest functions.
 pub struct Context<'a, T> {
     engine: Arc<EngineShared>,

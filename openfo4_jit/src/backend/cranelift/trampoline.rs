@@ -1,10 +1,11 @@
 use cranelift_codegen::ir::{
-    self, ExtFuncData, ExternalName, InstBuilder, StackSlotData, StackSlotKind, UserExternalName,
-    UserExternalNameRef,
+    self, ExtFuncData, ExternalName, InstBuilder, MemFlags, StackSlotData, StackSlotKind,
+    UserExternalName, UserExternalNameRef,
 };
 use cranelift_frontend::FunctionBuilder;
 use hashbrown::HashMap;
 
+use crate::FuncId;
 use crate::backend::cranelift::{Callee, FuncState, HostFunctionDefinition, map_type};
 use crate::func::{HostFunc, MAX_ALIGN};
 
@@ -97,4 +98,63 @@ pub fn call_host_trampoline(
     }
 
     return_values
+}
+
+pub fn call_guest_trampoline(
+    builder: &mut FunctionBuilder<'_>,
+    ptr_type: ir::Type,
+    func: &FuncState,
+    func_id: FuncId,
+    callee_signature: &ir::Signature,
+    callees: &mut HashMap<UserExternalNameRef, Callee>,
+) {
+    let block = builder.create_block();
+    builder.switch_to_block(block);
+    builder.append_block_params_for_function_params(block);
+    let args = builder.block_params(block);
+
+    let params_ptr = args[0];
+    let returns_ptr = args[1];
+
+    let mut offset = 0;
+    let mut params = Vec::with_capacity(func.signature.params.len());
+    for ty in &func.signature.params {
+        offset = (offset + ty.align() - 1) & !(ty.align() - 1);
+        let value = builder.ins().load(
+            map_type(ptr_type, *ty),
+            MemFlags::trusted(),
+            params_ptr,
+            offset as i32,
+        );
+        params.push(value);
+        offset += ty.size();
+    }
+
+    let name = builder
+        .func
+        .declare_imported_user_function(UserExternalName::new(0, func_id.0.try_into().unwrap()));
+    callees.insert(name, Callee::Id(func_id));
+
+    let sig_ref = builder.import_signature(callee_signature.clone());
+    let func_ref = builder.import_function(ExtFuncData {
+        name: ExternalName::User(name),
+        signature: sig_ref,
+        colocated: false,
+        patchable: false,
+    });
+
+    let inst = builder.ins().call(func_ref, &params);
+    let returns = builder.inst_results(inst).to_vec();
+
+    debug_assert_eq!(func.signature.returns.len(), returns.len());
+    let mut offset = 0;
+    for (ty, value) in func.signature.returns.iter().zip(returns) {
+        offset = (offset + ty.align() - 1) & !(ty.align() - 1);
+        builder
+            .ins()
+            .store(MemFlags::trusted(), value, returns_ptr, offset as i32);
+        offset += ty.size();
+    }
+
+    builder.ins().return_(&[]);
 }

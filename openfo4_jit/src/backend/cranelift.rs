@@ -5,6 +5,7 @@ mod relocs;
 mod trampoline;
 
 use std::alloc::Layout;
+use std::mem::transmute;
 use std::sync::Arc;
 
 use cranelift_codegen::control::ControlPlane;
@@ -98,6 +99,7 @@ impl CraneliftModule {
             signature: signature.clone(),
             definition: None,
             compiled: None,
+            trampoline: None,
         });
 
         Ok(FuncId(id))
@@ -171,6 +173,21 @@ impl CraneliftModule {
 
         let mut funcs_to_compile = vec![id];
 
+        if self.functions[id.0].trampoline.is_none() {
+            let trampoline_id = FuncId(self.functions.insert(FuncState {
+                signature: Signature {
+                    params: vec![Type::Pointer, Type::Pointer],
+                    returns: Vec::new(),
+                },
+                definition: Some(FunctionDefinition::GuestTrampoline(id)),
+                compiled: None,
+                trampoline: None,
+            }));
+
+            self.functions[id.0].trampoline = Some(trampoline_id);
+            funcs_to_compile.push(trampoline_id);
+        }
+
         let mut compiled_funcs = HashSet::new();
 
         while let Some(id) = funcs_to_compile.pop() {
@@ -212,6 +229,19 @@ impl CraneliftModule {
                     );
 
                     builder.ins().return_(&returns);
+                }
+                FunctionDefinition::GuestTrampoline(callee) => {
+                    let f = &self.functions[callee.0];
+                    let signature = convert_signature(&f.signature);
+
+                    trampoline::call_guest_trampoline(
+                        &mut builder,
+                        ptr_type,
+                        f,
+                        *callee,
+                        &signature,
+                        &mut refs_to_funcs,
+                    );
                 }
                 FunctionDefinition::Guest(func_def) => {
                     let mut values = vec![const { None }; func_def.num_values];
@@ -501,7 +531,7 @@ impl CraneliftModule {
                                             &mut refs_to_funcs,
                                         )
                                     }
-                                    None => unreachable!(),
+                                    _ => unreachable!(),
                                 };
 
                                 added_inst_count += 1;
@@ -927,13 +957,21 @@ impl CraneliftModule {
 
         wasmtime_internal_jit_icache_coherence::pipeline_flush_mt().unwrap();
 
-        let compiled = self.functions[id.0].compiled.as_ref().unwrap();
+        let func = &self.functions[id.0];
+        let compiled = func.compiled.as_ref().unwrap();
+        let trampoline = self.functions[func.trampoline.unwrap().0]
+            .compiled
+            .as_ref()
+            .unwrap();
+
         CompiledFunction {
             _allocation: compiled.allocation.clone(),
             fn_ptr: compiled.allocation.as_exec_ptr(),
             clif: compiled.clif.clone(),
             srclocs: compiled.srclocs.clone(),
             len: compiled.code.code_buffer().len(),
+            _trampoline_allocation: trampoline.allocation.clone(),
+            trampoline_fn_ptr: trampoline.allocation.as_exec_ptr(),
         }
     }
 }
@@ -956,12 +994,14 @@ struct FuncState {
     signature: Signature,
     definition: Option<FunctionDefinition>,
     compiled: Option<CompilationResult>,
+    trampoline: Option<FuncId>,
 }
 
 #[derive(Clone, Debug)]
 enum FunctionDefinition {
     Host(HostFunctionDefinition),
     Guest(GuestFunctionDefinition),
+    GuestTrampoline(FuncId),
 }
 
 #[derive(Clone, Debug)]
@@ -988,13 +1028,24 @@ struct GuestFunctionDefinition {
 pub struct CompiledFunction {
     /// The allocation must not be droped until all function calls terminate.
     _allocation: Arc<Allocation>,
+    _trampoline_allocation: Arc<Allocation>,
     fn_ptr: *const u8,
+    trampoline_fn_ptr: *const u8,
     clif: Option<TextWithSrcLocs<String>>,
     srclocs: SourceLocMap,
     len: usize,
 }
 
 impl CompiledFunction {
+    pub unsafe fn call(&self, params: *const u8, returns: *mut u8) {
+        unsafe {
+            let fn_ptr = transmute::<*const u8, unsafe extern "C" fn(*const u8, *mut u8)>(
+                self.trampoline_fn_ptr,
+            );
+            fn_ptr(params, returns);
+        }
+    }
+
     pub fn as_ptr(&self) -> *const u8 {
         self.fn_ptr
     }

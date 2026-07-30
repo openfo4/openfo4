@@ -1370,39 +1370,52 @@ pub struct CompiledFunction {
 }
 
 impl CompiledFunction {
-    /// Returns a pointer to the compiled function.
+    /// Calls the guest function.
+    ///
+    /// The `params` pointer contains the input elements read from the function body.
+    /// The `returns` pointer contains the output elements written by the function body.
+    ///
+    /// ## ABI
+    ///
+    /// The `params` and `returns` pointers must match the [`Signature`] used while building this
+    /// function. `params` and `returns` share the same ABI, except that `params` must be readable
+    /// and `returns` must be writable.
+    ///
+    /// We consider a pointer valid for a [`Type`] when it is non-null and well-aligned.
+    /// If the pointer is readable the bytes of a value must also be initialized and contain a
+    /// valid bit pattern for the [`Type`].
+    ///
+    /// The first value is placed at offset 0, all following values are placed at offset
+    /// `align_up(offset(i - 1) + size(i - 1), align(i))`, where:
+    /// - `offset(i)` is the offset of the value at index `i`,
+    /// - `size(i)` is the size in bytes of the value at index `i`,
+    /// - `align(i)` is the alignment of the value at index `i` and
+    /// - `align_up` returns the next multiple of the given alignment.
+    ///
+    /// `returns` may point to uninitialized memory as long as it is still writable for all return
+    /// values. Whether a value is initialized after the function returns depends on the code of
+    /// the function.
     ///
     /// # Safety
     ///
-    /// While this function is safe because it only returns a pointer, using the pointer requires
-    /// special care:
+    /// - The *Codegen Safety* requirements must hold for every instruction inserted into this
+    ///   function and all functions called by this function recursively. This includes indirect
+    ///   function calls.
+    /// - `params` must be non-null and valid for reads according to the ABI described above.
+    /// - `returns` must be non-null and valie for writes according to the ABI described above.
     ///
-    /// - You must ensure that all previous calls before `compile_function` respect the codegen
-    ///   safety.
-    /// - You must manually cast this pointer to a function pointer. The signature of the function
-    ///   must match the signature that the compiled function was declared.
-    /// - You must ensure that the function is safe to call on the current thread.
-    /// - Dropping this `CompiledFunction` will deallocate the code that this pointer references.
-    ///   When this happens no threads may currently have a callstack that includes this function.
-    /// - You must ensure that all native functions referenced remain valid until no threads
-    ///   have a callstack including this function.
-    ///
-    /// # Example
-    ///
-    /// ```no_run
-    /// # use openfo4_jit::CompiledFunction;
-    /// # use core::mem::transmute;
-    /// #
-    /// # let compiled_function: CompiledFunction = unreachable!();
-    /// #
-    /// // Cast the raw pointer to a function pointer.
-    /// let fn_ptr = compiled_function.as_ptr();
-    /// let fn_ptr = unsafe { transmute::<*const u8, extern "C" fn(i32) -> i32>(fn_ptr) };
-    ///
-    /// // Call the function.
-    /// let result = fn_ptr(42);
-    ///
-    /// ```
+    pub unsafe fn call(&self, params: *const u8, returns: *mut u8) {
+        debug_assert!(!params.is_null());
+        debug_assert!(!returns.is_null());
+
+        // SAFETY: The caller guarantees that the function was soundly constructed
+        // and the arguments are valid.
+        unsafe {
+            self.inner.call(params, returns);
+        }
+    }
+
+    /// Returns a pointer to the compiled function.
     pub fn as_ptr(&self) -> *const u8 {
         self.inner.as_ptr()
     }

@@ -1,25 +1,25 @@
 use std::any::Any;
 use std::marker::{PhantomData, PhantomPinned};
-use std::mem::{MaybeUninit, transmute};
+use std::mem::MaybeUninit;
 use std::pin::Pin;
 use std::sync::{Arc, Weak};
 use std::task::{self, Poll, ready};
 
 use game_common::cell::UnsafeRefCell;
-use openfo4_jit::{Signature, Type};
+use openfo4_jit::{CompiledFunction, Signature, Type};
 use pin_project::pin_project;
 use thiserror::Error;
 
 use crate::compiler::{CompilationResult, PscSignature};
 use crate::engine::EngineShared;
 use crate::runtime::{
-    Context, Error, NativeFnPtr, NativeTuple, NativeType, ObjectAddr, ObjectPool, PanicMsg,
-    RESULT_ERROR, RESULT_OK, RESULT_SUSPEND, RawContext, RawStack, RawVal, TypeArray, TypeRef, Val,
+    Context, Error, NativeTuple, NativeType, ObjectAddr, ObjectPool, PanicMsg, RESULT_ERROR,
+    RESULT_OK, RESULT_SUSPEND, RawContext, RawStack, RawVal, TypeArray, TypeRef, Val,
 };
 
 #[derive(Clone, Debug)]
 pub struct Func {
-    ptr: NativeFnPtr,
+    func: CompiledFunction,
     signature: Signature,
     psc_sig: PscSignature,
     engine: Weak<EngineShared>,
@@ -40,13 +40,28 @@ impl Func {
         );
 
         Self {
-            // SAFETY: The caller guarantees that the function is a valid
-            // function pointer of type `NativeFnPtr`.
-            ptr: unsafe { transmute::<*const u8, NativeFnPtr>(res.function.as_ptr()) },
+            func: res.function.clone(),
             signature: res.signature.clone(),
             psc_sig: res.psc_signature.clone(),
             engine,
         }
+    }
+
+    unsafe fn call_in(
+        &self,
+        ctx: *const RawContext,
+        params: *const RawVal,
+        returns: *mut RawVal,
+    ) -> i32 {
+        let args = &[ctx.cast::<u8>(), params.cast::<u8>(), returns.cast::<u8>()];
+        let mut res: i32 = 0;
+
+        unsafe {
+            self.func
+                .call(args.as_ptr().cast::<u8>(), (&raw mut res).cast::<u8>());
+        }
+
+        res
     }
 
     pub fn call<T>(&self, ctx: &mut Context<'_, T>, params: &[Val]) -> Result<Vec<Val>, Error>
@@ -189,14 +204,14 @@ impl Func {
             "attempted to call func with context from another Engine"
         );
         if let Some(stack_fn_ptr) = ctx.stack.func {
-            let fn_ptr = self.ptr as *const u8;
+            let fn_ptr = self.func.as_ptr();
             assert!(
                 core::ptr::addr_eq(fn_ptr, stack_fn_ptr),
                 "attempted to reuse stack for incompatible func"
             );
         }
 
-        ctx.stack.func = Some(self.ptr as *const u8);
+        ctx.stack.func = Some(self.func.as_ptr());
 
         // Allocate enough stack space for the callee prologue.
         if ctx.stack.size() == 0 {
@@ -219,7 +234,7 @@ impl Func {
             error: UnsafeRefCell::new(None),
         };
 
-        let res = unsafe { (self.ptr)(&raw_ctx, params, returns) };
+        let res = unsafe { self.call_in(&raw_ctx, params, returns) };
 
         // Once we drop `raw_ctx`, the future becomes invalid.
         // We must drop it before before that happens.
@@ -270,7 +285,7 @@ impl Func {
             "attempted to call func with context from another Engine"
         );
         if let Some(stack_fn_ptr) = ctx.stack.func {
-            let fn_ptr = self.ptr as *const u8;
+            let fn_ptr = self.func.as_ptr();
             assert!(
                 core::ptr::addr_eq(fn_ptr, stack_fn_ptr),
                 "attempted to reuse stack for incompatible func"
@@ -469,7 +484,7 @@ where
         let raw_ctx = this.raw_ctx.get_or_insert_with(|| {
             debug_assert_eq!(this.ctx.stack.size(), 0);
 
-            this.ctx.stack.func = Some(this.func.ptr as *const u8);
+            this.ctx.stack.func = Some(this.func.func.as_ptr());
 
             // Allocate enough stack space for the callee prologue.
             this.ctx.stack.alloc(size_of::<usize>());
@@ -494,7 +509,7 @@ where
         // We must lock the call table before we call the guest function.
         let _lock = this.ctx.engine.call_table_lock.read();
 
-        let res = unsafe { (this.func.ptr)(raw_ctx, this.params, this.returns) };
+        let res = unsafe { this.func.call_in(raw_ctx, this.params, this.returns) };
 
         // If the callee calls into a native host function that panics,
         // we will resume the panic here.
