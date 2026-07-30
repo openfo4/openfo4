@@ -3,6 +3,7 @@ use std::path::Path;
 
 use async_lock::RwLock;
 use game_common::collections::lru::LruCache;
+use game_common::string::Lowercase;
 use hashbrown::{HashMap, HashSet};
 use openfo4_core::record::{ModuleId, RecordId};
 use openfo4_esp::vmad::{Object, Value};
@@ -108,6 +109,7 @@ impl EspLoaderBuilder {
         }
 
         let mut files = Vec::with_capacity(entries.len());
+        let mut plugin_file_names = HashMap::new();
 
         // +1 because ModuleIds start at 1.
         let mut plugins = Vec::with_capacity(entries.len() + 1);
@@ -134,6 +136,8 @@ impl EspLoaderBuilder {
             });
             plugins[id.0.get() as usize] = index as u32;
 
+            plugin_file_names.insert(Lowercase::new(&*entry.name), id);
+
             if let Some(dependents) = dependents.remove(&entry.name) {
                 for dep in dependents {
                     let deps = dependencies.get_mut(&dep).unwrap();
@@ -153,6 +157,7 @@ impl EspLoaderBuilder {
             plugins: plugins.into_boxed_slice(),
             cache: RwLock::new(LruCache::new(65_536)),
             hardcoded: load_hardcoded_forms(),
+            plugin_file_names,
         }
     }
 }
@@ -163,6 +168,7 @@ pub struct EspLoader {
     plugins: Box<[u32]>,
     cache: RwLock<LruCache<RecordId, GlobalRecord>>,
     hardcoded: HashMap<FormId, Record>,
+    plugin_file_names: HashMap<Lowercase<String>, ModuleId>,
 }
 
 impl EspLoader {
@@ -281,7 +287,17 @@ impl EspLoader {
     ///
     /// The `origin` is the [`RecordId`] where the [`FormId`] was defined.
     pub fn resolve_form(&self, form: FormId, origin: RecordId) -> Option<RecordId> {
-        let index = *self.plugins.get(origin.module.0.get() as usize)?;
+        self.resolve_form_from_module(form, origin.module)
+    }
+
+    /// Resolves a plugin-local [`FormId`] from the given plugin file name into a global [`RecordId`].
+    pub fn resolve_form_file_name(&self, form: FormId, file: &Lowercase<str>) -> Option<RecordId> {
+        let module = *self.plugin_file_names.get(file)?;
+        self.resolve_form_from_module(form, module)
+    }
+
+    fn resolve_form_from_module(&self, form: FormId, module: ModuleId) -> Option<RecordId> {
+        let index = *self.plugins.get(module.0.get() as usize)?;
         let plugin = &self.files[index as usize];
 
         // It seems that out of bounds plugin indices reference the plugin
