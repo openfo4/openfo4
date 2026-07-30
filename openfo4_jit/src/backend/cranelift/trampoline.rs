@@ -6,7 +6,7 @@ use cranelift_frontend::FunctionBuilder;
 use hashbrown::HashMap;
 
 use crate::FuncId;
-use crate::backend::cranelift::{Callee, FuncState, HostFunctionDefinition, map_type};
+use crate::backend::cranelift::{Callee, FuncState, HostFunctionDefinition, Translator, map_type};
 use crate::func::{HostFunc, MAX_ALIGN};
 
 pub unsafe extern "C" fn host_call_trampoline(
@@ -29,6 +29,7 @@ pub fn call_host_trampoline(
     def: &HostFunctionDefinition,
     params: &[ir::Value],
     callees: &mut HashMap<UserExternalNameRef, Callee>,
+    translator: &mut Translator,
 ) -> Vec<ir::Value> {
     let mut params_size = 0;
     for ty in &func.signature.params {
@@ -66,18 +67,24 @@ pub fn call_host_trampoline(
         }
     }
 
-    let name = builder
-        .func
-        .declare_imported_user_function(UserExternalName::new(1, 0));
-    let sig_ref = builder.func.import_signature(shim_signature.clone());
-    let func_ref = builder.import_function(ExtFuncData {
-        name: ExternalName::User(name),
-        signature: sig_ref,
-        colocated: false,
-        patchable: false,
-    });
+    let func_ref = *translator.host_call_trampoline.get_or_insert_with(|| {
+        let name = builder
+            .func
+            .declare_imported_user_function(UserExternalName::new(1, 0));
 
-    callees.insert(name, Callee::HostCallTrampoline);
+        callees.insert(name, Callee::HostCallTrampoline);
+
+        let sig_ref = *translator
+            .signatures
+            .entry(shim_signature.clone())
+            .or_insert_with(|| builder.func.import_signature(shim_signature.clone()));
+        builder.import_function(ExtFuncData {
+            name: ExternalName::User(name),
+            signature: sig_ref,
+            colocated: false,
+            patchable: false,
+        })
+    });
 
     let ptr = builder.ins().iconst(ptr_type, def.data.addr() as i64);
     let params = builder.ins().stack_addr(ptr_type, params_slot, 0);

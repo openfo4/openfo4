@@ -210,6 +210,8 @@ impl CraneliftModule {
 
             let mut builder = FunctionBuilder::new(&mut func, &mut self.func_ctx);
 
+            let mut translator = Translator::default();
+
             match func_def.definition.as_ref().unwrap() {
                 FunctionDefinition::Host(def) => {
                     let block = builder.create_block();
@@ -224,6 +226,7 @@ impl CraneliftModule {
                         def,
                         &params,
                         &mut refs_to_funcs,
+                        &mut translator,
                     );
 
                     builder.ins().return_(&returns);
@@ -461,7 +464,10 @@ impl CraneliftModule {
                                     .collect::<Vec<_>>();
 
                                 let signature = convert_signature(signature);
-                                let sig_ref = builder.import_signature(signature);
+                                let sig_ref = *translator
+                                    .signatures
+                                    .entry(signature.clone())
+                                    .or_insert_with(|| builder.import_signature(signature));
 
                                 let callee = values[callee.0].unwrap();
 
@@ -502,7 +508,12 @@ impl CraneliftModule {
                                                 refs_to_funcs.insert(name, Callee::Id(*func_id));
 
                                                 let signature = convert_signature(&func.signature);
-                                                let sig_ref = builder.import_signature(signature);
+                                                let sig_ref = *translator
+                                                    .signatures
+                                                    .entry(signature.clone())
+                                                    .or_insert_with(|| {
+                                                        builder.import_signature(signature)
+                                                    });
 
                                                 builder.import_function(ExtFuncData {
                                                     name: ExternalName::User(name),
@@ -528,6 +539,7 @@ impl CraneliftModule {
                                             def,
                                             &args,
                                             &mut refs_to_funcs,
+                                            &mut translator,
                                         )
                                     }
                                     _ => unreachable!(),
@@ -1079,4 +1091,10 @@ fn map_type(ptr_type: ir::Type, ty: Type) -> ir::Type {
         Type::F64 => ir::types::F64,
         Type::Pointer => ptr_type,
     }
+}
+
+#[derive(Clone, Debug, Default)]
+struct Translator {
+    signatures: HashMap<ir::Signature, ir::SigRef>,
+    host_call_trampoline: Option<ir::FuncRef>,
 }
