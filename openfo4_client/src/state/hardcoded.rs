@@ -68,7 +68,7 @@ pub const ACTOR_PLAYER: RecordId = RecordId::new(HARDCODED_MODULE_ID, FormId(0x7
 
 pub const PLACED_ACTOR_PLAYER_REF: RecordId = RecordId::new(HARDCODED_MODULE_ID, FormId(0x14));
 
-pub fn load_hardcoded_forms() -> HashMap<FormId, Record> {
+pub fn load_hardcoded_forms() -> HashMap<RecordId, Record> {
     fn actor_value(id: FormId, name: &str) -> (FormId, Record) {
         (
             id,
@@ -171,6 +171,7 @@ pub fn load_hardcoded_forms() -> HashMap<FormId, Record> {
         ),
     ]
     .into_iter()
+    .map(|(form, record)| (RecordId::new(HARDCODED_MODULE_ID, form), record))
     .collect()
 }
 

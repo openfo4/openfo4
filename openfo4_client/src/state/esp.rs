@@ -10,14 +10,13 @@ use openfo4_esp::vmad::{Object, Value};
 use openfo4_esp::{Error, EspFile, FormId, Record, RecordChildren, RecordData, RecordKind};
 use openfo4_io::fs::File;
 
-use crate::state::hardcoded::load_hardcoded_forms;
-
 const HARDCODED_MODULE_ID: ModuleId = ModuleId(NonZeroU32::MIN);
 
 #[derive(Debug)]
 pub struct EspLoaderBuilder {
     files: Vec<EspFile<File>>,
     file_names: Vec<String>,
+    hardcoded: HashMap<RecordId, Record>,
 }
 
 impl EspLoaderBuilder {
@@ -25,6 +24,7 @@ impl EspLoaderBuilder {
         Self {
             files: Vec::new(),
             file_names: Vec::new(),
+            hardcoded: HashMap::new(),
         }
     }
 
@@ -45,6 +45,10 @@ impl EspLoaderBuilder {
         let file = futures_lite::future::block_on(EspFile::new(file)).unwrap();
 
         self.files.push(file);
+    }
+
+    pub fn set_hardcoded(&mut self, hardcoded: HashMap<RecordId, Record>) {
+        self.hardcoded = hardcoded;
     }
 
     pub fn finalize(self) -> EspLoader {
@@ -156,8 +160,8 @@ impl EspLoaderBuilder {
             files,
             plugins: plugins.into_boxed_slice(),
             cache: RwLock::new(LruCache::new(65_536)),
-            hardcoded: load_hardcoded_forms(),
             plugin_file_names,
+            hardcoded: self.hardcoded,
         }
     }
 }
@@ -167,7 +171,7 @@ pub struct EspLoader {
     files: Vec<PluginFile>,
     plugins: Box<[u32]>,
     cache: RwLock<LruCache<RecordId, GlobalRecord>>,
-    hardcoded: HashMap<FormId, Record>,
+    hardcoded: HashMap<RecordId, Record>,
     plugin_file_names: HashMap<Lowercase<String>, ModuleId>,
 }
 
@@ -178,14 +182,9 @@ impl EspLoader {
         kind: Option<RecordKind>,
         id: RecordId,
     ) -> Result<GlobalRecord, Error> {
-        if id.module == HARDCODED_MODULE_ID
-            && let Some(record) = self.hardcoded.get(&id.form)
-        {
+        if let Some(record) = self.hardcoded.get(&id) {
             return Ok(GlobalRecord {
-                id: RecordId {
-                    module: HARDCODED_MODULE_ID,
-                    form: record.id,
-                },
+                id,
                 local: record.clone(),
             });
         }

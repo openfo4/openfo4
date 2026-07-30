@@ -114,6 +114,8 @@ impl GameState {
         config: Config,
     ) -> Self {
         let mut loader = EspLoaderBuilder::new();
+        loader.set_hardcoded(hardcoded::load_hardcoded_forms());
+
         let mut sources = Vec::new();
 
         for path in data_dirs {
