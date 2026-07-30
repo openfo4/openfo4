@@ -15,7 +15,7 @@ use cranelift_codegen::ir::{
     InstBuilder, MemFlags, StackSlotData, StackSlotKind, UserExternalName, UserExternalNameRef,
     UserFuncName,
 };
-use cranelift_codegen::isa::OwnedTargetIsa;
+use cranelift_codegen::isa::{CallConv, OwnedTargetIsa};
 use cranelift_codegen::settings::Configurable;
 use cranelift_codegen::{CompiledCode, Context, settings};
 use cranelift_frontend::{FunctionBuilder, FunctionBuilderContext};
@@ -162,12 +162,10 @@ impl CraneliftModule {
             let params = sig.params.iter().map(map_param).collect();
             let returns = sig.returns.iter().map(map_param).collect();
 
-            let call_conv = self.isa.default_call_conv();
-
             ir::Signature {
                 params,
                 returns,
-                call_conv,
+                call_conv: CallConv::Fast,
             }
         };
 
@@ -232,7 +230,8 @@ impl CraneliftModule {
                 }
                 FunctionDefinition::GuestTrampoline(callee) => {
                     let f = &self.functions[callee.0];
-                    let signature = convert_signature(&f.signature);
+                    let mut signature = convert_signature(&f.signature);
+                    signature.call_conv = self.isa.default_call_conv();
 
                     trampoline::call_guest_trampoline(
                         &mut builder,
