@@ -204,18 +204,6 @@ pub enum ItemKind {
     Junk,
 }
 
-impl ItemStack {
-    fn joinable(&self, other: &ItemStack) -> bool {
-        debug_assert_eq!(self.item, other.item);
-        self.attachments == other.attachments
-    }
-}
-
-#[derive(Clone, Debug)]
-pub struct Attachment {
-    pub form: RecordId,
-}
-
 #[derive(Clone, Debug)]
 pub struct AddItemEvent {
     pub actor: Entity,
@@ -281,7 +269,7 @@ impl InventorySystem {
             let event = event.clone();
 
             self.async_item_add_tasks.push(self.pool.spawn(async move {
-                let items = load_item(
+                let mut items = load_item(
                     &esp_loader,
                     &script_loader,
                     event.item,
@@ -289,6 +277,10 @@ impl InventorySystem {
                     event.count,
                 )
                 .await;
+
+                for item in &mut items {
+                    item.hidden = event.hidden;
+                }
 
                 let equip_events = if event.equip {
                     items
