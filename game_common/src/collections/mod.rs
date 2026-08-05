@@ -1,3 +1,4 @@
+pub mod aligned_box;
 pub mod arena;
 pub mod bimap;
 pub mod bit_vec;
