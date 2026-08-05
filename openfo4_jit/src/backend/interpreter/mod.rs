@@ -370,12 +370,7 @@ impl CompiledFunc {
                     ops::write(ty, value, ptr);
                 }
             }
-            Instruction::StackAddr {
-                slot,
-                ty: _,
-                dst,
-                offset,
-            } => {
+            Instruction::StackAddr { slot, dst, offset } => {
                 let stack = frame.stack_slots.get_mut(slot.0).unwrap();
                 let offset = isize::from(*offset).cast_unsigned();
 

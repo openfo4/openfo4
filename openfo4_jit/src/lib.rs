@@ -796,18 +796,23 @@ impl<'a> FunctionBuilder<'a> {
         });
     }
 
+    /// Returns the address of the stack slot.
+    ///
+    /// The `offset` is added to the base address.
+    /// Returns a value of type [`Pointer`].
+    ///
+    /// [`Pointer`]: Type::Pointer
     #[track_caller]
-    pub fn stack_addr<T>(&mut self, slot: StackSlot, ty: Type, offset: T) -> Value
+    pub fn stack_addr<T>(&mut self, slot: StackSlot, offset: T) -> Value
     where
         T: Into<Imm>,
     {
         debug_assert!(self.stack_slots.contains(slot.0));
         self.assert_block_not_filled();
 
-        let dst = self.produce_value(ty);
+        let dst = self.produce_value(Type::Pointer);
         self.instructions.push(Instruction::StackAddr {
             slot,
-            ty,
             offset: offset.into().to_word(),
             dst,
         });
@@ -1250,7 +1255,6 @@ enum Instruction {
     },
     StackAddr {
         slot: StackSlot,
-        ty: Type,
         dst: Value,
         offset: Word,
     },

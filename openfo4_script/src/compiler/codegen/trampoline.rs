@@ -93,8 +93,8 @@ pub fn generate_guest_to_host_trampoline(
 
     let index = builder.iconst(Type::Pointer, i64::try_from(native.index).unwrap());
 
-    let stack_params_addr = builder.stack_addr(stack_params, Type::Pointer, 0);
-    let stack_returns_addr = builder.stack_addr(stack_returns, Type::Pointer, 0);
+    let stack_params_addr = builder.stack_addr(stack_params, 0);
+    let stack_returns_addr = builder.stack_addr(stack_returns, 0);
 
     let args = vec![ctx, index, stack_params_addr, stack_returns_addr];
 

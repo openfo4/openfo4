@@ -631,14 +631,9 @@ impl Backend for CraneliftModule {
                                 builder.ins().stack_store(value, slot, offset);
                                 added_inst_count += 1;
                             }
-                            Instruction::StackAddr {
-                                slot,
-                                ty,
-                                dst,
-                                offset,
-                            } => {
+                            Instruction::StackAddr { slot, dst, offset } => {
                                 let slot = stack_slots[slot.0].unwrap();
-                                let ty = map_type(*ty);
+                                let ty = map_type(Type::Pointer);
 
                                 // TODO: We can do manual address calcuation when offset is too big.
                                 let offset = i32::try_from(*offset).unwrap_or_else(|_| todo!());
