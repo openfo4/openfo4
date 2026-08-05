@@ -78,9 +78,7 @@ impl Compiler {
             compiler: self,
             instructions: Vec::new(),
             next_value: 0,
-            next_block: 0,
             next_variable: 0,
-            block_params: Vec::new(),
             stack_slots: Slab::new(),
             current_block_full: false,
             current_block: None,
@@ -89,6 +87,7 @@ impl Compiler {
             srclocs: SourceLocMap::default(),
             value_types: Vec::new(),
             variable_types: Vec::new(),
+            blocks: Vec::new(),
         }
     }
 
@@ -212,17 +211,16 @@ pub struct FunctionBuilder<'a> {
     compiler: &'a mut Compiler,
     instructions: Vec<Instruction>,
     next_value: usize,
-    next_block: usize,
     next_variable: usize,
     stack_slots: Slab<StackSlotDesc>,
-    block_params: Vec<Vec<Value>>,
-    blocks_filled: Vec<bool>,
     current_block_full: bool,
     current_block: Option<Block>,
     current_srcloc: Option<(SourceLoc, usize)>,
     srclocs: SourceLocMap,
     value_types: Vec<Type>,
     variable_types: Vec<Type>,
+    blocks: Vec<BlockProps>,
+    blocks_filled: Vec<bool>,
 }
 
 impl<'a> FunctionBuilder<'a> {
@@ -298,9 +296,6 @@ impl<'a> FunctionBuilder<'a> {
     pub fn create_entry_block(&mut self) -> Block {
         let state = &self.compiler.functions.get(self.id).unwrap();
 
-        let block = self.next_block;
-        self.next_block += 1;
-
         let params = state.signature.params.clone();
         let values = state
             .signature
@@ -311,45 +306,40 @@ impl<'a> FunctionBuilder<'a> {
             .map(|ty| self.produce_value_maybe_full(*ty))
             .collect::<Vec<_>>();
 
-        self.instructions.push(Instruction::CreateBlock {
-            id: Block(block),
-            params,
-            values: values.clone(),
+        let id = Block(self.blocks.len());
+        self.blocks.push(BlockProps {
+            id,
+            types: params,
+            values,
             is_entry: true,
         });
 
-        debug_assert_eq!(block, self.block_params.len());
-        self.block_params.push(values);
         self.blocks_filled.push(false);
 
-        Block(block)
+        id
     }
 
     pub fn create_block(&mut self, params: &[Type]) -> Block {
-        let block = self.next_block;
-        self.next_block += 1;
-
         let values = params
             .iter()
             .map(|ty| self.produce_value_maybe_full(*ty))
             .collect::<Vec<_>>();
 
-        self.instructions.push(Instruction::CreateBlock {
-            id: Block(block),
-            params: params.to_vec(),
-            values: values.clone(),
+        let id = Block(self.blocks.len());
+        self.blocks.push(BlockProps {
+            id,
+            types: params.to_vec(),
+            values,
             is_entry: false,
         });
 
-        debug_assert_eq!(block, self.block_params.len());
-        self.block_params.push(values);
         self.blocks_filled.push(false);
 
-        Block(block)
+        id
     }
 
     pub fn block_params(&self, block: Block) -> &[Value] {
-        &self.block_params[block.0]
+        &self.blocks[block.0].values
     }
 
     pub fn is_block_full(&self, block: Block) -> bool {
@@ -358,7 +348,7 @@ impl<'a> FunctionBuilder<'a> {
 
     #[track_caller]
     pub fn switch_to_block(&mut self, block: Block) {
-        debug_assert!(block.0 < self.next_block);
+        debug_assert!(block.0 < self.blocks.len());
         debug_assert!(!self.blocks_filled[block.0]);
 
         if self.current_block == Some(block) {
@@ -715,7 +705,7 @@ impl<'a> FunctionBuilder<'a> {
     /// Unconditionally jumps to the specified [`Block`] while passing the specified [`Value`]s.
     #[track_caller]
     pub fn jump(&mut self, block: Block, block_args: &[Value]) {
-        debug_assert!(block.0 < self.next_block);
+        debug_assert!(block.0 < self.blocks.len());
         self.assert_block_not_filled();
 
         self.instructions
@@ -736,8 +726,8 @@ impl<'a> FunctionBuilder<'a> {
         false_block: Block,
         false_block_args: &[Value],
     ) {
-        debug_assert!(true_block.0 < self.next_block);
-        debug_assert!(false_block.0 < self.next_block);
+        debug_assert!(true_block.0 < self.blocks.len());
+        debug_assert!(false_block.0 < self.blocks.len());
         self.assert_block_not_filled();
 
         self.instructions.push(Instruction::Brif {
@@ -1120,11 +1110,10 @@ impl<'a> FunctionBuilder<'a> {
             FunctionDefinitionDesc {
                 instructions: self.instructions,
                 num_values: self.next_value,
-                num_blocks: self.next_block,
                 num_variables: self.next_variable,
-                block_params: self.block_params,
                 stack_slots: self.stack_slots,
                 srcloc: self.srclocs,
+                blocks: self.blocks,
             },
         );
     }
@@ -1172,12 +1161,6 @@ pub struct Variable(usize);
 
 #[derive(Clone, Debug)]
 enum Instruction {
-    CreateBlock {
-        id: Block,
-        params: Vec<Type>,
-        values: Vec<Value>,
-        is_entry: bool,
-    },
     SwitchBlock(Block),
     IConst(Type, Word, Value),
     FConst(Type, f64, Value),
@@ -1539,4 +1522,12 @@ impl TryFrom<Word> for i32 {
     fn try_from(value: Word) -> Result<Self, Self::Error> {
         i32::try_from(value.0).map_err(|_| ())
     }
+}
+
+#[derive(Clone, Debug)]
+struct BlockProps {
+    id: Block,
+    types: Vec<Type>,
+    values: Vec<Value>,
+    is_entry: bool,
 }

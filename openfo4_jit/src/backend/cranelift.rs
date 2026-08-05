@@ -27,7 +27,9 @@ use crate::backend::cranelift::memory::{Allocation, MemoryAllocator};
 use crate::backend::cranelift::relocs::perform_relocations;
 use crate::backend::{FunctionDefinitionDesc, SourceLocMap, StackSlotDesc, TextWithSrcLocs};
 use crate::func::HostFunc;
-use crate::{FloatCompareOp, FuncId, Instruction, IntCompareOp, Signature, SourceLoc, Type, Value};
+use crate::{
+    BlockProps, FloatCompareOp, FuncId, Instruction, IntCompareOp, Signature, SourceLoc, Type,
+};
 
 #[derive(Clone, Debug)]
 pub enum Error {}
@@ -121,11 +123,10 @@ impl CraneliftModule {
         state.definition = Some(FunctionDefinition::Guest(GuestFunctionDefinition {
             instructions: definition.instructions,
             num_values: definition.num_values,
-            num_blocks: definition.num_blocks,
-            block_params: definition.block_params,
             stack_slots: definition.stack_slots,
             num_variables: definition.num_variables,
             srcloc: definition.srcloc,
+            blocks: definition.blocks,
         }));
     }
 
@@ -247,7 +248,7 @@ impl CraneliftModule {
                 }
                 FunctionDefinition::Guest(func_def) => {
                     let mut values = vec![const { None }; func_def.num_values];
-                    let mut blocks = vec![const { None }; func_def.num_blocks];
+                    let mut blocks = vec![const { None }; func_def.blocks.len()];
                     let mut stack_slots = vec![const { None }; func_def.stack_slots.len()];
                     let mut variables = vec![const { None }; func_def.num_variables];
 
@@ -265,6 +266,28 @@ impl CraneliftModule {
                         stack_slots[id] = Some(res);
                     }
 
+                    for block in &func_def.blocks {
+                        let b = builder.create_block();
+
+                        if block.is_entry {
+                            builder.append_block_params_for_function_params(b);
+                            builder.switch_to_block(b);
+                            builder.seal_block(b);
+                        } else {
+                            for ty in &block.types {
+                                builder.append_block_param(b, map_type(*ty));
+                            }
+                        }
+
+                        let params = builder.block_params(b);
+                        debug_assert_eq!(params.len(), block.values.len());
+                        for (param, value) in params.iter().zip(&block.values) {
+                            values[value.0] = Some(*param);
+                        }
+
+                        blocks[block.id.0] = Some(b);
+                    }
+
                     let mut current_block = None;
 
                     for (index, instruction) in func_def.instructions.iter().enumerate() {
@@ -272,32 +295,6 @@ impl CraneliftModule {
                         let mut added_inst_count = 0;
 
                         match instruction {
-                            Instruction::CreateBlock {
-                                id,
-                                params,
-                                values: dst,
-                                is_entry,
-                            } => {
-                                let block = builder.create_block();
-
-                                if *is_entry {
-                                    builder.append_block_params_for_function_params(block);
-                                    builder.switch_to_block(block);
-                                    builder.seal_block(block);
-                                } else {
-                                    for param in params {
-                                        builder.append_block_param(block, map_type(*param));
-                                    }
-                                }
-
-                                for (block_param, param) in
-                                    builder.block_params(block).iter().zip(dst)
-                                {
-                                    values[param.0] = Some(*block_param);
-                                }
-
-                                blocks[id.0] = Some(block);
-                            }
                             Instruction::SwitchBlock(block) => {
                                 let block = blocks[block.0].unwrap();
                                 builder.switch_to_block(block);
@@ -1028,11 +1025,10 @@ unsafe impl Sync for HostFunctionDefinition {}
 struct GuestFunctionDefinition {
     instructions: Vec<Instruction>,
     num_values: usize,
-    num_blocks: usize,
     num_variables: usize,
-    block_params: Vec<Vec<Value>>,
     stack_slots: Slab<StackSlotDesc>,
     srcloc: SourceLocMap,
+    blocks: Vec<BlockProps>,
 }
 
 #[derive(Clone)]
