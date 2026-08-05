@@ -189,6 +189,36 @@ where
     }
 }
 
+impl<T, A> Clone for AlignedBox<T, A>
+where
+    T: Clone,
+    A: Allocator + Clone,
+{
+    fn clone(&self) -> Self {
+        let value: T = self.deref().clone();
+        let alloc: A = self.alloc.deref().clone();
+        Self::new_in(value, self.align, alloc)
+    }
+}
+
+impl<T, A> Clone for AlignedBox<[T], A>
+where
+    T: Clone,
+    A: Allocator + Clone,
+{
+    fn clone(&self) -> Self {
+        let alloc: A = self.alloc.deref().clone();
+        let mut boxed = Self::new_uninit_slice_in(self.len(), self.align, alloc);
+
+        for index in 0..self.len() {
+            boxed[index].write(self[index].clone());
+        }
+
+        // SAFETY: We have initialized every element of the slice.
+        unsafe { boxed.assume_init() }
+    }
+}
+
 impl<T, A> Deref for AlignedBox<T, A>
 where
     T: ?Sized,
@@ -283,5 +313,20 @@ mod tests {
         assert_eq!(boxed[0], "A");
         assert_eq!(boxed[1], "B");
         assert_eq!(boxed[2], "C");
+    }
+
+    #[test]
+    fn aligned_box_slice_clone() {
+        let mut boxed = AlignedBox::<[i32]>::new_uninit_slice(3, 256);
+        boxed[0].write(0);
+        boxed[1].write(1);
+        boxed[2].write(2);
+
+        let boxed = unsafe { boxed.assume_init() };
+        let other = boxed.clone();
+
+        assert_eq!(boxed[0], other[0]);
+        assert_eq!(boxed[1], other[1]);
+        assert_eq!(boxed[2], other[2]);
     }
 }
