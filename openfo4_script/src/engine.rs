@@ -6,7 +6,7 @@ use game_common::cell::UnsafeRefCell;
 use game_common::string::Lowercase;
 use hashbrown::{HashMap, HashSet};
 use openfo4_jit::func::IntoHostFunc;
-use openfo4_jit::{CompilerConfig, Type};
+use openfo4_jit::{BackendKind, CompilerConfig, Type};
 use openfo4_pex::{Class, Module};
 use parking_lot::RwLock;
 
@@ -39,6 +39,7 @@ impl Engine {
         let ctx = Context::new(CompilerConfig {
             validation: options.validation,
             debug: options.debug,
+            backend: BackendKind::default(),
         });
         let pool = ObjectPool::new(Arc::clone(ctx.resources()));
 
