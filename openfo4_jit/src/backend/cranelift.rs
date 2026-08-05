@@ -852,6 +852,13 @@ impl Backend for CraneliftModule {
                                 let size = values[size.0].unwrap();
                                 let res =
                                     builder.call_memcmp(self.isa.frontend_config(), lhs, rhs, size);
+
+                                // Cranelift will always yield a I32 from memcmp, but for consistency
+                                // we always use an I8 as the return value of memcmp.
+                                // Our implementation guarantees to only return 0, 1 or -1, so we may
+                                // losslessly truncate the most significant bits.
+                                let res = builder.ins().ireduce(ir::types::I8, res);
+
                                 values[dst.0] = Some(res);
                                 added_inst_count += 1;
                             }

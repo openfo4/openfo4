@@ -1219,8 +1219,7 @@ impl<'a> FunctionBuilder<'a> {
     /// [`I8`]: Type::I8
     /// [`Pointer`]: Type::Pointer
     pub fn memcmp(&mut self, lhs: Value, rhs: Value, size: Value) -> Value {
-        // FIXME: We likely should return a I8 here aswell for consistency.
-        let dst = self.produce_value(Type::I32);
+        let dst = self.produce_value(Type::I8);
 
         self.instructions.push(Instruction::Memcmp {
             lhs,
