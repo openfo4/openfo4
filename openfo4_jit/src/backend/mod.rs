@@ -2,10 +2,72 @@ use std::range::Range;
 
 use slab::Slab;
 
-use crate::{BlockProps, Instruction, SourceLoc};
+use crate::backend::interpreter::Interpreter;
+use crate::func::HostFunc;
+use crate::{BackendKind, BlockProps, CompilerConfig, FuncId, Instruction, Signature, SourceLoc};
 
 #[cfg(feature = "cranelift")]
 pub mod cranelift;
+
+pub mod interpreter;
+
+pub trait Backend {
+    type CompiledFunc;
+
+    fn new(config: CompilerConfig) -> Self;
+
+    fn declare_function(&mut self, signature: &Signature) -> FuncId;
+
+    fn define_function(&mut self, id: FuncId, definition: FunctionDefinitionDesc);
+
+    fn define_host_function(&mut self, id: FuncId, func: HostFunc);
+
+    fn compile_function(&mut self, id: FuncId) -> Self::CompiledFunc;
+}
+
+pub enum BackendEnum {
+    Interpreter(Interpreter),
+    Cranelift(cranelift::CraneliftModule),
+}
+
+impl Backend for BackendEnum {
+    type CompiledFunc = CompiledFunc;
+
+    fn new(config: CompilerConfig) -> Self {
+        match config.backend {
+            BackendKind::Interpreter => Self::Interpreter(Interpreter::new(config)),
+            BackendKind::Cranelift => Self::Cranelift(cranelift::CraneliftModule::new(config)),
+        }
+    }
+
+    fn declare_function(&mut self, signature: &Signature) -> FuncId {
+        match self {
+            Self::Interpreter(backend) => backend.declare_function(signature),
+            Self::Cranelift(backend) => backend.declare_function(signature),
+        }
+    }
+
+    fn define_host_function(&mut self, id: FuncId, func: HostFunc) {
+        match self {
+            Self::Interpreter(backend) => backend.define_host_function(id, func),
+            Self::Cranelift(backend) => backend.define_host_function(id, func),
+        }
+    }
+
+    fn define_function(&mut self, id: FuncId, definition: FunctionDefinitionDesc) {
+        match self {
+            Self::Interpreter(backend) => backend.define_function(id, definition),
+            Self::Cranelift(backend) => backend.define_function(id, definition),
+        }
+    }
+
+    fn compile_function(&mut self, id: FuncId) -> Self::CompiledFunc {
+        match self {
+            Self::Interpreter(backend) => CompiledFunc::Intepreter(backend.compile_function(id)),
+            Self::Cranelift(backend) => CompiledFunc::Cranelift(backend.compile_function(id)),
+        }
+    }
+}
 
 #[derive(Clone, Debug)]
 pub struct FunctionDefinitionDesc {
@@ -104,4 +166,49 @@ impl<'a> Iterator for SourceLocMapIter<'a> {
 pub struct TextWithSrcLocs<T> {
     pub text: T,
     pub srclocs: SourceLocMap,
+}
+
+#[derive(Clone)]
+pub enum CompiledFunc {
+    Intepreter(interpreter::CompiledFunc),
+    Cranelift(cranelift::CompiledFunction),
+}
+
+impl CompiledFunc {
+    pub unsafe fn call(&self, params: *const u8, returns: *mut u8) {
+        unsafe {
+            match self {
+                Self::Intepreter(func) => func.call(params, returns),
+                Self::Cranelift(func) => func.call(params, returns),
+            }
+        }
+    }
+
+    pub fn as_ptr(&self) -> *const u8 {
+        match self {
+            Self::Intepreter(func) => func.index() as *const u8,
+            Self::Cranelift(func) => func.as_ptr(),
+        }
+    }
+
+    pub fn as_bytes(&self) -> &[u8] {
+        match self {
+            Self::Intepreter(_) => &[],
+            Self::Cranelift(func) => func.as_bytes(),
+        }
+    }
+
+    pub fn clif(&self) -> Option<&TextWithSrcLocs<String>> {
+        match self {
+            Self::Cranelift(func) => func.clif(),
+            _ => None,
+        }
+    }
+
+    pub fn srclocs(&self) -> &SourceLocMap {
+        match self {
+            Self::Intepreter(func) => todo!(),
+            Self::Cranelift(func) => func.srclocs(),
+        }
+    }
 }

@@ -7,15 +7,16 @@ use std::fmt::{self, Debug, Formatter};
 use game_common::collections::vec_map::{Index, VecMap};
 use slab::Slab;
 
-use crate::backend::cranelift::{self, CraneliftModule};
-use crate::backend::{FunctionDefinitionDesc, StackSlotDesc, TextWithSrcLocs};
+use crate::backend::{
+    Backend, BackendEnum, FunctionDefinitionDesc, StackSlotDesc, TextWithSrcLocs,
+};
 
 pub use crate::backend::SourceLocMap;
 use crate::func::IntoHostFunc;
 
 /// Main driver for the JIT compiler.
 pub struct Compiler {
-    inner: CraneliftModule,
+    backend: BackendEnum,
     functions: VecMap<FuncId, FuncState>,
     isa: Isa,
 }
@@ -24,7 +25,7 @@ impl Compiler {
     /// Creates a new `Compiler`.
     pub fn new(config: CompilerConfig) -> Self {
         Self {
-            inner: CraneliftModule::new(config.validation, config.debug),
+            backend: BackendEnum::new(config),
             functions: VecMap::new(),
             isa: Isa::new(),
         }
@@ -43,7 +44,7 @@ impl Compiler {
     /// [`define_function`]: Self::define_function
     /// [`define_native_function`]: Self::define_native_function
     pub fn declare_function(&mut self, signature: Signature) -> FuncId {
-        let id = self.inner.declare_function(&signature).unwrap();
+        let id = self.backend.declare_function(&signature);
         self.functions.insert(id, FuncState { signature });
         id
     }
@@ -63,7 +64,7 @@ impl Compiler {
     {
         let func = func.into_host_func();
 
-        self.inner.define_native_function(id, func);
+        self.backend.define_host_function(id, func);
     }
 
     /// Defines a function.
@@ -96,7 +97,7 @@ impl Compiler {
         let func = self.functions.get(id).unwrap();
 
         CompiledFunction {
-            inner: self.inner.compile_function(id),
+            inner: self.backend.compile_function(id),
             signature: func.signature.clone(),
         }
     }
@@ -983,21 +984,54 @@ impl<'a> FunctionBuilder<'a> {
     }
 
     /// Bitwise and.
+    ///
+    /// Computes and returns `lhs & rhs`.
+    ///
+    /// # Codegen Safety
+    ///
+    /// - `lhs` must be an integer value.
+    /// - `rhs` must be an integer value.
+    /// - `lhs` and `rhs` must be of the same type.
     #[track_caller]
     pub fn band(&mut self, lhs: Value, rhs: Value) -> Value {
         self.binop(lhs, rhs, Instruction::BAnd)
     }
 
+    /// Bitwise or.
+    ///
+    /// Computes and returns `lhs | rhs`.
+    ///
+    /// # Codegen Safety
+    ///
+    /// - `lhs` must be an integer value.
+    /// - `rhs` must be an integer value.
+    /// - `lhs` and `rhs` must be of the same type.
     #[track_caller]
     pub fn bor(&mut self, lhs: Value, rhs: Value) -> Value {
         self.binop(lhs, rhs, Instruction::BOr)
     }
 
+    /// Bitwise xor.
+    ///
+    /// Computes and returns `lhs ^ rhs`.
+    ///
+    /// # Codegen Safety
+    ///
+    /// - `lhs` must be an integer value.
+    /// - `rhs` must be an integer value.
+    /// - `lhs` and `rhs` must be of the same type.
     #[track_caller]
     pub fn bxor(&mut self, lhs: Value, rhs: Value) -> Value {
         self.binop(lhs, rhs, Instruction::BXor)
     }
 
+    /// Bitwise not.
+    ///
+    /// Computes and returns `!value`.
+    ///
+    /// # Codegen Safety
+    ///
+    /// - `value` must be an integer value.
     #[track_caller]
     pub fn bnot(&mut self, value: Value) -> Value {
         self.unop(value, Instruction::BNot)
@@ -1120,7 +1154,7 @@ impl<'a> FunctionBuilder<'a> {
 
     /// Finalize the function definition.
     pub fn finalize(self) {
-        self.compiler.inner.define_function(
+        self.compiler.backend.define_function(
             self.id,
             FunctionDefinitionDesc {
                 instructions: self.instructions,
@@ -1363,7 +1397,7 @@ pub enum FloatCompareOp {
 /// A compiled function ready to be called.
 #[derive(Clone)]
 pub struct CompiledFunction {
-    inner: cranelift::CompiledFunction,
+    inner: backend::CompiledFunc,
     signature: Signature,
 }
 
@@ -1452,6 +1486,7 @@ pub struct DataId(usize);
 
 #[derive(Clone, Debug, Default)]
 pub struct CompilerConfig {
+    pub backend: BackendKind,
     pub validation: bool,
     pub debug: bool,
 }
@@ -1531,11 +1566,95 @@ impl From<Word> for i64 {
     }
 }
 
+impl From<Word> for isize {
+    fn from(value: Word) -> Self {
+        value.0.try_into().unwrap()
+    }
+}
+
+impl TryFrom<Word> for i8 {
+    type Error = ();
+
+    fn try_from(value: Word) -> Result<Self, Self::Error> {
+        i8::try_from(value.0).map_err(|_| ())
+    }
+}
+
+impl TryFrom<Word> for i16 {
+    type Error = ();
+
+    fn try_from(value: Word) -> Result<Self, Self::Error> {
+        i16::try_from(value.0).map_err(|_| ())
+    }
+}
+
 impl TryFrom<Word> for i32 {
     type Error = ();
 
     fn try_from(value: Word) -> Result<Self, Self::Error> {
         i32::try_from(value.0).map_err(|_| ())
+    }
+}
+
+impl TryFrom<Word> for f32 {
+    type Error = <i32 as TryFrom<Word>>::Error;
+
+    fn try_from(value: Word) -> Result<Self, Self::Error> {
+        i32::try_from(value)
+            .map(i32::cast_unsigned)
+            .map(f32::from_bits)
+    }
+}
+
+impl TryFrom<Word> for f64 {
+    type Error = <i64 as TryFrom<Word>>::Error;
+
+    fn try_from(value: Word) -> Result<Self, Self::Error> {
+        i64::try_from(value)
+            .map(i64::cast_unsigned)
+            .map(f64::from_bits)
+    }
+}
+
+impl From<i8> for Word {
+    fn from(value: i8) -> Self {
+        Imm::I8(value).to_word()
+    }
+}
+
+impl From<i16> for Word {
+    fn from(value: i16) -> Self {
+        Imm::I16(value).to_word()
+    }
+}
+
+impl From<i32> for Word {
+    fn from(value: i32) -> Self {
+        Imm::I32(value).to_word()
+    }
+}
+
+impl From<i64> for Word {
+    fn from(value: i64) -> Self {
+        Imm::I64(value).to_word()
+    }
+}
+
+impl From<isize> for Word {
+    fn from(value: isize) -> Self {
+        Imm::Isize(value).to_word()
+    }
+}
+
+impl From<f32> for Word {
+    fn from(value: f32) -> Self {
+        Self(value.to_bits().cast_signed().into())
+    }
+}
+
+impl From<f64> for Word {
+    fn from(value: f64) -> Self {
+        Self(value.to_bits().cast_signed().into())
     }
 }
 
@@ -1545,4 +1664,23 @@ struct BlockProps {
     types: Vec<Type>,
     values: Vec<Value>,
     is_entry: bool,
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub enum BackendKind {
+    Interpreter,
+    #[cfg(feature = "cranelift")]
+    Cranelift,
+}
+
+impl Default for BackendKind {
+    fn default() -> Self {
+        cfg_select! {
+            // Miri does not work with JIT backends.
+            // It does not allow mapping memory as EXEC.
+            miri => Self::Interpreter,
+            feature = "cranelift" => Self::Cranelift,
+            _ => Self::Interpreter,
+        }
+    }
 }

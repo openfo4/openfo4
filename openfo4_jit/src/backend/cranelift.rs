@@ -25,14 +25,14 @@ use slab::Slab;
 
 use crate::backend::cranelift::memory::{Allocation, MemoryAllocator};
 use crate::backend::cranelift::relocs::perform_relocations;
-use crate::backend::{FunctionDefinitionDesc, SourceLocMap, StackSlotDesc, TextWithSrcLocs};
+use crate::backend::{
+    Backend, FunctionDefinitionDesc, SourceLocMap, StackSlotDesc, TextWithSrcLocs,
+};
 use crate::func::HostFunc;
 use crate::{
-    BlockProps, FloatCompareOp, FuncId, Instruction, IntCompareOp, Signature, SourceLoc, Type,
+    BlockProps, CompilerConfig, FloatCompareOp, FuncId, Instruction, IntCompareOp, Signature,
+    SourceLoc, Type,
 };
-
-#[derive(Clone, Debug)]
-pub enum Error {}
 
 pub struct CraneliftModule {
     functions: Slab<FuncState>,
@@ -45,15 +45,17 @@ pub struct CraneliftModule {
     call_host_trampoline_signature: ir::Signature,
 }
 
-impl CraneliftModule {
-    pub fn new(validation: bool, debug: bool) -> Self {
+impl Backend for CraneliftModule {
+    type CompiledFunc = CompiledFunction;
+
+    fn new(config: CompilerConfig) -> Self {
         let mut flags = settings::builder();
         flags.set("use_colocated_libcalls", "false").unwrap();
         flags.set("is_pic", "false").unwrap();
         flags.set("opt_level", "speed_and_size").unwrap();
         flags.set("regalloc_algorithm", "backtracking").unwrap();
 
-        if validation {
+        if config.validation {
             flags.set("enable_verifier", "true").unwrap();
         } else {
             flags.set("enable_verifier", "false").unwrap();
@@ -91,12 +93,12 @@ impl CraneliftModule {
             ctx: Context::new(),
             isa,
             func_ctx: FunctionBuilderContext::new(),
-            debug,
+            debug: config.debug,
             call_host_trampoline_signature,
         }
     }
 
-    pub fn declare_function(&mut self, signature: &Signature) -> Result<FuncId, Error> {
+    fn declare_function(&mut self, signature: &Signature) -> FuncId {
         let id = self.functions.insert(FuncState {
             signature: signature.clone(),
             definition: None,
@@ -104,10 +106,10 @@ impl CraneliftModule {
             trampoline: None,
         });
 
-        Ok(FuncId(id))
+        FuncId(id)
     }
 
-    pub fn define_native_function(&mut self, id: FuncId, func: HostFunc) {
+    fn define_host_function(&mut self, id: FuncId, func: HostFunc) {
         let state = self.functions.get_mut(id.0).unwrap();
         assert!(state.definition.is_none(), "cannot redefine function");
 
@@ -116,7 +118,7 @@ impl CraneliftModule {
         state.definition = Some(FunctionDefinition::Host(HostFunctionDefinition { data }));
     }
 
-    pub fn define_function(&mut self, id: FuncId, definition: FunctionDefinitionDesc) {
+    fn define_function(&mut self, id: FuncId, definition: FunctionDefinitionDesc) {
         let state = self.functions.get_mut(id.0).unwrap();
         assert!(state.definition.is_none(), "cannot redefine function");
 
@@ -130,7 +132,7 @@ impl CraneliftModule {
         }));
     }
 
-    pub fn compile_function(&mut self, id: FuncId) -> CompiledFunction {
+    fn compile_function(&mut self, id: FuncId) -> Self::CompiledFunc {
         let _span = trace_span!("CraneliftModule::compile_function").entered();
 
         if let Some(func) = self.compiled_functions.get(&id.0) {

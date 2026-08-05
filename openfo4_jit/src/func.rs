@@ -40,7 +40,7 @@ macro_rules! impl_into_func {
 
                     $(
                         unsafe { align_up::<$params>(&mut params) };
-                        let $params = unsafe { params.cast::<$params>().read() };
+                        let $params = unsafe { <$params>::read(params) };
                         unsafe { params = params.add($params::SIZE); }
                     )*
 
@@ -138,6 +138,10 @@ pub const MAX_ALIGN: usize = align_of::<usize>();
 pub unsafe trait HostType: Copy + Sized + 'static {
     const SIZE: usize = size_of::<Self>();
     const ALIGN: usize = align_of::<Self>();
+
+    unsafe fn read(ptr: *const u8) -> Self {
+        unsafe { ptr.cast::<Self>().read() }
+    }
 }
 
 unsafe impl HostType for bool {}
@@ -153,8 +157,20 @@ unsafe impl HostType for i64 {}
 unsafe impl HostType for isize {}
 unsafe impl HostType for f32 {}
 unsafe impl HostType for f64 {}
-unsafe impl<T: 'static> HostType for *const T {}
-unsafe impl<T: 'static> HostType for *mut T {}
+
+unsafe impl<T: 'static> HostType for *const T {
+    unsafe fn read(ptr: *const u8) -> Self {
+        let addr = unsafe { ptr.cast::<usize>().read() };
+        core::ptr::with_exposed_provenance(addr)
+    }
+}
+
+unsafe impl<T: 'static> HostType for *mut T {
+    unsafe fn read(ptr: *const u8) -> Self {
+        let addr = unsafe { ptr.cast::<usize>().read() };
+        core::ptr::with_exposed_provenance_mut(addr)
+    }
+}
 
 unsafe fn align_up<T>(ptr: &mut *mut u8)
 where
