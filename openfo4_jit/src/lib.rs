@@ -764,6 +764,19 @@ impl<'a> FunctionBuilder<'a> {
         self.create_stack_slot(size, align)
     }
 
+    /// Loads a value from a stack slot.
+    ///
+    /// Loads the value of the given [`Type`] from address `base+offset` where `base` is the base
+    /// address of the stack slot, as returned by [`stack_addr`].
+    ///
+    /// Returns a value of `ty`.
+    ///
+    /// # Codegen Safety
+    ///
+    /// - `base+offset` must be aligned to the given [`Type`].
+    /// - `base+offset+size` must be less than or equal to the size of the [`StackSlot`].
+    ///
+    /// [`stack_addr`]: Self::stack_addr
     #[track_caller]
     pub fn stack_load<T>(&mut self, slot: StackSlot, ty: Type, offset: T) -> Value
     where
@@ -781,6 +794,17 @@ impl<'a> FunctionBuilder<'a> {
         dst
     }
 
+    /// Stores a value into a stack slot.
+    ///
+    /// Stores the given [`Value`] at address `base+offset` where `base` is the base address of the
+    /// stack slot, as returned by [`stack_addr`].
+    ///
+    /// # Codegen Safety
+    ///
+    /// - `base+offset` must be aligned to the type of the given [`Value`].
+    /// - `base+offset+size` must be less than or equal to the size of the [`StackSlot`].
+    ///
+    /// [`stack_addr`]: Self::stack_addr
     #[track_caller]
     pub fn stack_store<T>(&mut self, slot: StackSlot, value: Value, offset: T)
     where
@@ -799,6 +823,7 @@ impl<'a> FunctionBuilder<'a> {
     /// Returns the address of the stack slot.
     ///
     /// The `offset` is added to the base address.
+    ///
     /// Returns a value of type [`Pointer`].
     ///
     /// [`Pointer`]: Type::Pointer
@@ -827,6 +852,11 @@ impl<'a> FunctionBuilder<'a> {
     /// Returns a value of type [`I8`].
     ///
     /// [`I8`]: Type::I8
+    ///
+    /// # Codegen Safety
+    ///
+    /// - `lhs` must be an integer value.
+    /// - `rhs` must be an integer value.
     #[track_caller]
     pub fn icmp(&mut self, lhs: Value, rhs: Value, op: IntCompareOp) -> Value {
         self.assert_block_not_filled();
@@ -843,6 +873,10 @@ impl<'a> FunctionBuilder<'a> {
     /// Returns a value of type [`I8`].
     ///
     /// [`I8`]: Type::I8
+    ///
+    /// # Codegen Safety
+    ///
+    /// - `lhs` must be an integer value.
     pub fn icmp_imm<T>(&mut self, lhs: Value, rhs: T, op: IntCompareOp) -> Value
     where
         T: Into<Imm>,
@@ -866,6 +900,11 @@ impl<'a> FunctionBuilder<'a> {
     /// Returns a value of type [`I8`].
     ///
     /// [`I8`]: Type::I8
+    ///
+    /// # Codegen Safety
+    ///
+    /// - `lhs` must be a floating point value.
+    /// - `rhs` must be a floating point value.
     #[track_caller]
     pub fn fcmp(&mut self, lhs: Value, rhs: Value, op: FloatCompareOp) -> Value {
         self.assert_block_not_filled();
@@ -1042,6 +1081,16 @@ impl<'a> FunctionBuilder<'a> {
         self.unop(value, Instruction::BNot)
     }
 
+    /// Unsigned integer extension.
+    ///
+    /// Extends the given [`Value`] to the given [`Type`] by zero extending.
+    /// The new [`Type`] must be at least as wide as the current type of the [`Value`].
+    /// The new high bits are zeroed.
+    ///
+    /// # Codegen Safety
+    ///
+    /// - `value` must be an integer value.
+    /// - `ty` must be at least as wide as the current type of `value`.
     #[track_caller]
     pub fn uextend(&mut self, value: Value, ty: Type) -> Value {
         let dst = self.produce_value(ty);
@@ -1050,6 +1099,16 @@ impl<'a> FunctionBuilder<'a> {
         dst
     }
 
+    /// Signed integer extension.
+    ///
+    /// Extends the given [`Value`] to the given [`Type`] by sign extending.
+    /// The new [`Type`] must be at least as wide as the current type of the [`Value`].
+    /// The new high bits contain the sign bit.
+    ///
+    /// # Codegen Safety
+    ///
+    /// - `value` must be an integer value.
+    /// - `ty` must be at least as wide as the current type of `value`.
     #[track_caller]
     pub fn sextend(&mut self, value: Value, ty: Type) -> Value {
         self.assert_block_not_filled();
@@ -1061,6 +1120,11 @@ impl<'a> FunctionBuilder<'a> {
     }
 
     /// Reduce the integer witdth of a value by discarding the most significant bits.
+    ///
+    /// # Codegen Safety
+    ///
+    /// - `value` must be an integer value.
+    /// - `ty` must be at most as wide as the current type of `value`.
     #[track_caller]
     pub fn ireduce(&mut self, value: Value, ty: Type) -> Value {
         self.assert_block_not_filled();
@@ -1087,6 +1151,13 @@ impl<'a> FunctionBuilder<'a> {
         dst
     }
 
+    /// Returns the number of ones in the integer value.
+    ///
+    /// Returns a value with the same type as the input `value`.
+    ///
+    /// # Codegen Safety
+    ///
+    /// - `value` must an integer value.
     #[track_caller]
     pub fn popcnt(&mut self, value: Value) -> Value {
         self.assert_block_not_filled();
@@ -1138,11 +1209,14 @@ impl<'a> FunctionBuilder<'a> {
 
     /// Compares `size` bytes from `lhs..lhs+size` to `rhs..rhs+size`.
     ///
+    /// Returns a value of type [`I8`].
+    ///
     /// # Codegen Safety
     ///
     /// - `src` must be of type [`Pointer`].
     /// - `dst` must be of type [`Pointer`].
     ///
+    /// [`I8`]: Type::I8
     /// [`Pointer`]: Type::Pointer
     pub fn memcmp(&mut self, lhs: Value, rhs: Value, size: Value) -> Value {
         // FIXME: We likely should return a I8 here aswell for consistency.
