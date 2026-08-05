@@ -1083,6 +1083,13 @@ impl<'a> FunctionBuilder<'a> {
     }
 
     /// Copies `size` bytes from `src..src+size` to `dst..dst+size`.
+    ///
+    /// # Codegen Safety
+    ///
+    /// - `src` must be of type [`Pointer`].
+    /// - `dst` must be of type [`Pointer`].
+    ///
+    /// [`Pointer`]: Type::Pointer
     pub fn memcpy(&mut self, src: Value, dst: Value, size: Value) {
         self.assert_block_not_filled();
 
@@ -1090,6 +1097,14 @@ impl<'a> FunctionBuilder<'a> {
             .push(Instruction::Memcpy { src, dst, size });
     }
 
+    /// Compares `size` bytes from `lhs..lhs+size` to `rhs..rhs+size`.
+    ///
+    /// # Codegen Safety
+    ///
+    /// - `src` must be of type [`Pointer`].
+    /// - `dst` must be of type [`Pointer`].
+    ///
+    /// [`Pointer`]: Type::Pointer
     pub fn memcmp(&mut self, lhs: Value, rhs: Value, size: Value) -> Value {
         // FIXME: We likely should return a I8 here aswell for consistency.
         let dst = self.produce_value(Type::I32);
