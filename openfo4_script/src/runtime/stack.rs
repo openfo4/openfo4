@@ -7,6 +7,8 @@ use std::task::{Context, Poll, ready};
 
 use crate::engine::EngineShared;
 
+const ALIGN: usize = align_of::<usize>();
+
 #[derive(Debug)]
 pub struct Stack {
     pub(crate) engine: Arc<EngineShared>,
@@ -14,7 +16,9 @@ pub struct Stack {
     ///
     /// If `None` the callstack is empty.
     pub(crate) func: Option<*const u8>,
-    pub(crate) memory: Vec<u8>,
+    // Semantically a Vec<u8>, however we want to always align the allocation
+    // to usize.
+    memory: Vec<usize>,
     len: usize,
     pub(crate) future: ReusableFutureBox,
     frames: Vec<Frame>,
@@ -37,17 +41,18 @@ impl Stack {
     }
 
     pub fn as_ptr(&mut self) -> *mut u8 {
-        self.memory.as_mut_ptr()
+        self.memory.as_mut_ptr().cast()
     }
 
     pub(crate) fn alloc(&mut self, size: usize) -> *mut u8 {
-        let offset = self.memory.len();
-        self.memory.resize(offset + size, 0);
+        let offset = self.memory.len() * ALIGN;
+        self.memory.resize((offset + size).div_ceil(ALIGN), 0);
+
         self.len += size;
 
         self.frames.push(Frame { len: size });
 
-        self.memory.as_mut_ptr()
+        self.memory.as_mut_ptr().cast()
     }
 
     pub(crate) fn free(&mut self, size: usize) -> *mut u8 {
@@ -63,7 +68,7 @@ impl Stack {
         }
 
         self.len -= size;
-        self.memory.as_mut_ptr()
+        self.memory.as_mut_ptr().cast()
     }
 }
 
