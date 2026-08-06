@@ -69,8 +69,6 @@ impl Backend for Interpreter {
             stack_slots.insert(slot, *desc);
         }
 
-        dbg!(&definition.instructions);
-
         self.rt.functions.lock().insert(
             id.0,
             Arc::new(FuncData {
@@ -386,9 +384,10 @@ impl CompiledFunc {
                 let stack = frame.stack_slots.get_mut(slot.0).unwrap();
                 let offset = isize::from(*offset).cast_unsigned();
 
-                let addr = unsafe { stack.as_mut_ptr().add(offset).expose_provenance() };
+                let ptr = unsafe { stack.as_mut_ptr().add(offset) };
+                let ptr = Word(ptr.cast());
 
-                frame.values.insert(Type::Pointer, addr.cast_signed(), *dst);
+                frame.values.insert(Type::Pointer, ptr, *dst);
             }
             // Variables
             Instruction::DefVar { ty: _, var, value } => {
@@ -484,12 +483,12 @@ impl CompiledFunc {
             }
             // Libcall
             Instruction::Memcpy { src, dst, size } => {
-                let src: isize = frame.values.get(*src);
-                let dst: isize = frame.values.get(*dst);
+                let src: *mut () = frame.values.get(*src);
+                let dst: *mut () = frame.values.get(*dst);
                 let count: isize = frame.values.get(*size);
 
-                let src = src as *const u8;
-                let dst = dst as *mut u8;
+                let src = src.cast::<u8>();
+                let dst = dst.cast::<u8>();
                 let count = count.cast_unsigned();
 
                 unsafe {
@@ -502,12 +501,10 @@ impl CompiledFunc {
                 dst,
                 size,
             } => {
-                let lhs: isize = frame.values.get(*lhs);
-                let rhs: isize = frame.values.get(*rhs);
+                let lhs: *mut () = frame.values.get(*lhs);
+                let rhs: *mut () = frame.values.get(*rhs);
                 let count: isize = frame.values.get(*size);
 
-                let lhs = lhs as *const u8;
-                let rhs = rhs as *const u8;
                 let count = count.cast_unsigned();
 
                 let res = unsafe {
