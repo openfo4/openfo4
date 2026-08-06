@@ -49,7 +49,7 @@ impl Func {
 
     unsafe fn call_in(
         &self,
-        ctx: *const RawContext,
+        ctx: *mut RawContext,
         params: *const RawVal,
         returns: *mut RawVal,
     ) -> i32 {
@@ -234,7 +234,7 @@ impl Func {
             error: UnsafeRefCell::new(None),
         };
 
-        let res = unsafe { self.call_in(&raw_ctx, params, returns) };
+        let res = unsafe { self.call_in(&mut raw_ctx, params, returns) };
 
         // Once we drop `raw_ctx`, the future becomes invalid.
         // We must drop it before before that happens.
