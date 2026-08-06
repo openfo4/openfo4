@@ -207,7 +207,7 @@ impl CompiledFunc {
 
     pub fn srclocs(&self) -> &SourceLocMap {
         match self {
-            Self::Intepreter(func) => todo!(),
+            Self::Intepreter(func) => func.srclocs(),
             Self::Cranelift(func) => func.srclocs(),
         }
     }

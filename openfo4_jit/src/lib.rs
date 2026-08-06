@@ -468,12 +468,17 @@ impl<'a> FunctionBuilder<'a> {
     }
 
     #[track_caller]
-    pub fn fconst<T: Into<f64>>(&mut self, ty: Type, value: T) -> Value {
+    pub fn fconst<T>(&mut self, ty: Type, value: T) -> Value
+    where
+        T: Into<ImmFloat>,
+    {
         self.assert_block_not_filled();
+        debug_assert!(ty.is_float());
 
         let id = self.produce_value(ty);
-        self.instructions
-            .push(Instruction::FConst(ty, value.into(), id));
+        let value = value.into().to_word();
+
+        self.instructions.push(Instruction::FConst(ty, value, id));
         id
     }
 
@@ -1459,7 +1464,7 @@ pub struct Variable(usize);
 enum Instruction {
     SwitchBlock(Block),
     IConst(Type, Word, Value),
-    FConst(Type, f64, Value),
+    FConst(Type, Word, Value),
     PtrConst(Word, Value),
     PtrOffset {
         ptr: Value,
@@ -1812,6 +1817,35 @@ impl_int_imm_from!(i16, u16, I16);
 impl_int_imm_from!(i32, u32, I32);
 impl_int_imm_from!(i64, u64, I64);
 impl_int_imm_from!(isize, usize, Isize);
+
+/// An immediate floating point value.
+#[derive(Copy, Clone, Debug)]
+#[non_exhaustive]
+pub enum ImmFloat {
+    F32(f32),
+    F64(f64),
+}
+
+impl ImmFloat {
+    fn to_word(&self) -> Word {
+        match self {
+            Self::F32(v) => v.to_bits().cast_signed().into(),
+            Self::F64(v) => v.to_bits().cast_signed().into(),
+        }
+    }
+}
+
+impl From<f32> for ImmFloat {
+    fn from(value: f32) -> Self {
+        Self::F32(value)
+    }
+}
+
+impl From<f64> for ImmFloat {
+    fn from(value: f64) -> Self {
+        Self::F64(value)
+    }
+}
 
 /// A immediate value.
 // A word needs to be represented as pointer internally to preserve

@@ -60,7 +60,7 @@ pub fn lower_function(
                 builder.iconst(ty, 0)
             }
             JitType::Pointer => builder.ptrconst(core::ptr::null::<()>()),
-            JitType::F32 | JitType::F64 => builder.fconst(ty, 0),
+            JitType::F32 | JitType::F64 => builder.fconst(ty, 0.0f32),
         };
 
         let var = builder.def_var(ty, default_value);
@@ -777,7 +777,7 @@ pub fn lower_function(
                             src_ty,
                             dst_ty,
                             |translator, value| {
-                                let zero = translator.builder.fconst(FLOAT_TYPE, 0.0);
+                                let zero = translator.builder.fconst(FLOAT_TYPE, 0.0f32);
                                 translator
                                     .builder
                                     .fcmp(value, zero, FloatCompareOp::NotEqual)
@@ -785,7 +785,7 @@ pub fn lower_function(
                         );
                     } else {
                         let src = translator.load(src);
-                        let zero = translator.builder.fconst(FLOAT_TYPE, 0.0);
+                        let zero = translator.builder.fconst(FLOAT_TYPE, 0.0f32);
                         let res = translator.builder.fcmp(src, zero, FloatCompareOp::NotEqual);
                         translator.store(dst, res);
                     }

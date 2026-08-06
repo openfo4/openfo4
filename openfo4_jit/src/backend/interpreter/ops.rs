@@ -219,12 +219,14 @@ pub fn fcmp(ty: Type, lhs: Word, rhs: Word, op: FloatCompareOp) -> Word {
         Type::F32 => {
             let lhs: f32 = lhs.try_into().unwrap();
             let rhs: f32 = rhs.try_into().unwrap();
-            (lhs - rhs).signum()
+            let res: f32 = lhs - rhs;
+            f32::from(res != 0.0) * res.signum()
         }
         Type::F64 => {
             let lhs: f64 = lhs.try_into().unwrap();
             let rhs: f64 = rhs.try_into().unwrap();
-            (lhs - rhs).signum() as f32
+            let res: f64 = lhs - rhs;
+            (f64::from(res == 0.0) * res.signum()) as f32
         }
         _ => unreachable!(),
     };
@@ -285,6 +287,10 @@ pub fn ineg(ty: Type, src: Word) -> Word {
         }
         Type::I64 => {
             let src: i64 = src.try_into().unwrap();
+            src.wrapping_neg().into()
+        }
+        Type::Isize => {
+            let src: isize = src.try_into().unwrap();
             src.wrapping_neg().into()
         }
         _ => unreachable!(),
@@ -389,6 +395,10 @@ pub fn bnot(ty: Type, src: Word) -> Word {
             let src: i64 = src.try_into().unwrap();
             (!src).into()
         }
+        Type::Isize => {
+            let src: isize = src.try_into().unwrap();
+            (!src).into()
+        }
         _ => unreachable!(),
     }
 }
@@ -399,6 +409,7 @@ pub fn popcnt(ty: Type, src: Word) -> Word {
         Type::I16 => i16::try_from(src).unwrap().count_ones(),
         Type::I32 => i32::try_from(src).unwrap().count_ones(),
         Type::I64 => i64::try_from(src).unwrap().count_ones(),
+        Type::Isize => isize::try_from(src).unwrap().count_ones(),
         _ => unreachable!(),
     };
 
@@ -415,6 +426,7 @@ pub fn ftos(src_ty: Type, src: Word, dst_ty: Type) -> Word {
                 Type::I16 => (src as i16).into(),
                 Type::I32 => (src as i32).into(),
                 Type::I64 => (src as i64).into(),
+                Type::Isize => (src as isize).try_into().unwrap(),
                 _ => unreachable!(),
             }
         }
@@ -426,6 +438,7 @@ pub fn ftos(src_ty: Type, src: Word, dst_ty: Type) -> Word {
                 Type::I16 => (src as i16).into(),
                 Type::I32 => (src as i32).into(),
                 Type::I64 => (src as i64).into(),
+                Type::Isize => (src as isize).try_into().unwrap(),
                 _ => unreachable!(),
             }
         }
@@ -443,6 +456,7 @@ pub fn ftou(src_ty: Type, src: Word, dst_ty: Type) -> Word {
                 Type::I16 => (src as u16).cast_signed().into(),
                 Type::I32 => (src as u32).cast_signed().into(),
                 Type::I64 => (src as u64).cast_signed().into(),
+                Type::Isize => (src as usize).cast_signed().try_into().unwrap(),
                 _ => unreachable!(),
             }
         }
@@ -454,6 +468,7 @@ pub fn ftou(src_ty: Type, src: Word, dst_ty: Type) -> Word {
                 Type::I16 => (src as u16).cast_signed().into(),
                 Type::I32 => (src as u32).cast_signed().into(),
                 Type::I64 => (src as u64).cast_signed().into(),
+                Type::Isize => (src as usize).cast_signed().into(),
                 _ => unreachable!(),
             }
         }
@@ -478,6 +493,10 @@ pub fn stof(src_ty: Type, src: Word, dst_ty: Type) -> Word {
         Type::I64 => {
             let src: i64 = src.try_into().unwrap();
             src
+        }
+        Type::Isize => {
+            let src: isize = src.try_into().unwrap();
+            src.try_into().unwrap()
         }
         _ => unreachable!(),
     };
@@ -507,6 +526,10 @@ pub fn utof(src_ty: Type, src: Word, dst_ty: Type) -> Word {
             let src: i64 = src.try_into().unwrap();
             src
         }
+        Type::Isize => {
+            let src: isize = src.try_into().unwrap();
+            src.try_into().unwrap()
+        }
         _ => unreachable!(),
     };
 
@@ -525,6 +548,7 @@ pub fn sextend(src_ty: Type, src: Word, dst_ty: Type) -> Word {
         Type::I16 => i16::try_from(src).unwrap().into(),
         Type::I32 => i32::try_from(src).unwrap().into(),
         Type::I64 => i64::try_from(src).unwrap().into(),
+        Type::Isize => isize::try_from(src).unwrap().try_into().unwrap(),
         _ => unreachable!(),
     };
 
@@ -533,6 +557,7 @@ pub fn sextend(src_ty: Type, src: Word, dst_ty: Type) -> Word {
         Type::I16 => (src as i16).into(),
         Type::I32 => (src as i32).into(),
         Type::I64 => (src as i64).into(),
+        Type::Isize => (src as isize).into(),
         _ => unreachable!(),
     }
 }
@@ -543,6 +568,7 @@ pub fn uextend(src_ty: Type, src: Word, dst_ty: Type) -> Word {
         Type::I16 => i16::try_from(src).unwrap().into(),
         Type::I32 => i32::try_from(src).unwrap().into(),
         Type::I64 => i64::try_from(src).unwrap().into(),
+        Type::Isize => isize::try_from(src).unwrap().try_into().unwrap(),
         _ => unreachable!(),
     };
     let src: u64 = src.cast_unsigned();
@@ -552,6 +578,7 @@ pub fn uextend(src_ty: Type, src: Word, dst_ty: Type) -> Word {
         Type::I16 => (src as u16).cast_signed().into(),
         Type::I32 => (src as u32).cast_signed().into(),
         Type::I64 => (src as u64).cast_signed().into(),
+        Type::Isize => (src as usize).cast_signed().into(),
         _ => unreachable!(),
     }
 }
@@ -562,6 +589,7 @@ pub fn ireduce(src_ty: Type, src: Word, dst_ty: Type) -> Word {
         Type::I16 => i16::try_from(src).unwrap().into(),
         Type::I32 => i32::try_from(src).unwrap().into(),
         Type::I64 => i64::try_from(src).unwrap().into(),
+        Type::Isize => isize::try_from(src).unwrap().try_into().unwrap(),
         _ => unreachable!(),
     };
 
@@ -570,6 +598,7 @@ pub fn ireduce(src_ty: Type, src: Word, dst_ty: Type) -> Word {
         Type::I16 => (src as i16).into(),
         Type::I32 => (src as i32).into(),
         Type::I64 => (src as i64).into(),
+        Type::Isize => (src as isize).into(),
         _ => unreachable!(),
     }
 }

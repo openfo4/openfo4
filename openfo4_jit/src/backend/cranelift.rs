@@ -310,8 +310,14 @@ impl Backend for CraneliftModule {
                             }
                             Instruction::FConst(ty, value, dst) => {
                                 let res = match ty {
-                                    Type::F32 => builder.ins().f32const(*value as f32),
-                                    Type::F64 => builder.ins().f64const(*value),
+                                    Type::F32 => {
+                                        let value = f32::try_from(*value).unwrap();
+                                        builder.ins().f32const(value)
+                                    }
+                                    Type::F64 => {
+                                        let value = f64::try_from(*value).unwrap();
+                                        builder.ins().f64const(value)
+                                    }
                                     _ => unreachable!(),
                                 };
 
