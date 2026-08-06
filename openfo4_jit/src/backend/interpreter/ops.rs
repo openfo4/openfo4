@@ -1,3 +1,4 @@
+use std::assert_matches;
 use std::convert::identity;
 
 use crate::{FloatCompareOp, IntCompareOp, Type, Word};
@@ -196,7 +197,17 @@ pub fn icmp(ty: Type, lhs: Word, rhs: Word, op: IntCompareOp) -> Word {
             let (_, cf) = lhs.cast_unsigned().overflowing_sub(rhs.cast_unsigned());
             (of, cf, res == 0, res.is_negative())
         }
-        Type::Pointer | Type::F32 | Type::F64 => unreachable!(),
+        Type::Pointer => {
+            assert_matches!(op, IntCompareOp::Equal | IntCompareOp::NotEqual);
+            let lhs: *mut () = lhs.try_into().unwrap();
+            let rhs: *mut () = rhs.try_into().unwrap();
+            let lhs = lhs.addr().cast_signed();
+            let rhs = rhs.addr().cast_signed();
+            let (res, of) = lhs.overflowing_sub(rhs);
+            let (_, cf) = lhs.cast_unsigned().overflowing_sub(rhs.cast_unsigned());
+            (of, cf, res == 0, res.is_negative())
+        }
+        Type::F32 | Type::F64 => unreachable!(),
     };
 
     // Based on http://unixwiz.net/techtips/x86-jumps.html
