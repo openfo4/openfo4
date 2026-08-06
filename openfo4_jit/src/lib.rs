@@ -191,6 +191,19 @@ impl Type {
             Self::Pointer => align_of::<*const ()>(),
         }
     }
+
+    /// Returns `true` if the type is an integer type.
+    pub const fn is_int(&self) -> bool {
+        matches!(
+            self,
+            Self::I8 | Self::I16 | Self::I32 | Self::I64 | Self::Pointer
+        )
+    }
+
+    /// Returns `true` if the type is a floating point type.
+    pub const fn is_float(&self) -> bool {
+        matches!(self, Self::F32 | Self::F64)
+    }
 }
 
 /// An opaque identifier for a function.
@@ -408,22 +421,31 @@ impl<'a> FunctionBuilder<'a> {
     /// Integer addition
     #[track_caller]
     pub fn iadd(&mut self, lhs: Value, rhs: Value) -> Value {
+        debug_assert!(self.value_type(lhs).is_int());
+        debug_assert!(self.value_type(rhs).is_int());
+
         self.binop(lhs, rhs, Instruction::IAdd)
     }
 
     /// Integer addition with immediate value.
     ///
     /// Computes and returns `lhs + rhs`.
+    #[track_caller]
     pub fn iadd_imm<T>(&mut self, lhs: Value, rhs: T) -> Value
     where
         T: Into<Imm>,
     {
+        debug_assert!(self.value_type(lhs).is_int());
+
         self.binop_imm(lhs, rhs.into(), Instruction::IAdd)
     }
 
     /// Integer subtraction
     #[track_caller]
     pub fn isub(&mut self, lhs: Value, rhs: Value) -> Value {
+        debug_assert!(self.value_type(lhs).is_int());
+        debug_assert!(self.value_type(rhs).is_int());
+
         self.binop(lhs, rhs, Instruction::ISub)
     }
 
@@ -435,22 +457,30 @@ impl<'a> FunctionBuilder<'a> {
     where
         T: Into<Imm>,
     {
+        debug_assert!(self.value_type(lhs).is_int());
+
         self.binop_imm(lhs, rhs.into(), Instruction::ISub)
     }
 
     /// Integer multiplication
     #[track_caller]
     pub fn imul(&mut self, lhs: Value, rhs: Value) -> Value {
+        debug_assert!(self.value_type(lhs).is_int());
+        debug_assert!(self.value_type(rhs).is_int());
+
         self.binop(lhs, rhs, Instruction::IMul)
     }
 
     /// Integer multiplication with immediate value.
     ///
     /// Computes and returns `lhs * rhs`.
+    #[track_caller]
     pub fn imul_imm<T>(&mut self, lhs: Value, rhs: T) -> Value
     where
         T: Into<Imm>,
     {
+        debug_assert!(self.value_type(lhs).is_int());
+
         self.binop_imm(lhs, rhs.into(), Instruction::IMul)
     }
 
@@ -463,21 +493,32 @@ impl<'a> FunctionBuilder<'a> {
     /// Signed integer division.
     #[track_caller]
     pub fn sdiv(&mut self, lhs: Value, rhs: Value) -> Value {
+        debug_assert!(self.value_type(lhs).is_int());
+        debug_assert!(self.value_type(rhs).is_int());
+
         self.binop(lhs, rhs, Instruction::SDiv)
     }
 
     #[track_caller]
     pub fn urem(&mut self, lhs: Value, rhs: Value) -> Value {
+        debug_assert!(self.value_type(lhs).is_int());
+        debug_assert!(self.value_type(rhs).is_int());
+
         self.binop(lhs, rhs, Instruction::URem)
     }
 
     #[track_caller]
     pub fn srem(&mut self, lhs: Value, rhs: Value) -> Value {
+        debug_assert!(self.value_type(lhs).is_int());
+        debug_assert!(self.value_type(rhs).is_int());
+
         self.binop(lhs, rhs, Instruction::SRem)
     }
 
     #[track_caller]
     pub fn ineg(&mut self, value: Value) -> Value {
+        debug_assert!(self.value_type(value).is_int());
+
         self.unop(value, Instruction::INeg)
     }
 
@@ -486,6 +527,9 @@ impl<'a> FunctionBuilder<'a> {
     /// Computes and returns `min(lhs, rhs)`.
     #[track_caller]
     pub fn smin(&mut self, lhs: Value, rhs: Value) -> Value {
+        debug_assert!(self.value_type(lhs).is_int());
+        debug_assert!(self.value_type(rhs).is_int());
+
         self.binop(lhs, rhs, Instruction::SMin)
     }
 
@@ -497,6 +541,8 @@ impl<'a> FunctionBuilder<'a> {
     where
         T: Into<Imm>,
     {
+        debug_assert!(self.value_type(lhs).is_int());
+
         self.binop_imm(lhs, rhs.into(), Instruction::SMin)
     }
 
@@ -505,6 +551,9 @@ impl<'a> FunctionBuilder<'a> {
     /// Computes and returns `max(lhs, rhs)`.
     #[track_caller]
     pub fn smax(&mut self, lhs: Value, rhs: Value) -> Value {
+        debug_assert!(self.value_type(lhs).is_int());
+        debug_assert!(self.value_type(rhs).is_int());
+
         self.binop(lhs, rhs, Instruction::SMax)
     }
 
@@ -516,6 +565,8 @@ impl<'a> FunctionBuilder<'a> {
     where
         T: Into<Imm>,
     {
+        debug_assert!(self.value_type(lhs).is_int());
+
         self.binop_imm(lhs, rhs.into(), Instruction::SMax)
     }
 
@@ -524,6 +575,9 @@ impl<'a> FunctionBuilder<'a> {
     /// Computes and returns `min(lhs, rhs)`.
     #[track_caller]
     pub fn umin(&mut self, lhs: Value, rhs: Value) -> Value {
+        debug_assert!(self.value_type(lhs).is_int());
+        debug_assert!(self.value_type(rhs).is_int());
+
         self.binop(lhs, rhs, Instruction::UMin)
     }
 
@@ -535,6 +589,8 @@ impl<'a> FunctionBuilder<'a> {
     where
         T: Into<Imm>,
     {
+        debug_assert!(self.value_type(lhs).is_int());
+
         self.binop_imm(lhs, rhs.into(), Instruction::UMin)
     }
 
@@ -543,6 +599,9 @@ impl<'a> FunctionBuilder<'a> {
     /// Computes and returns `max(lhs, rhs)`.
     #[track_caller]
     pub fn umax(&mut self, lhs: Value, rhs: Value) -> Value {
+        debug_assert!(self.value_type(lhs).is_int());
+        debug_assert!(self.value_type(rhs).is_int());
+
         self.binop(lhs, rhs, Instruction::UMax)
     }
 
@@ -554,6 +613,8 @@ impl<'a> FunctionBuilder<'a> {
     where
         T: Into<Imm>,
     {
+        debug_assert!(self.value_type(lhs).is_int());
+
         self.binop_imm(lhs, rhs.into(), Instruction::UMax)
     }
 
@@ -567,6 +628,10 @@ impl<'a> FunctionBuilder<'a> {
     /// - `rhs` must be a floating point value.
     #[track_caller]
     pub fn fadd(&mut self, lhs: Value, rhs: Value) -> Value {
+        debug_assert!(self.value_type(lhs).is_float());
+        debug_assert!(self.value_type(rhs).is_float());
+        debug_assert_eq!(self.value_type(lhs), self.value_type(rhs));
+
         self.binop(lhs, rhs, Instruction::FAdd)
     }
 
@@ -581,6 +646,10 @@ impl<'a> FunctionBuilder<'a> {
     /// - `rhs` must be a floating point value.
     #[track_caller]
     pub fn fsub(&mut self, lhs: Value, rhs: Value) -> Value {
+        debug_assert!(self.value_type(lhs).is_float());
+        debug_assert!(self.value_type(rhs).is_float());
+        debug_assert_eq!(self.value_type(lhs), self.value_type(rhs));
+
         self.binop(lhs, rhs, Instruction::FSub)
     }
 
@@ -595,6 +664,10 @@ impl<'a> FunctionBuilder<'a> {
     /// - `rhs` must be a floating point value.
     #[track_caller]
     pub fn fmul(&mut self, lhs: Value, rhs: Value) -> Value {
+        debug_assert!(self.value_type(lhs).is_float());
+        debug_assert!(self.value_type(rhs).is_float());
+        debug_assert_eq!(self.value_type(lhs), self.value_type(rhs));
+
         self.binop(lhs, rhs, Instruction::FMul)
     }
 
@@ -608,37 +681,57 @@ impl<'a> FunctionBuilder<'a> {
     /// - `rhs` must be a floating point value.
     #[track_caller]
     pub fn fdiv(&mut self, lhs: Value, rhs: Value) -> Value {
+        debug_assert!(self.value_type(lhs).is_float());
+        debug_assert!(self.value_type(rhs).is_float());
+        debug_assert_eq!(self.value_type(lhs), self.value_type(rhs));
+
         self.binop(lhs, rhs, Instruction::FDiv)
     }
 
     #[track_caller]
     pub fn fmin(&mut self, lhs: Value, rhs: Value) -> Value {
+        debug_assert!(self.value_type(lhs).is_float());
+        debug_assert!(self.value_type(rhs).is_float());
+        debug_assert_eq!(self.value_type(lhs), self.value_type(rhs));
+
         self.binop(lhs, rhs, Instruction::FMin)
     }
 
     #[track_caller]
     pub fn fmax(&mut self, lhs: Value, rhs: Value) -> Value {
+        debug_assert!(self.value_type(lhs).is_float());
+        debug_assert!(self.value_type(rhs).is_float());
+        debug_assert_eq!(self.value_type(lhs), self.value_type(rhs));
+
         self.binop(lhs, rhs, Instruction::FMax)
     }
 
     #[track_caller]
     pub fn fneg(&mut self, value: Value) -> Value {
+        debug_assert!(self.value_type(value).is_float());
+
         self.unop(value, Instruction::FNeg)
     }
 
     /// Absolute floating point value
     #[track_caller]
     pub fn fabs(&mut self, value: Value) -> Value {
+        debug_assert!(self.value_type(value).is_float());
+
         self.unop(value, Instruction::FAbs)
     }
 
     #[track_caller]
     pub fn floor(&mut self, value: Value) -> Value {
+        debug_assert!(self.value_type(value).is_float());
+
         self.unop(value, Instruction::Floor)
     }
 
     #[track_caller]
     pub fn ceil(&mut self, value: Value) -> Value {
+        debug_assert!(self.value_type(value).is_float());
+
         self.unop(value, Instruction::Ceil)
     }
 
