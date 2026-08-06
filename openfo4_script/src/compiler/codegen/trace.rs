@@ -24,8 +24,8 @@ impl Span {
     pub fn enter(&mut self, data: &CodegenData, builder: &mut FunctionBuilder<'_>, ctx: Value) {
         assert!(self.span.is_none(), "span already entered");
 
-        let ptr = builder.iconst(Type::Pointer, self.ptr as usize as i64);
-        let len = builder.iconst(Type::Pointer, self.len as i64);
+        let ptr = builder.ptrconst(self.ptr);
+        let len = builder.iconst(Type::Isize, self.len);
 
         let span = builder.call(data.runtime_funcs.enter_span, &[ctx, ptr, len])[0];
         self.span = Some(span);

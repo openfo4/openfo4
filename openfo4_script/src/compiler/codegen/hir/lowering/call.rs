@@ -9,7 +9,7 @@ use crate::compiler::codegen::function::translate_function_signature;
 use crate::compiler::codegen::hir::Literal;
 use crate::compiler::codegen::hir::Null;
 use crate::compiler::codegen::hir::Value;
-use crate::compiler::codegen::hir::lowering::PTR_TYPE;
+use crate::compiler::codegen::hir::lowering::ISIZE_TYPE;
 use crate::compiler::codegen::hir::lowering::Translator;
 use crate::compiler::codegen::hir::lowering::stack::StackFrameInfo;
 use crate::compiler::codegen::hir::lowering::stack::SuspensionPoint;
@@ -53,7 +53,7 @@ pub fn perform_checked_call(
     translator.stack_alloc(size_of::<usize>() + padding);
 
     let stack_ptr = translator.load_stack_ptr();
-    let zero_tag = translator.builder.iconst(PTR_TYPE, 0);
+    let zero_tag = translator.builder.iconst(ISIZE_TYPE, 0);
     translator.builder.store(zero_tag, stack_ptr, size_padded);
 
     translator.builder.jump(resume_call_block, &[]);

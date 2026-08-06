@@ -91,7 +91,7 @@ pub fn generate_guest_to_host_trampoline(
         builder.stack_store(stack_params, value, offset);
     }
 
-    let index = builder.iconst(Type::Pointer, i64::try_from(native.index).unwrap());
+    let index = builder.iconst(Type::Isize, i64::try_from(native.index).unwrap());
 
     let stack_params_addr = builder.stack_addr(stack_params, 0);
     let stack_returns_addr = builder.stack_addr(stack_returns, 0);

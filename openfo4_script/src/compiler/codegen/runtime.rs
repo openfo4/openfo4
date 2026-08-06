@@ -32,7 +32,7 @@ impl RuntimeFunctions {
         let alloc_zeroed = declare_and_define(
             compiler,
             Signature {
-                params: vec![Type::Pointer, Type::Pointer, Type::Pointer],
+                params: vec![Type::Pointer, Type::Isize, Type::Isize],
                 returns: vec![Type::Pointer],
             },
             host_functions::alloc_zeroed,
@@ -40,7 +40,7 @@ impl RuntimeFunctions {
         let stack_frame_alloc = declare_and_define(
             compiler,
             Signature {
-                params: vec![Type::Pointer, Type::Pointer],
+                params: vec![Type::Pointer, Type::Isize],
                 returns: vec![Type::Pointer],
             },
             host_functions::alloc_stack_frame,
@@ -48,7 +48,7 @@ impl RuntimeFunctions {
         let stack_frame_free = declare_and_define(
             compiler,
             Signature {
-                params: vec![Type::Pointer, Type::Pointer],
+                params: vec![Type::Pointer, Type::Isize],
                 returns: vec![Type::Pointer],
             },
             host_functions::free_stack_frame,
@@ -88,15 +88,15 @@ impl RuntimeFunctions {
         let enter_span = declare_and_define(
             compiler,
             Signature {
-                params: vec![Type::Pointer, Type::Pointer, Type::Pointer],
-                returns: vec![Type::Pointer],
+                params: vec![Type::Pointer, Type::Pointer, Type::Isize],
+                returns: vec![Type::Isize],
             },
             host_functions::enter_span,
         );
         let exit_span = declare_and_define(
             compiler,
             Signature {
-                params: vec![Type::Pointer, Type::Pointer],
+                params: vec![Type::Pointer, Type::Isize],
                 returns: vec![],
             },
             host_functions::exit_span,

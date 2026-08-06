@@ -154,6 +154,8 @@ pub enum Type {
     I32,
     /// An integer type with 64 bits. Equivalent to the [`i64`] type.
     I64,
+    /// An integer with the size of the current architecture.
+    Isize,
     /// A floating point type with 32 bits. Equivalent to the [`f32`] type.
     F32,
     /// A floating point type with 64 bits. Equivalent to the [`f64`] type.
@@ -169,6 +171,7 @@ impl Type {
             Self::I16 => "i16",
             Self::I32 => "i32",
             Self::I64 => "i64",
+            Self::Isize => "isize",
             Self::F32 => "f32",
             Self::F64 => "f64",
             Self::Pointer => "ptr",
@@ -181,6 +184,7 @@ impl Type {
             Self::I16 => size_of::<i16>(),
             Self::I32 => size_of::<i32>(),
             Self::I64 => size_of::<i64>(),
+            Self::Isize => size_of::<isize>(),
             Self::F32 => size_of::<f32>(),
             Self::F64 => size_of::<f64>(),
             Self::Pointer => size_of::<*const ()>(),
@@ -193,6 +197,7 @@ impl Type {
             Self::I16 => align_of::<i16>(),
             Self::I32 => align_of::<i32>(),
             Self::I64 => align_of::<i64>(),
+            Self::Isize => align_of::<isize>(),
             Self::F32 => align_of::<f32>(),
             Self::F64 => align_of::<f64>(),
             Self::Pointer => align_of::<*const ()>(),
@@ -203,13 +208,17 @@ impl Type {
     pub const fn is_int(&self) -> bool {
         matches!(
             self,
-            Self::I8 | Self::I16 | Self::I32 | Self::I64 | Self::Pointer
+            Self::I8 | Self::I16 | Self::I32 | Self::I64 | Self::Isize
         )
     }
 
     /// Returns `true` if the type is a floating point type.
     pub const fn is_float(&self) -> bool {
         matches!(self, Self::F32 | Self::F64)
+    }
+
+    pub const fn is_ptr(&self) -> bool {
+        matches!(self, Self::Pointer)
     }
 }
 
@@ -396,6 +405,7 @@ impl<'a> FunctionBuilder<'a> {
         T: Into<Imm>,
     {
         self.assert_block_not_filled();
+        debug_assert!(ty.is_int());
 
         let id = self.produce_value(ty);
         let value = value.into().to_word();
@@ -404,14 +414,56 @@ impl<'a> FunctionBuilder<'a> {
         id
     }
 
+    /// Creates a new pointer from the given host pointer.
+    ///
+    /// Returns a value of type [`Pointer`].
+    ///
+    /// [`Pointer`]: Type::Pointer
+    #[track_caller]
+    pub fn ptrconst<T>(&mut self, ptr: T) -> Value
+    where
+        T: IntoPointer,
+    {
+        self.assert_block_not_filled();
+
+        let id = self.produce_value(Type::Pointer);
+        let value = Word(ptr.into_raw());
+
+        self.instructions.push(Instruction::PtrConst(value, id));
+        id
+    }
+
+    /// Creates a new pointer from the given base `pointer` and the given `offset`.
+    ///
+    /// The returned pointer will have the address `pointer+offset` and the provenance of `pointer`.
+    ///
+    /// Returns a value of type [`Pointer`].
+    ///
+    /// [`Pointer`]: Type::Pointer
+    #[track_caller]
+    pub fn ptroffset(&mut self, pointer: Value, offset: Value) -> Value {
+        self.assert_block_not_filled();
+        debug_assert!(self.value_type(pointer).is_ptr());
+        debug_assert!(self.value_type(offset).is_int());
+
+        let dst = self.produce_value(Type::Pointer);
+        self.instructions.push(Instruction::PtrOffset {
+            ptr: pointer,
+            offset,
+            dst,
+        });
+        dst
+    }
+
     /// Creates a uninitialized value.
     #[track_caller]
     pub fn uninit(&mut self, ty: Type) -> Value {
         self.assert_block_not_filled();
 
         match ty {
-            Type::I8 | Type::I16 | Type::I32 | Type::I64 | Type::Pointer => self.iconst(ty, 0),
+            Type::I8 | Type::I16 | Type::I32 | Type::I64 | Type::Isize => self.iconst(ty, 0),
             Type::F32 | Type::F64 => self.fconst(ty, 0.0),
+            Type::Pointer => self.ptrconst(ptr::null::<()>()),
         }
     }
 
@@ -855,7 +907,7 @@ impl<'a> FunctionBuilder<'a> {
             Type::I64 => (size_of::<i64>(), align_of::<i64>()),
             Type::F32 => (size_of::<f32>(), align_of::<f32>()),
             Type::F64 => (size_of::<f64>(), align_of::<f64>()),
-            Type::Pointer => (
+            Type::Pointer | Type::Isize => (
                 self.compiler.isa().pointer_size(),
                 self.compiler.isa().pointer_align(),
             ),
@@ -977,6 +1029,7 @@ impl<'a> FunctionBuilder<'a> {
     /// # Codegen Safety
     ///
     /// - `lhs` must be an integer value.
+    #[track_caller]
     pub fn icmp_imm<T>(&mut self, lhs: Value, rhs: T, op: IntCompareOp) -> Value
     where
         T: Into<Imm>,
@@ -1028,6 +1081,7 @@ impl<'a> FunctionBuilder<'a> {
         T: Into<Imm>,
     {
         self.assert_block_not_filled();
+        debug_assert!(self.value_type(addr).is_ptr());
 
         let dst = self.produce_value(ty);
         self.instructions.push(Instruction::Load {
@@ -1051,6 +1105,7 @@ impl<'a> FunctionBuilder<'a> {
         T: Into<Imm>,
     {
         self.assert_block_not_filled();
+        debug_assert!(self.value_type(addr).is_ptr());
 
         self.instructions.push(Instruction::Store {
             value,
@@ -1193,6 +1248,10 @@ impl<'a> FunctionBuilder<'a> {
     /// - `ty` must be at least as wide as the current type of `value`.
     #[track_caller]
     pub fn uextend(&mut self, value: Value, ty: Type) -> Value {
+        self.assert_block_not_filled();
+        debug_assert!(self.value_type(value).is_int());
+        debug_assert!(ty.is_int());
+
         let dst = self.produce_value(ty);
         self.instructions
             .push(Instruction::UExtend { value, dst, ty });
@@ -1212,6 +1271,8 @@ impl<'a> FunctionBuilder<'a> {
     #[track_caller]
     pub fn sextend(&mut self, value: Value, ty: Type) -> Value {
         self.assert_block_not_filled();
+        debug_assert!(self.value_type(value).is_int());
+        debug_assert!(ty.is_int());
 
         let dst = self.produce_value(ty);
         self.instructions
@@ -1228,6 +1289,8 @@ impl<'a> FunctionBuilder<'a> {
     #[track_caller]
     pub fn ireduce(&mut self, value: Value, ty: Type) -> Value {
         self.assert_block_not_filled();
+        debug_assert!(self.value_type(value).is_int());
+        debug_assert!(ty.is_int());
 
         let dst = self.produce_value(ty);
         self.instructions
@@ -1261,6 +1324,7 @@ impl<'a> FunctionBuilder<'a> {
     #[track_caller]
     pub fn popcnt(&mut self, value: Value) -> Value {
         self.assert_block_not_filled();
+        debug_assert!(self.value_type(value).is_int());
 
         self.unop(value, Instruction::Popcnt)
     }
@@ -1302,6 +1366,8 @@ impl<'a> FunctionBuilder<'a> {
     /// [`Pointer`]: Type::Pointer
     pub fn memcpy(&mut self, src: Value, dst: Value, size: Value) {
         self.assert_block_not_filled();
+        debug_assert!(self.value_type(src).is_ptr());
+        debug_assert!(self.value_type(dst).is_ptr());
 
         self.instructions
             .push(Instruction::Memcpy { src, dst, size });
@@ -1319,6 +1385,9 @@ impl<'a> FunctionBuilder<'a> {
     /// [`I8`]: Type::I8
     /// [`Pointer`]: Type::Pointer
     pub fn memcmp(&mut self, lhs: Value, rhs: Value, size: Value) -> Value {
+        debug_assert!(self.value_type(lhs).is_ptr());
+        debug_assert!(self.value_type(rhs).is_ptr());
+
         let dst = self.produce_value(Type::I8);
 
         self.instructions.push(Instruction::Memcmp {
@@ -1391,6 +1460,12 @@ enum Instruction {
     SwitchBlock(Block),
     IConst(Type, Word, Value),
     FConst(Type, f64, Value),
+    PtrConst(Word, Value),
+    PtrOffset {
+        ptr: Value,
+        offset: Value,
+        dst: Value,
+    },
     IAdd(Binop),
     ISub(Binop),
     IMul(Binop),
@@ -1745,6 +1820,12 @@ impl_int_imm_from!(isize, usize, Isize);
 #[repr(transparent)]
 struct Word(*mut ());
 
+// From our point of view a word is only a bunch of bits.
+// How they are used is not our problem and the consumer
+// must ensure Send and Sync requirements are satisfied as needed.
+unsafe impl Send for Word {}
+unsafe impl Sync for Word {}
+
 impl From<Word> for i64 {
     fn from(value: Word) -> Self {
         isize::from(value).try_into().unwrap()
@@ -1754,6 +1835,12 @@ impl From<Word> for i64 {
 impl From<Word> for isize {
     fn from(value: Word) -> Self {
         value.0.addr().cast_signed()
+    }
+}
+
+impl From<Word> for *mut () {
+    fn from(value: Word) -> Self {
+        value.0
     }
 }
 
@@ -1867,5 +1954,23 @@ impl Default for BackendKind {
             feature = "cranelift" => Self::Cranelift,
             _ => Self::Interpreter,
         }
+    }
+}
+
+/// A pointer-like type.
+pub trait IntoPointer {
+    /// Converts this pointer into a untyped raw pointer.
+    fn into_raw(self) -> *mut ();
+}
+
+impl<T> IntoPointer for *const T {
+    fn into_raw(self) -> *mut () {
+        self.cast_mut().cast()
+    }
+}
+
+impl<T> IntoPointer for *mut T {
+    fn into_raw(self) -> *mut () {
+        self.cast()
     }
 }

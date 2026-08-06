@@ -62,8 +62,6 @@ fn call_native() {
     let mut value: i32 = 0;
     let value_ptr = &raw mut value;
 
-    dbg!(value_ptr);
-
     unsafe {
         compiled_fn.call(
             (&raw const value_ptr).cast::<u8>(),

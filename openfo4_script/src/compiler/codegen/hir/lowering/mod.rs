@@ -28,6 +28,7 @@ const BOOL_TYPE: JitType = JitType::I8;
 const INT_TYPE: JitType = JitType::I32;
 const FLOAT_TYPE: JitType = JitType::F32;
 const PTR_TYPE: JitType = JitType::Pointer;
+const ISIZE_TYPE: JitType = JitType::Isize;
 const RESULT_TYPE: JitType = JitType::I32;
 
 pub fn lower_function(
@@ -55,9 +56,10 @@ pub fn lower_function(
         };
 
         let default_value = match ty {
-            JitType::I8 | JitType::I16 | JitType::I32 | JitType::I64 | JitType::Pointer => {
+            JitType::I8 | JitType::I16 | JitType::I32 | JitType::I64 | JitType::Isize => {
                 builder.iconst(ty, 0)
             }
+            JitType::Pointer => builder.ptrconst(core::ptr::null::<()>()),
             JitType::F32 | JitType::F64 => builder.fconst(ty, 0),
         };
 
@@ -96,7 +98,7 @@ pub fn lower_function(
     let stack_frame = stack::compute_suspension_points(&mut builder, function, &variables);
 
     let stack_start_offset = builder.load(
-        PTR_TYPE,
+        ISIZE_TYPE,
         ctx_ptr,
         (offset_of!(RawContext, stack_ptr) + offset_of!(RawStack, len)),
     );
@@ -361,7 +363,7 @@ pub fn lower_function(
                     );
                 }
                 Instruction::StructCreate { dst, ty } => {
-                    let one = translator.builder.iconst(PTR_TYPE, 1);
+                    let one = translator.builder.iconst(ISIZE_TYPE, 1);
 
                     // Allocation will already be zeroed, which is the default
                     // value for all types.
@@ -967,7 +969,7 @@ impl<'a> Translator<'a> {
             return;
         }
 
-        let size = self.builder.iconst(PTR_TYPE, size);
+        let size = self.builder.iconst(ISIZE_TYPE, size);
         let stack_base = self.builder.call(
             self.data.runtime_funcs.stack_frame_alloc,
             &[self.ctx_ptr, size],
@@ -990,7 +992,7 @@ impl<'a> Translator<'a> {
             return;
         }
 
-        let size = self.builder.iconst(PTR_TYPE, size);
+        let size = self.builder.iconst(ISIZE_TYPE, size);
         let stack_base = self.builder.call(
             self.data.runtime_funcs.stack_frame_free,
             &[self.ctx_ptr, size],
@@ -1014,7 +1016,7 @@ impl<'a> Translator<'a> {
 
     pub fn load_stack_ptr(&mut self) -> JitValue {
         let base = self.load_stack_base();
-        self.builder.iadd(base, self.stack_start_offset)
+        self.builder.ptroffset(base, self.stack_start_offset)
     }
 
     pub fn suspend(&mut self, point: &SuspensionPoint, stack_ptr: JitValue, result: JitValue) {
@@ -1061,7 +1063,7 @@ impl LowerLiteral for f32 {
 
 impl LowerLiteral for Null {
     fn lower_literal(&self, translator: &mut Translator<'_>) -> JitValue {
-        translator.builder.iconst(PTR_TYPE, 0)
+        translator.builder.ptrconst(core::ptr::null::<()>())
     }
 
     fn ty(&self) -> JitType {
@@ -1082,7 +1084,7 @@ impl LowerLiteral for String {
 impl LowerLiteral for Literal {
     fn lower_literal(&self, translator: &mut Translator<'_>) -> JitValue {
         match self {
-            Self::Null => translator.builder.iconst(PTR_TYPE, 0),
+            Self::Null => translator.builder.ptrconst(core::ptr::null::<()>()),
             Self::Bool(v) => translator.builder.iconst(BOOL_TYPE, u8::from(*v)),
             Self::Int(v) => translator.builder.iconst(INT_TYPE, *v),
             Self::Float(v) => translator.builder.fconst(FLOAT_TYPE, *v),

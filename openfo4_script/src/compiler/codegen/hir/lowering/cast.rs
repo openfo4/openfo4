@@ -4,7 +4,7 @@ use openfo4_jit::{IntCompareOp, Value as JitValue};
 
 use crate::compiler::codegen::hir::lowering::malloc::call_malloc;
 use crate::compiler::codegen::hir::lowering::{
-    BOOL_TYPE, FLOAT_TYPE, INT_TYPE, PTR_TYPE, Translator,
+    BOOL_TYPE, FLOAT_TYPE, INT_TYPE, ISIZE_TYPE, PTR_TYPE, Translator,
 };
 use crate::compiler::codegen::pex::registry::ClassId;
 use crate::compiler::resources::TypeRepr;
@@ -23,15 +23,15 @@ pub fn is_class(translator: &mut Translator<'_>, src: JitValue, class: ClassId) 
     // of type ids + vtable pairs that follow.
     // If any type id matches we have a valid object of that class.
 
-    let count = translator.builder.load(PTR_TYPE, type_info_ptr, 0);
+    let count = translator.builder.load(ISIZE_TYPE, type_info_ptr, 0);
 
     let next_block = translator.builder.create_block(&[]);
 
     // Note that every object has at least one typeid. This means count is
     // always >= 1.
-    let iter_block = translator.builder.create_block(&[PTR_TYPE]);
+    let iter_block = translator.builder.create_block(&[ISIZE_TYPE]);
 
-    let zero = translator.builder.iconst(PTR_TYPE, 0);
+    let zero = translator.builder.iconst(ISIZE_TYPE, 0);
     translator.builder.jump(iter_block, &[zero]);
 
     translator.builder.switch_to_block(iter_block);
@@ -42,8 +42,8 @@ pub fn is_class(translator: &mut Translator<'_>, src: JitValue, class: ClassId) 
     let offset = translator.builder.imul_imm(index, stride);
     let offset = translator.builder.iadd_imm(offset, size_of::<usize>());
 
-    let addr = translator.builder.iadd(type_info_ptr, offset);
-    let type_id = translator.builder.load(PTR_TYPE, addr, 0);
+    let addr = translator.builder.ptroffset(type_info_ptr, offset);
+    let type_id = translator.builder.load(ISIZE_TYPE, addr, 0);
 
     let is_eq = translator
         .builder
@@ -71,10 +71,10 @@ pub fn is_class(translator: &mut Translator<'_>, src: JitValue, class: ClassId) 
 
 pub fn create_var(translator: &mut Translator<'_>, value: JitValue, tag: ObjectTag) -> JitValue {
     // Allocate var object.
-    let one = translator.builder.iconst(PTR_TYPE, 1);
+    let one = translator.builder.iconst(ISIZE_TYPE, 1);
     let ptr = call_malloc(translator, translator.data.resources.primitives.var, one);
 
-    let tag = translator.builder.iconst(PTR_TYPE, tag.to_bits());
+    let tag = translator.builder.iconst(ISIZE_TYPE, tag.to_bits());
     translator
         .builder
         .store(tag, ptr, offset_of!(VarObject, tag));
@@ -99,7 +99,7 @@ pub fn extract_var(
 
     let actual_tag = translator
         .builder
-        .load(PTR_TYPE, object, offset_of!(VarObject, tag));
+        .load(ISIZE_TYPE, object, offset_of!(VarObject, tag));
     let is_eq = translator
         .builder
         .icmp_imm(actual_tag, wanted_tag, IntCompareOp::Equal);
@@ -112,7 +112,7 @@ pub fn extract_var(
             .builder
             .load(PTR_TYPE, object, offset_of!(VarObject, data)),
         ObjectTag::TypeId(id) => match translator.data.resources.types.get(id).unwrap().repr {
-            TypeRepr::Unit => translator.builder.iconst(PTR_TYPE, 0),
+            TypeRepr::Unit => translator.builder.ptrconst(core::ptr::null::<()>()),
             TypeRepr::Int { bits } if bits == 8 => {
                 translator
                     .builder

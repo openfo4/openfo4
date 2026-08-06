@@ -9,7 +9,9 @@ use hashbrown::{HashMap, HashSet};
 use indexmap::IndexMap;
 use openfo4_jit::{Block, FunctionBuilder, IntCompareOp, Type as JitType};
 
-use crate::compiler::codegen::hir::lowering::{Local, PTR_TYPE, RESULT_TYPE, Translator};
+use crate::compiler::codegen::hir::lowering::{
+    ISIZE_TYPE, Local, PTR_TYPE, RESULT_TYPE, Translator,
+};
 use crate::compiler::codegen::hir::{Function, Instruction, Variable};
 
 #[derive(Clone, Debug)]
@@ -239,7 +241,7 @@ pub fn generate_suspension_blocks(
         }
 
         // Store tag at offset 0.
-        let tag = translator.builder.iconst(PTR_TYPE, point.tag.get());
+        let tag = translator.builder.iconst(ISIZE_TYPE, point.tag.get());
         translator.builder.store(tag, stack_ptr, 0);
 
         let dst_block = block_per_tag.get(&point.tag).unwrap();
@@ -257,7 +259,7 @@ pub fn resume(translator: &mut Translator<'_>, frame: &StackFrameInfo, start_blo
 
     let stack_ptr = translator.load_stack_ptr();
 
-    let tag = translator.builder.load(PTR_TYPE, stack_ptr, 0);
+    let tag = translator.builder.load(ISIZE_TYPE, stack_ptr, 0);
 
     let resume_root_block = translator.builder.create_block(&[]);
 
@@ -274,7 +276,7 @@ pub fn resume(translator: &mut Translator<'_>, frame: &StackFrameInfo, start_blo
     });
 
     // Tag was already read.
-    let offset = PTR_TYPE.size();
+    let offset = ISIZE_TYPE.size();
 
     let mut queue = VecDeque::new();
     queue.push_back((graph.root(), offset, Vec::new(), resume_root_block));

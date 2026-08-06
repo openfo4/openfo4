@@ -175,6 +175,7 @@ impl CompiledFunc {
                 Type::I16 => Word::from(unsafe { ptr.cast::<i16>().read() }),
                 Type::I32 => Word::from(unsafe { ptr.cast::<i32>().read() }),
                 Type::I64 => Word::from(unsafe { ptr.cast::<i64>().read() }),
+                Type::Isize => Word::from(unsafe { ptr.cast::<isize>().read() }),
                 Type::Pointer => Word(unsafe { ptr.cast::<*mut ()>().read() }),
                 Type::F32 => Word::from(unsafe { ptr.cast::<f32>().read() }),
                 Type::F64 => Word::from(unsafe { ptr.cast::<f64>().read() }),
@@ -215,6 +216,9 @@ impl CompiledFunc {
             }
             Instruction::FConst(ty, word, value) => {
                 frame.values.insert(*ty, *word, *value);
+            }
+            Instruction::PtrConst(value, dst) => {
+                frame.values.insert(Type::Pointer, *value, *dst);
             }
             // Arithmetic
             Instruction::IAdd(op) => impl_binop!(op, iadd),
@@ -257,6 +261,12 @@ impl CompiledFunc {
                 let rhs = frame.values.get(*rhs);
                 let res = ops::fcmp(ty, lhs, rhs, *op);
                 frame.values.insert(Type::I8, res, *dst);
+            }
+            Instruction::PtrOffset { ptr, offset, dst } => {
+                let base: *mut () = frame.values.get(*ptr);
+                let offset: isize = frame.values.get(*offset);
+                let ptr = unsafe { base.byte_offset(offset) };
+                frame.values.insert(Type::Pointer, Word(ptr), *dst);
             }
             // Conversion
             Instruction::SExtend { value, dst, ty } => {

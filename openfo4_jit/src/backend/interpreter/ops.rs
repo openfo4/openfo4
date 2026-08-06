@@ -1,332 +1,163 @@
+use std::convert::identity;
+
 use crate::{FloatCompareOp, IntCompareOp, Type, Word};
 
-pub fn iadd(ty: Type, lhs: Word, rhs: Word) -> Word {
-    match ty {
-        Type::I8 => {
-            let lhs: i8 = lhs.try_into().unwrap();
-            let rhs: i8 = rhs.try_into().unwrap();
-            lhs.wrapping_add(rhs).into()
-        }
-        Type::I16 => {
-            let lhs: i16 = lhs.try_into().unwrap();
-            let rhs: i16 = rhs.try_into().unwrap();
-            lhs.wrapping_add(rhs).into()
-        }
-        Type::I32 => {
-            let lhs: i32 = lhs.try_into().unwrap();
-            let rhs: i32 = rhs.try_into().unwrap();
-            lhs.wrapping_add(rhs).into()
-        }
-        Type::I64 => {
-            let lhs: i64 = lhs.try_into().unwrap();
-            let rhs: i64 = rhs.try_into().unwrap();
-            lhs.wrapping_add(rhs).into()
-        }
-        Type::Pointer => {
-            let lhs: i64 = lhs.try_into().unwrap();
-            let rhs: i64 = rhs.try_into().unwrap();
-            lhs.wrapping_add(rhs).into()
-        }
-        Type::F32 | Type::F64 => unreachable!(),
-    }
+trait AsType {
+    const TYPE: Type;
+    type Primitive;
+
+    fn from_primitive(v: Self::Primitive) -> Self;
+    fn into_primitive(self) -> Self::Primitive;
 }
 
-pub fn isub(ty: Type, lhs: Word, rhs: Word) -> Word {
-    match ty {
-        Type::I8 => {
-            let lhs: i8 = lhs.try_into().unwrap();
-            let rhs: i8 = rhs.try_into().unwrap();
-            lhs.wrapping_add(rhs).into()
+macro_rules! impl_primitive_type {
+    ($ty:ty, $primitive:ty, $t:tt, $from:expr, $to:expr) => {
+        impl AsType for $ty {
+            const TYPE: Type = Type::$t;
+            type Primitive = $primitive;
+
+            fn from_primitive(v: Self::Primitive) -> Self {
+                $from(v)
+            }
+
+            fn into_primitive(self) -> Self::Primitive {
+                $to(self)
+            }
         }
-        Type::I16 => {
-            let lhs: i16 = lhs.try_into().unwrap();
-            let rhs: i16 = rhs.try_into().unwrap();
-            lhs.wrapping_add(rhs).into()
-        }
-        Type::I32 => {
-            let lhs: i32 = lhs.try_into().unwrap();
-            let rhs: i32 = rhs.try_into().unwrap();
-            lhs.wrapping_add(rhs).into()
-        }
-        Type::I64 => {
-            let lhs: i64 = lhs.try_into().unwrap();
-            let rhs: i64 = rhs.try_into().unwrap();
-            lhs.wrapping_add(rhs).into()
-        }
-        Type::Pointer => {
-            let lhs: i64 = lhs.try_into().unwrap();
-            let rhs: i64 = rhs.try_into().unwrap();
-            lhs.wrapping_add(rhs).into()
-        }
-        Type::F32 | Type::F64 => unreachable!(),
-    }
+    };
 }
 
-pub fn imul(ty: Type, lhs: Word, rhs: Word) -> Word {
-    match ty {
-        Type::I8 => {
-            let lhs: i8 = lhs.try_into().unwrap();
-            let rhs: i8 = rhs.try_into().unwrap();
-            lhs.wrapping_mul(rhs).into()
+impl_primitive_type!(i8, i8, I8, identity, identity);
+impl_primitive_type!(i16, i16, I16, identity, identity);
+impl_primitive_type!(i32, i32, I32, identity, identity);
+impl_primitive_type!(i64, i64, I64, identity, identity);
+impl_primitive_type!(isize, isize, Isize, identity, identity);
+impl_primitive_type!(u8, i8, I8, i8::cast_unsigned, u8::cast_signed);
+impl_primitive_type!(u16, i16, I16, i16::cast_unsigned, u16::cast_signed);
+impl_primitive_type!(u32, i32, I32, i32::cast_unsigned, u32::cast_signed);
+impl_primitive_type!(u64, i64, I64, i64::cast_unsigned, u64::cast_signed);
+impl_primitive_type!(
+    usize,
+    isize,
+    Isize,
+    isize::cast_unsigned,
+    usize::cast_signed
+);
+impl_primitive_type!(f32, f32, F32, identity, identity);
+impl_primitive_type!(f64, f64, F64, identity, identity);
+
+macro_rules! binop {
+    ($func:ident, {
+        $(
+            $t:ty => $op:expr,
+        )*
+    }) => {
+        pub fn $func(ty: Type, lhs: Word, rhs: Word) -> Word {
+            match ty {
+                $(
+                    <$t as AsType>::TYPE => {
+                        let lhs: <$t as AsType>::Primitive = lhs.try_into().unwrap();
+                        let rhs: <$t as AsType>::Primitive = rhs.try_into().unwrap();
+                        let lhs: $t = <$t as AsType>::from_primitive(lhs);
+                        let rhs: $t = <$t as AsType>::from_primitive(rhs);
+                        let res: $t = $op(lhs, rhs);
+                        let res: <$t as AsType>::Primitive = <$t as AsType>::into_primitive(res);
+                        res.into()
+                    }
+                )*
+                _ => unreachable!(),
+            }
         }
-        Type::I16 => {
-            let lhs: i16 = lhs.try_into().unwrap();
-            let rhs: i16 = rhs.try_into().unwrap();
-            lhs.wrapping_mul(rhs).into()
-        }
-        Type::I32 => {
-            let lhs: i32 = lhs.try_into().unwrap();
-            let rhs: i32 = rhs.try_into().unwrap();
-            lhs.wrapping_mul(rhs).into()
-        }
-        Type::I64 => {
-            let lhs: i64 = lhs.try_into().unwrap();
-            let rhs: i64 = rhs.try_into().unwrap();
-            lhs.wrapping_mul(rhs).into()
-        }
-        Type::Pointer | Type::F32 | Type::F64 => unreachable!(),
-    }
+    };
 }
 
-pub fn sdiv(ty: Type, lhs: Word, rhs: Word) -> Word {
-    match ty {
-        Type::I8 => {
-            let lhs: i8 = lhs.try_into().unwrap();
-            let rhs: i8 = rhs.try_into().unwrap();
-            lhs.wrapping_div(rhs).into()
-        }
-        Type::I16 => {
-            let lhs: i16 = lhs.try_into().unwrap();
-            let rhs: i16 = rhs.try_into().unwrap();
-            lhs.wrapping_div(rhs).into()
-        }
-        Type::I32 => {
-            let lhs: i32 = lhs.try_into().unwrap();
-            let rhs: i32 = rhs.try_into().unwrap();
-            lhs.wrapping_div(rhs).into()
-        }
-        Type::I64 => {
-            let lhs: i64 = lhs.try_into().unwrap();
-            let rhs: i64 = rhs.try_into().unwrap();
-            lhs.wrapping_div(rhs).into()
-        }
-        Type::Pointer | Type::F32 | Type::F64 => unreachable!(),
-    }
-}
+binop!(iadd, {
+    i8 => |lhs: i8, rhs: i8| lhs.wrapping_add(rhs),
+    i16 => |lhs: i16, rhs: i16| lhs.wrapping_add(rhs),
+    i32 => |lhs: i32, rhs: i32| lhs.wrapping_add(rhs),
+    i64 => |lhs: i64, rhs: i64| lhs.wrapping_add(rhs),
+    isize => |lhs: isize, rhs: isize| lhs.wrapping_add(rhs),
+});
 
-pub fn udiv(ty: Type, lhs: Word, rhs: Word) -> Word {
-    match ty {
-        Type::I8 => {
-            let lhs: i8 = lhs.try_into().unwrap();
-            let rhs: i8 = rhs.try_into().unwrap();
-            let lhs = lhs.cast_unsigned();
-            let rhs = rhs.cast_unsigned();
-            lhs.wrapping_div(rhs).cast_signed().into()
-        }
-        Type::I16 => {
-            let lhs: i16 = lhs.try_into().unwrap();
-            let rhs: i16 = rhs.try_into().unwrap();
-            let lhs = lhs.cast_unsigned();
-            let rhs = rhs.cast_unsigned();
-            lhs.wrapping_div(rhs).cast_signed().into()
-        }
-        Type::I32 => {
-            let lhs: i32 = lhs.try_into().unwrap();
-            let rhs: i32 = rhs.try_into().unwrap();
-            let lhs = lhs.cast_unsigned();
-            let rhs = rhs.cast_unsigned();
-            lhs.wrapping_div(rhs).cast_signed().into()
-        }
-        Type::I64 => {
-            let lhs: i64 = lhs.try_into().unwrap();
-            let rhs: i64 = rhs.try_into().unwrap();
-            let lhs = lhs.cast_unsigned();
-            let rhs = rhs.cast_unsigned();
-            lhs.wrapping_div(rhs).cast_signed().into()
-        }
-        Type::Pointer | Type::F32 | Type::F64 => unreachable!(),
-    }
-}
+binop!(isub, {
+    i8 => |lhs: i8, rhs: i8| lhs.wrapping_sub(rhs),
+    i16 => |lhs: i16, rhs: i16| lhs.wrapping_sub(rhs),
+    i32 => |lhs: i32, rhs: i32| lhs.wrapping_sub(rhs),
+    i64 => |lhs: i64, rhs: i64| lhs.wrapping_sub(rhs),
+    isize => |lhs: isize, rhs: isize| lhs.wrapping_sub(rhs),
+});
 
-pub fn srem(ty: Type, lhs: Word, rhs: Word) -> Word {
-    match ty {
-        Type::I8 => {
-            let lhs: i8 = lhs.try_into().unwrap();
-            let rhs: i8 = rhs.try_into().unwrap();
-            lhs.wrapping_rem(rhs).into()
-        }
-        Type::I16 => {
-            let lhs: i16 = lhs.try_into().unwrap();
-            let rhs: i16 = rhs.try_into().unwrap();
-            lhs.wrapping_rem(rhs).into()
-        }
-        Type::I32 => {
-            let lhs: i32 = lhs.try_into().unwrap();
-            let rhs: i32 = rhs.try_into().unwrap();
-            lhs.wrapping_rem(rhs).into()
-        }
-        Type::I64 => {
-            let lhs: i64 = lhs.try_into().unwrap();
-            let rhs: i64 = rhs.try_into().unwrap();
-            lhs.wrapping_rem(rhs).into()
-        }
-        Type::Pointer | Type::F32 | Type::F64 => unreachable!(),
-    }
-}
+binop!(imul, {
+    i8 => |lhs: i8, rhs: i8| lhs.wrapping_mul(rhs),
+    i16 => |lhs: i16, rhs: i16| lhs.wrapping_mul(rhs),
+    i32 => |lhs: i32, rhs: i32| lhs.wrapping_mul(rhs),
+    i64 => |lhs: i64, rhs: i64| lhs.wrapping_mul(rhs),
+    isize => |lhs: isize, rhs: isize| lhs.wrapping_mul(rhs),
+});
 
-pub fn urem(ty: Type, lhs: Word, rhs: Word) -> Word {
-    match ty {
-        Type::I8 => {
-            let lhs: i8 = lhs.try_into().unwrap();
-            let rhs: i8 = rhs.try_into().unwrap();
-            let lhs = lhs.cast_unsigned();
-            let rhs = rhs.cast_unsigned();
-            lhs.wrapping_rem(rhs).cast_signed().into()
-        }
-        Type::I16 => {
-            let lhs: i16 = lhs.try_into().unwrap();
-            let rhs: i16 = rhs.try_into().unwrap();
-            let lhs = lhs.cast_unsigned();
-            let rhs = rhs.cast_unsigned();
-            lhs.wrapping_rem(rhs).cast_signed().into()
-        }
-        Type::I32 => {
-            let lhs: i32 = lhs.try_into().unwrap();
-            let rhs: i32 = rhs.try_into().unwrap();
-            let lhs = lhs.cast_unsigned();
-            let rhs = rhs.cast_unsigned();
-            lhs.wrapping_rem(rhs).cast_signed().into()
-        }
-        Type::I64 => {
-            let lhs: i64 = lhs.try_into().unwrap();
-            let rhs: i64 = rhs.try_into().unwrap();
-            let lhs = lhs.cast_unsigned();
-            let rhs = rhs.cast_unsigned();
-            lhs.wrapping_rem(rhs).cast_signed().into()
-        }
-        Type::Pointer | Type::F32 | Type::F64 => unreachable!(),
-    }
-}
+binop!(sdiv, {
+    i8 => |lhs: i8, rhs: i8| lhs.wrapping_div(rhs),
+    i16 => |lhs: i16, rhs: i16| lhs.wrapping_div(rhs),
+    i32 => |lhs: i32, rhs: i32| lhs.wrapping_div(rhs),
+    i64 => |lhs: i64, rhs: i64| lhs.wrapping_div(rhs),
+    isize => |lhs: isize, rhs: isize| lhs.wrapping_div(rhs),
+});
 
-pub fn smin(ty: Type, lhs: Word, rhs: Word) -> Word {
-    match ty {
-        Type::I8 => {
-            let lhs: i8 = lhs.try_into().unwrap();
-            let rhs: i8 = rhs.try_into().unwrap();
-            lhs.min(rhs).into()
-        }
-        Type::I16 => {
-            let lhs: i16 = lhs.try_into().unwrap();
-            let rhs: i16 = rhs.try_into().unwrap();
-            lhs.min(rhs).into()
-        }
-        Type::I32 => {
-            let lhs: i32 = lhs.try_into().unwrap();
-            let rhs: i32 = rhs.try_into().unwrap();
-            lhs.min(rhs).into()
-        }
-        Type::I64 => {
-            let lhs: i64 = lhs.try_into().unwrap();
-            let rhs: i64 = rhs.try_into().unwrap();
-            lhs.min(rhs).into()
-        }
-        Type::Pointer | Type::F32 | Type::F64 => unreachable!(),
-    }
-}
+binop!(udiv, {
+    u8 => |lhs: u8, rhs: u8| lhs.wrapping_div(rhs),
+    u16 => |lhs: u16, rhs: u16| lhs.wrapping_div(rhs),
+    u32 => |lhs: u32, rhs: u32| lhs.wrapping_div(rhs),
+    u64 => |lhs: u64, rhs: u64| lhs.wrapping_div(rhs),
+    usize => |lhs: usize, rhs: usize| lhs.wrapping_div(rhs),
+});
 
-pub fn umin(ty: Type, lhs: Word, rhs: Word) -> Word {
-    match ty {
-        Type::I8 => {
-            let lhs: i8 = lhs.try_into().unwrap();
-            let rhs: i8 = rhs.try_into().unwrap();
-            let lhs = lhs.cast_unsigned();
-            let rhs = rhs.cast_unsigned();
-            lhs.min(rhs).cast_signed().into()
-        }
-        Type::I16 => {
-            let lhs: i16 = lhs.try_into().unwrap();
-            let rhs: i16 = rhs.try_into().unwrap();
-            let lhs = lhs.cast_unsigned();
-            let rhs = rhs.cast_unsigned();
-            lhs.min(rhs).cast_signed().into()
-        }
-        Type::I32 => {
-            let lhs: i32 = lhs.try_into().unwrap();
-            let rhs: i32 = rhs.try_into().unwrap();
-            let lhs = lhs.cast_unsigned();
-            let rhs = rhs.cast_unsigned();
-            lhs.min(rhs).cast_signed().into()
-        }
-        Type::I64 => {
-            let lhs: i64 = lhs.try_into().unwrap();
-            let rhs: i64 = rhs.try_into().unwrap();
-            let lhs = lhs.cast_unsigned();
-            let rhs = rhs.cast_unsigned();
-            lhs.min(rhs).cast_signed().into()
-        }
-        Type::Pointer | Type::F32 | Type::F64 => unreachable!(),
-    }
-}
+binop!(srem, {
+    i8 => |lhs: i8, rhs: i8| lhs.wrapping_rem(rhs),
+    i16 => |lhs: i16, rhs: i16| lhs.wrapping_rem(rhs),
+    i32 => |lhs: i32, rhs: i32| lhs.wrapping_rem(rhs),
+    i64 => |lhs: i64, rhs: i64| lhs.wrapping_rem(rhs),
+    isize => |lhs: isize, rhs: isize| lhs.wrapping_rem(rhs),
+});
 
-pub fn smax(ty: Type, lhs: Word, rhs: Word) -> Word {
-    match ty {
-        Type::I8 => {
-            let lhs: i8 = lhs.try_into().unwrap();
-            let rhs: i8 = rhs.try_into().unwrap();
-            lhs.max(rhs).into()
-        }
-        Type::I16 => {
-            let lhs: i16 = lhs.try_into().unwrap();
-            let rhs: i16 = rhs.try_into().unwrap();
-            lhs.max(rhs).into()
-        }
-        Type::I32 => {
-            let lhs: i32 = lhs.try_into().unwrap();
-            let rhs: i32 = rhs.try_into().unwrap();
-            lhs.max(rhs).into()
-        }
-        Type::I64 => {
-            let lhs: i64 = lhs.try_into().unwrap();
-            let rhs: i64 = rhs.try_into().unwrap();
-            lhs.max(rhs).into()
-        }
-        Type::Pointer | Type::F32 | Type::F64 => unreachable!(),
-    }
-}
+binop!(urem, {
+    u8 => |lhs: u8, rhs: u8| lhs.wrapping_rem(rhs),
+    u16 => |lhs: u16, rhs: u16| lhs.wrapping_rem(rhs),
+    u32 => |lhs: u32, rhs: u32| lhs.wrapping_rem(rhs),
+    u64 => |lhs: u64, rhs: u64| lhs.wrapping_rem(rhs),
+    usize => |lhs: usize, rhs: usize| lhs.wrapping_rem(rhs),
+});
 
-pub fn umax(ty: Type, lhs: Word, rhs: Word) -> Word {
-    match ty {
-        Type::I8 => {
-            let lhs: i8 = lhs.try_into().unwrap();
-            let rhs: i8 = rhs.try_into().unwrap();
-            let lhs = lhs.cast_unsigned();
-            let rhs = rhs.cast_unsigned();
-            lhs.max(rhs).cast_signed().into()
-        }
-        Type::I16 => {
-            let lhs: i16 = lhs.try_into().unwrap();
-            let rhs: i16 = rhs.try_into().unwrap();
-            let lhs = lhs.cast_unsigned();
-            let rhs = rhs.cast_unsigned();
-            lhs.max(rhs).cast_signed().into()
-        }
-        Type::I32 => {
-            let lhs: i32 = lhs.try_into().unwrap();
-            let rhs: i32 = rhs.try_into().unwrap();
-            let lhs = lhs.cast_unsigned();
-            let rhs = rhs.cast_unsigned();
-            lhs.max(rhs).cast_signed().into()
-        }
-        Type::I64 => {
-            let lhs: i64 = lhs.try_into().unwrap();
-            let rhs: i64 = rhs.try_into().unwrap();
-            let lhs = lhs.cast_unsigned();
-            let rhs = rhs.cast_unsigned();
-            lhs.max(rhs).cast_signed().into()
-        }
-        Type::Pointer | Type::F32 | Type::F64 => unreachable!(),
-    }
-}
+binop!(smin, {
+    i8 => |lhs: i8, rhs: i8| lhs.min(rhs),
+    i16 => |lhs: i16, rhs: i16| lhs.min(rhs),
+    i32 => |lhs: i32, rhs: i32| lhs.min(rhs),
+    i64 => |lhs: i64, rhs: i64| lhs.min(rhs),
+    isize => |lhs: isize, rhs: isize| lhs.min(rhs),
+});
+
+binop!(umin, {
+    u8 => |lhs: u8, rhs: u8| lhs.min(rhs),
+    u16 => |lhs: u16, rhs: u16| lhs.min(rhs),
+    u32 => |lhs: u32, rhs: u32| lhs.min(rhs),
+    u64 => |lhs: u64, rhs: u64| lhs.min(rhs),
+    usize => |lhs: usize, rhs: usize| lhs.min(rhs),
+});
+
+binop!(smax, {
+    i8 => |lhs: i8, rhs: i8| lhs.max(rhs),
+    i16 => |lhs: i16, rhs: i16| lhs.max(rhs),
+    i32 => |lhs: i32, rhs: i32| lhs.max(rhs),
+    i64 => |lhs: i64, rhs: i64| lhs.max(rhs),
+    isize => |lhs: isize, rhs: isize| lhs.max(rhs),
+});
+
+binop!(umax, {
+    u8 => |lhs: u8, rhs: u8| lhs.max(rhs),
+    u16 => |lhs: u16, rhs: u16| lhs.max(rhs),
+    u32 => |lhs: u32, rhs: u32| lhs.max(rhs),
+    u64 => |lhs: u64, rhs: u64| lhs.max(rhs),
+    usize => |lhs: usize, rhs: usize| lhs.max(rhs),
+});
 
 pub fn icmp(ty: Type, lhs: Word, rhs: Word, op: IntCompareOp) -> Word {
     let (overflow, carry, zero, signed) = match ty {
@@ -358,14 +189,14 @@ pub fn icmp(ty: Type, lhs: Word, rhs: Word, op: IntCompareOp) -> Word {
             let (_, cf) = lhs.cast_unsigned().overflowing_sub(rhs.cast_unsigned());
             (of, cf, res == 0, res.is_negative())
         }
-        Type::Pointer => {
+        Type::Isize => {
             let lhs: isize = lhs.try_into().unwrap();
             let rhs: isize = rhs.try_into().unwrap();
             let (res, of) = lhs.overflowing_sub(rhs);
             let (_, cf) = lhs.cast_unsigned().overflowing_sub(rhs.cast_unsigned());
             (of, cf, res == 0, res.is_negative())
         }
-        Type::F32 | Type::F64 => unreachable!(),
+        Type::Pointer | Type::F32 | Type::F64 => unreachable!(),
     };
 
     // Based on http://unixwiz.net/techtips/x86-jumps.html
@@ -408,101 +239,35 @@ pub fn fcmp(ty: Type, lhs: Word, rhs: Word, op: FloatCompareOp) -> Word {
     }))
 }
 
-pub fn fadd(ty: Type, lhs: Word, rhs: Word) -> Word {
-    match ty {
-        Type::F32 => {
-            let lhs: f32 = lhs.try_into().unwrap();
-            let rhs: f32 = rhs.try_into().unwrap();
-            (lhs + rhs).into()
-        }
-        Type::F64 => {
-            let lhs: f64 = lhs.try_into().unwrap();
-            let rhs: f64 = rhs.try_into().unwrap();
-            (lhs + rhs).into()
-        }
-        _ => unreachable!(),
-    }
-}
+binop!(fadd, {
+    f32 => |lhs: f32, rhs: f32| lhs + rhs,
+    f64 => |lhs: f64, rhs: f64| lhs + rhs,
+});
 
-pub fn fsub(ty: Type, lhs: Word, rhs: Word) -> Word {
-    match ty {
-        Type::F32 => {
-            let lhs: f32 = lhs.try_into().unwrap();
-            let rhs: f32 = rhs.try_into().unwrap();
-            (lhs - rhs).into()
-        }
-        Type::F64 => {
-            let lhs: f64 = lhs.try_into().unwrap();
-            let rhs: f64 = rhs.try_into().unwrap();
-            (lhs - rhs).into()
-        }
-        _ => unreachable!(),
-    }
-}
+binop!(fsub, {
+    f32 => |lhs: f32, rhs: f32| lhs - rhs,
+    f64 => |lhs: f64, rhs: f64| lhs - rhs,
+});
 
-pub fn fmul(ty: Type, lhs: Word, rhs: Word) -> Word {
-    match ty {
-        Type::F32 => {
-            let lhs: f32 = lhs.try_into().unwrap();
-            let rhs: f32 = rhs.try_into().unwrap();
-            (lhs * rhs).into()
-        }
-        Type::F64 => {
-            let lhs: f64 = lhs.try_into().unwrap();
-            let rhs: f64 = rhs.try_into().unwrap();
-            (lhs * rhs).into()
-        }
-        _ => unreachable!(),
-    }
-}
+binop!(fmul, {
+    f32 => |lhs: f32, rhs: f32| lhs * rhs,
+    f64 => |lhs: f64, rhs: f64| lhs * rhs,
+});
 
-pub fn fdiv(ty: Type, lhs: Word, rhs: Word) -> Word {
-    match ty {
-        Type::F32 => {
-            let lhs: f32 = lhs.try_into().unwrap();
-            let rhs: f32 = rhs.try_into().unwrap();
-            (lhs / rhs).into()
-        }
-        Type::F64 => {
-            let lhs: f64 = lhs.try_into().unwrap();
-            let rhs: f64 = rhs.try_into().unwrap();
-            (lhs / rhs).into()
-        }
-        _ => unreachable!(),
-    }
-}
+binop!(fdiv, {
+    f32 => |lhs: f32, rhs: f32| lhs / rhs,
+    f64 => |lhs: f64, rhs: f64| lhs / rhs,
+});
 
-pub fn fmin(ty: Type, lhs: Word, rhs: Word) -> Word {
-    match ty {
-        Type::F32 => {
-            let lhs: f32 = lhs.try_into().unwrap();
-            let rhs: f32 = rhs.try_into().unwrap();
-            lhs.min(rhs).into()
-        }
-        Type::F64 => {
-            let lhs: f64 = lhs.try_into().unwrap();
-            let rhs: f64 = rhs.try_into().unwrap();
-            lhs.min(rhs).into()
-        }
-        _ => unreachable!(),
-    }
-}
+binop!(fmin, {
+    f32 => |lhs: f32, rhs: f32| lhs.min(rhs),
+    f64 => |lhs: f64, rhs: f64| lhs.min(rhs),
+});
 
-pub fn fmax(ty: Type, lhs: Word, rhs: Word) -> Word {
-    match ty {
-        Type::F32 => {
-            let lhs: f32 = lhs.try_into().unwrap();
-            let rhs: f32 = rhs.try_into().unwrap();
-            lhs.max(rhs).into()
-        }
-        Type::F64 => {
-            let lhs: f64 = lhs.try_into().unwrap();
-            let rhs: f64 = rhs.try_into().unwrap();
-            lhs.max(rhs).into()
-        }
-        _ => unreachable!(),
-    }
-}
+binop!(fmax, {
+    f32 => |lhs: f32, rhs: f32| lhs.max(rhs),
+    f64 => |lhs: f64, rhs: f64| lhs.max(rhs),
+});
 
 pub fn ineg(ty: Type, src: Word) -> Word {
     match ty {
@@ -582,83 +347,29 @@ pub fn floor(ty: Type, src: Word) -> Word {
     }
 }
 
-pub fn band(ty: Type, lhs: Word, rhs: Word) -> Word {
-    match ty {
-        Type::I8 => {
-            let lhs: i8 = lhs.try_into().unwrap();
-            let rhs: i8 = rhs.try_into().unwrap();
-            (lhs & rhs).into()
-        }
-        Type::I16 => {
-            let lhs: i16 = lhs.try_into().unwrap();
-            let rhs: i16 = rhs.try_into().unwrap();
-            (lhs & rhs).into()
-        }
-        Type::I32 => {
-            let lhs: i32 = lhs.try_into().unwrap();
-            let rhs: i32 = rhs.try_into().unwrap();
-            (lhs & rhs).into()
-        }
-        Type::I64 => {
-            let lhs: i64 = lhs.try_into().unwrap();
-            let rhs: i64 = rhs.try_into().unwrap();
-            (lhs & rhs).into()
-        }
-        _ => unreachable!(),
-    }
-}
+binop!(band, {
+    i8 => |lhs: i8, rhs: i8| lhs & rhs,
+    i16 => |lhs: i16, rhs: i16| lhs & rhs,
+    i32 => |lhs: i32, rhs: i32| lhs & rhs,
+    i64 => |lhs: i64, rhs: i64| lhs & rhs,
+    isize => |lhs: isize, rhs: isize| lhs & rhs,
+});
 
-pub fn bor(ty: Type, lhs: Word, rhs: Word) -> Word {
-    match ty {
-        Type::I8 => {
-            let lhs: i8 = lhs.try_into().unwrap();
-            let rhs: i8 = rhs.try_into().unwrap();
-            (lhs | rhs).into()
-        }
-        Type::I16 => {
-            let lhs: i16 = lhs.try_into().unwrap();
-            let rhs: i16 = rhs.try_into().unwrap();
-            (lhs | rhs).into()
-        }
-        Type::I32 => {
-            let lhs: i32 = lhs.try_into().unwrap();
-            let rhs: i32 = rhs.try_into().unwrap();
-            (lhs | rhs).into()
-        }
-        Type::I64 => {
-            let lhs: i64 = lhs.try_into().unwrap();
-            let rhs: i64 = rhs.try_into().unwrap();
-            (lhs | rhs).into()
-        }
-        _ => unreachable!(),
-    }
-}
+binop!(bor, {
+    i8 => |lhs: i8, rhs: i8| lhs | rhs,
+    i16 => |lhs: i16, rhs: i16| lhs | rhs,
+    i32 => |lhs: i32, rhs: i32| lhs | rhs,
+    i64 => |lhs: i64, rhs: i64| lhs | rhs,
+    isize => |lhs: isize, rhs: isize| lhs | rhs,
+});
 
-pub fn bxor(ty: Type, lhs: Word, rhs: Word) -> Word {
-    match ty {
-        Type::I8 => {
-            let lhs: i8 = lhs.try_into().unwrap();
-            let rhs: i8 = rhs.try_into().unwrap();
-            (lhs ^ rhs).into()
-        }
-        Type::I16 => {
-            let lhs: i16 = lhs.try_into().unwrap();
-            let rhs: i16 = rhs.try_into().unwrap();
-            (lhs ^ rhs).into()
-        }
-        Type::I32 => {
-            let lhs: i32 = lhs.try_into().unwrap();
-            let rhs: i32 = rhs.try_into().unwrap();
-            (lhs ^ rhs).into()
-        }
-        Type::I64 => {
-            let lhs: i64 = lhs.try_into().unwrap();
-            let rhs: i64 = rhs.try_into().unwrap();
-            (lhs ^ rhs).into()
-        }
-        _ => unreachable!(),
-    }
-}
+binop!(bxor, {
+    i8 => |lhs: i8, rhs: i8| lhs ^ rhs,
+    i16 => |lhs: i16, rhs: i16| lhs ^ rhs,
+    i32 => |lhs: i32, rhs: i32| lhs ^ rhs,
+    i64 => |lhs: i64, rhs: i64| lhs ^ rhs,
+    isize => |lhs: isize, rhs: isize| lhs ^ rhs,
+});
 
 pub fn bnot(ty: Type, src: Word) -> Word {
     match ty {
@@ -881,6 +592,10 @@ pub unsafe fn read(ty: Type, ptr: *const u8) -> Word {
             let value = unsafe { ptr.cast::<i64>().read() };
             Word::from(value)
         }
+        Type::Isize => {
+            let value = unsafe { ptr.cast::<isize>().read() };
+            Word::from(value)
+        }
         Type::Pointer => {
             let value = unsafe { ptr.cast::<*mut ()>().read() };
             Word(value)
@@ -920,6 +635,12 @@ pub unsafe fn write(ty: Type, value: Word, ptr: *mut u8) {
             let value: i64 = value.try_into().unwrap();
             unsafe {
                 ptr.cast::<i64>().write(value);
+            }
+        }
+        Type::Isize => {
+            let value: isize = value.try_into().unwrap();
+            unsafe {
+                ptr.cast::<isize>().write(value);
             }
         }
         Type::Pointer => {

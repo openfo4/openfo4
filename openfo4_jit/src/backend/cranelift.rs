@@ -148,6 +148,7 @@ impl Backend for CraneliftModule {
                 Type::I64 => ir::types::I64,
                 Type::F32 => ir::types::F32,
                 Type::F64 => ir::types::F64,
+                Type::Isize => ptr_type,
                 Type::Pointer => ptr_type,
             }
         };
@@ -314,6 +315,22 @@ impl Backend for CraneliftModule {
                                     _ => unreachable!(),
                                 };
 
+                                values[dst.0] = Some(res);
+                                added_inst_count += 1;
+                            }
+                            Instruction::PtrConst(value, dst) => {
+                                let res = builder.ins().iconst(
+                                    map_type(Type::Pointer),
+                                    i64::try_from(value.0.expose_provenance()).unwrap(),
+                                );
+                                values[dst.0] = Some(res);
+                                added_inst_count += 1;
+                            }
+                            Instruction::PtrOffset { ptr, offset, dst } => {
+                                let base = values[ptr.0].unwrap();
+                                let offset = values[offset.0].unwrap();
+
+                                let res = builder.ins().iadd(base, offset);
                                 values[dst.0] = Some(res);
                                 added_inst_count += 1;
                             }
@@ -1089,6 +1106,7 @@ fn map_type(ptr_type: ir::Type, ty: Type) -> ir::Type {
         Type::I64 => ir::types::I64,
         Type::F32 => ir::types::F32,
         Type::F64 => ir::types::F64,
+        Type::Isize => ptr_type,
         Type::Pointer => ptr_type,
     }
 }

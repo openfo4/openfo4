@@ -1,11 +1,12 @@
 use std::mem::offset_of;
+use std::ptr;
 
 use openfo4_jit::{FloatCompareOp, IntCompareOp, Type as JitType, Value as JitValue};
 
 use crate::compiler::codegen::function::type_to_id;
 use crate::compiler::codegen::hir::lowering::malloc::call_malloc;
 use crate::compiler::codegen::hir::lowering::{
-    BOOL_TYPE, FLOAT_TYPE, INT_TYPE, PTR_TYPE, Translator, string,
+    BOOL_TYPE, FLOAT_TYPE, INT_TYPE, ISIZE_TYPE, PTR_TYPE, Translator, string,
 };
 use crate::compiler::codegen::hir::{
     ArrayAdd, ArrayFind, ArrayFindStruct, ArrayInsert, ArrayRemove, Literal, Null, Value,
@@ -29,7 +30,7 @@ pub fn array_length(translator: &mut Translator<'_>, array: &Value<Null>, dst: &
 
     let len = translator
         .builder
-        .load(PTR_TYPE, array, offset_of!(ArrayObject, len));
+        .load(ISIZE_TYPE, array, offset_of!(ArrayObject, len));
     let len = translator.builder.ireduce(len, INT_TYPE);
     translator.builder.jump(final_block, &[len]);
 
@@ -85,7 +86,7 @@ pub fn array_create(
     elem_ty: TypeId,
 ) {
     let len = translator.load(len);
-    let len_wide = translator.builder.uextend(len, PTR_TYPE);
+    let len_wide = translator.builder.uextend(len, ISIZE_TYPE);
     let ptr = call_malloc(translator, elem_ty, len_wide);
     let arr = create_array_object(translator, ptr, len);
     translator.store(array, arr);
@@ -97,7 +98,7 @@ pub fn array_clear(translator: &mut Translator<'_>, array: &Value<Null>) {
     // Abort if array == null.
     translator.assert_true(array);
 
-    let zero = translator.builder.iconst(PTR_TYPE, 0);
+    let zero = translator.builder.iconst(ISIZE_TYPE, 0);
     translator
         .builder
         .store(zero, array, offset_of!(ArrayObject, len));
@@ -120,7 +121,7 @@ pub fn array_add(translator: &mut Translator<'_>, op: &ArrayAdd) {
     }
 
     let entry_block = translator.builder.create_block(&[]);
-    let loop_block = translator.builder.create_block(&[PTR_TYPE]);
+    let loop_block = translator.builder.create_block(&[ISIZE_TYPE]);
     let teminate_block = translator.builder.create_block(&[]);
     let exit_block = translator.builder.create_block(&[]);
 
@@ -131,14 +132,14 @@ pub fn array_add(translator: &mut Translator<'_>, op: &ArrayAdd) {
         .brif(count, entry_block, &[], exit_block, &[]);
     translator.builder.switch_to_block(entry_block);
 
-    let count_wide = translator.builder.uextend(count, PTR_TYPE);
+    let count_wide = translator.builder.uextend(count, ISIZE_TYPE);
 
     let ptr = translator
         .builder
         .load(PTR_TYPE, array, offset_of!(ArrayObject, ptr));
     let len = translator
         .builder
-        .load(PTR_TYPE, array, offset_of!(ArrayObject, len));
+        .load(ISIZE_TYPE, array, offset_of!(ArrayObject, len));
 
     let new_len = translator.builder.iadd(len, count_wide);
     let new_ptr = call_malloc(translator, op.elem_ty, new_len);
@@ -159,7 +160,7 @@ pub fn array_add(translator: &mut Translator<'_>, op: &ArrayAdd) {
         let ty = translator.lowered_ty(&op.value);
         let stride = ty.size();
         let offset = translator.builder.imul_imm(index, stride);
-        let addr = translator.builder.iadd(new_ptr, offset);
+        let addr = translator.builder.ptroffset(new_ptr, offset);
 
         translator.builder.store(value, addr, 0);
 
@@ -205,12 +206,12 @@ pub fn array_insert(translator: &mut Translator<'_>, op: &ArrayInsert) {
         .load(PTR_TYPE, array, offset_of!(ArrayObject, ptr));
     let old_len = translator
         .builder
-        .load(PTR_TYPE, array, offset_of!(ArrayObject, len));
+        .load(ISIZE_TYPE, array, offset_of!(ArrayObject, len));
 
     let new_len = translator.builder.iadd_imm(old_len, 1);
     let new_ptr = call_malloc(translator, op.elem_ty, new_len);
 
-    let index_wide = translator.builder.uextend(index, PTR_TYPE);
+    let index_wide = translator.builder.uextend(index, ISIZE_TYPE);
     let ty = translator.lowered_ty(&op.value);
     let stride = ty.size();
 
@@ -226,16 +227,16 @@ pub fn array_insert(translator: &mut Translator<'_>, op: &ArrayInsert) {
     let copy_trailing_bytes = translator.builder.imul_imm(copy_trailing_elems, stride);
     let index_plus_one = translator.builder.iadd_imm(index_wide, 1);
     let trailing_src_offset = translator.builder.imul_imm(index_wide, stride);
-    let trailing_src_ptr = translator.builder.iadd(old_ptr, trailing_src_offset);
+    let trailing_src_ptr = translator.builder.ptroffset(old_ptr, trailing_src_offset);
     let trailing_dst_offset = translator.builder.imul_imm(index_plus_one, stride);
-    let trailing_dst_ptr = translator.builder.iadd(new_ptr, trailing_dst_offset);
+    let trailing_dst_ptr = translator.builder.ptroffset(new_ptr, trailing_dst_offset);
     translator
         .builder
         .memcpy(trailing_src_ptr, trailing_dst_ptr, copy_trailing_bytes);
 
     // Insert new element.
     let offset = translator.builder.imul_imm(index_wide, stride);
-    let addr = translator.builder.iadd(new_ptr, offset);
+    let addr = translator.builder.ptroffset(new_ptr, offset);
     translator.builder.store(value, addr, 0);
 
     // Update ArrayObject.
@@ -270,10 +271,10 @@ pub fn array_remove(translator: &mut Translator<'_>, op: &ArrayRemove) {
         .load(PTR_TYPE, array, offset_of!(ArrayObject, ptr));
     let old_len = translator
         .builder
-        .load(PTR_TYPE, array, offset_of!(ArrayObject, len));
+        .load(ISIZE_TYPE, array, offset_of!(ArrayObject, len));
 
-    let index_wide = translator.builder.uextend(index, PTR_TYPE);
-    let count_wide = translator.builder.uextend(count, PTR_TYPE);
+    let index_wide = translator.builder.uextend(index, ISIZE_TYPE);
+    let count_wide = translator.builder.uextend(count, ISIZE_TYPE);
     let index_plus_count = translator.builder.iadd(index_wide, count_wide);
 
     let ty = translator.lowered_ty_from_id(op.elem_ty);
@@ -294,9 +295,9 @@ pub fn array_remove(translator: &mut Translator<'_>, op: &ArrayRemove) {
     let copy_trailing_elems = translator.builder.isub(old_len, index_plus_count);
     let copy_trailing_bytes = translator.builder.imul_imm(copy_trailing_elems, stride);
     let trailing_src_offset = translator.builder.imul_imm(index_plus_count, stride);
-    let trailing_src_ptr = translator.builder.iadd(old_ptr, trailing_src_offset);
+    let trailing_src_ptr = translator.builder.ptroffset(old_ptr, trailing_src_offset);
     let trailing_dst_offset = translator.builder.imul_imm(index_wide, stride);
-    let trailing_dst_ptr = translator.builder.iadd(new_ptr, trailing_dst_offset);
+    let trailing_dst_ptr = translator.builder.ptroffset(new_ptr, trailing_dst_offset);
     translator
         .builder
         .memcpy(trailing_src_ptr, trailing_dst_ptr, copy_trailing_bytes);
@@ -321,7 +322,7 @@ pub fn array_find(translator: &mut Translator<'_>, op: &ArrayFind) {
 
     array_find_inner(translator, op, |translator, base_addr, index| {
         let offset = translator.builder.imul_imm(index, stride);
-        let addr = translator.builder.iadd(base_addr, offset);
+        let addr = translator.builder.ptroffset(base_addr, offset);
         translator.builder.load(ty, addr, 0)
     });
 }
@@ -367,7 +368,7 @@ pub fn array_find_struct(translator: &mut Translator<'_>, op: &ArrayFindStruct) 
         },
         |translator, base_addr, index| {
             let offset = translator.builder.imul_imm(index, stride);
-            let addr = translator.builder.iadd(base_addr, offset);
+            let addr = translator.builder.ptroffset(base_addr, offset);
             let struct_addr = translator.builder.load(PTR_TYPE, addr, 0);
             translator
                 .builder
@@ -393,15 +394,15 @@ where
         .load(PTR_TYPE, array, offset_of!(ArrayObject, ptr));
     let len = translator
         .builder
-        .load(PTR_TYPE, array, offset_of!(ArrayObject, len));
+        .load(ISIZE_TYPE, array, offset_of!(ArrayObject, len));
 
     // FIXME: What with other negative indices.
 
-    let entry_block = translator.builder.create_block(&[PTR_TYPE]);
-    let body_block = translator.builder.create_block(&[PTR_TYPE]);
+    let entry_block = translator.builder.create_block(&[ISIZE_TYPE]);
+    let body_block = translator.builder.create_block(&[ISIZE_TYPE]);
     let terminator_block = translator.builder.create_block(&[INT_TYPE]);
 
-    let start_index_wide = translator.builder.uextend(start_index, PTR_TYPE);
+    let start_index_wide = translator.builder.uextend(start_index, ISIZE_TYPE);
 
     // The value `-1` indicates the end of the array.
     let negative_one = translator.builder.iconst(INT_TYPE, -1);
@@ -487,10 +488,10 @@ fn array_addr_at_index(
         .builder
         .load(PTR_TYPE, array, offset_of!(ArrayObject, ptr));
 
-    let index = translator.builder.uextend(index, PTR_TYPE);
+    let index = translator.builder.uextend(index, ISIZE_TYPE);
     let offset = translator.builder.imul_imm(index, elem_ty.size());
 
-    let addr = translator.builder.iadd(ptr, offset);
+    let addr = translator.builder.ptroffset(ptr, offset);
     addr
 }
 
@@ -516,11 +517,11 @@ fn emit_array_bounds_check(
     // Bounds check
     let array_len = translator
         .builder
-        .load(PTR_TYPE, array, offset_of!(ArrayObject, len));
+        .load(ISIZE_TYPE, array, offset_of!(ArrayObject, len));
 
     // Papyrus integers are i32, but the array len is usize.
-    let index_wide = translator.builder.uextend(index, PTR_TYPE);
-    let count_wide = translator.builder.uextend(count, PTR_TYPE);
+    let index_wide = translator.builder.uextend(index, ISIZE_TYPE);
+    let count_wide = translator.builder.uextend(count, ISIZE_TYPE);
     let index_plus_count = translator.builder.iadd(index_wide, count_wide);
 
     // Negative indices are always out of bounds.
@@ -548,10 +549,10 @@ fn emit_array_bounds_check(
 }
 
 fn create_array_object(translator: &mut Translator<'_>, ptr: JitValue, len: JitValue) -> JitValue {
-    let one = translator.builder.iconst(PTR_TYPE, 1);
+    let one = translator.builder.iconst(ISIZE_TYPE, 1);
     let array = call_malloc(translator, translator.data.resources.primitives.array, one);
 
-    let len = translator.builder.uextend(len, PTR_TYPE);
+    let len = translator.builder.uextend(len, ISIZE_TYPE);
 
     translator
         .builder
@@ -609,7 +610,7 @@ pub fn array_cast<F>(
 
     {
         translator.builder.switch_to_block(array_is_null_block);
-        let null = translator.builder.iconst(PTR_TYPE, 0);
+        let null = translator.builder.ptrconst(ptr::null::<()>());
         translator.store(dst, null);
         translator.builder.jump(final_block, &[]);
     }
@@ -621,7 +622,7 @@ pub fn array_cast<F>(
         .load(PTR_TYPE, array, offset_of!(ArrayObject, ptr));
     let len = translator
         .builder
-        .load(PTR_TYPE, array, offset_of!(ArrayObject, len));
+        .load(ISIZE_TYPE, array, offset_of!(ArrayObject, len));
 
     let dst_base_ptr = call_malloc(translator, dst_ty, len);
 
@@ -631,11 +632,11 @@ pub fn array_cast<F>(
     let src_stride = src_ty.size();
     let dst_stride = dst_ty.size();
 
-    let loop_cond_block = translator.builder.create_block(&[PTR_TYPE]);
-    let loop_body_block = translator.builder.create_block(&[PTR_TYPE]);
+    let loop_cond_block = translator.builder.create_block(&[ISIZE_TYPE]);
+    let loop_body_block = translator.builder.create_block(&[ISIZE_TYPE]);
     let terminator_block = translator.builder.create_block(&[]);
 
-    let zero_usize = translator.builder.iconst(PTR_TYPE, 0);
+    let zero_usize = translator.builder.iconst(ISIZE_TYPE, 0);
     translator.builder.jump(loop_cond_block, &[zero_usize]);
 
     {
@@ -654,13 +655,13 @@ pub fn array_cast<F>(
         let index = translator.builder.block_params(loop_body_block)[0];
 
         let src_offset = translator.builder.imul_imm(index, src_stride);
-        let src_addr = translator.builder.iadd(src_base_ptr, src_offset);
+        let src_addr = translator.builder.ptroffset(src_base_ptr, src_offset);
         let src_value = translator.builder.load(src_ty, src_addr, 0);
 
         let dst_value = map_elem(translator, src_value);
 
         let dst_offset = translator.builder.imul_imm(index, dst_stride);
-        let dst_addr = translator.builder.iadd(dst_base_ptr, dst_offset);
+        let dst_addr = translator.builder.ptroffset(dst_base_ptr, dst_offset);
         translator.builder.store(dst_value, dst_addr, 0);
 
         let next_index = translator.builder.iadd_imm(index, 1);
@@ -670,7 +671,7 @@ pub fn array_cast<F>(
     {
         translator.builder.switch_to_block(terminator_block);
 
-        let one = translator.builder.iconst(PTR_TYPE, 1);
+        let one = translator.builder.iconst(ISIZE_TYPE, 1);
         let dst_array = call_malloc(translator, translator.data.resources.primitives.array, one);
 
         translator
