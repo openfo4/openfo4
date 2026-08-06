@@ -295,7 +295,8 @@ impl Func {
         CallUnchecked {
             ctx,
             func: self,
-            raw_ctx: None,
+            raw_ctx: MaybeUninit::uninit(),
+            raw_ctx_init: false,
             params,
             returns,
             _pinned: PhantomPinned,
@@ -465,9 +466,10 @@ where
 pub struct CallUnchecked<'a, 'b, T> {
     func: &'a Func,
     ctx: &'a mut Context<'b, T>,
-    raw_ctx: Option<RawContext>,
     params: *const RawVal,
     returns: *mut RawVal,
+    raw_ctx: MaybeUninit<RawContext>,
+    raw_ctx_init: bool,
     // We must not move the RawContext.
     _pinned: PhantomPinned,
 }
@@ -481,7 +483,8 @@ where
     fn poll(self: Pin<&mut Self>, cx: &mut task::Context<'_>) -> Poll<Self::Output> {
         let this = unsafe { self.get_unchecked_mut() };
 
-        let raw_ctx = this.raw_ctx.get_or_insert_with(|| {
+        if !this.raw_ctx_init {
+            this.raw_ctx_init = true;
             debug_assert_eq!(this.ctx.stack.size(), 0);
 
             this.ctx.stack.func = Some(this.func.func.as_ptr());
@@ -489,7 +492,7 @@ where
             // Allocate enough stack space for the callee prologue.
             this.ctx.stack.alloc(size_of::<usize>());
 
-            RawContext {
+            let ctx = RawContext {
                 stack_ptr: RawStack {
                     ptr: this.ctx.stack.as_ptr(),
                     len: 0,
@@ -500,8 +503,12 @@ where
                 panic: PanicMsg::default(),
                 waker: core::ptr::null(),
                 error: UnsafeRefCell::new(None),
-            }
-        });
+            };
+
+            this.raw_ctx.write(ctx);
+        }
+
+        let raw_ctx = unsafe { this.raw_ctx.assume_init_mut() };
 
         raw_ctx.stack_ptr.len = 0;
         raw_ctx.waker = cx.waker();
@@ -531,6 +538,16 @@ where
                 return Poll::Ready(Err(*err));
             }
             _ => unreachable!(),
+        }
+    }
+}
+
+impl<'a, 'b, T> Drop for CallUnchecked<'a, 'b, T> {
+    fn drop(&mut self) {
+        if self.raw_ctx_init {
+            unsafe {
+                self.raw_ctx.assume_init_drop();
+            }
         }
     }
 }

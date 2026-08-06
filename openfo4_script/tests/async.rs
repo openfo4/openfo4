@@ -54,9 +54,10 @@ fn drop_async_fn() {
         let mut stack = engine.create_stack();
         let mut ctx = Context::new(&engine, &mut stack, Arc::clone(&dropped));
 
-        let mut fut = pin!(func.call_async(&mut ctx, ()));
-
-        assert_matches!(fut.as_mut().poll(&mut cx), Poll::Pending);
+        {
+            let mut fut = pin!(func.call_async(&mut ctx, ()));
+            assert_matches!(fut.as_mut().poll(&mut cx), Poll::Pending);
+        }
 
         drop(stack);
         assert_eq!(*dropped.lock(), true);
