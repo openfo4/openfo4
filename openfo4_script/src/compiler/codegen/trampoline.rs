@@ -1,11 +1,11 @@
 //! Trampline for host to guest transitions
 
-use openfo4_jit::{Compiler, FuncId, Signature, Type};
+use openfo4_jit::{Compiler, FuncId, IntCompareOp, Signature, Type};
 
 use crate::compiler::NativeFunction;
 use crate::compiler::codegen::CodegenData;
 use crate::compiler::codegen::trace::Span;
-use crate::runtime::RawVal;
+use crate::runtime::{RESULT_OK, RawVal};
 
 pub fn generate_host_to_guest_trampoline(
     compiler: &mut Compiler,
@@ -103,7 +103,26 @@ pub fn generate_guest_to_host_trampoline(
     let mut returns = Vec::new();
     if target_signature.returns.len() > 1 {
         let ty = target_signature.returns[0];
+
+        let result_ok_block = builder.create_block(&[]);
+        let result_err_block = builder.create_block(&[]);
+        let merge_block = builder.create_block(&[ty]);
+
+        let is_ok = builder.icmp_imm(result, RESULT_OK, IntCompareOp::Equal);
+        builder.brif(is_ok, result_ok_block, &[], result_err_block, &[]);
+
+        builder.switch_to_block(result_ok_block);
+        let ty = target_signature.returns[0];
         let value = builder.stack_load(stack_returns, ty, 0);
+        builder.jump(merge_block, &[value]);
+
+        builder.switch_to_block(result_err_block);
+        let value = builder.uninit(ty);
+        builder.jump(merge_block, &[value]);
+
+        builder.switch_to_block(merge_block);
+        let value = builder.block_params(merge_block)[0];
+
         returns.push(value);
     }
 
