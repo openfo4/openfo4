@@ -1,3 +1,4 @@
+use bevy_mikktspace::{Geometry, TangentSpace};
 use game_common::components::{Color, Transform};
 use game_core::hierarchy::Hierarchy;
 use glam::{Vec2, Vec3, Vec4};
@@ -54,7 +55,7 @@ impl GltfMesh {
             }
         }
 
-        impl<'a> mikktspace::Geometry for Mikktpsace<'a> {
+        impl<'a> Geometry for Mikktpsace<'a> {
             fn num_faces(&self) -> usize {
                 self.indices.len() / 3
             }
@@ -75,7 +76,13 @@ impl GltfMesh {
                 self.uvs[self.index(face, vert)].to_array()
             }
 
-            fn set_tangent_encoded(&mut self, tangent: [f32; 4], face: usize, vert: usize) {
+            fn set_tangent(
+                &mut self,
+                tangent_space: Option<TangentSpace>,
+                face: usize,
+                vert: usize,
+            ) {
+                let tangent = tangent_space.unwrap_or_default().tangent_encoded();
                 let tangent = Vec4::from_array(tangent);
                 let index = self.index(face, vert);
                 self.tangents[index] = tangent;
@@ -89,7 +96,7 @@ impl GltfMesh {
             uvs: &self.uvs,
             tangents: vec![Vec4::ZERO; len],
         };
-        mikktspace::generate_tangents(&mut mesh);
+        bevy_mikktspace::generate_tangents(&mut mesh).unwrap();
 
         self.tangents = mesh.tangents;
     }

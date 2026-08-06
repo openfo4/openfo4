@@ -1,6 +1,6 @@
+use bevy_mikktspace::{Geometry, TangentSpace};
 use game_tracing::trace_span;
 use glam::{Vec2, Vec3, Vec4};
-use mikktspace::Geometry;
 
 // FIXME: Meshes will be duplicated quite a bit, so
 // we don't want to have it attached to every entity.
@@ -117,7 +117,7 @@ impl Mesh {
             uvs: &self.uvs,
             tangents: vec![Vec4::ZERO; len],
         };
-        mikktspace::generate_tangents(&mut mesh);
+        bevy_mikktspace::generate_tangents(&mut mesh).unwrap();
 
         self.tangents = mesh.tangents;
     }
@@ -271,7 +271,8 @@ impl<'a> Geometry for Mikktpsace<'a> {
         self.uvs[self.index(face, vert)].to_array()
     }
 
-    fn set_tangent_encoded(&mut self, tangent: [f32; 4], face: usize, vert: usize) {
+    fn set_tangent(&mut self, tangent_space: Option<TangentSpace>, face: usize, vert: usize) {
+        let tangent = tangent_space.unwrap_or_default().tangent_encoded();
         let tangent = Vec4::from_array(tangent);
         let index = self.index(face, vert);
         self.tangents[index] = tangent;

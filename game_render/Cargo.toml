@@ -26,7 +26,7 @@ glam = { workspace = true, features = ["bytemuck"] }
 tracing = { workspace = true }
 parking_lot = "0.12.3"
 bitflags = { version = "2.6.0", features = ["bytemuck"] }
-mikktspace = "0.3.0"
+bevy_mikktspace = { version = "1.0.0", features = ["corrected-edge-sorting", "corrected-vertex-welding"] }
 thiserror = "1.0.61"
 bytes = "1.10.1"
 

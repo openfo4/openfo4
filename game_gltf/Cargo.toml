@@ -21,8 +21,7 @@ gltf = "1.4.1"
 image = { version = "0.25.1", default-features = false, features = ["jpeg", "png"] }
 serde_json = "1.0.120"
 thiserror = "1.0.61"
-
-mikktspace = "0.3.0"
+bevy_mikktspace = { version = "1.0.0", features = ["corrected-edge-sorting", "corrected-vertex-welding"] }
 
 [[test]]
 name = "gltf_box"
