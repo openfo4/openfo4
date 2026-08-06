@@ -4,6 +4,7 @@ mod validation;
 
 pub mod resources;
 
+use bytemuck::Zeroable;
 pub use codegen::PscSignature;
 use openfo4_jit::func::HostFunc;
 
@@ -110,4 +111,17 @@ pub struct CompiledClass {
 pub struct CompilerOptions {
     pub validation: bool,
     pub debug: bool,
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Zeroable)]
+#[repr(transparent)]
+pub struct IPtr(*mut ());
+
+unsafe impl Send for IPtr {}
+unsafe impl Sync for IPtr {}
+
+impl From<usize> for IPtr {
+    fn from(value: usize) -> Self {
+        Self(core::ptr::without_provenance_mut(value))
+    }
 }

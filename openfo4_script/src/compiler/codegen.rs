@@ -23,8 +23,8 @@ use crate::compiler::codegen::pex::registry::{
     ClassDef, ClassId, FunctionDef, FunctionId, FunctionStateImpl, Registry, StructId, Type,
 };
 use crate::compiler::codegen::runtime::RuntimeFunctions;
-use crate::compiler::resources::{Resources, TypeId, TypeRepr};
-use crate::compiler::{CompilationResult, CompiledClass, NativeFunction};
+use crate::compiler::resources::{Resources, TypeId, TypeRepr, Words};
+use crate::compiler::{CompilationResult, CompiledClass, IPtr, NativeFunction};
 use crate::engine::Options;
 use crate::{RegisterNativeError, UnknownFunctionError};
 
@@ -221,7 +221,7 @@ impl CodegenPass {
         }
     }
 
-    fn build_vtable_for_class(&self, class: &ClassDef) -> Vec<usize> {
+    fn build_vtable_for_class(&self, class: &ClassDef) -> Vec<IPtr> {
         let mut vtable = Vec::new();
         for func_id in class.functions.new.values() {
             let addr = self.data.function_addrs[func_id];
@@ -315,27 +315,31 @@ impl CodegenPass {
                 vtable[index] = addr;
             }
 
-            let mut data: Vec<usize> = vec![vtables.len()];
+            let mut data: Vec<IPtr> = vec![IPtr::from(vtables.len())];
 
             for (id, vtable) in vtables {
                 let ty = self.data.class_types[&id];
-                data.push(ty.as_bits());
+                data.push(IPtr::from(ty.as_bits()));
+
+                let vtable = Words::ptrs(&vtable);
 
                 let vtable_ptr = self
                     .data
                     .resources
                     .constants
-                    .alloc(bytemuck::cast_slice(&vtable), align_of::<usize>());
-                data.push(vtable_ptr.addr())
+                    .alloc_words(&vtable, align_of::<usize>());
+                data.push(IPtr(vtable_ptr.cast_mut().cast()))
             }
 
             let type_id = self.data.class_types[&class.id];
+
+            let data_words = Words::ptrs(&data);
 
             let header_ptr = self
                 .data
                 .resources
                 .constants
-                .alloc(bytemuck::cast_slice(&data), align_of::<usize>());
+                .alloc_words(&data_words, align_of::<usize>());
             self.data.class_headers.insert(id, data);
 
             // Update the "default value" for the class header ptr.
@@ -343,8 +347,7 @@ impl CodegenPass {
                 Arc::make_mut(&mut self.data.resources.types.get(type_id).unwrap()).clone();
             match &mut ty.repr {
                 TypeRepr::Composite(ty) => {
-                    ty.members[0].default_value =
-                        Some(bytemuck::bytes_of(&header_ptr.addr()).to_vec());
+                    ty.members[0].default_value = Some(Words::ptr(header_ptr.cast_mut().cast()));
                 }
                 _ => unreachable!(),
             }
@@ -491,7 +494,9 @@ impl CodegenPass {
             let func_id = self.data.functions[&id];
             let func = self.compiler.compile_function(func_id);
 
-            self.data.function_addrs.insert(id, func.as_ptr().addr());
+            self.data
+                .function_addrs
+                .insert(id, IPtr(func.as_ptr().cast_mut().cast()));
 
             if let Some(info) = &res.debug {
                 super::debug::write_debug_output(info, &func);
@@ -558,11 +563,11 @@ struct CodegenData {
     class_types: HashMap<ClassId, TypeId>,
     class_field_offsets: HashMap<ClassId, HashMap<Lowercase<String>, usize>>,
     functions: HashMap<FunctionId, FuncId>,
-    function_addrs: HashMap<FunctionId, usize>,
+    function_addrs: HashMap<FunctionId, IPtr>,
     native_funcs: HashMap<FunctionId, NativeFunction>,
     /// Functions defined in the guest that can be called from the host with `extern "C"` ABI.
     native_guest_funcs: HashMap<FunctionId, CompilationResult>,
-    class_headers: HashMap<ClassId, Vec<usize>>,
+    class_headers: HashMap<ClassId, Vec<IPtr>>,
 }
 
 impl CodegenData {

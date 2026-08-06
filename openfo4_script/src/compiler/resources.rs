@@ -7,6 +7,7 @@ use hashbrown::HashMap;
 use parking_lot::Mutex;
 use slab::Slab;
 
+use crate::compiler::IPtr;
 use crate::runtime::ObjectAddr;
 
 /// A collection of all compiled artifacts required for runnable functions.
@@ -154,7 +155,57 @@ pub struct CompositeTypeMember {
     pub offset: usize,
     pub size: usize,
     /// Optional default value of this member.
-    pub default_value: Option<Vec<u8>>,
+    pub default_value: Option<Words>,
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct Words {
+    words: Vec<IPtr>,
+    len: usize,
+}
+
+impl Words {
+    pub fn bytes(bytes: &[u8]) -> Self {
+        let num_words = bytes.len().div_ceil(size_of::<IPtr>());
+        let mut words = vec![IPtr(core::ptr::null_mut()); num_words];
+
+        unsafe {
+            let src = bytes.as_ptr();
+            let dst = words.as_mut_ptr().cast::<u8>();
+            let count = bytes.len();
+            core::ptr::copy_nonoverlapping(src, dst, count);
+        }
+
+        Self {
+            words,
+            len: bytes.len(),
+        }
+    }
+
+    pub fn ptr(ptr: *mut ()) -> Self {
+        Self {
+            words: vec![IPtr(ptr)],
+            len: size_of::<IPtr>(),
+        }
+    }
+
+    pub fn ptrs(ptrs: &[IPtr]) -> Self {
+        Self {
+            words: ptrs.to_vec(),
+            len: ptrs.len() * size_of::<IPtr>(),
+        }
+    }
+
+    pub fn len(&self) -> usize {
+        self.len
+    }
+
+    pub unsafe fn write(&self, dst: *mut u8) {
+        unsafe {
+            let src = self.words.as_ptr();
+            core::ptr::copy_nonoverlapping(src.cast::<u8>(), dst, self.len);
+        }
+    }
 }
 
 /// Pool for constant memory allocation.
@@ -179,6 +230,25 @@ impl ConstantPool {
 
         unsafe {
             core::ptr::copy_nonoverlapping(buf.as_ptr(), ptr, buf.len());
+        }
+
+        ptr
+    }
+
+    pub fn alloc_words(&self, words: &Words, align: usize) -> *const u8 {
+        debug_assert!(align > 0);
+
+        if words.len() == 0 {
+            return core::ptr::dangling();
+        }
+
+        let layout = Layout::from_size_align(words.len, align).unwrap();
+
+        let ptr = unsafe { std::alloc::alloc(layout) };
+        assert!(!ptr.is_null());
+
+        unsafe {
+            words.write(ptr);
         }
 
         ptr

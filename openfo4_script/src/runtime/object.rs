@@ -292,11 +292,7 @@ impl Object {
                 debug_assert_eq!(value.len(), member.size);
 
                 unsafe {
-                    core::ptr::copy_nonoverlapping(
-                        value.as_ptr(),
-                        ptr.add(member.offset),
-                        member.size,
-                    );
+                    value.write(ptr.add(member.offset));
                 }
             }
         }

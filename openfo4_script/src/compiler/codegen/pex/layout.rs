@@ -6,8 +6,8 @@ use openfo4_pex::Value;
 
 use crate::compiler::codegen::pex::registry::{ClassDef, Registry, StructDef, Type};
 use crate::compiler::resources::{
-    self, CompositeType, CompositeTypeMember, PropertyType, Resources, TypeId, TypeInfo,
-    TypeProperty, TypeRepr,
+    self, CompositeType, CompositeTypeMember, Words, PropertyType, Resources, TypeId,
+    TypeInfo, TypeProperty, TypeRepr,
 };
 use crate::runtime::ArrayObject;
 
@@ -59,13 +59,13 @@ pub fn compute_class_layout(
 
         match &field.value {
             Value::Bool(v) => {
-                default_value = vec![u8::from(*v)];
+                default_value = Words::bytes(&[u8::from(*v)]);
             }
             Value::Int(v) => {
-                default_value = v.to_ne_bytes().to_vec();
+                default_value = Words::bytes(&v.to_ne_bytes());
             }
             Value::Float(v) => {
-                default_value = v.to_ne_bytes().to_vec();
+                default_value = Words::bytes(&v.to_ne_bytes());
             }
             Value::String(v) => {
                 let ptr = res.constants.alloc(v.as_bytes(), 1);
@@ -80,7 +80,7 @@ pub fn compute_class_layout(
                     res.primitives.string,
                 );
 
-                default_value = string_ptr.expose_provenance().to_ne_bytes().to_vec();
+                default_value = Words::ptr(string_ptr.cast_mut().cast());
             }
             Value::Null | Value::Ident(_) => {}
         };
@@ -199,15 +199,22 @@ pub fn compute_struct_layout(
     )
 }
 
-fn resolve_ty_and_default_value(res: &Resources, ty: &Type) -> (TypeId, Vec<u8>) {
+fn resolve_ty_and_default_value(res: &Resources, ty: &Type) -> (TypeId, Words) {
     match ty {
-        Type::None => (res.primitives.none, vec![]),
-        Type::Bool => (res.primitives.bool, vec![0; 1]),
-        Type::Int => (res.primitives.int, vec![0; size_of::<i32>()]),
-        Type::Float => (res.primitives.float, vec![0; size_of::<f32>()]),
-        Type::String | Type::Struct(_) | Type::Class(_) | Type::Var | Type::Array(_) => {
-            (res.primitives.pointer, vec![0; size_of::<usize>()])
-        }
+        Type::None => (res.primitives.none, Words::bytes(&[])),
+        Type::Bool => (res.primitives.bool, Words::bytes(&[0; 1])),
+        Type::Int => (
+            res.primitives.int,
+            Words::bytes(&[0; size_of::<i32>()]),
+        ),
+        Type::Float => (
+            res.primitives.float,
+            Words::bytes(&[0; size_of::<f32>()]),
+        ),
+        Type::String | Type::Struct(_) | Type::Class(_) | Type::Var | Type::Array(_) => (
+            res.primitives.pointer,
+            Words::bytes(&[0; size_of::<usize>()]),
+        ),
     }
 }
 
