@@ -326,12 +326,11 @@ impl CompiledFunc {
                 dst,
                 offset,
             } => {
-                let addr: isize = frame.values.get(*addr);
+                let ptr: *mut () = frame.values.get(*addr);
                 let offset: isize = (*offset).into();
 
                 let value = unsafe {
-                    let ptr = addr as *const u8;
-                    let ptr = ptr.add(offset.cast_unsigned());
+                    let ptr = ptr.cast::<u8>().offset(offset);
                     ops::read(*ty, ptr)
                 };
 
@@ -342,15 +341,14 @@ impl CompiledFunc {
                 addr,
                 offset,
             } => {
-                let addr: isize = frame.values.get(*addr);
+                let ptr: *mut () = frame.values.get(*addr);
                 let offset: isize = (*offset).into();
 
                 let ty = frame.values.ty(*value);
                 let value = frame.values.get(*value);
 
                 unsafe {
-                    let ptr = addr as *mut u8;
-                    let ptr = ptr.add(offset.cast_unsigned());
+                    let ptr = ptr.cast::<u8>().offset(offset);
                     ops::write(ty, value, ptr);
                 }
             }

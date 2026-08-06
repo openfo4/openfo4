@@ -186,7 +186,7 @@ impl CompiledFunc {
 
     pub fn as_ptr(&self) -> *const u8 {
         match self {
-            Self::Intepreter(func) => func.index() as *const u8,
+            Self::Intepreter(func) => core::ptr::without_provenance(func.index()),
             Self::Cranelift(func) => func.as_ptr(),
         }
     }
