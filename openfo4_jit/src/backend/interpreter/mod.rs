@@ -175,7 +175,7 @@ impl CompiledFunc {
                 Type::I16 => Word::from(unsafe { ptr.cast::<i16>().read() }),
                 Type::I32 => Word::from(unsafe { ptr.cast::<i32>().read() }),
                 Type::I64 => Word::from(unsafe { ptr.cast::<i64>().read() }),
-                Type::Pointer => Word::from(unsafe { ptr.cast::<isize>().read() }),
+                Type::Pointer => Word(unsafe { ptr.cast::<*mut ()>().read() }),
                 Type::F32 => Word::from(unsafe { ptr.cast::<f32>().read() }),
                 Type::F64 => Word::from(unsafe { ptr.cast::<f64>().read() }),
             };
@@ -442,7 +442,7 @@ impl CompiledFunc {
                 false_block_args,
             } => {
                 let condition: Word = frame.values.get(*condition);
-                let (block, args) = if condition.0 != 0 {
+                let (block, args) = if isize::from(condition) != 0 {
                     (true_block, true_block_args)
                 } else {
                     (false_block, false_block_args)

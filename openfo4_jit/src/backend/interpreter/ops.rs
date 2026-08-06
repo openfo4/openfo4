@@ -882,8 +882,8 @@ pub unsafe fn read(ty: Type, ptr: *const u8) -> Word {
             Word::from(value)
         }
         Type::Pointer => {
-            let value = unsafe { ptr.cast::<isize>().read() };
-            Word::from(value)
+            let value = unsafe { ptr.cast::<*mut ()>().read() };
+            Word(value)
         }
         Type::F32 => {
             let value = unsafe { ptr.cast::<f32>().read() };
@@ -923,9 +923,9 @@ pub unsafe fn write(ty: Type, value: Word, ptr: *mut u8) {
             }
         }
         Type::Pointer => {
-            let value: isize = value.try_into().unwrap();
+            let value: *mut () = value.0;
             unsafe {
-                ptr.cast::<isize>().write(value);
+                ptr.cast::<*mut ()>().write(value);
             }
         }
         Type::F32 => {

@@ -157,20 +157,8 @@ unsafe impl HostType for i64 {}
 unsafe impl HostType for isize {}
 unsafe impl HostType for f32 {}
 unsafe impl HostType for f64 {}
-
-unsafe impl<T: 'static> HostType for *const T {
-    unsafe fn read(ptr: *const u8) -> Self {
-        let addr = unsafe { ptr.cast::<usize>().read() };
-        core::ptr::with_exposed_provenance(addr)
-    }
-}
-
-unsafe impl<T: 'static> HostType for *mut T {
-    unsafe fn read(ptr: *const u8) -> Self {
-        let addr = unsafe { ptr.cast::<usize>().read() };
-        core::ptr::with_exposed_provenance_mut(addr)
-    }
-}
+unsafe impl<T: 'static> HostType for *const T {}
+unsafe impl<T: 'static> HostType for *mut T {}
 
 unsafe fn align_up<T>(ptr: &mut *mut u8)
 where

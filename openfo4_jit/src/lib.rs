@@ -3,6 +3,7 @@ pub mod func;
 mod backend;
 
 use std::fmt::{self, Debug, Formatter};
+use std::ptr;
 
 use game_common::collections::vec_map::{Index, VecMap};
 use slab::Slab;
@@ -145,11 +146,17 @@ pub struct Signature {
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Type {
+    /// An integer type with 8 bits. Equivalent to the [`i8`] type.
     I8,
+    /// An integer type with 16 bits. Equivalent to the [`i16`] type.
     I16,
+    /// An integer type with 32 bits. Equivalent to the [`i32`] type.
     I32,
+    /// An integer type with 64 bits. Equivalent to the [`i64`] type.
     I64,
+    /// A floating point type with 32 bits. Equivalent to the [`f32`] type.
     F32,
+    /// A floating point type with 64 bits. Equivalent to the [`f64`] type.
     F64,
     /// The pointer size of the current architecture.
     Pointer,
@@ -1683,7 +1690,7 @@ pub enum Imm {
 
 impl Imm {
     fn to_word(&self) -> Word {
-        Word(match *self {
+        let val: i64 = match *self {
             Self::I8(v) => v.into(),
             Self::I16(v) => v.into(),
             Self::I32(v) => v.into(),
@@ -1698,7 +1705,12 @@ impl Imm {
 
                 v as _
             }
-        })
+        };
+
+        let val: isize = val.try_into().unwrap();
+        let val = val.cast_unsigned();
+
+        Word(ptr::without_provenance_mut(val))
     }
 }
 
@@ -1726,19 +1738,22 @@ impl_int_imm_from!(i32, u32, I32);
 impl_int_imm_from!(i64, u64, I64);
 impl_int_imm_from!(isize, usize, Isize);
 
+/// A immediate value.
+// A word needs to be represented as pointer internally to preserve
+// provenance. All integer values always have an invalid provenance.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 #[repr(transparent)]
-struct Word(i64);
+struct Word(*mut ());
 
 impl From<Word> for i64 {
     fn from(value: Word) -> Self {
-        value.0
+        isize::from(value).try_into().unwrap()
     }
 }
 
 impl From<Word> for isize {
     fn from(value: Word) -> Self {
-        value.0.try_into().unwrap()
+        value.0.addr().cast_signed()
     }
 }
 
@@ -1746,7 +1761,7 @@ impl TryFrom<Word> for i8 {
     type Error = ();
 
     fn try_from(value: Word) -> Result<Self, Self::Error> {
-        i8::try_from(value.0).map_err(|_| ())
+        i64::from(value).try_into().map_err(|_| ())
     }
 }
 
@@ -1754,7 +1769,7 @@ impl TryFrom<Word> for i16 {
     type Error = ();
 
     fn try_from(value: Word) -> Result<Self, Self::Error> {
-        i16::try_from(value.0).map_err(|_| ())
+        i64::from(value).try_into().map_err(|_| ())
     }
 }
 
@@ -1762,7 +1777,7 @@ impl TryFrom<Word> for i32 {
     type Error = ();
 
     fn try_from(value: Word) -> Result<Self, Self::Error> {
-        i32::try_from(value.0).map_err(|_| ())
+        i64::from(value).try_into().map_err(|_| ())
     }
 }
 
@@ -1818,13 +1833,13 @@ impl From<isize> for Word {
 
 impl From<f32> for Word {
     fn from(value: f32) -> Self {
-        Self(value.to_bits().cast_signed().into())
+        Imm::I32(value.to_bits().cast_signed()).to_word()
     }
 }
 
 impl From<f64> for Word {
     fn from(value: f64) -> Self {
-        Self(value.to_bits().cast_signed().into())
+        Imm::I64(value.to_bits().cast_signed()).to_word()
     }
 }
 
