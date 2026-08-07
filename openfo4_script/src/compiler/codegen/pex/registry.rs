@@ -405,6 +405,39 @@ impl Type {
             }
         }
     }
+
+    pub fn to_string(&self, registry: &Registry) -> String {
+        let mut buf = String::new();
+
+        let mut ty = self;
+        loop {
+            buf.push_str(match ty {
+                Self::None => "none",
+                Self::Bool => "bool",
+                Self::Int => "int",
+                Self::Float => "float",
+                Self::String => "string",
+                Self::Var => "var",
+                Self::Struct(id) => {
+                    let st = registry.struct_(*id).unwrap();
+                    &st.debug_name
+                }
+                Self::Class(id) => {
+                    let class = registry.class(*id).unwrap();
+                    &class.debug_name
+                }
+                Self::Array(_) => "[]",
+            });
+
+            if let Self::Array(next) = ty {
+                ty = next;
+            } else {
+                break;
+            }
+        }
+
+        buf
+    }
 }
 
 #[derive(Clone, Debug)]

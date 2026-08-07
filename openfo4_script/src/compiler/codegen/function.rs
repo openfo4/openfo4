@@ -1,3 +1,5 @@
+use std::fmt::Write;
+
 use game_common::string::Lowercase;
 use hashbrown::HashMap;
 use openfo4_jit::{Compiler, FuncId, Signature, Type as JitType};
@@ -124,7 +126,7 @@ pub fn translate_function(
         if enable_debug {
             debug = Some(Box::new(DebugInfo {
                 name: format!("{}.{}", class.debug_name, func.debug_name),
-                pex: "TODO".into(),
+                pex: format_pex(data, func),
                 hir: f.debug_text(data),
             }));
         }
@@ -1310,4 +1312,53 @@ pub fn type_to_id(data: &CodegenData, ty: &Type) -> TypeId {
         Type::Struct(id) => data.struct_types[id],
         Type::Array(_) => data.resources.primitives.array,
     }
+}
+
+fn format_pex(data: &CodegenData, func: &FunctionDef) -> String {
+    let mut pex = String::new();
+
+    let uses_states = func.states.len() > 1;
+
+    for (id, imp) in &func.states {
+        if uses_states {
+            match id {
+                StateId::Named(name) => {
+                    writeln!(pex, "state = \"{}\":", name).unwrap();
+                }
+                StateId::Default => {
+                    writeln!(pex, "state = default").unwrap();
+                }
+            }
+        }
+
+        match imp {
+            FunctionStateImpl::Body(body) => {
+                for (local, ty) in &body.locals {
+                    if uses_states {
+                        pex.push_str("  ");
+                    }
+
+                    writeln!(pex, "local {}: {}", local, ty.to_string(&data.registry)).unwrap();
+                }
+
+                for ins in &body.instructions {
+                    if uses_states {
+                        pex.push_str("  ");
+                    }
+
+                    writeln!(pex, "{}", ins.text()).unwrap();
+                }
+            }
+            FunctionStateImpl::Call(id) => {
+                if uses_states {
+                    pex.push_str("  ");
+                }
+
+                let callee = data.registry.function(*id).unwrap();
+                writeln!(pex, "-> {}", callee.debug_name).unwrap();
+            }
+        }
+    }
+
+    pex
 }
