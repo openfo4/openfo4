@@ -22,6 +22,7 @@ pub use stack::Stack;
 use crate::compiler::PscSignature;
 use crate::compiler::resources::TypeId;
 use crate::engine::{Engine, EngineShared};
+use crate::runtime::host_functions::{enter_span, exit_span};
 
 pub(crate) const RESULT_OK: i32 = 0;
 pub(crate) const RESULT_ERROR: i32 = 1;
@@ -307,7 +308,7 @@ pub struct FalliableAsyncFnMarker<'a>(PhantomData<fn(&'a ())>);
 /// A native host function that can be called from the guest.
 pub trait IntoFunc<T, Marker, Params, Returns> {
     #[doc(hidden)]
-    fn into_func(self, signature: PscSignature) -> HostFunc;
+    fn into_func(self, signature: PscSignature, name: String) -> HostFunc;
 
     #[doc(hidden)]
     fn signature() -> Signature;
@@ -329,8 +330,10 @@ macro_rules! impl_into_func {
                 $returns: NativeType,
             )*
         {
-            fn into_func(self, signature: PscSignature) -> HostFunc {
+            fn into_func(self, signature: PscSignature, name: String) -> HostFunc {
                 IntoHostFunc::into_host_func(move |ctx: *const RawContext, $($params: $params),*| -> (i32 $(,MaybeUninit<$returns>)*) {
+                    let _span = Span::new(ctx.cast_mut(), &name);
+
                     try_call!(ctx, $($returns),* => || {
                         let ctx = unsafe { &*ctx };
 
@@ -386,8 +389,10 @@ macro_rules! impl_into_func {
                 $returns: NativeType,
             )*
         {
-            fn into_func(self, signature: PscSignature) -> HostFunc {
+            fn into_func(self, signature: PscSignature, name: String) -> HostFunc {
                 IntoHostFunc::into_host_func(move |ctx: *const RawContext, $($params: $params),*| -> (i32 $(,MaybeUninit<$returns>)*) {
+                    let _span = Span::new(ctx.cast_mut(), &name);
+
                     try_call!(ctx, $($returns),* => || {
                         let ctx = unsafe { &*ctx };
 
@@ -434,8 +439,10 @@ macro_rules! impl_into_func {
                 $returns: NativeType,
             )*
         {
-            fn into_func(self, signature: PscSignature) -> HostFunc {
+            fn into_func(self, signature: PscSignature, name: String) -> HostFunc {
                 IntoHostFunc::into_host_func(move |ctx: *const RawContext, $($params: $params),*| -> (i32 $(,MaybeUninit<$returns>)*) {
+                    let _span = Span::new(ctx.cast_mut(), &name);
+
                     try_call!(ctx, $($returns),* => || {
                         let ctx = unsafe { &*ctx };
                         let stack = unsafe { &mut *ctx.stack };
@@ -497,8 +504,10 @@ macro_rules! impl_into_func {
                 $returns: NativeType,
             )*
         {
-            fn into_func(self, signature: PscSignature) -> HostFunc {
+            fn into_func(self, signature: PscSignature, name: String) -> HostFunc {
                 IntoHostFunc::into_host_func(move |ctx: *const RawContext, $($params: $params),*| -> (i32 $(,MaybeUninit<$returns>)*) {
+                    let _span = Span::new(ctx.cast_mut(), &name);
+
                     try_call!(ctx, $($returns),* => || {
                         let ctx = unsafe { &*ctx };
                         let stack = unsafe { &mut *ctx.stack };
@@ -888,3 +897,24 @@ macro_rules! try_call {
 }
 
 use try_call;
+
+struct Span {
+    ctx: *mut RawContext,
+    // The returned id must be dropped on the same thread,
+    // i.e. we are not Send/Sync.
+    id: usize,
+}
+
+impl Span {
+    fn new(ctx: *mut RawContext, s: &str) -> Self {
+        let id = enter_span(ctx, s.as_ptr(), s.len());
+
+        Self { ctx, id }
+    }
+}
+
+impl Drop for Span {
+    fn drop(&mut self) {
+        exit_span(self.ctx, self.id);
+    }
+}

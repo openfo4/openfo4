@@ -95,10 +95,11 @@ impl Engine {
             .get_mut()
             .compute_function_signature(class, func)
             .map_err(|err| RegisterNativeError::UnknownFunction(err))?;
+        let name = format!("{}.{}", class, func);
 
         let _lock = self.shared.call_table_lock.write();
 
-        let host_func = f.into_func(sig);
+        let host_func = f.into_func(sig, name);
 
         let mut signature = F::signature();
         // Our VM context pointer.
