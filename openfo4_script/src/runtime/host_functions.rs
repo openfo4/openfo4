@@ -6,37 +6,10 @@ use openfo4_jit::func::HostType;
 use tracing::span::EnteredSpan;
 
 use crate::compiler::resources::TypeId;
-use crate::runtime::{Error, ObjectAddr, RawContext, RawVal};
+use crate::runtime::{Error, ObjectAddr, RawContext};
 
 unsafe impl HostType for TypeId {}
 unsafe impl HostType for ObjectAddr {}
-
-pub fn call_host_trampoline(
-    ctx: *mut RawContext,
-    index: usize,
-    params: *const RawVal,
-    returns: *mut RawVal,
-) -> i32 {
-    match catch_unwind(AssertUnwindSafe(|| {
-        // SAFETY: We have locked the call table before any guest function is called.
-        let call_table = unsafe { (*(*ctx).state).call_table.borrow() };
-        let func = &call_table.functions[index];
-        func(ctx, params, returns)
-    })) {
-        Ok(v) => v,
-        #[cfg(panic = "unwind")]
-        Err(msg) => {
-            let ctx = unsafe { &mut *ctx };
-            ctx.panic.set(msg);
-            // Value does not matter, except that it must be non-zero,
-            // but we set it to a value that cannot be interpreted as any other status.
-            i32::MAX
-        }
-        // Cannot unwind when aborting.
-        #[cfg(not(panic = "unwind"))]
-        Err(_) => unreachable!(),
-    }
-}
 
 pub fn alloc_zeroed(ctx: *mut RawContext, ty: TypeId, array_len: usize) -> *mut u8 {
     abort_on_unwind(|| {

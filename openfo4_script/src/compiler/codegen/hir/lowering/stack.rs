@@ -213,13 +213,13 @@ pub fn generate_suspension_blocks(
             translator.builder.jump(parent, &values);
         } else {
             let mut rvals = Vec::new();
+            rvals.push(result);
+
             if let Some(ty) = func.returns {
                 let ty = translator.lowered_ty_from_id(ty);
                 let value = translator.builder.uninit(ty);
                 rvals.push(value);
             }
-
-            rvals.push(result);
 
             // Root block, we can return now.
             translator.builder.jump(translator.return_block, &rvals);

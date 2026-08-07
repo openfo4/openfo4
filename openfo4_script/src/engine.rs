@@ -2,10 +2,8 @@ use std::fmt::Debug;
 use std::sync::Arc;
 
 use async_lock::Mutex;
-use game_common::cell::UnsafeRefCell;
 use game_common::string::Lowercase;
 use hashbrown::{HashMap, HashSet};
-use openfo4_jit::func::IntoHostFunc;
 use openfo4_jit::{BackendKind, CompilerConfig, Type};
 use openfo4_pex::{Class, Module};
 use parking_lot::RwLock;
@@ -13,8 +11,7 @@ use parking_lot::RwLock;
 use crate::compiler::resources::{Resources, TypeId, TypeInfo};
 use crate::compiler::{CompilationResult, CompilerOptions, Context, NativeFunction};
 use crate::runtime::func::Func;
-use crate::runtime::host_functions::call_host_trampoline;
-use crate::runtime::{CallTable, HostState, IntoFunc, ObjectPool, Stack};
+use crate::runtime::{HostState, IntoFunc, ObjectPool, Stack};
 use crate::{RegisterNativeError, compiler};
 
 #[derive(Clone, Debug)]
@@ -47,10 +44,7 @@ impl Engine {
             resources: Arc::clone(ctx.resources()),
             ctx: Mutex::new(ctx),
             shared: Arc::new(EngineShared {
-                state: HostState {
-                    call_table: UnsafeRefCell::new(CallTable::default()),
-                    pool,
-                },
+                state: HostState { pool },
                 call_table_lock: RwLock::default(),
             }),
             instances: RwLock::new(HashMap::new()),
@@ -103,22 +97,20 @@ impl Engine {
             .map_err(|err| RegisterNativeError::UnknownFunction(err))?;
 
         let _lock = self.shared.call_table_lock.write();
-        let mut call_table = unsafe { self.shared.state.call_table.borrow_mut() };
 
-        let index = f.into_func(&mut call_table, sig);
+        let host_func = f.into_func(sig);
 
         let mut signature = F::signature();
         // Our VM context pointer.
         signature.params.insert(0, Type::Pointer);
         // VM error
-        signature.returns.push(Type::I32);
+        signature.returns.insert(0, Type::I32);
 
         self.ctx.get_mut().define_native_function(
             class,
             func,
             NativeFunction {
-                ptr: call_host_trampoline.into_host_func(),
-                index,
+                func: host_func,
                 signature,
             },
         )

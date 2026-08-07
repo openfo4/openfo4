@@ -1,17 +1,14 @@
 use game_common::string::Lowercase;
 use hashbrown::HashMap;
-use openfo4_jit::func::IntoHostFunc;
 use openfo4_jit::{Compiler, FuncId, Signature, Type as JitType};
 use openfo4_pex::{Instruction, Value};
 
-use crate::compiler::NativeFunction;
 use crate::compiler::codegen::hir::{
     self, AddrCompareOp, FunctionBuilder, Literal, Null, ScalarCompareOp, StringCompareOp, Variable,
 };
 use crate::compiler::codegen::pex::cfg::ControlFlowGraph;
 use crate::compiler::codegen::pex::registry::{ClassId, FunctionBody, FunctionId, StateId};
 use crate::compiler::codegen::trace::Span;
-use crate::compiler::codegen::trampoline::generate_guest_to_host_trampoline;
 use crate::compiler::codegen::{
     ClassDef, CodegenData, Error, FunctionDef, FunctionStateImpl, PscSignature, Type,
     get_parent_class_with_property,
@@ -37,6 +34,7 @@ pub fn declare_function(
     use_native_stubs: bool,
 ) -> Result<FuncId, Error> {
     let signature = translate_function_signature(&func);
+    let id = compiler.declare_function(signature.clone());
 
     if func.is_native {
         tracing::debug!(
@@ -57,11 +55,12 @@ pub fn declare_function(
 
                 native.clone()
             }
-            None if use_native_stubs => NativeFunction {
-                signature: signature.clone(),
-                index: 0,
-                ptr: IntoHostFunc::into_host_func(crate::runtime::host_functions::stub),
-            },
+            // None if use_native_stubs => NativeFunction {
+            //     signature: signature.clone(),
+            //     index: 0,
+            //     ptr: IntoHostFunc::into_host_func(crate::runtime::host_functions::stub),
+            // },
+            None if use_native_stubs => todo!(),
             None => {
                 return Err(Error::UndefNativeFunc(format!(
                     "{}.{}",
@@ -70,19 +69,10 @@ pub fn declare_function(
             }
         };
 
-        let id = generate_guest_to_host_trampoline(
-            compiler,
-            data,
-            &signature,
-            &native,
-            &class.debug_name,
-            &func.debug_name,
-        );
-        Ok(id)
-    } else {
-        let id = compiler.declare_function(signature);
-        Ok(id)
+        compiler.define_native_function(id, native.func.clone());
     }
+
+    Ok(id)
 }
 
 pub fn translate_function_psc_signature(data: &CodegenData, func: &FunctionDef) -> PscSignature {
@@ -159,12 +149,12 @@ pub fn translate_function_signature(func: &FunctionDef) -> Signature {
         params.push(ty.to_jit());
     }
 
+    // VM error value
+    returns.push(JitType::I32);
+
     if func.returns != Type::None {
         returns.push(func.returns.to_jit());
     }
-
-    // VM error value
-    returns.push(JitType::I32);
 
     Signature { params, returns }
 }

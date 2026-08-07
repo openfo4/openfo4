@@ -85,8 +85,7 @@ impl Context {
 
 #[derive(Clone, Debug)]
 pub struct NativeFunction {
-    pub ptr: HostFunc,
-    pub index: usize,
+    pub func: HostFunc,
     pub signature: Signature,
 }
 

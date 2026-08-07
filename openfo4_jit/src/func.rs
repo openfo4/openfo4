@@ -1,5 +1,6 @@
 use std::fmt::{self, Debug, Formatter};
 use std::hint::assert_unchecked;
+use std::mem::MaybeUninit;
 use std::sync::Arc;
 
 pub trait IntoHostFunc<Params, Returns> {
@@ -159,6 +160,11 @@ unsafe impl HostType for f32 {}
 unsafe impl HostType for f64 {}
 unsafe impl<T: 'static> HostType for *const T {}
 unsafe impl<T: 'static> HostType for *mut T {}
+
+// `MaybeUninit` has the same layout as `T`.
+// In some cases the callee may want to return an uninit value,
+// however the caller is required to never read it.
+unsafe impl<T> HostType for MaybeUninit<T> where T: HostType {}
 
 unsafe fn align_up<T>(ptr: &mut *mut u8)
 where

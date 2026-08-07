@@ -83,7 +83,7 @@ pub fn lower_function(
             TypeRepr::Composite(_) => PTR_TYPE,
             _ => unreachable!(),
         };
-        builder.create_block(&[ty, JitType::I32])
+        builder.create_block(&[JitType::I32, ty])
     } else {
         builder.create_block(&[JitType::I32])
     };
@@ -292,7 +292,7 @@ pub fn lower_function(
                         let value = translator.load(value);
                         translator
                             .builder
-                            .jump(translator.return_block, &[value, result]);
+                            .jump(translator.return_block, &[result, value]);
                     } else {
                         translator.builder.jump(translator.return_block, &[result]);
                     }
@@ -1116,10 +1116,10 @@ fn generate_return_block(
     span.exit(data, builder, ctx_ptr);
 
     if function.returns.is_some() {
-        let value = builder.block_params(block)[0];
-        let result = builder.block_params(block)[1];
+        let result = builder.block_params(block)[0];
+        let value = builder.block_params(block)[1];
 
-        builder.return_(&[value, result]);
+        builder.return_(&[result, value]);
     } else {
         let result = builder.block_params(block)[0];
         builder.return_(&[result]);
@@ -1152,7 +1152,7 @@ fn generate_abort_block(
         };
 
         let value = builder.uninit(ty);
-        builder.jump(return_block, &[value, result]);
+        builder.jump(return_block, &[result, value]);
     } else {
         builder.jump(return_block, &[result]);
     }

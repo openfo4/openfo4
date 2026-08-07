@@ -220,6 +220,7 @@ impl Backend for CraneliftModule {
                 FunctionDefinition::Host(def) => {
                     let block = builder.create_block();
                     builder.append_block_params_for_function_params(block);
+                    builder.switch_to_block(block);
                     let params = builder.block_params(block).to_vec();
 
                     let returns = trampoline::call_host_trampoline(

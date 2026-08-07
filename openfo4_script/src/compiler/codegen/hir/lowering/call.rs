@@ -98,23 +98,21 @@ pub fn perform_checked_call(
     //    the stack len written by the callee.
     let stack_ptr = translator.load_stack_ptr();
 
-    let result_pos = if callee_returns_value { 1 } else { 0 };
-
-    let result = res.get(result_pos).unwrap();
+    let result = res[0];
 
     let continue_block = translator.builder.create_block(&[]);
     let suspend_block = translator.builder.create_block(&[]);
 
     let is_ok = translator
         .builder
-        .icmp_imm(*result, RESULT_OK, IntCompareOp::Equal);
+        .icmp_imm(result, RESULT_OK, IntCompareOp::Equal);
 
     translator
         .builder
         .brif(is_ok, continue_block, &[], suspend_block, &[]);
 
     translator.builder.switch_to_block(suspend_block);
-    translator.suspend(suspension_point, stack_ptr, *result);
+    translator.suspend(suspension_point, stack_ptr, result);
 
     translator.builder.switch_to_block(continue_block);
 
@@ -126,7 +124,7 @@ pub fn perform_checked_call(
     if let Some(dst) = dst
         && callee_returns_value
     {
-        let res = res[0];
+        let res = res[1];
         translator.store(dst, res);
     }
 }

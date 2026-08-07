@@ -311,7 +311,7 @@ impl Func {
         Returns: NativeTuple,
     {
         if &self.signature.params[1..] != Params::TYPES
-            || &self.signature.returns[..self.signature.returns.len() - 1] != Returns::TYPES
+            || &self.signature.returns[1..] != Returns::TYPES
         {
             let expected = Signature {
                 params: Params::TYPES.to_vec(),

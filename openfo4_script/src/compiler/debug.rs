@@ -263,10 +263,6 @@ fn format_instruction(ins: &Insn<'_>) -> String {
     #[allow(function_casts_as_integer)]
     static SYMBOLS: LazyLock<HashMap<usize, &'static str>> = LazyLock::new(|| {
         HashMap::from([
-            (
-                host_functions::call_host_trampoline as usize,
-                "call_host_trampoline",
-            ),
             (host_functions::alloc_zeroed as usize, "alloc_zeroed"),
             (
                 host_functions::alloc_stack_frame as usize,

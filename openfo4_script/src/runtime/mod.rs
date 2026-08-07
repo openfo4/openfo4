@@ -7,10 +7,13 @@ pub(crate) mod host_functions;
 use std::any::Any;
 use std::fmt::Display;
 use std::marker::PhantomData;
+use std::mem::MaybeUninit;
+use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::sync::Arc;
 use std::task::{Poll, Waker};
 
 use game_common::cell::UnsafeRefCell;
+use openfo4_jit::func::{HostFunc, HostType, IntoHostFunc};
 use openfo4_jit::{Signature, Type};
 
 pub use object::{ArrayObject, Object, ObjectAddr, ObjectPool, ObjectRef};
@@ -286,24 +289,7 @@ unsafe impl<T> Send for Caller<'_, T> {}
 unsafe impl<T> Sync for Caller<'_, T> {}
 
 pub(crate) struct HostState {
-    pub call_table: UnsafeRefCell<CallTable>,
     pub pool: ObjectPool,
-}
-
-#[derive(Default)]
-pub(crate) struct CallTable {
-    functions: Vec<Box<dyn Fn(*const RawContext, *const RawVal, *mut RawVal) -> i32 + Send + Sync>>,
-}
-
-impl CallTable {
-    pub fn insert<F>(&mut self, func: F) -> usize
-    where
-        F: Fn(*const RawContext, *const RawVal, *mut RawVal) -> i32 + Send + Sync + 'static,
-    {
-        let index = self.functions.len();
-        self.functions.push(Box::new(func));
-        index
-    }
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
@@ -321,8 +307,7 @@ pub struct FalliableAsyncFnMarker<'a>(PhantomData<fn(&'a ())>);
 /// A native host function that can be called from the guest.
 pub trait IntoFunc<T, Marker, Params, Returns> {
     #[doc(hidden)]
-    #[expect(private_interfaces)]
-    fn into_func(self, call_table: &mut CallTable, signature: PscSignature) -> usize;
+    fn into_func(self, signature: PscSignature) -> HostFunc;
 
     #[doc(hidden)]
     fn signature() -> Signature;
@@ -344,49 +329,32 @@ macro_rules! impl_into_func {
                 $returns: NativeType,
             )*
         {
-            #[expect(private_interfaces)]
-            fn into_func(self, call_table: &mut CallTable, signature: PscSignature) -> usize {
-                let callback = move |ctx: *const RawContext, params: *const RawVal, returns: *mut RawVal| -> i32 {
-                    let ctx = unsafe { &*ctx };
+            fn into_func(self, signature: PscSignature) -> HostFunc {
+                IntoHostFunc::into_host_func(move |ctx: *const RawContext, $($params: $params),*| -> (i32 $(,MaybeUninit<$returns>)*) {
+                    try_call!(ctx, $($returns),* => || {
+                        let ctx = unsafe { &*ctx };
 
-                    let mut index = 0;
-                    $(
-                        let $params = unsafe { $params::from_raw(&*params.add(index)) };
-                        index += 1;
-                    )*
+                        let caller = Caller {
+                            ctx,
+                            _marker: PhantomData,
+                        };
 
-                    let caller = Caller {
-                        ctx,
-                        _marker: PhantomData,
-                    };
+                        match self(caller, $($params),*) {
+                            Ok(($($returns),*)) => {
+                                validate_return_value_types(ctx, &($($returns,)*), &signature);
 
-                    match self(caller, $($params),*) {
-                        Ok(($($returns),*)) => {
-                            validate_return_value_types(ctx, &($($returns,)*), &signature);
-
-                            let mut index = 0;
-                            $(
+                                (RESULT_OK $(,MaybeUninit::<$returns>::new($returns))*)
+                            },
+                            Err(err) => {
                                 unsafe {
-                                    returns.add(index).write($returns.to_raw());
-                                    index += 1;
+                                    *ctx.error.borrow_mut() = Some(Box::new(err));
                                 }
-                            )*
 
-                            RESULT_OK
-                        },
-                        // When returning without RESULT_OK we can leave all return
-                        // values uninitialized.
-                        Err(err) => {
-                            unsafe {
-                                *ctx.error.borrow_mut() = Some(Box::new(err));
-                            }
-
-                            RESULT_ERROR
-                        },
-                    }
-                };
-
-                call_table.insert(callback)
+                                (RESULT_ERROR $(,MaybeUninit::<$returns>::zeroed())*)
+                            },
+                        }
+                    })
+                })
             }
 
             fn signature() -> Signature {
@@ -418,37 +386,22 @@ macro_rules! impl_into_func {
                 $returns: NativeType,
             )*
         {
-            #[expect(private_interfaces)]
-            fn into_func(self, call_table: &mut CallTable, signature: PscSignature) -> usize {
-                let callback = move |ctx: *const RawContext, params: *const RawVal, returns: *mut RawVal| -> i32 {
-                    let ctx = unsafe { &*ctx };
+            fn into_func(self, signature: PscSignature) -> HostFunc {
+                IntoHostFunc::into_host_func(move |ctx: *const RawContext, $($params: $params),*| -> (i32 $(,MaybeUninit<$returns>)*) {
+                    try_call!(ctx, $($returns),* => || {
+                        let ctx = unsafe { &*ctx };
 
-                    let mut index = 0;
-                    $(
-                        let $params = unsafe { $params::from_raw(&*params.add(index)) };
-                        index += 1;
-                    )*
+                        let caller = Caller {
+                            ctx,
+                            _marker: PhantomData,
+                        };
 
-                    let caller = Caller {
-                        ctx,
-                        _marker: PhantomData,
-                    };
+                        let ($($returns),*) =  self(caller, $($params),*);
+                        validate_return_value_types(ctx, &($($returns,)*), &signature);
 
-                    let ($($returns),*) =  self(caller, $($params),*);
-                    validate_return_value_types(ctx, &($($returns,)*), &signature);
-
-                    let mut index = 0;
-                    $(
-                        unsafe {
-                            returns.add(index).write($returns.to_raw());
-                            index += 1;
-                        }
-                    )*
-
-                    RESULT_OK
-                };
-
-                call_table.insert(callback)
+                        (RESULT_OK $(,MaybeUninit::<$returns>::new($returns))*)
+                    })
+                })
             }
 
             fn signature() -> Signature {
@@ -481,52 +434,37 @@ macro_rules! impl_into_func {
                 $returns: NativeType,
             )*
         {
-            #[expect(private_interfaces)]
-            fn into_func(self, call_table: &mut CallTable, signature: PscSignature) -> usize {
-                let callback = move |ctx: *const RawContext, params: *const RawVal, returns: *mut RawVal| -> i32 {
-                    let ctx = unsafe { &*ctx };
-                    let stack = unsafe { &mut *ctx.stack };
+            fn into_func(self, signature: PscSignature) -> HostFunc {
+                IntoHostFunc::into_host_func(move |ctx: *const RawContext, $($params: $params),*| -> (i32 $(,MaybeUninit<$returns>)*) {
+                    try_call!(ctx, $($returns),* => || {
+                        let ctx = unsafe { &*ctx };
+                        let stack = unsafe { &mut *ctx.stack };
 
-                    let waker = unsafe { &*ctx.waker };
-                    let mut cx = std::task::Context::from_waker(waker);
+                        let waker = unsafe { &*ctx.waker };
+                        let mut cx = std::task::Context::from_waker(waker);
 
-                    if !stack.future.is_init() {
-                        let mut index = 0;
-                        $(
-                            let $params = unsafe { $params::from_raw(&*params.add(index)) };
-                            index += 1;
-                        )*
+                        if !stack.future.is_init() {
+                            let caller = Caller {
+                                ctx,
+                                _marker: PhantomData,
+                            };
 
-                        let caller = Caller {
-                            ctx,
-                            _marker: PhantomData,
-                        };
-
-                        let future = self(caller, $($params),*).into_future();
-                        stack.future.set(future);
-                    }
-
-                    match unsafe { stack.future.poll::<($($returns),*), Fut::IntoFuture>(&mut cx) } {
-                        Poll::Ready(($($returns),*)) => {
-                            validate_return_value_types(ctx, &($($returns,)*), &signature);
-
-                            let mut index = 0;
-                            $(
-                                unsafe {
-                                    returns.add(index).write($returns.to_raw());
-                                    index += 1;
-                                }
-                            )*
-
-                            RESULT_OK
+                            let future = self(caller, $($params),*).into_future();
+                            stack.future.set(future);
                         }
-                        Poll::Pending => {
-                            RESULT_SUSPEND
-                        }
-                    }
-                };
 
-                call_table.insert(callback)
+                        match unsafe { stack.future.poll::<($($returns),*), Fut::IntoFuture>(&mut cx) } {
+                            Poll::Ready(($($returns),*)) => {
+                                validate_return_value_types(ctx, &($($returns,)*), &signature);
+
+                                (RESULT_OK $(,MaybeUninit::<$returns>::new($returns))*)
+                            }
+                            Poll::Pending => {
+                                (RESULT_SUSPEND $(,MaybeUninit::<$returns>::zeroed())*)
+                            }
+                        }
+                    })
+                })
             }
 
             fn signature() -> Signature {
@@ -559,59 +497,44 @@ macro_rules! impl_into_func {
                 $returns: NativeType,
             )*
         {
-            #[expect(private_interfaces)]
-            fn into_func(self, call_table: &mut CallTable, signature: PscSignature) -> usize {
-                let callback = move |ctx: *const RawContext, params: *const RawVal, returns: *mut RawVal| -> i32 {
-                    let ctx = unsafe { &*ctx };
-                    let stack = unsafe { &mut *ctx.stack };
+            fn into_func(self, signature: PscSignature) -> HostFunc {
+                IntoHostFunc::into_host_func(move |ctx: *const RawContext, $($params: $params),*| -> (i32 $(,MaybeUninit<$returns>)*) {
+                    try_call!(ctx, $($returns),* => || {
+                        let ctx = unsafe { &*ctx };
+                        let stack = unsafe { &mut *ctx.stack };
 
-                    let waker = unsafe { &*ctx.waker };
-                    let mut cx = std::task::Context::from_waker(waker);
+                        let waker = unsafe { &*ctx.waker };
+                        let mut cx = std::task::Context::from_waker(waker);
 
-                    if !stack.future.is_init() {
-                        let mut index = 0;
-                        $(
-                            let $params = unsafe { $params::from_raw(&*params.add(index)) };
-                            index += 1;
-                        )*
+                        if !stack.future.is_init() {
+                            let caller = Caller {
+                                ctx,
+                                _marker: PhantomData,
+                            };
 
-                        let caller = Caller {
-                            ctx,
-                            _marker: PhantomData,
-                        };
-
-                        let future = self(caller, $($params),*).into_future();
-                        stack.future.set(future);
-                    }
-
-                    match unsafe { stack.future.poll::<Result<($($returns),*), Error>, Fut::IntoFuture>(&mut cx) } {
-                        Poll::Ready(Ok(($($returns),*))) => {
-                            validate_return_value_types(ctx, &($($returns,)*), &signature);
-
-                            let mut index = 0;
-                            $(
-                                unsafe {
-                                    returns.add(index).write($returns.to_raw());
-                                    index += 1;
-                                }
-                            )*
-
-                            RESULT_OK
+                            let future = self(caller, $($params),*).into_future();
+                            stack.future.set(future);
                         }
-                        Poll::Ready(Err(err)) => {
-                            unsafe {
-                                *ctx.error.borrow_mut() = Some(Box::new(err));
+
+                        match unsafe { stack.future.poll::<Result<($($returns),*), Error>, Fut::IntoFuture>(&mut cx) } {
+                            Poll::Ready(Ok(($($returns),*))) => {
+                                validate_return_value_types(ctx, &($($returns,)*), &signature);
+
+                                (RESULT_OK $(,MaybeUninit::<$returns>::new($returns))*)
                             }
+                            Poll::Ready(Err(err)) => {
+                                unsafe {
+                                    *ctx.error.borrow_mut() = Some(Box::new(err));
+                                }
 
-                            RESULT_ERROR
+                                (RESULT_ERROR $(,MaybeUninit::<$returns>::zeroed())*)
+                            }
+                            Poll::Pending => {
+                                (RESULT_SUSPEND $(,MaybeUninit::<$returns>::zeroed())*)
+                            }
                         }
-                        Poll::Pending => {
-                            RESULT_SUSPEND
-                        }
-                    }
-                };
-
-                call_table.insert(callback)
+                    })
+                })
             }
 
             fn signature() -> Signature {
@@ -691,7 +614,7 @@ impl_into_func!(A0, A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11 =>);
 impl_into_func!(A0, A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11 => R0);
 
 /// A type that can be send to Papyrus functions.
-pub unsafe trait NativeType: Copy {
+pub unsafe trait NativeType: Copy + HostType {
     const TYPE: Type;
 
     unsafe fn from_raw(val: &RawVal) -> Self;
@@ -944,3 +867,24 @@ impl Display for Error {
         Display::fmt(&self.msg, f)
     }
 }
+
+macro_rules! try_call {
+    ($ctx:expr, $($returns:ty),* => $f:expr) => {{
+        match catch_unwind(AssertUnwindSafe(|| $f())) {
+            Ok(v) => v,
+            #[cfg(panic = "unwind")]
+            Err(msg) => {
+                let ctx = unsafe { &mut *$ctx.cast_mut() };
+                ctx.panic.set(msg);
+                // Value does not matter, except that it must be non-zero,
+                // but we set it to a value that cannot be interpreted as any other status.
+                (i32::MAX $(, MaybeUninit::<$returns>::zeroed())*)
+            }
+            // Cannot unwind when aborting.
+            #[cfg(not(panic = "unwind"))]
+            Err(_) => unreachable!(),
+        }
+    }};
+}
+
+use try_call;
