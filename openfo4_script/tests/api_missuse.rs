@@ -41,7 +41,7 @@ fn call_with_incorrect_object_type() {
     let b = engine.object_pool().insert(b).finalize().addr();
 
     let func = func.typed::<ObjectAddr, ()>().unwrap();
-    func.call(&mut ctx, b).unwrap();
+    func.call(&mut ctx, b).now_or_never().unwrap();
 }
 
 #[test]
@@ -92,7 +92,7 @@ fn return_wrong_type_from_native_func() {
     );
 
     let func = func.typed::<(), ()>().unwrap();
-    func.call(&mut ctx, ()).unwrap();
+    func.call(&mut ctx, ()).now_or_never().unwrap();
 }
 
 #[test]
@@ -118,7 +118,9 @@ fn call_with_incorrect_parameter_count() {
     let mut stack = engine.create_stack();
     let mut ctx = Context::new(&engine, &mut stack, ());
 
-    func.call(&mut ctx, &[Val::F32(0.0)]).unwrap();
+    func.call(&mut ctx, &[Val::F32(0.0)])
+        .now_or_never()
+        .unwrap();
 }
 
 #[test]
@@ -153,5 +155,5 @@ fn return_null_non_nullable_object() {
     let mut stack = engine.create_stack();
     let mut ctx = Context::new(&engine, &mut stack, ());
 
-    func.call(&mut ctx, ()).unwrap();
+    func.call(&mut ctx, ()).now_or_never().unwrap();
 }

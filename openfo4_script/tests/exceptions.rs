@@ -39,7 +39,7 @@ fn call_method_on_null() {
     let mut ctx = Context::new(&engine, &mut stack, ());
 
     let func = func.typed::<(), ()>().unwrap();
-    assert!(func.call(&mut ctx, ()).is_err());
+    assert!(func.call(&mut ctx, ()).now_or_never().is_err());
 }
 
 #[test]
@@ -69,7 +69,7 @@ fn array_get_on_null() {
     let mut ctx = Context::new(&engine, &mut stack, ());
 
     let func = func.typed::<(), ()>().unwrap();
-    assert!(func.call(&mut ctx, ()).is_err());
+    assert!(func.call(&mut ctx, ()).now_or_never().is_err());
 }
 
 #[test]
@@ -101,5 +101,5 @@ fn array_get_out_of_bounds() {
     let mut ctx = Context::new(&engine, &mut stack, ());
 
     let func = func.typed::<(), ()>().unwrap();
-    assert!(func.call(&mut ctx, ()).is_err());
+    assert!(func.call(&mut ctx, ()).now_or_never().is_err());
 }

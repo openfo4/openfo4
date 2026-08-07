@@ -49,7 +49,7 @@ fn array_create() {
     let mut ctx = Context::new(&engine, &mut stack, ());
 
     let func = func.typed::<(), ()>().unwrap();
-    func.call(&mut ctx, ()).unwrap();
+    func.call(&mut ctx, ()).now_or_never().unwrap();
 }
 
 #[test]
@@ -95,7 +95,9 @@ fn array_get() {
     let mut ctx = Context::new(&engine, &mut stack, ());
 
     let func = func.typed::<ObjectAddr, ()>().unwrap();
-    func.call(&mut ctx, array_ptr.addr()).unwrap();
+    func.call(&mut ctx, array_ptr.addr())
+        .now_or_never()
+        .unwrap();
 }
 
 #[test]
@@ -140,7 +142,9 @@ fn array_add() {
     let mut ctx = Context::new(&engine, &mut stack, ());
 
     let func = func.typed::<ObjectAddr, ()>().unwrap();
-    func.call(&mut ctx, array_ptr.addr()).unwrap();
+    func.call(&mut ctx, array_ptr.addr())
+        .now_or_never()
+        .unwrap();
 }
 
 #[test]
@@ -185,7 +189,9 @@ fn array_insert() {
     let mut ctx = Context::new(&engine, &mut stack, ());
 
     let func = func.typed::<ObjectAddr, ()>().unwrap();
-    func.call(&mut ctx, array_ptr.addr()).unwrap();
+    func.call(&mut ctx, array_ptr.addr())
+        .now_or_never()
+        .unwrap();
 }
 
 #[test]
@@ -231,7 +237,9 @@ fn array_clear() {
     let mut ctx = Context::new(&engine, &mut stack, ());
 
     let func = func.typed::<ObjectAddr, ()>().unwrap();
-    func.call(&mut ctx, array_ptr.addr()).unwrap();
+    func.call(&mut ctx, array_ptr.addr())
+        .now_or_never()
+        .unwrap();
 }
 
 #[test]
@@ -281,7 +289,9 @@ fn array_find_int() {
     let mut ctx = Context::new(&engine, &mut stack, ());
 
     let func = func.typed::<ObjectAddr, ()>().unwrap();
-    func.call(&mut ctx, array_ptr.addr()).unwrap();
+    func.call(&mut ctx, array_ptr.addr())
+        .now_or_never()
+        .unwrap();
 }
 
 #[test]
@@ -352,7 +362,9 @@ fn array_find_struct() {
     let mut ctx = Context::new(&engine, &mut stack, ());
 
     let func = func.typed::<ObjectAddr, ()>().unwrap();
-    func.call(&mut ctx, array_ptr.addr()).unwrap();
+    func.call(&mut ctx, array_ptr.addr())
+        .now_or_never()
+        .unwrap();
 }
 
 #[test]
@@ -380,7 +392,7 @@ fn array_len_on_null() {
     let mut ctx = Context::new(&engine, &mut stack, ());
 
     let func = func.typed::<(), i32>().unwrap();
-    assert_eq!(func.call(&mut ctx, ()).unwrap(), 0);
+    assert_eq!(func.call(&mut ctx, ()).now_or_never().unwrap(), 0);
 }
 
 #[test]
@@ -538,5 +550,5 @@ where
     let mut ctx = Context::new(&engine, &mut stack, ());
 
     let func = func.typed::<I, O>().unwrap();
-    func.call(&mut ctx, input)
+    func.call(&mut ctx, input).now_or_never()
 }

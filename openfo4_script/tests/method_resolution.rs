@@ -46,15 +46,15 @@ fn method_resolution_external() {
 
     let f = instance.get_func("F").unwrap();
     let f = f.typed::<ObjectAddr, i32>().unwrap();
-    assert_eq!(f.call(&mut ctx, addr).unwrap(), 3);
+    assert_eq!(f.call(&mut ctx, addr).now_or_never().unwrap(), 3);
 
     let g = instance.get_func("G").unwrap();
     let g = g.typed::<ObjectAddr, i32>().unwrap();
-    assert_eq!(g.call(&mut ctx, addr).unwrap(), 2);
+    assert_eq!(g.call(&mut ctx, addr).now_or_never().unwrap(), 2);
 
     let h = instance.get_func("H").unwrap();
     let h = h.typed::<ObjectAddr, i32>().unwrap();
-    assert_eq!(h.call(&mut ctx, addr).unwrap(), 4);
+    assert_eq!(h.call(&mut ctx, addr).now_or_never().unwrap(), 4);
 }
 
 #[test]
@@ -109,15 +109,15 @@ fn method_resolution_internal() {
 
     let f = instance.get_func("CallF").unwrap();
     let f = f.typed::<ObjectAddr, i32>().unwrap();
-    assert_eq!(f.call(&mut ctx, addr).unwrap(), 3);
+    assert_eq!(f.call(&mut ctx, addr).now_or_never().unwrap(), 3);
 
     let g = instance.get_func("CallG").unwrap();
     let g = g.typed::<ObjectAddr, i32>().unwrap();
-    assert_eq!(g.call(&mut ctx, addr).unwrap(), 2);
+    assert_eq!(g.call(&mut ctx, addr).now_or_never().unwrap(), 2);
 
     let h = instance.get_func("CallH").unwrap();
     let h = h.typed::<ObjectAddr, i32>().unwrap();
-    assert_eq!(h.call(&mut ctx, addr).unwrap(), 4);
+    assert_eq!(h.call(&mut ctx, addr).now_or_never().unwrap(), 4);
 }
 
 #[test]
@@ -158,7 +158,7 @@ fn method_resolution_call_parent() {
 
     let f = instance.get_func("F").unwrap();
     let f = f.typed::<ObjectAddr, i32>().unwrap();
-    assert_eq!(f.call(&mut ctx, addr).unwrap(), 2);
+    assert_eq!(f.call(&mut ctx, addr).now_or_never().unwrap(), 2);
 }
 
 #[test]
@@ -212,7 +212,7 @@ fn class_without_methods() {
 
     let f = instance.get_func("F").unwrap();
     let f = f.typed::<ObjectAddr, i32>().unwrap();
-    assert_eq!(f.call(&mut ctx, addr).unwrap(), 1);
+    assert_eq!(f.call(&mut ctx, addr).now_or_never().unwrap(), 1);
 }
 
 #[test]
@@ -244,5 +244,5 @@ fn class_without_methods_twice() {
 
     let f = instance.get_func("F").unwrap();
     let f = f.typed::<ObjectAddr, i32>().unwrap();
-    assert_eq!(f.call(&mut ctx, addr).unwrap(), 1);
+    assert_eq!(f.call(&mut ctx, addr).now_or_never().unwrap(), 1);
 }

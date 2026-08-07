@@ -50,7 +50,7 @@ fn cast_array() {
     let input = input.finalize().addr();
 
     let func = func.typed::<ObjectAddr, ObjectAddr>().unwrap();
-    let output = func.call(&mut ctx, input).unwrap();
+    let output = func.call(&mut ctx, input).now_or_never().unwrap();
 
     assert_ne!(input, output);
 
@@ -96,7 +96,7 @@ fn class_upcast() {
     let addr = engine.object_pool().insert(type_id).finalize().addr();
 
     let func = func.typed::<ObjectAddr, ObjectAddr>().unwrap();
-    assert_eq!(func.call(&mut ctx, addr).unwrap(), addr);
+    assert_eq!(func.call(&mut ctx, addr).now_or_never().unwrap(), addr);
 }
 
 #[test]
@@ -132,7 +132,7 @@ fn class_downcast() {
     let addr = engine.object_pool().insert(type_id).finalize().addr();
 
     let func = func.typed::<ObjectAddr, ObjectAddr>().unwrap();
-    assert_eq!(func.call(&mut ctx, addr).unwrap(), addr);
+    assert_eq!(func.call(&mut ctx, addr).now_or_never().unwrap(), addr);
 }
 
 #[test]
@@ -169,16 +169,16 @@ fn class_downcast_fail() {
     let addr = engine.object_pool().insert(type_id).finalize().addr();
 
     let func = func.typed::<ObjectAddr, ObjectAddr>().unwrap();
-    assert!(func.call(&mut ctx, addr).is_err());
+    assert!(func.call(&mut ctx, addr).now_or_never().is_err());
 }
 
 #[test]
 fn cast_bool_to_int() {
     cast_test_impl("bool", "int", |_, func, ctx| {
-        let res: i32 = func.call(ctx, false).unwrap();
+        let res: i32 = func.call(ctx, false).now_or_never().unwrap();
         assert_eq!(res, 0);
 
-        let res: i32 = func.call(ctx, true).unwrap();
+        let res: i32 = func.call(ctx, true).now_or_never().unwrap();
         assert_eq!(res, 1);
     });
 }
@@ -186,10 +186,10 @@ fn cast_bool_to_int() {
 #[test]
 fn cast_bool_to_float() {
     cast_test_impl("bool", "float", |_, func, ctx| {
-        let res: f32 = func.call(ctx, false).unwrap();
+        let res: f32 = func.call(ctx, false).now_or_never().unwrap();
         assert_eq!(res, 0.0);
 
-        let res: f32 = func.call(ctx, true).unwrap();
+        let res: f32 = func.call(ctx, true).now_or_never().unwrap();
         assert_eq!(res, 1.0);
     });
 }
@@ -197,10 +197,10 @@ fn cast_bool_to_float() {
 #[test]
 fn cast_int_to_bool() {
     cast_test_impl("int", "bool", |_, func, ctx| {
-        let res: bool = func.call(ctx, 0).unwrap();
+        let res: bool = func.call(ctx, 0).now_or_never().unwrap();
         assert!(!res);
 
-        let res: bool = func.call(ctx, 123).unwrap();
+        let res: bool = func.call(ctx, 123).now_or_never().unwrap();
         assert!(res);
     });
 }
@@ -208,7 +208,7 @@ fn cast_int_to_bool() {
 #[test]
 fn cast_int_to_float() {
     cast_test_impl("int", "float", |_, func, ctx| {
-        let res: f32 = func.call(ctx, 42).unwrap();
+        let res: f32 = func.call(ctx, 42).now_or_never().unwrap();
         assert_eq!(res, 42.0);
     });
 }
@@ -216,10 +216,10 @@ fn cast_int_to_float() {
 #[test]
 fn cast_float_to_bool() {
     cast_test_impl("float", "bool", |_, func, ctx| {
-        let res: bool = func.call(ctx, 0.0).unwrap();
+        let res: bool = func.call(ctx, 0.0).now_or_never().unwrap();
         assert!(!res);
 
-        let res: bool = func.call(ctx, 1.5).unwrap();
+        let res: bool = func.call(ctx, 1.5).now_or_never().unwrap();
         assert!(res);
     });
 }
@@ -227,7 +227,7 @@ fn cast_float_to_bool() {
 #[test]
 fn cast_float_to_int() {
     cast_test_impl("float", "int", |_, func, ctx| {
-        let res: i32 = func.call(ctx, -42.0).unwrap();
+        let res: i32 = func.call(ctx, -42.0).now_or_never().unwrap();
         assert_eq!(res, -42);
     });
 }
@@ -235,7 +235,7 @@ fn cast_float_to_int() {
 #[test]
 fn cast_bool_to_string() {
     cast_test_impl("bool", "string", |engine, func, ctx| {
-        let string = func.call(ctx, true).unwrap();
+        let string = func.call(ctx, true).now_or_never().unwrap();
         let string = unsafe { engine.object_pool().string(string) };
         assert_eq!(string, "true");
     });
@@ -244,7 +244,7 @@ fn cast_bool_to_string() {
 #[test]
 fn cast_int_to_string() {
     cast_test_impl("int", "string", |engine, func, ctx| {
-        let string = func.call(ctx, 32).unwrap();
+        let string = func.call(ctx, 32).now_or_never().unwrap();
         let string = unsafe { engine.object_pool().string(string) };
         assert_eq!(string, "32");
     });
@@ -253,7 +253,7 @@ fn cast_int_to_string() {
 #[test]
 fn cast_float_to_string() {
     cast_test_impl("float", "string", |engine, func, ctx| {
-        let string = func.call(ctx, -42.0).unwrap();
+        let string = func.call(ctx, -42.0).now_or_never().unwrap();
         let string = unsafe { engine.object_pool().string(string) };
         assert_eq!(string, "-42");
     });
@@ -262,7 +262,7 @@ fn cast_float_to_string() {
 #[test]
 fn cast_null_to_class() {
     cast_test_impl("none", "MyClass", |_engine, func, ctx| {
-        let res: ObjectAddr = func.call(ctx, ObjectAddr::NULL).unwrap();
+        let res: ObjectAddr = func.call(ctx, ObjectAddr::NULL).now_or_never().unwrap();
         assert_eq!(res, ObjectAddr::NULL);
     });
 }

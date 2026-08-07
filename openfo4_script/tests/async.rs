@@ -26,7 +26,7 @@ fn suspend_async() {
         let mut stack = engine.create_stack();
         let mut ctx = Context::new(&engine, &mut stack, false);
 
-        let mut fut = pin!(func.call_async(&mut ctx, ()));
+        let mut fut = pin!(func.call(&mut ctx, ()));
 
         assert_matches!(fut.as_mut().poll(&mut cx), Poll::Pending);
         assert_matches!(fut.as_mut().poll(&mut cx), Poll::Ready(Ok(())));
@@ -55,7 +55,7 @@ fn drop_async_fn() {
         let mut ctx = Context::new(&engine, &mut stack, Arc::clone(&dropped));
 
         {
-            let mut fut = pin!(func.call_async(&mut ctx, ()));
+            let mut fut = pin!(func.call(&mut ctx, ()));
             assert_matches!(fut.as_mut().poll(&mut cx), Poll::Pending);
         }
 
@@ -86,7 +86,7 @@ fn async_fn_waker() {
         let mut stack = engine.create_stack();
         let mut ctx = Context::new(&engine, &mut stack, ());
 
-        let fut = pin!(func.call_async(&mut ctx, ()));
+        let fut = pin!(func.call(&mut ctx, ()));
 
         assert_matches!(fut.poll(&mut cx), Poll::Pending);
 
@@ -109,7 +109,7 @@ fn async_fn_use_data_across_await_point() {
         let mut stack = engine.create_stack();
         let mut ctx = Context::new(&engine, &mut stack, 0);
 
-        let mut fut = pin!(func.call_async(&mut ctx, ()));
+        let mut fut = pin!(func.call(&mut ctx, ()));
 
         for _ in 0..3 {
             assert_matches!(fut.as_mut().poll(&mut cx,), Poll::Pending);
@@ -163,7 +163,6 @@ fn suspend_in_callstack() {
         let data = caller.data_mut();
 
         for _ in 0..3 {
-            dbg!("call");
             yield_now().await;
             *data += 1;
         }
@@ -230,7 +229,7 @@ fn suspend_in_callstack() {
     let mut stack = engine.create_stack();
     let mut ctx = Context::new(&engine, &mut stack, 0);
 
-    let mut fut = pin!(func.call_async(&mut ctx, (c.addr(), a.addr(), b.addr())));
+    let mut fut = pin!(func.call(&mut ctx, (c.addr(), a.addr(), b.addr())));
     for _ in 0..6 {
         assert_matches!(fut.as_mut().poll(&mut cx), Poll::Pending);
     }

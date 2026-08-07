@@ -255,7 +255,7 @@ impl Runner {
 
                 let func = instance.get_func(&task.func).unwrap();
 
-                if let Err(err) = func.call_async(&mut ctx, &params).await {
+                if let Err(err) = func.call(&mut ctx, &params).await {
                     tracing::error!("script returned with error: {:?}", err);
                 }
 

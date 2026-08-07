@@ -46,7 +46,7 @@ fn string_constant() {
     let mut ctx = Context::new(&engine, &mut stack, ());
 
     let func = func.typed::<(), ()>().unwrap();
-    func.call(&mut ctx, ()).unwrap();
+    func.call(&mut ctx, ()).now_or_never().unwrap();
 }
 
 #[test]
@@ -89,7 +89,9 @@ fn string_concat() {
     let mut ctx = Context::new(&engine, &mut stack, ());
 
     let func = func.typed::<(ObjectAddr, ObjectAddr), ()>().unwrap();
-    func.call(&mut ctx, (a.addr(), b.addr())).unwrap();
+    func.call(&mut ctx, (a.addr(), b.addr()))
+        .now_or_never()
+        .unwrap();
 }
 
 #[test]
@@ -120,8 +122,8 @@ fn string_cmpeq() {
     let func = func.typed::<ObjectAddr, bool>().unwrap();
 
     let input = engine.object_pool().insert_string("Hello").addr();
-    assert!(func.call(&mut ctx, input).unwrap());
+    assert!(func.call(&mut ctx, input).now_or_never().unwrap());
 
     let input = engine.object_pool().insert_string("NotHello").addr();
-    assert!(!func.call(&mut ctx, input).unwrap());
+    assert!(!func.call(&mut ctx, input).now_or_never().unwrap());
 }

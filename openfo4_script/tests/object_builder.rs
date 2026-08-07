@@ -105,13 +105,13 @@ fn field_without_property() {
 
     let get_a = instance.get_func("GetA").unwrap();
     let get_a = get_a.typed::<ObjectAddr, i32>().unwrap();
-    assert_eq!(get_a.call(&mut ctx, addr).unwrap(), 1);
+    assert_eq!(get_a.call(&mut ctx, addr).now_or_never().unwrap(), 1);
 
     let get_b = instance.get_func("GetC").unwrap();
     let get_c = get_b.typed::<ObjectAddr, ObjectAddr>().unwrap();
-    assert_eq!(get_c.call(&mut ctx, addr).unwrap(), addr);
+    assert_eq!(get_c.call(&mut ctx, addr).now_or_never().unwrap(), addr);
 
     let get_e = instance.get_func("GetE").unwrap();
     let get_e = get_e.typed::<ObjectAddr, bool>().unwrap();
-    assert_eq!(get_e.call(&mut ctx, addr).unwrap(), true);
+    assert_eq!(get_e.call(&mut ctx, addr).now_or_never().unwrap(), true);
 }

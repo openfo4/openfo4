@@ -1,9 +1,9 @@
 use std::any::Any;
 use std::marker::{PhantomData, PhantomPinned};
 use std::mem::MaybeUninit;
-use std::pin::Pin;
+use std::pin::{Pin, pin};
 use std::sync::{Arc, Weak};
-use std::task::{self, Poll, ready};
+use std::task::{self, Poll, Waker, ready};
 
 use game_common::cell::UnsafeRefCell;
 use openfo4_jit::{CompiledFunction, Signature, Type};
@@ -64,68 +64,7 @@ impl Func {
         res
     }
 
-    pub fn call<T>(&self, ctx: &mut Context<'_, T>, params: &[Val]) -> Result<Vec<Val>, Error>
-    where
-        T: Send + 'static,
-    {
-        assert_eq!(
-            self.psc_sig.params.len(),
-            params.len(),
-            "function takes {} parameters, {} were given",
-            self.psc_sig.params.len(),
-            params.len()
-        );
-        validate_parameter_types(&ctx.engine.state.pool, params, &self.psc_sig);
-
-        let mut r_params = vec![MaybeUninit::<RawVal>::uninit(); params.len()];
-        let mut r_returns = vec![MaybeUninit::<RawVal>::uninit(); self.signature.returns.len()];
-
-        // We don't need logic to drop written `MaybeUninit<RawVal>` values.
-        const {
-            assert!(!core::mem::needs_drop::<RawVal>());
-        }
-
-        for (index, param) in params.iter().enumerate() {
-            r_params[index].write(param.into_raw());
-        }
-
-        // SAFETY:
-        // - When we have constructed this `TypedFunc` we have asserted that the signature
-        //   matches.
-        // - We have filled all params according to the function signature.
-        // - We have allocated enough capacity for all return values according to the function
-        //   signature.
-        unsafe {
-            self.call_unchecked(
-                ctx,
-                r_params.as_ptr().cast::<RawVal>(),
-                r_returns.as_mut_ptr().cast::<RawVal>(),
-            )?;
-        }
-
-        let mut returns = Vec::with_capacity(self.signature.returns.len());
-        for (index, ty) in self.signature.returns.iter().enumerate() {
-            let raw = unsafe { r_returns[index].assume_init_ref() };
-
-            unsafe {
-                returns.push(match ty {
-                    Type::I8 => Val::Bool(<bool as NativeType>::from_raw(raw)),
-                    Type::I32 => Val::I32(<i32 as NativeType>::from_raw(raw)),
-                    Type::F32 => Val::F32(<f32 as NativeType>::from_raw(raw)),
-                    Type::Pointer => Val::Object(<ObjectAddr as NativeType>::from_raw(raw)),
-                    _ => unreachable!(),
-                });
-            }
-        }
-
-        Ok(returns)
-    }
-
-    pub fn call_async<'a, 'b, T>(
-        &'a self,
-        ctx: &'a mut Context<'b, T>,
-        params: &[Val],
-    ) -> Call<'a, 'b, T>
+    pub fn call<'a, 'b, T>(&'a self, ctx: &'a mut Context<'b, T>, params: &[Val]) -> Call<'a, 'b, T>
     where
         T: Send + 'static,
     {
@@ -157,7 +96,7 @@ impl Func {
         // - We have allocated enough capacity for all return values according to the function
         //   signature.
         let inner = unsafe {
-            self.call_unchecked_async(
+            self.call_unchecked(
                 ctx,
                 r_params.as_ptr().cast::<RawVal>(),
                 r_returns.as_mut_ptr().cast::<RawVal>(),
@@ -185,88 +124,7 @@ impl Func {
     /// - The values in `params` must match the function signature.
     /// - The `returns` allocation must be large enough for the return parameters of the function
     ///   signature.
-    pub unsafe fn call_unchecked<T>(
-        &self,
-        ctx: &mut Context<'_, T>,
-        params: *const RawVal,
-        returns: *mut RawVal,
-    ) -> Result<(), Error>
-    where
-        T: Send + 'static,
-    {
-        // The guest function will read from the stack and on suspension assume that
-        // current contents match the contents of the previous writes.
-        // We must ensure that we only resume using a stack that is compatible with
-        // function we are calling, otherwise the guest function will begin reading
-        // arbitrary memory and reinterpret memory incorrectly.
-        assert!(
-            core::ptr::addr_eq(Arc::as_ptr(&ctx.engine), Weak::as_ptr(&self.engine)),
-            "attempted to call func with context from another Engine"
-        );
-        if let Some(stack_fn_ptr) = ctx.stack.func {
-            let fn_ptr = self.func.as_ptr();
-            assert!(
-                core::ptr::addr_eq(fn_ptr, stack_fn_ptr),
-                "attempted to reuse stack for incompatible func"
-            );
-        }
-
-        ctx.stack.func = Some(self.func.as_ptr());
-
-        // Allocate enough stack space for the callee prologue.
-        if ctx.stack.size() == 0 {
-            ctx.stack.alloc(size_of::<usize>());
-        }
-
-        // We must lock the call table before we call the guest function.
-        let _lock = ctx.engine.call_table_lock.read();
-
-        let mut raw_ctx = RawContext {
-            stack_ptr: RawStack {
-                ptr: ctx.stack.as_ptr(),
-                len: 0,
-            },
-            state: &ctx.engine.state,
-            data: &mut ctx.data as *mut (dyn Any + Send),
-            stack: ctx.stack,
-            panic: PanicMsg::default(),
-            waker: task::Waker::noop(),
-            error: UnsafeRefCell::new(None),
-        };
-
-        let res = unsafe { self.call_in(&mut raw_ctx, params, returns) };
-
-        // Once we drop `raw_ctx`, the future becomes invalid.
-        // We must drop it before before that happens.
-        // The future is only maintained for the call_*_async functions.
-        ctx.stack.future.clear();
-
-        // If the callee calls into a native host function that panics,
-        // we will resume the panic here.
-        // The following code will not be executed.
-        raw_ctx.panic.resume();
-
-        match res {
-            RESULT_SUSPEND => {
-                panic!("suspended on non-async call");
-            }
-            RESULT_OK => {
-                ctx.stack.free(size_of::<usize>());
-                debug_assert_eq!(ctx.stack.size(), 0);
-
-                ctx.stack.func = None;
-
-                Ok(())
-            }
-            RESULT_ERROR => {
-                let err = raw_ctx.error.get_mut().take().unwrap();
-                return Err(*err);
-            }
-            _ => unreachable!(),
-        }
-    }
-
-    pub unsafe fn call_unchecked_async<'a, 'b, T>(
+    pub unsafe fn call_unchecked<'a, 'b, T>(
         &'a self,
         ctx: &'a mut Context<'b, T>,
         params: *const RawVal,
@@ -347,45 +205,7 @@ where
     Params: NativeTuple,
     Returns: NativeTuple,
 {
-    pub fn call<T>(&self, ctx: &mut Context<'_, T>, params: Params) -> Result<Returns, Error>
-    where
-        T: Send + 'static,
-    {
-        validate_parameter_types(&ctx.engine.state.pool, &params, &self.func.psc_sig);
-
-        // TODO: When const_generics is stabilized we can avoid the heap allocation
-        // and use a regular array.
-        let mut r_params = vec![MaybeUninit::<RawVal>::uninit(); Params::SIZE];
-        let mut r_returns = vec![MaybeUninit::<RawVal>::uninit(); Returns::SIZE];
-
-        // We don't need logic to drop written `MaybeUninit<RawVal>` values.
-        const {
-            assert!(!core::mem::needs_drop::<RawVal>());
-        }
-
-        unsafe {
-            params.write_raw(r_params.as_mut_ptr().cast::<RawVal>());
-        }
-
-        // SAFETY:
-        // - When we have constructed this `TypedFunc` we have asserted that the signature
-        //   matches.
-        // - We have filled all params according to the function signature.
-        // - We have allocated enough capacity for all return values according to the function
-        //   signature.
-        unsafe {
-            self.func.call_unchecked(
-                ctx,
-                r_params.as_ptr().cast::<RawVal>(),
-                r_returns.as_mut_ptr().cast::<RawVal>(),
-            )?;
-        }
-
-        let returns = unsafe { Returns::from_raw(r_returns.as_ptr().cast::<RawVal>()) };
-        Ok(returns)
-    }
-
-    pub fn call_async<'s, 'b, T>(
+    pub fn call<'s, 'b, T>(
         &'s self,
         ctx: &'s mut Context<'b, T>,
         params: Params,
@@ -416,7 +236,7 @@ where
         // - We have allocated enough capacity for all return values according to the function
         //   signature.
         let inner = unsafe {
-            self.func.call_unchecked_async(
+            self.func.call_unchecked(
                 ctx,
                 r_params.as_ptr().cast::<RawVal>(),
                 r_returns.as_mut_ptr().cast::<RawVal>(),
@@ -472,6 +292,27 @@ pub struct CallUnchecked<'a, 'b, T> {
     raw_ctx_init: bool,
     // We must not move the RawContext.
     _pinned: PhantomPinned,
+}
+
+impl<'a, 'b, T> CallUnchecked<'a, 'b, T> {
+    /// Calls the function once, consuming the future.
+    ///
+    /// If the future yielded `Poll::Ready(..)` this function returns the result, otherwise if
+    /// the callee suspended this function returns `Err(..)`.
+    pub fn now_or_never(self) -> Result<(), Error>
+    where
+        T: Send + 'static,
+    {
+        let fut = pin!(self);
+        let waker = Waker::noop();
+        let mut cx = task::Context::from_waker(waker);
+        match fut.poll(&mut cx) {
+            Poll::Ready(res) => res,
+            Poll::Pending => Err(Error {
+                msg: "suspended".to_owned(),
+            }),
+        }
+    }
 }
 
 impl<'a, 'b, T> Future for CallUnchecked<'a, 'b, T>
@@ -568,6 +409,27 @@ pub struct Call<'a, 'b, T> {
     r_returns: Vec<MaybeUninit<RawVal>>,
 }
 
+impl<'a, 'b, T> Call<'a, 'b, T> {
+    /// Calls the function once, consuming the future.
+    ///
+    /// If the future yielded `Poll::Ready(..)` this function returns the result, otherwise if
+    /// the callee suspended this function returns `Err(..)`.
+    pub fn now_or_never(self) -> Result<Vec<Val>, Error>
+    where
+        T: Send + 'static,
+    {
+        let fut = pin!(self);
+        let waker = Waker::noop();
+        let mut cx = task::Context::from_waker(waker);
+        match fut.poll(&mut cx) {
+            Poll::Ready(res) => res,
+            Poll::Pending => Err(Error {
+                msg: "suspended".to_owned(),
+            }),
+        }
+    }
+}
+
 impl<'a, 'b, T> Future for Call<'a, 'b, T>
 where
     T: Send + 'static,
@@ -604,6 +466,28 @@ pub struct TypedCall<'a, 'b, T, Params, Returns> {
     r_params: Vec<MaybeUninit<RawVal>>,
     r_returns: Vec<MaybeUninit<RawVal>>,
     _marker: PhantomData<fn(Params) -> Returns>,
+}
+
+impl<'a, 'b, T, Params, Returns> TypedCall<'a, 'b, T, Params, Returns> {
+    /// Calls the function once, consuming the future.
+    ///
+    /// If the future yielded `Poll::Ready(..)` this function returns the result, otherwise if
+    /// the callee suspended this function returns `Err(..)`.
+    pub fn now_or_never(self) -> Result<Returns, Error>
+    where
+        T: Send + 'static,
+        Returns: NativeTuple,
+    {
+        let fut = pin!(self);
+        let waker = Waker::noop();
+        let mut cx = task::Context::from_waker(waker);
+        match fut.poll(&mut cx) {
+            Poll::Ready(res) => res,
+            Poll::Pending => Err(Error {
+                msg: "suspended".to_owned(),
+            }),
+        }
+    }
 }
 
 impl<'a, 'b, T, Params, Returns> Future for TypedCall<'a, 'b, T, Params, Returns>

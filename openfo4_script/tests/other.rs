@@ -29,7 +29,9 @@ fn pass_null_param() {
     let mut stack = engine.create_stack();
     let mut ctx = Context::new(&engine, &mut stack, ());
 
-    func.call(&mut ctx, ObjectAddr::NULL).unwrap();
+    func.call(&mut ctx, ObjectAddr::NULL)
+        .now_or_never()
+        .unwrap();
 }
 
 #[test]
@@ -63,5 +65,8 @@ fn host_function_returns_null() {
     let mut stack = engine.create_stack();
     let mut ctx = Context::new(&engine, &mut stack, ());
 
-    assert_eq!(func.call(&mut ctx, ()).unwrap(), ObjectAddr::NULL);
+    assert_eq!(
+        func.call(&mut ctx, ()).now_or_never().unwrap(),
+        ObjectAddr::NULL
+    );
 }

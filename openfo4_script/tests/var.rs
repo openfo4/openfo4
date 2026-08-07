@@ -49,7 +49,7 @@ fn int_var() {
     let mut ctx = Context::new(&engine, &mut stack, ());
 
     let func = func.typed::<(), ()>().unwrap();
-    func.call(&mut ctx, ()).unwrap();
+    func.call(&mut ctx, ()).now_or_never().unwrap();
 }
 
 #[test]
@@ -80,7 +80,7 @@ fn string_var() {
     let input = engine.object_pool().insert_string("Hello World").addr();
 
     let func = func.typed::<ObjectAddr, ObjectAddr>().unwrap();
-    let output = func.call(&mut ctx, input).unwrap();
+    let output = func.call(&mut ctx, input).now_or_never().unwrap();
     assert_eq!(input, output);
 }
 
@@ -113,7 +113,7 @@ fn class_var() {
     let input = engine.object_pool().alloc(layout, 1).addr();
 
     let func = func.typed::<ObjectAddr, ObjectAddr>().unwrap();
-    let output = func.call(&mut ctx, input).unwrap();
+    let output = func.call(&mut ctx, input).now_or_never().unwrap();
     assert_eq!(input, output);
 }
 
@@ -150,6 +150,6 @@ fn struct_var() {
     let input = engine.object_pool().alloc(layout, 1).addr();
 
     let func = func.typed::<ObjectAddr, ObjectAddr>().unwrap();
-    let output = func.call(&mut ctx, input).unwrap();
+    let output = func.call(&mut ctx, input).now_or_never().unwrap();
     assert_eq!(input, output);
 }

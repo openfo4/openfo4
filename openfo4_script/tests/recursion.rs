@@ -40,7 +40,7 @@ fn recursion() {
     let mut ctx = Context::new(&engine, &mut stack, ());
 
     let func = func.typed::<i32, i32>().unwrap();
-    assert_eq!(func.call(&mut ctx, 10).unwrap(), 3628800);
+    assert_eq!(func.call(&mut ctx, 10).now_or_never().unwrap(), 3628800);
 }
 
 #[test]
@@ -86,5 +86,5 @@ fn recursion_multiple_functions() {
     let mut ctx = Context::new(&engine, &mut stack, ());
 
     let func = func.typed::<i32, i32>().unwrap();
-    assert_eq!(func.call(&mut ctx, 10).unwrap(), 3628800);
+    assert_eq!(func.call(&mut ctx, 10).now_or_never().unwrap(), 3628800);
 }

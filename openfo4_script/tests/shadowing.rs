@@ -58,7 +58,7 @@ fn variable_shadowing() {
     let mut ctx = Context::new(&engine, &mut stack, ());
 
     let func = func.typed::<ObjectAddr, i32>().unwrap();
-    assert_eq!(func.call(&mut ctx, addr).unwrap(), 600);
+    assert_eq!(func.call(&mut ctx, addr).now_or_never().unwrap(), 600);
 }
 
 #[test]
@@ -95,5 +95,5 @@ fn load_property_from_parent_class() {
     let mut ctx = Context::new(&engine, &mut stack, ());
 
     let func = func.typed::<ObjectAddr, i32>().unwrap();
-    assert_eq!(func.call(&mut ctx, addr).unwrap(), 1);
+    assert_eq!(func.call(&mut ctx, addr).now_or_never().unwrap(), 1);
 }

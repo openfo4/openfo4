@@ -46,7 +46,7 @@ fn state() {
     let mut ctx = Context::new(&engine, &mut stack, ());
 
     let func = func.typed::<ObjectAddr, i32>().unwrap();
-    assert_eq!(func.call(&mut ctx, addr).unwrap(), 1);
+    assert_eq!(func.call(&mut ctx, addr).now_or_never().unwrap(), 1);
 
     let mut object = engine.object_pool().get(addr).unwrap();
     unsafe {
@@ -54,14 +54,14 @@ fn state() {
         object.set("MyClass", "::state", b.addr());
     }
 
-    assert_eq!(func.call(&mut ctx, addr).unwrap(), 2);
+    assert_eq!(func.call(&mut ctx, addr).now_or_never().unwrap(), 2);
 
     unsafe {
         let a = engine.object_pool().insert_string("a");
         object.set("MyClass", "::state", a.addr());
     }
 
-    assert_eq!(func.call(&mut ctx, addr).unwrap(), 1);
+    assert_eq!(func.call(&mut ctx, addr).now_or_never().unwrap(), 1);
 
     unsafe {
         let a = engine.object_pool().insert_string("c");
@@ -69,7 +69,7 @@ fn state() {
     }
 
     // Fallthrough, default value
-    assert_eq!(func.call(&mut ctx, addr).unwrap(), 3);
+    assert_eq!(func.call(&mut ctx, addr).now_or_never().unwrap(), 3);
 }
 
 #[test]
@@ -124,7 +124,7 @@ fn state_override_order() {
 
     // Default state for all classes.
     // Calls A.MyFunction().
-    assert_eq!(func.call(&mut ctx, addr).unwrap(), 1);
+    assert_eq!(func.call(&mut ctx, addr).now_or_never().unwrap(), 1);
 
     let x = engine.object_pool().insert_string("X").addr();
     let y = engine.object_pool().insert_string("Y").addr();
@@ -137,7 +137,7 @@ fn state_override_order() {
 
     // C is the subclass of {A, B} with state "X".
     // Calls C.MyFunction().
-    assert_eq!(func.call(&mut ctx, addr).unwrap(), 4);
+    assert_eq!(func.call(&mut ctx, addr).now_or_never().unwrap(), 4);
 
     unsafe {
         let mut obj = engine.object_pool().get(addr).unwrap();
@@ -146,7 +146,7 @@ fn state_override_order() {
 
     // C has no state "Y", so B is the subclass of A with state "Y".
     // Calls B.MyFunction().
-    assert_eq!(func.call(&mut ctx, addr).unwrap(), 3);
+    assert_eq!(func.call(&mut ctx, addr).now_or_never().unwrap(), 3);
 
     unsafe {
         let mut obj = engine.object_pool().get(addr).unwrap();
@@ -155,7 +155,7 @@ fn state_override_order() {
 
     // C is the subclass of {A, B} with state "Z".
     // Calls C.MyFunction().
-    assert_eq!(func.call(&mut ctx, addr).unwrap(), 5);
+    assert_eq!(func.call(&mut ctx, addr).now_or_never().unwrap(), 5);
 }
 
 #[test]
