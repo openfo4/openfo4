@@ -588,7 +588,7 @@ fn decode_quantized_quat_polar32(buf: &mut Cursor<&[u8]>) -> Result<Quat, Error>
     Ok(Quat::from_xyzw(x, y, z, w))
 }
 
-fn decode_quantized_quat_threecomp40(mut buf: &mut Cursor<&[u8]>) -> Result<Quat, Error> {
+fn decode_quantized_quat_threecomp40(buf: &mut Cursor<&[u8]>) -> Result<Quat, Error> {
     // Quaternion encoded in 40 bits:
     // - 3x12 bit quantized floats in the range -1/sqrt(2)..+1/sqrt(2).
     // - 2 bits indicating the index of the fourth (implicit) value.
@@ -602,7 +602,7 @@ fn decode_quantized_quat_threecomp40(mut buf: &mut Cursor<&[u8]>) -> Result<Quat
     // FRAC = (1 / sqrt(2) ) / POSITIVE_MASK
     const FRAC: f32 = 0.00034543566;
 
-    let [val0, val1, val2, val3, val4] = <[u8; 5]>::decode(&mut buf)?;
+    let [val0, val1, val2, val3, val4] = <[u8; 5]>::decode(buf)?;
     let val = u64::from_le_bytes([val0, val1, val2, val3, val4, 0, 0, 0]);
 
     let mut x = (val & MASK) as i64;
