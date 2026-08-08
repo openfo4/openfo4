@@ -6,8 +6,8 @@ use openfo4_pex::Value;
 
 use crate::compiler::codegen::pex::registry::{ClassDef, Registry, StructDef, Type};
 use crate::compiler::resources::{
-    self, CompositeType, CompositeTypeMember, Words, PropertyType, Resources, TypeId,
-    TypeInfo, TypeProperty, TypeRepr,
+    self, CompositeType, CompositeTypeMember, PropertyType, Resources, TypeId, TypeInfo,
+    TypeProperty, TypeRepr, Words,
 };
 use crate::runtime::ArrayObject;
 
@@ -203,14 +203,8 @@ fn resolve_ty_and_default_value(res: &Resources, ty: &Type) -> (TypeId, Words) {
     match ty {
         Type::None => (res.primitives.none, Words::bytes(&[])),
         Type::Bool => (res.primitives.bool, Words::bytes(&[0; 1])),
-        Type::Int => (
-            res.primitives.int,
-            Words::bytes(&[0; size_of::<i32>()]),
-        ),
-        Type::Float => (
-            res.primitives.float,
-            Words::bytes(&[0; size_of::<f32>()]),
-        ),
+        Type::Int => (res.primitives.int, Words::bytes(&[0; size_of::<i32>()])),
+        Type::Float => (res.primitives.float, Words::bytes(&[0; size_of::<f32>()])),
         Type::String | Type::Struct(_) | Type::Class(_) | Type::Var | Type::Array(_) => (
             res.primitives.pointer,
             Words::bytes(&[0; size_of::<usize>()]),
