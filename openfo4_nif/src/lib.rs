@@ -8,7 +8,6 @@ use std::io::Cursor;
 use std::str::FromStr;
 
 use bitflags::bitflags;
-use bstr::BString;
 use bytes::Buf;
 use glam::{Mat3, Quat, Vec2, Vec3, Vec4};
 use half::f16;
@@ -49,7 +48,7 @@ impl Nif {
         let user_version = reader.get_u32()?;
         let num_blocks = reader.get_u32()?;
 
-        let bs_header = BsHeader::decode(&mut reader)?;
+        read_bs_header(&mut reader)?;
 
         let num_block_types = reader.get_u16()?;
 
@@ -406,6 +405,15 @@ impl Reader<'_> {
         }
     }
 
+    fn advance(&mut self, count: usize) -> Result<(), Error> {
+        if self.buf.remaining() < count {
+            Err(Error::Eof)
+        } else {
+            self.buf.advance(count);
+            Ok(())
+        }
+    }
+
     fn get_string(&mut self) -> Result<&str, Error> {
         let index = self.get_u32()?;
         self.string(index)
@@ -479,52 +487,29 @@ impl Reader<'_> {
     }
 }
 
-#[derive(Clone, Debug)]
-pub struct BsHeader {
-    version: u32,
-    // These fields should represent strings, but
-    // sometimes contain garbage, so we handle them
-    // as bytes instead.
-    author: BString,
-    process_script: Option<BString>,
-    export_script: BString,
-    max_filepath: BString,
-}
+/// Reads and skips over the BSHeader.
+///
+/// The BSHeader only contains non-semantic information.
+fn read_bs_header(reader: &mut Reader<'_>) -> Result<(), Error> {
+    let version = reader.get_u32()?;
 
-impl Decode for BsHeader {
-    fn decode(reader: &mut Reader<'_>) -> Result<Self, Error> {
-        let version = reader.get_u32()?;
+    let author_len = reader.get_u8()?;
+    reader.advance(author_len.into())?;
 
-        let author_len = u8::decode(reader)?;
-        let mut author = vec![0; author_len.into()];
-        reader.copy_to_bytes(&mut author)?;
-
-        let process_script = if version >= 132 {
-            u32::decode(reader)?;
-            None
-        } else {
-            let process_script_len = u8::decode(reader)?;
-            let mut process_script = vec![0; process_script_len.into()];
-            reader.copy_to_bytes(&mut process_script)?;
-            Some(BString::new(process_script))
-        };
-
-        let export_script_len = u8::decode(reader)?;
-        let mut export_script = vec![0; export_script_len.into()];
-        reader.copy_to_bytes(&mut export_script)?;
-
-        let max_filepath_len = u8::decode(reader)?;
-        let mut max_filepath = vec![0; max_filepath_len.into()];
-        reader.copy_to_bytes(&mut max_filepath)?;
-
-        Ok(Self {
-            version,
-            author: BString::new(author),
-            process_script,
-            export_script: BString::new(export_script),
-            max_filepath: BString::new(max_filepath),
-        })
+    if version >= 132 {
+        reader.get_u32()?;
+    } else {
+        let process_script_len = reader.get_u8()?;
+        reader.advance(process_script_len.into())?;
     }
+
+    let export_script_len = reader.get_u8()?;
+    reader.advance(export_script_len.into())?;
+
+    let max_filepath_len = reader.get_u8()?;
+    reader.advance(max_filepath_len.into())?;
+
+    Ok(())
 }
 
 impl Decode for String {
