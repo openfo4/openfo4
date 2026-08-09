@@ -314,7 +314,7 @@ fn parse_literal(lit: Literal<'_>, variables: &VariableSet) -> ValueExpression {
             let variable = variables.lookup_variable_name(ident).unwrap();
             ValueExpression::Variable(variable)
         }
-        Literal::Int { base, value } => ValueExpression::Const(Value::I32(value)),
+        Literal::Int { value } => ValueExpression::Const(Value::I32(value)),
         Literal::Float { value } => ValueExpression::Const(Value::F32(value)),
     }
 }
@@ -353,7 +353,7 @@ enum Token<'a> {
 #[derive(Copy, Clone, Debug, PartialEq)]
 enum Literal<'a> {
     Str(&'a str),
-    Int { base: u8, value: i32 },
+    Int { value: i32 },
     Float { value: f32 },
 }
 
@@ -374,7 +374,7 @@ fn tokenize(input: &str) -> Vec<Token<'_>> {
                             value = -value;
                         }
 
-                        tokens.push(Token::Literal(Literal::Int { base: 10, value }));
+                        tokens.push(Token::Literal(Literal::Int { value }));
                     }
                     Err(_) => match lit.parse::<f32>() {
                         Ok(mut value) => {
@@ -426,7 +426,7 @@ fn tokenize(input: &str) -> Vec<Token<'_>> {
     if !lit.is_empty() {
         match lit.parse::<i32>() {
             Ok(value) => {
-                tokens.push(Token::Literal(Literal::Int { base: 10, value }));
+                tokens.push(Token::Literal(Literal::Int { value }));
             }
             Err(_) => match lit.parse::<f32>() {
                 Ok(value) => {
@@ -463,10 +463,7 @@ mod tests {
                 Token::OpenParen,
                 Token::Literal(Literal::Str("c")),
                 Token::CloseParen,
-                Token::Literal(Literal::Int {
-                    base: 10,
-                    value: -2
-                }),
+                Token::Literal(Literal::Int { value: -2 }),
                 Token::Literal(Literal::Float { value: 2.3 }),
             ]
         );
