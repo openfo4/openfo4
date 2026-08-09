@@ -1,10 +1,8 @@
-use std::collections::HashMap;
 use std::time::Duration;
 
 use game_common::components::Transform;
-use game_core::hierarchy::Entity;
 use glam::{Quat, Vec3};
-use openfo4_core::ecs::{CommandBuffer, World};
+use openfo4_core::ecs::{CommandBuffer, Entity, World};
 use openfo4_core::events::EventBus;
 
 use crate::animation::{AnimationClip, AnimationClipFlags, BlendMode};
@@ -23,15 +21,17 @@ pub fn drive_animations<T>(
 {
     let mut commands = CommandBuffer::new();
 
-    let mut rng = rand::rng();
-
-    for (entity, skeleton, driver, set) in
-        world.query_mut::<(Entity, &mut SkeletonInstance, &mut AnimationDriver, &T)>()
+    for (entity, mut skeleton, mut driver, set) in world
+        .query::<(Entity, &mut SkeletonInstance, &mut AnimationDriver, &T)>()
+        .iter()
     {
-        let mut new_transforms = HashMap::new();
+        // let mut new_transforms = HashMap::new();
+
+        let skeleton = &mut *skeleton;
+        let driver = &mut *driver;
 
         let mut events = Vec::new();
-        driver.update(delta, set, &mut events, &skeleton.skeleton);
+        driver.update(delta, &*set, &mut events, &skeleton.skeleton);
 
         let game_events = events
             .into_iter()
@@ -50,8 +50,7 @@ pub fn drive_animations<T>(
 
                     for index in skeleton.culled.drain() {
                         let transform = *skeleton.bones_bind_pose.get(&index).unwrap();
-                        let entity = skeleton.bones.get(&index).unwrap();
-                        new_transforms.insert(*entity, transform);
+                        skeleton.transforms.set_local(index, transform);
                     }
                 }
                 GameEvent::CullBone(name) => {
@@ -62,12 +61,12 @@ pub fn drive_animations<T>(
                         .position(|b| b.name.to_lowercase() == name.to_lowercase())
                         .unwrap();
 
-                    let entity = skeleton.bones.get(&index).unwrap();
-
                     // FIXME: Setting this to NAN will cause a NAN for the MVP matrix
                     // effectively hiding the entity, but saying this is hacky is the
                     // understatement of the century.
-                    new_transforms.insert(*entity, Transform::from_translation(Vec3::NAN));
+                    skeleton
+                        .transforms
+                        .set_local(index, Transform::from_translation(Vec3::NAN));
                     skeleton.culled.insert(index);
                 }
                 GameEvent::UncullBone(name) => {
@@ -80,8 +79,7 @@ pub fn drive_animations<T>(
 
                     let transform = *skeleton.bones_bind_pose.get(&index).unwrap();
 
-                    let entity = skeleton.bones.get(&index).unwrap();
-                    new_transforms.insert(*entity, transform);
+                    skeleton.transforms.set_local(index, transform);
                     skeleton.culled.remove(&index);
                 }
                 GameEvent::WeaponFire => {}
@@ -150,7 +148,7 @@ pub fn drive_animations<T>(
             })
             .collect::<Vec<_>>();
 
-        for (index, entity) in &skeleton.bones {
+        for (index, _) in &skeleton.bones {
             if skeleton.culled.contains(index) {
                 continue;
             }
@@ -270,8 +268,8 @@ pub fn drive_animations<T>(
                 debug_assert_ne!(rotation.length(), 0.0);
                 rotation = rotation.normalize();
 
-                new_transforms.insert(
-                    *entity,
+                skeleton.transforms.set_local(
+                    *index,
                     Transform {
                         translation,
                         rotation,
@@ -285,17 +283,17 @@ pub fn drive_animations<T>(
         for modifier in driver.modifiers() {
             match modifier {
                 Modifier::Offset(offset) => {
-                    let bone_entity = skeleton.bones[&offset.bone];
-
-                    // FIXME: This only works for bones inserted this frame,
-                    // what if a modifier is applied to another bone?
-                    let transform = new_transforms.get_mut(&bone_entity).unwrap();
-                    *transform *= offset.transform;
+                    let mut transform = skeleton.transforms.local(offset.bone);
+                    transform *= offset.transform;
+                    skeleton.transforms.set_local(offset.bone, transform);
                 }
+                Modifier::DirectAt(_) => {}
+                Modifier::InverseKinematics(_) => (),
             }
         }
 
-        for (entity, transform) in new_transforms {
+        for (bone, transform) in skeleton.transforms.drain_updated_local() {
+            let entity = *skeleton.bones.get(&bone).unwrap();
             commands.insert_one(entity, transform);
         }
     }

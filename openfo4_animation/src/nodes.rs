@@ -1,6 +1,7 @@
 pub mod assign_variables;
 pub mod blend;
 pub mod clip;
+pub mod direct_at;
 pub mod event_driven;
 pub mod events_from_range;
 pub mod is_active;
@@ -12,11 +13,14 @@ pub mod state_machine;
 pub mod timer;
 pub mod twist;
 
+use std::collections::HashMap;
 use std::time::Duration;
 
 use game_common::components::Transform;
+use glam::Vec3;
 
 use crate::events::EventSet;
+use crate::ik::Constraint;
 use crate::skeleton::Skeleton;
 use crate::variables::VariableSet;
 use crate::{AnimationProvider, BoneWeights, Event, NodeId, Value, VariableId};
@@ -195,6 +199,7 @@ impl_node_inner! {
         ManualSelector(manual_selector::ManualSelector),
         EventsFromRange(events_from_range::EventsFromRange),
         Twist(twist::Twist),
+        DirectAt(direct_at::DirectAt),
     }
 }
 
@@ -243,6 +248,8 @@ pub enum Property {
 #[derive(Clone, Debug)]
 pub enum Modifier {
     Offset(OffsetModifier),
+    InverseKinematics(InverseKinematicsModifier),
+    DirectAt(DirectAtModifier),
 }
 
 /// Apply an offset to a bone.
@@ -250,4 +257,23 @@ pub enum Modifier {
 pub struct OffsetModifier {
     pub bone: usize,
     pub transform: Transform,
+}
+
+#[derive(Clone, Debug)]
+pub struct InverseKinematicsModifier {
+    /// The index of the starting bone to evaluate.
+    pub start_bone: usize,
+    /// The index of the ending bone to evaluate.
+    pub end_bone: usize,
+    /// The target (end effector) that should be reached.
+    pub target: Vec3,
+    pub constraints: HashMap<usize, Constraint>,
+}
+
+#[derive(Copy, Clone, Debug)]
+pub struct DirectAtModifier {
+    pub detector_bone: usize,
+    pub chain_start_bone: usize,
+    pub chain_end_bone: usize,
+    pub target: Vec3,
 }

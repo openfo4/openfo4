@@ -2,14 +2,14 @@ pub mod animation;
 pub mod builder;
 pub mod debug;
 pub mod driver;
+pub mod events;
+pub mod expr;
 pub mod graph;
+pub mod ik;
+pub mod nodes;
 pub mod skeleton;
 pub mod systems;
 pub mod variables;
-
-mod events;
-mod expr;
-mod nodes;
 
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::fmt::Debug;
@@ -604,6 +604,20 @@ pub struct AnimationGraph {
 }
 
 impl AnimationGraph {
+    pub fn new(
+        nodes: Slab<Node>,
+        root: Option<NodeId>,
+        variables: VariableSet,
+        events: EventSet,
+    ) -> Self {
+        Self {
+            nodes,
+            root,
+            variables,
+            events,
+        }
+    }
+
     pub fn event_name(&self, id: EventId) -> Option<&str> {
         self.events.lookup_id(id)
     }
@@ -839,7 +853,7 @@ impl Value {
         }
     }
 
-    fn to_i32(&self) -> Option<i32> {
+    pub fn to_i32(&self) -> Option<i32> {
         match self {
             Self::I32(val) => Some(*val),
             _ => None,
