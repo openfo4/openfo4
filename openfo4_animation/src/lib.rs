@@ -14,7 +14,6 @@ pub mod variables;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::fmt::Debug;
 use std::ops::{Add, AddAssign, Mul, MulAssign};
-use std::sync::Arc;
 use std::time::Duration;
 
 use animation::AnimationClip;
@@ -28,7 +27,7 @@ use slab::Slab;
 
 use crate::events::{EventId, EventSet};
 use crate::nodes::{GraphNode as _, Node, NodeInner};
-use crate::variables::{VariableId, VariableKind, VariableSet};
+use crate::variables::{VariableId, VariableSet};
 
 pub fn build_graph(file: &HkxFile) {
     let mut root = None;

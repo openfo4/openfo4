@@ -14,7 +14,7 @@ pub struct Clip {
 }
 
 impl GraphNode for Clip {
-    fn activate<T>(&mut self, ctx: T)
+    fn activate<T>(&mut self, _ctx: T)
     where
         T: Context,
     {

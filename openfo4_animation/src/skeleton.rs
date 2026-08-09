@@ -1,8 +1,7 @@
 use std::collections::{HashMap, HashSet, VecDeque};
-use std::ops::Mul;
 
 use game_common::components::Transform;
-use game_core::hierarchy::{self, Hierarchy, Key, TransformHierarchy};
+use game_core::hierarchy::{Hierarchy, Key};
 use openfo4_core::ecs::Entity;
 
 #[derive(Clone, Debug, Default)]

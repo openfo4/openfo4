@@ -27,26 +27,26 @@ use crate::{AnimationProvider, BoneWeights, Event, NodeId, Value, VariableId};
 
 pub trait GraphNode {
     /// Called once when the node is activated.
-    fn activate<T>(&mut self, ctx: T)
+    fn activate<T>(&mut self, _ctx: T)
     where
         T: Context,
     {
     }
 
     /// Called once when the node is deactivated.
-    fn deactivate<T>(&mut self, ctx: T)
+    fn deactivate<T>(&mut self, _ctx: T)
     where
         T: Context,
     {
     }
 
-    fn update<T>(&mut self, ctx: T)
+    fn update<T>(&mut self, _ctx: T)
     where
         T: Context,
     {
     }
 
-    fn handle_event<T>(&mut self, ctx: T, event: &Event)
+    fn handle_event<T>(&mut self, _ctx: T, _event: &Event)
     where
         T: Context,
     {

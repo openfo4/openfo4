@@ -30,7 +30,7 @@ impl GraphNode for Timer {
         self.is_running = true;
     }
 
-    fn deactivate<T>(&mut self, ctx: T)
+    fn deactivate<T>(&mut self, _ctx: T)
     where
         T: Context,
     {
