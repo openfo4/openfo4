@@ -1733,7 +1733,7 @@ pub struct INGR {
     #[record("KSIZ")]
     pub ksiz: Option<u32>,
     #[record("KWDA")]
-    pub kwda: Option<Keywords>,
+    pub kwda: Option<Array<FormId>>,
     #[record("MODL")]
     pub modl: (),
     #[record("ICON")]
@@ -1815,27 +1815,6 @@ impl<T> IntoIterator for Array<T> {
 
     fn into_iter(self) -> Self::IntoIter {
         self.0.into_iter()
-    }
-}
-
-#[deprecated(note = "use Array<FormId> instead")]
-#[derive(Clone, Debug)]
-pub struct Keywords(Vec<FormId>);
-
-impl Decode for Keywords {
-    type Error = Error;
-
-    fn decode<B>(mut buf: B) -> Result<Self, Self::Error>
-    where
-        B: Buf,
-    {
-        let mut keywords = Vec::new();
-        while buf.has_remaining() {
-            let kw = FormId::decode(&mut buf)?;
-            keywords.push(kw);
-        }
-
-        Ok(Self(keywords))
     }
 }
 
@@ -2128,7 +2107,7 @@ pub struct FLOR {
     #[record("KSIZ")]
     pub ksiz: Option<u32>,
     #[record("KWDA")]
-    pub kwda: Option<Keywords>,
+    pub kwda: Option<Array<FormId>>,
     #[record("PNAM")]
     pub pnam: u32,
     #[record("RNAM")]
