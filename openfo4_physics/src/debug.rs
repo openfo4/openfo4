@@ -1,22 +1,13 @@
 use game_common::components::Color;
 use game_gizmos::Gizmos;
-use rapier3d::math::Point;
+use glam::Vec3;
 use rapier3d::pipeline::{DebugColor, DebugRenderBackend, DebugRenderObject};
-
-use crate::convert::vec3;
 
 #[derive(Copy, Clone, Debug)]
 pub struct GizmoRenderBackend<'a>(pub &'a Gizmos);
 
 impl DebugRenderBackend for GizmoRenderBackend<'_> {
-    fn draw_line(
-        &mut self,
-        _object: DebugRenderObject<'_>,
-        a: Point<f32>,
-        b: Point<f32>,
-        color: DebugColor,
-    ) {
-        self.0
-            .line(vec3(a.coords), vec3(b.coords), Color::from_rgba(color));
+    fn draw_line(&mut self, _object: DebugRenderObject<'_>, a: Vec3, b: Vec3, color: DebugColor) {
+        self.0.line(a, b, Color::from_rgba(color));
     }
 }

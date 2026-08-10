@@ -2,7 +2,7 @@ pub mod components;
 pub mod controller;
 pub mod debug;
 
-mod convert;
+mod rapier_controller;
 
 use std::cell::Cell;
 use std::collections::VecDeque;
@@ -18,23 +18,22 @@ use hashbrown::HashMap;
 use openfo4_core::Frozen;
 use openfo4_core::ecs::{Entity, Satisfies, ViewBorrow, World};
 use openfo4_core::hierarchy::Children;
-use rapier3d::math::Isometry;
+use rapier3d::math::Pose;
 use rapier3d::parry::query::{DefaultQueryDispatcher, ShapeCastOptions};
 use rapier3d::prelude::{
     CCDSolver, ColliderBuilder, ColliderHandle, ColliderSet, DebugRenderMode, DebugRenderPipeline,
     DebugRenderStyle, DefaultBroadPhase, ImpulseJointSet, IntegrationParameters, IslandManager,
     MultibodyJointSet, NarrowPhase, QueryPipeline, RigidBodyBuilder, RigidBodyHandle, RigidBodySet,
-    RigidBodyType, SharedShape, Vector,
+    RigidBodyType, SharedShape,
 };
 use tracing::instrument;
 
 use crate::components::{Collider, CollisionLayer};
-use crate::convert::{quat, rotation, vec3, vector};
 use crate::debug::GizmoRenderBackend;
 
 const DT: f32 = 1.0 / 60.0;
 const MIN_CCD_DT: f32 = DT / 100.0;
-const GRAVITY: Vector<f32> = Vector::new(0.0, -9.81, 0.0);
+const GRAVITY: Vec3 = Vec3::new(0.0, -9.81, 0.0);
 
 pub struct PhysicsPipeline {
     // Rapier stuff
@@ -92,7 +91,7 @@ impl PhysicsPipeline {
         self.update_colliders(world);
 
         self.pipeline.step(
-            &GRAVITY,
+            GRAVITY,
             &self.integration_parameters,
             &mut self.islands,
             &mut self.broad_phase,
@@ -139,15 +138,15 @@ impl PhysicsPipeline {
                 continue;
             }
 
-            let translation = vector(global_transform.0.translation);
-            let rotation = rotation(global_transform.0.rotation);
+            let translation = global_transform.0.translation;
+            let rotation = global_transform.0.rotation;
 
             let kind = match rigid_body.kind {
                 RigidBodyKind::Fixed => RigidBodyType::Fixed,
                 RigidBodyKind::Dynamic => RigidBodyType::Dynamic,
             };
-            let linvel = vector(rigid_body.linvel);
-            let angvel = vector(rigid_body.angvel);
+            let linvel = rigid_body.linvel;
+            let angvel = rigid_body.angvel;
 
             if !self.body_handles.contains_left(&entity) {
                 let builder = RigidBodyBuilder::new(kind);
@@ -271,9 +270,10 @@ impl PhysicsPipeline {
                 // parent requires access to all colliders for some reason. (rapiers API
                 // is probably just weird...).
                 let state = self.colliders.get_mut(spawned_collider.handle).unwrap();
-                state.set_position_wrt_parent(Isometry {
-                    translation: vector(translation).into(),
-                    rotation: convert::rotation(rotation),
+                state.set_position_wrt_parent(Pose {
+                    translation,
+                    rotation,
+                    padding: 0,
                 });
             }
         }
@@ -289,13 +289,8 @@ impl PhysicsPipeline {
     fn write_back(&mut self, world: &mut World) {
         let mut view = world.view_mut::<(&mut RigidBody, &mut Transform, &mut GlobalTransform)>();
 
-        for handle in self
-            .islands
-            .active_dynamic_bodies()
-            .iter()
-            .chain(self.islands.active_kinematic_bodies())
-        {
-            let body = self.bodies.get(*handle).unwrap();
+        for handle in self.islands.active_bodies() {
+            let body = self.bodies.get(handle).unwrap();
             let entity = *self.body_handles.get_right(&handle).unwrap();
 
             let Some((mut rigid_body, mut transform, mut global_transform)) = view.get_mut(entity)
@@ -303,8 +298,8 @@ impl PhysicsPipeline {
                 continue;
             };
 
-            rigid_body.linvel = vec3(*body.linvel());
-            rigid_body.angvel = vec3(*body.angvel());
+            rigid_body.linvel = body.linvel();
+            rigid_body.angvel = body.angvel();
 
             // We source the position of the rigid body from the `GlobalTransform` component,
             // but we cannot write back directly to the `GlobalTransform` component since
@@ -317,8 +312,8 @@ impl PhysicsPipeline {
             // The delta describes the changed transform in this physics tick and can be applied
             // to `Transform`.
 
-            let new_translation = vec3(*body.translation());
-            let new_rotation = quat(*body.rotation());
+            let new_translation = body.translation();
+            let new_rotation = *body.rotation();
 
             let delta_translation = new_translation - global_transform.0.translation;
             // Note that `delta_rotation` is applied from left.
@@ -348,8 +343,8 @@ impl PhysicsPipeline {
         let _span = trace_span!("PhysicsPipeline::cast_ray").entered();
 
         let ray = rapier3d::geometry::Ray {
-            origin: vector(ray.origin).into(),
-            dir: vector(ray.direction).into(),
+            origin: ray.origin,
+            dir: ray.direction,
         };
 
         let predicate = |handle: ColliderHandle, _: &rapier3d::prelude::Collider| -> bool {
@@ -379,18 +374,14 @@ impl PhysicsPipeline {
         shape: &ColliderShape,
     ) -> Option<QueryHit> {
         let shape = build_shape(shape, origin.scale);
-        let origin = Isometry {
-            translation: vector(origin.translation).into(),
-            rotation: rotation(origin.rotation),
+        let origin = Pose {
+            translation: origin.translation,
+            rotation: origin.rotation,
+            padding: 0,
         };
 
         self.query_pipeline()
-            .cast_shape(
-                &origin,
-                &vector(direction).into(),
-                &*shape,
-                ShapeCastOptions::default(),
-            )
+            .cast_shape(&origin, direction, &*shape, ShapeCastOptions::default())
             .map(|(collider, hit)| {
                 let entity = *self.collider_handle_entities.get(&collider).unwrap();
 
@@ -515,10 +506,7 @@ fn build_shape(shape: &ColliderShape, scale: Vec3) -> SharedShape {
             let vertices = mesh
                 .vertices()
                 .iter()
-                .map(|vertex| {
-                    let point = *vertex * scale;
-                    vector(point).into()
-                })
+                .map(|vertex| *vertex * scale)
                 .collect();
             let indices = mesh
                 .indices()

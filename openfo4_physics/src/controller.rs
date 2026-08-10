@@ -2,19 +2,18 @@ use game_common::components::Transform;
 use game_tracing::trace_span;
 use glam::Vec3;
 use openfo4_core::ecs::Entity;
-use rapier3d::control::{CharacterAutostep, CharacterLength, KinematicCharacterController};
-use rapier3d::math::{Isometry, Vector};
+use rapier3d::math::{Pose, Vector};
 use rapier3d::parry::query::DefaultQueryDispatcher;
 use rapier3d::prelude::QueryFilter;
 
 use crate::components::ColliderShape;
-use crate::convert::{rotation, vec3, vector};
+use crate::rapier_controller::{CharacterAutostep, CharacterLength, KinematicCharacterController};
 use crate::{GRAVITY, PhysicsPipeline, build_shape};
 
 #[derive(Clone, Debug)]
 pub struct CharacterController {
     controller: KinematicCharacterController,
-    gravity_velcotiy: Vector<f32>,
+    gravity_velcotiy: Vec3,
 }
 
 impl CharacterController {
@@ -46,9 +45,10 @@ impl CharacterController {
 
         let shape = build_shape(shape, transform.scale);
 
-        let position = Isometry {
-            translation: vector(transform.translation).into(),
-            rotation: rotation(transform.rotation),
+        let position = Pose {
+            translation: transform.translation,
+            rotation: transform.rotation,
+            padding: 0,
         };
 
         let mut events = Vec::new();
@@ -70,7 +70,7 @@ impl CharacterController {
             &query_pl.as_ref(),
             &*shape,
             &position,
-            vector(direction),
+            direction,
             |event| events.push(event),
         );
 
@@ -87,7 +87,7 @@ impl CharacterController {
         }
 
         Movement {
-            translation: vec3(movement.translation),
+            translation: movement.translation,
             grounded: movement.grounded,
         }
     }
@@ -102,7 +102,7 @@ impl CharacterController {
         self.gravity_velcotiy += GRAVITY * pipeline.integration_parameters.dt;
         let delta = self.gravity_velcotiy * pipeline.integration_parameters.dt;
 
-        self.move_shape(pipeline, transform, shape, vec3(delta), exclude_body)
+        self.move_shape(pipeline, transform, shape, delta, exclude_body)
     }
 }
 

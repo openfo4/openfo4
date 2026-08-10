@@ -1,5 +1,6 @@
 use game_common::components::Axis;
 use glam::Vec3;
+use rapier3d::geometry::InteractionTestMode;
 use rapier3d::prelude::{Group, InteractionGroups};
 
 #[derive(Copy, Clone, Debug)]
@@ -53,14 +54,17 @@ impl CollisionLayer {
             Self::STATIC => InteractionGroups {
                 memberships: self.0,
                 filter: self.0 | Self::CHARACTER_CONTROLLER.0 | Self::PROJECTILE.0,
+                test_mode: InteractionTestMode::And,
             },
             Self::CHARACTER_CONTROLLER => InteractionGroups {
                 memberships: self.0,
                 filter: self.0 | Self::STATIC.0,
+                test_mode: InteractionTestMode::And,
             },
             Self::PROJECTILE => InteractionGroups {
                 memberships: self.0,
                 filter: self.0 | Self::STATIC.0,
+                test_mode: InteractionTestMode::And,
             },
             _ => unreachable!(),
         }
