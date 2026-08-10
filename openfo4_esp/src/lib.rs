@@ -1397,40 +1397,6 @@ impl_primitive! {
     f64,
 }
 
-macro_rules! impl_struct {
-    (
-        $(#[$($attrs:tt)*])*
-        struct $struct_ident:ident {
-        $(
-            $field_name:ident: $field_ty:ty,
-        )*
-    }) => {
-        $(
-            #[$($attrs)*]
-        )*
-        struct $struct_ident {
-            $(
-                $field_name: $field_ty,
-            )*
-        }
-
-        impl Decode for $struct_ident {
-            type Error = ();
-
-            fn decode<R>(mut reader: R) -> Result<Self, Self::Error>
-            where
-                R: Reader,
-            {
-                Ok(Self {
-                $(
-                    $field_name: <$field_ty as Decode>::decode(&mut reader)?,
-                )*
-                })
-            }
-        }
-    };
-}
-
 #[derive(Copy, Clone, Debug)]
 struct GroupHeader {
     size: u32,
@@ -1441,10 +1407,6 @@ struct GroupHeader {
 impl GroupHeader {
     fn label(&self) -> Text<4> {
         Text(self.label)
-        // match self.group_type {
-        //     0 => Text(self.label),
-        //     2 | 3 | 4 | 5 => Text::CELL,
-        // }
     }
 }
 
@@ -1454,10 +1416,6 @@ struct RecordHeader {
     size: u32,
     flags: RecordHeaderFlags,
     form_id: FormId,
-    timestamp: u16,
-    vcs: u16,
-    version: u16,
-    unknown0: u16,
 }
 
 impl RecordHeader {
@@ -1484,15 +1442,20 @@ impl Decode for RecordHeader {
     where
         B: Buf,
     {
+        let typ = Text::<4>::decode(&mut buf)?;
+        let size = u32::decode(&mut buf)?;
+        let flags = u32::decode(&mut buf).map(RecordHeaderFlags::from_bits_retain)?;
+        let form_id = FormId::decode(&mut buf)?;
+        let _timestamp = u16::decode(&mut buf)?;
+        let _vcs = u16::decode(&mut buf)?;
+        let _version = u16::decode(&mut buf)?;
+        let _unknown0 = u16::decode(&mut buf)?;
+
         Ok(Self {
-            typ: Text::<4>::decode(&mut buf)?,
-            size: u32::decode(&mut buf)?,
-            flags: u32::decode(&mut buf).map(RecordHeaderFlags::from_bits_retain)?,
-            form_id: FormId::decode(&mut buf)?,
-            timestamp: u16::decode(&mut buf)?,
-            vcs: u16::decode(&mut buf)?,
-            version: u16::decode(&mut buf)?,
-            unknown0: u16::decode(&mut buf)?,
+            typ,
+            size,
+            flags,
+            form_id,
         })
     }
 }
