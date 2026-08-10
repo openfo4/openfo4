@@ -706,7 +706,7 @@ pub struct BufferBarrier<'a> {
 
 #[derive(Debug)]
 pub struct TextureBarrier<'a> {
-    pub texture: &'a vulkan::Texture,
+    pub texture: &'a Texture,
     pub src_access: AccessFlags,
     pub dst_access: AccessFlags,
     pub base_mip_level: u32,

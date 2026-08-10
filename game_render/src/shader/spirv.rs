@@ -22,7 +22,7 @@ use ops::{
     OpTypePointer, OpTypeRuntimeArray, OpTypeSampledImage, OpTypeSampler, OpTypeStruct,
     OpTypeVector, OpTypeVoid, OpVariable,
 };
-use spirv::{Capability, ExecutionModel, MAGIC_NUMBER, StorageClass};
+use spirv::{Capability, ExecutionMode, ExecutionModel, MAGIC_NUMBER, StorageClass};
 use thiserror::Error;
 
 use crate::backend::{DescriptorType, ShaderStage};
@@ -990,6 +990,31 @@ impl SpirvModule {
         }
     }
 
+    /// Returns the local workgroup size.
+    fn workgroup_size(&self) -> Option<[u32; 3]> {
+        self.execution_modes.iter().find_map(|ins| match ins {
+            Instruction::ExecutionMode(mode) if mode.mode == ExecutionMode::LocalSize => {
+                let x = mode.operands[0];
+                let y = mode.operands[1];
+                let z = mode.operands[2];
+                Some([x, y, z])
+            }
+            Instruction::ExecutionModeId(mode) if mode.mode == ExecutionMode::LocalSizeId => {
+                let x = self.constants.get(&mode.operands[0]).unwrap();
+                let y = self.constants.get(&mode.operands[1]).unwrap();
+                let z = self.constants.get(&mode.operands[2]).unwrap();
+                let (Constant::Constant(x), Constant::Constant(y), Constant::Constant(z)) =
+                    (x, y, z)
+                else {
+                    unreachable!();
+                };
+
+                Some([x.value[0], y.value[0], z.value[0]])
+            }
+            _ => None,
+        })
+    }
+
     fn compute_global_accesses(&self, func_id: Id) -> HashMap<Id, ShaderAccess> {
         let mut variables: HashMap<_, _> = self
             .globals
@@ -1564,6 +1589,11 @@ impl Instance {
         &self.bindings
     }
 
+    /// Returns the local workgroup size.
+    pub fn workgroup_size(&self) -> Option<[u32; 3]> {
+        self.data.workgroup_size()
+    }
+
     pub fn to_spirv(&self) -> Vec<u32> {
         let mut words = Vec::new();
         self.data.write(&mut words);
@@ -1864,7 +1894,7 @@ mod tests {
         %ty_u32       = OpTypeInt 32 0
         %const_u32_3  = OpConstant %ty_u32 3
         %ty_f32_3     = OpTypeArray %ty_f32 %const_u32_3
-        %ty_f32_3_ptr = OpTypePointer UniformConstant %ty_f32_3 
+        %ty_f32_3_ptr = OpTypePointer UniformConstant %ty_f32_3
         %ty_vec4_f32  = OpTypeVector %ty_f32 4
         %ty_vec2_f32  = OpTypeVector %ty_f32 2
         %const_f32_0  = OpConstant %ty_f32 0
@@ -2130,5 +2160,60 @@ mod tests {
         let bindings = module.bindings();
         assert_eq!(bindings[0].location.unwrap().group, 1);
         assert_eq!(bindings[0].location.unwrap().binding, 2);
+    }
+
+    #[test]
+    fn workgroup_size_from_local_size() {
+        let text = r#"
+        OpCapability Shader
+        OpMemoryModel Logical GLSL450
+
+        OpEntryPoint GLCompute %1 "main"
+
+        OpExecutionMode %1 LocalSize 32 16 8
+
+        %ty_void = OpTypeVoid
+        %ty_fn   = OpTypeFunction %ty_void
+
+        %1 = OpFunction %ty_void None %ty_fn
+        %2 = OpLabel
+        OpReturn
+        OpFunctionEnd
+        "#;
+
+        let bytes = assemble(text);
+        let module = Module::new(&bytes).unwrap();
+
+        assert_eq!(module.module.workgroup_size(), Some([32, 16, 8]));
+    }
+
+    #[test]
+    fn workgroup_size_from_local_size_id() {
+        let text = r#"
+        OpCapability Shader
+        OpMemoryModel Logical GLSL450
+
+        OpEntryPoint GLCompute %1 "main"
+
+        OpExecutionModeId %1 LocalSizeId %32 %16 %8
+
+        %ty_void = OpTypeVoid
+        %ty_fn   = OpTypeFunction %ty_void
+        %ty_u32  = OpTypeInt 32 0
+
+        %32 = OpConstant %ty_u32 32
+        %16 = OpConstant %ty_u32 16
+        %8  = OpConstant %ty_u32 8
+
+        %1 = OpFunction %ty_void None %ty_fn
+        %2 = OpLabel
+        OpReturn
+        OpFunctionEnd
+        "#;
+
+        let bytes = assemble(text);
+        let module = Module::new(&bytes).unwrap();
+
+        assert_eq!(module.module.workgroup_size(), Some([32, 16, 8]));
     }
 }

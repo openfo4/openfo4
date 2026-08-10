@@ -170,6 +170,11 @@ impl<'a> ShaderInstance<'a> {
     pub fn to_spirv(&self) -> Vec<u32> {
         self.instance.to_spirv()
     }
+
+    /// Returns the local workgroup size defined.
+    pub fn workgroup_size(&self) -> Option<[u32; 3]> {
+        self.instance.workgroup_size()
+    }
 }
 
 #[derive(Clone, Debug)]

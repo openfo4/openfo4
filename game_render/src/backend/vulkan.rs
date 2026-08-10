@@ -354,9 +354,9 @@ impl Instance {
             instance: Arc::new(InstanceShared {
                 extensions: InstanceExtensionFns::new(&entry, &instance, &supported_extensions),
                 config,
-                entry,
                 instance,
                 messenger,
+                _entry: entry,
             }),
             extensions: supported_extensions,
         })
@@ -1676,6 +1676,13 @@ impl Device {
         let mut bindings = Vec::new();
         let mut flags = Vec::new();
 
+        let mut num_descriptors = 0_u32;
+        for binding in descriptor.bindings {
+            num_descriptors = num_descriptors.checked_add(binding.count.get()).unwrap();
+        }
+
+        assert!(num_descriptors <= self.device.limits.max_per_set_descriptors);
+
         for binding in descriptor.bindings {
             let info = vk::DescriptorSetLayoutBinding::default()
                 .binding(binding.binding)
@@ -1872,6 +1879,15 @@ impl Device {
                     )?);
                     let name = stage_entry_pointers.insert(CString::new(stage.entry).unwrap());
 
+                    let size = stage.shader.workgroup_size().unwrap();
+                    assert!(size[0] <= self.device.limits.max_task_work_group_size[0]);
+                    assert!(size[1] <= self.device.limits.max_task_work_group_size[1]);
+                    assert!(size[2] <= self.device.limits.max_task_work_group_size[2]);
+                    assert!(
+                        size[0] * size[1] * size[2]
+                            <= self.device.limits.max_task_work_group_invocations
+                    );
+
                     vk::PipelineShaderStageCreateInfo::default()
                         .stage(vk::ShaderStageFlags::TASK_EXT)
                         .module(module.shader)
@@ -1890,6 +1906,15 @@ impl Device {
                     )?);
                     let name = stage_entry_pointers.insert(CString::new(stage.entry).unwrap());
 
+                    let size = stage.shader.workgroup_size().unwrap();
+                    assert!(size[0] <= self.device.limits.max_mesh_work_group_size[0]);
+                    assert!(size[1] <= self.device.limits.max_mesh_work_group_size[1]);
+                    assert!(size[2] <= self.device.limits.max_mesh_work_group_size[2]);
+                    assert!(
+                        size[0] * size[1] * size[2]
+                            <= self.device.limits.max_mesh_work_group_invocations
+                    );
+
                     vk::PipelineShaderStageCreateInfo::default()
                         .stage(vk::ShaderStageFlags::MESH_EXT)
                         .module(module.shader)
@@ -1902,6 +1927,15 @@ impl Device {
                         descriptor.descriptors,
                     )?);
                     let name = stage_entry_pointers.insert(CString::new(stage.entry).unwrap());
+
+                    let size = stage.shader.workgroup_size().unwrap();
+                    assert!(size[0] <= self.device.limits.max_compute_work_group_size[0]);
+                    assert!(size[1] <= self.device.limits.max_compute_work_group_size[1]);
+                    assert!(size[2] <= self.device.limits.max_compute_work_group_size[2]);
+                    assert!(
+                        size[0] * size[1] * size[2]
+                            <= self.device.limits.max_compute_work_group_invocations
+                    );
 
                     vk::PipelineShaderStageCreateInfo::default()
                         .stage(vk::ShaderStageFlags::COMPUTE)
@@ -5012,13 +5046,13 @@ extern "system" fn debug_callback(
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct UnknownEnumValue;
 
-#[derive(Clone)]
 struct InstanceShared {
     config: Config,
-    entry: Entry,
     instance: ash::Instance,
     messenger: Option<vk::DebugUtilsMessengerEXT>,
     extensions: InstanceExtensionFns,
+    // The `Entry` must be kept alive until the `Instance` is dropped.
+    _entry: Entry,
 }
 
 impl InstanceShared {
@@ -5212,24 +5246,40 @@ pub struct DeviceLimits {
     max_descriptor_set_sampled_images: u32,
     max_descriptor_set_storage_images: u32,
     max_color_attachments: u32,
-    // VkPhysicalDeviceMaintenance3Properties
-    max_per_set_descriptors: u32,
-    max_memory_allocation_size: u64,
-    max_task_work_group_total_count: u32,
-    max_task_work_group_count: [u32; 3],
-    max_task_work_group_invocations: u32,
-    max_task_work_group_size: [u32; 3],
-    max_task_payload_size: u32,
-    max_mesh_work_group_total_count: u32,
-    max_mesh_work_group_count: [u32; 3],
-    max_mesh_work_group_invocations: u32,
-    max_mesh_work_group_size: [u32; 3],
-    max_mesh_output_vertices: u32,
-    max_mesh_output_primitives: u32,
+    /// The maximum number of compute workgroups that can be dispatched by a single call.
     max_compute_work_group_count: [u32; 3],
+    /// The maximum number of total threads of a single compute workgroup.
     max_compute_work_group_invocations: u32,
+    /// The maximum number dimension of a single compute workgroup.
     max_compute_work_group_size: [u32; 3],
     pub timestamp_period_nanos: f32,
+    // VkPhysicalDeviceMaintenance3Properties
+    /// The maximum number of descriptors in a single set.
+    max_per_set_descriptors: u32,
+    /// The maximum size of any individual allocation.
+    max_memory_allocation_size: u64,
+    // VkPhysicalDeviceMeshShaderPropertiesEXT
+    /// The maximum number of total workgroups that can be dispatched by a single call.
+    max_task_work_group_total_count: u32,
+    /// The maximum number of task shader workgroups that can be dispatched by a single call.
+    max_task_work_group_count: [u32; 3],
+    /// The maximum number of total threads of a single task shader workgroup.
+    max_task_work_group_invocations: u32,
+    /// The maximum size of each dimension of a single task shader workgroup.
+    max_task_work_group_size: [u32; 3],
+    max_task_payload_size: u32,
+    /// The maximum number of mesh shader workgroups that can be dispatched by a single call.
+    max_mesh_work_group_total_count: u32,
+    /// The maximum number of mesh shader workgroups that can be dispatched by a single call.
+    max_mesh_work_group_count: [u32; 3],
+    /// The maximum number of total threads of a single mesh shader workgroup.
+    max_mesh_work_group_invocations: u32,
+    /// The maximum size of each dimension of a single mesh shader workgroup.
+    max_mesh_work_group_size: [u32; 3],
+    /// The maximum number of vertices a mesh shader can emit.
+    max_mesh_output_vertices: u32,
+    /// The maximum number of primitives a mesh shader can emit.
+    max_mesh_output_primitives: u32,
 }
 
 #[derive(Copy, Clone, Debug, Default)]
