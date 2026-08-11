@@ -1,6 +1,6 @@
 //! Utility functions for triangle math
 
-use game_common::math::Ray;
+use game_common::math::{LineSegment, Ray};
 use glam::Vec3;
 
 /// A triangle with counter-clockwise winding.
@@ -89,6 +89,50 @@ impl Triangle {
         } else {
             None
         }
+    }
+
+    /// Returns the shared edge length between two triangles.
+    pub fn shared_edge_length(&self, other: &Self, threshold: f32) -> f32 {
+        let threshold2 = threshold * threshold;
+
+        let mut max_sq = 0.0;
+
+        for x in self.edges() {
+            for y in other.edges() {
+                let xdir = (x[0] - x[1]).normalize_or_zero();
+                let ydir = (y[0] - y[1]).normalize_or_zero();
+
+                let diff = 1.0 - xdir.dot(ydir) * xdir.dot(ydir);
+                // The line segments are not parallel.
+                if diff > threshold2 {
+                    continue;
+                }
+
+                let [a, b] = x;
+                let [c, d] = y;
+                let ab = LineSegment::new(a, b);
+                let cd = LineSegment::new(c, d);
+
+                let ab_to_c = ab.nearest_point(c);
+                let ab_to_d = ab.nearest_point(d);
+                let cd_to_a = cd.nearest_point(a);
+                let cd_to_b = cd.nearest_point(b);
+
+                // The line segments are not intersecting.
+                if ab_to_c.distance_squared(c) > threshold2
+                    && ab_to_d.distance_squared(d) > threshold2
+                    && cd_to_a.distance_squared(a) > threshold2
+                    && cd_to_b.distance_squared(b) > threshold2
+                {
+                    continue;
+                }
+
+                let len = cd_to_a.distance_squared(cd_to_b);
+                max_sq = f32::max(max_sq, len);
+            }
+        }
+
+        max_sq.sqrt()
     }
 }
 
@@ -450,5 +494,100 @@ mod tests {
 
         let ray = Ray::new(Vec3::new(0.0, -1.0, 0.0), Vec3::ONE.normalize());
         assert_eq!(tri.ray_intersection(ray), Some(Vec3::new(1.0, 0.0, 1.0)));
+    }
+
+    #[test]
+    fn triangle_shared_edge_length() {
+        const THRESHOLD: f32 = 0.001;
+
+        let a = Triangle::from_vertices(
+            [
+                Vec3::new(0.0, 0.0, 0.0),
+                Vec3::new(1.0, 0.0, 0.0),
+                Vec3::new(0.0, 0.0, 1.0),
+            ],
+            Vec3::Y,
+        );
+        let b = Triangle::from_vertices(
+            [
+                Vec3::new(0.0, 0.0, 0.0),
+                Vec3::new(1.0, 0.0, 0.0),
+                Vec3::new(0.0, 0.0, -1.0),
+            ],
+            Vec3::Y,
+        );
+        assert_eq!(a.shared_edge_length(&b, THRESHOLD), 1.0);
+
+        let a = Triangle::from_vertices(
+            [
+                Vec3::new(0.0, 0.0, 0.0),
+                Vec3::new(1.0, 0.0, 0.0),
+                Vec3::new(0.0, 0.0, 1.0),
+            ],
+            Vec3::Y,
+        );
+        let b = Triangle::from_vertices(
+            [
+                Vec3::new(0.0, 0.0, 0.0),
+                Vec3::new(-1.0, 0.0, 0.0),
+                Vec3::new(0.0, 0.0, -1.0),
+            ],
+            Vec3::Y,
+        );
+        assert_eq!(a.shared_edge_length(&b, THRESHOLD), 0.0);
+
+        let a = Triangle::from_vertices(
+            [
+                Vec3::new(0.0, 0.0, 0.0),
+                Vec3::new(1.0, 0.0, 0.0),
+                Vec3::new(0.0, 0.0, 1.0),
+            ],
+            Vec3::Y,
+        );
+        let b = Triangle::from_vertices(
+            [
+                Vec3::new(0.0, 0.0, 0.0),
+                Vec3::new(-1.0, 0.0, -1.0),
+                Vec3::new(0.0, 0.0, -1.0),
+            ],
+            Vec3::Y,
+        );
+        assert_eq!(a.shared_edge_length(&b, THRESHOLD), 0.0);
+
+        let a = Triangle::from_vertices(
+            [
+                Vec3::new(0.0, 0.0, 0.0),
+                Vec3::new(1.0, 0.0, 0.0),
+                Vec3::new(0.0, 0.0, 1.0),
+            ],
+            Vec3::Y,
+        );
+        let b = Triangle::from_vertices(
+            [
+                Vec3::new(1.0, 0.0, 1.0),
+                Vec3::new(1.0, 0.0, 0.0),
+                Vec3::new(0.0, 0.0, 1.0),
+            ],
+            Vec3::Y,
+        );
+        assert_eq!(a.shared_edge_length(&b, THRESHOLD), 2.0_f32.sqrt());
+
+        let a = Triangle::from_vertices(
+            [
+                Vec3::new(-726.8885, 66.89754, -792.87994),
+                Vec3::new(-727.8624, 67.03962, -787.29846),
+                Vec3::new(-732.1129, 67.00333, -787.43604),
+            ],
+            Vec3::Y,
+        );
+        let b = Triangle::from_vertices(
+            [
+                Vec3::new(-724.66205, 66.72719, -784.098),
+                Vec3::new(-732.1684, 66.776276, -783.9626),
+                Vec3::new(-727.8624, 67.03962, -787.29846),
+            ],
+            Vec3::Y,
+        );
+        assert_eq!(a.shared_edge_length(&b, THRESHOLD), 0.0);
     }
 }

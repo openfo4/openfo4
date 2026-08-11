@@ -22,7 +22,7 @@ const NEIGHBOR_THRESHOLD: f32 = 0.001;
 pub struct NavMesh {
     triangles: Vec<Triangle>,
     centers: Vec<Vec3>,
-    graph: Graph<usize, (), Undirected>,
+    graph: Graph<usize, f32, Undirected>,
     tree: RTree<GeomWithData<Rectangle<[f32; 3]>, usize>>,
 }
 
@@ -51,7 +51,8 @@ impl NavMesh {
 
             let center = triangle.centroid();
 
-            self.graph.add_node(new_index);
+            let i = self.graph.add_node(new_index);
+            debug_assert_eq!(i.index(), new_index);
 
             let aabb = AABB::from_points([
                 &triangle.a.to_array(),
@@ -68,8 +69,10 @@ impl NavMesh {
                     continue;
                 }
 
+                let len = triangle.shared_edge_length(&tri, NEIGHBOR_THRESHOLD);
+
                 self.graph
-                    .add_edge(NodeIndex::new(new_index), NodeIndex::new(index), ());
+                    .update_edge(NodeIndex::new(new_index), NodeIndex::new(index), len);
             }
 
             self.triangles.push(triangle);
@@ -117,9 +120,14 @@ impl NavMesh {
             NodeIndex::new(start),
             |index| index.index() == end,
             |edge| {
-                let a = self.centers[edge.source().index()];
-                let b = self.centers[edge.target().index()];
-                a.distance_squared(b)
+                let width = edge.weight();
+                if *width < agent.width {
+                    f32::MAX
+                } else {
+                    let a = self.centers[edge.source().index()];
+                    let b = self.centers[edge.target().index()];
+                    a.distance_squared(b)
+                }
             },
             |index| {
                 let a = self.centers[index.index()];
@@ -134,6 +142,24 @@ impl NavMesh {
             .iter()
             .map(|index| self.triangles[*index])
             .collect();
+
+        // Currently width is included in our A* path cost heuristic, which
+        // means A* will never choose it if another valid exists, however
+        // when only one path exists, A* will choose paths that are not wide
+        // enough.
+        // We never want to return a path that is not wide enough, so we filter
+        // them out here.
+        for [a, b] in triangles.array_windows::<2>() {
+            for edge in self
+                .graph
+                .edges_connecting((*a as u32).into(), (*b as u32).into())
+            {
+                let width = edge.weight();
+                if *width < agent.width {
+                    return None;
+                }
+            }
+        }
 
         let mut waypoints = ssf::ssf(&tris, agent.position);
         waypoints.push(target);
@@ -173,6 +199,7 @@ pub struct ObstacleId();
 
 pub struct Agent {
     pub position: Vec3,
+    pub width: f32,
 }
 
 #[cfg(test)]
@@ -197,6 +224,7 @@ mod tests {
             .search(
                 &Agent {
                     position: Vec3::new(-1.0, 0.0, -1.0),
+                    width: 0.0,
                 },
                 Vec3::Z,
             )
@@ -222,6 +250,7 @@ mod tests {
             .search(
                 &Agent {
                     position: Vec3::new(-1.0, 0.0, -1.0),
+                    width: 0.0,
                 },
                 Vec3::new(1.0, 0.0, 1.0),
             )
