@@ -31,3 +31,9 @@ impl<T> TaskQueue<T> {
         }
     }
 }
+
+impl<T> Default for TaskQueue<T> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
