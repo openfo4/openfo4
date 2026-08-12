@@ -1,20 +1,19 @@
-use std::f32::consts::{FRAC_2_PI, FRAC_PI_2, PI};
+use std::f32::consts::FRAC_PI_2;
 use std::time::{Duration, Instant};
 
 use game_common::components::Transform;
 use game_common::math::Ray;
-use game_egui::egui::containers;
 use glam::{Quat, Vec3};
 use openfo4_core::ecs::Entity;
 use openfo4_core::transform::ConvertCoordinateSystem;
 
 use crate::assets::nif::NIF_TO_METERS;
 use crate::systems::ai::movement::{Face, MoveTo};
-use crate::systems::ai::{AiPackage, Behavior, Context, Status};
+use crate::systems::ai::{Behavior, Context, Status};
 use crate::systems::inventory::{EquipItemEvent, Inventory, InventoryKey, ItemData};
 use crate::systems::{
     FacingDirection, GunFireRequest, GunReloadEvent, GunReloadRequest, WeaponDrawRequest,
-    WeaponDrawnEvent, WeaponSheathEvent,
+    WeaponDrawnEvent,
 };
 
 /// Below this distance NPCs with guns seem to consistently backoff until they reach this distance.

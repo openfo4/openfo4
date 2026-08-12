@@ -22,7 +22,6 @@ pub mod inventory;
 pub mod lights;
 pub mod linked_refs;
 pub mod movement;
-pub mod ni_transform;
 pub mod nif_animation;
 pub mod pathing;
 pub mod projectile;

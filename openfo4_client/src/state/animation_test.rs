@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::collections::{HashMap, VecDeque};
 use std::sync::OnceLock;
 
 use game_common::components::{Axis, Transform};
@@ -51,40 +51,8 @@ pub fn animation_test(
     esp_loader: &EspLoader,
     script_loader: &ScriptLoader,
     script_entities: &mut ScriptEntities,
-    config: config::Streaming,
 ) {
     static ONCE: OnceLock<()> = OnceLock::new();
-
-    let project_file = "actors/turret/turretstanding.hkx";
-    let behavior_file = "meshes/actors/turret/behaviors/turretsharedbehavior.hkx";
-    let search_paths = ["meshes/actors/turret/animations/standing"];
-    let skin_path = "meshes/actors/turret/characterassets/turretstanding.nif";
-    let nif_skeleton = "actors/turret/characterassets/turretstandingskeleton.nif";
-
-    let behavior_filename = "meshes/actors/character/behaviors/raiderrootbehavior.hkx";
-    // let behavior_filename = "meshes/actors/character/behaviors/weaponbehavior.hkx";
-    let subgraph_filename = "meshes/actors/character/behaviors/weaponbehavior.hkx";
-    // let behavior_filename = "meshes/actors/character/behaviors/mtbehavior.hkx";
-    // let behavior_filename = "meshes/actors/character/behaviors/raiderrootbehavior.hkx";
-    let behavior_file = behavior_filename;
-    let search_paths = [
-        // "meshes/actors/character/animations/mt/player",
-        // "meshes/actors/character/animations/mt/confident",
-        // "meshes/actors/character/animations/mt/neutral",
-        // "meshes/actors/character/animations",
-        // "meshes/actors/character/animations/furniture/water",
-        "actors/character/animations/weapon/laserpistol",
-        "actors/character/animations/weapon/pistol",
-        "actors/character/animations",
-    ];
-    // let anim_search_path = "meshes/actors/character/animations/";
-    // let skin_path = "meshes/actors/character/characterassets/malebody.nif";
-    let skin_path = "meshes/armor/armoredcoat/outfitf.nif";
-    let nif_skeleton = "actors/character/characterassets/skeleton.nif";
-
-    let char_path = "meshes/actors/character/characters/raidercharacter.hkx";
-
-    // let raider_root_path = "meshes/actors/character/behaviors/raiderrootbehavior.hkx";
 
     ONCE.get_or_init(|| {
         let start_x = std::env::var("OF4_SX")
@@ -239,8 +207,6 @@ pub fn animation_test(
             // world.add_children(root, collider);
 
             if index == 0 {
-                let distance = config.active;
-
                 crate::systems::camera::attach_camera(world, root);
                 world
                     .insert(

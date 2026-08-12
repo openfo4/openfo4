@@ -337,6 +337,3 @@ pub fn update_actor_animation_graphs(world: &mut World, loader: &AssetLoader, po
 
 #[derive(Copy, Clone, Debug)]
 struct ActiveAnimationGraph(usize);
-
-#[derive(Clone, Debug)]
-pub struct AnimationPreloadCache {}

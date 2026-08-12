@@ -102,9 +102,6 @@ pub struct BodyPartBone {
 }
 
 #[derive(Clone, Debug)]
-pub struct ActorAnimationGraphs(pub Vec<ActorAnimationGraph>);
-
-#[derive(Clone, Debug)]
 pub struct ActorBodyParts(Vec<ActorBodyPart>);
 
 impl ActorBodyParts {

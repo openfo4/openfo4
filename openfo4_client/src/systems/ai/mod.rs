@@ -1,4 +1,4 @@
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 use game_ai::navmesh::{Agent, Mesh, NavMesh, Path};
 use game_common::components::Transform;

@@ -7,7 +7,6 @@ pub mod equipment;
 pub mod esp;
 pub mod globals;
 pub mod hardcoded;
-pub mod item;
 pub mod level;
 pub mod npc;
 pub mod terrain;
@@ -214,7 +213,6 @@ impl GameState {
             &self.esp_loader,
             &self.executor.loader(),
             &mut self.script_entities,
-            self.config.streaming,
         );
 
         update_time(&mut self.world, Duration::from_secs_f32(1.0 / UPS as f32));
