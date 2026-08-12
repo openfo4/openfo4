@@ -24,7 +24,7 @@ use crate::systems::scripting::invocations::{
     AliasInit, AliasShutdown, Init, QuestFragmentSetStage, QuestInit, QuestSetStage, QuestShutdown,
 };
 use crate::systems::scripting::loader::{ScriptLoader, ScriptObject};
-use crate::systems::scripting::{Executor, InvocationId};
+use crate::systems::scripting::{Executor, Invocation};
 
 static ONCE: Once = Once::new();
 
@@ -118,7 +118,7 @@ impl QuestManager {
                         }
                     }
                     QuestState::Init(invocation) => {
-                        if !executor.is_invocation_done(*invocation) {
+                        if !invocation.is_done() {
                             break;
                         }
 
@@ -176,7 +176,7 @@ impl QuestManager {
                         quest.state = QuestState::Starting(QuestStarting::AliasInit(invocations));
                     }
                     QuestState::Starting(QuestStarting::AliasInit(invocations)) => {
-                        invocations.retain(|id| !executor.is_invocation_done(*id));
+                        invocations.retain(|invoc| !invoc.is_done());
                         if !invocations.is_empty() {
                             break;
                         }
@@ -191,8 +191,8 @@ impl QuestManager {
                             quest.state = QuestState::Running;
                         }
                     }
-                    QuestState::Starting(QuestStarting::QuestInit(id)) => {
-                        if !executor.is_invocation_done(*id) {
+                    QuestState::Starting(QuestStarting::QuestInit(invoc)) => {
+                        if !invoc.is_done() {
                             break;
                         }
 
@@ -285,8 +285,8 @@ impl QuestManager {
                             }
                         }
                     }
-                    QuestState::Stopping(QuestStopping::QuestShutdown(id)) => {
-                        if !executor.is_invocation_done(*id) {
+                    QuestState::Stopping(QuestStopping::QuestShutdown(invoc)) => {
+                        if !invoc.is_done() {
                             break;
                         }
 
@@ -304,7 +304,7 @@ impl QuestManager {
                             QuestState::Stopping(QuestStopping::AliasShutdown(invocations));
                     }
                     QuestState::Stopping(QuestStopping::AliasShutdown(invocations)) => {
-                        invocations.retain(|id| !executor.is_invocation_done(*id));
+                        invocations.retain(|invoc| !invoc.is_done());
                         if !invocations.is_empty() {
                             break;
                         }
@@ -410,7 +410,7 @@ pub enum QuestState {
     /// The quest is loaded, but `OnInit` was not called yet.
     PreInit,
     /// `OnInit` is being called on the quest.
-    Init(InvocationId),
+    Init(Invocation),
     Starting(QuestStarting),
     /// The quest is currently active.
     Running,
@@ -423,17 +423,17 @@ pub enum QuestStarting {
     /// The quest is loading some data before being started.
     Load(Task<HashMap<u32, EntityRef>>),
     /// `OnAliasInit` is being called on all aliases.
-    AliasInit(Vec<InvocationId>),
+    AliasInit(Vec<Invocation>),
     /// `OnQuestInit` is being called on the quest.
-    QuestInit(InvocationId),
+    QuestInit(Invocation),
 }
 
 #[derive(Debug)]
 pub enum QuestStopping {
     /// `OnQuest` is being called on the quest.
-    QuestShutdown(InvocationId),
+    QuestShutdown(Invocation),
     /// `OnQuestShutdown` is being called on all aliases.
-    AliasShutdown(Vec<InvocationId>),
+    AliasShutdown(Vec<Invocation>),
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
