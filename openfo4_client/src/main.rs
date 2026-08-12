@@ -41,10 +41,14 @@ use shared::SharedState;
 use state::GameState;
 
 use crate::config::Config;
+use crate::loader::FileLoader;
 use crate::render::physics_debug::{
     draw_doors, draw_hitscan_markers, draw_light_markers, draw_navmesh,
     draw_planned_ai_agent_paths, draw_trigger_boxes,
 };
+use crate::state::data;
+use crate::state::esp::EspLoaderBuilder;
+use crate::state::hardcoded;
 
 #[derive(Clone, Debug, Parser)]
 #[command(version, about, long_about = None)]
@@ -101,7 +105,8 @@ fn main() -> ExitCode {
     let egui_ctx = EguiContext::new(ui_renderer);
 
     let ui = UiState::new(&mut renderer);
-    let mut game = GameState::new(shared.clone(), pool, &data_dirs, config);
+    let mut game =
+        futures_lite::future::block_on(create_game(shared.clone(), pool, &data_dirs, config));
     game.init_camera();
     let state = RenderState::new(
         renderer,
@@ -125,6 +130,49 @@ fn main() -> ExitCode {
 
     wm.run(app);
     ExitCode::SUCCESS
+}
+
+async fn create_game(
+    shared: Arc<SharedState>,
+    pool: Arc<TaskPool>,
+    data_dirs: &[PathBuf],
+    config: Config,
+) -> GameState {
+    let mut loader = EspLoaderBuilder::new();
+    loader.set_hardcoded(hardcoded::load_hardcoded_forms());
+
+    let mut sources = Vec::new();
+
+    for path in data_dirs {
+        let contents = match data::scan_data_directory(path) {
+            Ok(contents) => contents,
+            Err(err) => {
+                tracing::error!(
+                    "failed to load from data directory {}: {}; skipping",
+                    path.to_string_lossy(),
+                    err
+                );
+                continue;
+            }
+        };
+
+        for path in contents.plugins {
+            loader.push(path);
+        }
+
+        for path in contents.archives {
+            sources.push(path);
+        }
+
+        for path in contents.directories {
+            sources.push(path);
+        }
+    }
+
+    let file_loader = Arc::new(FileLoader::new(sources));
+    let loader = Arc::new(loader.finalize());
+
+    GameState::new(shared, pool, file_loader, loader, config).await
 }
 
 struct App {

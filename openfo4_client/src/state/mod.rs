@@ -2,19 +2,17 @@ pub mod actions;
 pub mod anim_starter;
 pub mod animation;
 pub mod animation_test;
+pub mod data;
 pub mod equipment;
 pub mod esp;
+pub mod globals;
 pub mod hardcoded;
 pub mod item;
 pub mod level;
 pub mod npc;
 pub mod terrain;
 
-mod data;
-mod globals;
-
 use std::f32::consts::PI;
-use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -51,7 +49,6 @@ use crate::shared::SharedState;
 use crate::state::actions::{Action, Actions};
 use crate::state::anim_starter::{AnimationEventQueue, AnimationSystem};
 use crate::state::animation::update_actor_animation_graphs;
-use crate::state::esp::EspLoaderBuilder;
 use crate::systems::activation::update_player_looking_at_target;
 use crate::systems::ai::AiSystem;
 use crate::systems::animation_sync::{bounce_animation_events, update_animation_parameters};
@@ -75,14 +72,11 @@ use crate::systems::{self, GunFireRequest, GunReloadRequest, WeaponDrawRequest, 
 
 pub const UPS: u32 = 60;
 
-// Load cell
-// Instantiate entity
-
+/// The main simulation structure of a game world.
 pub struct GameState {
     pool: Arc<TaskPool>,
     pub world: World,
     shared: Arc<SharedState>,
-    loader: Arc<FileLoader>,
     level: Level,
     physics: PhysicsPipeline,
     anim_event: Option<&'static str>,
@@ -107,57 +101,22 @@ pub struct GameState {
 }
 
 impl GameState {
-    pub fn new(
+    pub async fn new(
         shared: Arc<SharedState>,
         pool: Arc<TaskPool>,
-        data_dirs: &[PathBuf],
+        file_loader: Arc<FileLoader>,
+        loader: Arc<EspLoader>,
         config: Config,
     ) -> Self {
-        let mut loader = EspLoaderBuilder::new();
-        loader.set_hardcoded(hardcoded::load_hardcoded_forms());
-
-        let mut sources = Vec::new();
-
-        for path in data_dirs {
-            let contents = match data::scan_data_directory(path) {
-                Ok(contents) => contents,
-                Err(err) => {
-                    tracing::error!(
-                        "failed to load from data directory {}: {}; skipping",
-                        path.to_string_lossy(),
-                        err
-                    );
-                    continue;
-                }
-            };
-
-            for path in contents.plugins {
-                loader.push(path);
-            }
-
-            for path in contents.archives {
-                sources.push(path);
-            }
-
-            for path in contents.directories {
-                sources.push(path);
-            }
-        }
-
-        let file_loader = Arc::new(FileLoader::new(sources));
-        let loader = Arc::new(loader.finalize());
-
         let asset_loader = init_asset_loader(&file_loader, &shared.entities);
 
-        let actions = futures_lite::future::block_on(actions::Actions::load(&loader));
-        dbg!(&actions);
+        let actions = Actions::load(&loader).await;
 
         let animation = AnimationSystem::new(&loader);
 
-        let global_variables =
-            futures_lite::future::block_on(globals::load_global_variables(&loader));
-        let form_lists = futures_lite::future::block_on(globals::load_form_lists(&loader));
-        let factions = futures_lite::future::block_on(globals::load_factions(&loader));
+        let global_variables = globals::load_global_variables(&loader).await;
+        let form_lists = globals::load_form_lists(&loader).await;
+        let factions = globals::load_factions(&loader).await;
         let globals = Arc::new(GlobalProperties {
             variables: Mutex::new(global_variables),
             form_lists: Mutex::new(form_lists),
@@ -169,13 +128,14 @@ impl GameState {
             mods: Default::default(),
         });
 
-        let mut executor = futures_lite::future::block_on(Executor::new(
+        let mut executor = Executor::new(
             loader.clone(),
             file_loader.clone(),
             pool.clone(),
             config.scripting,
             globals.clone(),
-        ));
+        )
+        .await;
 
         let level = Level::new(
             loader.clone(),
@@ -199,7 +159,6 @@ impl GameState {
             world,
             shared,
             level,
-            loader: file_loader.clone(),
             physics: PhysicsPipeline::new(),
             anim_event: None,
             asset_loader,
@@ -348,10 +307,6 @@ impl GameState {
         &self.world
     }
 
-    pub fn events_mut(&mut self) -> &mut EventBus {
-        &mut self.event_bus
-    }
-
     pub fn send_event(&mut self, event: WindowEvent) {
         systems::camera::handle_free_camera(&mut self.world, &event);
         systems::controller::handle_inputs(
@@ -407,7 +362,7 @@ impl GameState {
                             shape: mesh,
                             layer: CollisionLayer::STATIC,
                         },
-                        openfo4_physics::components::RigidBody {
+                        RigidBody {
                             kind: openfo4_physics::components::RigidBodyKind::Dynamic,
                             linvel: Vec3::ZERO,
                             angvel: Vec3::ZERO,
@@ -540,7 +495,7 @@ impl GameState {
                 if event.key_code == Some(KeyCode::B) {
                     let mut buffer = CommandBuffer::new();
 
-                    for (e, body, _, controller) in self.world.query_mut::<(
+                    for (e, _, _, controller) in self.world.query_mut::<(
                         Entity,
                         &mut RigidBody,
                         &Player,
