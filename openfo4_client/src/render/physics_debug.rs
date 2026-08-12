@@ -310,7 +310,7 @@ pub fn draw_navmesh(world: &World, ai: &AiSystem, gizmos: &Gizmos) {
         return;
     };
 
-    for &[a, b, c] in navmesh.triangles() {
+    for [a, b, c] in navmesh.triangles().iter().map(|v| v.vertices()) {
         gizmos.line(a, b, NAVMESH_TRIANGLE_COLOR);
         gizmos.line(b, c, NAVMESH_TRIANGLE_COLOR);
         gizmos.line(c, a, NAVMESH_TRIANGLE_COLOR);
@@ -326,7 +326,7 @@ pub fn draw_planned_ai_agent_paths(world: &World, ai: &AiSystem, gizmos: &Gizmos
         return;
     };
 
-    for (entity, path) in &ai.paths {
+    for (_, (entity, path)) in &ai.paths {
         if world
             .get::<&WorldSpace>(*entity)
             .ok()
@@ -336,7 +336,7 @@ pub fn draw_planned_ai_agent_paths(world: &World, ai: &AiSystem, gizmos: &Gizmos
         }
 
         for id in &path.triangles {
-            let [a, b, c] = navmesh.triangles()[*id];
+            let [a, b, c] = navmesh.triangles()[*id].vertices();
 
             gizmos.line(a, b, NAVMESH_PATH_COLOR);
             gizmos.line(b, c, NAVMESH_PATH_COLOR);
