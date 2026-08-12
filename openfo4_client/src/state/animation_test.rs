@@ -249,7 +249,7 @@ pub fn animation_test(
                             Player,
                             PlayerControlState::default(),
                             AnimationEventQueue::default(),
-                            Streamer { distance },
+                            Streamer {},
                             ActorMarker,
                             InputControllerMask::default(),
                         ),
@@ -509,26 +509,6 @@ impl ActorCharacter {
             }
         }
 
-        let mut bones_bind_pose = HashMap::new();
-        let mut root_bones: HashSet<_> = self.skeleton.bones.iter().map(|b| b.index).collect();
-        for (bone, transform) in self
-            .skeleton
-            .bones
-            .iter()
-            .zip(self.skeleton.bind_pose_bone_transforms())
-        {
-            bones_bind_pose.insert(bone.index, transform);
-
-            for index in &bone.children {
-                root_bones.remove(index);
-            }
-        }
-
-        let root_bone_entities = root_bones
-            .into_iter()
-            .map(|index| *bones.get(&index).unwrap())
-            .collect();
-
         for (bone_index, bone_entity) in &bones {
             // A bone tagged body part must include all recursive
             // children since colliders may be children.
@@ -555,13 +535,7 @@ impl ActorCharacter {
         }
 
         SpawnedActor {
-            skeleton: SkeletonInstance {
-                skeleton: self.skeleton.clone(),
-                bones,
-                bones_bind_pose,
-                root_bones: root_bone_entities,
-                culled: HashSet::new(),
-            },
+            skeleton: SkeletonInstance::new(self.skeleton.clone(), bones),
         }
     }
 
