@@ -56,7 +56,7 @@ impl BlockBuffer {
         match self.writes_queued.last_mut() {
             // It is possible that only a prefix of a block is written,
             // in this case we cannot merge.
-            Some(BufferWrite::Data(last_index, buf)) if buf.len() == self.block_size => {
+            Some(BufferWrite::Data(last_index, buf)) if buf.len() % self.block_size == 0 => {
                 let count = (buf.len() / self.block_size) as u32;
 
                 if last_index.checked_add(count) == Some(index) {
