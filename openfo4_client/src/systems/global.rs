@@ -158,5 +158,12 @@ pub enum FactionReaction {
 #[derive(Debug, Default)]
 pub struct RecordModifications {
     /// Dynamically added leveled list additions.
-    pub leveled_list: Mutex<HashMap<RecordId, FormList>>,
+    pub leveled_list: Mutex<HashMap<RecordId, Vec<LevelListAddition>>>,
+}
+
+#[derive(Copy, Clone, Debug)]
+pub struct LevelListAddition {
+    pub item: RecordId,
+    pub level: u16,
+    pub count: u32,
 }
