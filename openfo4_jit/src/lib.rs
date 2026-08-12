@@ -1738,9 +1738,6 @@ impl Debug for CompiledFunction {
     }
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
-pub struct DataId(usize);
-
 #[derive(Clone, Debug, Default)]
 pub struct CompilerConfig {
     pub backend: BackendKind,
