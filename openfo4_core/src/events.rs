@@ -1,10 +1,8 @@
 use std::any::{Any, TypeId};
-use std::collections::HashMap;
-use std::hash::Hash;
 use std::iter::FusedIterator;
 use std::marker::PhantomData;
 
-use crate::ecs::Entity;
+use hashbrown::HashMap;
 
 #[derive(Debug, Default)]
 pub struct EventBus {
@@ -44,6 +42,12 @@ impl EventBus {
 
     pub fn clear(&mut self) {
         self.events.clear();
+    }
+
+    pub fn move_to(&mut self, dst: &mut EventBus) {
+        for (id, events) in self.events.drain() {
+            dst.events.entry(id).or_default().extend(events);
+        }
     }
 }
 
