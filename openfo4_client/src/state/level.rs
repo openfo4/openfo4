@@ -196,6 +196,10 @@ impl Level {
             }
         }
 
+        for cell in &cells_to_unload {
+            self.cells_loaded.remove(cell);
+        }
+
         for (cell, new_mode) in cells_to_load {
             if let Some(mode) = self.cells_loaded.get(&cell) {
                 if *mode == new_mode {

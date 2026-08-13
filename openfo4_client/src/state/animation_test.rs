@@ -24,7 +24,7 @@ use crate::assets::animation::AnimationSet;
 use crate::assets::data_file::DataFile;
 use crate::assets::nif::{Instantiate, LoadNifFlags, NIF_TO_METERS, NifScene};
 use crate::cell::CellId;
-use crate::components::{ActorMarker, NiTransform, Player, WorldSpace};
+use crate::components::{ActorMarker, NiTransform, Persistent, Player, WorldSpace};
 use crate::config;
 use crate::state::anim_starter::AnimationEventQueue;
 use crate::state::animation::{self, SkeletonConfig, load_anim};
@@ -218,6 +218,7 @@ pub fn animation_test(
                             Streamer {},
                             ActorMarker,
                             InputControllerMask::default(),
+                            Persistent,
                         ),
                     )
                     .unwrap();
