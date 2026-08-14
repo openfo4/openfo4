@@ -1,4 +1,5 @@
 use std::iter::FusedIterator;
+use std::time::Duration;
 
 use hashbrown::{HashMap, HashSet};
 use indexmap::IndexSet;
@@ -14,6 +15,7 @@ pub struct GlobalProperties {
     pub form_lists: Mutex<HashMap<RecordId, FormList>>,
     pub factions: Mutex<HashMap<RecordId, Faction>>,
     pub mods: RecordModifications,
+    pub playtime: PlayTime,
 }
 
 /// Set of game rules.
@@ -166,4 +168,19 @@ pub struct LevelListAddition {
     pub item: RecordId,
     pub level: u16,
     pub count: u32,
+}
+
+#[derive(Debug, Default)]
+pub struct PlayTime(Mutex<Duration>);
+
+impl PlayTime {
+    pub fn get(&self) -> Duration {
+        *self.0.lock()
+    }
+
+    /// Increases the time by the given [`Duration`].
+    pub fn increase(&self, delta: Duration) {
+        let mut dur = self.0.lock();
+        *dur = dur.saturating_add(delta);
+    }
 }

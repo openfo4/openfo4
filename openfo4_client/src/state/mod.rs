@@ -54,7 +54,7 @@ use crate::systems::animation_sync::{bounce_animation_events, update_animation_p
 use crate::systems::camera::CameraMode;
 use crate::systems::controller::{apply_player_movements, update_facing_direction};
 use crate::systems::door::{handle_automatic_doors, handle_door_activations};
-use crate::systems::global::{Difficulty, GameRules, GlobalProperties};
+use crate::systems::global::{Difficulty, GameRules, GlobalProperties, PlayTime};
 use crate::systems::hierarchy::TransformHierarchyCache;
 use crate::systems::inventory::InventorySystem;
 use crate::systems::movement::apply_movement;
@@ -96,7 +96,6 @@ pub struct GameState {
     pub ai: AiSystem,
     real_time_elapsed: Duration,
     transform_hierarchy_cache: TransformHierarchyCache,
-    config: Config,
 }
 
 impl GameState {
@@ -125,6 +124,7 @@ impl GameState {
             },
             factions: Mutex::new(factions),
             mods: Default::default(),
+            playtime: PlayTime::default(),
         });
 
         let mut executor = Executor::new(
@@ -175,7 +175,6 @@ impl GameState {
             ai: AiSystem::default(),
             real_time_elapsed: Duration::ZERO,
             transform_hierarchy_cache: TransformHierarchyCache::default(),
-            config,
         }
     }
 
@@ -197,6 +196,7 @@ impl GameState {
 
         futures_lite::future::block_on(self.interval.wait(Instant::now()));
         self.real_time_elapsed += self.interval.timestep();
+        self.globals.playtime.increase(self.interval.timestep());
 
         self.level.update(
             &mut self.world,

@@ -579,8 +579,9 @@ fn get_players_last_ridden_horse(caller: Caller<'_, State>) -> Result<Object, Er
 /// ```text
 /// float Function() native global
 /// ```
-fn get_real_hours_passed(caller: Caller<'_, State>) -> Result<f32, Error> {
-    todo!()
+fn get_real_hours_passed(caller: Caller<'_, State>) -> f32 {
+    let dur = caller.data().globals.playtime.get();
+    dur.as_secs_f32() / 3600.0
 }
 
 /// `GetSuspiciousAV`
