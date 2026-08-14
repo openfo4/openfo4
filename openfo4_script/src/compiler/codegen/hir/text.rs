@@ -162,15 +162,13 @@ where
         }
         Instruction::Brif {
             condition,
-            invert_condition,
             then_block,
             else_block,
         } => {
-            let mode = if *invert_condition { "false" } else { "true" };
             writeln!(
                 writer,
-                "brif {} {} b{} b{}",
-                mode, condition, then_block.0, else_block.0,
+                "brif {} b{} b{}",
+                condition, then_block.0, else_block.0,
             )?;
         }
         Instruction::Return(value) => {

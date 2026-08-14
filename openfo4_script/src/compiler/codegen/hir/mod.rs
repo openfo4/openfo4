@@ -73,7 +73,6 @@ enum Instruction {
     },
     Brif {
         condition: Value<bool>,
-        invert_condition: bool,
         then_block: Block,
         else_block: Block,
     },
@@ -427,7 +426,6 @@ impl FunctionBuilder {
     pub fn brif_true(&mut self, condition: Value<bool>, then_block: Block, else_block: Block) {
         self.instructions.push(Instruction::Brif {
             condition,
-            invert_condition: false,
             then_block,
             else_block,
         });
@@ -436,9 +434,8 @@ impl FunctionBuilder {
     pub fn brif_false(&mut self, condition: Value<bool>, then_block: Block, else_block: Block) {
         self.instructions.push(Instruction::Brif {
             condition,
-            invert_condition: true,
-            then_block,
-            else_block,
+            then_block: else_block,
+            else_block: then_block,
         });
     }
 

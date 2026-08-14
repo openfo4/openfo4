@@ -303,7 +303,6 @@ pub fn lower_function(
                 }
                 Instruction::Brif {
                     condition,
-                    invert_condition,
                     then_block,
                     else_block,
                 } => {
@@ -312,15 +311,9 @@ pub fn lower_function(
                     let true_block = blocks[then_block.0 - 1];
                     let false_block = blocks[else_block.0 - 1];
 
-                    if *invert_condition {
-                        translator
-                            .builder
-                            .brif(condition, false_block, &[], true_block, &[]);
-                    } else {
-                        translator
-                            .builder
-                            .brif(condition, true_block, &[], false_block, &[]);
-                    }
+                    translator
+                        .builder
+                        .brif(condition, true_block, &[], false_block, &[]);
                 }
                 Instruction::Call(op) => {
                     let callee = &translator.data.registry.function(op.callee).unwrap();
