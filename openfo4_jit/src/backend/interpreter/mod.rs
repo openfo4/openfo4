@@ -11,7 +11,7 @@ use slab::Slab;
 
 use crate::backend::{Backend, FunctionDefinitionDesc, StackSlotDesc};
 use crate::func::{HostFunc, MAX_ALIGN};
-use crate::{CompilerConfig, FuncId, Instruction, Signature, SourceLocMap, Type, Value, Word};
+use crate::{CompilerConfig, FuncId, Instruction, Signature, Type, Value, Word};
 
 pub struct Interpreter {
     functions: Slab<FuncState>,
@@ -79,7 +79,6 @@ impl Backend for Interpreter {
                 signature: state.signature.clone(),
                 num_values: definition.num_values,
                 stack_slots,
-                srclocs: SourceLocMap::default(),
             }),
         );
     }
@@ -99,7 +98,6 @@ impl Backend for Interpreter {
                 signature: state.signature.clone(),
                 num_values: 0,
                 stack_slots: VecMap::new(),
-                srclocs: SourceLocMap::default(),
             }),
         );
     }
@@ -603,10 +601,6 @@ impl CompiledFunc {
     pub fn index(&self) -> usize {
         self.index
     }
-
-    pub fn srclocs(&self) -> &SourceLocMap {
-        &self.func.srclocs
-    }
 }
 
 #[derive(Clone, Debug)]
@@ -655,7 +649,6 @@ struct FuncData {
     signature: Signature,
     num_values: usize,
     stack_slots: VecMap<usize, StackSlotDesc>,
-    srclocs: SourceLocMap,
 }
 
 #[derive(Clone, Debug)]

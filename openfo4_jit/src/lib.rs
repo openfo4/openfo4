@@ -1709,10 +1709,6 @@ impl CompiledFunction {
         self.inner.as_ptr()
     }
 
-    pub fn as_bytes(&self) -> &[u8] {
-        self.inner.as_bytes()
-    }
-
     /// Returns a textual representation of the compiled code.
     ///
     /// This is only available when debug was enabled. The text format is unspecified and only
@@ -1732,10 +1728,6 @@ impl CompiledFunction {
 
     pub fn signature(&self) -> &Signature {
         &self.signature
-    }
-
-    pub fn srclocs(&self) -> &SourceLocMap {
-        self.inner.srclocs()
     }
 }
 

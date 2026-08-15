@@ -191,13 +191,6 @@ impl CompiledFunc {
         }
     }
 
-    pub fn as_bytes(&self) -> &[u8] {
-        match self {
-            Self::Intepreter(_) => &[],
-            Self::Cranelift(func) => func.as_bytes(),
-        }
-    }
-
     pub fn clif(&self) -> Option<&TextWithSrcLocs<String>> {
         match self {
             Self::Cranelift(func) => func.clif(),
@@ -209,13 +202,6 @@ impl CompiledFunc {
         match self {
             Self::Cranelift(func) => func.disasm(),
             Self::Intepreter(_) => None,
-        }
-    }
-
-    pub fn srclocs(&self) -> &SourceLocMap {
-        match self {
-            Self::Intepreter(func) => func.srclocs(),
-            Self::Cranelift(func) => func.srclocs(),
         }
     }
 }

@@ -1019,8 +1019,6 @@ impl Backend for CraneliftModule {
         CompiledFunction {
             _allocation: compiled.allocation.clone(),
             fn_ptr: compiled.allocation.as_exec_ptr(),
-            srclocs: compiled.srclocs.clone(),
-            len: compiled.code.code_buffer().len(),
             _trampoline_allocation: trampoline.allocation.clone(),
             trampoline_fn_ptr: trampoline.allocation.as_exec_ptr(),
             debug,
@@ -1082,8 +1080,6 @@ pub struct CompiledFunction {
     _trampoline_allocation: Arc<Allocation>,
     fn_ptr: *const u8,
     trampoline_fn_ptr: *const u8,
-    srclocs: SourceLocMap,
-    len: usize,
     // This is boxed to reduce the size of this struct when
     // debug info is disabled.
     debug: Option<Box<DebugInfo>>,
@@ -1103,22 +1099,12 @@ impl CompiledFunction {
         self.fn_ptr
     }
 
-    pub fn as_bytes(&self) -> &[u8] {
-        let ptr = self.as_ptr();
-        let len = self.len;
-        unsafe { core::slice::from_raw_parts(ptr, len) }
-    }
-
     pub fn clif(&self) -> Option<&TextWithSrcLocs<String>> {
         self.debug.as_ref().map(|debug| &debug.clif)
     }
 
     pub fn disasm(&self) -> Option<&TextWithSrcLocs<String>> {
         self.debug.as_ref().map(|debug| &debug.disasm)
-    }
-
-    pub fn srclocs(&self) -> &SourceLocMap {
-        &self.srclocs
     }
 }
 
