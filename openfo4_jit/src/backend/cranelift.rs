@@ -1000,14 +1000,30 @@ impl Backend for CraneliftModule {
             .as_ref()
             .unwrap();
 
+        let mut debug = None;
+        if self.debug {
+            // We must read from the final allocation place, not the code buffer,
+            // since the code buffer does not have relocations resolved yet.
+            let ptr = compiled.allocation.as_exec_ptr();
+            let len = compiled.code.code_buffer().len();
+            let buf = unsafe { core::slice::from_raw_parts(ptr, len) };
+
+            let disasm = debug::build_disasm(buf, &compiled.srclocs);
+
+            debug = Some(Box::new(DebugInfo {
+                clif: compiled.clif.clone().unwrap(),
+                disasm,
+            }));
+        }
+
         CompiledFunction {
             _allocation: compiled.allocation.clone(),
             fn_ptr: compiled.allocation.as_exec_ptr(),
-            clif: compiled.clif.clone(),
             srclocs: compiled.srclocs.clone(),
             len: compiled.code.code_buffer().len(),
             _trampoline_allocation: trampoline.allocation.clone(),
             trampoline_fn_ptr: trampoline.allocation.as_exec_ptr(),
+            debug,
         }
     }
 }
@@ -1066,9 +1082,11 @@ pub struct CompiledFunction {
     _trampoline_allocation: Arc<Allocation>,
     fn_ptr: *const u8,
     trampoline_fn_ptr: *const u8,
-    clif: Option<TextWithSrcLocs<String>>,
     srclocs: SourceLocMap,
     len: usize,
+    // This is boxed to reduce the size of this struct when
+    // debug info is disabled.
+    debug: Option<Box<DebugInfo>>,
 }
 
 impl CompiledFunction {
@@ -1092,7 +1110,11 @@ impl CompiledFunction {
     }
 
     pub fn clif(&self) -> Option<&TextWithSrcLocs<String>> {
-        self.clif.as_ref()
+        self.debug.as_ref().map(|debug| &debug.clif)
+    }
+
+    pub fn disasm(&self) -> Option<&TextWithSrcLocs<String>> {
+        self.debug.as_ref().map(|debug| &debug.disasm)
     }
 
     pub fn srclocs(&self) -> &SourceLocMap {
@@ -1122,4 +1144,10 @@ fn map_type(ptr_type: ir::Type, ty: Type) -> ir::Type {
 struct Translator {
     signatures: HashMap<ir::Signature, ir::SigRef>,
     host_call_trampoline: Option<ir::FuncRef>,
+}
+
+#[derive(Clone, Debug)]
+struct DebugInfo {
+    clif: TextWithSrcLocs<String>,
+    disasm: TextWithSrcLocs<String>,
 }

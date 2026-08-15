@@ -205,6 +205,13 @@ impl CompiledFunc {
         }
     }
 
+    pub fn disasm(&self) -> Option<&TextWithSrcLocs<String>> {
+        match self {
+            Self::Cranelift(func) => func.disasm(),
+            Self::Intepreter(_) => None,
+        }
+    }
+
     pub fn srclocs(&self) -> &SourceLocMap {
         match self {
             Self::Intepreter(func) => func.srclocs(),

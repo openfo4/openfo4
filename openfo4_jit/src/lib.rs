@@ -1721,6 +1721,15 @@ impl CompiledFunction {
         self.inner.clif()
     }
 
+    /// Returns the disassembly of the generated machine code.
+    ///
+    /// Only available on the [`Cranelift`] backend and when `debug` is enabled.
+    ///
+    /// [`Cranelift`]: BackendKind::Cranelift
+    pub fn disasm(&self) -> Option<&TextWithSrcLocs<String>> {
+        self.inner.disasm()
+    }
+
     pub fn signature(&self) -> &Signature {
         &self.signature
     }

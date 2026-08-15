@@ -1,5 +1,8 @@
 use std::fmt::Write;
 
+use capstone::arch::BuildsCapstone;
+use capstone::{Capstone, CsResult, Insn, arch};
+
 use crate::backend::TextWithSrcLocs;
 use crate::{SourceLoc, SourceLocMap};
 
@@ -43,5 +46,52 @@ pub fn format_clif(clif: &str) -> TextWithSrcLocs<String> {
     TextWithSrcLocs {
         text: output,
         srclocs,
+    }
+}
+
+pub fn build_disasm(buf: &[u8], srclocs: &SourceLocMap) -> TextWithSrcLocs<String> {
+    let mut text = TextWithSrcLocs {
+        text: String::new(),
+        srclocs: SourceLocMap::default(),
+    };
+
+    let cs = create_capstone().unwrap();
+
+    let mut last_range_end = 0;
+    for (range, loc) in srclocs.iter() {
+        if range.start > last_range_end {
+            let bytes = &buf[range];
+            let insts = cs.disasm_all(bytes, bytes.as_ptr().addr() as u64).unwrap();
+            write_instructions(&mut text.text, &insts);
+        }
+
+        let srcloc_start = text.text.len();
+
+        let bytes = &buf[range];
+        let insts = cs.disasm_all(bytes, bytes.as_ptr().addr() as u64).unwrap();
+        write_instructions(&mut text.text, &insts);
+
+        let srcloc_end = text.text.len();
+
+        text.srclocs.insert(srcloc_start, srcloc_end, loc);
+
+        last_range_end = range.end;
+    }
+
+    text
+}
+
+fn create_capstone() -> CsResult<Capstone> {
+    let cs = Capstone::new();
+    cfg_select! {
+        target_arch = "x86" => cs.x86().mode(arch::x86::ArchMode::Mode32).build(),
+        target_arch = "x86_64" => cs.x86().mode(arch::x86::ArchMode::Mode64).build(),
+        _ => todo!("disassembly is not yet implemented for {}", std::env::consts::ARCH),
+    }
+}
+
+fn write_instructions(buf: &mut String, insts: &[Insn<'_>]) {
+    for inst in insts {
+        writeln!(buf, "{}", inst).unwrap();
     }
 }
