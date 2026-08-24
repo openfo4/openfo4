@@ -4,16 +4,14 @@ use game_render::api::{BufferInitDescriptor, ComputePassDescriptor, ComputeStage
 use game_render::backend::allocator::UsageFlags;
 use game_render::backend::{BufferUsage, DescriptorType, ShaderStages};
 use game_render::graph::{Node, RenderContext};
-use game_render::shader::{ShaderConfig, ShaderLanguage, ShaderSource};
+use openfo4_shaderlib::{ShaderSource, include_shader};
 use parking_lot::Mutex;
 
 use crate::passes::State;
 use crate::passes::pipeline::{Pipeline, PipelineBinding};
 
-const SHADER: &str = concat!(
-    env!("CARGO_MANIFEST_DIR"),
-    "/shaders/skinning/skinning.slang"
-);
+static SHADER: ShaderSource =
+    include_shader!("/game_core_pipeline/shaders/skinning/skinning.slang");
 
 const WORKGROUP_SIZE: u32 = 64;
 
@@ -27,10 +25,7 @@ impl SkinningPass {
         Self {
             state,
             pipeline: Mutex::new(Pipeline::new(
-                vec![ShaderConfig {
-                    source: ShaderSource::File(SHADER.into()),
-                    language: ShaderLanguage::Slang,
-                }],
+                [&SHADER],
                 Box::new(|_queue, shaders| {
                     let specs = shaders[0].spec_constants();
                     let spec = specs

@@ -8,9 +8,8 @@ use game_render::api::{
     RenderPassDescriptor,
 };
 use game_render::backend::{DescriptorBinding, DescriptorType, ShaderStage, ShaderStages};
-use game_render::shader::{
-    BindingId, BindingLocation, ReloadableShaderSource, Shader, ShaderConfig,
-};
+use game_render::shader::{BindingId, BindingLocation, Shader};
+use openfo4_shaderlib::ShaderSource;
 
 #[derive(Clone, Debug)]
 pub struct PipelineBinding {
@@ -21,7 +20,7 @@ pub struct PipelineBinding {
 
 pub struct Pipeline {
     stages: Vec<Stage>,
-    shaders: Vec<ReloadableShaderSource>,
+    shaders: Vec<&'static ShaderSource>,
     builder: Box<dyn for<'a> Fn(&CommandQueue<'_>, &'a [Shader]) -> Vec<PipelineStage<'a>> + Send>,
     cur_pipeline: Option<PipelineInstance>,
     compiled_shaders: Option<Vec<Shader>>,
@@ -31,16 +30,13 @@ pub struct Pipeline {
 
 impl Pipeline {
     pub fn new(
-        shaders: impl IntoIterator<Item = ShaderConfig>,
+        shaders: impl IntoIterator<Item = &'static ShaderSource>,
         builder: Box<
             dyn for<'a> Fn(&CommandQueue<'_>, &'a [Shader]) -> Vec<PipelineStage<'a>> + Send,
         >,
         bindings: &[PipelineBinding],
     ) -> Self {
-        let shaders = shaders
-            .into_iter()
-            .map(|config| ReloadableShaderSource::new(config))
-            .collect();
+        let shaders = shaders.into_iter().collect();
 
         Self {
             stages: Vec::new(),
@@ -64,7 +60,7 @@ impl Pipeline {
                 }
             };
 
-            compiled_shaders.push(s);
+            compiled_shaders.push(s.clone());
         }
 
         self.stages.clear();

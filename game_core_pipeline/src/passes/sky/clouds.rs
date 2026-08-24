@@ -14,16 +14,16 @@ use game_render::backend::{
 };
 use game_render::buffer::texture_slab::{TextureSlab, TextureSlabIndex};
 use game_render::mesh::Mesh;
-use game_render::shader::{ShaderConfig, ShaderLanguage, ShaderSource};
 use game_render::texture::image::MipImage;
 use glam::{Mat4, UVec2, Vec2};
+use openfo4_shaderlib::{ShaderSource, include_shader};
 
 use crate::camera::Camera;
 use crate::passes::HDR_FORMAT;
 use crate::passes::pipeline::{Pipeline, PipelineBinding};
 
-const VS_SHADER: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/shaders/sky/clouds_vs.slang");
-const FS_SHADER: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/shaders/sky/clouds_fs.slang");
+static VS_SHADER: ShaderSource = include_shader!("/game_core_pipeline/shaders/sky/clouds_vs.slang");
+static FS_SHADER: ShaderSource = include_shader!("/game_core_pipeline/shaders/sky/clouds_fs.slang");
 
 pub struct CloudsPass {
     pipeline: Pipeline,
@@ -36,16 +36,7 @@ pub struct CloudsPass {
 impl CloudsPass {
     pub fn new(queue: &CommandQueue<'_>) -> Self {
         let pipeline = Pipeline::new(
-            vec![
-                ShaderConfig {
-                    source: ShaderSource::File(VS_SHADER.into()),
-                    language: ShaderLanguage::Slang,
-                },
-                ShaderConfig {
-                    source: ShaderSource::File(FS_SHADER.into()),
-                    language: ShaderLanguage::Slang,
-                },
-            ],
+            [&VS_SHADER, &FS_SHADER],
             Box::new(|_queue, shaders| {
                 vec![
                     PipelineStage::Vertex(VertexStage {

@@ -12,6 +12,7 @@ use std::sync::{Arc, OnceLock, mpsc};
 use bitflags::bitflags;
 use hashbrown::HashMap;
 use notify::{RecursiveMode, Watcher};
+use slangc::Config;
 use thiserror::Error;
 
 use crate::backend::{DescriptorType, ShaderStage};
@@ -279,7 +280,7 @@ impl ReloadableShaderSource {
                     _ => panic!("Only file sources are supported for slang shaders"),
                 };
 
-                let bytes = slangc::compile(&path, slangc::OptLevel::Max).map_err(Error::Slang)?;
+                let bytes = slangc::compile(&path, &Config::default()).map_err(Error::Slang)?;
                 let module = spirv::Module::new(&bytes).map_err(Error::Spirv)?;
 
                 let sources = slangc::load_imported_files(&path).map_err(Error::Slang)?;

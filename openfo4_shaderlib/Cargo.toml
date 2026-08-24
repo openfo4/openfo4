@@ -1,0 +1,20 @@
+[package]
+name = "openfo4_shaderlib"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+hashbrown = { workspace = true }
+game_render = { version = "0.1.0", path = "../game_render" }
+tracing = { workspace = true }
+
+[target.'cfg(openfo4_embed_shaders)'.dependencies]
+macros = { version = "0.1.0", path = "./macros" }
+
+[target.'cfg(not(openfo4_embed_shaders))'.dependencies]
+slangc = { version = "0.1.0", path = "../game_render/slangc" }
+# Hot reloading
+notify = "8.0.0"
+
+[lints]
+workspace = true

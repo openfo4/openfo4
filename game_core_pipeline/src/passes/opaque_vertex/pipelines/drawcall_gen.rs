@@ -3,14 +3,12 @@ use game_render::api::{
 };
 use game_render::backend::allocator::UsageFlags;
 use game_render::backend::{BufferUsage, DescriptorType, ShaderStages};
-use game_render::shader::{ShaderConfig, ShaderLanguage, ShaderSource};
+use openfo4_shaderlib::{ShaderSource, include_shader};
 
 use crate::passes::pipeline::{Pipeline, PipelineBinding};
 
-const SHADER: &str = concat!(
-    env!("CARGO_MANIFEST_DIR"),
-    "/shaders/opaque_vertex/drawcall_gen.slang"
-);
+static SHADER: ShaderSource =
+    include_shader!("/game_core_pipeline/shaders/opaque_vertex/drawcall_gen.slang");
 
 const WORKGROUP_SIZE: u32 = 64;
 
@@ -30,10 +28,7 @@ impl DrawcallGenPipeline {
     pub fn new() -> Self {
         Self {
             pipeline: Pipeline::new(
-                vec![ShaderConfig {
-                    language: ShaderLanguage::Slang,
-                    source: ShaderSource::File(SHADER.into()),
-                }],
+                [&SHADER],
                 Box::new(|_, shaders| {
                     vec![PipelineStage::Compute(ComputeStage {
                         shader: &shaders[0],

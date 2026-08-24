@@ -3,15 +3,13 @@ use game_render::api::{
     Sampler, Texture, TextureView, TextureViewDescriptor,
 };
 use game_render::backend::{DescriptorType, ShaderStages};
-use game_render::shader::{ShaderConfig, ShaderLanguage, ShaderSource};
 use glam::UVec2;
+use openfo4_shaderlib::{ShaderSource, include_shader};
 
 use crate::passes::pipeline::{Pipeline, PipelineBinding};
 
-const SHADER: &str = concat!(
-    env!("CARGO_MANIFEST_DIR"),
-    "/shaders/opaque_vertex/visbuffer_shading.slang"
-);
+static SHADER: ShaderSource =
+    include_shader!("/game_core_pipeline/shaders/opaque_vertex/visbuffer_shading.slang");
 
 const TILE_SIZE: u32 = 16;
 
@@ -51,10 +49,7 @@ impl ShadingPipeline {
     pub fn new() -> Self {
         Self {
             pipeline: Pipeline::new(
-                vec![ShaderConfig {
-                    language: ShaderLanguage::Slang,
-                    source: ShaderSource::File(SHADER.into()),
-                }],
+                [&SHADER],
                 Box::new(|_queue, shaders| {
                     let tile_size = shaders[0]
                         .spec_constants()

@@ -9,20 +9,16 @@ use game_render::backend::{
     BufferUsage, ColorTargetState, CompareOp, DepthStencilState, DescriptorType, Face, FrontFace,
     LoadOp, PrimitiveTopology, ShaderStages, StoreOp, TextureFormat,
 };
-use game_render::shader::{ShaderConfig, ShaderLanguage, ShaderSource};
+use openfo4_shaderlib::{ShaderSource, include_shader};
 
 use crate::camera::{Camera, CameraUniform};
 use crate::passes::DEPTH_FORMAT;
 use crate::passes::pipeline::{Pipeline, PipelineBinding};
 
-const VS_SHADER: &str = concat!(
-    env!("CARGO_MANIFEST_DIR"),
-    "/shaders/opaque_vertex/visbuffer_vert.slang"
-);
-const FS_SHADER: &str = concat!(
-    env!("CARGO_MANIFEST_DIR"),
-    "/shaders/opaque_vertex/visbuffer_frag.slang"
-);
+static VS_SHADER: ShaderSource =
+    include_shader!("/game_core_pipeline/shaders/opaque_vertex/visbuffer_vert.slang");
+static FS_SAHDER: ShaderSource =
+    include_shader!("/game_core_pipeline/shaders/opaque_vertex/visbuffer_frag.slang");
 
 pub struct ForwardParams<'a> {
     pub camera: &'a Camera,
@@ -44,16 +40,7 @@ impl VisbufferForwardPipeline {
     pub fn new() -> Self {
         Self {
             pipeline: Pipeline::new(
-                vec![
-                    ShaderConfig {
-                        language: ShaderLanguage::Slang,
-                        source: ShaderSource::File(VS_SHADER.into()),
-                    },
-                    ShaderConfig {
-                        language: ShaderLanguage::Slang,
-                        source: ShaderSource::File(FS_SHADER.into()),
-                    },
-                ],
+                [&VS_SHADER, &FS_SAHDER],
                 Box::new(|_queue, shaders| {
                     vec![
                         PipelineStage::Vertex(VertexStage {

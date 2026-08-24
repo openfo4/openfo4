@@ -9,19 +9,16 @@ use game_render::backend::{
     BufferUsage, ColorTargetState, CompareOp, DepthStencilState, DescriptorType, Face, FrontFace,
     LoadOp, PrimitiveTopology, ShaderStages, StoreOp, TextureFormat,
 };
-use game_render::shader::{ShaderConfig, ShaderLanguage, ShaderSource};
+use openfo4_shaderlib::{ShaderSource, include_shader};
 
 use crate::camera::{Camera, CameraUniform};
 use crate::passes::DEPTH_FORMAT;
 use crate::passes::pipeline::{Pipeline, PipelineBinding};
-const VS_SHADER: &str = concat!(
-    env!("CARGO_MANIFEST_DIR"),
-    "/shaders/opaque_vertex/transparent_mask_vert.slang"
-);
-const FS_SHADER: &str = concat!(
-    env!("CARGO_MANIFEST_DIR"),
-    "/shaders/opaque_vertex/transparent_mask_frag.slang"
-);
+
+static VS_SHADER: ShaderSource =
+    include_shader!("/game_core_pipeline/shaders/opaque_vertex/transparent_mask_vert.slang");
+static FS_SHADER: ShaderSource =
+    include_shader!("/game_core_pipeline/shaders/opaque_vertex/transparent_mask_frag.slang");
 
 #[derive(Copy, Clone, Debug)]
 pub struct AlphaMaskParams<'a> {
@@ -49,16 +46,7 @@ impl VisbufferAlphaMaskPipeline {
     pub fn new() -> Self {
         Self {
             pipeline: Pipeline::new(
-                vec![
-                    ShaderConfig {
-                        language: ShaderLanguage::Slang,
-                        source: ShaderSource::File(VS_SHADER.into()),
-                    },
-                    ShaderConfig {
-                        language: ShaderLanguage::Slang,
-                        source: ShaderSource::File(FS_SHADER.into()),
-                    },
-                ],
+                [&VS_SHADER, &FS_SHADER],
                 Box::new(|_queue, shaders| {
                     vec![
                         PipelineStage::Vertex(VertexStage {

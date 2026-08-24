@@ -7,19 +7,15 @@ use game_render::backend::{
     BufferUsage, CompareOp, DepthStencilState, DescriptorType, Face, FrontFace, LoadOp,
     PrimitiveTopology, ShaderStages, StoreOp, TextureFormat,
 };
-use game_render::shader::{ShaderConfig, ShaderLanguage, ShaderSource};
 use glam::Mat4;
+use openfo4_shaderlib::{ShaderSource, include_shader};
 
 use crate::passes::pipeline::{Pipeline, PipelineBinding};
 
-const VS_SHADER: &str = concat!(
-    env!("CARGO_MANIFEST_DIR"),
-    "/shaders/shadows/shadow_map_vs.slang",
-);
-const FS_SHADER: &str = concat!(
-    env!("CARGO_MANIFEST_DIR"),
-    "/shaders/shadows/shadow_map_fs.slang",
-);
+static VS_SHADER: ShaderSource =
+    include_shader!("/game_core_pipeline/shaders/shadows/shadow_map_vs.slang");
+static FS_SHADER: ShaderSource =
+    include_shader!("/game_core_pipeline/shaders/shadows/shadow_map_fs.slang");
 
 const SHADOW_MAP_FORMAT: TextureFormat = TextureFormat::Depth32Float;
 
@@ -43,16 +39,7 @@ impl ShadowMapPipeline {
     pub fn new() -> Self {
         Self {
             pipeline: Pipeline::new(
-                vec![
-                    ShaderConfig {
-                        language: ShaderLanguage::Slang,
-                        source: ShaderSource::File(VS_SHADER.into()),
-                    },
-                    ShaderConfig {
-                        language: ShaderLanguage::Slang,
-                        source: ShaderSource::File(FS_SHADER.into()),
-                    },
-                ],
+                [&VS_SHADER, &FS_SHADER],
                 Box::new(|_queue, shaders| {
                     vec![
                         PipelineStage::Vertex(VertexStage {

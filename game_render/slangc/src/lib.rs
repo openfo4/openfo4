@@ -37,7 +37,22 @@ pub enum OptLevel {
     Max = 3,
 }
 
-pub fn compile<P>(input: P, opt_level: OptLevel) -> Result<Vec<u8>, Error>
+#[derive(Clone, Debug)]
+pub struct Config {
+    pub opt_level: OptLevel,
+    pub debug: bool,
+}
+
+impl Default for Config {
+    fn default() -> Self {
+        Self {
+            opt_level: OptLevel::Max,
+            debug: true,
+        }
+    }
+}
+
+pub fn compile<P>(input: P, config: &Config) -> Result<Vec<u8>, Error>
 where
     P: AsRef<Path>,
 {
@@ -59,7 +74,12 @@ where
     let path = RemoveOnDrop(path);
 
     let mut args = Vec::new();
-    args.push("-g");
+
+    if config.debug {
+        args.push("-g3");
+    } else {
+        args.push("-g0");
+    }
 
     // SPIR-V 1.6
     args.extend(["-target", "spirv"]);
@@ -74,7 +94,7 @@ where
     // This is the same as GLSL and glam.
     args.push("-matrix-layout-column-major");
 
-    let opt_level = format!("-O{}", opt_level as u8);
+    let opt_level = format!("-O{}", config.opt_level as u8);
     args.push(&opt_level);
 
     args.extend(["-o", path.to_str().unwrap()]);
@@ -132,8 +152,6 @@ pub fn load_imported_files(path: &Path) -> Result<Vec<PathBuf>, Error> {
 
             // Remove the parent directory.
             if !p.pop() {
-                dbg!(&p);
-
                 return Err(Error::Other(format!(
                     "cannot find import: {}",
                     file_name.to_str().unwrap(),

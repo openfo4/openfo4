@@ -17,9 +17,9 @@ use game_render::backend::{
 };
 use game_render::graph::RenderContext;
 use game_render::mesh::Mesh;
-use game_render::shader::{ShaderConfig, ShaderLanguage, ShaderSource};
 use game_render::texture::image::MipImage;
 use glam::{Mat4, UVec2, Vec2, Vec3};
+use openfo4_shaderlib::{ShaderSource, include_shader};
 use parking_lot::Mutex;
 
 use crate::camera::Camera;
@@ -28,11 +28,13 @@ use crate::passes::pipeline::{Pipeline, PipelineBinding};
 use crate::passes::sky::clouds::CloudsPass;
 use crate::sky::SkyMaterial;
 
-const VS_SHADER: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/shaders/sky/sky_vs.slang");
-const FS_SHADER: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/shaders/sky/sky_fs.slang");
+static VS_SHADER: ShaderSource = include_shader!("/game_core_pipeline/shaders/sky/sky_vs.slang");
+static FS_SHADER: ShaderSource = include_shader!("/game_core_pipeline/shaders/sky/sky_fs.slang");
 
-const SUN_VS_SHADER: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/shaders/sky/sun_vs.slang");
-const SUN_FS_SHADER: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/shaders/sky/sun_fs.slang");
+static SUN_VS_SHADER: ShaderSource =
+    include_shader!("/game_core_pipeline/shaders/sky/sun_vs.slang");
+static SUN_FS_SHADER: ShaderSource =
+    include_shader!("/game_core_pipeline/shaders/sky/sun_fs.slang");
 
 pub struct SkyPass {
     pipeline: Mutex<Pipeline>,
@@ -51,16 +53,7 @@ impl SkyPass {
     pub fn new(state: Arc<Mutex<SkyState>>, queue: &CommandQueue<'_>) -> Self {
         Self {
             pipeline: Mutex::new(Pipeline::new(
-                vec![
-                    ShaderConfig {
-                        source: ShaderSource::File(VS_SHADER.into()),
-                        language: ShaderLanguage::Slang,
-                    },
-                    ShaderConfig {
-                        source: ShaderSource::File(FS_SHADER.into()),
-                        language: ShaderLanguage::Slang,
-                    },
-                ],
+                [&VS_SHADER, &FS_SHADER],
                 Box::new(|_queue, shaders| {
                     vec![
                         PipelineStage::Vertex(VertexStage {
@@ -107,16 +100,7 @@ impl SkyPass {
                 ],
             )),
             sun_pipeline: Mutex::new(Pipeline::new(
-                vec![
-                    ShaderConfig {
-                        source: ShaderSource::File(SUN_VS_SHADER.into()),
-                        language: ShaderLanguage::Slang,
-                    },
-                    ShaderConfig {
-                        source: ShaderSource::File(SUN_FS_SHADER.into()),
-                        language: ShaderLanguage::Slang,
-                    },
-                ],
+                [&SUN_VS_SHADER, &SUN_FS_SHADER],
                 Box::new(|_queue, shaders| {
                     vec![
                         PipelineStage::Vertex(VertexStage {
