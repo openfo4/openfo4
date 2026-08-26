@@ -10,7 +10,7 @@ use game_render::backend::{
 use glam::Mat4;
 use openfo4_shaderlib::{ShaderSource, include_shader};
 
-use crate::passes::pipeline::{Pipeline, PipelineBinding};
+use crate::passes::pipeline::{Pipeline, PipelineBinding, PipelineConfig, ShaderConfig};
 
 static VS_SHADER: ShaderSource =
     include_shader!("/game_core_pipeline/shaders/shadows/shadow_map_vs.slang");
@@ -38,32 +38,12 @@ pub struct ShadowMapPipeline {
 impl ShadowMapPipeline {
     pub fn new() -> Self {
         Self {
-            pipeline: Pipeline::new(
-                [&VS_SHADER, &FS_SHADER],
-                Box::new(|_queue, shaders| {
-                    vec![
-                        PipelineStage::Vertex(VertexStage {
-                            shader: &shaders[0],
-                            entry: "main",
-                            topology: PrimitiveTopology::TriangleList,
-                            spec_consts: Default::default(),
-                        }),
-                        PipelineStage::Fragment(FragmentStage {
-                            shader: &shaders[1],
-                            entry: "main",
-                            targets: &[],
-                            front_face: FrontFace::Ccw,
-                            cull_mode: Some(Face::Back),
-                            depth_stencil_state: Some(DepthStencilState {
-                                format: SHADOW_MAP_FORMAT,
-                                depth_write_enabled: true,
-                                depth_compare_op: CompareOp::Greater,
-                            }),
-                            spec_consts: Default::default(),
-                        }),
-                    ]
-                }),
-                &[
+            pipeline: Pipeline::new(PipelineConfig {
+                shaders: vec![
+                    ShaderConfig { source: &VS_SHADER },
+                    ShaderConfig { source: &FS_SHADER },
+                ],
+                bindings: vec![
                     PipelineBinding {
                         name: "light_view_proj",
                         stages: ShaderStages::VERTEX,
@@ -95,7 +75,30 @@ impl ShadowMapPipeline {
                         kind: DescriptorType::Storage,
                     },
                 ],
-            ),
+                builder: Box::new(|_queue, shaders| {
+                    vec![
+                        PipelineStage::Vertex(VertexStage {
+                            shader: &shaders[0],
+                            entry: "main",
+                            topology: PrimitiveTopology::TriangleList,
+                            spec_consts: Default::default(),
+                        }),
+                        PipelineStage::Fragment(FragmentStage {
+                            shader: &shaders[1],
+                            entry: "main",
+                            targets: &[],
+                            front_face: FrontFace::Ccw,
+                            cull_mode: Some(Face::Back),
+                            depth_stencil_state: Some(DepthStencilState {
+                                format: SHADOW_MAP_FORMAT,
+                                depth_write_enabled: true,
+                                depth_compare_op: CompareOp::Greater,
+                            }),
+                            spec_consts: Default::default(),
+                        }),
+                    ]
+                }),
+            }),
         }
     }
 

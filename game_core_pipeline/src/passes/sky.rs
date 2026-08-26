@@ -24,7 +24,7 @@ use parking_lot::Mutex;
 
 use crate::camera::Camera;
 use crate::passes::HDR_FORMAT;
-use crate::passes::pipeline::{Pipeline, PipelineBinding};
+use crate::passes::pipeline::{Pipeline, PipelineBinding, PipelineConfig, ShaderConfig};
 use crate::passes::sky::clouds::CloudsPass;
 use crate::sky::SkyMaterial;
 
@@ -52,31 +52,12 @@ pub struct SkyPass {
 impl SkyPass {
     pub fn new(state: Arc<Mutex<SkyState>>, queue: &CommandQueue<'_>) -> Self {
         Self {
-            pipeline: Mutex::new(Pipeline::new(
-                [&VS_SHADER, &FS_SHADER],
-                Box::new(|_queue, shaders| {
-                    vec![
-                        PipelineStage::Vertex(VertexStage {
-                            shader: &shaders[0],
-                            entry: "main",
-                            topology: PrimitiveTopology::TriangleList,
-                            spec_consts: Default::default(),
-                        }),
-                        PipelineStage::Fragment(FragmentStage {
-                            shader: &shaders[1],
-                            entry: "main",
-                            targets: &[ColorTargetState {
-                                format: HDR_FORMAT,
-                                blend: None,
-                            }],
-                            front_face: FrontFace::Ccw,
-                            cull_mode: Some(Face::Back),
-                            depth_stencil_state: None,
-                            spec_consts: Default::default(),
-                        }),
-                    ]
-                }),
-                &[
+            pipeline: Mutex::new(Pipeline::new(PipelineConfig {
+                shaders: vec![
+                    ShaderConfig { source: &VS_SHADER },
+                    ShaderConfig { source: &FS_SHADER },
+                ],
+                bindings: vec![
                     PipelineBinding {
                         kind: DescriptorType::Uniform,
                         name: "constants",
@@ -98,10 +79,7 @@ impl SkyPass {
                         stages: ShaderStages::FRAGMENT,
                     },
                 ],
-            )),
-            sun_pipeline: Mutex::new(Pipeline::new(
-                [&SUN_VS_SHADER, &SUN_FS_SHADER],
-                Box::new(|_queue, shaders| {
+                builder: Box::new(|_queue, shaders| {
                     vec![
                         PipelineStage::Vertex(VertexStage {
                             shader: &shaders[0],
@@ -114,16 +92,26 @@ impl SkyPass {
                             entry: "main",
                             targets: &[ColorTargetState {
                                 format: HDR_FORMAT,
-                                blend: Some(BlendState::NON_PREMULTIPLIED_ALPHA),
+                                blend: None,
                             }],
                             front_face: FrontFace::Ccw,
-                            cull_mode: None,
+                            cull_mode: Some(Face::Back),
                             depth_stencil_state: None,
                             spec_consts: Default::default(),
                         }),
                     ]
                 }),
-                &[
+            })),
+            sun_pipeline: Mutex::new(Pipeline::new(PipelineConfig {
+                shaders: vec![
+                    ShaderConfig {
+                        source: &SUN_VS_SHADER,
+                    },
+                    ShaderConfig {
+                        source: &SUN_FS_SHADER,
+                    },
+                ],
+                bindings: vec![
                     PipelineBinding {
                         kind: DescriptorType::Uniform,
                         name: "constants",
@@ -145,7 +133,29 @@ impl SkyPass {
                         stages: ShaderStages::FRAGMENT,
                     },
                 ],
-            )),
+                builder: Box::new(|_queue, shaders| {
+                    vec![
+                        PipelineStage::Vertex(VertexStage {
+                            shader: &shaders[0],
+                            entry: "main",
+                            topology: PrimitiveTopology::TriangleList,
+                            spec_consts: Default::default(),
+                        }),
+                        PipelineStage::Fragment(FragmentStage {
+                            shader: &shaders[1],
+                            entry: "main",
+                            targets: &[ColorTargetState {
+                                format: HDR_FORMAT,
+                                blend: Some(BlendState::NON_PREMULTIPLIED_ALPHA),
+                            }],
+                            front_face: FrontFace::Ccw,
+                            cull_mode: None,
+                            depth_stencil_state: None,
+                            spec_consts: Default::default(),
+                        }),
+                    ]
+                }),
+            })),
             state,
             sky_material: Mutex::new(None),
             sky_mesh: Mutex::new(None),

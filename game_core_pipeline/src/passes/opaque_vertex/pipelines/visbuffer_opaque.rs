@@ -13,7 +13,7 @@ use openfo4_shaderlib::{ShaderSource, include_shader};
 
 use crate::camera::{Camera, CameraUniform};
 use crate::passes::DEPTH_FORMAT;
-use crate::passes::pipeline::{Pipeline, PipelineBinding};
+use crate::passes::pipeline::{Pipeline, PipelineBinding, PipelineConfig, ShaderConfig};
 
 static VS_SHADER: ShaderSource =
     include_shader!("/game_core_pipeline/shaders/opaque_vertex/visbuffer_vert.slang");
@@ -39,35 +39,12 @@ pub struct VisbufferForwardPipeline {
 impl VisbufferForwardPipeline {
     pub fn new() -> Self {
         Self {
-            pipeline: Pipeline::new(
-                [&VS_SHADER, &FS_SAHDER],
-                Box::new(|_queue, shaders| {
-                    vec![
-                        PipelineStage::Vertex(VertexStage {
-                            shader: &shaders[0],
-                            entry: "main",
-                            topology: PrimitiveTopology::TriangleList,
-                            spec_consts: Default::default(),
-                        }),
-                        PipelineStage::Fragment(FragmentStage {
-                            shader: &shaders[1],
-                            entry: "main",
-                            targets: &[ColorTargetState {
-                                format: TextureFormat::Rg32Uint,
-                                blend: None,
-                            }],
-                            front_face: FrontFace::Ccw,
-                            cull_mode: Some(Face::Back),
-                            depth_stencil_state: Some(DepthStencilState {
-                                format: DEPTH_FORMAT,
-                                depth_write_enabled: true,
-                                depth_compare_op: CompareOp::Greater,
-                            }),
-                            spec_consts: Default::default(),
-                        }),
-                    ]
-                }),
-                &[
+            pipeline: Pipeline::new(PipelineConfig {
+                shaders: vec![
+                    ShaderConfig { source: &VS_SHADER },
+                    ShaderConfig { source: &FS_SAHDER },
+                ],
+                bindings: vec![
                     PipelineBinding {
                         name: "camera",
                         stages: ShaderStages::VERTEX,
@@ -99,7 +76,33 @@ impl VisbufferForwardPipeline {
                         kind: DescriptorType::Storage,
                     },
                 ],
-            ),
+                builder: Box::new(|_queue, shaders| {
+                    vec![
+                        PipelineStage::Vertex(VertexStage {
+                            shader: &shaders[0],
+                            entry: "main",
+                            topology: PrimitiveTopology::TriangleList,
+                            spec_consts: Default::default(),
+                        }),
+                        PipelineStage::Fragment(FragmentStage {
+                            shader: &shaders[1],
+                            entry: "main",
+                            targets: &[ColorTargetState {
+                                format: TextureFormat::Rg32Uint,
+                                blend: None,
+                            }],
+                            front_face: FrontFace::Ccw,
+                            cull_mode: Some(Face::Back),
+                            depth_stencil_state: Some(DepthStencilState {
+                                format: DEPTH_FORMAT,
+                                depth_write_enabled: true,
+                                depth_compare_op: CompareOp::Greater,
+                            }),
+                            spec_consts: Default::default(),
+                        }),
+                    ]
+                }),
+            }),
         }
     }
 

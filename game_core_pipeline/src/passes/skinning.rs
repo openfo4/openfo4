@@ -8,7 +8,7 @@ use openfo4_shaderlib::{ShaderSource, include_shader};
 use parking_lot::Mutex;
 
 use crate::passes::State;
-use crate::passes::pipeline::{Pipeline, PipelineBinding};
+use crate::passes::pipeline::{Pipeline, PipelineBinding, PipelineConfig, ShaderConfig};
 
 static SHADER: ShaderSource =
     include_shader!("/game_core_pipeline/shaders/skinning/skinning.slang");
@@ -24,22 +24,9 @@ impl SkinningPass {
     pub fn new(state: Arc<Mutex<State>>) -> Self {
         Self {
             state,
-            pipeline: Mutex::new(Pipeline::new(
-                [&SHADER],
-                Box::new(|_queue, shaders| {
-                    let specs = shaders[0].spec_constants();
-                    let spec = specs
-                        .iter()
-                        .find(|v| v.name.as_ref().is_some_and(|v| v == "NUM_THREADS"))
-                        .unwrap();
-
-                    vec![PipelineStage::Compute(ComputeStage {
-                        shader: &shaders[0],
-                        entry: "main",
-                        spec_consts: [(spec.id, WORKGROUP_SIZE.into())].into_iter().collect(),
-                    })]
-                }),
-                &[
+            pipeline: Mutex::new(Pipeline::new(PipelineConfig {
+                shaders: vec![ShaderConfig { source: &SHADER }],
+                bindings: vec![
                     PipelineBinding {
                         name: "instance_count",
                         kind: DescriptorType::Uniform,
@@ -96,7 +83,20 @@ impl SkinningPass {
                         stages: ShaderStages::COMPUTE,
                     },
                 ],
-            )),
+                builder: Box::new(|_queue, shaders| {
+                    let specs = shaders[0].spec_constants();
+                    let spec = specs
+                        .iter()
+                        .find(|v| v.name.as_ref().is_some_and(|v| v == "NUM_THREADS"))
+                        .unwrap();
+
+                    vec![PipelineStage::Compute(ComputeStage {
+                        shader: &shaders[0],
+                        entry: "main",
+                        spec_consts: [(spec.id, WORKGROUP_SIZE.into())].into_iter().collect(),
+                    })]
+                }),
+            })),
         }
     }
 }

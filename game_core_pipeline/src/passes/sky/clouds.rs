@@ -20,7 +20,7 @@ use openfo4_shaderlib::{ShaderSource, include_shader};
 
 use crate::camera::Camera;
 use crate::passes::HDR_FORMAT;
-use crate::passes::pipeline::{Pipeline, PipelineBinding};
+use crate::passes::pipeline::{Pipeline, PipelineBinding, PipelineConfig, ShaderConfig};
 
 static VS_SHADER: ShaderSource = include_shader!("/game_core_pipeline/shaders/sky/clouds_vs.slang");
 static FS_SHADER: ShaderSource = include_shader!("/game_core_pipeline/shaders/sky/clouds_fs.slang");
@@ -35,31 +35,12 @@ pub struct CloudsPass {
 
 impl CloudsPass {
     pub fn new(queue: &CommandQueue<'_>) -> Self {
-        let pipeline = Pipeline::new(
-            [&VS_SHADER, &FS_SHADER],
-            Box::new(|_queue, shaders| {
-                vec![
-                    PipelineStage::Vertex(VertexStage {
-                        shader: &shaders[0],
-                        entry: "main",
-                        topology: PrimitiveTopology::TriangleList,
-                        spec_consts: Default::default(),
-                    }),
-                    PipelineStage::Fragment(FragmentStage {
-                        shader: &shaders[1],
-                        entry: "main",
-                        targets: &[ColorTargetState {
-                            format: HDR_FORMAT,
-                            blend: Some(BlendState::NON_PREMULTIPLIED_ALPHA),
-                        }],
-                        front_face: FrontFace::Ccw,
-                        cull_mode: Some(Face::Back),
-                        depth_stencil_state: None,
-                        spec_consts: Default::default(),
-                    }),
-                ]
-            }),
-            &[
+        let pipeline = Pipeline::new(PipelineConfig {
+            shaders: vec![
+                ShaderConfig { source: &VS_SHADER },
+                ShaderConfig { source: &FS_SHADER },
+            ],
+            bindings: vec![
                 PipelineBinding {
                     kind: DescriptorType::Uniform,
                     name: "constants",
@@ -101,7 +82,29 @@ impl CloudsPass {
                     stages: ShaderStages::FRAGMENT,
                 },
             ],
-        );
+            builder: Box::new(|_queue, shaders| {
+                vec![
+                    PipelineStage::Vertex(VertexStage {
+                        shader: &shaders[0],
+                        entry: "main",
+                        topology: PrimitiveTopology::TriangleList,
+                        spec_consts: Default::default(),
+                    }),
+                    PipelineStage::Fragment(FragmentStage {
+                        shader: &shaders[1],
+                        entry: "main",
+                        targets: &[ColorTargetState {
+                            format: HDR_FORMAT,
+                            blend: Some(BlendState::NON_PREMULTIPLIED_ALPHA),
+                        }],
+                        front_face: FrontFace::Ccw,
+                        cull_mode: Some(Face::Back),
+                        depth_stencil_state: None,
+                        spec_consts: Default::default(),
+                    }),
+                ]
+            }),
+        });
 
         let default_texture = queue.create_texture(&TextureDescriptor {
             size: UVec2::ONE,

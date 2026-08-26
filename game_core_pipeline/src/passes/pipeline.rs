@@ -19,40 +19,43 @@ pub struct PipelineBinding {
 }
 
 pub struct Pipeline {
+    config: PipelineConfig,
     stages: Vec<Stage>,
-    shaders: Vec<&'static ShaderSource>,
-    builder: Box<dyn for<'a> Fn(&CommandQueue<'_>, &'a [Shader]) -> Vec<PipelineStage<'a>> + Send>,
     cur_pipeline: Option<PipelineInstance>,
     compiled_shaders: Option<Vec<Shader>>,
     shaders_changed: bool,
-    bindings: Vec<PipelineBinding>,
+}
+
+/// Configuration parameters for a [`Pipeline`].
+pub struct PipelineConfig {
+    pub shaders: Vec<ShaderConfig>,
+    pub bindings: Vec<PipelineBinding>,
+    pub builder:
+        Box<dyn for<'a> Fn(&CommandQueue<'_>, &'a [Shader]) -> Vec<PipelineStage<'a>> + Send>,
+}
+
+/// Configuration parameters for a shader module.
+#[derive(Clone, Debug)]
+pub struct ShaderConfig {
+    /// The source of the shader module.
+    pub source: &'static ShaderSource,
 }
 
 impl Pipeline {
-    pub fn new(
-        shaders: impl IntoIterator<Item = &'static ShaderSource>,
-        builder: Box<
-            dyn for<'a> Fn(&CommandQueue<'_>, &'a [Shader]) -> Vec<PipelineStage<'a>> + Send,
-        >,
-        bindings: &[PipelineBinding],
-    ) -> Self {
-        let shaders = shaders.into_iter().collect();
-
+    pub fn new(config: PipelineConfig) -> Self {
         Self {
             stages: Vec::new(),
-            shaders,
-            builder,
             cur_pipeline: None,
             compiled_shaders: None,
-            bindings: bindings.to_vec(),
             shaders_changed: false,
+            config,
         }
     }
 
     fn rebuild_shaders(&mut self, queue: &CommandQueue<'_>) {
         let mut compiled_shaders = Vec::new();
-        for shader in &mut self.shaders {
-            let s = match shader.compile() {
+        for shader in &mut self.config.shaders {
+            let s = match shader.source.compile() {
                 Ok(s) => s,
                 Err(err) => {
                     tracing::error!("failed to recompile shader: {}", err);
@@ -65,7 +68,7 @@ impl Pipeline {
 
         self.stages.clear();
 
-        let stages = (self.builder)(queue, &compiled_shaders);
+        let stages = (self.config.builder)(queue, &compiled_shaders);
 
         let mut prepared_shaders = Vec::new();
         for (stage_index, stage) in stages.iter().enumerate() {
@@ -89,6 +92,7 @@ impl Pipeline {
                 };
 
                 let Some(pipeline_binding) = self
+                    .config
                     .bindings
                     .iter()
                     .find(|v| v.name == name && v.stages.contains(stage.stage.stages()))
@@ -182,7 +186,7 @@ impl Pipeline {
             panic!("initial shader compilation failed");
         };
 
-        let stages = (self.builder)(queue, compiled_shader);
+        let stages = (self.config.builder)(queue, compiled_shader);
         let pipeline = queue.create_pipeline(&PipelineDescriptor {
             stages: &stages,
             descriptors: &layout_refs,
@@ -198,7 +202,8 @@ impl Pipeline {
 
     pub fn prepare<'b, 'c>(&mut self, queue: &'c CommandQueue<'c>) -> PreparePass<'_, 'b, 'c> {
         // Rebuild shaders on first call or when any shader changed.
-        if self.cur_pipeline.is_none() || self.shaders.iter().any(|v| v.has_changed()) {
+        if self.cur_pipeline.is_none() || self.config.shaders.iter().any(|v| v.source.has_changed())
+        {
             self.rebuild_shaders(queue);
         }
 

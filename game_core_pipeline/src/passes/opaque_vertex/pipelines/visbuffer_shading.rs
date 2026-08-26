@@ -6,7 +6,7 @@ use game_render::backend::{DescriptorType, ShaderStages};
 use glam::UVec2;
 use openfo4_shaderlib::{ShaderSource, include_shader};
 
-use crate::passes::pipeline::{Pipeline, PipelineBinding};
+use crate::passes::pipeline::{Pipeline, PipelineBinding, PipelineConfig, ShaderConfig};
 
 static SHADER: ShaderSource =
     include_shader!("/game_core_pipeline/shaders/opaque_vertex/visbuffer_shading.slang");
@@ -48,23 +48,9 @@ pub struct ShadingPipeline {
 impl ShadingPipeline {
     pub fn new() -> Self {
         Self {
-            pipeline: Pipeline::new(
-                [&SHADER],
-                Box::new(|_queue, shaders| {
-                    let tile_size = shaders[0]
-                        .spec_constants()
-                        .iter()
-                        .find(|v| v.name.as_ref().is_some_and(|v| v == "TILE_SIZE"))
-                        .unwrap()
-                        .id;
-
-                    vec![PipelineStage::Compute(ComputeStage {
-                        shader: &shaders[0],
-                        entry: "main",
-                        spec_consts: [(tile_size, TILE_SIZE.into())].into_iter().collect(),
-                    })]
-                }),
-                &[
+            pipeline: Pipeline::new(PipelineConfig {
+                shaders: vec![ShaderConfig { source: &SHADER }],
+                bindings: vec![
                     PipelineBinding {
                         name: "constants",
                         stages: ShaderStages::COMPUTE,
@@ -181,7 +167,21 @@ impl ShadingPipeline {
                         kind: DescriptorType::Sampler,
                     },
                 ],
-            ),
+                builder: Box::new(|_queue, shaders| {
+                    let tile_size = shaders[0]
+                        .spec_constants()
+                        .iter()
+                        .find(|v| v.name.as_ref().is_some_and(|v| v == "TILE_SIZE"))
+                        .unwrap()
+                        .id;
+
+                    vec![PipelineStage::Compute(ComputeStage {
+                        shader: &shaders[0],
+                        entry: "main",
+                        spec_consts: [(tile_size, TILE_SIZE.into())].into_iter().collect(),
+                    })]
+                }),
+            }),
         }
     }
 

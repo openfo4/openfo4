@@ -143,7 +143,7 @@ void main(
     var luminance = Vec3(0.0);
 
     // Ambient light
-    luminance += eval_indirect_light(constants.scene.ambient, pbr_material) ;
+    luminance += eval_indirect_light(constants.scene.ambient, pbr_material);
     // luminance += constants.scene.ambient.sample(pbr_material.normal) ;
 
     for (var i = 0; i < constants.num_directional_lights; i++) {
@@ -159,10 +159,10 @@ void main(
         // luminance += dot(pbr_material.normal, light.direction) * shadow * light.color;
     }
 
-    for (var i = 0; i < constants.num_point_lights; i++) {
-        let light = point_lights[i].eval(FragParams(world_position));
-        luminance += pbr::surface_shading(pbr_material, view_dir, light);
-    }
+    // for (var i = 0; i < constants.num_point_lights; i++) {
+    //     let light = point_lights[i].eval(FragParams(world_position));
+    //     luminance += pbr::surface_shading(pbr_material, view_dir, light);
+    // }
 
     for (var i = 0; i < constants.num_spot_lights; i++) {
         let light = spot_lights[i].eval(FragParams(world_position));
@@ -170,6 +170,7 @@ void main(
     }
 
     output[coords] = Vec4(luminance  , 1.0);
+    // output[coords] = Vec4(pbr_material.base_color , 1.0);
 }
 
 struct InputParams {
@@ -282,14 +283,17 @@ func sample_material(material: Material, uv: Gradient, vert_color: Vec4, normal:
     let base_color_texture = material.base_color * sample_material_texture(material.base_color_texture, uv);
     var base_color = base_color_texture * vert_color;
     if ((material.flags & MATERIAL_FLAGS_GRAYSCALE_PALETTE) != 0) {
-        let x = clamp(linear_to_srgb(base_color_texture.g), 0.0, 1.0);
+        let x = clamp(base_color_texture.g, 0.0, 1.0);
         let y = clamp(material.grayscale_palette_scale - (1.0 - vert_color.r), 0.0, 1.0);
         base_color =  textures[NonUniformResourceIndex(material.grayscale_palette_texture)].SampleLevel(sampler, Vec2(x, y), 0.0);
     }
 
-    base_color.r = linear_to_srgb(base_color.r);
-    base_color.g = linear_to_srgb(base_color.g);
-    base_color.b = linear_to_srgb(base_color.b);
+    // base_color.r = linear_to_srgb(base_color.r);
+    // base_color.g = linear_to_srgb(base_color.g);
+    // base_color.b = linear_to_srgb(base_color.b);
+    // base_color.r = srgb_to_linear(base_color.r);
+    // base_color.g = srgb_to_linear(base_color.g);
+    // base_color.b = srgb_to_linear(base_color.b);
 
 
     let specular_strength = material.specular_strength * sample_material_texture(material.specular_glossiness_texture, uv).r;

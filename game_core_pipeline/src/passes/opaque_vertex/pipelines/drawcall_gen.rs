@@ -5,7 +5,7 @@ use game_render::backend::allocator::UsageFlags;
 use game_render::backend::{BufferUsage, DescriptorType, ShaderStages};
 use openfo4_shaderlib::{ShaderSource, include_shader};
 
-use crate::passes::pipeline::{Pipeline, PipelineBinding};
+use crate::passes::pipeline::{Pipeline, PipelineBinding, PipelineConfig, ShaderConfig};
 
 static SHADER: ShaderSource =
     include_shader!("/game_core_pipeline/shaders/opaque_vertex/drawcall_gen.slang");
@@ -27,16 +27,9 @@ pub struct DrawcallGenPipeline {
 impl DrawcallGenPipeline {
     pub fn new() -> Self {
         Self {
-            pipeline: Pipeline::new(
-                [&SHADER],
-                Box::new(|_, shaders| {
-                    vec![PipelineStage::Compute(ComputeStage {
-                        shader: &shaders[0],
-                        entry: "main",
-                        spec_consts: Default::default(),
-                    })]
-                }),
-                &[
+            pipeline: Pipeline::new(PipelineConfig {
+                shaders: vec![ShaderConfig { source: &SHADER }],
+                bindings: vec![
                     PipelineBinding {
                         name: "instance_count",
                         stages: ShaderStages::COMPUTE,
@@ -58,7 +51,14 @@ impl DrawcallGenPipeline {
                         kind: DescriptorType::Storage,
                     },
                 ],
-            ),
+                builder: Box::new(|_, shaders| {
+                    vec![PipelineStage::Compute(ComputeStage {
+                        shader: &shaders[0],
+                        entry: "main",
+                        spec_consts: Default::default(),
+                    })]
+                }),
+            }),
         }
     }
 
