@@ -1,59 +1,48 @@
 //! Vertex pipeline based transparency pass
 
-use std::num::NonZeroU32;
 use std::sync::Arc;
 
 use bytemuck::Zeroable;
 use game_render::api::{
     BindingResource, BufferDescriptor, BufferInitDescriptor, CommandQueue, ComputePassDescriptor,
-    ComputeStage, DepthStencilAttachment, DescriptorSetDescriptor, DescriptorSetEntry,
-    DescriptorSetLayout, DescriptorSetLayoutDescriptor, FragmentStage, Pipeline,
-    PipelineDescriptor, PipelineStage, RenderPassDescriptor, Sampler, Texture, TextureRegion,
-    TextureViewDescriptor, VertexStage,
+    ComputeStage, DepthStencilAttachment, FragmentStage, PipelineStage, RenderPassDescriptor,
+    Sampler, Texture, TextureRegion, TextureViewDescriptor, VertexStage,
 };
 use game_render::backend::allocator::UsageFlags;
 use game_render::backend::{
-    AddressMode, BufferUsage, CompareOp, DepthStencilState, DescriptorBinding, DescriptorType,
+    AddressMode, BufferUsage, CompareOp, DepthStencilState, DescriptorType,
     DrawIndexedIndirectCommand, Face, FilterMode, FrontFace, IndexFormat, LoadOp,
-    PrimitiveTopology, PushConstantRange, SamplerDescriptor, ShaderStages, StoreOp,
-    TextureDescriptor, TextureFormat, TextureUsage,
+    PrimitiveTopology, SamplerDescriptor, ShaderStages, StoreOp, TextureDescriptor, TextureFormat,
+    TextureUsage,
 };
 use game_render::graph::{Node, RenderContext};
-use game_render::pipeline_cache::{PipelineBuilder, PipelineCache};
-use game_render::shader::{Shader, ShaderConfig, ShaderLanguage, ShaderSource};
 use game_tracing::trace_span;
+use openfo4_shaderlib::{ShaderSource, include_shader};
 use parking_lot::Mutex;
 
 use crate::camera::CameraUniform;
 use crate::entities::{CameraId, SceneId};
+use crate::passes::pipeline::{Pipeline, PipelineBinding, PipelineConfig, ShaderConfig};
 use crate::passes::update::{RawAmbientLight, RawSceneData};
-use crate::passes::{DEPTH_FORMAT, HDR_FORMAT, HDR_TEXTURE, OPAQUE_DEPTH, State};
+use crate::passes::{DEPTH_FORMAT, HDR_TEXTURE, OPAQUE_DEPTH, State};
 
-const DRAWGEN_SHADER: &str = concat!(
-    env!("CARGO_MANIFEST_DIR"),
-    "/shaders/transparent/drawcall_gen.slang"
-);
-const COLOR_VERT_SHADER: &str = concat!(
-    env!("CARGO_MANIFEST_DIR"),
-    "/shaders/transparent/transparent_vert.slang"
-);
-const COLOR_FRAG_SHADER: &str = concat!(
-    env!("CARGO_MANIFEST_DIR"),
-    "/shaders/transparent/transparent_frag.slang"
-);
-const BLEND_SHADER: &str = concat!(
-    env!("CARGO_MANIFEST_DIR"),
-    "/shaders/transparent/transparent_blend.slang"
-);
+static DRAWGEN_SHADER: ShaderSource =
+    include_shader!("/game_core_pipeline/shaders/transparent/drawcall_gen.slang");
+static COLOR_VERT_SHADER: ShaderSource =
+    include_shader!("/game_core_pipeline/shaders/transparent/transparent_vert.slang");
+static COLOR_FRAG_SHADER: ShaderSource =
+    include_shader!("/game_core_pipeline/shaders/transparent/transparent_frag.slang");
+static BLEND_SHADER: ShaderSource =
+    include_shader!("/game_core_pipeline/shaders/transparent/transparent_blend.slang");
 
 const WORKGROUP_SIZE: u32 = 64;
 
 #[derive(Debug)]
 pub struct TransparentVertexPass {
     state: Arc<Mutex<State>>,
-    drawcall_gen_pipeline: PipelineCache<DrawcallGenPipeline>,
-    color_pipeline: PipelineCache<BuildColorPipeline>,
-    blend_pipeline: PipelineCache<BuildBlendPipeline>,
+    drawcall_gen_pipeline: Mutex<Pipeline>,
+    color_pipeline: Mutex<Pipeline>,
+    blend_pipeline: Mutex<Pipeline>,
     linear_sampler: Sampler,
 }
 
@@ -61,227 +50,204 @@ impl TransparentVertexPass {
     pub fn new(state: Arc<Mutex<State>>, queue: &CommandQueue<'_>) -> Self {
         Self {
             state,
-            drawcall_gen_pipeline: PipelineCache::new(
-                DrawcallGenPipeline {
-                    descriptor: queue.create_descriptor_set_layout(
-                        &DescriptorSetLayoutDescriptor {
-                            bindings: &[
-                                // Instances in
-                                DescriptorBinding {
-                                    binding: 0,
-                                    visibility: ShaderStages::COMPUTE,
-                                    kind: DescriptorType::Storage,
-                                    count: NonZeroU32::MIN,
-                                },
-                                // Instances out
-                                DescriptorBinding {
-                                    binding: 1,
-                                    visibility: ShaderStages::COMPUTE,
-                                    kind: DescriptorType::Storage,
-                                    count: NonZeroU32::MIN,
-                                },
-                                // Draw commands
-                                DescriptorBinding {
-                                    binding: 2,
-                                    visibility: ShaderStages::COMPUTE,
-                                    kind: DescriptorType::Storage,
-                                    count: NonZeroU32::MIN,
-                                },
-                            ],
-                        },
-                    ),
-                },
-                vec![ShaderConfig {
-                    source: ShaderSource::File(DRAWGEN_SHADER.into()),
-                    language: ShaderLanguage::Slang,
+            drawcall_gen_pipeline: Mutex::new(Pipeline::new(PipelineConfig {
+                shaders: vec![ShaderConfig {
+                    source: &DRAWGEN_SHADER,
                 }],
-            ),
-            color_pipeline: PipelineCache::new(
-                BuildColorPipeline {
-                    mesh_descriptor: queue.create_descriptor_set_layout(
-                        &DescriptorSetLayoutDescriptor {
-                            bindings: &[
-                                DescriptorBinding {
-                                    binding: 0,
-                                    visibility: ShaderStages::VERTEX,
-                                    kind: DescriptorType::Storage,
-                                    count: NonZeroU32::MIN,
-                                },
-                                DescriptorBinding {
-                                    binding: 1,
-                                    visibility: ShaderStages::VERTEX,
-                                    kind: DescriptorType::Storage,
-                                    count: NonZeroU32::MIN,
-                                },
-                                DescriptorBinding {
-                                    binding: 2,
-                                    visibility: ShaderStages::VERTEX,
-                                    kind: DescriptorType::Storage,
-                                    count: NonZeroU32::MIN,
-                                },
-                                DescriptorBinding {
-                                    binding: 3,
-                                    visibility: ShaderStages::VERTEX,
-                                    kind: DescriptorType::Storage,
-                                    count: NonZeroU32::MIN,
-                                },
-                                DescriptorBinding {
-                                    binding: 4,
-                                    visibility: ShaderStages::VERTEX,
-                                    kind: DescriptorType::Storage,
-                                    count: NonZeroU32::MIN,
-                                },
-                                DescriptorBinding {
-                                    binding: 5,
-                                    visibility: ShaderStages::VERTEX,
-                                    kind: DescriptorType::Storage,
-                                    count: NonZeroU32::MIN,
-                                },
-                                DescriptorBinding {
-                                    binding: 6,
-                                    visibility: ShaderStages::VERTEX,
-                                    kind: DescriptorType::Storage,
-                                    count: NonZeroU32::MIN,
-                                },
-                                DescriptorBinding {
-                                    binding: 7,
-                                    visibility: ShaderStages::VERTEX,
-                                    kind: DescriptorType::Storage,
-                                    count: NonZeroU32::MIN,
-                                },
-                            ],
-                        },
-                    ),
-                    material_descriptor: queue.create_descriptor_set_layout(
-                        &DescriptorSetLayoutDescriptor {
-                            bindings: &[
-                                DescriptorBinding {
-                                    binding: 0,
-                                    visibility: ShaderStages::FRAGMENT,
-                                    kind: DescriptorType::Storage,
-                                    count: NonZeroU32::MIN,
-                                },
-                                DescriptorBinding {
-                                    binding: 1,
-                                    visibility: ShaderStages::FRAGMENT,
-                                    kind: DescriptorType::Storage,
-                                    count: NonZeroU32::MIN,
-                                },
-                                DescriptorBinding {
-                                    binding: 2,
-                                    visibility: ShaderStages::FRAGMENT,
-                                    kind: DescriptorType::Storage,
-                                    count: NonZeroU32::MIN,
-                                },
-                                DescriptorBinding {
-                                    binding: 3,
-                                    visibility: ShaderStages::FRAGMENT,
-                                    kind: DescriptorType::Storage,
-                                    count: NonZeroU32::MIN,
-                                },
-                                DescriptorBinding {
-                                    binding: 4,
-                                    visibility: ShaderStages::FRAGMENT,
-                                    kind: DescriptorType::Texture,
-                                    // TODO: Grow when needed instead of initializing this to a value.
-                                    count: NonZeroU32::new(8192).unwrap(),
-                                },
-                                DescriptorBinding {
-                                    binding: 5,
-                                    visibility: ShaderStages::FRAGMENT,
-                                    kind: DescriptorType::Sampler,
-                                    count: NonZeroU32::MIN,
-                                },
-                                DescriptorBinding {
-                                    binding: 6,
-                                    visibility: ShaderStages::FRAGMENT,
-                                    kind: DescriptorType::Uniform,
-                                    count: NonZeroU32::MIN,
-                                },
-                            ],
-                        },
-                    ),
-                    output_descriptor: queue.create_descriptor_set_layout(
-                        &DescriptorSetLayoutDescriptor {
-                            bindings: &[
-                                // A-Buffer
-                                DescriptorBinding {
-                                    binding: 0,
-                                    visibility: ShaderStages::FRAGMENT,
-                                    kind: DescriptorType::Storage,
-                                    count: NonZeroU32::MIN,
-                                },
-                                // Linked list heads
-                                DescriptorBinding {
-                                    binding: 1,
-                                    visibility: ShaderStages::FRAGMENT,
-                                    kind: DescriptorType::StorageTexture,
-                                    count: NonZeroU32::MIN,
-                                },
-                                // Shared atomic counter
-                                DescriptorBinding {
-                                    binding: 2,
-                                    visibility: ShaderStages::FRAGMENT,
-                                    kind: DescriptorType::Storage,
-                                    count: NonZeroU32::MIN,
-                                },
-                                // Depth buffer
-                                DescriptorBinding {
-                                    binding: 3,
-                                    visibility: ShaderStages::FRAGMENT,
-                                    kind: DescriptorType::Texture,
-                                    count: NonZeroU32::MIN,
-                                },
-                            ],
-                        },
-                    ),
-                },
-                vec![
-                    ShaderConfig {
-                        source: ShaderSource::File(COLOR_VERT_SHADER.into()),
-                        language: ShaderLanguage::Slang,
+                bindings: vec![
+                    PipelineBinding {
+                        name: "instances_in",
+                        kind: DescriptorType::Storage,
+                        stages: ShaderStages::COMPUTE,
                     },
-                    ShaderConfig {
-                        source: ShaderSource::File(COLOR_FRAG_SHADER.into()),
-                        language: ShaderLanguage::Slang,
+                    PipelineBinding {
+                        name: "instances_out",
+                        kind: DescriptorType::Storage,
+                        stages: ShaderStages::COMPUTE,
+                    },
+                    PipelineBinding {
+                        name: "draws",
+                        kind: DescriptorType::Storage,
+                        stages: ShaderStages::COMPUTE,
+                    },
+                    PipelineBinding {
+                        name: "instance_count",
+                        kind: DescriptorType::Uniform,
+                        stages: ShaderStages::COMPUTE,
                     },
                 ],
-            ),
-            blend_pipeline: PipelineCache::new(
-                BuildBlendPipeline {
-                    descriptor: queue.create_descriptor_set_layout(
-                        &DescriptorSetLayoutDescriptor {
-                            bindings: &[
-                                // A-Buffer
-                                DescriptorBinding {
-                                    binding: 0,
-                                    visibility: ShaderStages::COMPUTE,
-                                    kind: DescriptorType::Storage,
-                                    count: NonZeroU32::MIN,
-                                },
-                                // Heads Buffer
-                                DescriptorBinding {
-                                    binding: 1,
-                                    visibility: ShaderStages::COMPUTE,
-                                    kind: DescriptorType::Texture,
-                                    count: NonZeroU32::MIN,
-                                },
-                                // Output Texture
-                                DescriptorBinding {
-                                    binding: 2,
-                                    visibility: ShaderStages::COMPUTE,
-                                    kind: DescriptorType::StorageTexture,
-                                    count: NonZeroU32::MIN,
-                                },
-                            ],
-                        },
-                    ),
-                },
-                vec![ShaderConfig {
-                    source: ShaderSource::File(BLEND_SHADER.into()),
-                    language: ShaderLanguage::Slang,
+                builder: Box::new(|_queue, shaders| {
+                    vec![PipelineStage::Compute(ComputeStage {
+                        shader: &shaders[0],
+                        entry: "main",
+                        spec_consts: Default::default(),
+                    })]
+                }),
+            })),
+            color_pipeline: Mutex::new(Pipeline::new(PipelineConfig {
+                shaders: vec![
+                    ShaderConfig {
+                        source: &COLOR_VERT_SHADER,
+                    },
+                    ShaderConfig {
+                        source: &COLOR_FRAG_SHADER,
+                    },
+                ],
+                bindings: vec![
+                    PipelineBinding {
+                        name: "positions",
+                        stages: ShaderStages::VERTEX,
+                        kind: DescriptorType::Storage,
+                    },
+                    PipelineBinding {
+                        name: "normals",
+                        stages: ShaderStages::VERTEX,
+                        kind: DescriptorType::Storage,
+                    },
+                    PipelineBinding {
+                        name: "uvs",
+                        stages: ShaderStages::VERTEX,
+                        kind: DescriptorType::Storage,
+                    },
+                    PipelineBinding {
+                        name: "tangents",
+                        stages: ShaderStages::VERTEX,
+                        kind: DescriptorType::Storage,
+                    },
+                    PipelineBinding {
+                        name: "colors",
+                        stages: ShaderStages::VERTEX,
+                        kind: DescriptorType::Storage,
+                    },
+                    PipelineBinding {
+                        name: "offsets",
+                        stages: ShaderStages::VERTEX,
+                        kind: DescriptorType::Storage,
+                    },
+                    PipelineBinding {
+                        name: "instances",
+                        stages: ShaderStages::VERTEX,
+                        kind: DescriptorType::Storage,
+                    },
+                    PipelineBinding {
+                        name: "materials",
+                        stages: ShaderStages::VERTEX | ShaderStages::FRAGMENT,
+                        kind: DescriptorType::Storage,
+                    },
+                    PipelineBinding {
+                        name: "directional_lights",
+                        stages: ShaderStages::FRAGMENT,
+                        kind: DescriptorType::Storage,
+                    },
+                    PipelineBinding {
+                        name: "point_lights",
+                        stages: ShaderStages::FRAGMENT,
+                        kind: DescriptorType::Storage,
+                    },
+                    PipelineBinding {
+                        name: "spot_lights",
+                        stages: ShaderStages::FRAGMENT,
+                        kind: DescriptorType::Storage,
+                    },
+                    PipelineBinding {
+                        name: "textures",
+                        stages: ShaderStages::FRAGMENT,
+                        kind: DescriptorType::Texture,
+                    },
+                    PipelineBinding {
+                        name: "sampler",
+                        stages: ShaderStages::FRAGMENT,
+                        kind: DescriptorType::Sampler,
+                    },
+                    PipelineBinding {
+                        name: "scene",
+                        stages: ShaderStages::FRAGMENT,
+                        kind: DescriptorType::Uniform,
+                    },
+                    PipelineBinding {
+                        name: "elements",
+                        stages: ShaderStages::FRAGMENT,
+                        kind: DescriptorType::Storage,
+                    },
+                    PipelineBinding {
+                        name: "heads",
+                        stages: ShaderStages::FRAGMENT,
+                        kind: DescriptorType::StorageTexture,
+                    },
+                    PipelineBinding {
+                        name: "frag_counter",
+                        stages: ShaderStages::FRAGMENT,
+                        kind: DescriptorType::Storage,
+                    },
+                    PipelineBinding {
+                        name: "depth",
+                        stages: ShaderStages::FRAGMENT,
+                        kind: DescriptorType::Texture,
+                    },
+                    PipelineBinding {
+                        name: "push_constants",
+                        stages: ShaderStages::VERTEX | ShaderStages::FRAGMENT,
+                        kind: DescriptorType::Uniform,
+                    },
+                ],
+                builder: Box::new(|_queue, shaders| {
+                    vec![
+                        PipelineStage::Vertex(VertexStage {
+                            shader: &shaders[0],
+                            entry: "main",
+                            topology: PrimitiveTopology::TriangleList,
+                            spec_consts: Default::default(),
+                        }),
+                        PipelineStage::Fragment(FragmentStage {
+                            shader: &shaders[1],
+                            entry: "main",
+                            targets: &[],
+                            front_face: FrontFace::Ccw,
+                            cull_mode: Some(Face::Back),
+                            depth_stencil_state: Some(DepthStencilState {
+                                format: DEPTH_FORMAT,
+                                depth_write_enabled: false,
+                                depth_compare_op: CompareOp::Always,
+                            }),
+                            spec_consts: Default::default(),
+                        }),
+                    ]
+                }),
+            })),
+            blend_pipeline: Mutex::new(Pipeline::new(PipelineConfig {
+                shaders: vec![ShaderConfig {
+                    source: &BLEND_SHADER,
                 }],
-            ),
+                bindings: vec![
+                    PipelineBinding {
+                        name: "output_size",
+                        stages: ShaderStages::COMPUTE,
+                        kind: DescriptorType::Uniform,
+                    },
+                    PipelineBinding {
+                        name: "elements",
+                        stages: ShaderStages::COMPUTE,
+                        kind: DescriptorType::Storage,
+                    },
+                    PipelineBinding {
+                        name: "heads",
+                        stages: ShaderStages::COMPUTE,
+                        kind: DescriptorType::Texture,
+                    },
+                    PipelineBinding {
+                        name: "output",
+                        stages: ShaderStages::COMPUTE,
+                        kind: DescriptorType::StorageTexture,
+                    },
+                ],
+                builder: Box::new(|_queue, shaders| {
+                    vec![PipelineStage::Compute(ComputeStage {
+                        shader: &shaders[0],
+                        entry: "main",
+                        spec_consts: Default::default(),
+                    })]
+                }),
+            })),
             linear_sampler: queue.create_sampler(&SamplerDescriptor {
                 address_mode_u: AddressMode::Repeat,
                 address_mode_v: AddressMode::Repeat,
@@ -303,6 +269,10 @@ impl TransparentVertexPass {
         scene: SceneId,
         camera: CameraId,
     ) {
+        let mut drawcall_gen_pipeline = self.drawcall_gen_pipeline.lock();
+        let mut color_pipeline = self.color_pipeline.lock();
+        let mut blend_pipeline = self.blend_pipeline.lock();
+
         let scene = state.scenes.get_mut(&scene).unwrap();
         let camera = scene.cameras.get(&camera).unwrap();
 
@@ -335,26 +305,18 @@ impl TransparentVertexPass {
                 usage: BufferUsage::STORAGE | BufferUsage::INDIRECT,
                 flags: UsageFlags::empty(),
             });
-
-            let descriptor = ctx.queue.create_descriptor_set(&DescriptorSetDescriptor {
-                layout: &self.drawcall_gen_pipeline.builder.descriptor,
-                entries: &[
-                    DescriptorSetEntry {
-                        binding: 0,
-                        resource: BindingResource::Buffer(&instances_in),
-                    },
-                    DescriptorSetEntry {
-                        binding: 1,
-                        resource: BindingResource::Buffer(&instances_out),
-                    },
-                    DescriptorSetEntry {
-                        binding: 2,
-                        resource: BindingResource::Buffer(&draws),
-                    },
-                ],
+            let instance_count = ctx.queue.create_buffer_init(&BufferInitDescriptor {
+                contents: bytemuck::bytes_of(&state.mesh.instances.num_translucent),
+                usage: BufferUsage::UNIFORM,
+                flags: UsageFlags::empty(),
             });
 
-            let mut pass = ctx.queue.run_compute_pass(&ComputePassDescriptor {
+            let mut pass = drawcall_gen_pipeline.prepare(ctx.queue);
+            pass.set("instances_in", ShaderStages::COMPUTE, instances_in);
+            pass.set("instances_out", ShaderStages::COMPUTE, &instances_out);
+            pass.set("draws", ShaderStages::COMPUTE, &draws);
+            pass.set("instance_count", ShaderStages::COMPUTE, &instance_count);
+            let mut pass = pass.run_compute_pass(&ComputePassDescriptor {
                 name: "Transparent Drawcall Generation Pass",
             });
 
@@ -364,13 +326,6 @@ impl TransparentVertexPass {
                 .num_translucent
                 .div_ceil(WORKGROUP_SIZE);
 
-            pass.set_pipeline(&self.drawcall_gen_pipeline.get(ctx.queue, HDR_FORMAT));
-            pass.set_push_constants(
-                ShaderStages::COMPUTE,
-                0,
-                bytemuck::bytes_of(&state.mesh.instances.num_translucent),
-            );
-            pass.set_descriptor_set(0, &descriptor);
             pass.dispatch(num_dispatches, 1, 1);
 
             instance_buffer = instances_out;
@@ -385,43 +340,27 @@ impl TransparentVertexPass {
             let offsets = state.mesh.mesh_offsets.buffer(ctx.queue);
             let materials = state.material_slab.buffer(ctx.queue);
 
-            let mesh_descriptor = ctx.queue.create_descriptor_set(&DescriptorSetDescriptor {
-                layout: &self.color_pipeline.builder.mesh_descriptor,
-                entries: &[
-                    DescriptorSetEntry {
-                        binding: 0,
-                        resource: BindingResource::Buffer(state.mesh.positions.buffer()),
-                    },
-                    DescriptorSetEntry {
-                        binding: 1,
-                        resource: BindingResource::Buffer(state.mesh.normals.buffer()),
-                    },
-                    DescriptorSetEntry {
-                        binding: 2,
-                        resource: BindingResource::Buffer(state.mesh.uvs.buffer()),
-                    },
-                    DescriptorSetEntry {
-                        binding: 3,
-                        resource: BindingResource::Buffer(state.mesh.tangents.buffer()),
-                    },
-                    DescriptorSetEntry {
-                        binding: 4,
-                        resource: BindingResource::Buffer(state.mesh.colors.buffer()),
-                    },
-                    DescriptorSetEntry {
-                        binding: 5,
-                        resource: BindingResource::Buffer(offsets),
-                    },
-                    DescriptorSetEntry {
-                        binding: 6,
-                        resource: BindingResource::Buffer(&instance_buffer),
-                    },
-                    DescriptorSetEntry {
-                        binding: 7,
-                        resource: BindingResource::Buffer(&materials),
-                    },
-                ],
-            });
+            let mut pass = color_pipeline.prepare(ctx.queue);
+            pass.set(
+                "positions",
+                ShaderStages::VERTEX,
+                state.mesh.positions.buffer(),
+            );
+            pass.set("normals", ShaderStages::VERTEX, state.mesh.normals.buffer());
+            pass.set("uvs", ShaderStages::VERTEX, state.mesh.uvs.buffer());
+            pass.set(
+                "tangents",
+                ShaderStages::VERTEX,
+                state.mesh.tangents.buffer(),
+            );
+            pass.set("colors", ShaderStages::VERTEX, state.mesh.colors.buffer());
+            pass.set("offsets", ShaderStages::VERTEX, offsets);
+            pass.set("instances", ShaderStages::VERTEX, &instance_buffer);
+            pass.set(
+                "materials",
+                ShaderStages::VERTEX | ShaderStages::FRAGMENT,
+                materials,
+            );
 
             let textures = state.textures.views();
 
@@ -445,39 +384,20 @@ impl TransparentVertexPass {
                 flags: UsageFlags::empty(),
             });
 
-            let material_descriptor = ctx.queue.create_descriptor_set(&DescriptorSetDescriptor {
-                layout: &self.color_pipeline.builder.material_descriptor,
-                entries: &[
-                    DescriptorSetEntry {
-                        binding: 0,
-                        resource: BindingResource::Buffer(&directional_lights),
-                    },
-                    DescriptorSetEntry {
-                        binding: 1,
-                        resource: BindingResource::Buffer(&point_lights),
-                    },
-                    DescriptorSetEntry {
-                        binding: 2,
-                        resource: BindingResource::Buffer(&spot_lights),
-                    },
-                    DescriptorSetEntry {
-                        binding: 3,
-                        resource: BindingResource::Buffer(&materials),
-                    },
-                    DescriptorSetEntry {
-                        binding: 4,
-                        resource: BindingResource::TextureArray(&textures),
-                    },
-                    DescriptorSetEntry {
-                        binding: 5,
-                        resource: BindingResource::Sampler(&self.linear_sampler),
-                    },
-                    DescriptorSetEntry {
-                        binding: 6,
-                        resource: BindingResource::Buffer(&ambient),
-                    },
-                ],
-            });
+            pass.set(
+                "directional_lights",
+                ShaderStages::FRAGMENT,
+                directional_lights,
+            );
+            pass.set("point_lights", ShaderStages::FRAGMENT, point_lights);
+            pass.set("spot_lights", ShaderStages::FRAGMENT, spot_lights);
+            pass.set(
+                "textures",
+                ShaderStages::FRAGMENT,
+                BindingResource::TextureArray(&textures),
+            );
+            pass.set("sampler", ShaderStages::FRAGMENT, &self.linear_sampler);
+            pass.set("scene", ShaderStages::FRAGMENT, &ambient);
 
             abuffer = ctx.queue.create_buffer(&BufferDescriptor {
                 size: abuffer_size,
@@ -511,31 +431,12 @@ impl TransparentVertexPass {
                 flags: UsageFlags::empty(),
             });
 
-            let output_descriptor = ctx.queue.create_descriptor_set(&DescriptorSetDescriptor {
-                layout: &self.color_pipeline.builder.output_descriptor,
-                entries: &[
-                    DescriptorSetEntry {
-                        binding: 0,
-                        resource: BindingResource::Buffer(&abuffer),
-                    },
-                    DescriptorSetEntry {
-                        binding: 1,
-                        resource: BindingResource::Texture(
-                            &heads.create_view(&TextureViewDescriptor::default()),
-                        ),
-                    },
-                    DescriptorSetEntry {
-                        binding: 2,
-                        resource: BindingResource::Buffer(&counter),
-                    },
-                    DescriptorSetEntry {
-                        binding: 3,
-                        resource: BindingResource::Texture(
-                            &depth_target.create_view(&TextureViewDescriptor::default()),
-                        ),
-                    },
-                ],
-            });
+            pass.set("elements", ShaderStages::FRAGMENT, &abuffer);
+            let heads_view = heads.create_view(&TextureViewDescriptor::default());
+            pass.set("heads", ShaderStages::FRAGMENT, &heads_view);
+            pass.set("frag_counter", ShaderStages::FRAGMENT, &counter);
+            let depth_view = depth_target.create_view(&TextureViewDescriptor::default());
+            pass.set("depth", ShaderStages::FRAGMENT, &depth_view);
 
             let mut push_constants = [0; 128];
             push_constants[0..80].copy_from_slice(bytemuck::bytes_of(&CameraUniform::new(
@@ -548,6 +449,18 @@ impl TransparentVertexPass {
                 .copy_from_slice(&(scene.point_lights.len() as u32).to_ne_bytes());
             push_constants[88..92].copy_from_slice(&(scene.spot_lights.len() as u32).to_ne_bytes());
 
+            let push_constants = ctx.queue.create_buffer_init(&BufferInitDescriptor {
+                contents: &push_constants,
+                usage: BufferUsage::UNIFORM,
+                flags: UsageFlags::empty(),
+            });
+
+            pass.set(
+                "push_constants",
+                ShaderStages::VERTEX | ShaderStages::FRAGMENT,
+                &push_constants,
+            );
+
             // FIXME: We are attaching a dummy texture in the render pass.
             // This is currently a workaround so that the render pass gets the size
             // from the texture size. The depth function always suceeds.
@@ -559,7 +472,7 @@ impl TransparentVertexPass {
                 usage: TextureUsage::RENDER_ATTACHMENT,
             });
 
-            let mut pass = ctx.queue.run_render_pass(&RenderPassDescriptor {
+            let mut pass = pass.run_render_pass(&RenderPassDescriptor {
                 name: "Transparent (Vertex) Color Pass",
                 color_attachments: &[],
                 // We use the depth buffer from the opaque pass to reject
@@ -576,50 +489,30 @@ impl TransparentVertexPass {
                 }),
             });
 
-            pass.set_pipeline(&self.color_pipeline.get(ctx.queue, HDR_FORMAT));
-            pass.set_push_constants(
-                ShaderStages::VERTEX | ShaderStages::FRAGMENT,
-                0,
-                &push_constants,
-            );
-            pass.set_descriptor_set(0, &mesh_descriptor);
-            pass.set_descriptor_set(1, &material_descriptor);
-            pass.set_descriptor_set(2, &output_descriptor);
             pass.set_index_buffer(state.mesh.indices.buffer(), IndexFormat::U32);
             pass.draw_indexed_indirect(&indirect_buffer);
         }
 
         // Blend Pass
         {
-            let mut pass = ctx.queue.run_compute_pass(&ComputePassDescriptor {
+            let output_size = ctx.queue.create_buffer_init(&BufferInitDescriptor {
+                contents: bytemuck::bytes_of(&size),
+                usage: BufferUsage::UNIFORM,
+                flags: UsageFlags::empty(),
+            });
+
+            let mut pass = blend_pipeline.prepare(ctx.queue);
+
+            pass.set("output_size", ShaderStages::COMPUTE, &output_size);
+            pass.set("elements", ShaderStages::COMPUTE, &abuffer);
+            let heads_view = heads.create_view(&TextureViewDescriptor::default());
+            pass.set("heads", ShaderStages::COMPUTE, &heads_view);
+            let colors_view = color_target.create_view(&TextureViewDescriptor::default());
+            pass.set("output", ShaderStages::COMPUTE, &colors_view);
+
+            let mut pass = pass.run_compute_pass(&ComputePassDescriptor {
                 name: "Transparent Blend Pass",
             });
-
-            let descriptor = ctx.queue.create_descriptor_set(&DescriptorSetDescriptor {
-                layout: &self.blend_pipeline.builder.descriptor,
-                entries: &[
-                    DescriptorSetEntry {
-                        binding: 0,
-                        resource: BindingResource::Buffer(&abuffer),
-                    },
-                    DescriptorSetEntry {
-                        binding: 1,
-                        resource: BindingResource::Texture(
-                            &heads.create_view(&TextureViewDescriptor::default()),
-                        ),
-                    },
-                    DescriptorSetEntry {
-                        binding: 2,
-                        resource: BindingResource::Texture(
-                            &color_target.create_view(&TextureViewDescriptor::default()),
-                        ),
-                    },
-                ],
-            });
-
-            pass.set_pipeline(&self.blend_pipeline.get(ctx.queue, HDR_FORMAT));
-            pass.set_push_constants(ShaderStages::COMPUTE, 0, bytemuck::bytes_of(&size));
-            pass.set_descriptor_set(0, &descriptor);
 
             let x = size.x.div_ceil(16);
             let y = size.y.div_ceil(16);
@@ -643,108 +536,5 @@ impl Node for TransparentVertexPass {
                 }
             }
         }
-    }
-}
-
-#[derive(Debug)]
-struct DrawcallGenPipeline {
-    descriptor: DescriptorSetLayout,
-}
-
-impl PipelineBuilder for DrawcallGenPipeline {
-    fn build(
-        &self,
-        queue: &CommandQueue<'_>,
-        shaders: &[Shader],
-        _format: TextureFormat,
-    ) -> Pipeline {
-        queue.create_pipeline(&PipelineDescriptor {
-            stages: &[PipelineStage::Compute(ComputeStage {
-                shader: &shaders[0],
-                entry: "main",
-                spec_consts: Default::default(),
-            })],
-            descriptors: &[&self.descriptor],
-            push_constant_ranges: &[PushConstantRange {
-                range: 0..4,
-                stages: ShaderStages::COMPUTE,
-            }],
-        })
-    }
-}
-
-#[derive(Debug)]
-struct BuildColorPipeline {
-    mesh_descriptor: DescriptorSetLayout,
-    material_descriptor: DescriptorSetLayout,
-    output_descriptor: DescriptorSetLayout,
-}
-
-impl PipelineBuilder for BuildColorPipeline {
-    fn build(
-        &self,
-        queue: &CommandQueue<'_>,
-        shaders: &[Shader],
-        _format: TextureFormat,
-    ) -> Pipeline {
-        queue.create_pipeline(&PipelineDescriptor {
-            stages: &[
-                PipelineStage::Vertex(VertexStage {
-                    shader: &shaders[0],
-                    entry: "main",
-                    topology: PrimitiveTopology::TriangleList,
-                    spec_consts: Default::default(),
-                }),
-                PipelineStage::Fragment(FragmentStage {
-                    shader: &shaders[1],
-                    entry: "main",
-                    targets: &[],
-                    front_face: FrontFace::Ccw,
-                    cull_mode: Some(Face::Back),
-                    depth_stencil_state: Some(DepthStencilState {
-                        format: DEPTH_FORMAT,
-                        depth_write_enabled: false,
-                        depth_compare_op: CompareOp::Always,
-                    }),
-                    spec_consts: Default::default(),
-                }),
-            ],
-            descriptors: &[
-                &self.mesh_descriptor,
-                &self.material_descriptor,
-                &self.output_descriptor,
-            ],
-            push_constant_ranges: &[PushConstantRange {
-                range: 0..128,
-                stages: ShaderStages::VERTEX | ShaderStages::FRAGMENT,
-            }],
-        })
-    }
-}
-
-#[derive(Debug)]
-struct BuildBlendPipeline {
-    descriptor: DescriptorSetLayout,
-}
-
-impl PipelineBuilder for BuildBlendPipeline {
-    fn build(
-        &self,
-        queue: &CommandQueue<'_>,
-        shaders: &[Shader],
-        _format: TextureFormat,
-    ) -> Pipeline {
-        queue.create_pipeline(&PipelineDescriptor {
-            stages: &[PipelineStage::Compute(ComputeStage {
-                shader: &shaders[0],
-                entry: "main",
-                spec_consts: Default::default(),
-            })],
-            descriptors: &[&self.descriptor],
-            push_constant_ranges: &[PushConstantRange {
-                range: 0..8,
-                stages: ShaderStages::COMPUTE,
-            }],
-        })
     }
 }

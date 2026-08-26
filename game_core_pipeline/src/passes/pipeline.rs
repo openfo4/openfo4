@@ -26,6 +26,12 @@ pub struct Pipeline {
     shaders_changed: bool,
 }
 
+impl std::fmt::Debug for Pipeline {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Pipeline").finish_non_exhaustive()
+    }
+}
+
 /// Configuration parameters for a [`Pipeline`].
 pub struct PipelineConfig {
     pub shaders: Vec<ShaderConfig>,

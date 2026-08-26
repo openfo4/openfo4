@@ -3,16 +3,16 @@ import camera;
 import shared;
 import material;
 
-[[vk::push_constant]] Camera camera;
+ConstantBuffer<Camera> push_constants;
 
-[[vk::binding(0, 0)]] StructuredBuffer<f32> positions;
-[[vk::binding(1, 0)]] StructuredBuffer<f32> normals;
-[[vk::binding(2, 0)]] StructuredBuffer<f32> uvs;
-[[vk::binding(3, 0)]] StructuredBuffer<f32> tangents;
-[[vk::binding(4, 0)]] StructuredBuffer<f32> colors;
-[[vk::binding(5, 0)]] StructuredBuffer<MeshOffsets> offsets;
-[[vk::binding(6, 0)]] StructuredBuffer<InstanceOut> instances;
-[[vk::binding(7, 0)]] StructuredBuffer<Material> materials;
+StructuredBuffer<f32> positions;
+StructuredBuffer<f32> normals;
+StructuredBuffer<f32> uvs;
+StructuredBuffer<f32> tangents;
+StructuredBuffer<f32> colors;
+StructuredBuffer<MeshOffsets> offsets;
+StructuredBuffer<InstanceOut> instances;
+StructuredBuffer<Material> materials;
 
 struct Input {
     u32 draw_id: SV_DrawIndex;
@@ -42,7 +42,7 @@ Output main(Input input) {
     let color = fetch<4>(colors, offsets.color, input.vertex_index);
 
     Output output;
-    output.clip_position = mul(mul(camera.view_proj, instance.transform), Vec4(position, 1.0));
+    output.clip_position = mul(mul(push_constants.view_proj, instance.transform), Vec4(position, 1.0));
     output.clip_position.z += material.depth_bias;
     output.world_position = mul(instance.transform, Vec4(position, 1.0)).xyz;
     output.world_normal = mul(instance.normal, normal);

@@ -5,11 +5,11 @@ static const u32 NUM_THREADS = 64;
 
 static const u32 OIT_LAYERS = 8;
 
-[[vk::push_constant]] vector<u32, 2> output_size;
+ConstantBuffer<vector<u32, 2>> output_size;
 
-[[vk::binding(0, 0)]] StructuredBuffer<Element> elements;
-[[vk::binding(1, 0)]] Texture2D<u32> heads;
-[[vk::binding(2, 0)]] RWTexture2D<Vec4> output;
+StructuredBuffer<Element> elements;
+Texture2D<u32> heads;
+RWTexture2D<Vec4> output;
 
 static const u32 TILE_SIZE = 16;
 

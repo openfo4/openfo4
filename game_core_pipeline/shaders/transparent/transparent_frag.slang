@@ -13,20 +13,20 @@ struct PushConstants {
     u32 num_spot_lights;
 }
 
-[[vk::push_constant]] PushConstants push_constants;
+ConstantBuffer<PushConstants> push_constants;
 
-[[vk::binding(0, 1)]] StructuredBuffer<DirectionalLight> directional_lights;
-[[vk::binding(1, 1)]] StructuredBuffer<PointLight> point_lights;
-[[vk::binding(2, 1)]] StructuredBuffer<SpotLight> spot_lights;
-[[vk::binding(3, 1)]] StructuredBuffer<Material> materials;
-[[vk::binding(4, 1)]] Texture2D<Vec4>[] textures;
-[[vk::binding(5, 1)]] SamplerState sampler;
-[[vk::binding(6, 1)]] ConstantBuffer<SceneData> scene;
+StructuredBuffer<DirectionalLight> directional_lights;
+StructuredBuffer<PointLight> point_lights;
+StructuredBuffer<SpotLight> spot_lights;
+StructuredBuffer<Material> materials;
+Texture2D<Vec4>[] textures;
+SamplerState sampler;
+ConstantBuffer<SceneData> scene;
 
-[[vk::binding(0, 2)]] RWStructuredBuffer<Element> elements;
-[[vk::binding(1, 2)]] RWTexture2D<u32> heads;
-[[vk::binding(2, 2)]] RWStructuredBuffer<Atomic<u32>> frag_counter;
-[[vk::binding(3, 2)]] Texture2D<f32> depth;
+RWStructuredBuffer<Element> elements;
+RWTexture2D<u32> heads;
+RWStructuredBuffer<Atomic<u32>> frag_counter;
+Texture2D<f32> depth;
 
 struct Input {
     Vec4 clip_position: SV_Position;
