@@ -7,6 +7,7 @@ use hashbrown::HashMap;
 use parking_lot::Mutex;
 
 use crate::compiler::resources::{Resources, Type, TypeId, TypeRepr};
+use crate::runtime::Val;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 #[repr(transparent)]
@@ -514,6 +515,17 @@ impl IntoValue for ObjectAddr {
     fn as_bytes(&self) -> &[u8] {
         let addr = unsafe { core::mem::transmute::<&*mut u8, &usize>(&self.0) };
         bytemuck::bytes_of(addr)
+    }
+}
+
+impl IntoValue for Val {
+    fn as_bytes(&self) -> &[u8] {
+        match self {
+            Self::Bool(v) => v.as_bytes(),
+            Self::I32(v) => v.as_bytes(),
+            Self::F32(v) => v.as_bytes(),
+            Self::Object(v) => v.as_bytes(),
+        }
     }
 }
 

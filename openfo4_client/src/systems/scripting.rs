@@ -4,6 +4,7 @@ pub mod loader;
 mod classes;
 mod effects;
 mod events;
+mod object_builder;
 mod objects;
 mod registration;
 mod runner;
