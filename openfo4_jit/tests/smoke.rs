@@ -71,3 +71,33 @@ fn call_native() {
 
     assert_eq!(value, 1);
 }
+
+#[test]
+fn call_native_from_host() {
+    fn my_native_func(a: u8, b: u64) {
+        assert_eq!(a, 1);
+        assert_eq!(b, 2);
+    }
+
+    #[repr(C)]
+    union Param {
+        a: u8,
+        b: u64,
+    }
+
+    let mut compiler = Compiler::new(CompilerConfig::default());
+    let host_fn = compiler.declare_function(Signature {
+        params: vec![Type::I8, Type::I64],
+        returns: vec![],
+    });
+
+    compiler.define_native_function(host_fn, my_native_func);
+
+    let compiled_fn = compiler.compile_function(host_fn);
+
+    let params = [Param { a: 1 }, Param { b: 2 }];
+
+    unsafe {
+        compiled_fn.call((&raw const params).cast::<u8>(), core::ptr::dangling_mut());
+    }
+}

@@ -7,7 +7,7 @@ use hashbrown::HashMap;
 
 use crate::FuncId;
 use crate::backend::cranelift::{Callee, FuncState, HostFunctionDefinition, Translator, map_type};
-use crate::func::{HostFunc, MAX_ALIGN};
+use crate::func::HostFunc;
 
 pub unsafe extern "C" fn host_call_trampoline(
     func: *const HostFunc,
@@ -32,27 +32,35 @@ pub fn call_host_trampoline(
     translator: &mut Translator,
 ) -> Vec<ir::Value> {
     let mut params_size = 0;
+    let mut params_align = 1;
     for ty in &func.signature.params {
         params_size = (params_size + ty.align() - 1) & !(ty.align() - 1);
         params_size += ty.size();
+        params_align = params_align.max(ty.align());
     }
 
     let mut returns_size = 0;
+    let mut returns_align = 1;
     for ty in &func.signature.returns {
         returns_size = (returns_size + ty.align() - 1) & !(ty.align() - 1);
         returns_size += ty.size();
+        returns_align = returns_align.max(ty.align());
     }
 
+    debug_assert!(params_align.is_power_of_two());
+    debug_assert!(returns_align.is_power_of_two());
     let params_slot = builder.create_sized_stack_slot(StackSlotData {
         kind: StackSlotKind::ExplicitSlot,
         size: params_size as u32,
-        align_shift: MAX_ALIGN.ilog2() as u8,
+        // Alignment always is a power of two, so this is the same as ilog2.
+        align_shift: params_align.trailing_zeros() as u8,
         key: None,
     });
     let returns_slot = builder.create_sized_stack_slot(StackSlotData {
         kind: StackSlotKind::ExplicitSlot,
         size: returns_size as u32,
-        align_shift: MAX_ALIGN.ilog2() as u8,
+        // Alignment always is a power of two, so this is the same as ilog2.
+        align_shift: returns_align.trailing_zeros() as u8,
         key: None,
     });
 

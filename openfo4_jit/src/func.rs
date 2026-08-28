@@ -23,21 +23,26 @@ macro_rules! impl_into_func {
                 $returns: HostType,
             )*
         {
-            #[allow(unused_assignments)]
-            #[allow(unused_mut)]
             #[allow(private_interfaces)]
+            #[allow(unused)]
             fn into_host_func(self) -> HostFunc {
                 HostFunc::new(move |params, mut returns| {
                     let mut params = params.cast_mut();
 
-                    // Both pointers are always aligned to MAX_ALIGN, which is
-                    // the highest alignment needed by any type.
+                    // Both pointers are always aligned to the maximum of all parameters.
                     // Guaranteeing this here allows all following alignment offsets
                     // to become constants.
-                    unsafe {
-                        assert_unchecked(params.align_offset(MAX_ALIGN) == 0);
-                        assert_unchecked(returns.align_offset(MAX_ALIGN) == 0);
-                    }
+                    $(
+                        unsafe {
+                            assert_unchecked(params.align_offset(align_of::<$params>()) == 0);
+                        }
+                    )*
+                    $(
+                        unsafe {
+                            assert_unchecked(returns.align_offset(align_of::<$returns>()) == 0);
+                        }
+                    )*
+
 
                     $(
                         unsafe { align_up::<$params>(&mut params) };
@@ -113,9 +118,6 @@ impl HostFunc {
     ///
     /// - `params` and `returns` must both be aligned to [`MAX_ALIGN`].
     pub(crate) unsafe fn call(&self, params: *const u8, returns: *mut u8) {
-        debug_assert_eq!(params.align_offset(MAX_ALIGN), 0);
-        debug_assert_eq!(returns.align_offset(MAX_ALIGN), 0);
-
         (self.func)(params, returns);
     }
 }
@@ -133,8 +135,6 @@ impl IntoHostFunc<(), ()> for HostFunc {
         self
     }
 }
-
-pub const MAX_ALIGN: usize = align_of::<usize>();
 
 pub unsafe trait HostType: Copy + Sized + 'static {
     const SIZE: usize = size_of::<Self>();
@@ -170,10 +170,6 @@ unsafe fn align_up<T>(ptr: &mut *mut u8)
 where
     T: HostType,
 {
-    const {
-        assert!(MAX_ALIGN >= T::ALIGN);
-    }
-
     let offset = ptr.align_offset(T::ALIGN);
     *ptr = unsafe { ptr.add(offset) };
 }

@@ -1681,6 +1681,10 @@ impl CompiledFunction {
     /// - `align(i)` is the alignment of the value at index `i` and
     /// - `align_up` returns the next multiple of the given alignment.
     ///
+    /// In addition both pointers must be aligned to the maximum of any [`Type`] that the pointer
+    /// points to. In other words the pointer must be aligned to `max(align(elem))` over all
+    /// elements.
+    ///
     /// `returns` may point to uninitialized memory as long as it is still writable for all return
     /// values. Whether a value is initialized after the function returns depends on the code of
     /// the function.
@@ -1696,6 +1700,16 @@ impl CompiledFunction {
     pub unsafe fn call(&self, params: *const u8, returns: *mut u8) {
         debug_assert!(!params.is_null());
         debug_assert!(!returns.is_null());
+
+        if cfg!(debug_assertions) {
+            for ty in &self.signature.params {
+                debug_assert_eq!(params.align_offset(ty.align()), 0);
+            }
+
+            for ty in &self.signature.returns {
+                debug_assert_eq!(returns.align_offset(ty.align()), 0);
+            }
+        }
 
         // SAFETY: The caller guarantees that the function was soundly constructed
         // and the arguments are valid.

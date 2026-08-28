@@ -10,7 +10,7 @@ use parking_lot::Mutex;
 use slab::Slab;
 
 use crate::backend::{Backend, FunctionDefinitionDesc, StackSlotDesc};
-use crate::func::{HostFunc, MAX_ALIGN};
+use crate::func::HostFunc;
 use crate::{CompilerConfig, FuncId, Instruction, Signature, Type, Value, Word};
 
 pub struct Interpreter {
@@ -135,6 +135,16 @@ pub struct CompiledFunc {
 
 impl CompiledFunc {
     pub unsafe fn call(&self, params: *const u8, returns: *mut u8) {
+        // The host is allowed to directly call into host functions.
+        // In this case we only need to forward parameters, the ABI
+        // is the same for both host-to-guest and guest-to-host calls.
+        if let Some(func) = &self.func.host {
+            unsafe {
+                func.call(params, returns);
+            }
+            return;
+        }
+
         let mut stack_slots = VecMap::new();
         for (index, slot) in &self.func.stack_slots {
             let stack = AlignedBox::new_uninit_slice(slot.size, slot.align);
@@ -530,9 +540,27 @@ impl CompiledFunc {
 
         match &data.host {
             Some(func) => {
+                let params_align = data
+                    .signature
+                    .params
+                    .iter()
+                    .max_by(|a, b| a.align().cmp(&b.align()))
+                    .map(|ty| ty.align())
+                    .unwrap_or(1);
+                let returns_align = data
+                    .signature
+                    .returns
+                    .iter()
+                    .max_by(|a, b| a.align().cmp(&b.align()))
+                    .map(|ty| ty.align())
+                    .unwrap_or(1);
+
+                debug_assert!(params_align.is_power_of_two());
+                debug_assert!(returns_align.is_power_of_two());
+
                 let mut stack_params = AlignedBox::<[u8]>::new_uninit_slice(
                     call_abi_size(&data.signature.params),
-                    MAX_ALIGN,
+                    params_align,
                 );
 
                 let mut offset = 0;
@@ -550,7 +578,7 @@ impl CompiledFunc {
 
                 let mut stack_returns = AlignedBox::<[u8]>::new_uninit_slice(
                     call_abi_size(&data.signature.returns),
-                    MAX_ALIGN,
+                    returns_align,
                 );
 
                 unsafe {
