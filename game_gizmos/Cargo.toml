@@ -12,6 +12,7 @@ glam = { workspace = true }
 tracing = { workspace = true }
 bytemuck = "1.16.1"
 parking_lot = "0.12.3"
+openfo4_shaderlib = { version = "0.1.0", path = "../openfo4_shaderlib" }
 
 [lints]
 workspace = true
