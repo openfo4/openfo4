@@ -74,7 +74,7 @@ impl ShadowMapPipeline {
                         kind: DescriptorType::Storage,
                     },
                 ],
-                builder: Box::new(|_queue, shaders| {
+                builder: Box::new(|_queue, shaders, _ctx| {
                     vec![
                         PipelineStage::Vertex(VertexStage {
                             shader: &shaders[0],

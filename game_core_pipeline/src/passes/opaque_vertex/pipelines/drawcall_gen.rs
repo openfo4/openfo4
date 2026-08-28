@@ -50,7 +50,7 @@ impl DrawcallGenPipeline {
                         kind: DescriptorType::Storage,
                     },
                 ],
-                builder: Box::new(|_, shaders| {
+                builder: Box::new(|_, shaders, _ctx| {
                     vec![PipelineStage::Compute(ComputeStage {
                         shader: &shaders[0],
                         entry: "main",

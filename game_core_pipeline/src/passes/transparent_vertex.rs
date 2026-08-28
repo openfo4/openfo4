@@ -76,7 +76,7 @@ impl TransparentVertexPass {
                         stages: ShaderStages::COMPUTE,
                     },
                 ],
-                builder: Box::new(|_queue, shaders| {
+                builder: Box::new(|_queue, shaders, _ctx| {
                     vec![PipelineStage::Compute(ComputeStage {
                         shader: &shaders[0],
                         entry: "main",
@@ -190,7 +190,7 @@ impl TransparentVertexPass {
                         kind: DescriptorType::Uniform,
                     },
                 ],
-                builder: Box::new(|_queue, shaders| {
+                builder: Box::new(|_queue, shaders, _ctx| {
                     vec![
                         PipelineStage::Vertex(VertexStage {
                             shader: &shaders[0],
@@ -240,7 +240,7 @@ impl TransparentVertexPass {
                         kind: DescriptorType::StorageTexture,
                     },
                 ],
-                builder: Box::new(|_queue, shaders| {
+                builder: Box::new(|_queue, shaders, _ctx| {
                     vec![PipelineStage::Compute(ComputeStage {
                         shader: &shaders[0],
                         entry: "main",

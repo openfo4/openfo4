@@ -18,12 +18,13 @@ pub struct PipelineBinding {
     pub kind: DescriptorType,
 }
 
-pub struct Pipeline {
-    config: PipelineConfig,
+pub struct Pipeline<Ctx = ()> {
+    config: PipelineConfig<Ctx>,
     stages: Vec<Stage>,
     cur_pipeline: Option<PipelineInstance>,
     compiled_shaders: Option<Vec<Shader>>,
     shaders_changed: bool,
+    ctx: Ctx,
 }
 
 impl std::fmt::Debug for Pipeline {
@@ -33,11 +34,12 @@ impl std::fmt::Debug for Pipeline {
 }
 
 /// Configuration parameters for a [`Pipeline`].
-pub struct PipelineConfig {
+pub struct PipelineConfig<Ctx = ()> {
     pub shaders: Vec<ShaderConfig>,
     pub bindings: Vec<PipelineBinding>,
-    pub builder:
-        Box<dyn for<'a> Fn(&CommandQueue<'_>, &'a [Shader]) -> Vec<PipelineStage<'a>> + Send>,
+    pub builder: Box<
+        dyn for<'a> Fn(&CommandQueue<'_>, &'a [Shader], &'a Ctx) -> Vec<PipelineStage<'a>> + Send,
+    >,
 }
 
 /// Configuration parameters for a shader module.
@@ -49,12 +51,19 @@ pub struct ShaderConfig {
 
 impl Pipeline {
     pub fn new(config: PipelineConfig) -> Self {
+        Self::new_with_ctx(config, ())
+    }
+}
+
+impl<Ctx> Pipeline<Ctx> {
+    pub fn new_with_ctx(config: PipelineConfig<Ctx>, ctx: Ctx) -> Self {
         Self {
             stages: Vec::new(),
             cur_pipeline: None,
             compiled_shaders: None,
             shaders_changed: false,
             config,
+            ctx,
         }
     }
 
@@ -74,7 +83,7 @@ impl Pipeline {
 
         self.stages.clear();
 
-        let stages = (self.config.builder)(queue, &compiled_shaders);
+        let stages = (self.config.builder)(queue, &compiled_shaders, &self.ctx);
 
         let mut prepared_shaders = Vec::new();
         for (stage_index, stage) in stages.iter().enumerate() {
@@ -192,7 +201,7 @@ impl Pipeline {
             panic!("initial shader compilation failed");
         };
 
-        let stages = (self.config.builder)(queue, compiled_shader);
+        let stages = (self.config.builder)(queue, compiled_shader, &self.ctx);
         let pipeline = queue.create_pipeline(&PipelineDescriptor {
             stages: &stages,
             descriptors: &layout_refs,
@@ -207,7 +216,7 @@ impl Pipeline {
     }
 
     /// Prepare execution of the pipeline.
-    pub fn prepare<'b, 'c>(&mut self, queue: &'c CommandQueue<'c>) -> PreparePass<'_, 'b, 'c> {
+    pub fn prepare<'b, 'c>(&mut self, queue: &'c CommandQueue<'c>) -> PreparePass<'_, 'b, 'c, Ctx> {
         // Rebuild shaders on first call or when any shader changed.
         if self.cur_pipeline.is_none() || self.config.shaders.iter().any(|v| v.source.has_changed())
         {
@@ -229,14 +238,14 @@ struct PipelineInstance {
     pipeline: api::Pipeline,
 }
 
-pub struct PreparePass<'a, 'b, 'c> {
+pub struct PreparePass<'a, 'b, 'c, Ctx> {
     queue: &'a CommandQueue<'c>,
-    pipeline: &'a mut Pipeline,
+    pipeline: &'a mut Pipeline<Ctx>,
     resources: HashMap<(String, ShaderStage), BindingResource<'b>>,
     array_counts: HashMap<(String, ShaderStage), u32>,
 }
 
-impl<'a, 'b, 'c> PreparePass<'a, 'b, 'c> {
+impl<'a, 'b, 'c, Ctx> PreparePass<'a, 'b, 'c, Ctx> {
     /// Sets a resource that was previously defined as a [`PipelineBinding`].
     #[track_caller]
     pub fn set<T>(&mut self, name: &str, stages: ShaderStages, resource: T)

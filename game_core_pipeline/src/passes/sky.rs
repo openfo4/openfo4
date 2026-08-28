@@ -79,7 +79,7 @@ impl SkyPass {
                         stages: ShaderStages::FRAGMENT,
                     },
                 ],
-                builder: Box::new(|_queue, shaders| {
+                builder: Box::new(|_queue, shaders, _ctx| {
                     vec![
                         PipelineStage::Vertex(VertexStage {
                             shader: &shaders[0],
@@ -133,7 +133,7 @@ impl SkyPass {
                         stages: ShaderStages::FRAGMENT,
                     },
                 ],
-                builder: Box::new(|_queue, shaders| {
+                builder: Box::new(|_queue, shaders, _ctx| {
                     vec![
                         PipelineStage::Vertex(VertexStage {
                             shader: &shaders[0],

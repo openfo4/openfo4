@@ -83,7 +83,7 @@ impl SkinningPass {
                         stages: ShaderStages::COMPUTE,
                     },
                 ],
-                builder: Box::new(|_queue, shaders| {
+                builder: Box::new(|_queue, shaders, _ctx| {
                     let specs = shaders[0].spec_constants();
                     let spec = specs
                         .iter()

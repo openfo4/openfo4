@@ -102,7 +102,7 @@ impl VisbufferAlphaMaskPipeline {
                         kind: DescriptorType::Sampler,
                     },
                 ],
-                builder: Box::new(|_queue, shaders| {
+                builder: Box::new(|_queue, shaders, _ctx| {
                     vec![
                         PipelineStage::Vertex(VertexStage {
                             shader: &shaders[0],

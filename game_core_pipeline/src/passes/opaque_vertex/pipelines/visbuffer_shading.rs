@@ -166,7 +166,7 @@ impl ShadingPipeline {
                         kind: DescriptorType::Sampler,
                     },
                 ],
-                builder: Box::new(|_queue, shaders| {
+                builder: Box::new(|_queue, shaders, _ctx| {
                     let tile_size = shaders[0]
                         .spec_constants()
                         .iter()
