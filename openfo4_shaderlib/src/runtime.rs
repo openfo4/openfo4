@@ -2,9 +2,9 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::{Arc, LazyLock, Mutex, OnceLock};
 
-use game_render::shader::{Error, Shader};
+use game_render::shader::Shader;
 
-use crate::reload::ReloadableShaderSource;
+use crate::reload::{BoxError, ReloadableShaderSource};
 
 #[derive(Debug)]
 pub struct ShaderSource {
@@ -28,7 +28,7 @@ impl ShaderSource {
             .has_changed()
     }
 
-    pub fn compile(&self) -> Result<Arc<Shader>, Error> {
+    pub fn compile(&self) -> Result<Arc<Shader>, BoxError> {
         let source = self
             .source
             .get_or_init(|| ReloadableShaderSource::new(self.path()));

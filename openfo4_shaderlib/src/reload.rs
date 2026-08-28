@@ -1,10 +1,13 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, OnceLock, mpsc};
 
 use game_render::shader::{Error, Shader};
 use hashbrown::HashMap;
+use naga::valid::{Capabilities, ValidationFlags, Validator};
 use notify::{RecursiveMode, Watcher};
+
+pub type BoxError = Box<dyn std::error::Error>;
 
 #[derive(Debug)]
 pub struct ReloadableShaderSource {
@@ -41,10 +44,9 @@ impl ReloadableShaderSource {
         Ok(())
     }
 
-    pub fn compile(&self) -> Result<Shader, Error> {
-        let bytes =
-            slangc::compile(&self.path, &slangc::Config::default()).map_err(Error::Slang)?;
-        Shader::from_spirv(&bytes)
+    pub fn compile(&self) -> Result<Shader, BoxError> {
+        let bytes = compile(&self.path)?;
+        Ok(Shader::from_spirv(&bytes)?)
     }
 }
 
@@ -130,4 +132,31 @@ impl FileWatcher {
             tx
         })
     }
+}
+
+fn compile(path: &Path) -> Result<Vec<u8>, BoxError> {
+    if path.extension().is_some_and(|ext| ext == "slang") {
+        compile_slang(path)
+    } else if path.extension().is_some_and(|ext| ext == "wgsl") {
+        compile_wgsl(path)
+    } else {
+        panic!("unknown shader extension: {:?}", path.extension())
+    }
+}
+
+fn compile_slang(path: &Path) -> Result<Vec<u8>, BoxError> {
+    let bytes = slangc::compile(&path, &slangc::Config::default())?;
+    Ok(bytes)
+}
+
+fn compile_wgsl(path: &Path) -> Result<Vec<u8>, BoxError> {
+    let data = std::fs::read_to_string(path)?;
+    let module = naga::front::wgsl::parse_str(&data)?;
+    let info = Validator::new(ValidationFlags::all(), Capabilities::default()).validate(&module)?;
+    let words = naga::back::spv::write_vec(&module, &info, &Default::default(), None)?;
+    Ok(words
+        .into_iter()
+        .map(|word| word.to_le_bytes())
+        .flatten()
+        .collect())
 }

@@ -7,12 +7,14 @@ edition = "2024"
 hashbrown = { workspace = true }
 game_render = { version = "0.1.0", path = "../game_render" }
 tracing = { workspace = true }
+thiserror = "2.0.17"
 
 [target.'cfg(openfo4_embed_shaders)'.dependencies]
 macros = { version = "0.1.0", path = "./macros" }
 
 [target.'cfg(not(openfo4_embed_shaders))'.dependencies]
 slangc = { version = "0.1.0", path = "../game_render/slangc" }
+naga = { version = "27.0.3", features = ["wgsl-in", "spv-out"] }
 # Hot reloading
 notify = "8.0.0"
 

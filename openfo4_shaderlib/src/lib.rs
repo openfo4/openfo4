@@ -12,7 +12,7 @@ use std::marker::PhantomData;
 use std::ops::Deref;
 use std::sync::Arc;
 
-use game_render::shader::{Error, Shader};
+use game_render::shader::Shader;
 
 /// Includes a [`ShaderSource`] file.
 ///
@@ -58,6 +58,17 @@ pub struct ShaderSource {
     source: embed::ShaderSource,
 }
 
+/// An error that can occur while compiling a [`ShaderSource`].
+#[derive(Debug, thiserror::Error)]
+#[cfg_attr(not(openfo4_embed_shaders), error(transparent))]
+#[cfg_attr(openfo4_embed_shaders, error(""))]
+pub struct Error {
+    #[cfg(not(openfo4_embed_shaders))]
+    inner: reload::BoxError,
+    #[cfg(openfo4_embed_shaders)]
+    inner: (),
+}
+
 impl ShaderSource {
     /// Returns `true` when the shader source has changed and should be reloaded.
     #[inline]
@@ -70,7 +81,7 @@ impl ShaderSource {
     pub fn compile(&self) -> Result<ShaderRef<'_>, Error> {
         cfg_select! {
             not(openfo4_embed_shaders) => {
-                let shader = self.source.compile()?;
+                let shader = self.source.compile().map_err(|inner| Error { inner })?;
                 Ok(ShaderRef { shader, _marker: PhantomData })
             }
             openfo4_embed_shaders => {
