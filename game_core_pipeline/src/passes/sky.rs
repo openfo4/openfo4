@@ -19,12 +19,12 @@ use game_render::graph::RenderContext;
 use game_render::mesh::Mesh;
 use game_render::texture::image::MipImage;
 use glam::{Mat4, UVec2, Vec2, Vec3};
+use openfo4_shaderlib::pipeline::{Pipeline, PipelineBinding, PipelineConfig, ShaderConfig};
 use openfo4_shaderlib::{ShaderSource, include_shader};
 use parking_lot::Mutex;
 
 use crate::camera::Camera;
 use crate::passes::HDR_FORMAT;
-use crate::passes::pipeline::{Pipeline, PipelineBinding, PipelineConfig, ShaderConfig};
 use crate::passes::sky::clouds::CloudsPass;
 use crate::sky::SkyMaterial;
 

@@ -1,6 +1,5 @@
 mod mesh;
 mod opaque_vertex;
-mod pipeline;
 mod post_process;
 mod skinning;
 pub mod sky;

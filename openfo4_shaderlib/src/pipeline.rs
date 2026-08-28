@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::num::NonZeroU32;
 
+use crate::ShaderSource;
 use game_render::api::{
     self, BindingResource, CommandQueue, ComputePass, ComputePassDescriptor, DescriptorSet,
     DescriptorSetDescriptor, DescriptorSetEntry, DescriptorSetLayout,
@@ -9,7 +10,6 @@ use game_render::api::{
 };
 use game_render::backend::{DescriptorBinding, DescriptorType, ShaderStage, ShaderStages};
 use game_render::shader::{BindingId, BindingLocation, Shader};
-use openfo4_shaderlib::ShaderSource;
 
 #[derive(Clone, Debug)]
 pub struct PipelineBinding {
@@ -206,6 +206,7 @@ impl Pipeline {
         });
     }
 
+    /// Prepare execution of the pipeline.
     pub fn prepare<'b, 'c>(&mut self, queue: &'c CommandQueue<'c>) -> PreparePass<'_, 'b, 'c> {
         // Rebuild shaders on first call or when any shader changed.
         if self.cur_pipeline.is_none() || self.config.shaders.iter().any(|v| v.source.has_changed())
@@ -236,6 +237,7 @@ pub struct PreparePass<'a, 'b, 'c> {
 }
 
 impl<'a, 'b, 'c> PreparePass<'a, 'b, 'c> {
+    /// Sets a resource that was previously defined as a [`PipelineBinding`].
     #[track_caller]
     pub fn set<T>(&mut self, name: &str, stages: ShaderStages, resource: T)
     where
@@ -263,6 +265,9 @@ impl<'a, 'b, 'c> PreparePass<'a, 'b, 'c> {
         }
     }
 
+    /// Begin a render pass.
+    ///
+    /// The descriptors and push constants are already set for the [`RenderPass`].
     pub fn run_render_pass(mut self, descriptor: &RenderPassDescriptor<'_>) -> RenderPass<'a, 'b> {
         let (pipeline, sets) = self.finalize();
 
@@ -276,6 +281,9 @@ impl<'a, 'b, 'c> PreparePass<'a, 'b, 'c> {
         pass
     }
 
+    /// Begin a compute pass.
+    ///
+    /// The descriptors and push constants are already set for the [`ComputePass`].
     pub fn run_compute_pass(mut self, descriptor: &ComputePassDescriptor) -> ComputePass<'a> {
         let (pipeline, sets) = self.finalize();
 

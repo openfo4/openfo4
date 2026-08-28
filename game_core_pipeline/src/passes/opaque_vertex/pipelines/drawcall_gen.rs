@@ -3,9 +3,8 @@ use game_render::api::{
 };
 use game_render::backend::allocator::UsageFlags;
 use game_render::backend::{BufferUsage, DescriptorType, ShaderStages};
+use openfo4_shaderlib::pipeline::{Pipeline, PipelineBinding, PipelineConfig, ShaderConfig};
 use openfo4_shaderlib::{ShaderSource, include_shader};
-
-use crate::passes::pipeline::{Pipeline, PipelineBinding, PipelineConfig, ShaderConfig};
 
 static SHADER: ShaderSource =
     include_shader!("/game_core_pipeline/shaders/opaque_vertex/drawcall_gen.slang");

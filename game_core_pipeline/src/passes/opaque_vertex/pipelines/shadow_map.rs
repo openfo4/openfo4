@@ -8,9 +8,8 @@ use game_render::backend::{
     PrimitiveTopology, ShaderStages, StoreOp, TextureFormat,
 };
 use glam::Mat4;
+use openfo4_shaderlib::pipeline::{Pipeline, PipelineBinding, PipelineConfig, ShaderConfig};
 use openfo4_shaderlib::{ShaderSource, include_shader};
-
-use crate::passes::pipeline::{Pipeline, PipelineBinding, PipelineConfig, ShaderConfig};
 
 static VS_SHADER: ShaderSource =
     include_shader!("/game_core_pipeline/shaders/shadows/shadow_map_vs.slang");

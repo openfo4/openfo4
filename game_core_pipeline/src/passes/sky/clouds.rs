@@ -16,11 +16,11 @@ use game_render::buffer::texture_slab::{TextureSlab, TextureSlabIndex};
 use game_render::mesh::Mesh;
 use game_render::texture::image::MipImage;
 use glam::{Mat4, UVec2, Vec2};
+use openfo4_shaderlib::pipeline::{Pipeline, PipelineBinding, PipelineConfig, ShaderConfig};
 use openfo4_shaderlib::{ShaderSource, include_shader};
 
 use crate::camera::Camera;
 use crate::passes::HDR_FORMAT;
-use crate::passes::pipeline::{Pipeline, PipelineBinding, PipelineConfig, ShaderConfig};
 
 static VS_SHADER: ShaderSource = include_shader!("/game_core_pipeline/shaders/sky/clouds_vs.slang");
 static FS_SHADER: ShaderSource = include_shader!("/game_core_pipeline/shaders/sky/clouds_fs.slang");

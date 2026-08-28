@@ -1,3 +1,5 @@
+pub mod pipeline;
+
 #[cfg(not(openfo4_embed_shaders))]
 mod reload;
 #[cfg(not(openfo4_embed_shaders))]

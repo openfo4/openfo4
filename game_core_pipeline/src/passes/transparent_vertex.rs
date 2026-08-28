@@ -17,12 +17,12 @@ use game_render::backend::{
 };
 use game_render::graph::{Node, RenderContext};
 use game_tracing::trace_span;
+use openfo4_shaderlib::pipeline::{Pipeline, PipelineBinding, PipelineConfig, ShaderConfig};
 use openfo4_shaderlib::{ShaderSource, include_shader};
 use parking_lot::Mutex;
 
 use crate::camera::CameraUniform;
 use crate::entities::{CameraId, SceneId};
-use crate::passes::pipeline::{Pipeline, PipelineBinding, PipelineConfig, ShaderConfig};
 use crate::passes::update::{RawAmbientLight, RawSceneData};
 use crate::passes::{DEPTH_FORMAT, HDR_TEXTURE, OPAQUE_DEPTH, State};
 
