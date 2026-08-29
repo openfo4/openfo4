@@ -1,9 +1,8 @@
 import types;
 
-[[vk::push_constant]] vector<u32, 2> viewport_size;
-
-[[vk::binding(0, 0)]] StructuredBuffer<Vertex> vertices;
-[[vk::binding(1, 0)]] StructuredBuffer<Instance> instances;
+ConstantBuffer<vector<u32, 2>> viewport_size;
+StructuredBuffer<Vertex> vertices;
+StructuredBuffer<Instance> instances;
 
 struct Instance {
     u32 texture_index;

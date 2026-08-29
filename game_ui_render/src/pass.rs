@@ -1,163 +1,38 @@
 use std::collections::HashMap;
-use std::num::NonZeroU32;
 use std::sync::Mutex;
 
 use bytemuck::{Pod, Zeroable};
 use crossbeam_channel::Receiver;
-use game_render::RenderTarget;
 use game_render::api::{
-    BindingResource, CommandQueue, DescriptorSetDescriptor, DescriptorSetEntry,
-    DescriptorSetLayout, DescriptorSetLayoutDescriptor, FragmentStage, Pipeline,
-    PipelineDescriptor, PipelineStage, RenderPassColorAttachment, RenderPassDescriptor, Sampler,
-    Texture, TextureRegion, TextureViewDescriptor, VertexStage,
+    BindingResource, BufferInitDescriptor, CommandQueue, FragmentStage, PipelineStage,
+    RenderPassColorAttachment, RenderPassDescriptor, Sampler, Texture, TextureRegion,
+    TextureViewDescriptor, VertexStage,
 };
+use game_render::backend::allocator::UsageFlags;
 use game_render::backend::{
-    AddressMode, BlendState, BufferUsage, ColorTargetState, DescriptorBinding, DescriptorType,
+    AddressMode, BlendState, BufferUsage, ColorTargetState, DescriptorType,
     DrawIndexedIndirectCommand, FilterMode, FrontFace, ImageDataLayout, IndexFormat, LoadOp,
-    PrimitiveTopology, PushConstantRange, SamplerDescriptor, ShaderStages, StoreOp,
-    TextureDescriptor, TextureFormat, TextureUsage,
+    PrimitiveTopology, SamplerDescriptor, ShaderStages, StoreOp, TextureDescriptor, TextureFormat,
+    TextureUsage,
 };
 use game_render::buffer::GpuBuffer;
 use game_render::buffer::slab::{CompactSlabBuffer, SlabBuffer, SlabIndex};
 use game_render::buffer::suballocated::SubAllocatedGrowableBuffer;
 use game_render::buffer::texture_slab::{TextureSlab, TextureSlabIndex};
 use game_render::graph::{Node, RenderContext, SlotLabel};
-use game_render::pipeline_cache::{PipelineBuilder, PipelineCache};
-use game_render::shader::{Shader, ShaderConfig, ShaderLanguage, ShaderSource};
 use glam::UVec2;
+use openfo4_shaderlib::pipeline::{Pipeline, PipelineBinding, PipelineConfig, ShaderConfig};
+use openfo4_shaderlib::{ShaderSource, include_shader};
 
 use crate::{Event, MeshId, TextureId};
 
-const VS_SHADER: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/shaders/ui_vs.slang");
-const FS_SHADER: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/shaders/ui_fs.slang");
-
-/// The default texture array capacity.
-const DEFAULT_TEXTURE_CAPACITY: NonZeroU32 = NonZeroU32::new(8).unwrap();
-
-#[derive(Debug)]
-struct UiPipeline {
-    descriptor_set_layout: DescriptorSetLayout,
-    sampler: Sampler,
-    capacity: NonZeroU32,
-    pipeline: PipelineCache<UiPipelineBuilder>,
-}
-
-impl UiPipeline {
-    pub fn new(queue: &CommandQueue<'_>) -> Self {
-        Self::new_with_capacity(queue, DEFAULT_TEXTURE_CAPACITY)
-    }
-
-    fn new_with_capacity(queue: &CommandQueue<'_>, capacity: NonZeroU32) -> Self {
-        let descriptor_set_layout =
-            queue.create_descriptor_set_layout(&DescriptorSetLayoutDescriptor {
-                bindings: &[
-                    DescriptorBinding {
-                        binding: 0,
-                        visibility: ShaderStages::VERTEX,
-                        kind: DescriptorType::Storage,
-                        count: NonZeroU32::MIN,
-                    },
-                    DescriptorBinding {
-                        binding: 1,
-                        visibility: ShaderStages::VERTEX,
-                        kind: DescriptorType::Storage,
-                        count: NonZeroU32::MIN,
-                    },
-                    DescriptorBinding {
-                        binding: 2,
-                        visibility: ShaderStages::FRAGMENT,
-                        kind: DescriptorType::Texture,
-                        count: capacity,
-                    },
-                    DescriptorBinding {
-                        binding: 3,
-                        visibility: ShaderStages::FRAGMENT,
-                        kind: DescriptorType::Sampler,
-                        count: NonZeroU32::MIN,
-                    },
-                ],
-            });
-
-        let sampler = queue.create_sampler(&SamplerDescriptor {
-            address_mode_u: AddressMode::ClampToEdge,
-            address_mode_v: AddressMode::ClampToEdge,
-            address_mode_w: AddressMode::ClampToEdge,
-            mag_filter: FilterMode::Linear,
-            min_filter: FilterMode::Nearest,
-            mipmap_filter: FilterMode::Nearest,
-            compare: None,
-        });
-
-        let pipeline = PipelineCache::new(
-            UiPipelineBuilder {
-                descriptor_set_layout: descriptor_set_layout.clone(),
-            },
-            vec![
-                ShaderConfig {
-                    source: ShaderSource::File(VS_SHADER.into()),
-                    language: ShaderLanguage::Slang,
-                },
-                ShaderConfig {
-                    source: ShaderSource::File(FS_SHADER.into()),
-                    language: ShaderLanguage::Slang,
-                },
-            ],
-        );
-
-        Self {
-            descriptor_set_layout,
-            sampler,
-            capacity,
-            pipeline,
-        }
-    }
-}
-
-#[derive(Debug)]
-struct UiPipelineBuilder {
-    descriptor_set_layout: DescriptorSetLayout,
-}
-
-impl PipelineBuilder for UiPipelineBuilder {
-    fn build(
-        &self,
-        queue: &CommandQueue<'_>,
-        shaders: &[Shader],
-        format: TextureFormat,
-    ) -> Pipeline {
-        queue.create_pipeline(&PipelineDescriptor {
-            stages: &[
-                PipelineStage::Vertex(VertexStage {
-                    shader: &shaders[0],
-                    entry: "main",
-                    topology: PrimitiveTopology::TriangleList,
-                    spec_consts: Default::default(),
-                }),
-                PipelineStage::Fragment(FragmentStage {
-                    shader: &shaders[1],
-                    entry: "main",
-                    targets: &[ColorTargetState {
-                        format,
-                        blend: Some(BlendState::PREMULTIPLIED_ALPHA),
-                    }],
-                    front_face: FrontFace::Ccw,
-                    cull_mode: None,
-                    depth_stencil_state: None,
-                    spec_consts: Default::default(),
-                }),
-            ],
-            descriptors: &[&self.descriptor_set_layout],
-            push_constant_ranges: &[PushConstantRange {
-                range: 0..8,
-                stages: ShaderStages::VERTEX,
-            }],
-        })
-    }
-}
+static VS_SHADER: ShaderSource = include_shader!("/game_ui_render/shaders/ui_vs.slang");
+static FS_SHADER: ShaderSource = include_shader!("/game_ui_render/shaders/ui_fs.slang");
 
 pub struct UiPass {
-    pipeline: Mutex<UiPipeline>,
     state: Mutex<State>,
+    pipelines: Mutex<HashMap<TextureFormat, Pipeline<ColorTargetState>>>,
+    sampler: Sampler,
 }
 
 impl UiPass {
@@ -186,18 +61,26 @@ impl UiPass {
             textures.insert(default_texture.create_view(&TextureViewDescriptor::default()));
 
         Self {
-            pipeline: Mutex::new(UiPipeline::new(queue)),
             state: Mutex::new(State {
                 events,
                 meshes: HashMap::new(),
                 textures,
                 texture_id_to_index: HashMap::new(),
-                targets: HashMap::new(),
                 vertex_buffer: SubAllocatedGrowableBuffer::new(queue, BufferUsage::STORAGE),
                 index_buffer: SubAllocatedGrowableBuffer::new(queue, BufferUsage::INDEX),
                 instance_buffer: SlabBuffer::new(BufferUsage::STORAGE),
                 draw_calls: CompactSlabBuffer::new(BufferUsage::INDIRECT),
                 default_texture,
+            }),
+            pipelines: Mutex::default(),
+            sampler: queue.create_sampler(&SamplerDescriptor {
+                address_mode_u: AddressMode::ClampToEdge,
+                address_mode_v: AddressMode::ClampToEdge,
+                address_mode_w: AddressMode::ClampToEdge,
+                mag_filter: FilterMode::Linear,
+                min_filter: FilterMode::Nearest,
+                mipmap_filter: FilterMode::Nearest,
+                compare: None,
             }),
         }
     }
@@ -207,66 +90,51 @@ impl Node for UiPass {
     fn render<'a>(&self, ctx: &'a mut RenderContext<'_, 'a>) {
         let target = ctx.read::<Texture>(SlotLabel::SURFACE).cloned().unwrap();
 
-        let mut pipeline = self.pipeline.lock().unwrap();
         let state = &mut *self.state.lock().unwrap();
-
         state.update(ctx.queue);
+
+        let mut pipelines = self.pipelines.lock().unwrap();
+        let pipeline = pipelines
+            .entry(target.format())
+            .or_insert_with(|| make_pipeline(target.format()));
 
         if state.meshes.is_empty() {
             return;
         }
 
-        // We have to recreate the pipeline with increased capacity if we have
-        // more textures than we can store with the current pipeline layout.
-        if state.textures.len() as u32 > pipeline.capacity.get() {
-            // We cannot place more than u32::MAX textures.
-            assert!(state.textures.len() <= u32::MAX as usize);
-
-            let new_capacity = (state.textures.len() as u32)
-                .checked_next_power_of_two()
-                .unwrap_or(state.textures.len() as u32);
-            let new_capacity = NonZeroU32::new(new_capacity).unwrap();
-
-            tracing::debug!("recreating UiPipeline with capacity {}", new_capacity);
-            *pipeline = UiPipeline::new_with_capacity(&mut ctx.queue, new_capacity);
-        }
-
-        let textures = state.textures.views();
-
-        let instance_buffer = state.instance_buffer.buffer(ctx.queue);
-        let vertex_buffer = state.vertex_buffer.buffer();
-        let index_buffer = state.index_buffer.buffer();
-
-        let descriptor_set = ctx.queue.create_descriptor_set(&DescriptorSetDescriptor {
-            layout: &pipeline.descriptor_set_layout,
-            entries: &[
-                DescriptorSetEntry {
-                    binding: 0,
-                    resource: BindingResource::Buffer(vertex_buffer),
-                },
-                DescriptorSetEntry {
-                    binding: 1,
-                    resource: BindingResource::Buffer(instance_buffer),
-                },
-                DescriptorSetEntry {
-                    binding: 2,
-                    resource: BindingResource::TextureArray(&textures),
-                },
-                DescriptorSetEntry {
-                    binding: 3,
-                    resource: BindingResource::Sampler(&pipeline.sampler),
-                },
-            ],
+        let viewport_size = ctx.queue.create_buffer_init(&BufferInitDescriptor {
+            contents: bytemuck::bytes_of(&target.size()),
+            usage: BufferUsage::UNIFORM,
+            flags: UsageFlags::empty(),
         });
 
+        let index_buffer = state.index_buffer.buffer();
         let indirect_buffer = state
             .draw_calls
             .buffer(ctx.queue)
             .slice(..(state.meshes.len() * size_of::<DrawIndexedIndirectCommand>()) as u64);
 
-        let pipeline = pipeline.pipeline.get(ctx.queue, target.format());
+        let mut pass = pipeline.prepare(ctx.queue);
+        pass.set("viewport_size", ShaderStages::VERTEX, &viewport_size);
+        pass.set(
+            "vertices",
+            ShaderStages::VERTEX,
+            state.vertex_buffer.buffer(),
+        );
+        pass.set(
+            "instances",
+            ShaderStages::VERTEX,
+            state.instance_buffer.buffer(ctx.queue),
+        );
+        let views = state.textures.views();
+        pass.set(
+            "textures",
+            ShaderStages::FRAGMENT,
+            BindingResource::TextureArray(&views),
+        );
+        pass.set("sampler", ShaderStages::FRAGMENT, &self.sampler);
 
-        let mut render_pass = ctx.queue.run_render_pass(&RenderPassDescriptor {
+        let mut pass = pass.run_render_pass(&RenderPassDescriptor {
             name: "UI",
             color_attachments: &[RenderPassColorAttachment {
                 target: &target.create_view(&TextureViewDescriptor::default()),
@@ -276,11 +144,8 @@ impl Node for UiPass {
             depth_stencil_attachment: None,
         });
 
-        render_pass.set_pipeline(&pipeline);
-        render_pass.set_push_constants(ShaderStages::VERTEX, 0, bytemuck::bytes_of(&target.size()));
-        render_pass.set_descriptor_set(0, &descriptor_set);
-        render_pass.set_index_buffer(index_buffer, IndexFormat::U32);
-        render_pass.draw_indexed_indirect(&indirect_buffer);
+        pass.set_index_buffer(index_buffer, IndexFormat::U32);
+        pass.draw_indexed_indirect(&indirect_buffer);
     }
 }
 
@@ -289,7 +154,6 @@ struct State {
     meshes: HashMap<MeshId, MeshState>,
     textures: TextureSlab,
     texture_id_to_index: HashMap<TextureId, TextureSlabIndex>,
-    targets: HashMap<RenderTarget, Vec<MeshId>>,
     vertex_buffer: SubAllocatedGrowableBuffer<RawVertex>,
     index_buffer: SubAllocatedGrowableBuffer<u32>,
     instance_buffer: SlabBuffer<RawInstance>,
@@ -407,4 +271,67 @@ struct RawVertex {
     position: [f32; 2],
     uv: [f32; 2],
     color: [f32; 4],
+}
+
+fn make_pipeline(format: TextureFormat) -> Pipeline<ColorTargetState> {
+    let target = ColorTargetState {
+        format,
+        blend: Some(BlendState::PREMULTIPLIED_ALPHA),
+    };
+
+    Pipeline::new_with_ctx(
+        PipelineConfig {
+            shaders: vec![
+                ShaderConfig { source: &VS_SHADER },
+                ShaderConfig { source: &FS_SHADER },
+            ],
+            bindings: vec![
+                PipelineBinding {
+                    name: "viewport_size",
+                    stages: ShaderStages::VERTEX,
+                    kind: DescriptorType::Uniform,
+                },
+                PipelineBinding {
+                    name: "vertices",
+                    stages: ShaderStages::VERTEX,
+                    kind: DescriptorType::Storage,
+                },
+                PipelineBinding {
+                    name: "instances",
+                    stages: ShaderStages::VERTEX,
+                    kind: DescriptorType::Storage,
+                },
+                PipelineBinding {
+                    name: "textures",
+                    stages: ShaderStages::FRAGMENT,
+                    kind: DescriptorType::Texture,
+                },
+                PipelineBinding {
+                    name: "sampler",
+                    stages: ShaderStages::FRAGMENT,
+                    kind: DescriptorType::Sampler,
+                },
+            ],
+            builder: Box::new(|_queue, shaders, target| {
+                vec![
+                    PipelineStage::Vertex(VertexStage {
+                        shader: &shaders[0],
+                        entry: "main",
+                        topology: PrimitiveTopology::TriangleList,
+                        spec_consts: Default::default(),
+                    }),
+                    PipelineStage::Fragment(FragmentStage {
+                        shader: &shaders[1],
+                        entry: "main",
+                        targets: core::slice::from_ref(target),
+                        front_face: FrontFace::Ccw,
+                        cull_mode: None,
+                        depth_stencil_state: None,
+                        spec_consts: Default::default(),
+                    }),
+                ]
+            }),
+        },
+        target,
+    )
 }

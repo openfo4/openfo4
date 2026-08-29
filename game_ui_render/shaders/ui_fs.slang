@@ -1,7 +1,7 @@
 import types;
 
-[[vk::binding(2, 0)]] Texture2D<Vec4>[] textures;
-[[vk::binding(3, 0)]] SamplerState sampler;
+Texture2D<Vec4>[] textures;
+SamplerState sampler;
 
 struct Input {
     Vec4 clip_position: SV_Position;
