@@ -10,6 +10,7 @@ use crate::state::level::leveled_list::select_from_leveled_list;
 use crate::systems::inventory::{ItemData, ItemKind, ItemStack, ItemVisibilityFlags};
 use crate::systems::scripting::loader::{ScriptLoader, ScriptObject};
 
+pub const VISIBILITY_PRIORITY_SKIN: u8 = 0;
 pub const VISIBILITY_PRIORITY_WEAPON_ARMOR: u8 = 255;
 
 #[derive(Clone, Debug)]

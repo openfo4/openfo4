@@ -19,19 +19,24 @@ use crate::assets::nif::{LoadNifFlags, NifKey, NifScene};
 use crate::components::{ActorProperties, ActorProtection, DeadActor, MovementState};
 use crate::state::anim_starter::AnimationEventQueue;
 use crate::state::animation_test::{ActorCharacter, BodyPartBoneProps, load_character};
+use crate::state::equipment::load_item;
 use crate::state::esp::EspLoader;
 use crate::state::hardcoded::KEYWORD_FEMALE;
 use crate::state::hardcoded::fallout4::{
     DEFAULT_MOVEMENT_TYPE_DEFAULT, DEFAULT_MOVEMENT_TYPE_SNEAK,
 };
+use crate::state::level::items::VISIBILITY_PRIORITY_SKIN;
 use crate::state::level::leveled_list::select_from_leveled_list;
 use crate::systems::FacingDirection;
 use crate::systems::actor_value::{ActorValue, ActorValueProperties};
 use crate::systems::ai::AiComponent;
 use crate::systems::controller::ControllerShape;
 use crate::systems::equipment::{Equipment, equip_item};
-use crate::systems::inventory::{AddItemEventAsync, Inventory};
+use crate::systems::inventory::{
+    AddItemEvent, AddItemEventAsync, EquipItemEvent, Inventory, ItemStack,
+};
 use crate::systems::movement::{MovementDirection, MovementSpeed};
+use crate::systems::scripting::loader::ScriptLoader;
 
 // FIXME: Unhardcode this guy.
 const PLAYER_LEVEL: u16 = 1000;
@@ -123,7 +128,7 @@ pub struct Actor {
     anim_graphs: ActorAnimationGraphData,
     character: ActorCharacter,
     controller: ControllerShape,
-    skin: Option<RecordId>,
+    skin: Option<Vec<ItemStack>>,
     properties: ActorValueProperties,
     body_parts: ActorBodyParts,
     dead: bool,
@@ -155,14 +160,13 @@ impl Actor {
         let instance = spawned_actor.skeleton;
 
         if let Some(skin) = self.skin {
-            events.send(AddItemEventAsync {
-                actor: root,
-                item: skin,
-                attachments: Vec::new(),
-                hidden: true,
-                count: 1,
-                equip: true,
-            });
+            for item in skin {
+                events.send(EquipItemEvent {
+                    actor: root,
+                    item: item.item,
+                });
+                events.send(AddItemEvent { actor: root, item });
+            }
         }
 
         let mut equipment = Equipment::default();
@@ -248,6 +252,7 @@ pub struct ActorInstanceProps {
 pub async fn spawn_actor(
     loader: &AssetLoader,
     esp_loader: &EspLoader,
+    script_loader: &ScriptLoader,
     npc_form: RecordId,
     instance_props: &ActorInstanceProps,
 ) -> Result<Actor, ()> {
@@ -393,6 +398,18 @@ pub async fn spawn_actor(
             let level = u32::from(PLAYER_LEVEL).saturating_mul(u32::from(factor));
             u32::clamp(level, u32::from(min), u32::from(max))
         }
+    };
+
+    let skin = if let Some(skin) = skin {
+        let mut skin = load_item(esp_loader, script_loader, skin, &[], 1).await;
+        for item in &mut skin {
+            item.equipment_slots = HashSet::new();
+            item.visibility.priority = VISIBILITY_PRIORITY_SKIN;
+        }
+
+        Some(skin)
+    } else {
+        None
     };
 
     Ok(Actor {

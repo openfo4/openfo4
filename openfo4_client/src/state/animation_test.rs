@@ -25,7 +25,6 @@ use crate::assets::data_file::DataFile;
 use crate::assets::nif::{Instantiate, LoadNifFlags, NIF_TO_METERS, NifScene};
 use crate::cell::CellId;
 use crate::components::{ActorMarker, NiTransform, Persistent, Player, WorldSpace};
-use crate::config;
 use crate::state::anim_starter::AnimationEventQueue;
 use crate::state::animation::{self, SkeletonConfig, load_anim};
 use crate::state::esp::EspLoader;
@@ -75,6 +74,7 @@ pub fn animation_test(
             let actor = futures_lite::future::block_on(spawn_actor(
                 asset_loader,
                 esp_loader,
+                script_loader,
                 RecordId::new(HARDCODED_MODULE_ID, FormId(0x7)),
                 &ActorInstanceProps { dead: false },
             ))
