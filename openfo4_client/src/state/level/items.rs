@@ -7,8 +7,10 @@ use crate::state::equipment::load_equipment_item;
 use crate::state::esp::{EspLoader, GlobalRecord};
 use crate::state::level::data_ext::RecordDataExt;
 use crate::state::level::leveled_list::select_from_leveled_list;
-use crate::systems::inventory::{ItemData, ItemKind, ItemStack};
+use crate::systems::inventory::{ItemData, ItemKind, ItemStack, ItemVisibilityFlags};
 use crate::systems::scripting::loader::{ScriptLoader, ScriptObject};
+
+pub const VISIBILITY_PRIORITY_WEAPON_ARMOR: u8 = 255;
 
 #[derive(Clone, Debug)]
 pub struct LoadItemProps {
@@ -76,9 +78,9 @@ pub async fn resolve_item(
                     data: ItemData::None,
                     equipment_keys: Vec::new(),
                     equipment_slots: HashSet::new(),
-                    visibility_slots: HashSet::new(),
-                    visible: true,
+                    visible: HashSet::new(),
                     script,
+                    visibility: ItemVisibilityFlags::default(),
                 });
             }
             RecordData::Weapon(_) | RecordData::Armor(_) => {
@@ -112,9 +114,12 @@ pub async fn resolve_item(
                     data: item.data,
                     equipment_keys: Vec::new(),
                     equipment_slots: item.equipment_slots,
-                    visibility_slots: item.visibility_slots,
-                    visible: true,
+                    visible: HashSet::new(),
                     script,
+                    visibility: ItemVisibilityFlags {
+                        slots: item.visibility_slots,
+                        priority: VISIBILITY_PRIORITY_WEAPON_ARMOR,
+                    },
                 });
             }
             RecordData::Ammo(data) => {
@@ -140,9 +145,9 @@ pub async fn resolve_item(
                     data: ItemData::None,
                     equipment_keys: Vec::new(),
                     equipment_slots: HashSet::new(),
-                    visibility_slots: HashSet::new(),
-                    visible: true,
+                    visible: HashSet::new(),
                     script,
+                    visibility: ItemVisibilityFlags::default(),
                 });
             }
             RecordData::Ingestible(data) => {
@@ -168,9 +173,9 @@ pub async fn resolve_item(
                     data: ItemData::None,
                     equipment_keys: Vec::new(),
                     equipment_slots: HashSet::new(),
-                    visibility_slots: HashSet::new(),
-                    visible: true,
+                    visible: HashSet::new(),
                     script,
+                    visibility: ItemVisibilityFlags::default(),
                 });
             }
             RecordData::Key(data) => {
@@ -196,9 +201,9 @@ pub async fn resolve_item(
                     data: ItemData::None,
                     equipment_keys: Vec::new(),
                     equipment_slots: HashSet::new(),
-                    visibility_slots: HashSet::new(),
-                    visible: true,
+                    visible: HashSet::new(),
                     script,
+                    visibility: ItemVisibilityFlags::default(),
                 });
             }
             RecordData::Book(data) => {
@@ -224,9 +229,9 @@ pub async fn resolve_item(
                     data: ItemData::None,
                     equipment_keys: Vec::new(),
                     equipment_slots: HashSet::new(),
-                    visibility_slots: HashSet::new(),
-                    visible: true,
+                    visible: HashSet::new(),
                     script,
+                    visibility: ItemVisibilityFlags::default(),
                 });
             }
             RecordData::Component(data) => {
@@ -245,9 +250,9 @@ pub async fn resolve_item(
                     data: ItemData::None,
                     equipment_keys: Vec::new(),
                     equipment_slots: HashSet::new(),
-                    visibility_slots: HashSet::new(),
-                    visible: true,
+                    visible: HashSet::new(),
                     script,
+                    visibility: ItemVisibilityFlags::default(),
                 });
             }
             RecordData::Note(data) => {
@@ -266,9 +271,9 @@ pub async fn resolve_item(
                     data: ItemData::None,
                     equipment_keys: Vec::new(),
                     equipment_slots: HashSet::new(),
-                    visibility_slots: HashSet::new(),
-                    visible: true,
+                    visible: HashSet::new(),
                     script,
+                    visibility: ItemVisibilityFlags::default(),
                 });
             }
             x => todo!("{:?}", x),

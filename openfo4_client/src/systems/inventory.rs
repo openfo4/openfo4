@@ -1,3 +1,5 @@
+mod visibility;
+
 use std::fmt::Debug;
 use std::num::NonZeroU64;
 use std::sync::Arc;
@@ -23,6 +25,7 @@ use crate::state::esp::EspLoader;
 use crate::state::hardcoded::KEYWORD_FEMALE;
 use crate::state::npc::ObjectKeywords;
 use crate::systems::equipment::{EquipmentKey, unequip_item};
+use crate::systems::inventory::visibility::VisibilityTracker;
 use crate::systems::scripting::Executor;
 use crate::systems::scripting::loader::ScriptObject;
 use crate::systems::{PickupItemEvent, TransferItemEvent};
@@ -35,6 +38,7 @@ pub struct InventoryKey(usize);
 pub struct Inventory {
     items: Slab<ItemStack>,
     by_id: HashMap<RecordId, Vec<usize>>,
+    visibility: VisibilityTracker,
 }
 
 impl Inventory {
@@ -111,9 +115,9 @@ pub struct ItemStack {
     pub data: ItemData,
     pub equipment_keys: Vec<EquipmentKey>,
     pub equipment_slots: HashSet<u32>,
-    pub visibility_slots: HashSet<u32>,
-    pub visible: bool,
     pub script: Option<ScriptObject>,
+    pub visibility: ItemVisibilityFlags,
+    pub visible: HashSet<u32>,
 }
 
 impl ItemStack {
@@ -204,6 +208,12 @@ pub enum ItemKind {
     Junk,
 }
 
+#[derive(Clone, Debug, Default)]
+pub struct ItemVisibilityFlags {
+    pub slots: HashSet<u32>,
+    pub priority: u8,
+}
+
 #[derive(Clone, Debug)]
 pub struct AddItemEvent {
     pub actor: Entity,
@@ -240,7 +250,7 @@ pub struct InventorySystem {
     pool: Arc<TaskPool>,
     loader: AssetLoader,
     esp_loader: Arc<EspLoader>,
-    tasks: TaskQueue<(Entity, InventoryKey, EquipmentItemModels)>,
+    tasks: TaskQueue<(Entity, InventoryKey, EquipmentItemModels, HashSet<u32>)>,
     async_item_add_tasks: TaskQueue<(Vec<AddItemEvent>, Vec<EquipItemEvent>)>,
 }
 
@@ -356,221 +366,7 @@ impl InventorySystem {
 
         events.extend(items_added);
 
-        let mut unequip_conflicting_events = Vec::new();
-
-        let mut items_equipped = Vec::new();
-        for event in events.read::<EquipItemEvent>() {
-            let female = world
-                .get::<&ObjectKeywords>(event.actor)
-                .is_ok_and(|kw| kw.contains(KEYWORD_FEMALE));
-
-            let Ok(mut inventory) = world.get::<&mut Inventory>(event.actor) else {
-                continue;
-            };
-
-            let Some((key, item)) = inventory.items_mut().find(|(_, v)| v.item == event.item)
-            else {
-                continue;
-            };
-
-            // Only weapons and armor can be equipped.
-            if item.kind != ItemKind::Weapon && item.kind != ItemKind::Armor {
-                continue;
-            }
-
-            if item.equipped {
-                continue;
-            }
-
-            item.equipped = true;
-            items_equipped.push(ItemEquippedEvent {
-                actor: event.actor,
-                slot: key,
-            });
-
-            match &mut item.data {
-                ItemData::Weapon(weapon) => {
-                    // Start without weapon drawn.
-                    weapon.drawn = false;
-                }
-                _ => (),
-            }
-
-            let loader = self.loader.clone();
-            let esp_loader = self.esp_loader.clone();
-            let form = item.item;
-            let attachments = item.attachments.clone();
-            let actor = event.actor;
-            self.tasks.push(self.pool.spawn(async move {
-                let model =
-                    load_equipment_item_models(&loader, &esp_loader, form, &attachments, female)
-                        .await;
-
-                (actor, key, model)
-            }));
-
-            let Some((key, item)) = inventory.items().find(|(_, v)| v.item == event.item) else {
-                continue;
-            };
-
-            let mut hide_slots = Vec::new();
-            for (other_key, other_item) in inventory.items() {
-                if key == other_key {
-                    continue;
-                }
-
-                // Unequip all other items that occupy the same equipment slot.
-                if other_item
-                    .equipment_slots
-                    .intersection(&item.equipment_slots)
-                    .count()
-                    != 0
-                {
-                    unequip_conflicting_events.push(UnequipItemEvent {
-                        actor: event.actor,
-                        item: other_key,
-                    });
-                }
-
-                if other_item.equipped
-                    && other_item.visible
-                    && other_item
-                        .visibility_slots
-                        .intersection(&item.visibility_slots)
-                        .count()
-                        != 0
-                {
-                    hide_slots.push(other_key);
-                }
-            }
-
-            let mut unequip_keys = Vec::new();
-            for key in hide_slots {
-                let slot = inventory.get_mut(key).unwrap();
-
-                slot.visible = false;
-                let keys = core::mem::take(&mut slot.equipment_keys);
-                unequip_keys.extend(keys);
-            }
-
-            drop(inventory);
-            unequip_item(event.actor, unequip_keys, world);
-        }
-
-        events.extend(items_equipped);
-
-        let mut rescan_visiblity = HashSet::new();
-
-        let mut items_unequipped = Vec::new();
-        for event in events.read::<UnequipItemEvent>() {
-            let Ok(mut inventory) = world.get::<&mut Inventory>(event.actor) else {
-                continue;
-            };
-
-            let Some(item) = inventory.get_mut(event.item) else {
-                continue;
-            };
-
-            // Only weapons and armor can be equipped.
-            if item.kind != ItemKind::Weapon && item.kind != ItemKind::Armor {
-                continue;
-            }
-
-            if !item.equipped {
-                continue;
-            }
-
-            item.equipped = false;
-
-            if let ItemData::Weapon(weapon) = &mut item.data {
-                weapon.drawn = false;
-            }
-
-            let keys = core::mem::take(&mut item.equipment_keys);
-            items_unequipped.push(ItemUnequippedEvent {
-                actor: event.actor,
-                slot: event.item,
-            });
-
-            // Reset visibility state.
-            item.visible = true;
-
-            if !item.visibility_slots.is_empty() {
-                rescan_visiblity.insert(event.actor);
-            }
-
-            drop(inventory);
-            unequip_item(event.actor, keys, world);
-        }
-
-        events.extend(items_unequipped);
-
-        for actor in rescan_visiblity {
-            let female = world
-                .get::<&ObjectKeywords>(actor)
-                .is_ok_and(|kw| kw.contains(KEYWORD_FEMALE));
-
-            let Ok(mut inventory) = world.get::<&mut Inventory>(actor) else {
-                continue;
-            };
-
-            let mut newly_visible = HashSet::new();
-
-            for (key, item) in inventory.items() {
-                if !item.equipped || item.visible {
-                    continue;
-                }
-
-                let mut can_be_visible = true;
-
-                for (other_key, other) in inventory.items() {
-                    if key == other_key || !other.equipped {
-                        continue;
-                    }
-
-                    if item
-                        .visibility_slots
-                        .intersection(&other.visibility_slots)
-                        .count()
-                        == 0
-                    {
-                        continue;
-                    }
-
-                    // If another item is already visible keep it as is.
-                    if other.visible || newly_visible.contains(&other_key) {
-                        can_be_visible = false;
-                        break;
-                    }
-                }
-
-                if can_be_visible {
-                    newly_visible.insert(key);
-                }
-            }
-
-            for key in newly_visible {
-                let item = inventory.get_mut(key).unwrap();
-                item.visible = true;
-
-                let loader = self.loader.clone();
-                let esp_loader = self.esp_loader.clone();
-                let form = item.item;
-                let attachments = item.attachments.clone();
-                self.tasks.push(self.pool.spawn(async move {
-                    let model = load_equipment_item_models(
-                        &loader,
-                        &esp_loader,
-                        form,
-                        &attachments,
-                        female,
-                    )
-                    .await;
-
-                    (actor, key, model)
-                }));
-            }
-        }
+        self.handle_equip_unequip(world, events);
 
         // Transfering items must come after all unequip events have been processed.
         // This ensures that any items to transfer are not equipped.
@@ -641,10 +437,161 @@ impl InventorySystem {
         self.attach_ready_models(world);
     }
 
+    fn handle_equip_unequip(&mut self, world: &mut World, events: &mut EventBus) {
+        let mut unequip_conflicting_events = Vec::new();
+        let mut items_equipped = Vec::new();
+        let mut visibility_changed = HashSet::new();
+
+        for event in events.read::<EquipItemEvent>() {
+            let Ok(mut inventory) = world.get::<&mut Inventory>(event.actor) else {
+                continue;
+            };
+
+            let Some((key, item)) = inventory.items_mut().find(|(_, v)| v.item == event.item)
+            else {
+                continue;
+            };
+
+            // Only weapons and armor can be equipped.
+            if item.kind != ItemKind::Weapon && item.kind != ItemKind::Armor {
+                continue;
+            }
+
+            if item.equipped {
+                continue;
+            }
+
+            item.equipped = true;
+            items_equipped.push(ItemEquippedEvent {
+                actor: event.actor,
+                slot: key,
+            });
+
+            match &mut item.data {
+                ItemData::Weapon(weapon) => {
+                    // Start without weapon drawn.
+                    weapon.drawn = false;
+                }
+                _ => (),
+            }
+
+            let item = inventory.items.get(key.0).unwrap();
+            for (other_key, other_item) in inventory.items() {
+                if key == other_key {
+                    continue;
+                }
+
+                // Unequip all other items that occupy the same equipment slot.
+                if other_item
+                    .equipment_slots
+                    .intersection(&item.equipment_slots)
+                    .count()
+                    != 0
+                {
+                    unequip_conflicting_events.push(UnequipItemEvent {
+                        actor: event.actor,
+                        item: other_key,
+                    });
+                }
+            }
+
+            let vis_flags = item.visibility.clone();
+            let inventory = &mut *inventory;
+            let items = &mut inventory.items;
+            inventory.visibility.add(vis_flags, key, |key, slots| {
+                let item = items.get_mut(key.0).unwrap();
+                item.visible.clear();
+                item.visible.extend(slots);
+                visibility_changed.insert((event.actor, key));
+            });
+        }
+
+        events.extend(unequip_conflicting_events);
+        events.extend(items_equipped);
+
+        let mut items_unequipped = Vec::new();
+        for event in events.read::<UnequipItemEvent>() {
+            let Ok(mut inventory) = world.get::<&mut Inventory>(event.actor) else {
+                continue;
+            };
+
+            let Some(item) = inventory.get_mut(event.item) else {
+                continue;
+            };
+
+            // Only weapons and armor can be equipped.
+            if item.kind != ItemKind::Weapon && item.kind != ItemKind::Armor {
+                continue;
+            }
+
+            if !item.equipped {
+                continue;
+            }
+
+            item.equipped = false;
+
+            if let ItemData::Weapon(weapon) = &mut item.data {
+                weapon.drawn = false;
+            }
+
+            items_unequipped.push(ItemUnequippedEvent {
+                actor: event.actor,
+                slot: event.item,
+            });
+
+            let inventory = &mut *inventory;
+            let items = &mut inventory.items;
+            inventory.visibility.remove(event.item, |key, slots| {
+                let item = items.get_mut(key.0).unwrap();
+                item.visible.clear();
+                item.visible.extend(slots);
+                visibility_changed.insert((event.actor, key));
+            });
+        }
+
+        events.extend(items_unequipped);
+
+        for (entity, key) in visibility_changed {
+            let Ok(mut inventory) = world.get::<&mut Inventory>(entity) else {
+                continue;
+            };
+
+            let item = inventory.items.get_mut(key.0).unwrap();
+
+            if item.equipped {
+                let female = world
+                    .get::<&ObjectKeywords>(entity)
+                    .is_ok_and(|kw| kw.contains(KEYWORD_FEMALE));
+
+                let loader = self.loader.clone();
+                let esp_loader = self.esp_loader.clone();
+                let record = item.item;
+                let attachments = item.attachments.clone();
+                let visible = item.visible.clone();
+                self.tasks.push(self.pool.spawn(async move {
+                    let models = load_equipment_item_models(
+                        &loader,
+                        &esp_loader,
+                        record,
+                        &attachments,
+                        female,
+                        &visible,
+                    )
+                    .await;
+                    (entity, key, models, visible)
+                }));
+            }
+
+            let keys = core::mem::take(&mut item.equipment_keys);
+            drop(inventory);
+            unequip_item(entity, keys, world);
+        }
+    }
+
     fn attach_ready_models(&mut self, world: &mut World) {
         let _span = trace_span!("InventorySystem::attach_ready_models").entered();
 
-        while let Some((entity, key, models)) = self.tasks.pop() {
+        while let Some((entity, key, models, visible)) = self.tasks.pop() {
             // Recheck that we still should attach the scene.
             // The item may already be unequipped again.
             let Ok(inventory) = world.get::<&Inventory>(entity) else {
@@ -655,7 +602,7 @@ impl InventorySystem {
                 continue;
             };
 
-            if !item.equipped || !item.visible {
+            if !item.equipped || item.visible != visible {
                 continue;
             }
 

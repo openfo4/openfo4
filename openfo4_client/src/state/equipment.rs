@@ -413,6 +413,7 @@ pub async fn load_equipment_item_models(
     record: RecordId,
     attachments: &[RecordId],
     female: bool,
+    visible_slots: &HashSet<u32>,
 ) -> EquipmentItemModels {
     let mut models = Vec::new();
     let mut attachment_point_parents = HashMap::new();
@@ -436,6 +437,14 @@ pub async fn load_equipment_item_models(
                     RecordData::ArmorAddon(data) => data,
                     _ => unreachable!(),
                 };
+
+                // We only want to include armor addons where ALL slots of the
+                // armor addon are also marked visible.
+                let mut slots = HashSet::new();
+                extract_biped_object_flags(addon.biped_body_template, &mut slots);
+                if !slots.is_subset(visible_slots) {
+                    continue;
+                }
 
                 let mut model_path = None;
                 if female {
