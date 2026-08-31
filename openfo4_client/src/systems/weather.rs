@@ -461,7 +461,6 @@ async fn load_worldspace_weather_props(
         let img = loader
             .load::<FileImage, _>(&FileImageKey {
                 path: DataPathBuf::new(path.as_bytes()),
-                force_srgb: None,
             })
             .await
             .unwrap();
@@ -536,10 +535,7 @@ async fn load_worldspace_weather_props(
             path.push_front("textures");
 
             let Ok(img) = loader
-                .load::<FileImage, _>(&FileImageKey {
-                    path: path.clone(),
-                    force_srgb: Some(true),
-                })
+                .load::<FileImage, _>(&FileImageKey { path: path.clone() })
                 .await
                 .inspect_err(|err| {
                     tracing::error!(

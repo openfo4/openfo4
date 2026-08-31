@@ -311,10 +311,7 @@ async fn load_terrain_material_from_form(
     let diffuse_texture = match &diffuse_path {
         Some(path) => Some(
             loader
-                .load::<FileImageHandle, _>(&FileImageKey {
-                    path: path.clone(),
-                    force_srgb: Some(true),
-                })
+                .load::<FileImageHandle, _>(&FileImageKey { path: path.clone() })
                 .await
                 .unwrap(),
         ),
@@ -323,10 +320,7 @@ async fn load_terrain_material_from_form(
     let normal_texture = match &normal_path {
         Some(path) => Some(
             loader
-                .load::<FileImageHandle, _>(&FileImageKey {
-                    path: path.clone(),
-                    force_srgb: None,
-                })
+                .load::<FileImageHandle, _>(&FileImageKey { path: path.clone() })
                 .await
                 .unwrap(),
         ),
@@ -335,10 +329,7 @@ async fn load_terrain_material_from_form(
     let smooth_spec_texture = match &smooth_spec_path {
         Some(path) => Some(
             loader
-                .load::<FileImageHandle, _>(&FileImageKey {
-                    path: path.clone(),
-                    force_srgb: None,
-                })
+                .load::<FileImageHandle, _>(&FileImageKey { path: path.clone() })
                 .await
                 .unwrap(),
         ),
@@ -361,21 +352,18 @@ async fn load_default_terrain_material(loader: &AssetLoader) -> TerrainLayerMate
     let diffuse_texture = loader
         .load::<FileImageHandle, _>(&FileImageKey {
             path: PATH_LAND_TEXTURE_DEFAULT_DIFFUSE.to_owned(),
-            force_srgb: Some(true),
         })
         .await
         .unwrap();
     let normal_texture = loader
         .load::<FileImageHandle, _>(&FileImageKey {
             path: PATH_LAND_TEXTURE_DEFAULT_NORMAL.to_owned(),
-            force_srgb: None,
         })
         .await
         .unwrap();
     let smooth_spec_texture = loader
         .load::<FileImageHandle, _>(&FileImageKey {
             path: PATH_LAND_TEXTURE_DEFAULT_SPEC_GLOSS.to_owned(),
-            force_srgb: None,
         })
         .await
         .unwrap();
