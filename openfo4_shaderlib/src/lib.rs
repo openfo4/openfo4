@@ -71,6 +71,9 @@ pub struct Error {
 
 impl ShaderSource {
     /// Returns `true` when the shader source has changed and should be reloaded.
+    ///
+    /// When this function returns `true` the internal state is cleared and the next call returns
+    /// `false` again until the source is changed another time.
     #[inline]
     pub fn has_changed(&self) -> bool {
         self.source.has_changed()

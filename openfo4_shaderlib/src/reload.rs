@@ -1,5 +1,5 @@
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, OnceLock, mpsc};
 
 use game_render::shader::{Error, Shader};
@@ -12,32 +12,35 @@ pub type BoxError = Box<dyn std::error::Error>;
 #[derive(Debug)]
 pub struct ReloadableShaderSource {
     path: PathBuf,
-    cell: Arc<AtomicBool>,
     sources: Mutex<Vec<PathBuf>>,
+    /// Internal revision number of the source.
+    ///
+    /// Each time the source is updated, this number is incremented.
+    rev: Arc<AtomicU64>,
 }
 
 impl ReloadableShaderSource {
     pub fn new(path: PathBuf) -> Self {
         Self {
             path,
-            cell: Arc::new(AtomicBool::new(false)),
             sources: Mutex::new(Vec::new()),
+            rev: Arc::new(AtomicU64::new(0)),
         }
     }
 
-    pub fn has_changed(&self) -> bool {
-        self.cell.swap(false, Ordering::SeqCst)
+    pub fn rev(&self) -> u64 {
+        self.rev.load(Ordering::SeqCst)
     }
 
     pub fn reload_sources(&self) -> Result<(), Error> {
         let mut sources = self.sources.lock().unwrap();
         for path in sources.drain(..) {
-            FileWatcher::unregister(path, self.cell.clone());
+            FileWatcher::unregister(path, self.rev.clone());
         }
 
         let new_sources = slangc::load_imported_files(&self.path).map_err(Error::Slang)?;
         for source in &new_sources {
-            FileWatcher::register(source.clone(), self.cell.clone());
+            FileWatcher::register(source.clone(), self.rev.clone());
         }
         *sources = new_sources;
 
@@ -51,19 +54,19 @@ impl ReloadableShaderSource {
 }
 
 enum WatchEvent {
-    Register(PathBuf, Arc<AtomicBool>),
-    Unregister(PathBuf, Arc<AtomicBool>),
+    Register(PathBuf, Arc<AtomicU64>),
+    Unregister(PathBuf, Arc<AtomicU64>),
     Changed(PathBuf),
 }
 
 struct FileWatcher;
 
 impl FileWatcher {
-    fn register(path: PathBuf, cell: Arc<AtomicBool>) {
+    fn register(path: PathBuf, cell: Arc<AtomicU64>) {
         Self::get().send(WatchEvent::Register(path, cell)).ok();
     }
 
-    fn unregister(path: PathBuf, cell: Arc<AtomicBool>) {
+    fn unregister(path: PathBuf, cell: Arc<AtomicU64>) {
         Self::get().send(WatchEvent::Unregister(path, cell)).ok();
     }
 
@@ -121,7 +124,7 @@ impl FileWatcher {
                         WatchEvent::Changed(path) => {
                             if let Some(cells) = paths.get(&path) {
                                 for cell in cells {
-                                    cell.store(true, Ordering::SeqCst);
+                                    cell.fetch_add(1, Ordering::SeqCst);
                                 }
                             }
                         }

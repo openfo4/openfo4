@@ -1,5 +1,6 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, LazyLock, Mutex, OnceLock};
 
 use game_render::shader::Shader;
@@ -10,7 +11,8 @@ use crate::reload::{BoxError, ReloadableShaderSource};
 pub struct ShaderSource {
     path: &'static str,
     source: OnceLock<ReloadableShaderSource>,
-    shader: Mutex<Option<Arc<Shader>>>,
+    shader: Mutex<Option<ShaderRev>>,
+    rev: AtomicU64,
 }
 
 impl ShaderSource {
@@ -19,13 +21,17 @@ impl ShaderSource {
             path,
             source: OnceLock::new(),
             shader: Mutex::new(None),
+            rev: AtomicU64::new(0),
         }
     }
 
     pub fn has_changed(&self) -> bool {
-        self.source
+        let rev = self
+            .source
             .get_or_init(|| ReloadableShaderSource::new(self.path()))
-            .has_changed()
+            .rev();
+
+        self.rev.swap(rev, Ordering::SeqCst) != rev
     }
 
     pub fn compile(&self) -> Result<Arc<Shader>, BoxError> {
@@ -33,17 +39,29 @@ impl ShaderSource {
             .source
             .get_or_init(|| ReloadableShaderSource::new(self.path()));
 
+        // We should take the revision number before we compile the shader.
+        // This might mean that we compile an already outdated shader, but
+        // we can correctly update it on the next compile call.
+        // If we took the revision after compilation we might not see a change
+        // and forever return an outdated shader.
+        let rev = source.rev();
+
         let mut shader_slot = self.shader.lock().unwrap();
 
+        // Don't recompile the shader when the revision number of unchanged,
+        // which indicates that the shader source has not changed.
         if let Some(shader) = &*shader_slot
-            && !self.has_changed()
+            && shader.rev == rev
         {
-            return Ok(Arc::clone(shader));
+            return Ok(Arc::clone(&shader.shader));
         }
 
         source.reload_sources()?;
         let shader = Arc::new(source.compile()?);
-        *shader_slot = Some(Arc::clone(&shader));
+        *shader_slot = Some(ShaderRev {
+            shader: Arc::clone(&shader),
+            rev,
+        });
         Ok(shader)
     }
 
@@ -64,3 +82,9 @@ static WORKSPACE: LazyLock<PathBuf> = LazyLock::new(|| {
     let cargo_path = Path::new(std::str::from_utf8(&output).unwrap().trim());
     cargo_path.parent().unwrap().to_path_buf()
 });
+
+#[derive(Debug)]
+struct ShaderRev {
+    shader: Arc<Shader>,
+    rev: u64,
+}
