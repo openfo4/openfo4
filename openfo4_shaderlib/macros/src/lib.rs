@@ -2,6 +2,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use game_render::shader::Shader;
+use naga::back::spv::{Options, WriterFlags};
 use naga::valid::{Capabilities, ValidationFlags, Validator};
 use proc_macro::TokenStream;
 use proc_macro2::Span;
@@ -65,7 +66,10 @@ fn compile_wgsl(path: &Path) -> Vec<u8> {
     let info = Validator::new(ValidationFlags::all(), Capabilities::default())
         .validate(&module)
         .unwrap();
-    let words = naga::back::spv::write_vec(&module, &info, &Default::default(), None).unwrap();
+    let mut opts = Options::default();
+    // Emit OpName instructions.
+    opts.flags |= WriterFlags::DEBUG;
+    let words = naga::back::spv::write_vec(&module, &info, &opts, None).unwrap();
     words
         .into_iter()
         .map(|word| word.to_le_bytes())

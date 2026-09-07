@@ -4,6 +4,7 @@ use std::sync::{Arc, Mutex, OnceLock, mpsc};
 
 use game_render::shader::{Error, Shader};
 use hashbrown::HashMap;
+use naga::back::spv::{Options, WriterFlags};
 use naga::valid::{Capabilities, ValidationFlags, Validator};
 use notify::{RecursiveMode, Watcher};
 
@@ -156,7 +157,10 @@ fn compile_wgsl(path: &Path) -> Result<Vec<u8>, BoxError> {
     let data = std::fs::read_to_string(path)?;
     let module = naga::front::wgsl::parse_str(&data)?;
     let info = Validator::new(ValidationFlags::all(), Capabilities::default()).validate(&module)?;
-    let words = naga::back::spv::write_vec(&module, &info, &Default::default(), None)?;
+    let mut opts = Options::default();
+    // Emit OpName instructions.
+    opts.flags |= WriterFlags::DEBUG;
+    let words = naga::back::spv::write_vec(&module, &info, &opts, None)?;
     Ok(words
         .into_iter()
         .map(|word| word.to_le_bytes())
