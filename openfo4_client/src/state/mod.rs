@@ -28,9 +28,11 @@ use game_window::events::WindowEvent;
 use glam::{IVec2, Vec3};
 use level::Level;
 use openfo4_asset::AssetLoader;
+use openfo4_core::Frozen;
 use openfo4_core::ecs::{CommandBuffer, Entity, World};
 use openfo4_core::events::EventBus;
 use openfo4_core::object_ref_set::ObjectReferenceSet;
+use openfo4_core::record::RecordId;
 use openfo4_physics::PhysicsPipeline;
 use openfo4_physics::components::{CollisionLayer, RigidBody};
 use openfo4_physics::controller::CharacterController;
@@ -39,7 +41,7 @@ use parking_lot::Mutex;
 use crate::assets::animation::AnimationSet;
 use crate::assets::init_asset_loader;
 use crate::cell::CellId;
-use crate::components::{Camera, NiTransform, Player};
+use crate::components::{ActorMarker, Camera, NiTransform, Persistent, Player, Root, WorldSpace};
 use crate::config::Config;
 use crate::loader::FileLoader;
 use crate::render::RenderObject;
@@ -48,11 +50,16 @@ use crate::shared::SharedState;
 use crate::state::actions::{Action, Actions};
 use crate::state::anim_starter::{AnimationEventQueue, AnimationSystem};
 use crate::state::animation::update_actor_animation_graphs;
+use crate::state::hardcoded::ACTOR_PLAYER;
+use crate::state::level::Streamer;
+use crate::state::npc::{ActorInstanceProps, ObjectKeywords, spawn_actor};
 use crate::systems::activation::update_player_looking_at_target;
 use crate::systems::ai::AiSystem;
 use crate::systems::animation_sync::{bounce_animation_events, update_animation_parameters};
 use crate::systems::camera::CameraMode;
-use crate::systems::controller::{apply_player_movements, update_facing_direction};
+use crate::systems::controller::{
+    InputControllerMask, apply_player_movements, update_facing_direction,
+};
 use crate::systems::door::{handle_automatic_doors, handle_door_activations};
 use crate::systems::global::{Difficulty, GameRules, GlobalProperties, PlayTime};
 use crate::systems::hierarchy::TransformHierarchyCache;
@@ -67,7 +74,9 @@ use crate::systems::weapon::{
     handle_weapon_hit_damage, handle_weapon_reload_events, handle_weapon_reload_requests,
 };
 use crate::systems::weather::WeatherSystem;
-use crate::systems::{self, GunFireRequest, GunReloadRequest, WeaponDrawRequest, combat};
+use crate::systems::{
+    self, GunFireRequest, GunReloadRequest, PlayerControlState, WeaponDrawRequest, combat,
+};
 
 pub const UPS: u32 = 60;
 
@@ -205,15 +214,6 @@ impl GameState {
             &mut self.script_entities,
         );
         self.ai.run_events(&mut self.world, &mut self.event_bus);
-
-        animation_test::animation_test(
-            &mut self.event_bus,
-            &mut self.world,
-            &self.asset_loader,
-            &self.esp_loader,
-            &self.executor.loader(),
-            &mut self.script_entities,
-        );
 
         update_time(&mut self.world, Duration::from_secs_f32(1.0 / UPS as f32));
         self.weather
@@ -513,5 +513,65 @@ impl GameState {
             }
             _ => (),
         }
+    }
+
+    pub async fn spawn_actor(
+        &mut self,
+        id: RecordId,
+        worldspace: WorldSpace,
+        transform: Transform,
+    ) -> Entity {
+        let actor = spawn_actor(
+            &self.asset_loader,
+            &self.esp_loader,
+            self.executor.loader(),
+            id,
+            &ActorInstanceProps { dead: false },
+        )
+        .await
+        .unwrap();
+
+        let root = actor
+            .clone()
+            .instantiate(&mut self.world, &mut self.event_bus);
+        self.world
+            .insert(
+                root,
+                (
+                    ObjectKeywords::new(actor.keywords),
+                    Frozen::default(),
+                    Root,
+                    transform,
+                    worldspace,
+                ),
+            )
+            .unwrap();
+
+        if id == ACTOR_PLAYER {
+            if let Some(script) = self.executor.loader().load_instance(id).await {
+                self.script_entities.0.insert(script.id(), root);
+                self.world.insert_one(root, script).unwrap();
+            } else {
+                tracing::warn!("cloud not load script for player");
+            }
+
+            systems::camera::attach_camera(&mut self.world, root);
+            self.world
+                .insert(
+                    root,
+                    (
+                        Player,
+                        PlayerControlState::default(),
+                        AnimationEventQueue::default(),
+                        Streamer,
+                        ActorMarker,
+                        InputControllerMask::default(),
+                        Persistent,
+                    ),
+                )
+                .unwrap();
+        }
+
+        root
     }
 }

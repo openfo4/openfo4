@@ -1,20 +1,16 @@
 use std::collections::{HashMap, VecDeque};
-use std::sync::OnceLock;
 
 use game_common::components::{Axis, Transform};
 use game_tasks::TaskPool;
-use glam::{IVec2, Vec3};
+use glam::Vec3;
 use openfo4_animation::builder::{Builder, Hint};
 use openfo4_animation::skeleton::{BoneMarker, Skeleton, SkeletonInstance};
 use openfo4_animation::{AnimationGraph, Value};
 use openfo4_asset::{AssetLoader, Handle};
+use openfo4_core::WorldExt;
 use openfo4_core::ecs::{Entity, World};
-use openfo4_core::events::EventBus;
 use openfo4_core::hierarchy::Children;
 use openfo4_core::path::{DataPath, DataPathBuf};
-use openfo4_core::record::RecordId;
-use openfo4_core::{Frozen, WorldExt};
-use openfo4_esp::FormId;
 use openfo4_esp::records::Race;
 use openfo4_hkx::behavior::VariableType;
 use openfo4_hkx::{HkObject, HkxFile};
@@ -23,217 +19,13 @@ use openfo4_physics::components::{Capsule, ColliderShape};
 use crate::assets::animation::AnimationSet;
 use crate::assets::data_file::DataFile;
 use crate::assets::nif::{Instantiate, LoadNifFlags, NIF_TO_METERS, NifScene};
-use crate::cell::CellId;
-use crate::components::{ActorMarker, NiTransform, Persistent, Player, WorldSpace};
-use crate::state::anim_starter::AnimationEventQueue;
 use crate::state::animation::{self, SkeletonConfig, load_anim};
-use crate::state::esp::EspLoader;
-use crate::state::hardcoded::{ACTOR_PLAYER, HARDCODED_MODULE_ID};
-use crate::state::level::Streamer;
-use crate::state::npc::{ActorInstanceProps, BodyPartBone, ObjectKeywords, spawn_actor};
-use crate::systems::PlayerControlState;
-use crate::systems::controller::InputControllerMask;
-use crate::systems::inventory::{AddItemEventAsync, EquipItemEvent, Inventory};
-use crate::systems::scripting::ScriptEntities;
-use crate::systems::scripting::loader::ScriptLoader;
+use crate::state::npc::BodyPartBone;
 
 #[derive(Clone, Debug)]
 pub struct SkinInstance {
     pub entity: Entity,
     pub bones: Vec<usize>,
-}
-
-pub fn animation_test(
-    events: &mut EventBus,
-    world: &mut World,
-    asset_loader: &AssetLoader,
-    esp_loader: &EspLoader,
-    script_loader: &ScriptLoader,
-    script_entities: &mut ScriptEntities,
-) {
-    static ONCE: OnceLock<()> = OnceLock::new();
-
-    ONCE.get_or_init(|| {
-        let start_x = std::env::var("OF4_SX")
-            .unwrap_or("-13".to_owned())
-            .parse()
-            .unwrap();
-        let start_y = std::env::var("OF4_SX")
-            .unwrap_or("13".to_owned())
-            .parse()
-            .unwrap();
-
-        let offset = CellId(IVec2::new(start_x, start_y)).min();
-        for (index, offset) in [
-            NiTransform::from_translation(offset.extend(0.0) + Vec3::new(1024.0, 1024.0, 8096.0)),
-            // NiTransform::from_translation(offset.extend(0.0) - Vec3::new(2000.0, 2000.0, 0.0)),
-        ]
-        .iter()
-        .enumerate()
-        {
-            let actor = futures_lite::future::block_on(spawn_actor(
-                asset_loader,
-                esp_loader,
-                script_loader,
-                RecordId::new(HARDCODED_MODULE_ID, FormId(0x7)),
-                &ActorInstanceProps { dead: false },
-            ))
-            .unwrap();
-
-            let root = actor.clone().instantiate(world, events);
-            world
-                .insert_one(root, ObjectKeywords::new(actor.keywords))
-                .unwrap();
-            world.insert_one(root, Frozen::default()).unwrap();
-            world.insert_one(root, crate::components::Root).unwrap();
-
-            if let Some(script) =
-                futures_lite::future::block_on(script_loader.load_instance(ACTOR_PLAYER))
-            {
-                script_entities.0.insert(script.id(), root);
-                world.insert_one(root, script).unwrap();
-            } else {
-                tracing::warn!("cloud not load script for player");
-            }
-
-            // let race = futures_lite::future::block_on(
-            //     esp_loader.lookup(Some(RecordKind::Race), FormId(0x13746)),
-            // )
-            // .unwrap();
-
-            // let race = match race.data {
-            //     RecordData::Race(race) => race,
-            //     _ => todo!(),
-            // };
-
-            // let character =
-            //     futures_lite::future::block_on(load_character(&race, false, asset_loader)).unwrap();
-            // let behavior = futures_lite::future::block_on(load_behavior_data(
-            //     &character.root_path,
-            //     behavior_filename,
-            //     subgraph_filename,
-            //     &character,
-            //     &search_paths,
-            //     asset_loader,
-            // ))
-            // .unwrap();
-
-            let inventory = Inventory::default();
-            let armor = FormId(0x001BBCB5);
-
-            // events.send(AddItemEvent {
-            //     actor: root,
-            //     item: armor,
-            //     attachments: Vec::new(),
-            // });
-            // events.send(EquipItemEvent {
-            //     actor: root,
-            //     item: armor,
-            // });
-
-            events.send(AddItemEventAsync {
-                actor: root,
-                item: RecordId::new(HARDCODED_MODULE_ID, FormId(0x9983b)),
-                // OMODs
-                attachments: vec![
-                    RecordId::new(HARDCODED_MODULE_ID, FormId(0x12eced)),
-                    RecordId::new(HARDCODED_MODULE_ID, FormId(0x9983d)),
-                    RecordId::new(HARDCODED_MODULE_ID, FormId(0x99836)),
-                    RecordId::new(HARDCODED_MODULE_ID, FormId(0x1877fa)),
-                    RecordId::new(HARDCODED_MODULE_ID, FormId(0x4f21d)),
-                ],
-                hidden: false,
-                count: 1,
-                equip: true,
-            });
-            events.send(AddItemEventAsync {
-                actor: root,
-                item: RecordId::new(HARDCODED_MODULE_ID, FormId(0x000C1897)),
-                attachments: Vec::new(),
-                hidden: false,
-                count: 100,
-                equip: true,
-            });
-            events.send(EquipItemEvent {
-                actor: root,
-                item: RecordId::new(HARDCODED_MODULE_ID, FormId(0x9983b)),
-            });
-
-            world.insert_one(root, inventory).unwrap();
-            world.insert_one(root, Transform::from(*offset)).unwrap();
-            world
-                .insert_one(
-                    root,
-                    WorldSpace {
-                        record: RecordId::new(HARDCODED_MODULE_ID, FormId(0x3c)),
-                        is_interior: false,
-                    },
-                )
-                .unwrap();
-
-            // let equipment = Equipment::default();
-
-            // let collider = world.spawn((
-            //     character.controller_offset,
-            //     Collider {
-            //         friction: 1.0,
-            //         restitution: 0.0,
-            //         shape: character.controller_shape.clone(),
-            //     },
-            // ));
-
-            // world
-            //     .insert(
-            //         root,
-            //         (
-            //             behavior.clips,
-            //             skeleton_instance,
-            //             AnimationDriver::new(Arc::new(behavior.graph)),
-            //             ActiveBehaviorGraphs(vec![
-            //                 subgraph_filename.replace("meshes/", ""),
-            //                 "actors/character/behaviors/raiderrootbehavior.hkx".to_owned(),
-            //             ]),
-            //             RigidBody::FIXED,
-            //             ControllerShape {
-            //                 offset: character.controller_offset,
-            //                 shape: character.controller_shape,
-            //             },
-            //             equipment,
-            //             inventory,
-            //         ),
-            //     )
-            //     .unwrap();
-
-            // world.add_children(root, collider);
-
-            if index == 0 {
-                crate::systems::camera::attach_camera(world, root);
-                world
-                    .insert(
-                        root,
-                        (
-                            Player,
-                            PlayerControlState::default(),
-                            AnimationEventQueue::default(),
-                            Streamer {},
-                            ActorMarker,
-                            InputControllerMask::default(),
-                            Persistent,
-                        ),
-                    )
-                    .unwrap();
-            }
-        }
-
-        // world.spawn((
-        //     Transform {
-        //         translation: Transform::from(offset).translation,
-        //         rotation: Transform::from(offset).rotation,
-        //         scale: Transform::from(offset).scale,
-        //     },
-        //     Children(child_entities),
-        // ));
-    });
 }
 
 #[derive(Clone, Debug)]

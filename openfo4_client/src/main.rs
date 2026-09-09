@@ -32,7 +32,11 @@ use game_ui_render::UiRenderer;
 use game_window::events::WindowEvent;
 use game_window::windows::{WindowBuilder, WindowId};
 use game_window::{WindowManager, WindowManagerContext};
+use glam::IVec2;
 use glam::UVec2;
+use glam::Vec3;
+use openfo4_core::record::RecordId;
+use openfo4_esp::FormId;
 use render::RenderState;
 use render::physics_debug::{
     draw_cell_boundaries, draw_colliers, draw_skeletons, draw_translations,
@@ -40,6 +44,9 @@ use render::physics_debug::{
 use shared::SharedState;
 use state::GameState;
 
+use crate::cell::CellId;
+use crate::components::NiTransform;
+use crate::components::WorldSpace;
 use crate::config::Config;
 use crate::loader::FileLoader;
 use crate::render::physics_debug::{
@@ -49,6 +56,10 @@ use crate::render::physics_debug::{
 use crate::state::data;
 use crate::state::esp::EspLoaderBuilder;
 use crate::state::hardcoded;
+use crate::state::hardcoded::ACTOR_PLAYER;
+use crate::state::hardcoded::HARDCODED_MODULE_ID;
+use crate::systems::inventory::AddItemEventAsync;
+use crate::systems::inventory::EquipItemEvent;
 
 #[derive(Clone, Debug, Parser)]
 #[command(version, about, long_about = None)]
@@ -172,7 +183,60 @@ async fn create_game(
     let file_loader = Arc::new(FileLoader::new(sources));
     let loader = Arc::new(loader.finalize());
 
-    GameState::new(shared, pool, file_loader, loader, config).await
+    let mut game = GameState::new(shared, pool, file_loader, loader, config).await;
+    spawn_player(&mut game).await;
+
+    game
+}
+
+async fn spawn_player(game: &mut GameState) {
+    let start_x = std::env::var("OF4_SX")
+        .unwrap_or("-13".to_owned())
+        .parse()
+        .unwrap();
+    let start_y = std::env::var("OF4_SY")
+        .unwrap_or("13".to_owned())
+        .parse()
+        .unwrap();
+
+    let offset = CellId(IVec2::new(start_x, start_y)).min();
+    let transform =
+        NiTransform::from_translation(offset.extend(0.0) + Vec3::new(1024.0, 1024.0, 8096.0));
+    let worldspace = WorldSpace {
+        record: RecordId::new(HARDCODED_MODULE_ID, FormId(0x3c)),
+        is_interior: false,
+    };
+    let player = game
+        .spawn_actor(ACTOR_PLAYER, worldspace, transform.into())
+        .await;
+
+    game.event_bus.send(AddItemEventAsync {
+        actor: player,
+        item: RecordId::new(HARDCODED_MODULE_ID, FormId(0x9983b)),
+        // OMODs
+        attachments: vec![
+            RecordId::new(HARDCODED_MODULE_ID, FormId(0x12eced)),
+            RecordId::new(HARDCODED_MODULE_ID, FormId(0x9983d)),
+            RecordId::new(HARDCODED_MODULE_ID, FormId(0x99836)),
+            RecordId::new(HARDCODED_MODULE_ID, FormId(0x1877fa)),
+            RecordId::new(HARDCODED_MODULE_ID, FormId(0x4f21d)),
+        ],
+        hidden: false,
+        count: 1,
+        equip: true,
+    });
+    game.event_bus.send(AddItemEventAsync {
+        actor: player,
+        item: RecordId::new(HARDCODED_MODULE_ID, FormId(0x000C1897)),
+        attachments: Vec::new(),
+        hidden: false,
+        count: 100,
+        equip: true,
+    });
+    game.event_bus.send(EquipItemEvent {
+        actor: player,
+        item: RecordId::new(HARDCODED_MODULE_ID, FormId(0x9983b)),
+    });
 }
 
 struct App {
