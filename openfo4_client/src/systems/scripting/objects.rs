@@ -186,6 +186,13 @@ impl<'a> ScriptRef<'a> {
     pub fn get(&self) -> &ScriptInstance {
         &self.info.scripts[self.index]
     }
+
+    /// Returns the extra data attached to this instance.
+    ///
+    /// The returned data is shared among all scripts of this instance.
+    pub fn data(&self) -> &ObjectData {
+        &self.info.data
+    }
 }
 
 #[derive(Clone, Debug)]

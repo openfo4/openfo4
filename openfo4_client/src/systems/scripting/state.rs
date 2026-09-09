@@ -8,9 +8,7 @@ use hashbrown::{HashMap, HashSet};
 use openfo4_core::ecs::{Entity, World};
 use openfo4_core::events::EventBus;
 use openfo4_core::record::RecordId;
-use openfo4_script::RegisterNativeError;
-use openfo4_script::engine::Engine;
-use openfo4_script::runtime::{Error, IntoFunc, ObjectAddr, ObjectRef};
+use openfo4_script::runtime::{Error, ObjectAddr, ObjectRef};
 use parking_lot::{
     MappedRwLockReadGuard, MappedRwLockWriteGuard, Mutex, RwLock, RwLockReadGuard, RwLockWriteGuard,
 };
@@ -34,7 +32,6 @@ pub struct State {
     pub borrowed: Arc<SharedBorrowCell<BorrowedState>>,
     pub registration: Arc<RegistrationSet>,
     pub objects: Arc<ScriptObjects>,
-    pub object_data: HashMap<ObjectAddr, ObjectData>,
     pub aliases: AliasSet,
     pub effects: Arc<Mutex<Effects>>,
     pub loader: Arc<ScriptLoader>,

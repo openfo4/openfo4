@@ -8,6 +8,7 @@ mod object_builder;
 mod objects;
 mod registration;
 mod runner;
+mod state;
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -16,14 +17,14 @@ use futures_lite::future::block_on;
 use game_common::collections::bimap::BiMap;
 use game_tasks::TaskPool;
 use game_tracing::trace_span;
-use hashbrown::HashMap;
 use openfo4_core::ecs::{Entity, World};
 use openfo4_core::events::EventBus;
 use openfo4_pex::Module;
+use openfo4_script::RegisterNativeError;
 use openfo4_script::compiler::CompilerOptions;
 use openfo4_script::compiler::resources::TypeId;
 use openfo4_script::engine::{Engine, Instance, Options};
-use openfo4_script::runtime::ObjectRef;
+use openfo4_script::runtime::{IntoFunc, ObjectRef};
 
 use crate::config;
 use crate::events::combat::{BleedoutStartEvent, BodyPartCrippleEvent};
@@ -34,15 +35,15 @@ use crate::state::esp::EspLoader;
 use crate::systems::DeathStartEvent;
 use crate::systems::global::GlobalProperties;
 use crate::systems::quests::QuestManager;
-use crate::systems::scripting::classes::{AliasSet, BorrowedState, CoreObjects, SharedBorrowCell};
 use crate::systems::scripting::events::queue::EventQueueProducer;
 use crate::systems::scripting::invocations::EventInvocation;
 use crate::systems::scripting::loader::{ScriptLoader, ScriptObjectId};
 use crate::systems::scripting::objects::ScriptObjects;
 use crate::systems::scripting::registration::RegistrationSet;
 use crate::systems::scripting::runner::{Runner, RunnerHandle};
-
-use classes::State;
+use crate::systems::scripting::state::{
+    AliasSet, BorrowedState, CoreObjects, SharedBorrowCell, State,
+};
 
 pub use runner::Invocation;
 
@@ -224,7 +225,6 @@ fn core_actor_values(
         registration,
         aliases: AliasSet::default(),
         effects: Arc::default(),
-        object_data: HashMap::new(),
         borrowed: Arc::new(SharedBorrowCell::new()),
         loader,
         globals,
@@ -242,3 +242,30 @@ struct ScriptInstance {
 /// Maps [`ScriptObject`]s to game world [`Entity`].
 #[derive(Clone, Debug, Default)]
 pub struct ScriptEntities(pub BiMap<ScriptObjectId, Entity>);
+
+trait EngineExt {
+    fn register_if_exists<F, T, Marker, Params, Returns>(&mut self, class: &str, func: &str, f: F)
+    where
+        F: IntoFunc<T, Marker, Params, Returns>;
+}
+
+impl EngineExt for Engine {
+    fn register_if_exists<F, T, Marker, Params, Returns>(&mut self, class: &str, func: &str, f: F)
+    where
+        F: IntoFunc<T, Marker, Params, Returns>,
+    {
+        match self.register_native_function(class, func, f) {
+            Ok(()) => {}
+            Err(RegisterNativeError::UnknownFunction(_)) => {
+                tracing::debug!("not registering {}.{}: not found", class, func);
+            }
+            Err(RegisterNativeError::IncompatibleSignature { expected, found }) => {
+                tracing::warn!(
+                    "not registering {}.{}: incompatible signature: {found:?}, expected {expected:?}",
+                    class,
+                    func,
+                );
+            }
+        }
+    }
+}

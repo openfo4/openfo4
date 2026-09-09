@@ -533,14 +533,11 @@ async fn with_layer<T, F>(caller: Caller<'_, State>, object: Object, f: F) -> Re
 where
     F: FnOnce(&mut InputControllerLayer) -> T,
 {
-    let data = caller
-        .data()
-        .object_data
-        .get(&object)
-        .ok_or_else(|| todo!())?;
+    let script = caller.data().objects.get_by_addr(object).unwrap();
+    let data = script.data();
 
     let ObjectData::InputEnableLayer { layer } = data else {
-        todo!();
+        unreachable!();
     };
 
     let world = caller.data().world().await;
