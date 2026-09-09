@@ -301,6 +301,7 @@ mod unix {
     }
 }
 
+#[cfg(not(unix))]
 mod generic {
     use std::io::{self, Read, Seek, SeekFrom};
     use std::path::Path;
