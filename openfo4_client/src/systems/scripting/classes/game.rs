@@ -5,7 +5,9 @@ use openfo4_script::runtime::{Caller, Error};
 use crate::components::{ActorProperties, Player};
 use crate::state::hardcoded::cumulative_xp_for_level;
 use crate::systems::controller::InputControllerMask;
-use crate::systems::scripting::classes::{EngineExt, Object, State};
+use crate::systems::scripting::EngineExt;
+use crate::systems::scripting::classes::Object;
+use crate::systems::scripting::state::State;
 
 #[rustfmt::skip]
 pub fn register(engine: &mut Engine) {

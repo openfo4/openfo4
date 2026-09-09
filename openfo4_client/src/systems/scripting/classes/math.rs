@@ -3,7 +3,8 @@
 use openfo4_script::engine::Engine;
 use openfo4_script::runtime::Caller;
 
-use crate::systems::scripting::classes::{EngineExt, State};
+use crate::systems::scripting::EngineExt;
+use crate::systems::scripting::state::State;
 
 #[rustfmt::skip]
 pub fn register(engine: &mut Engine) {

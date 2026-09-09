@@ -1,6 +1,6 @@
 use openfo4_script::runtime::{Caller, Error, ObjectAddr};
 
-use crate::systems::scripting::classes::State;
+use crate::systems::scripting::state::State;
 
 /// `IsIntalled`
 ///

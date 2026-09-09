@@ -13,12 +13,12 @@ use openfo4_script::runtime::{Context, Val};
 use slab::Slab;
 use tracing::instrument;
 
-use crate::systems::scripting::classes::{BorrowedState, SharedBorrowCell, State};
 use crate::systems::scripting::events::queue::{EventQueue, EventQueueProducer};
 use crate::systems::scripting::invocations::{EventInvocation, Value};
 use crate::systems::scripting::loader::{ScriptLoader, ScriptObjectId};
 use crate::systems::scripting::objects::ScriptObjects;
 use crate::systems::scripting::registration::{EventSender, RegistrationSet};
+use crate::systems::scripting::state::{BorrowedState, SharedBorrowCell, State};
 
 pub struct RunnerHandle {
     pub events: EventQueueProducer,

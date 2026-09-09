@@ -2,8 +2,8 @@ use std::borrow::Cow;
 
 use openfo4_script::runtime::{ObjectAddr, ObjectRef};
 
-use crate::systems::scripting::classes::TimerId;
 use crate::systems::scripting::loader::ScriptObject;
+use crate::systems::scripting::state::TimerId;
 
 #[derive(Clone, Debug)]
 pub struct EventInvocation {

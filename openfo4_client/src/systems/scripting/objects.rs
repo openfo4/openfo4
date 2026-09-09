@@ -10,6 +10,7 @@ use slab::Slab;
 
 use crate::systems::scripting::ScriptInstance;
 use crate::systems::scripting::loader::ScriptObjectId;
+use crate::systems::scripting::state::ObjectData;
 
 #[derive(Debug, Default)]
 pub struct ScriptObjects {
@@ -24,6 +25,7 @@ impl ScriptObjects {
         engine: &Engine,
         scripts: Vec<ScriptInstance>,
         record: Option<RecordId>,
+        data: ObjectData,
     ) -> ScriptObjectId {
         let mut instances = self.instances.lock();
         let mut addrs = self.addrs.lock();
@@ -59,6 +61,7 @@ impl ScriptObjects {
             scripts,
             class_names,
             record,
+            data,
         }));
 
         id
@@ -147,6 +150,11 @@ impl<'a> ScriptsRef<'a> {
             _owner: PhantomData,
         })
     }
+
+    /// Returns the extra data attached to this instance.
+    pub fn data(&self) -> &ObjectData {
+        &self.info.data
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -189,4 +197,5 @@ struct ObjectInfo {
     /// to exist, but in that case which one we return is not defined.
     class_names: HashMap<String, usize>,
     record: Option<RecordId>,
+    data: ObjectData,
 }

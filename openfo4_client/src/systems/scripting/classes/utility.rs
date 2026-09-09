@@ -3,7 +3,9 @@ use std::time::Duration;
 use openfo4_script::engine::Engine;
 use openfo4_script::runtime::{Caller, Error};
 
-use crate::systems::scripting::classes::{EngineExt, Object, State};
+use crate::systems::scripting::EngineExt;
+use crate::systems::scripting::classes::Object;
+use crate::systems::scripting::state::State;
 
 #[rustfmt::skip]
 pub fn register(engine: &mut Engine) {

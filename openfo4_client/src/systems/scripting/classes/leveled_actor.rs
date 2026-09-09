@@ -2,7 +2,9 @@ use openfo4_script::engine::Engine;
 use openfo4_script::runtime::Caller;
 
 use crate::systems::global::LevelListAddition;
-use crate::systems::scripting::classes::{EngineExt, Object, State};
+use crate::systems::scripting::EngineExt;
+use crate::systems::scripting::classes::Object;
+use crate::systems::scripting::state::State;
 
 pub fn register(engine: &mut Engine) {
     engine.register_if_exists("LeveledActor", "AddForm", add_form);

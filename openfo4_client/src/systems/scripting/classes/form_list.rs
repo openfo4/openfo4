@@ -2,9 +2,10 @@ use openfo4_script::engine::Engine;
 use openfo4_script::runtime::{Caller, Error};
 
 use crate::systems::global::FormList;
-use crate::systems::scripting::classes::EngineExt;
+use crate::systems::scripting::EngineExt;
+use crate::systems::scripting::state::State;
 
-use super::{Bool, Int, Object, State};
+use super::{Bool, Int, Object};
 
 pub fn register(engine: &mut Engine) {
     engine.register_if_exists("FormList", "AddForm", add_form);

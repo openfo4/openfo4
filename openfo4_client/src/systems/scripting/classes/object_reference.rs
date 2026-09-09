@@ -13,10 +13,12 @@ use crate::state::npc::ObjectKeywords;
 use crate::systems::actor_value::ActorValueProperties;
 use crate::systems::inventory::Inventory;
 use crate::systems::linked_refs::LinkedRefs;
-use crate::systems::scripting::classes::{EngineExt, Object, State};
+use crate::systems::scripting::EngineExt;
+use crate::systems::scripting::classes::Object;
 use crate::systems::scripting::effects::{
     AddItemEffect, DisableEntitiesEffect, EnableEntitiesEffect,
 };
+use crate::systems::scripting::state::State;
 
 #[rustfmt::skip]
 pub fn register(engine: &mut Engine) {

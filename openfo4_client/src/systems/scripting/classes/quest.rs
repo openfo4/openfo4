@@ -2,9 +2,10 @@ use openfo4_script::engine::Engine;
 use openfo4_script::runtime::{Caller, Error};
 
 use crate::systems::quests::QuestState;
-use crate::systems::scripting::classes::EngineExt;
+use crate::systems::scripting::EngineExt;
+use crate::systems::scripting::state::State;
 
-use super::{Int, Object, State};
+use super::{Int, Object};
 
 #[rustfmt::skip]
 pub fn register(engine: &mut Engine) {

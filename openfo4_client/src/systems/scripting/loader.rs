@@ -10,10 +10,11 @@ use openfo4_script::runtime::ObjectAddr;
 use openfo4_script::runtime::object::ObjectBuilder;
 use parking_lot::Mutex;
 
-use crate::state::esp::EspLoader;
+use crate::state::esp::{EspLoader, GlobalRecord};
 use crate::systems::scripting::object_builder::build_script_object;
 use crate::systems::scripting::objects::ScriptObjects;
 use crate::systems::scripting::registration::{Event, EventKind, EventSender, RegistrationSet};
+use crate::systems::scripting::state::ObjectData;
 use crate::systems::scripting::{COMPILER_OPTIONS, ScriptInstance};
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
@@ -103,6 +104,7 @@ impl ScriptLoader {
     /// Only the top level properties are cloned.
     pub async fn clone_object(&self, object: &ScriptObject) -> ScriptObject {
         let scripts = self.objects.get_by_id(object.id()).unwrap();
+        let data = scripts.data().clone();
 
         let scripts = scripts
             .iter()
@@ -118,7 +120,7 @@ impl ScriptLoader {
             })
             .collect();
 
-        let id = self.objects.insert(&self.engine, scripts, None);
+        let id = self.objects.insert(&self.engine, scripts, None, data);
 
         ScriptObject(Arc::new(ScriptObjectInner {
             base: object.0.base,
@@ -290,8 +292,13 @@ impl ScriptLoader {
 
         let mut built_objects = Vec::new();
 
-        for (record, scripts) in records {
+        for (record, mut scripts) in records {
             let mut final_instances = Vec::new();
+
+            let data = scripts
+                .values_mut()
+                .find_map(|obj| obj.data.take())
+                .unwrap();
 
             for (name, mut object) in scripts {
                 register_static_events(&object, &self.registration);
@@ -341,7 +348,7 @@ impl ScriptLoader {
 
             let is_root = record == root;
 
-            built_objects.push((final_instances, rid, None, is_root));
+            built_objects.push((final_instances, rid, None, is_root, data));
         }
 
         let mut compiled_aliases = HashMap::new();
@@ -383,7 +390,7 @@ impl ScriptLoader {
                 });
             }
 
-            built_objects.push((final_instances, None, Some(key), false));
+            built_objects.push((final_instances, None, Some(key), false, ObjectData::None));
         }
 
         {
@@ -411,8 +418,8 @@ impl ScriptLoader {
         // Once we insert the new objects into the object pool, they are allowed
         // to immediately be used by another thread, so must wait until the objects
         // are fully built.
-        for (instances, record, alias_key, is_root) in built_objects {
-            let id = self.objects.insert(&self.engine, instances, record);
+        for (instances, record, alias_key, is_root, data) in built_objects {
+            let id = self.objects.insert(&self.engine, instances, record, data);
 
             if is_root {
                 root_id = Some(id);
@@ -794,6 +801,7 @@ async fn load_record(
             instance: instance.clone(),
             builder,
             script: None,
+            data: Some(load_record_object_data(&record)),
         },
     );
 
@@ -808,6 +816,7 @@ async fn load_record(
                 instance: instance.clone(),
                 builder,
                 script: Some(script),
+                data: None,
             },
         );
     }
@@ -831,6 +840,7 @@ async fn load_record(
                 instance: instance.clone(),
                 builder,
                 script: None,
+                data: None,
             },
         );
 
@@ -845,6 +855,7 @@ async fn load_record(
                     instance: instance.clone(),
                     builder,
                     script: Some(script),
+                    data: None,
                 },
             );
         }
@@ -964,6 +975,7 @@ struct PartialObject {
     instance: Instance,
     builder: ObjectBuilder,
     script: Option<Script>,
+    data: Option<ObjectData>,
 }
 
 fn record_script_name(data: &RecordData) -> Option<&'static str> {
@@ -1068,4 +1080,8 @@ fn record_instance_script_name(data: &RecordData) -> Option<&'static str> {
         RecordData::Weapon(_) => Some("ObjectReference"),
         _ => todo!(),
     }
+}
+
+fn load_record_object_data(record: &GlobalRecord) -> ObjectData {
+    ObjectData::None
 }

@@ -1,6 +1,8 @@
 use openfo4_script::runtime::{Caller, Error};
 
-use super::{Bool, Object, State};
+use crate::systems::scripting::state::State;
+
+use super::{Bool, Object};
 
 /// `Cast`
 ///

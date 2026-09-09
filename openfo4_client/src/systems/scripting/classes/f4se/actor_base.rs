@@ -1,7 +1,9 @@
 use openfo4_script::engine::Engine;
 use openfo4_script::runtime::{Caller, Error};
 
-use crate::systems::scripting::classes::{EngineExt, Object, State};
+use crate::systems::scripting::EngineExt;
+use crate::systems::scripting::classes::Object;
+use crate::systems::scripting::state::State;
 
 pub fn register(engine: &mut Engine) {
     engine.register_if_exists("ActorBase", "GetTemplate", get_template);

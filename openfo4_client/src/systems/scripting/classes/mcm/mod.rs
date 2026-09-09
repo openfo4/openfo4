@@ -1,6 +1,6 @@
 use openfo4_script::engine::Engine;
 
-use crate::systems::scripting::classes::EngineExt;
+use crate::systems::scripting::EngineExt;
 
 mod mcm;
 
