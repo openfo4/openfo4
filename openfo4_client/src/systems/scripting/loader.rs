@@ -10,11 +10,11 @@ use openfo4_script::runtime::ObjectAddr;
 use openfo4_script::runtime::object::ObjectBuilder;
 use parking_lot::Mutex;
 
-use crate::state::esp::{EspLoader, GlobalRecord};
+use crate::state::esp::EspLoader;
 use crate::systems::scripting::object_builder::build_script_object;
+use crate::systems::scripting::object_data::{ObjectData, load_record_object_data};
 use crate::systems::scripting::objects::ScriptObjects;
 use crate::systems::scripting::registration::{Event, EventKind, EventSender, RegistrationSet};
-use crate::systems::scripting::state::ObjectData;
 use crate::systems::scripting::{COMPILER_OPTIONS, ScriptInstance};
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
@@ -801,7 +801,7 @@ async fn load_record(
             instance: instance.clone(),
             builder,
             script: None,
-            data: Some(load_record_object_data(&record)),
+            data: Some(load_record_object_data(esp_loader, &record)),
         },
     );
 
@@ -1080,8 +1080,4 @@ fn record_instance_script_name(data: &RecordData) -> Option<&'static str> {
         RecordData::Weapon(_) => Some("ObjectReference"),
         _ => todo!(),
     }
-}
-
-fn load_record_object_data(record: &GlobalRecord) -> ObjectData {
-    ObjectData::None
 }

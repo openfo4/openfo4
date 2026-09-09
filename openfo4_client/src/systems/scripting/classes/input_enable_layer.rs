@@ -5,7 +5,8 @@ use crate::components::Player;
 use crate::systems::controller::{InputControllerLayer, InputControllerMask};
 use crate::systems::scripting::EngineExt;
 use crate::systems::scripting::classes::Object;
-use crate::systems::scripting::state::{ObjectData, State};
+use crate::systems::scripting::object_data::ObjectData;
+use crate::systems::scripting::state::State;
 
 #[rustfmt::skip]
 pub fn register(engine: &mut Engine) {

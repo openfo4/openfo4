@@ -30,8 +30,18 @@ pub fn register(engine: &mut Engine) {
 /// ```text
 /// Class Function GetClass() native
 /// ```
-fn get_class(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Error> {
-    todo!()
+async fn get_class(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Error> {
+    let data = caller.data().objects.get_by_addr(self_ptr).unwrap();
+    let data = data.data().actor_base().unwrap();
+    let Some(class) = data.class else {
+        return Ok(Object::NULL);
+    };
+
+    let class = caller
+        .data()
+        .get_or_create_record_class(class, "Class")
+        .await?;
+    Ok(class.get().object.addr())
 }
 
 /// `GetDeadCount`
@@ -57,8 +67,15 @@ fn get_gift_filter(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object
 /// ```text
 /// Race Function GetRace() native
 /// ```
-fn get_race(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Error> {
-    todo!()
+async fn get_race(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Error> {
+    let data = caller.data().objects.get_by_addr(self_ptr).unwrap();
+    let data = data.data().actor_base().unwrap();
+
+    let race = caller
+        .data()
+        .get_or_create_record_class(data.race, "Race")
+        .await?;
+    Ok(race.get().object.addr())
 }
 
 /// `GetLevel`
@@ -102,8 +119,10 @@ fn get_unique_actor(caller: Caller<'_, State>, self_ptr: Object) -> Result<Objec
 /// ```text
 /// bool Function IsEssential() native
 /// ```
-fn is_essential(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Error> {
-    todo!()
+fn is_essential(caller: Caller<'_, State>, self_ptr: Object) -> bool {
+    let data = caller.data().objects.get_by_addr(self_ptr).unwrap();
+    let data = data.data().actor_base().unwrap();
+    data.is_essential
 }
 
 /// `IsInvulnerable`
@@ -111,8 +130,10 @@ fn is_essential(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Err
 /// ```text
 /// bool Function IsInvulnerable() native
 /// ```
-fn is_invulnerable(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Error> {
-    todo!()
+fn is_invulnerable(caller: Caller<'_, State>, self_ptr: Object) -> bool {
+    let data = caller.data().objects.get_by_addr(self_ptr).unwrap();
+    let data = data.data().actor_base().unwrap();
+    data.is_invulnerable
 }
 
 /// `IsProtected`
@@ -120,8 +141,10 @@ fn is_invulnerable(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, 
 /// ```text
 /// bool Function IsProtected() native
 /// ```
-fn is_protected(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Error> {
-    todo!()
+fn is_protected(caller: Caller<'_, State>, self_ptr: Object) -> bool {
+    let data = caller.data().objects.get_by_addr(self_ptr).unwrap();
+    let data = data.data().actor_base().unwrap();
+    data.is_protected
 }
 
 /// `IsUnique`
@@ -129,8 +152,10 @@ fn is_protected(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Err
 /// ```text
 /// bool Function IsUnique() native
 /// ```
-fn is_unique(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Error> {
-    todo!()
+fn is_unique(caller: Caller<'_, State>, self_ptr: Object) -> bool {
+    let data = caller.data().objects.get_by_addr(self_ptr).unwrap();
+    let data = data.data().actor_base().unwrap();
+    data.is_unique
 }
 
 /// `SetEssential`

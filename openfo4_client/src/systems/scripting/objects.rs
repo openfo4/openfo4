@@ -10,7 +10,7 @@ use slab::Slab;
 
 use crate::systems::scripting::ScriptInstance;
 use crate::systems::scripting::loader::ScriptObjectId;
-use crate::systems::scripting::state::ObjectData;
+use crate::systems::scripting::object_data::ObjectData;
 
 #[derive(Debug, Default)]
 pub struct ScriptObjects {

@@ -21,7 +21,7 @@ use crate::systems::scripting::ScriptEntities;
 use crate::systems::scripting::classes::{Int, Object};
 use crate::systems::scripting::effects::{Effect, EffectId, Effects};
 use crate::systems::scripting::loader::ScriptLoader;
-use crate::systems::scripting::objects::{ScriptObjects, ScriptsRef};
+use crate::systems::scripting::objects::{ScriptObjects, ScriptRef, ScriptsRef};
 use crate::systems::scripting::registration::RegistrationSet;
 
 #[derive(Clone)]
@@ -134,6 +134,17 @@ impl State {
 
         let scripts = self.objects.get_by_id(object.object.id()).unwrap();
         Ok(scripts)
+    }
+
+    pub async fn get_or_create_record_class(
+        &self,
+        id: RecordId,
+        class: &str,
+    ) -> Result<ScriptRef<'_>, Error> {
+        let scripts = self.get_or_create_record(id).await?;
+        scripts
+            .get(class)
+            .ok_or_else(|| Error::msg(format!("{} has no object of type {}", id, class)))
     }
 
     pub async fn get_or_create_entity(&self, entity: Entity) -> Result<ScriptsRef<'_>, Error> {
@@ -315,12 +326,6 @@ pub struct TimerEntry {
     pub object: ObjectAddr,
     pub id: TimerId,
     pub at: Instant,
-}
-
-#[derive(Clone, Debug)]
-pub enum ObjectData {
-    None,
-    InputEnableLayer { layer: usize },
 }
 
 /// A cell that allows a thread to provide a value to another thread temporarily.

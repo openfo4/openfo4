@@ -5,6 +5,7 @@ mod classes;
 mod effects;
 mod events;
 mod object_builder;
+mod object_data;
 mod objects;
 mod registration;
 mod runner;
