@@ -64,7 +64,7 @@ fn gamma_correct(color: vec3<f32>) -> vec3<f32> {
     out_color.r = linear_to_srgb(color.r);
     out_color.g = linear_to_srgb(color.g);
     out_color.b = linear_to_srgb(color.b);
-    return color;
+    return out_color;
 }
 
 // sRGB transfer functions
