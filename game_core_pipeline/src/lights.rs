@@ -1,4 +1,5 @@
 use bytemuck::{Pod, Zeroable};
+use game_common::color::LinearRgb;
 use game_common::components::{Color, Transform};
 use game_render::buffer::GpuBuffer;
 use glam::Vec3;
@@ -44,12 +45,12 @@ pub struct SpotLight {
 #[derive(Clone, Debug)]
 pub struct AmbientLight {
     pub scene: SceneHandle,
-    pub top: Color,
-    pub bottom: Color,
-    pub left: Color,
-    pub right: Color,
-    pub front: Color,
-    pub back: Color,
+    pub top: LinearRgb,
+    pub bottom: LinearRgb,
+    pub left: LinearRgb,
+    pub right: LinearRgb,
+    pub front: LinearRgb,
+    pub back: LinearRgb,
     pub brightness: f32,
 }
 

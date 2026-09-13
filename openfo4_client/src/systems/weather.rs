@@ -1,6 +1,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 
+use game_common::color::{LinearRgb, Rgb};
 use game_common::components::{AmbientLight, Color, DirectionalLight, Transform};
 use game_common::utils::vec_ext::VecExt;
 use game_core_pipeline::entities::Entities;
@@ -29,6 +30,8 @@ use crate::systems::time::GameTime;
 
 // The clear weather image space uses a sunlight scale of 4.5 for the day sun.
 const SUNLIGHT_BASE_ILLUMINANCE: f32 = 120_000.0 / 4.5;
+
+const AMBIENT_BRIGHTNESS: f32 = 1.0 / 3.0;
 
 pub struct WeatherSystem {
     climates: HashMap<RecordId, WorldspaceClimate>,
@@ -76,6 +79,13 @@ impl WeatherSystem {
 
         let mut climates = HashMap::new();
         climates.insert(RecordId::new(HARDCODED_MODULE_ID, FormId(0x3c)), climate);
+
+        let lut =
+            futures_lite::future::block_on(asset_loader.load::<FileImage, _>(&FileImageKey {
+                path: DataPathBuf::new("textures/effects/luts/lut_cw_clearday.dds"),
+            }))
+            .unwrap();
+        shared.entities.set_lut(lut.0.clone());
 
         Self {
             climates,
@@ -147,7 +157,7 @@ impl WeatherSystem {
                 right: params.ambient_right,
                 front: params.ambient_front,
                 back: params.ambient_right,
-                brightness: 1.0,
+                brightness: AMBIENT_BRIGHTNESS,
             },
             worldspace,
         )));
@@ -228,13 +238,13 @@ struct WeatherPhase {
 #[derive(Clone, Debug)]
 struct WeatherParams {
     /// `+Z`
-    ambient_top: Color,
+    ambient_top: LinearRgb,
     /// `-Z`
-    ambient_bottom: Color,
-    ambient_left: Color,
-    ambient_right: Color,
-    ambient_front: Color,
-    ambient_back: Color,
+    ambient_bottom: LinearRgb,
+    ambient_left: LinearRgb,
+    ambient_right: LinearRgb,
+    ambient_front: LinearRgb,
+    ambient_back: LinearRgb,
     sky_lower: Color,
     sky_upper: Color,
     horizon: Color,
@@ -577,12 +587,12 @@ async fn load_worldspace_weather_props(
             let dir_light = weather.lighting_data[dir_light_index];
 
             WeatherParams {
-                ambient_top: rgb_to_color(dir_light.directional_ambient_z_down),
-                ambient_bottom: rgb_to_color(dir_light.directional_ambient_z_up),
-                ambient_right: rgb_to_color(dir_light.directional_ambient_x_down),
-                ambient_left: rgb_to_color(dir_light.directional_ambient_x_up),
-                ambient_front: rgb_to_color(dir_light.directional_ambient_y_down),
-                ambient_back: rgb_to_color(dir_light.directional_ambient_y_up),
+                ambient_top: rgb_to_color_linear(dir_light.directional_ambient_z_down),
+                ambient_bottom: rgb_to_color_linear(dir_light.directional_ambient_z_up),
+                ambient_right: rgb_to_color_linear(dir_light.directional_ambient_x_down),
+                ambient_left: rgb_to_color_linear(dir_light.directional_ambient_x_up),
+                ambient_front: rgb_to_color_linear(dir_light.directional_ambient_y_down),
+                ambient_back: rgb_to_color_linear(dir_light.directional_ambient_y_up),
                 sky_lower: rgb_to_color(f(weather.colors.sky_lower)),
                 sky_upper: rgb_to_color(f(weather.colors.sky_upper)),
                 horizon: rgb_to_color(f(weather.colors.horizon)),
@@ -751,6 +761,14 @@ fn rgb_to_color(input: Rgba<u8>) -> Color {
         input.g as f32 / 255.0,
         input.b as f32 / 255.0,
     ])
+}
+
+fn rgb_to_color_linear(input: Rgba<u8>) -> LinearRgb {
+    LinearRgb::from_srgb(Rgb {
+        red: input.r as f32 / 255.0,
+        green: input.g as f32 / 255.0,
+        blue: input.b as f32 / 255.0,
+    })
 }
 
 // It seems like the sun position is not affected by the climate times

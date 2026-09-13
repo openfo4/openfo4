@@ -3,6 +3,8 @@ use std::ops::Mul;
 use bytemuck::{Pod, Zeroable};
 use glam::FloatExt;
 
+use crate::color::LinearRgb;
+
 #[derive(Copy, Clone, Debug, PartialEq, Zeroable, Pod)]
 #[repr(C)]
 pub struct Color {
@@ -114,11 +116,11 @@ pub struct SpotLight {
 
 #[derive(Copy, Clone, Debug)]
 pub struct AmbientLight {
-    pub top: Color,
-    pub bottom: Color,
-    pub left: Color,
-    pub right: Color,
-    pub front: Color,
-    pub back: Color,
+    pub top: LinearRgb,
+    pub bottom: LinearRgb,
+    pub left: LinearRgb,
+    pub right: LinearRgb,
+    pub front: LinearRgb,
+    pub back: LinearRgb,
     pub brightness: f32,
 }
