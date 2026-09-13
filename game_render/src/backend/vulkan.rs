@@ -5829,7 +5829,7 @@ fn access_flags_to_image_layout(flags: AccessFlags) -> vk::ImageLayout {
     }
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 enum BarrierAccessScope {
     Source,
     Destination,
@@ -5839,123 +5839,71 @@ fn access_flags_to_stage_mask(
     flags: AccessFlags,
     scope: BarrierAccessScope,
 ) -> vk::PipelineStageFlags2 {
+    let mut output = vk::PipelineStageFlags2::empty();
+
+    let indirect = flags.intersects(AccessFlags::INDIRECT);
+    let index = flags.intersects(AccessFlags::INDEX);
+    let vertex_shader =
+        flags.intersects(AccessFlags::VERTEX_SHADER_READ | AccessFlags::VERTEX_SHADER_WRITE);
+    let fragment_shader =
+        flags.intersects(AccessFlags::FRAGMENT_SHADER_READ | AccessFlags::FRAGMENT_SHADER_WRITE);
+    // Even LOAD ops for color attachments happen at the COLOR_ATTACHMENT_WRITE stage.
+    // https://registry.khronos.org/vulkan/specs/latest/html/vkspec.html#renderpass-load-operations
+    let color_attachment_output =
+        flags.intersects(AccessFlags::COLOR_ATTACHMENT_READ | AccessFlags::COLOR_ATTACHMENT_WRITE);
+    let task_shader =
+        flags.intersects(AccessFlags::TASK_SHADER_READ | AccessFlags::TASK_SHADER_WRITE);
+    let mesh_shader =
+        flags.intersects(AccessFlags::MESH_SHADER_READ | AccessFlags::MESH_SHADER_WRITE);
+    let depth_attachment =
+        flags.intersects(AccessFlags::DEPTH_ATTACHMENT_READ | AccessFlags::DEPTH_ATTACHMENT_WRITE);
+
     // See https://registry.khronos.org/vulkan/specs/latest/html/vkspec.html#synchronization-pipeline-stages-order
     // for ordered list of pipeline stages.
-    #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
-    enum GraphicsPrimitiveStage {
-        DrawIndirect,
-        // PRIMITIVE PIPELINE
-        VertexInput,
-        // PRIMITIVE PIPELINE
-        VertexShader,
-        // MESH PIPELINE
-        TaskShader,
-        // MESH PIPELINE
-        MeshShader,
-        EarlyFragmentTests,
-        FragmentShader,
-        LateFragmentTests,
-        ColorAttachmentOutput,
-        None,
-    }
-
-    #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
-    enum ComputeStage {
-        Compute,
-        None,
-    }
-
-    #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
-    enum TransferStage {
-        Transfer,
-        None,
-    }
-
-    let mut transfer = TransferStage::None;
-    if flags.intersects(AccessFlags::TRANSFER_READ | AccessFlags::TRANSFER_WRITE) {
-        transfer = TransferStage::Transfer;
-    }
-
-    let mut compute = ComputeStage::None;
-    if flags.intersects(AccessFlags::COMPUTE_SHADER_READ | AccessFlags::COMPUTE_SHADER_WRITE) {
-        compute = ComputeStage::Compute;
-    }
-
     // See https://registry.khronos.org/vulkan/specs/latest/man/html/VkAccessFlagBits2.html
     // for which accesses map to which pipeline stages.
-    let mut graphics = GraphicsPrimitiveStage::None;
-
-    for (flag, stage) in [
-        (AccessFlags::INDIRECT, GraphicsPrimitiveStage::DrawIndirect),
-        (AccessFlags::INDEX, GraphicsPrimitiveStage::VertexInput),
-        (
-            AccessFlags::VERTEX_SHADER_READ | AccessFlags::VERTEX_SHADER_WRITE,
-            GraphicsPrimitiveStage::VertexShader,
-        ),
-        (
-            AccessFlags::FRAGMENT_SHADER_READ | AccessFlags::FRAGMENT_SHADER_WRITE,
-            GraphicsPrimitiveStage::FragmentShader,
-        ),
-        (
-            // Even LOAD ops for color attachments happen at the COLOR_ATTACHMENT_WRITE stage.
-            // https://registry.khronos.org/vulkan/specs/latest/html/vkspec.html#renderpass-load-operations
-            AccessFlags::COLOR_ATTACHMENT_READ | AccessFlags::COLOR_ATTACHMENT_WRITE,
-            GraphicsPrimitiveStage::ColorAttachmentOutput,
-        ),
-        (
-            AccessFlags::TASK_SHADER_READ | AccessFlags::TASK_SHADER_WRITE,
-            GraphicsPrimitiveStage::TaskShader,
-        ),
-        (
-            AccessFlags::MESH_SHADER_READ | AccessFlags::MESH_SHADER_WRITE,
-            GraphicsPrimitiveStage::MeshShader,
-        ),
-    ] {
-        if flags.intersects(flag) {
-            graphics = core::cmp::min(graphics, stage);
-        }
+    if indirect {
+        output |= vk::PipelineStageFlags2::DRAW_INDIRECT;
+    // Primitive Pipeline
+    // Mutually exclusive with `TaskShader` and `MeshShader`.
+    } else if index {
+        output |= vk::PipelineStageFlags2::VERTEX_INPUT;
+    // Primitive Pipeline
+    // Mutually exclusive with `TaskShader` and `MeshShader`.
+    } else if vertex_shader {
+        output |= vk::PipelineStageFlags2::VERTEX_SHADER;
+    // Mesh Pipeline
+    // Mutually exclusive with `Index` and `VertexShader`.
+    } else if task_shader {
+        output |= vk::PipelineStageFlags2::TASK_SHADER_EXT;
+    // Mesh Pipeline
+    // Mutually exclusive with `Index` and `VertexShader`.
+    } else if mesh_shader {
+        output |= vk::PipelineStageFlags2::MESH_SHADER_EXT;
+    // Accessing depth buffers may happen in both the EARLY_FRAGMENT_TESTS and
+    // LATE_FRAGMENT_TESTS stage.
+    // This means flushing must happen in the LATE_FRAGMENT_TESTS stage and
+    // invalidation must happen in the EARLY_FRAGMENT_TESTS stage so that no
+    // accesses overlap.
+    } else if depth_attachment && scope == BarrierAccessScope::Destination {
+        output |= vk::PipelineStageFlags2::EARLY_FRAGMENT_TESTS;
+    } else if fragment_shader {
+        output |= vk::PipelineStageFlags2::FRAGMENT_SHADER;
+    } else if depth_attachment && scope == BarrierAccessScope::Source {
+        output |= vk::PipelineStageFlags2::LATE_FRAGMENT_TESTS;
+    } else if color_attachment_output {
+        output |= vk::PipelineStageFlags2::COLOR_ATTACHMENT_OUTPUT;
     }
 
-    if flags.intersects(AccessFlags::DEPTH_ATTACHMENT_READ | AccessFlags::DEPTH_ATTACHMENT_WRITE) {
-        // Accessing depth buffers may happen in both the EARLY_FRAGMENT_TESTS and
-        // LATE_FRAGMENT_TESTS stage.
-        // This means flushing must happen in the LATE_FRAGMENT_TESTS stage and
-        // invalidation must happen in the EARLY_FRAGMENT_TESTS stage so that no
-        // accesses overlap.
-        let stage = match scope {
-            BarrierAccessScope::Source => GraphicsPrimitiveStage::LateFragmentTests,
-            BarrierAccessScope::Destination => GraphicsPrimitiveStage::EarlyFragmentTests,
-        };
-
-        graphics = core::cmp::min(graphics, stage);
+    if flags.intersects(AccessFlags::TRANSFER_READ | AccessFlags::TRANSFER_WRITE) {
+        output |= vk::PipelineStageFlags2::TRANSFER;
     }
 
-    let transfer = match transfer {
-        TransferStage::Transfer => vk::PipelineStageFlags2::TRANSFER,
-        TransferStage::None => vk::PipelineStageFlags2::empty(),
-    };
+    if flags.intersects(AccessFlags::COMPUTE_SHADER_READ | AccessFlags::COMPUTE_SHADER_WRITE) {
+        output |= vk::PipelineStageFlags2::COMPUTE_SHADER;
+    }
 
-    let compute = match compute {
-        ComputeStage::Compute => vk::PipelineStageFlags2::COMPUTE_SHADER,
-        ComputeStage::None => vk::PipelineStageFlags2::empty(),
-    };
-
-    let graphics = match graphics {
-        GraphicsPrimitiveStage::DrawIndirect => vk::PipelineStageFlags2::DRAW_INDIRECT,
-        GraphicsPrimitiveStage::VertexInput => vk::PipelineStageFlags2::VERTEX_INPUT,
-        GraphicsPrimitiveStage::VertexShader => vk::PipelineStageFlags2::VERTEX_SHADER,
-        GraphicsPrimitiveStage::TaskShader => vk::PipelineStageFlags2::TASK_SHADER_EXT,
-        GraphicsPrimitiveStage::MeshShader => vk::PipelineStageFlags2::MESH_SHADER_EXT,
-        GraphicsPrimitiveStage::EarlyFragmentTests => vk::PipelineStageFlags2::EARLY_FRAGMENT_TESTS,
-        GraphicsPrimitiveStage::FragmentShader => vk::PipelineStageFlags2::FRAGMENT_SHADER,
-        GraphicsPrimitiveStage::LateFragmentTests => vk::PipelineStageFlags2::LATE_FRAGMENT_TESTS,
-        GraphicsPrimitiveStage::ColorAttachmentOutput => {
-            vk::PipelineStageFlags2::COLOR_ATTACHMENT_OUTPUT
-        }
-        GraphicsPrimitiveStage::None => vk::PipelineStageFlags2::empty(),
-    };
-
-    transfer | compute | graphics
+    output
 }
 
 fn validate_shader_bindings(shader: &ShaderInstance<'_>, descriptors: &[&DescriptorSetLayout]) {
