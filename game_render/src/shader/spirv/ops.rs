@@ -231,6 +231,8 @@ pub enum Instruction {
     AtomicXor(OpAtomicXor),
     AtomicFlagTestAndSet(OpAtomicFlagTestAndSet),
     AtomicFlagClear(OpAtomicFlagClear),
+    ControlBarrier(OpControlBarrier),
+    MemoryBarrier(OpMemoryBarrier),
     EmitMeshTasksEXT(OpEmitMeshTasksEXT),
     SetMeshOutputsEXT(OpSetMeshOutputsEXT),
 }
@@ -488,6 +490,8 @@ impl Instruction {
             AtomicXor => AtomicXor,
             AtomicFlagTestAndSet => AtomicFlagTestAndSet,
             AtomicFlagClear => AtomicFlagClear,
+            ControlBarrier => ControlBarrier,
+            MemoryBarrier => MemoryBarrier,
             EmitMeshTasksEXT => EmitMeshTasksEXT,
             SetMeshOutputsEXT => SetMeshOutputsEXT,
         }
@@ -733,6 +737,8 @@ impl Instruction {
             AtomicXor => AtomicXor,
             AtomicFlagTestAndSet => AtomicFlagTestAndSet,
             AtomicFlagClear => AtomicFlagClear,
+            ControlBarrier => ControlBarrier,
+            MemoryBarrier => MemoryBarrier,
             EmitMeshTasksEXT => EmitMeshTasksEXT,
             SetMeshOutputsEXT => SetMeshOutputsEXT,
         };
@@ -3450,6 +3456,27 @@ spirv_op! {
     #[derive(Copy, Clone, Debug)]
     pub struct OpAtomicFlagClear {
         pub pointer: Id,
+        pub memory: Id,
+        pub semantics: Id,
+    }
+}
+
+// ============================
+// === Barrier Instructions ===
+// ============================
+
+spirv_op! {
+    #[derive(Copy, Clone, Debug)]
+    pub struct OpControlBarrier {
+        pub execution: Id,
+        pub memory: Id,
+        pub semantics: Id,
+    }
+}
+
+spirv_op! {
+    #[derive(Copy, Clone, Debug)]
+    pub struct OpMemoryBarrier {
         pub memory: Id,
         pub semantics: Id,
     }
