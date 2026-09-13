@@ -250,6 +250,9 @@ pub struct LinearRgb {
 impl LinearRgb {
     pub const BLACK: Self = Self::from_rgb(0.0, 0.0, 0.0);
     pub const WHITE: Self = Self::from_rgb(1.0, 1.0, 1.0);
+    pub const RED: Self = Self::from_rgb(1.0, 0.0, 0.0);
+    pub const GREEN: Self = Self::from_rgb(0.0, 1.0, 0.0);
+    pub const BLUE: Self = Self::from_rgb(0.0, 0.0, 1.0);
 
     /// Converts this color from linear to sRGB colorspace.
     pub fn to_srgb(&self) -> Rgb {

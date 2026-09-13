@@ -68,9 +68,9 @@ impl WeatherSystem {
         shared.entities.set_clouds_meshes(meshes);
 
         shared.entities.set_sky_material(SkyMaterial {
-            sky_lower: Color::WHITE,
-            sky_upper: Color::RED,
-            horizon: Color::GREEN,
+            sky_lower: LinearRgb::WHITE,
+            sky_upper: LinearRgb::RED,
+            horizon: LinearRgb::GREEN,
             sun: Color::BLACK,
             sun_scale: 1.0,
             sun_position: Vec3::Y,
@@ -245,9 +245,9 @@ struct WeatherParams {
     ambient_right: LinearRgb,
     ambient_front: LinearRgb,
     ambient_back: LinearRgb,
-    sky_lower: Color,
-    sky_upper: Color,
-    horizon: Color,
+    sky_lower: LinearRgb,
+    sky_upper: LinearRgb,
+    horizon: LinearRgb,
     /// Color of the sun
     sun: Color,
     sky_scale: f32,
@@ -593,9 +593,9 @@ async fn load_worldspace_weather_props(
                 ambient_left: rgb_to_color_linear(dir_light.directional_ambient_x_up),
                 ambient_front: rgb_to_color_linear(dir_light.directional_ambient_y_down),
                 ambient_back: rgb_to_color_linear(dir_light.directional_ambient_y_up),
-                sky_lower: rgb_to_color(f(weather.colors.sky_lower)),
-                sky_upper: rgb_to_color(f(weather.colors.sky_upper)),
-                horizon: rgb_to_color(f(weather.colors.horizon)),
+                sky_lower: rgb_to_color_linear(f(weather.colors.sky_lower)),
+                sky_upper: rgb_to_color_linear(f(weather.colors.sky_upper)),
+                horizon: rgb_to_color_linear(f(weather.colors.horizon)),
                 sun: rgb_to_color(f(weather.colors.sun)),
                 sky_scale: 1.0,
                 sunlight: rgb_to_color(f(weather.colors.sunlight)),
