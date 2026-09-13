@@ -252,7 +252,7 @@ struct WeatherParams {
     sun: Color,
     sky_scale: f32,
     /// Color of the directional light of the sun.
-    sunlight: Color,
+    sunlight: LinearRgb,
     sunlight_scale: f32,
     cloud_colors: [Color; 32],
 }
@@ -598,7 +598,7 @@ async fn load_worldspace_weather_props(
                 horizon: rgb_to_color_linear(f(weather.colors.horizon)),
                 sun: rgb_to_color(f(weather.colors.sun)),
                 sky_scale: 1.0,
-                sunlight: rgb_to_color(f(weather.colors.sunlight)),
+                sunlight: rgb_to_color_linear(f(weather.colors.sunlight)),
                 sunlight_scale: 1.0,
                 cloud_colors: [Color::TRANSPARENT; 32],
             }

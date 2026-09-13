@@ -18,7 +18,7 @@ pub enum Light {
 pub struct DirectionalLight {
     pub transform: Transform,
     pub scene: SceneHandle,
-    pub color: Color,
+    pub color: LinearRgb,
     pub illuminance: f32,
 }
 

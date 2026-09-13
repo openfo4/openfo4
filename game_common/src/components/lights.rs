@@ -93,7 +93,7 @@ impl Mul<f32> for Color {
 }
 #[derive(Copy, Clone, Debug)]
 pub struct DirectionalLight {
-    pub color: Color,
+    pub color: LinearRgb,
     pub illuminance: f32,
 }
 
