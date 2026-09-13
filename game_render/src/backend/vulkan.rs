@@ -3715,6 +3715,15 @@ impl<'a> CommandEncoder<'a> {
             let dst_stage_mask =
                 access_flags_to_stage_mask(barrier.dst_access, BarrierAccessScope::Destination);
 
+            // We do not need a barrier betwen READ->READ dependencies when the
+            // access mask is not changed.
+            if barrier.src_access.is_read_only()
+                && barrier.dst_access.is_read_only()
+                && src_access_flags == dst_access_flags
+            {
+                continue;
+            }
+
             // Guaranteed by caller.
             // - `offset` must be less than the size of `buffer`.
             // - `size` must not be 0.
@@ -3755,6 +3764,17 @@ impl<'a> CommandEncoder<'a> {
                 access_flags_to_stage_mask(barrier.dst_access, BarrierAccessScope::Destination);
             let old_layout = access_flags_to_image_layout(barrier.src_access);
             let new_layout = access_flags_to_image_layout(barrier.dst_access);
+
+            // We do not need a barrier betwen READ->READ dependencies when the
+            // access mask is not changed, except when an image layout transition
+            // happens, which may perform WRITE accesses.
+            if barrier.src_access.is_read_only()
+                && barrier.dst_access.is_read_only()
+                && src_access_flags == dst_access_flags
+                && old_layout == new_layout
+            {
+                continue;
+            }
 
             let aspect_mask = if barrier.texture.format.is_depth() {
                 vk::ImageAspectFlags::DEPTH
@@ -3800,6 +3820,10 @@ impl<'a> CommandEncoder<'a> {
             unsafe {
                 image_barriers.push_unchecked(barrier);
             }
+        }
+
+        if buffer_barriers.is_empty() && image_barriers.is_empty() {
+            return;
         }
 
         let info = vk::DependencyInfo::default()
