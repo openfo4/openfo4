@@ -8,7 +8,7 @@ mod resources;
 mod scheduler;
 
 use std::mem;
-use std::num::NonZeroU64;
+use std::num::NonZeroUsize;
 use std::ops::{Bound, Range, RangeBounds};
 use std::sync::Arc;
 
@@ -319,7 +319,7 @@ impl<'a> CommandQueue<'a> {
     #[track_caller]
     pub fn create_buffer_init(&self, descriptor: &BufferInitDescriptor<'_>) -> Buffer {
         let buffer = self.create_buffer(&BufferDescriptor {
-            size: descriptor.contents.len() as u64,
+            size: descriptor.contents.len(),
             usage: descriptor.usage | BufferUsage::TRANSFER_DST,
             flags: descriptor.flags,
         });
@@ -387,7 +387,7 @@ impl<'a> CommandQueue<'a> {
             // Otherwise we cannot access the buffer directly and
             // need to go through a host visible staging buffer.
             let staging_buffer = self.create_buffer(&BufferDescriptor {
-                size: data.len() as u64,
+                size: data.len(),
                 usage: BufferUsage::TRANSFER_SRC,
                 flags: UsageFlags::HOST_VISIBLE,
             });
@@ -695,7 +695,7 @@ impl<'a> CommandQueue<'a> {
 
         // We don't actually have to copy anything if the destination is
         // empty.
-        let Some(count) = NonZeroU64::new(dst_len) else {
+        let Some(count) = NonZeroUsize::new(dst_len) else {
             return;
         };
 
@@ -1774,20 +1774,20 @@ impl BindingMap {
 #[derive(Debug)]
 pub struct Buffer {
     id: BufferId,
-    size: u64,
+    size: usize,
     usage: BufferUsage,
     flags: UsageFlags,
     resources: Arc<Resources>,
 }
 
 impl Buffer {
-    pub fn size(&self) -> u64 {
+    pub fn size(&self) -> usize {
         self.size
     }
 
     pub fn slice<T>(&self, range: T) -> BufferSlice<'_>
     where
-        T: RangeBounds<u64>,
+        T: RangeBounds<usize>,
     {
         let start = match range.start_bound() {
             Bound::Included(index) => *index,
@@ -1853,7 +1853,7 @@ impl Drop for Buffer {
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct BufferDescriptor {
-    pub size: u64,
+    pub size: usize,
     pub usage: BufferUsage,
     pub flags: UsageFlags,
 }
@@ -1872,8 +1872,8 @@ pub trait IntoBufferSlice {
 #[derive(Copy, Clone, Debug)]
 pub struct BufferSlice<'a> {
     buffer: &'a Buffer,
-    start: u64,
-    end: u64,
+    start: usize,
+    end: usize,
 }
 
 impl<'a> IntoBufferSlice for BufferSlice<'a> {
@@ -2193,8 +2193,8 @@ impl<'a, 'b> RenderPass<'a, 'b> {
         assert!(indirect_buffer.buffer.usage.contains(BufferUsage::INDIRECT));
 
         let len = indirect_buffer.end - indirect_buffer.start;
-        assert_eq!(len % size_of::<DrawIndirectCommand>() as u64, 0);
-        let count = len / size_of::<DrawIndirectCommand>() as u64;
+        assert_eq!(len % size_of::<DrawIndirectCommand>(), 0);
+        let count = len / size_of::<DrawIndirectCommand>();
 
         self.ctx
             .executor
@@ -2233,8 +2233,8 @@ impl<'a, 'b> RenderPass<'a, 'b> {
         assert!(indirect_buffer.buffer.usage.contains(BufferUsage::INDIRECT));
 
         let len = indirect_buffer.end - indirect_buffer.start;
-        assert_eq!(len % size_of::<DrawIndexedIndirectCommand>() as u64, 0);
-        let count = len / size_of::<DrawIndexedIndirectCommand>() as u64;
+        assert_eq!(len % size_of::<DrawIndexedIndirectCommand>(), 0);
+        let count = len / size_of::<DrawIndexedIndirectCommand>();
 
         self.ctx
             .executor
@@ -2437,14 +2437,14 @@ struct DrawIndexed {
 #[derive(Clone, Debug)]
 struct DrawIndirect {
     buffer: BufferId,
-    offset: u64,
+    offset: usize,
     count: u32,
 }
 
 #[derive(Clone, Debug)]
 struct DrawIndexedIndirect {
     buffer: BufferId,
-    offset: u64,
+    offset: usize,
     count: u32,
 }
 

@@ -6,10 +6,10 @@ pub use buddy::BuddyAllocator;
 use game_tracing::trace_span;
 
 use std::alloc::Layout;
-use std::num::NonZeroU64;
+use std::num::NonZeroUsize;
 use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 use bitflags::bitflags;
 use thiserror::Error;
@@ -29,8 +29,8 @@ pub enum AllocError {
 
 #[derive(Debug)]
 struct Heap {
-    size: u64,
-    used: AtomicU64,
+    size: usize,
+    used: AtomicUsize,
 }
 
 #[derive(Clone, Debug)]
@@ -45,7 +45,7 @@ impl MemoryManager {
             .iter()
             .map(|heap| Heap {
                 size: heap.size,
-                used: AtomicU64::new(0),
+                used: AtomicUsize::new(0),
             })
             .collect();
 
@@ -60,7 +60,7 @@ impl MemoryManager {
 
     pub fn allocate(
         &self,
-        size: NonZeroU64,
+        size: NonZeroUsize,
         memory_type: u32,
         dedicated_for: Option<DedicatedResource<'_>>,
     ) -> Result<MemoryAllocation, AllocError> {
@@ -105,7 +105,7 @@ impl MemoryManager {
         })
     }
 
-    fn deallocate(&self, size: NonZeroU64, memory_type: u32) {
+    fn deallocate(&self, size: NonZeroUsize, memory_type: u32) {
         let _span = trace_span!("MemoryManager::deallocate").entered();
 
         let typ = &self.inner.properties.types[memory_type as usize];
@@ -129,7 +129,7 @@ struct MemoryManagerInner {
 pub struct MemoryAllocation {
     manager: MemoryManager,
     memory: DeviceMemory,
-    size: NonZeroU64,
+    size: NonZeroUsize,
     memory_type: u32,
 }
 

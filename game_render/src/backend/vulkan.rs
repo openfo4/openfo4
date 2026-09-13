@@ -6,7 +6,7 @@ use std::borrow::Cow;
 use std::ffi::{CStr, CString, c_void};
 use std::fmt::{self, Debug, Display, Formatter};
 use std::marker::PhantomData;
-use std::num::{NonZeroU32, NonZeroU64};
+use std::num::{NonZeroU32, NonZeroUsize};
 use std::ops::{Bound, Deref, Range, RangeBounds};
 use std::ptr::{NonNull, null_mut};
 use std::sync::Arc;
@@ -54,6 +54,9 @@ const APPLICATION_NAME: Option<&CStr> = None;
 const APPLICATION_VERSION: u32 = 0;
 const ENGINE_NAME: Option<&CStr> = None;
 const ENGINE_VERSION: u32 = 0;
+
+// Let us freely cast between usize and `vk::DeviceSize`.
+const _: () = assert!(size_of::<usize>() == size_of::<vk::DeviceSize>());
 
 #[derive(Copy, Clone, Debug, Default)]
 struct InstanceLayers {
@@ -738,7 +741,7 @@ impl Adapter {
 
                 MemoryHeap {
                     id: id as u32,
-                    size: heap.size,
+                    size: heap.size.try_into().unwrap_or(usize::MAX),
                     flags,
                 }
             })
@@ -783,12 +786,15 @@ impl Adapter {
             })
             .collect();
 
+        let max_memory_allocation_size = limits
+            .max_memory_allocation_size
+            .try_into()
+            .unwrap_or(usize::MAX);
+
         AdapterMemoryProperties {
             heaps,
             types,
-            max_allocation_size: unsafe {
-                NonZeroU64::new_unchecked(limits.max_memory_allocation_size)
-            },
+            max_allocation_size: unsafe { NonZeroUsize::new_unchecked(max_memory_allocation_size) },
         }
     }
 
@@ -1223,7 +1229,7 @@ impl Device {
     }
 
     /// Creates a new [`Buffer`] with the given size and usage flags.
-    pub fn create_buffer(&self, size: NonZeroU64, usage: BufferUsage) -> Result<Buffer, Error> {
+    pub fn create_buffer(&self, size: NonZeroUsize, usage: BufferUsage) -> Result<Buffer, Error> {
         let mut buffer_usage_flags = vk::BufferUsageFlags::empty();
         if usage.contains(BufferUsage::TRANSFER_SRC) {
             buffer_usage_flags |= vk::BufferUsageFlags::TRANSFER_SRC;
@@ -1251,7 +1257,7 @@ impl Device {
 
         let info = vk::BufferCreateInfo::default()
             // - `size` must be greater than 0.
-            .size(size.get())
+            .size(size.get() as vk::DeviceSize)
             // - `usage` must not be 0. (Unless `VkBufferUsageFlags2CreateInfo` is used.)
             // Checked above.
             .usage(buffer_usage_flags)
@@ -1269,7 +1275,7 @@ impl Device {
     /// Allocates some [`DeviceMemory`] from the memory type given by `memory_type_index`.
     pub fn allocate_memory(
         &self,
-        size: NonZeroU64,
+        size: NonZeroUsize,
         memory_type_index: u32,
         dedicated_for: Option<DedicatedResource<'_>>,
     ) -> Result<DeviceMemory, Error> {
@@ -1293,7 +1299,7 @@ impl Device {
 
         let mut info = vk::MemoryAllocateInfo::default()
             // - `allocationSize` must be greater than 0.
-            .allocation_size(size.get())
+            .allocation_size(size.get() as vk::DeviceSize)
             // - memoryTypeIndex must not indicate a memory type that reports `VK_MEMORY_PROPERTY_PROTECTED_BIT`.
             .memory_type_index(memory_type_index);
 
@@ -1302,14 +1308,14 @@ impl Device {
         }
 
         assert!(
-            size.get() <= u64::from(self.device.memory_properties.heaps[heap as usize].size),
+            size.get() <= self.device.memory_properties.heaps[heap as usize].size,
             "attempted to allocate more than heap size: heap size = {}, allocation = {}",
             self.device.memory_properties.heaps[heap as usize].size,
             size,
         );
 
         assert!(
-            size.get() <= self.device.limits.max_memory_allocation_size,
+            size.get() as vk::DeviceSize <= self.device.limits.max_memory_allocation_size,
             "attempted to allocate ({}) more than max_memory_allocation_size ({})",
             size,
             self.device.limits.max_memory_allocation_size,
@@ -1381,8 +1387,9 @@ impl Device {
         // - The `alignment` member is a power of two.
         debug_assert!(req.memory_requirements.alignment.is_power_of_two());
 
-        let size = unsafe { NonZeroU64::new_unchecked(req.memory_requirements.size) };
-        let align = unsafe { NonZeroU64::new_unchecked(req.memory_requirements.alignment) };
+        let size = unsafe { NonZeroUsize::new_unchecked(req.memory_requirements.size as usize) };
+        let align =
+            unsafe { NonZeroUsize::new_unchecked(req.memory_requirements.alignment as usize) };
 
         // Bit `i` is set iff the memory type at index `i` is
         // supported for this buffer.
@@ -1466,8 +1473,8 @@ impl Device {
         };
 
         MemoryRequirements {
-            size: unsafe { NonZeroU64::new_unchecked(size) },
-            align: unsafe { NonZeroU64::new_unchecked(align) },
+            size: unsafe { NonZeroUsize::new_unchecked(size as usize) },
+            align: unsafe { NonZeroUsize::new_unchecked(align as usize) },
             memory_types,
             dedicated,
         }
@@ -1513,7 +1520,7 @@ impl Device {
             // - `buffer` must not have been created with any sparse memory binding flags.
             .buffer(buffer.buffer)
             .memory(memory.memory.memory)
-            .memory_offset(memory.offset);
+            .memory_offset(memory.offset as vk::DeviceSize);
 
         unsafe {
             self.device.bind_buffer_memory2(&[info])?;
@@ -1559,7 +1566,7 @@ impl Device {
             // - `image` must not have been created with any sparse memory binding flags.
             .image(texture.image)
             .memory(memory.memory.memory)
-            .memory_offset(memory.offset);
+            .memory_offset(memory.offset as vk::DeviceSize);
 
         unsafe {
             self.device.bind_image_memory2(&[info])?;
@@ -3270,10 +3277,10 @@ impl<'a> CommandEncoder<'a> {
     pub unsafe fn copy_buffer_to_buffer(
         &mut self,
         src: &Buffer,
-        src_offset: u64,
+        src_offset: usize,
         dst: &Buffer,
-        dst_offset: u64,
-        count: u64,
+        dst_offset: usize,
+        count: usize,
     ) {
         assert!(self.queue_caps.contains(QueueCapabilities::TRANSFER));
 
@@ -3311,10 +3318,10 @@ impl<'a> CommandEncoder<'a> {
         }
 
         let region = vk::BufferCopy::default()
-            .src_offset(src_offset)
-            .dst_offset(dst_offset)
+            .src_offset(src_offset as vk::DeviceSize)
+            .dst_offset(dst_offset as vk::DeviceSize)
             // - `size` must be greater than 0.
-            .size(count);
+            .size(count as vk::DeviceSize);
 
         unsafe {
             self.device
@@ -3351,7 +3358,7 @@ impl<'a> CommandEncoder<'a> {
         // https://docs.vulkan.org/spec/latest/chapters/resources.html#resources-image-mip-level-sizing
         let dst_size = UVec2::max(UVec2::ONE, dst.size >> mip_level);
 
-        let bytes_to_copy = src.layout.format.storage_size(dst_size) as u64;
+        let bytes_to_copy = src.layout.format.storage_size(dst_size);
         assert!(src.buffer.size > src.offset);
         assert!(src.buffer.size - src.offset >= bytes_to_copy);
 
@@ -3368,7 +3375,7 @@ impl<'a> CommandEncoder<'a> {
             .layer_count(1);
 
         let region = vk::BufferImageCopy2::default()
-            .buffer_offset(src.offset)
+            .buffer_offset(src.offset as vk::DeviceSize)
             // - `bufferRowLength` must be 0, or greater than or equal to `width` of `imageExtent`.
             // We use a value of 0, which indicates that the source buffer is tightly packed.
             .buffer_row_length(0)
@@ -3718,8 +3725,8 @@ impl<'a> CommandEncoder<'a> {
 
             let barrier = vk::BufferMemoryBarrier2::default()
                 .buffer(barrier.buffer.buffer)
-                .offset(barrier.offset)
-                .size(barrier.size)
+                .offset(barrier.offset as vk::DeviceSize)
+                .size(barrier.size as vk::DeviceSize)
                 .src_access_mask(src_access_flags)
                 .dst_access_mask(dst_access_flags)
                 .src_stage_mask(src_stage_mask)
@@ -3889,13 +3896,13 @@ impl<'encoder, 'resources> RenderPass<'encoder, 'resources> {
                 .contains(vk::BufferUsageFlags::INDEX_BUFFER)
         );
 
-        assert_eq!(buffer.len() % u64::from(format.size()), 0);
+        assert_eq!(buffer.len() % usize::from(format.size()), 0);
 
         unsafe {
             self.encoder.device.device.cmd_bind_index_buffer(
                 self.encoder.buffer,
                 buffer.buffer.buffer,
-                buffer.view.start,
+                buffer.view.start as vk::DeviceSize,
                 format.into(),
             );
         }
@@ -3956,7 +3963,7 @@ impl<'encoder, 'resources> RenderPass<'encoder, 'resources> {
     /// Dispatches indirect draw commands from the given `buffer`.
     ///
     /// <https://registry.khronos.org/vulkan/specs/latest/man/html/vkCmdDrawIndirect.html>
-    pub fn draw_indirect(&mut self, buffer: &Buffer, offset: u64, draw_count: u32, stride: u32) {
+    pub fn draw_indirect(&mut self, buffer: &Buffer, offset: usize, draw_count: u32, stride: u32) {
         assert!(
             buffer
                 .usages
@@ -3964,13 +3971,13 @@ impl<'encoder, 'resources> RenderPass<'encoder, 'resources> {
         );
 
         assert!(offset <= buffer.size);
-        assert!(offset + u64::from(draw_count) * u64::from(stride) <= buffer.size);
+        assert!(offset + draw_count as usize * stride as usize <= buffer.size);
 
         unsafe {
             self.encoder.device.cmd_draw_indirect(
                 self.encoder.buffer,
                 buffer.buffer,
-                offset,
+                offset as vk::DeviceSize,
                 draw_count,
                 stride,
             );
@@ -3981,7 +3988,7 @@ impl<'encoder, 'resources> RenderPass<'encoder, 'resources> {
     pub fn draw_indexed_indirect(
         &mut self,
         buffer: &Buffer,
-        offset: u64,
+        offset: usize,
         draw_count: u32,
         stride: u32,
     ) {
@@ -3992,13 +3999,13 @@ impl<'encoder, 'resources> RenderPass<'encoder, 'resources> {
         );
 
         assert!(offset <= buffer.size);
-        assert!(offset + u64::from(draw_count) * u64::from(stride) <= buffer.size);
+        assert!(offset + draw_count as usize * stride as usize <= buffer.size);
 
         unsafe {
             self.encoder.device.cmd_draw_indexed_indirect(
                 self.encoder.buffer,
                 buffer.buffer,
-                offset,
+                offset as vk::DeviceSize,
                 draw_count,
                 stride,
             );
@@ -4044,7 +4051,7 @@ impl<'encoder, 'resources> RenderPass<'encoder, 'resources> {
     pub fn draw_mesh_tasks_indirect(
         &mut self,
         buffer: &Buffer,
-        offset: u64,
+        offset: usize,
         draw_count: u32,
         stride: u32,
     ) {
@@ -4056,7 +4063,7 @@ impl<'encoder, 'resources> RenderPass<'encoder, 'resources> {
             device.cmd_draw_mesh_tasks_indirect(
                 self.encoder.buffer,
                 buffer.buffer,
-                offset,
+                offset as vk::DeviceSize,
                 draw_count,
                 stride,
             );
@@ -4067,9 +4074,9 @@ impl<'encoder, 'resources> RenderPass<'encoder, 'resources> {
     pub fn draw_mesh_tasks_indirect_count(
         &mut self,
         buffer: &Buffer,
-        offset: u64,
+        offset: usize,
         count_buffer: &Buffer,
-        count_buffer_offset: u64,
+        count_buffer_offset: usize,
         max_draw_count: u32,
         stride: u32,
     ) {
@@ -4081,9 +4088,9 @@ impl<'encoder, 'resources> RenderPass<'encoder, 'resources> {
             device.cmd_draw_mesh_tasks_indirect_count(
                 self.encoder.buffer,
                 buffer.buffer,
-                offset,
+                offset as vk::DeviceSize,
                 count_buffer.buffer,
-                count_buffer_offset,
+                count_buffer_offset as vk::DeviceSize,
                 max_draw_count,
                 stride,
             );
@@ -4438,14 +4445,14 @@ impl<'a> Drop for TextureView<'a> {
 pub struct Buffer {
     device: Arc<DeviceShared>,
     buffer: vk::Buffer,
-    size: u64,
+    size: usize,
     usages: vk::BufferUsageFlags,
 }
 
 impl Buffer {
     pub fn slice<R>(&self, range: R) -> BufferView<'_>
     where
-        R: RangeBounds<u64>,
+        R: RangeBounds<usize>,
     {
         let start = match range.start_bound() {
             Bound::Included(start) => *start,
@@ -4482,7 +4489,7 @@ impl Drop for Buffer {
 pub struct DeviceMemory {
     device: Arc<DeviceShared>,
     memory: vk::DeviceMemory,
-    size: NonZeroU64,
+    size: NonZeroUsize,
     flags: MemoryTypeFlags,
     memory_type: u32,
     is_mapped: bool,
@@ -4491,7 +4498,7 @@ pub struct DeviceMemory {
 impl DeviceMemory {
     pub fn slice<R>(&self, range: R) -> DeviceMemorySlice<'_>
     where
-        R: RangeBounds<u64>,
+        R: RangeBounds<usize>,
     {
         let (offset, size) = range.into_offset_size(self.size.get());
 
@@ -4511,8 +4518,12 @@ impl DeviceMemory {
         assert!(self.flags.contains(MemoryTypeFlags::HOST_VISIBLE));
 
         let ptr = unsafe {
-            self.device
-                .map_memory(self.memory, 0, self.size.get(), vk::MemoryMapFlags::empty())?
+            self.device.map_memory(
+                self.memory,
+                0,
+                self.size.get() as vk::DeviceSize,
+                vk::MemoryMapFlags::empty(),
+            )?
         };
 
         self.is_mapped = true;
@@ -4581,8 +4592,8 @@ impl Drop for DeviceMemory {
 
 pub struct DeviceMemorySlice<'a> {
     memory: &'a DeviceMemory,
-    offset: u64,
-    size: u64,
+    offset: usize,
+    size: usize,
 }
 
 impl<'a> DeviceMemorySlice<'a> {}
@@ -4755,8 +4766,8 @@ impl<'a> DescriptorSet<'a> {
                     for buffer in buffers {
                         let info = vk::DescriptorBufferInfo::default()
                             .buffer(buffer.buffer().buffer)
-                            .offset(buffer.offset())
-                            .range(buffer.len());
+                            .offset(buffer.offset() as vk::DeviceSize)
+                            .range(buffer.len() as vk::DeviceSize);
 
                         infos.push(Info { buffer: info });
                     }
@@ -5680,14 +5691,14 @@ impl Display for DeviceFeatures {
 }
 
 trait RangeBoundsExt {
-    fn into_offset_size(self, upper_bound: u64) -> (u64, u64);
+    fn into_offset_size(self, upper_bound: usize) -> (usize, usize);
 }
 
 impl<T> RangeBoundsExt for T
 where
-    T: RangeBounds<u64>,
+    T: RangeBounds<usize>,
 {
-    fn into_offset_size(self, upper_bound: u64) -> (u64, u64) {
+    fn into_offset_size(self, upper_bound: usize) -> (usize, usize) {
         let start = match self.start_bound() {
             Bound::Included(start) => *start,
             Bound::Excluded(start) => *start + 1,

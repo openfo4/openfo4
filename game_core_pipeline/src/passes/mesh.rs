@@ -137,7 +137,7 @@ impl MeshState {
                 joint_indices_offset,
                 joint_weights_offset,
                 indices_offset: indices_offset,
-                indices_count: indices.len() as u64,
+                indices_count: indices.len(),
                 vertex_count,
                 min_bone_count: compute_skinned_mesh_bone_count(mesh),
             })
@@ -170,7 +170,7 @@ impl MeshState {
                 tangents_offset,
                 colors_offset,
                 indices_offset,
-                indices_count: indices.len() as u64,
+                indices_count: indices.len(),
                 offsets,
             })
         };
@@ -376,27 +376,27 @@ pub enum MeshData {
 
 #[derive(Copy, Clone, Debug)]
 pub struct UnskinnedMeshData {
-    positions_offset: u64,
-    normals_offset: u64,
-    uvs_offset: u64,
-    tangents_offset: u64,
-    colors_offset: u64,
-    indices_offset: u64,
-    indices_count: u64,
+    positions_offset: usize,
+    normals_offset: usize,
+    uvs_offset: usize,
+    tangents_offset: usize,
+    colors_offset: usize,
+    indices_offset: usize,
+    indices_count: usize,
     offsets: SlabIndex,
 }
 
 #[derive(Copy, Clone, Debug)]
 pub struct SkinnedMeshData {
-    pre_skinned_positions_offset: u64,
-    pre_skinned_normals_offset: u64,
-    pre_skinned_tangents_offset: u64,
-    uvs_offset: u64,
-    colors_offset: u64,
-    joint_indices_offset: u64,
-    joint_weights_offset: u64,
-    indices_offset: u64,
-    indices_count: u64,
+    pre_skinned_positions_offset: usize,
+    pre_skinned_normals_offset: usize,
+    pre_skinned_tangents_offset: usize,
+    uvs_offset: usize,
+    colors_offset: usize,
+    joint_indices_offset: usize,
+    joint_weights_offset: usize,
+    indices_offset: usize,
+    indices_count: usize,
 
     vertex_count: usize,
     min_bone_count: u8,
@@ -454,11 +454,11 @@ impl GpuBuffer for SkinInstance {
 
 #[derive(Clone, Debug)]
 pub struct SkinInstanceData {
-    positions_offset: u64,
-    normals_offset: u64,
-    tangents_offset: u64,
+    positions_offset: usize,
+    normals_offset: usize,
+    tangents_offset: usize,
     index: SlabIndex,
-    bones_offset: u64,
+    bones_offset: usize,
     min_bone_count: u8,
     pub vertex_count: u32,
     mesh_offsets: SlabIndex,

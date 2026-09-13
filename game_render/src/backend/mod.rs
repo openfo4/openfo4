@@ -2,7 +2,7 @@ pub mod allocator;
 pub mod descriptors;
 pub mod vulkan;
 
-use std::num::{NonZeroU32, NonZeroU64};
+use std::num::{NonZeroU32, NonZeroUsize};
 use std::ops::Range;
 
 use ash::vk;
@@ -38,13 +38,13 @@ pub struct AdapterMemoryProperties {
     pub heaps: Vec<MemoryHeap>,
     pub types: Vec<MemoryType>,
     /// Maximum size of a single allocation.
-    pub max_allocation_size: NonZeroU64,
+    pub max_allocation_size: NonZeroUsize,
 }
 
 #[derive(Copy, Clone, Debug)]
 pub struct MemoryHeap {
     pub id: u32,
-    pub size: u64,
+    pub size: usize,
     pub flags: MemoryHeapFlags,
 }
 
@@ -584,14 +584,14 @@ bitflags! {
 
 #[derive(Clone, Debug)]
 pub struct MemoryRequirements {
-    pub size: NonZeroU64,
-    pub align: NonZeroU64,
+    pub size: NonZeroUsize,
+    pub align: NonZeroUsize,
     pub memory_types: Vec<u32>,
     pub dedicated: DedicatedAllocation,
 }
 
 impl MemoryRequirements {
-    pub fn padding_needed(&self) -> u64 {
+    pub fn padding_needed(&self) -> usize {
         let size = self.size.get();
         let align = self.align.get();
         if size % align == 0 {
@@ -665,7 +665,7 @@ pub enum WriteDescriptorResource<'a> {
 #[derive(Clone, Debug)]
 pub struct BufferView<'a> {
     buffer: &'a Buffer,
-    view: Range<u64>,
+    view: Range<usize>,
 }
 
 impl<'a> BufferView<'a> {
@@ -673,11 +673,11 @@ impl<'a> BufferView<'a> {
         self.buffer
     }
 
-    pub fn offset(&self) -> u64 {
+    pub fn offset(&self) -> usize {
         self.view.start
     }
 
-    pub fn len(&self) -> u64 {
+    pub fn len(&self) -> usize {
         self.view.end - self.view.start
     }
 }
@@ -698,8 +698,8 @@ pub struct PipelineBarriers<'a> {
 #[derive(Debug)]
 pub struct BufferBarrier<'a> {
     pub buffer: &'a Buffer,
-    pub offset: u64,
-    pub size: u64,
+    pub offset: usize,
+    pub size: usize,
     pub src_access: AccessFlags,
     pub dst_access: AccessFlags,
 }
@@ -860,7 +860,7 @@ pub enum TextureLayout {
 #[derive(Debug)]
 pub struct CopyBuffer<'a> {
     pub buffer: &'a Buffer,
-    pub offset: u64,
+    pub offset: usize,
     pub layout: ImageDataLayout,
 }
 

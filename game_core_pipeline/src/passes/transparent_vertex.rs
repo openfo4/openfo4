@@ -282,7 +282,7 @@ impl TransparentVertexPass {
 
         // Size for at least four layers if every pixel is covered.
         // The size of one element is 16 bytes.
-        let abuffer_size = size.x as u64 * size.y as u64 * 4 * 16;
+        let abuffer_size = size.x as usize * size.y as usize * 4 * 16;
 
         if state.mesh.instances.num_translucent == 0 || size.x == 0 || size.y == 0 {
             return;
@@ -300,8 +300,8 @@ impl TransparentVertexPass {
                 flags: UsageFlags::empty(),
             });
             let draws = ctx.queue.create_buffer(&BufferDescriptor {
-                size: state.mesh.instances.num_translucent as u64
-                    * size_of::<DrawIndexedIndirectCommand>() as u64,
+                size: state.mesh.instances.num_translucent as usize
+                    * size_of::<DrawIndexedIndirectCommand>(),
                 usage: BufferUsage::STORAGE | BufferUsage::INDIRECT,
                 flags: UsageFlags::empty(),
             });

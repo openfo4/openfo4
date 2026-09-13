@@ -147,7 +147,7 @@ impl OpaqueVertexForwardPass {
                 .opaque
                 .buffer(ctx.queue)
                 .size()
-                .max(size_of::<Instance>() as u64),
+                .max(size_of::<Instance>()),
             usage: BufferUsage::STORAGE,
             flags: UsageFlags::empty(),
         });
@@ -161,8 +161,7 @@ impl OpaqueVertexForwardPass {
 
             let instances_in = state.mesh.instances.opaque.buffer(ctx.queue);
             let draws = ctx.queue.create_buffer(&BufferDescriptor {
-                size: state.mesh.instances.num_opaque as u64
-                    * size_of::<DrawIndirectCommand>() as u64,
+                size: state.mesh.instances.num_opaque as usize * size_of::<DrawIndirectCommand>(),
                 usage: BufferUsage::STORAGE | BufferUsage::INDIRECT,
                 flags: UsageFlags::empty(),
             });
@@ -235,7 +234,7 @@ impl OpaqueVertexForwardPass {
                 .transparent
                 .buffer(ctx.queue)
                 .size()
-                .max(size_of::<Instance>() as u64),
+                .max(size_of::<Instance>()),
             flags: UsageFlags::empty(),
             usage: BufferUsage::STORAGE,
         });
@@ -245,8 +244,8 @@ impl OpaqueVertexForwardPass {
             let instance_in = state.mesh.instances.transparent.buffer(ctx.queue);
 
             let draws = ctx.queue.create_buffer(&BufferDescriptor {
-                size: state.mesh.instances.num_transparent as u64
-                    * size_of::<DrawIndirectCommand>() as u64,
+                size: state.mesh.instances.num_transparent as usize
+                    * size_of::<DrawIndirectCommand>(),
                 usage: BufferUsage::STORAGE | BufferUsage::INDIRECT,
                 flags: UsageFlags::empty(),
             });

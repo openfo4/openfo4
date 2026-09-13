@@ -1,4 +1,4 @@
-use std::num::NonZeroU64;
+use std::num::NonZeroUsize;
 
 use bumpalo::Bump;
 use game_common::utils::exclusive::Exclusive;
@@ -462,7 +462,7 @@ impl Command {
 pub struct WriteBuffer {
     pub buffer: BufferId,
     /// Offset in the buffer object.
-    pub offset: u64,
+    pub offset: usize,
     /// Starting index into the shared staging memory pool
     pub staging_memory_offset: usize,
     /// Number of bytes to copy.
@@ -472,16 +472,16 @@ pub struct WriteBuffer {
 #[derive(Copy, Clone, Debug)]
 pub struct CopyBufferToBuffer {
     pub src: BufferId,
-    pub src_offset: u64,
+    pub src_offset: usize,
     pub dst: BufferId,
-    pub dst_offset: u64,
-    pub count: NonZeroU64,
+    pub dst_offset: usize,
+    pub count: NonZeroUsize,
 }
 
 #[derive(Copy, Clone, Debug)]
 pub struct CopyBufferToTexture {
     pub src: BufferId,
-    pub src_offset: u64,
+    pub src_offset: usize,
     pub layout: ImageDataLayout,
     pub dst: TextureId,
     pub dst_mip_level: u32,

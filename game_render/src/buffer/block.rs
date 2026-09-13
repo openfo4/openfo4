@@ -159,7 +159,7 @@ impl BlockBuffer {
         let _span = trace_span!("BlockBuffer::buffer").entered();
 
         let buffer = self.buffer.get_or_insert_with(|| {
-            let size = (self.block_size * self.buffer_size.max(1)) as u64;
+            let size = self.block_size * self.buffer_size.max(1);
 
             queue.create_buffer(&BufferDescriptor {
                 flags: UsageFlags::empty(),
@@ -171,7 +171,7 @@ impl BlockBuffer {
         for cmd in self.writes_queued.drain(..) {
             match cmd {
                 BufferWrite::BufferExpand => {
-                    let size = (self.block_size * self.buffer_size) as u64;
+                    let size = self.block_size * self.buffer_size;
 
                     let new_buffer = queue.create_buffer(&BufferDescriptor {
                         size,
@@ -184,10 +184,10 @@ impl BlockBuffer {
                     *buffer = new_buffer;
                 }
                 BufferWrite::BufferCopy { src, dst } => {
-                    let src_start = src as u64 * self.block_size as u64;
-                    let src_end = (src as u64 + 1) * self.block_size as u64;
-                    let dst_start = dst as u64 * self.block_size as u64;
-                    let dst_end = (dst as u64 + 1) * self.block_size as u64;
+                    let src_start = src as usize * self.block_size;
+                    let src_end = (src as usize + 1) * self.block_size;
+                    let dst_start = dst as usize * self.block_size;
+                    let dst_end = (dst as usize + 1) * self.block_size;
 
                     queue.copy_buffer_to_buffer(
                         buffer.slice(src_start..src_end),
@@ -195,8 +195,8 @@ impl BlockBuffer {
                     );
                 }
                 BufferWrite::Data(index, bytes) => {
-                    let offset = self.block_size as u64 * index as u64;
-                    queue.write_buffer(buffer.slice(offset..offset + bytes.len() as u64), &bytes);
+                    let offset = self.block_size * index as usize;
+                    queue.write_buffer(buffer.slice(offset..offset + bytes.len()), &bytes);
                 }
             }
         }

@@ -310,5 +310,5 @@ pub struct MaterialState {
 pub struct TerrainMaterialState {
     pub materials: Vec<SlabIndex>,
     pub textures: Vec<TextureSlabIndex>,
-    pub layer_index: u64,
+    pub layer_index: usize,
 }

@@ -112,7 +112,7 @@ impl Node for UiPass {
         let indirect_buffer = state
             .draw_calls
             .buffer(ctx.queue)
-            .slice(..(state.meshes.len() * size_of::<DrawIndexedIndirectCommand>()) as u64);
+            .slice(..state.meshes.len() * size_of::<DrawIndexedIndirectCommand>());
 
         let mut pass = pipeline.prepare(ctx.queue);
         pass.set("viewport_size", ShaderStages::VERTEX, &viewport_size);
@@ -248,8 +248,8 @@ impl State {
 }
 
 struct MeshState {
-    vertex_buffer: u64,
-    index_buffer: u64,
+    vertex_buffer: usize,
+    index_buffer: usize,
     instance: SlabIndex,
     draw_call: SlabIndex,
 }

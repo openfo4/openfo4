@@ -1,5 +1,5 @@
 use std::alloc::Layout;
-use std::num::NonZeroU64;
+use std::num::NonZeroUsize;
 use std::ptr::NonNull;
 use std::sync::Arc;
 
@@ -17,8 +17,8 @@ use crate::backend::vulkan::{Device, DeviceMemorySlice};
 use crate::backend::{DedicatedResource, MemoryRequirements, MemoryTypeFlags, TextureDescriptor};
 use crate::statistics::{AllocationKind, MemoryAlloc, MemoryBlock, Statistics};
 
-const MIN_PAGE_SIZE: NonZeroU64 = NonZeroU64::new(1 << 20).unwrap();
-const GROWTH_FACTOR: NonZeroU64 = NonZeroU64::new(2).unwrap();
+const MIN_PAGE_SIZE: NonZeroUsize = NonZeroUsize::new(1 << 20).unwrap();
+const GROWTH_FACTOR: NonZeroUsize = NonZeroUsize::new(2).unwrap();
 
 #[derive(Clone, Debug, Error)]
 #[error("allocation {req:?} with flags {flags:?} failed")]
@@ -48,7 +48,7 @@ impl MemoryAllocator {
     }
 
     pub fn create_buffer(&mut self, descriptor: &BufferDescriptor) -> BufferAlloc {
-        let size = NonZeroU64::new(descriptor.size).unwrap();
+        let size = NonZeroUsize::new(descriptor.size).unwrap();
 
         let mut buffer = self.device.create_buffer(size, descriptor.usage).unwrap();
         let req = self.device.buffer_memory_requirements(&buffer);
@@ -69,12 +69,12 @@ impl MemoryAllocator {
 
         let mut stats = self.statistics.memory.write();
         let block = &mut stats.blocks[allocation.stats_block_index];
-        block.used += allocation.size as u64;
+        block.used += allocation.size;
         block.allocs.insert(
-            allocation.region.offset as u64,
+            allocation.region.offset,
             MemoryAlloc {
-                offset: allocation.region.offset as u64,
-                size: allocation.size as u64,
+                offset: allocation.region.offset,
+                size: allocation.size,
                 kind: AllocationKind::Buffer,
             },
         );
@@ -102,12 +102,12 @@ impl MemoryAllocator {
 
         let mut stats = self.statistics.memory.write();
         let block = &mut stats.blocks[allocation.stats_block_index];
-        block.used += allocation.size as u64;
+        block.used += allocation.size;
         block.allocs.insert(
-            allocation.region.offset as u64,
+            allocation.region.offset,
             MemoryAlloc {
-                offset: allocation.region.offset as u64,
-                size: allocation.size as u64,
+                offset: allocation.region.offset,
+                size: allocation.size,
                 kind: AllocationKind::Texture,
             },
         );
@@ -284,8 +284,8 @@ impl MemoryAllocator {
         {
             let mut stats = self.statistics.memory.write();
             let block = &mut stats.blocks[allocation.stats_block_index];
-            block.used -= allocation.size as u64;
-            block.allocs.remove(&(allocation.region.offset as u64));
+            block.used -= allocation.size;
+            block.allocs.remove(&allocation.region.offset);
         }
 
         match allocation.strategy {
@@ -330,7 +330,7 @@ unsafe impl Sync for Allocation {}
 impl Allocation {
     pub fn memory(&self) -> DeviceMemorySlice<'_> {
         self.memory
-            .slice(self.region.offset as u64..self.region.offset as u64 + self.region.size as u64)
+            .slice(self.region.offset..self.region.offset + self.region.size)
     }
 
     pub fn flags(&self) -> MemoryTypeFlags {
@@ -377,7 +377,7 @@ enum Strategy {
 struct PagePool {
     pages: Slab<Page>,
     memory_type: u32,
-    next_page_size: NonZeroU64,
+    next_page_size: NonZeroUsize,
 }
 
 impl PagePool {
@@ -419,7 +419,7 @@ impl PagePool {
             });
         }
 
-        let size_padded = NonZeroU64::new(layout.pad_to_align().size() as u64).unwrap();
+        let size_padded = NonZeroUsize::new(layout.pad_to_align().size()).unwrap();
         let page_size = self
             .next_page_size
             .max(size_padded)
@@ -549,10 +549,10 @@ unsafe impl Send for PagePoolAllocation {}
 unsafe impl Sync for PagePoolAllocation {}
 
 /// Returns the previous power of two value.
-fn prev_power_of_two(x: NonZeroU64) -> NonZeroU64 {
+fn prev_power_of_two(x: NonZeroUsize) -> NonZeroUsize {
     // Note that this can never be zero, since 1 << n is always greater
     // than 0.
     // The subtraction cannot overflow, since `leading_zeroes` will never
     // return 64, since `x` is never 0. As such 63 - n where n < 64 is ok.
-    unsafe { NonZeroU64::new_unchecked(1 << (u64::BITS - 1) - x.leading_zeros()) }
+    unsafe { NonZeroUsize::new_unchecked(1 << (usize::BITS - 1) - x.leading_zeros()) }
 }

@@ -98,6 +98,7 @@ pub struct Mesh {
 
 #[derive(Copy, Clone, Debug)]
 pub struct Vertex {
+    /// The vertex position in viewport space.
     pub position: Vec2,
     pub uv: Vec2,
     pub color: Vec4,

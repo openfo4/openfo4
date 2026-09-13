@@ -60,7 +60,7 @@ const COLOR_TEXTURE: Rgba<u8> = Rgba([0x00, 0x00, 0xff, 0xff]);
 fn draw_block(size: UVec2, block: &MemoryBlock) -> ImageBuffer<Rgba<u8>, Vec<u8>> {
     let mut img = ImageBuffer::new(size.x, BLOCK_HEIGHT + PADDING_BETWEEN_BLOCKS);
 
-    let block_px = u64::from(BLOCK_HEIGHT) * u64::from(size.x);
+    let block_px = BLOCK_HEIGHT as usize * size.x as usize;
     let bytes_per_px = block.size.div_ceil(block_px);
 
     for x in 0..size.x {
@@ -89,7 +89,7 @@ fn draw_block(size: UVec2, block: &MemoryBlock) -> ImageBuffer<Rgba<u8>, Vec<u8>
     img
 }
 
-fn bytes_to_human_readable(mut bytes: u64) -> String {
+fn bytes_to_human_readable(mut bytes: usize) -> String {
     for unit in ["", "KiB"] {
         if bytes < 1024 {
             return format!("{} {}", bytes, unit);
