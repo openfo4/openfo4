@@ -20,6 +20,7 @@ use crate::terrain::TerrainMaterial;
 pub struct Entities {
     inner: Arc<Inner>,
     pub(super) sky: Arc<Mutex<SkyState>>,
+    pub(super) new_lut: Arc<Mutex<Option<MipImage>>>,
 }
 
 impl Entities {
@@ -38,6 +39,7 @@ impl Entities {
                     lights: Mutex::new(Arena::new()),
                 }),
                 sky: Arc::default(),
+                new_lut: Arc::default(),
             },
             rx,
         )
@@ -215,6 +217,10 @@ impl Entities {
             .events
             .send(Event::UpdateTransform(object.id, object.scene, transform))
             .ok();
+    }
+
+    pub fn set_lut(&self, lut: MipImage) {
+        *self.new_lut.lock() = Some(lut);
     }
 }
 

@@ -1,20 +1,25 @@
 use std::num::NonZeroU32;
+use std::sync::Arc;
 
 use game_common::components::Color;
 use game_render::api::{
     BindingResource, CommandQueue, DescriptorSetDescriptor, DescriptorSetEntry,
     DescriptorSetLayout, DescriptorSetLayoutDescriptor, FragmentStage, Pipeline,
     PipelineDescriptor, PipelineStage, RenderPassColorAttachment, RenderPassDescriptor, Sampler,
-    Texture, TextureViewDescriptor, VertexStage,
+    Texture, TextureRegion, TextureViewDescriptor, VertexStage,
 };
 use game_render::backend::{
     AddressMode, ColorTargetState, DescriptorBinding, DescriptorType, FilterMode, FrontFace,
-    LoadOp, PrimitiveTopology, SamplerDescriptor, ShaderStages, StoreOp, TextureFormat,
+    ImageDataLayout, LoadOp, PrimitiveTopology, SamplerDescriptor, ShaderStages, StoreOp,
+    TextureDescriptor, TextureFormat, TextureUsage,
 };
 use game_render::graph::{Node, RenderContext, SlotLabel};
 use game_render::pipeline_cache::{PipelineBuilder, PipelineCache};
 use game_render::shader::{Shader, ShaderConfig, ShaderLanguage, ShaderSource};
+use game_render::texture::MipImage;
 use game_tracing::trace_span;
+use glam::UVec2;
+use parking_lot::Mutex;
 
 const SHADER: &'static str = concat!(env!("CARGO_MANIFEST_DIR"), "/shaders/post_process.wgsl");
 
@@ -24,10 +29,17 @@ pub struct PostProcessPass {
     pipelines: PipelineCache<PostProcessPipelineBuilder>,
     src: SlotLabel,
     dst: SlotLabel,
+    new_lut: Arc<Mutex<Option<MipImage>>>,
+    lut: Mutex<Texture>,
 }
 
 impl PostProcessPass {
-    pub fn new(queue: &CommandQueue<'_>, src: SlotLabel, dst: SlotLabel) -> Self {
+    pub fn new(
+        queue: &CommandQueue<'_>,
+        src: SlotLabel,
+        dst: SlotLabel,
+        new_lut: Arc<Mutex<Option<MipImage>>>,
+    ) -> Self {
         let bind_group_layout =
             queue.create_descriptor_set_layout(&DescriptorSetLayoutDescriptor {
                 bindings: &[
@@ -41,6 +53,12 @@ impl PostProcessPass {
                         binding: 1,
                         visibility: ShaderStages::FRAGMENT,
                         kind: DescriptorType::Sampler,
+                        count: NonZeroU32::MIN,
+                    },
+                    DescriptorBinding {
+                        binding: 2,
+                        visibility: ShaderStages::FRAGMENT,
+                        kind: DescriptorType::Texture,
                         count: NonZeroU32::MIN,
                     },
                 ],
@@ -66,12 +84,31 @@ impl PostProcessPass {
             }],
         );
 
+        let lut = queue.create_texture(&TextureDescriptor {
+            size: UVec2::ONE,
+            mip_levels: 1,
+            format: TextureFormat::Rgba8Unorm,
+            usage: TextureUsage::TEXTURE_BINDING | TextureUsage::TRANSFER_DST,
+        });
+        queue.write_texture(
+            TextureRegion {
+                texture: &lut,
+                mip_level: 0,
+            },
+            &[0, 0, 0, 0],
+            ImageDataLayout {
+                format: TextureFormat::Rgba8Unorm,
+            },
+        );
+
         Self {
             bind_group_layout,
             sampler,
             pipelines,
             src,
             dst,
+            new_lut,
+            lut: Mutex::new(lut),
         }
     }
 }
@@ -79,6 +116,26 @@ impl PostProcessPass {
 impl Node for PostProcessPass {
     fn render(&self, ctx: &mut RenderContext<'_, '_>) {
         let _span = trace_span!("PostProcessPass::render").entered();
+
+        let mut lut = self.lut.lock();
+        if let Some(img) = self.new_lut.lock().take() {
+            *lut = ctx.queue.create_texture(&TextureDescriptor {
+                format: img.format(),
+                size: UVec2::new(img.root().width(), img.root().height()),
+                mip_levels: 1,
+                usage: TextureUsage::TEXTURE_BINDING | TextureUsage::TRANSFER_DST,
+            });
+            ctx.queue.write_texture(
+                TextureRegion {
+                    texture: &lut,
+                    mip_level: 0,
+                },
+                img.root().as_bytes(),
+                ImageDataLayout {
+                    format: img.format(),
+                },
+            );
+        }
 
         let input = ctx.read::<Texture>(self.src).unwrap().clone();
         let output = ctx.read::<Texture>(self.dst).unwrap().clone();
@@ -97,6 +154,12 @@ impl Node for PostProcessPass {
                 DescriptorSetEntry {
                     binding: 1,
                     resource: BindingResource::Sampler(&self.sampler),
+                },
+                DescriptorSetEntry {
+                    binding: 2,
+                    resource: BindingResource::Texture(
+                        &lut.create_view(&TextureViewDescriptor::default()),
+                    ),
                 },
             ],
         });

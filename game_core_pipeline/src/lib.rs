@@ -17,7 +17,13 @@ pub fn init(renderer: &mut Renderer) -> Entities {
     let (entities, rx) = Entities::new();
 
     renderer.with_command_queue_and_graph(|graph, queue| {
-        passes::init(graph, queue, rx, entities.sky.clone());
+        passes::init(
+            graph,
+            queue,
+            rx,
+            entities.sky.clone(),
+            entities.new_lut.clone(),
+        );
     });
 
     entities

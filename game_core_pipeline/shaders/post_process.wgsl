@@ -26,13 +26,16 @@ fn vs_main(in: VertexInput) -> VertexOutput {
 var t_texture: texture_2d<f32>;
 @group(0) @binding(1)
 var t_sampler: sampler;
+@group(0) @binding(2)
+var t_lut: texture_2d<f32>;
 
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     var color = textureSample(t_texture, t_sampler, in.uv).rgb;
 
     color = tonemap(color);
-    color = gamma_correct(color);
+    // The LUT is already gamma corrected.
+    color = fo4_lut(color);
 
     // Screen space dithering should happen after converting to gamma correction.
     // The bound output texture is already linear, so the GPU will not do a convertion
@@ -43,13 +46,27 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
 }
 
 fn tonemap(color: vec3<f32>) -> vec3<f32> {
-    // return color / (color + vec3(1.0));
-    return aces_fitted(color);
-    return uncharted2_tonemap_partial(color);
+    // TODO: Extract this value from the input texture.
+    let luminance = 0.125;
+    // TODO: Allow the camera to provide these values.
+    let gray_middle = 0.18;
+    let min_exposure = 1.6;
+    let max_expsure = 4.5;
+    let exposure = clamp(gray_middle / luminance, min_exposure, max_expsure);
+    return uncharted2_filmic(color * exposure);
 }
 
-fn uncharted2_tonemap_partial(x: vec3<f32>) -> vec3<f32>
-{
+// https://64.github.io/tonemapping/#uncharted-2
+fn uncharted2_filmic(v: vec3<f32>) -> vec3<f32> {
+    let exposure_bias = 2.0;
+    let curr = uncharted2_tonemap_partial(v * exposure_bias);
+
+    let W = vec3<f32>(11.2);
+    let white_scale = vec3<f32>(1.0) / uncharted2_tonemap_partial(W);
+    return curr * white_scale;
+}
+
+fn uncharted2_tonemap_partial(x: vec3<f32>) -> vec3<f32> {
     let A = 0.15f;
     let B = 0.50f;
     let C = 0.10f;
@@ -117,4 +134,32 @@ fn rtt_and_odt_fit(v: vec3<f32>) -> vec3<f32> {
     let a = v * (v + 0.0245786) - 0.000090537;
     let b = v * (0.983729 * v + 0.4329510) + 0.238081;
     return a/b;
+}
+
+fn fo4_lut(color: vec3<f32>) -> vec3<f32> {
+    var c = log2(color) * 0.454545;
+    c = exp2(c) * 0.937500 + 0.031250;
+    return sample_lut(t_lut, c);
+}
+
+fn sample_lut(lut: texture_2d<f32>, color: vec3<f32>) -> vec3<f32> {
+    // Our LUT texture is given as a 16*16x16 texture with the higher "layers"
+    // in the X dimension representing an increase in blue.
+    // Trilinearly interpolate by fetching a bilinear sample from two "layers"
+    // and interpolate between them.
+    // Once we support 3D textures we can remove all this in favor of simply
+    // sampling the 3D texture.
+    let r = min(color.r / 16.0, (1.0 - 16.0) / (1.0 - 256.0));
+    let b = color.b * 15.0;
+    let b_a = floor(b) / 16.0;
+    let b_b = max(floor(b) + 1, 1.0) / 16.0;
+    let b_s = fract(b);
+
+    let uv1 = vec2<f32>(r + b_a, color.g);
+    let uv2 = vec2<f32>(r + b_b, color.g);
+
+    let v1 = textureSample(lut, t_sampler, uv1).rgb;
+    let v2 = textureSample(lut, t_sampler, uv2).rgb;
+    let v = v1 * (1.0 - b_s) + v2 * b_s;
+    return v;
 }

@@ -21,6 +21,7 @@ use game_render::buffer::slab::{CompactSlabBuffer, SlabBuffer, SlabIndex};
 use game_render::buffer::suballocated::SubAllocatedGrowableBuffer;
 use game_render::buffer::texture_slab::{TextureSlab, TextureSlabIndex};
 use game_render::graph::{NodeLabel, RenderGraph, SlotFlags, SlotKind, SlotLabel};
+use game_render::texture::MipImage;
 use glam::{UVec2, Vec3};
 use parking_lot::Mutex;
 use post_process::PostProcessPass;
@@ -55,6 +56,7 @@ pub(crate) fn init(
     queue: &CommandQueue<'_>,
     events: Receiver<Event>,
     sky: Arc<Mutex<SkyState>>,
+    new_lut: Arc<Mutex<Option<MipImage>>>,
 ) {
     let state = Arc::new(Mutex::new(State::new(queue, sky)));
 
@@ -84,7 +86,7 @@ pub(crate) fn init(
         SlotFlags::READ | SlotFlags::WRITE,
     );
 
-    let post_process_pass = PostProcessPass::new(queue, HDR_TEXTURE, SlotLabel::SURFACE);
+    let post_process_pass = PostProcessPass::new(queue, HDR_TEXTURE, SlotLabel::SURFACE, new_lut);
     graph.add_node(POST_PROCESS_PASS, post_process_pass);
     graph.add_node_dependency(POST_PROCESS_PASS, TRANSPARENT_VERTEX_PASS);
     graph.add_slot_dependency(
