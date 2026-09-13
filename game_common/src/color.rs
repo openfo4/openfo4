@@ -1,5 +1,9 @@
 //! Color space conversion
 
+use std::ops::{Mul, MulAssign};
+
+use glam::FloatExt;
+
 /// A color in the standard sRGB color space.
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub struct Rgb {
@@ -232,5 +236,89 @@ fn hsl_to_hsv(hue: f32, saturation: f32, lightness: f32) -> Hsv {
         hue,
         saturation: hsv_saturation,
         value,
+    }
+}
+
+/// Linear RGB color.
+#[derive(Copy, Clone, Debug, PartialEq)]
+pub struct LinearRgb {
+    pub red: f32,
+    pub green: f32,
+    pub blue: f32,
+}
+
+impl LinearRgb {
+    pub const BLACK: Self = Self::from_rgb(0.0, 0.0, 0.0);
+    pub const WHITE: Self = Self::from_rgb(1.0, 1.0, 1.0);
+
+    /// Converts this color from linear to sRGB colorspace.
+    pub fn to_srgb(&self) -> Rgb {
+        Rgb {
+            red: linear_to_srgb(self.red),
+            green: linear_to_srgb(self.green),
+            blue: linear_to_srgb(self.blue),
+        }
+    }
+
+    /// Converts a color from sRGB to linear colorspace.
+    pub fn from_srgb(color: Rgb) -> Self {
+        Self {
+            red: srgb_to_linear(color.red),
+            green: srgb_to_linear(color.green),
+            blue: srgb_to_linear(color.blue),
+        }
+    }
+
+    pub fn lerp(self, other: Self, s: f32) -> Self {
+        Self {
+            red: self.red.lerp(other.red, s),
+            green: self.green.lerp(other.green, s),
+            blue: self.blue.lerp(other.blue, s),
+        }
+    }
+
+    const fn from_rgb(red: f32, green: f32, blue: f32) -> Self {
+        Self { red, green, blue }
+    }
+
+    pub const fn as_rgb(&self) -> [f32; 3] {
+        [self.red, self.green, self.blue]
+    }
+}
+
+impl Mul<f32> for LinearRgb {
+    type Output = Self;
+
+    fn mul(self, rhs: f32) -> Self::Output {
+        Self {
+            red: self.red * rhs,
+            green: self.green * rhs,
+            blue: self.blue * rhs,
+        }
+    }
+}
+
+impl MulAssign<f32> for LinearRgb {
+    fn mul_assign(&mut self, rhs: f32) {
+        *self = *self * rhs;
+    }
+}
+
+// sRGB transfer functions
+// https://en.wikipedia.org/wiki/SRGB#Transformation
+
+fn linear_to_srgb(color: f32) -> f32 {
+    if color <= 0.0031308 {
+        return color * 12.92;
+    } else {
+        return (f32::powf(color, 1.0 / 2.4) * 1.055) - 0.055;
+    }
+}
+
+fn srgb_to_linear(color: f32) -> f32 {
+    if color <= 0.04045 {
+        return color / 12.92;
+    } else {
+        return f32::powf((color + 0.055) / 1.055, 2.4);
     }
 }
