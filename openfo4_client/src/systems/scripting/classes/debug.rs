@@ -86,9 +86,7 @@ fn dump_alias_data(_caller: Caller<'_, State>, _quest: Object) {}
 /// ```text
 /// Function(ScriptObject akScript) native global
 /// ```
-fn dump_event_registrations(caller: Caller<'_, State>, ak_script: Object) -> Result<(), Error> {
-    todo!()
-}
+fn dump_event_registrations(_caller: Caller<'_, State>, _script: Object) {}
 
 /// `EnableAI`
 ///
@@ -306,15 +304,11 @@ fn trace_user(caller: Caller<'_, State>, _user_log: Object, text: Object, severi
 /// ```text
 /// Function(ObjectReference arRef) native global
 /// ```
-fn show_ref_position(caller: Caller<'_, State>, ar_ref: Object) -> Result<(), Error> {
-    todo!()
-}
+fn show_ref_position(_caller: Caller<'_, State>, _object: Object) {}
 
 /// `DBSendPlayerPosition`
 ///
 /// ```text
 /// Function() native global
 /// ```
-fn db_send_player_position(caller: Caller<'_, State>) -> Result<(), Error> {
-    todo!()
-}
+fn db_send_player_position(_caller: Caller<'_, State>) {}
