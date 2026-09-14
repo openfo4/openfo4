@@ -62,7 +62,7 @@ pub async fn load_land(ctx: &LoadContext<'_>, land_id: RecordId, land: &Land) ->
     let mut normals = Box::new([[Vec3::ZERO; 33]; 33]);
     for a in 0..33 {
         for b in 0..33 {
-            let [x, y, z] = land.vertex_normals.as_ref().unwrap()[a * 33 + b];
+            let [x, y, z] = land.vertex_normals.as_ref().unwrap()[b * 33 + a];
             normals[a][b] =
                 (Vec3::new(x as f32, y as f32, z as f32) / i8::MAX as f32).normalize_or_zero();
         }
