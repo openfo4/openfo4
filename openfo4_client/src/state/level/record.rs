@@ -27,7 +27,7 @@ use crate::state::level::LoadContext;
 use crate::state::level::data_ext::RecordDataExt;
 use crate::state::level::items::{LoadItemProps, resolve_item};
 use crate::state::level::navmesh::load_navmesh;
-use crate::state::level::partial::PartialEntityFlags;
+use crate::state::level::partial::{LodLevel, PartialEntityFlags};
 use crate::state::level::terrain::load_land;
 use crate::state::npc::{Actor, ActorInstanceProps, ObjectKeywords};
 use crate::state::terrain::{TerrainManager, TerrainRegion};
@@ -380,8 +380,22 @@ impl SpawnEntity {
 
         match base.local.data {
             RecordData::STAT(data) => {
-                model = data.modl.model;
                 object_bounds = Some(data.object_bounds);
+
+                match flags.lod {
+                    LodLevel::Normal => {
+                        model = data.modl.model;
+                    }
+                    LodLevel::Distant0 => {
+                        if let Some(lods) = data.lods
+                            && !lods.level0.as_bytes().is_empty()
+                        {
+                            model = Some(lods.level0);
+                        } else {
+                            model = data.modl.model;
+                        }
+                    }
+                }
             }
             RecordData::StaticCollection(data) => {
                 model = data.model.model;

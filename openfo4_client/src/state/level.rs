@@ -37,7 +37,7 @@ use crate::config;
 use crate::loader::FileLoader;
 use crate::shared::SharedState;
 use crate::state::level::loader::{EntityLoader, EntityRefInner};
-use crate::state::level::partial::PartialEntityFlags;
+use crate::state::level::partial::{LodLevel, PartialEntityFlags};
 use crate::state::level::record::SpawnEntity;
 use crate::state::terrain::TerrainManager;
 use crate::systems::scripting::loader::ScriptLoader;
@@ -97,6 +97,7 @@ impl Level {
         //             &shared,
         //             &state,
         //             &script_loader,
+        //             CellActivityMode::Active,
         //         )
         //         .await;
         //     }
@@ -759,6 +760,7 @@ async fn load_cell(
             scene: false,
             script: true,
             require_distant_lod: false,
+            lod: LodLevel::Normal,
         },
         CellActivityMode::Active => PartialEntityFlags {
             graphics: true,
@@ -767,6 +769,7 @@ async fn load_cell(
             scene: true,
             script: true,
             require_distant_lod: false,
+            lod: LodLevel::Normal,
         },
         CellActivityMode::VisibleDistant => PartialEntityFlags {
             graphics: true,
@@ -775,6 +778,7 @@ async fn load_cell(
             actor: false,
             script: false,
             require_distant_lod: true,
+            lod: LodLevel::Distant0,
         },
     };
 

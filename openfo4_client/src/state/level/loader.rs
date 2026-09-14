@@ -20,7 +20,7 @@ use crate::loader::FileLoader;
 use crate::shared::SharedState;
 use crate::state::esp::EspLoader;
 use crate::state::hardcoded::HARDCODED_MODULE_ID;
-use crate::state::level::partial::PartialEntityFlags;
+use crate::state::level::partial::{LodLevel, PartialEntityFlags};
 use crate::state::level::record::SpawnEntity;
 use crate::state::level::{Event, LoadContext};
 use crate::systems::scripting::loader::ScriptLoader;
@@ -192,6 +192,7 @@ impl EntityLoader {
             scene: false,
             script: false,
             require_distant_lod: false,
+            lod: LodLevel::Normal,
         };
 
         let mut entity = SpawnEntity::load(&ctx, &record, flags).await.unwrap();
