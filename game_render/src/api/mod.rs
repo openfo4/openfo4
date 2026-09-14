@@ -35,7 +35,7 @@ use resources::{
 };
 use scheduler::{Node, Resource, ResourceMap, Scheduler};
 
-use crate::api::commands::{ClearTexture, CreateBuffer, CreateTexture};
+use crate::api::commands::{ClearTexture, CreateBuffer, CreateTexture, PassBindingInfo};
 use crate::api::executor::Executor;
 use crate::backend::allocator::{MemoryManager, UsageFlags};
 use crate::backend::vulkan::{self, CommandEncoder, Device};
@@ -812,6 +812,7 @@ impl<'a> CommandQueue<'a> {
         let mut num_samplers = 0;
         let mut num_sampled_texture_arrays = 0;
         let mut num_storage_texture_arrays = 0;
+        let mut num_texture_mips = 0;
 
         let layout = self
             .executor
@@ -922,6 +923,7 @@ impl<'a> CommandQueue<'a> {
                         });
 
                     num_sampled_texture_arrays += 1;
+                    num_texture_mips += view.mip_levels as usize;
 
                     DescriptorSetResource::SampledTexture(vec![RawTextureView {
                         texture: view.texture.id,
@@ -943,6 +945,8 @@ impl<'a> CommandQueue<'a> {
                             .with_texture_rc(view.texture.id, |ref_count| {
                                 ref_count.increment_internal();
                             });
+
+                        num_texture_mips += view.mip_levels as usize;
                     }
 
                     num_sampled_texture_arrays += 1;
@@ -971,6 +975,7 @@ impl<'a> CommandQueue<'a> {
                         });
 
                     num_storage_texture_arrays += 1;
+                    num_texture_mips += view.mip_levels as usize;
 
                     DescriptorSetResource::StorageTexture(vec![RawTextureView {
                         texture: view.texture.id,
@@ -994,6 +999,8 @@ impl<'a> CommandQueue<'a> {
                             .with_texture_rc(view.texture.id, |ref_count| {
                                 ref_count.increment_internal();
                             });
+
+                        num_texture_mips += view.mip_levels as usize;
                     }
 
                     num_storage_texture_arrays += 1;
@@ -1058,6 +1065,8 @@ impl<'a> CommandQueue<'a> {
         DescriptorSet {
             id,
             resources: self.executor.resources.clone(),
+            num_buffers: num_buffers as usize,
+            num_texture_mips,
         }
     }
 
@@ -1495,6 +1504,10 @@ impl<'a> CommandQueue<'a> {
             }
         });
 
+        let mut binding = PassBindingInfo::default();
+        binding.num_texture_mips += descriptor.color_attachments.len();
+        binding.num_texture_mips += usize::from(descriptor.depth_stencil_attachment.is_some());
+
         RenderPass {
             name: descriptor.name,
             ctx: self,
@@ -1503,6 +1516,7 @@ impl<'a> CommandQueue<'a> {
             cmds: Vec::new(),
             last_pipeline: None,
             last_index_buffer: None,
+            binding,
         }
     }
 
@@ -1512,6 +1526,7 @@ impl<'a> CommandQueue<'a> {
             queue: self,
             last_pipeline: None,
             cmds: Vec::new(),
+            binding: PassBindingInfo::default(),
         }
     }
 
@@ -1546,6 +1561,10 @@ pub struct TextureRegion<'a> {
 pub struct DescriptorSet {
     id: DescriptorSetId,
     resources: Arc<Resources>,
+    /// The number of [`Buffer`] objects that are bound in this set.
+    num_buffers: usize,
+    /// The total number of mip levels of all [`Texture`]s that are bound in this set.
+    num_texture_mips: usize,
 }
 
 impl Clone for DescriptorSet {
@@ -1556,6 +1575,8 @@ impl Clone for DescriptorSet {
         Self {
             id: self.id,
             resources: self.resources.clone(),
+            num_buffers: self.num_buffers,
+            num_texture_mips: self.num_texture_mips,
         }
     }
 }
@@ -2048,6 +2069,8 @@ pub struct RenderPass<'a, 'b> {
     last_pipeline: Option<PipelineId>,
     // Exists purely for validation.
     last_index_buffer: Option<(BufferId, IndexFormat)>,
+    /// Color and depth attachments are already included here.
+    binding: PassBindingInfo,
 }
 
 impl<'a, 'b> RenderPass<'a, 'b> {
@@ -2100,6 +2123,9 @@ impl<'a, 'b> RenderPass<'a, 'b> {
             .ref_count
             .increment_internal();
 
+        self.binding.num_buffers += descriptor_set.num_buffers;
+        self.binding.num_texture_mips += descriptor_set.num_texture_mips;
+
         self.cmds
             .push(DrawCmd::SetDescriptorSet(index, descriptor_set.id));
     }
@@ -2122,6 +2148,8 @@ impl<'a, 'b> RenderPass<'a, 'b> {
             .with_buffer_rc(buffer.id, |ref_count| {
                 ref_count.increment_internal();
             });
+
+        self.binding.num_buffers += 1;
 
         self.cmds.push(DrawCmd::SetIndexBuffer(buffer.id, format));
         self.last_index_buffer = Some((buffer.id, format));
@@ -2163,6 +2191,8 @@ impl<'a, 'b> RenderPass<'a, 'b> {
         //     format,
         // );
 
+        self.binding.num_buffers += 1;
+
         self.cmds
             .push(DrawCmd::Draw(DrawCall::DrawIndexed(DrawIndexed {
                 indices,
@@ -2202,6 +2232,8 @@ impl<'a, 'b> RenderPass<'a, 'b> {
             .with_buffer_rc(indirect_buffer.buffer.id, |ref_count| {
                 ref_count.increment_internal();
             });
+
+        self.binding.num_buffers += 1;
 
         self.cmds
             .push(DrawCmd::Draw(DrawCall::DrawIndirect(DrawIndirect {
@@ -2243,6 +2275,8 @@ impl<'a, 'b> RenderPass<'a, 'b> {
                 ref_count.increment_internal();
             });
 
+        self.binding.num_buffers += 1;
+
         self.cmds.push(DrawCmd::Draw(DrawCall::DrawIndexedIndirect(
             DrawIndexedIndirect {
                 buffer: indirect_buffer.buffer.id,
@@ -2273,6 +2307,7 @@ impl<'a, 'b> RenderPass<'a, 'b> {
                 color_attachments: mem::take(&mut self.color_attachments),
                 depth_stencil_attachment: mem::take(&mut self.depth_stencil_attachment),
                 cmds: mem::take(&mut self.cmds),
+                binding: self.binding,
             }),
         );
     }
@@ -2291,6 +2326,7 @@ pub struct ComputePass<'a> {
     // Exists purely for validation.
     last_pipeline: Option<PipelineId>,
     cmds: Vec<ComputeCommand>,
+    binding: PassBindingInfo,
 }
 
 impl<'a> ComputePass<'a> {
@@ -2328,6 +2364,9 @@ impl<'a> ComputePass<'a> {
             .ref_count
             .increment_internal();
 
+        self.binding.num_buffers += descriptor_set.num_buffers;
+        self.binding.num_texture_mips += descriptor_set.num_texture_mips;
+
         self.cmds
             .push(ComputeCommand::SetDescriptorSet(index, descriptor_set.id));
     }
@@ -2358,6 +2397,7 @@ impl<'a> ComputePass<'a> {
             Command::ComputePass(ComputePassCmd {
                 name: self.name,
                 cmds: mem::take(&mut self.cmds),
+                binding: self.binding,
             }),
         );
     }

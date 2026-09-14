@@ -230,7 +230,15 @@ impl Command {
                 });
             }
             Self::RenderPass(cmd) => {
-                let mut access_flags = HashMap::<ResourceId, AccessFlags, _, &Bump>::new_in(alloc);
+                let mut buffers = HashMap::<BufferId, AccessFlags, _, &Bump>::with_capacity_in(
+                    cmd.binding.num_buffers,
+                    alloc,
+                );
+                let mut textures = HashMap::<TextureMip, AccessFlags, _, &Bump>::with_capacity_in(
+                    cmd.binding.num_texture_mips,
+                    alloc,
+                );
+
                 // The same descriptor set may get bound multiple times,
                 // but this has no effect on the access flags.
                 // As such it is cheaper to track visited descriptor sets
@@ -245,9 +253,7 @@ impl Command {
                             pipeline = Some(resources.pipelines.get(id.0).unwrap());
                         }
                         DrawCmd::SetIndexBuffer(buffer, _) => {
-                            *access_flags
-                                .entry(ResourceId::Buffer(*buffer).into())
-                                .or_default() |= AccessFlags::INDEX;
+                            *buffers.entry(*buffer).or_default() |= AccessFlags::INDEX;
                         }
                         DrawCmd::SetDescriptorSet(group, id) => {
                             let Some(pipeline) = &pipeline else {
@@ -267,9 +273,7 @@ impl Command {
                                     | DescriptorSetResource::StorageBuffer(buffer) => {
                                         if let Some(access) = pipeline.bindings.get(*group, binding)
                                         {
-                                            *access_flags
-                                                .entry(ResourceId::Buffer(*buffer).into())
-                                                .or_default() |= access;
+                                            *buffers.entry(*buffer).or_default() |= access;
                                         }
                                     }
                                     DescriptorSetResource::SampledTexture(views)
@@ -278,8 +282,8 @@ impl Command {
                                         {
                                             for view in views {
                                                 for mip in view.mips() {
-                                                    *access_flags
-                                                        .entry(ResourceId::Texture {
+                                                    *textures
+                                                        .entry(TextureMip {
                                                             id: view.texture,
                                                             mip_level: mip,
                                                         })
@@ -296,14 +300,10 @@ impl Command {
                         DrawCmd::Draw(DrawCall::Draw(_)) => (),
                         DrawCmd::Draw(DrawCall::DrawIndexed(_)) => (),
                         DrawCmd::Draw(DrawCall::DrawIndirect(call)) => {
-                            *access_flags
-                                .entry(ResourceId::Buffer(call.buffer).into())
-                                .or_default() |= AccessFlags::INDIRECT;
+                            *buffers.entry(call.buffer).or_default() |= AccessFlags::INDIRECT;
                         }
                         DrawCmd::Draw(DrawCall::DrawIndexedIndirect(call)) => {
-                            *access_flags
-                                .entry(ResourceId::Buffer(call.buffer).into())
-                                .or_default() |= AccessFlags::INDIRECT;
+                            *buffers.entry(call.buffer).or_default() |= AccessFlags::INDIRECT;
                         }
                         DrawCmd::Draw(DrawCall::DrawMeshTasks(_)) => (),
                     }
@@ -321,8 +321,8 @@ impl Command {
                     }
 
                     for mip in attachment.target.mips() {
-                        *access_flags
-                            .entry(ResourceId::Texture {
+                        *textures
+                            .entry(TextureMip {
                                 id: attachment.target.texture,
                                 mip_level: mip,
                             })
@@ -331,8 +331,8 @@ impl Command {
                 }
 
                 if let Some(attachment) = &cmd.depth_stencil_attachment {
-                    *access_flags
-                        .entry(ResourceId::Texture {
+                    *textures
+                        .entry(TextureMip {
                             id: attachment.texture,
                             mip_level: 0,
                         })
@@ -340,17 +340,41 @@ impl Command {
                         AccessFlags::DEPTH_ATTACHMENT_READ | AccessFlags::DEPTH_ATTACHMENT_WRITE;
                 }
 
-                for (id, access) in access_flags {
+                for (buffer, access) in buffers {
                     // We should never require a resource without any flags.
                     // This could result in a texture transition into UNDEFINED
                     // which is always invalid.
                     debug_assert!(!access.is_empty());
+                    accesses.push(Resource {
+                        id: ResourceId::Buffer(buffer),
+                        access,
+                    });
+                }
 
-                    accesses.push(Resource { id, access });
+                for (texture, access) in textures {
+                    // We should never require a resource without any flags.
+                    // This could result in a texture transition into UNDEFINED
+                    // which is always invalid.
+                    debug_assert!(!access.is_empty());
+                    accesses.push(Resource {
+                        id: ResourceId::Texture {
+                            id: texture.id,
+                            mip_level: texture.mip_level,
+                        },
+                        access,
+                    });
                 }
             }
             Self::ComputePass(cmd) => {
-                let mut access_flags = HashMap::<ResourceId, AccessFlags, _, &Bump>::new_in(alloc);
+                let mut buffers = HashMap::<BufferId, AccessFlags, _, &Bump>::with_capacity_in(
+                    cmd.binding.num_buffers,
+                    alloc,
+                );
+                let mut textures = HashMap::<TextureMip, AccessFlags, _, &Bump>::with_capacity_in(
+                    cmd.binding.num_texture_mips,
+                    alloc,
+                );
+
                 // The same descriptor set may get bound multiple times,
                 // but this has no effect on the access flags.
                 // As such it is cheaper to track visited descriptor sets
@@ -382,9 +406,7 @@ impl Command {
                                     | DescriptorSetResource::StorageBuffer(buffer) => {
                                         if let Some(access) = pipeline.bindings.get(*group, binding)
                                         {
-                                            *access_flags
-                                                .entry(ResourceId::Buffer(*buffer).into())
-                                                .or_default() |= access;
+                                            *buffers.entry(*buffer).or_default() |= access;
                                         }
                                     }
                                     DescriptorSetResource::SampledTexture(views)
@@ -393,8 +415,8 @@ impl Command {
                                         {
                                             for view in views {
                                                 for mip in view.mips() {
-                                                    *access_flags
-                                                        .entry(ResourceId::Texture {
+                                                    *textures
+                                                        .entry(TextureMip {
                                                             id: view.texture,
                                                             mip_level: mip,
                                                         })
@@ -412,13 +434,29 @@ impl Command {
                     }
                 }
 
-                for (id, access) in access_flags {
+                for (buffer, access) in buffers {
                     // We should never require a resource without any flags.
                     // This could result in a texture transition into UNDEFINED
                     // which is always invalid.
                     debug_assert!(!access.is_empty());
+                    accesses.push(Resource {
+                        id: ResourceId::Buffer(buffer),
+                        access,
+                    });
+                }
 
-                    accesses.push(Resource { id, access });
+                for (texture, access) in textures {
+                    // We should never require a resource without any flags.
+                    // This could result in a texture transition into UNDEFINED
+                    // which is always invalid.
+                    debug_assert!(!access.is_empty());
+                    accesses.push(Resource {
+                        id: ResourceId::Texture {
+                            id: texture.id,
+                            mip_level: texture.mip_level,
+                        },
+                        access,
+                    });
                 }
             }
             // We only need to "touch" the resource once to ensure
@@ -507,12 +545,14 @@ pub struct RenderPassCmd {
     pub color_attachments: Vec<ColorAttachmentOwned>,
     pub depth_stencil_attachment: Option<DepthStencilAttachmentOwned>,
     pub cmds: Vec<DrawCmd>,
+    pub binding: PassBindingInfo,
 }
 
 #[derive(Debug)]
 pub struct ComputePassCmd {
     pub name: &'static str,
     pub cmds: Vec<ComputeCommand>,
+    pub binding: PassBindingInfo,
 }
 
 #[derive(Debug)]
@@ -542,4 +582,12 @@ pub struct ClearTexture {
     pub id: TextureId,
     pub mip_level: u32,
     pub value: [u32; 4],
+}
+
+#[derive(Copy, Clone, Debug, Default)]
+pub struct PassBindingInfo {
+    /// The total number of [`Buffer`] objects bound by descriptors.
+    pub num_buffers: usize,
+    /// The total number of mip levels of all textures combined bound by descriptors.
+    pub num_texture_mips: usize,
 }
