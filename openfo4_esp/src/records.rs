@@ -10,7 +10,7 @@ use openfo4_esp_derive::{BinaryStruct, Record};
 use crate::conditions::Conditions;
 use crate::fields::{FieldMap, Read, SubField, SubRecordArray, SubRecordSection};
 use crate::vmad::{QuestFragments, VirtualMachineAdapter};
-use crate::{Decode, Error, FormId, LString, Rgb, RgbPadded, Text, ZString};
+use crate::{Decode, Error, FixedString, FormId, LString, Rgb, RgbPadded, Text, ZString};
 
 macro_rules! impl_decode_bitflags {
     ($($t:ty:$i:ty),*) => {
@@ -1992,12 +1992,42 @@ pub struct STAT {
     pub modl: Model,
     #[record("DNAM")]
     pub dnam: STAT_DNAM,
+    #[record("MNAM")]
+    pub lods: Option<DistantLods>,
 }
 
 #[derive(Copy, Clone, Debug, BinaryStruct)]
 pub struct STAT_DNAM {
     pub max_angle: f32,
     pub directional_material: FormId,
+}
+
+#[derive(Clone, Debug)]
+pub struct DistantLods {
+    pub level0: ZString,
+    pub level1: ZString,
+    pub level2: ZString,
+    pub level3: ZString,
+}
+
+impl Decode for DistantLods {
+    type Error = Error;
+
+    fn decode<B>(mut buf: B) -> Result<Self, Self::Error>
+    where
+        B: Buf,
+    {
+        let level0 = FixedString::<260>::decode(&mut buf)?.0;
+        let level1 = FixedString::<260>::decode(&mut buf)?.0;
+        let level2 = FixedString::<260>::decode(&mut buf)?.0;
+        let level3 = FixedString::<260>::decode(&mut buf)?.0;
+        Ok(Self {
+            level0,
+            level1,
+            level2,
+            level3,
+        })
+    }
 }
 
 #[derive(Clone, Debug, Record)]

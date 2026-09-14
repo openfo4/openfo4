@@ -1863,3 +1863,30 @@ impl IndexTable {
         self.entries.get(&form).copied()
     }
 }
+
+#[derive(Clone, Debug)]
+struct FixedString<const SIZE: usize>(ZString);
+
+impl<const SIZE: usize> Decode for FixedString<SIZE> {
+    type Error = Error;
+
+    fn decode<B>(mut buf: B) -> Result<Self, Self::Error>
+    where
+        B: Buf,
+    {
+        let mut remaining = SIZE;
+        let mut bytes = Vec::new();
+        while remaining != 0 {
+            remaining -= 1;
+            let b = u8::decode(&mut buf)?;
+            if b == 0 {
+                break;
+            }
+
+            bytes.push(b);
+        }
+
+        buf.advance(buf.remaining().min(remaining));
+        Ok(Self(ZString(bytes)))
+    }
+}
