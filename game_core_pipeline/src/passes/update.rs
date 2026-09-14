@@ -83,7 +83,7 @@ impl Node for UpdatePass {
                 }
                 Event::CreateImage(id, image) => {
                     let texture =
-                        create_image(ctx.queue, &mut state.textures, &self.mipgen, &image);
+                        create_image(ctx.queue, &mut state.textures, &self.mipgen, &image, true);
                     state.images.insert(id, texture);
                 }
                 Event::DestroyImage(id) => {
@@ -282,6 +282,7 @@ fn create_image(
     textures: &mut TextureSlab,
     mipgen: &MipMapGenerator,
     image: &MipImage,
+    generate_mips: bool,
 ) -> TextureSlabIndex {
     let _span = trace_span!("create_image").entered();
 
@@ -298,8 +299,9 @@ fn create_image(
     // we have enough mips.)
     // TODO: In the future we may want to still generate missing mips.
     // - The format can be used to create mipmaps.
-    let generate_mipmaps =
-        image.mip_levels() == 1 && supported_usages.contains(TextureUsage::RENDER_ATTACHMENT);
+    let generate_mipmaps = generate_mips
+        && image.mip_levels() == 1
+        && supported_usages.contains(TextureUsage::RENDER_ATTACHMENT);
 
     let mut mip_levels = image.mip_levels();
     let mut usage = TextureUsage::TRANSFER_DST | TextureUsage::TEXTURE_BINDING;
@@ -480,7 +482,7 @@ fn create_terrain_material(
             bytemuck::must_cast_slice(&layer.alpha).to_vec(),
         );
 
-        let alpha = create_image(queue, textures, mipgen, &MipImage::new(vec![image]));
+        let alpha = create_image(queue, textures, mipgen, &MipImage::new(vec![image]), false);
 
         layers.push(RawTerrainLayer {
             material: material.index,
