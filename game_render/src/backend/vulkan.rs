@@ -4495,6 +4495,10 @@ impl Buffer {
             view: start..end,
         }
     }
+
+    pub fn size(&self) -> usize {
+        self.size
+    }
 }
 
 impl Drop for Buffer {
@@ -5292,7 +5296,7 @@ pub struct DeviceLimits {
     /// The maximum number of descriptors in a single set.
     max_per_set_descriptors: u32,
     /// The maximum size of any individual allocation.
-    max_memory_allocation_size: u64,
+    pub max_memory_allocation_size: u64,
     // VkPhysicalDeviceMeshShaderPropertiesEXT
     /// The maximum number of total workgroups that can be dispatched by a single call.
     max_task_work_group_total_count: u32,

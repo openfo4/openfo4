@@ -128,7 +128,7 @@ impl CommandExecutor {
     }
 
     pub fn destroy(&mut self, tmp: TemporaryResources) {
-        tmp.destroy(&mut self.resources);
+        tmp.destroy(&mut self.resources, &mut self.executor);
         self.cleanup();
     }
 
@@ -363,58 +363,23 @@ impl<'a> CommandQueue<'a> {
         let staging_memory_offset = pool.len();
         pool.extend_from_slice(data);
 
-        // If the buffer is host visible we can map and write
-        // to it directly.
-        if buffer.buffer.flags.contains(UsageFlags::HOST_VISIBLE) {
-            // The destination buffer must be kept alive until
-            // the memcpy is complete.
-            self.executor
-                .resources
-                .with_buffer_rc(buffer.buffer.id, |ref_count| {
-                    ref_count.increment_internal();
-                });
-
-            self.executor.cmds.lock().push(
-                &self.executor.resources,
-                Command::WriteBuffer(WriteBuffer {
-                    buffer: buffer.buffer.id,
-                    offset: buffer.start,
-                    staging_memory_offset,
-                    count: data.len(),
-                }),
-            );
-        } else {
-            // Otherwise we cannot access the buffer directly and
-            // need to go through a host visible staging buffer.
-            let staging_buffer = self.create_buffer(&BufferDescriptor {
-                size: data.len(),
-                usage: BufferUsage::TRANSFER_SRC,
-                flags: UsageFlags::HOST_VISIBLE,
+        // The destination buffer must be kept alive until
+        // the memcpy is complete.
+        self.executor
+            .resources
+            .with_buffer_rc(buffer.buffer.id, |ref_count| {
+                ref_count.increment_internal();
             });
 
-            debug_assert!(buffer.buffer.size >= staging_buffer.size);
-
-            // The staging buffer must be kept alive until
-            // the memcpy is complete.
-            self.executor
-                .resources
-                .with_buffer_rc(staging_buffer.id, |ref_count| {
-                    ref_count.increment_internal();
-                });
-
-            // Write the data into the staging buffer.
-            self.executor.cmds.lock().push(
-                &self.executor.resources,
-                Command::WriteBuffer(WriteBuffer {
-                    buffer: staging_buffer.id,
-                    offset: 0,
-                    staging_memory_offset,
-                    count: data.len(),
-                }),
-            );
-
-            self.copy_buffer_to_buffer(&staging_buffer, buffer);
-        }
+        self.executor.cmds.lock().push(
+            &self.executor.resources,
+            Command::WriteBuffer(WriteBuffer {
+                buffer: buffer.buffer.id,
+                offset: buffer.start,
+                staging_memory_offset,
+                count: data.len(),
+            }),
+        );
     }
 
     #[track_caller]

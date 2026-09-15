@@ -47,6 +47,10 @@ impl MemoryAllocator {
         }
     }
 
+    pub fn max_allocation_size(&self) -> usize {
+        self.device.limits().max_memory_allocation_size as usize
+    }
+
     pub fn create_buffer(&mut self, descriptor: &BufferDescriptor) -> BufferAlloc {
         let size = NonZeroUsize::new(descriptor.size).unwrap();
 

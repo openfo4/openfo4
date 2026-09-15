@@ -10,16 +10,17 @@ use game_common::collections::vec_map::VecMap;
 use game_tracing::trace_span;
 use hashbrown::HashMap;
 
-use crate::api::RawTextureView;
 use crate::api::executor::allocator::Allocation;
+use crate::api::{BufferDescriptor, RawTextureView};
 use crate::backend::allocator::{MemoryManager, UsageFlags};
 use crate::backend::descriptors::AllocatedDescriptorSet;
 use crate::backend::vulkan::{self, Buffer, CommandEncoder, Device, Texture, TextureView};
 use crate::backend::{
-    AccessFlags, BufferBarrier, CopyBuffer, DrawIndexedIndirectCommand, DrawIndirectCommand,
-    MemoryTypeFlags, PipelineBarriers, RenderPassColorAttachment, RenderPassDepthStencilAttachment,
-    RenderPassDescriptor, TextureBarrier, TextureViewDescriptor, TimestampPipelineStage,
-    WriteDescriptorBinding, WriteDescriptorResource, WriteDescriptorResources,
+    AccessFlags, BufferBarrier, BufferUsage, BufferView, CopyBuffer, DrawIndexedIndirectCommand,
+    DrawIndirectCommand, MemoryTypeFlags, PipelineBarriers, RenderPassColorAttachment,
+    RenderPassDepthStencilAttachment, RenderPassDescriptor, TextureBarrier, TextureViewDescriptor,
+    TimestampPipelineStage, WriteDescriptorBinding, WriteDescriptorResource,
+    WriteDescriptorResources,
 };
 use crate::statistics::Statistics;
 
@@ -71,14 +72,6 @@ impl Executor {
     ) -> TemporaryResources {
         let _span = trace_span!("Executor::execute").entered();
 
-        // Note that we are taking the Vec and dropping it
-        // at the end of the execution. We do this instead of
-        // reusing the allocated memory because there may sometimes
-        // be big chunks of data to be uploaded and that would result
-        // in significant memory waste for most frames. Reallocating the
-        // Vec is relatively cheap.
-        let staging_memory_pool = core::mem::take(&mut *resources.staging_memory.lock());
-
         let mut render_passes = 0;
         let mut compute_passes = 0;
 
@@ -110,6 +103,8 @@ impl Executor {
             let index = query_pool.next_index(QueryObject::BeginCommands);
             encoder.write_timestamp_query(query_pool.pool(), index, TimestampPipelineStage::None);
         }
+
+        let staging = self.prepare_staging_pool(resources, encoder);
 
         for step in steps {
             // Batch all barrier steps together, then when the new step is not
@@ -179,25 +174,18 @@ impl Executor {
                     Command::WriteBuffer(cmd) => {
                         let buffer = self.buffers.get_mut(cmd.buffer).unwrap();
 
-                        let data = &staging_memory_pool
-                            [cmd.staging_memory_offset..cmd.staging_memory_offset + cmd.count];
+                        let mut offset = cmd.offset;
+                        staging.copy(cmd.staging_memory_offset, cmd.count, |src| unsafe {
+                            encoder.copy_buffer_to_buffer(
+                                src.buffer(),
+                                src.offset(),
+                                &buffer.buffer,
+                                offset,
+                                src.len(),
+                            );
 
-                        buffer.allocation.as_bytes()
-                            [cmd.offset as usize..cmd.offset as usize + cmd.count]
-                            .copy_from_slice(&data);
-
-                        // If the memory of the buffer is not HOST_COHERENT it needs to
-                        // be flushed, otherwise it may never become visible to the device.
-                        // TODO: We should batch and do a single flush for all writes.
-                        if !buffer
-                            .allocation
-                            .flags()
-                            .contains(MemoryTypeFlags::HOST_COHERENT)
-                        {
-                            unsafe {
-                                buffer.allocation.flush();
-                            }
-                        }
+                            offset += src.len();
+                        });
 
                         tmp.buffers.insert(cmd.buffer);
                     }
@@ -311,8 +299,77 @@ impl Executor {
         }
 
         tmp.query_pool = Some(query_pool);
+        tmp.staging = staging;
 
         tmp
+    }
+
+    fn prepare_staging_pool(
+        &mut self,
+        resources: &Resources,
+        encoder: &mut CommandEncoder<'_>,
+    ) -> StagingPool {
+        // Note that we are taking the Vec and dropping it
+        // at the end of the execution. We do this instead of
+        // reusing the allocated memory because there may sometimes
+        // be big chunks of data to be uploaded and that would result
+        // in significant memory waste for most frames. Reallocating the
+        // Vec is relatively cheap.
+        let staging_memory_pool = core::mem::take(&mut *resources.staging_memory.lock());
+
+        let mut offset = 0;
+        let mut buffers = Vec::new();
+
+        while offset < staging_memory_pool.len() {
+            let remaining = staging_memory_pool.len() - offset;
+            let size = self.allocator.max_allocation_size().min(remaining);
+
+            let mut buffer = self.allocator.create_buffer(&BufferDescriptor {
+                size,
+                usage: BufferUsage::TRANSFER_SRC | BufferUsage::TRANSFER_DST,
+                flags: UsageFlags::HOST_VISIBLE,
+            });
+
+            buffer.allocation.as_bytes()[0..size]
+                .copy_from_slice(&staging_memory_pool[offset..offset + size]);
+
+            // If the memory of the buffer is not HOST_COHERENT it needs to
+            // be flushed, otherwise it may never become visible to the device.
+            if buffer
+                .allocation
+                .flags()
+                .contains(MemoryTypeFlags::HOST_COHERENT)
+            {
+                unsafe {
+                    buffer.allocation.flush();
+                }
+            }
+
+            buffers.push((buffer, offset));
+            offset += size;
+        }
+
+        debug_assert_eq!(offset, staging_memory_pool.len());
+
+        let barriers = buffers
+            .iter()
+            .map(|(buffer, _)| BufferBarrier {
+                buffer: &buffer.buffer,
+                offset: 0,
+                size: buffer.buffer.size(),
+                src_access: AccessFlags::empty(),
+                dst_access: AccessFlags::TRANSFER_WRITE,
+            })
+            .collect::<Vec<_>>();
+
+        unsafe {
+            encoder.insert_pipeline_barriers(&PipelineBarriers {
+                buffer: &barriers,
+                texture: &[],
+            });
+        }
+
+        StagingPool { buffers }
     }
 }
 
@@ -737,10 +794,12 @@ pub struct TemporaryResources {
     pipelines: CountingSet<PipelineId>,
     samplers: CountingSet<SamplerId>,
     pub query_pool: Option<ManagedQueryPool>,
+    // The staging buffers must be kept alive.
+    staging: StagingPool,
 }
 
 impl TemporaryResources {
-    pub(super) fn destroy(mut self, resources: &Resources) {
+    pub(super) fn destroy(mut self, resources: &Resources, executor: &mut Executor) {
         for (id, count) in self.buffers.drain() {
             if resources.with_buffer_rc(id, |ref_count| ref_count.decrement_many_internal(count)) {
                 resources.deletion_queue.push(DeletionEvent::Buffer(id));
@@ -782,6 +841,12 @@ impl TemporaryResources {
         if let Some(query_pool) = self.query_pool {
             unsafe {
                 query_pool.release();
+            }
+        }
+
+        for (buffer, _) in self.staging.buffers.drain(..) {
+            unsafe {
+                executor.allocator.dealloc(buffer.allocation);
             }
         }
     }
@@ -888,5 +953,45 @@ impl TextureViewCache {
 
     pub fn get(&self, view: &RawTextureView) -> Option<&TextureView<'static>> {
         self.views.get(view)
+    }
+}
+
+/// A pool of staging buffers.
+#[derive(Debug, Default)]
+struct StagingPool {
+    buffers: Vec<(BufferAlloc, usize)>,
+}
+
+impl StagingPool {
+    // TODO: Make this return an iterator.
+    fn copy<F>(&self, mut offset: usize, mut count: usize, mut f: F)
+    where
+        F: FnMut(BufferView<'_>),
+    {
+        debug_assert_ne!(count, 0);
+        debug_assert!(!self.buffers.is_empty());
+
+        let mut index = self
+            .buffers
+            .iter()
+            .position(|(_, off)| *off > offset)
+            .unwrap_or(self.buffers.len())
+            .saturating_sub(1);
+
+        // It is very possible for a single write destination to span multiple
+        // staging buffers. In the "staging allocation" continues in the next
+        // buffer.
+        while count != 0 {
+            let (buffer, start) = &self.buffers[index];
+            let start = offset - start;
+            let len = usize::min(buffer.buffer.size() - start, count);
+
+            let slice = buffer.buffer.slice(start..start + len);
+            f(slice);
+
+            count -= len;
+            offset += len;
+            index += 1;
+        }
     }
 }

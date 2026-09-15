@@ -843,7 +843,8 @@ impl AccessFlags {
                 | Self::VERTEX_SHADER_WRITE
                 | Self::FRAGMENT_SHADER_WRITE
                 | Self::MESH_SHADER_WRITE
-                | Self::TASK_SHADER_WRITE,
+                | Self::TASK_SHADER_WRITE
+                | Self::COMPUTE_SHADER_WRITE,
         )
     }
 }
