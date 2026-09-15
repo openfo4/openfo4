@@ -209,9 +209,12 @@ pub fn lower_function(
                 }
                 Instruction::BNot(op) => {
                     let src = translator.load(&op.src);
-                    // FIXME: A `icmp` might result in better codegen here;
-                    // we only care whether the byte is zero or non-zero.
-                    let res = translator.builder.bnot(src);
+
+                    // Invert the boolean value:
+                    // 1 != 1 => 0
+                    // 0 != 1 => 1
+                    let res = translator.builder.icmp_imm(src, 1, IntCompareOp::NotEqual);
+
                     translator.store(&op.dst, res);
                 }
                 Instruction::Store { src, dst } => {
