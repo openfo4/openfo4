@@ -358,7 +358,7 @@ impl Executor {
                 offset: 0,
                 size: buffer.buffer.size(),
                 src_access: AccessFlags::empty(),
-                dst_access: AccessFlags::TRANSFER_WRITE,
+                dst_access: AccessFlags::TRANSFER_READ,
             })
             .collect::<Vec<_>>();
 
