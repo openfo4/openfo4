@@ -335,7 +335,7 @@ impl Executor {
 
             // If the memory of the buffer is not HOST_COHERENT it needs to
             // be flushed, otherwise it may never become visible to the device.
-            if buffer
+            if !buffer
                 .allocation
                 .flags()
                 .contains(MemoryTypeFlags::HOST_COHERENT)
