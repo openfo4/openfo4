@@ -474,21 +474,19 @@ pub fn lower_function(
                 } => {
                     let src = translator.load(src);
 
-                    let is_subclass_block = translator.builder.create_block(&[]);
+                    let next_block = translator.builder.create_block(&[JitType::Pointer]);
+                    let null = translator.builder.ptrconst(core::ptr::null::<()>());
 
                     let is_eq = cast::is_class(&mut translator, src, *dst_class);
-                    translator.builder.brif(
-                        is_eq,
-                        is_subclass_block,
-                        &[],
-                        translator.abort_block,
-                        &[],
-                    );
+                    translator
+                        .builder
+                        .brif(is_eq, next_block, &[src], next_block, &[null]);
 
-                    translator.builder.switch_to_block(is_subclass_block);
-                    translator.current_block = is_subclass_block;
+                    translator.builder.switch_to_block(next_block);
+                    let res = translator.builder.block_params(next_block)[0];
+                    translator.current_block = next_block;
 
-                    translator.store(dst, src);
+                    translator.store(dst, res);
                 }
                 Instruction::ClassIsInstanceOf { src, dst, class } => {
                     let src = translator.load(src);

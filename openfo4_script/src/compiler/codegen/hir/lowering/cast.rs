@@ -1,6 +1,6 @@
 use std::mem::offset_of;
 
-use openfo4_jit::{IntCompareOp, Value as JitValue};
+use openfo4_jit::{IntCompareOp, Type as JitType, Value as JitValue};
 
 use crate::compiler::codegen::hir::lowering::malloc::call_malloc;
 use crate::compiler::codegen::hir::lowering::{
@@ -14,6 +14,25 @@ use crate::runtime::object::{ObjectTag, VarObject};
 ///
 /// - `src` must be of type [`PTR_TYPE`] and must point to a class object, or be null.
 pub fn is_class(translator: &mut Translator<'_>, src: JitValue, class: ClassId) -> JitValue {
+    let zero = translator.builder.iconst(JitType::I8, 0);
+    let non_null_block = translator.builder.create_block(&[]);
+    let merge_block = translator.builder.create_block(&[JitType::I8]);
+    translator
+        .builder
+        .brif(src, non_null_block, &[], merge_block, &[zero]);
+
+    translator.builder.switch_to_block(non_null_block);
+    let is_eq = is_class_non_null(translator, src, class);
+    translator.builder.jump(merge_block, &[is_eq]);
+
+    translator.builder.switch_to_block(merge_block);
+    translator.current_block = merge_block;
+    let is_eq = translator.builder.block_params(merge_block)[0];
+
+    is_eq
+}
+
+fn is_class_non_null(translator: &mut Translator<'_>, src: JitValue, class: ClassId) -> JitValue {
     let dst_id = translator.data.class_types.get(&class).unwrap();
 
     let type_info_ptr = translator.builder.load(PTR_TYPE, src, 0);

@@ -169,7 +169,47 @@ fn class_downcast_fail() {
     let addr = engine.object_pool().insert(type_id).finalize().addr();
 
     let func = func.typed::<ObjectAddr, ObjectAddr>().unwrap();
-    assert!(func.call(&mut ctx, addr).now_or_never().is_err());
+    assert_eq!(
+        func.call(&mut ctx, addr).now_or_never().unwrap(),
+        ObjectAddr::NULL
+    );
+}
+
+#[test]
+fn class_downcast_on_null() {
+    let mut engine = Engine::new(COMPILER_OPTIONS);
+
+    let module = assemble(
+        r#"
+        class A:
+
+        class B:
+        parent: A
+
+        function F(a: A) -> B static:
+        local b: B
+        b = cast a
+        return b
+        "#,
+    );
+
+    engine.register(&module);
+
+    block_on(engine.compile("A", &Options::default())).unwrap();
+    let instance = block_on(engine.compile("B", &Options::default())).unwrap();
+    let func = instance.get_func("F").unwrap();
+    let type_id = engine.get_type("A").unwrap();
+
+    let mut stack = engine.create_stack();
+    let mut ctx = Context::new(&engine, &mut stack, ());
+
+    let addr = engine.object_pool().insert(type_id).finalize().addr();
+
+    let func = func.typed::<ObjectAddr, ObjectAddr>().unwrap();
+    assert_eq!(
+        func.call(&mut ctx, addr).now_or_never().unwrap(),
+        ObjectAddr::NULL
+    );
 }
 
 #[test]
