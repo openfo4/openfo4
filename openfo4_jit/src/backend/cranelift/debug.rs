@@ -60,7 +60,7 @@ pub fn build_disasm(buf: &[u8], srclocs: &SourceLocMap) -> TextWithSrcLocs<Strin
     let mut last_range_end = 0;
     for (range, loc) in srclocs.iter() {
         if range.start > last_range_end {
-            let bytes = &buf[range];
+            let bytes = &buf[last_range_end..range.start];
             let insts = cs.disasm_all(bytes, bytes.as_ptr().addr() as u64).unwrap();
             write_instructions(&mut text.text, &insts);
         }
@@ -77,6 +77,11 @@ pub fn build_disasm(buf: &[u8], srclocs: &SourceLocMap) -> TextWithSrcLocs<Strin
 
         last_range_end = range.end;
     }
+
+    // Trailing instructions.
+    let bytes = &buf[last_range_end..];
+    let insts = cs.disasm_all(bytes, bytes.as_ptr().addr() as u64).unwrap();
+    write_instructions(&mut text.text, &insts);
 
     text
 }
