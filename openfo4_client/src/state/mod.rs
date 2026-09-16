@@ -98,7 +98,7 @@ pub struct GameState {
     object_ref_set: ObjectReferenceSet,
     weather: WeatherSystem,
     inventory: InventorySystem,
-    executor: Executor,
+    pub executor: Executor,
     quests: QuestManager,
     globals: Arc<GlobalProperties>,
     script_entities: ScriptEntities,

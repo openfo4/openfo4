@@ -13,6 +13,7 @@ pub struct DebugState {
     pub draw_navmesh: bool,
     pub draw_planned_ai_agent_paths: bool,
     pub draw_gpu_memory_visualizer: bool,
+    pub scripting_objects_open: bool,
 }
 
 pub fn draw_debug_ui(ctx: &Context, state: &mut DebugState) {
@@ -34,5 +35,6 @@ pub fn draw_debug_ui(ctx: &Context, state: &mut DebugState) {
             &mut state.draw_planned_ai_agent_paths,
             "Draw Planned AI Agent Paths",
         );
+        ui.checkbox(&mut state.scripting_objects_open, "Scripting Objects");
     });
 }

@@ -177,6 +177,14 @@ impl Executor {
         collect_event_dispatches::<BleedoutStartEvent>(&mut self.handle.events, events, ctx);
         collect_event_dispatches::<BodyPartCrippleEvent>(&mut self.handle.events, events, ctx);
     }
+
+    pub fn objects(&self) -> &ScriptObjects {
+        &self.loader().objects
+    }
+
+    pub fn engine(&self) -> &Engine {
+        &self.loader().engine
+    }
 }
 
 fn core_actor_values(
@@ -234,10 +242,10 @@ fn core_actor_values(
 }
 
 #[derive(Clone, Debug)]
-struct ScriptInstance {
+pub struct ScriptInstance {
     instance: Instance,
-    layout: TypeId,
-    object: ObjectRef,
+    pub layout: TypeId,
+    pub object: ObjectRef,
 }
 
 /// Maps [`ScriptObject`]s to game world [`Entity`].

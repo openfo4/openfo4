@@ -328,14 +328,8 @@ impl game_window::App for App {
             }
         }
 
-        self.egui_ctx.draw(|ctx| {
-            ui::draw_ui(
-                ctx,
-                &mut self.ui_state,
-                &self.game.world,
-                &mut self.game.event_bus,
-            )
-        });
+        self.egui_ctx
+            .draw(|ctx| ui::draw_ui(ctx, &mut self.ui_state, &mut self.game));
 
         self.time.update();
 

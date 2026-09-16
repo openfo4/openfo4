@@ -109,6 +109,19 @@ impl ScriptObjects {
             _owner: PhantomData,
         })
     }
+
+    pub fn iter(&self) -> ScriptObjectsIter<'_> {
+        let instances = self
+            .instances
+            .lock()
+            .iter()
+            .map(|(key, info)| (ScriptObjectId(key), Arc::clone(info)))
+            .collect();
+        ScriptObjectsIter {
+            instances,
+            _marker: PhantomData,
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -121,6 +134,13 @@ pub struct ScriptsRef<'a> {
 impl<'a> ScriptsRef<'a> {
     pub fn id(&self) -> ScriptObjectId {
         self.id
+    }
+
+    /// Returns the [`RecordId`] associated with this script instance.
+    ///
+    /// May be `None` if the script refers to a runtime-created object.
+    pub fn record(&self) -> Option<RecordId> {
+        self.info.record
     }
 
     pub fn get(&self, name: &str) -> Option<ScriptRef<'a>> {
@@ -205,4 +225,24 @@ struct ObjectInfo {
     class_names: HashMap<String, usize>,
     record: Option<RecordId>,
     data: ObjectData,
+}
+
+#[derive(Debug)]
+pub struct ScriptObjectsIter<'a> {
+    instances: Vec<(ScriptObjectId, Arc<ObjectInfo>)>,
+    _marker: PhantomData<&'a ScriptObjects>,
+}
+
+impl<'a> Iterator for ScriptObjectsIter<'a> {
+    type Item = ScriptsRef<'a>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let (id, info) = self.instances.pop()?;
+
+        Some(ScriptsRef {
+            info,
+            id,
+            _owner: PhantomData,
+        })
+    }
 }
