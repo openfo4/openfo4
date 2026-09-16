@@ -5,6 +5,7 @@ use openfo4_core::record::RecordId;
 
 use crate::systems::inventory::InventoryKey;
 
+pub mod accel;
 pub mod activation;
 pub mod actor_value;
 pub mod ai;

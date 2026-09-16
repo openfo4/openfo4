@@ -53,6 +53,7 @@ use crate::state::animation::update_actor_animation_graphs;
 use crate::state::hardcoded::ACTOR_PLAYER;
 use crate::state::level::Streamer;
 use crate::state::npc::{ActorInstanceProps, ObjectKeywords, spawn_actor};
+use crate::systems::accel::AccelerationStructure;
 use crate::systems::activation::update_player_looking_at_target;
 use crate::systems::ai::AiSystem;
 use crate::systems::animation_sync::{bounce_animation_events, update_animation_parameters};
@@ -157,6 +158,8 @@ impl GameState {
 
         let mut world = World::new();
         init_time(&mut world);
+
+        world.spawn_one(AccelerationStructure::default());
 
         let quests = QuestManager::new(pool.clone(), &loader, &mut executor, &level.loader());
 

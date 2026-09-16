@@ -1,9 +1,13 @@
-use openfo4_core::ecs::Entity;
+use glam::Vec3;
+use openfo4_core::ecs::{Entity, World};
+use openfo4_core::transform::ConvertCoordinateSystem;
 use openfo4_script::engine::Engine;
 use openfo4_script::runtime::{Caller, Error};
 
-use crate::components::{ActorProperties, Player};
+use crate::assets::nif::NIF_TO_METERS;
+use crate::components::{ActorMarker, ActorProperties, BaseObject, NiTransform, Player};
 use crate::state::hardcoded::cumulative_xp_for_level;
+use crate::systems::accel::{AccelerationStructure, IterElem};
 use crate::systems::controller::InputControllerMask;
 use crate::systems::scripting::EngineExt;
 use crate::systems::scripting::classes::Object;
@@ -222,15 +226,32 @@ fn fast_travel(caller: Caller<'_, State>, ak_destination: Object) -> Result<(), 
 /// ```text
 /// ObjectReference Function(Form arBaseObject, float afX, float afY, float afZ, float afRadius) native global
 /// ```
-fn find_closest_reference_of_type(
+async fn find_closest_reference_of_type(
     caller: Caller<'_, State>,
-    ar_base_object: Object,
-    af_x: f32,
-    af_y: f32,
-    af_z: f32,
-    af_radius: f32,
+    base_object: Object,
+    x: f32,
+    y: f32,
+    z: f32,
+    radius: f32,
 ) -> Result<Object, Error> {
-    todo!()
+    if base_object.is_null() {
+        return Ok(Object::NULL);
+    }
+
+    let base_object = caller
+        .data()
+        .objects
+        .get_by_addr(base_object)
+        .and_then(|s| s.record())
+        .unwrap();
+
+    find_closest_entity(caller, x, y, z, radius, |world, entity| {
+        match world.get::<&BaseObject>(entity) {
+            Ok(base) => base.record == base_object,
+            Err(_) => false,
+        }
+    })
+    .await
 }
 
 /// `FindRandomReferenceOfType`
@@ -238,15 +259,32 @@ fn find_closest_reference_of_type(
 /// ```text
 /// ObjectReference Function(Form arBaseObject, float afX, float afY, float afZ, float afRadius) native global
 /// ```
-fn find_random_reference_of_type(
+async fn find_random_reference_of_type(
     caller: Caller<'_, State>,
-    ar_base_object: Object,
-    af_x: f32,
-    af_y: f32,
-    af_z: f32,
-    af_radius: f32,
+    base_object: Object,
+    x: f32,
+    y: f32,
+    z: f32,
+    radius: f32,
 ) -> Result<Object, Error> {
-    todo!()
+    if base_object.is_null() {
+        return Ok(Object::NULL);
+    }
+
+    let base_object = caller
+        .data()
+        .objects
+        .get_by_addr(base_object)
+        .and_then(|s| s.record())
+        .unwrap();
+
+    find_random_entity(caller, x, y, z, radius, |world, entity| {
+        match world.get::<&BaseObject>(entity) {
+            Ok(base) => base.record == base_object,
+            Err(_) => false,
+        }
+    })
+    .await
 }
 
 /// `FindClosestReferenceOfAnyTypeInList`
@@ -254,15 +292,40 @@ fn find_random_reference_of_type(
 /// ```text
 /// ObjectReference Function(FormList arBaseObjects, float afX, float afY, float afZ, float afRadius) native global
 /// ```
-fn find_closest_reference_of_any_type_in_list(
+async fn find_closest_reference_of_any_type_in_list(
     caller: Caller<'_, State>,
-    ar_base_objects: Object,
-    af_x: f32,
-    af_y: f32,
-    af_z: f32,
-    af_radius: f32,
+    base_objects: Object,
+    x: f32,
+    y: f32,
+    z: f32,
+    radius: f32,
 ) -> Result<Object, Error> {
-    todo!()
+    if base_objects.is_null() {
+        return Ok(Object::NULL);
+    }
+
+    let list = caller
+        .data()
+        .objects
+        .get_by_addr(base_objects)
+        .and_then(|s| s.record())
+        .unwrap();
+    let list = caller
+        .data()
+        .globals
+        .form_lists
+        .lock()
+        .get(&list)
+        .unwrap()
+        .clone();
+
+    find_closest_entity(caller, x, y, z, radius, |world, entity| {
+        match world.get::<&BaseObject>(entity) {
+            Ok(base) => list.contains(base.record),
+            Err(_) => false,
+        }
+    })
+    .await
 }
 
 /// `FindRandomReferenceOfAnyTypeInList`
@@ -270,15 +333,40 @@ fn find_closest_reference_of_any_type_in_list(
 /// ```text
 /// ObjectReference Function(FormList arBaseObjects, float afX, float afY, float afZ, float afRadius) native global
 /// ```
-fn find_random_reference_of_any_type_in_list(
+async fn find_random_reference_of_any_type_in_list(
     caller: Caller<'_, State>,
-    ar_base_objects: Object,
-    af_x: f32,
-    af_y: f32,
-    af_z: f32,
-    af_radius: f32,
+    base_objects: Object,
+    x: f32,
+    y: f32,
+    z: f32,
+    radius: f32,
 ) -> Result<Object, Error> {
-    todo!()
+    if base_objects.is_null() {
+        return Ok(Object::NULL);
+    }
+
+    let list = caller
+        .data()
+        .objects
+        .get_by_addr(base_objects)
+        .and_then(|s| s.record())
+        .unwrap();
+    let list = caller
+        .data()
+        .globals
+        .form_lists
+        .lock()
+        .get(&list)
+        .unwrap()
+        .clone();
+
+    find_random_entity(caller, x, y, z, radius, |world, entity| {
+        match world.get::<&BaseObject>(entity) {
+            Ok(base) => list.contains(base.record),
+            Err(_) => false,
+        }
+    })
+    .await
 }
 
 /// `FindClosestActor`
@@ -286,14 +374,17 @@ fn find_random_reference_of_any_type_in_list(
 /// ```text
 /// Actor Function(float afX, float afY, float afZ, float afRadius) native global
 /// ```
-fn find_closest_actor(
+async fn find_closest_actor(
     caller: Caller<'_, State>,
-    af_x: f32,
-    af_y: f32,
-    af_z: f32,
-    af_radius: f32,
+    x: f32,
+    y: f32,
+    z: f32,
+    radius: f32,
 ) -> Result<Object, Error> {
-    todo!()
+    find_closest_entity(caller, x, y, z, radius, |world, entity| {
+        world.get::<&ActorMarker>(entity).is_ok()
+    })
+    .await
 }
 
 /// `FindRandomActor`
@@ -301,14 +392,17 @@ fn find_closest_actor(
 /// ```text
 /// Actor Function(float afX, float afY, float afZ, float afRadius) native global
 /// ```
-fn find_random_actor(
+async fn find_random_actor(
     caller: Caller<'_, State>,
-    af_x: f32,
-    af_y: f32,
-    af_z: f32,
-    af_radius: f32,
+    x: f32,
+    y: f32,
+    z: f32,
+    radius: f32,
 ) -> Result<Object, Error> {
-    todo!()
+    find_random_entity(caller, x, y, z, radius, |world, entity| {
+        world.get::<&ActorMarker>(entity).is_ok()
+    })
+    .await
 }
 
 /// `ForceDisableSSRGodraysDirLight`
@@ -1231,4 +1325,83 @@ where
     };
 
     Ok(f(&mut *props))
+}
+
+fn find_entity_within_radius<F>(world: &World, x: f32, y: f32, z: f32, radius: f32, f: F)
+where
+    F: FnMut(IterElem),
+{
+    let center = Vec3::new(x, y, z).to_opengl();
+    let radius = radius * NIF_TO_METERS;
+
+    let mut accel = world.query::<&AccelerationStructure>();
+    let accel = accel.iter().next().unwrap();
+    accel.query_within_radius(center, radius).for_each(f);
+}
+
+async fn find_closest_entity<F>(
+    caller: Caller<'_, State>,
+    x: f32,
+    y: f32,
+    z: f32,
+    radius: f32,
+    filter: F,
+) -> Result<Object, Error>
+where
+    F: Fn(&World, Entity) -> bool,
+{
+    let mut closest = None;
+    let mut dist_sq = f32::MAX;
+
+    {
+        let world = caller.data().world().await;
+        find_entity_within_radius(&world, x, y, z, radius, |e| {
+            if e.distance_squared() < dist_sq && filter(&world, e.entity()) {
+                closest = Some(e.entity());
+                dist_sq = e.distance_squared();
+            }
+        });
+    }
+
+    let Some(entity) = closest else {
+        return Ok(Object::NULL);
+    };
+
+    let scripts = caller.data().get_or_create_entity(entity).await?;
+    let script = scripts.get("ObjectReference").unwrap();
+    Ok(script.get().object.addr())
+}
+
+async fn find_random_entity<F>(
+    caller: Caller<'_, State>,
+    x: f32,
+    y: f32,
+    z: f32,
+    radius: f32,
+    filter: F,
+) -> Result<Object, Error>
+where
+    F: Fn(&World, Entity) -> bool,
+{
+    let mut entities = Vec::new();
+
+    {
+        let world = caller.data().world().await;
+        find_entity_within_radius(&world, x, y, z, radius, |e| {
+            if filter(&world, e.entity()) {
+                entities.push(e.entity());
+            }
+        });
+    }
+
+    if entities.is_empty() {
+        return Ok(Object::NULL);
+    }
+
+    let index = rand::random_range(0..entities.len());
+    let entity = entities[index];
+
+    let scripts = caller.data().get_or_create_entity(entity).await?;
+    let script = scripts.get("ObjectReference").unwrap();
+    Ok(script.get().object.addr())
 }
