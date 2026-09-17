@@ -39,6 +39,7 @@ pub struct State {
     pub globals: Arc<GlobalProperties>,
     pub wait_for_effects: Arc<Mutex<HashMap<EffectId, Event>>>,
     pub esp_loader: Arc<EspLoader>,
+    pub deletion: HashSet<Entity>,
 }
 
 #[derive(Clone, Debug, Default)]

@@ -668,10 +668,11 @@ async fn damage_value(
 /// `Delete`
 ///
 /// ```text
-/// Function() native
+/// Function Delete() native
 /// ```
-async fn delete(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Error> {
-    todo!()
+async fn delete(mut caller: Caller<'_, State>, self_ptr: Object) {
+    let entity = caller.data().entity(self_ptr).await.unwrap();
+    caller.data_mut().deletion.insert(entity);
 }
 
 /// `Disable`
@@ -1999,8 +2000,9 @@ fn is_created(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Error
 /// ```text
 /// bool Function() native
 /// ```
-fn is_deleted(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Error> {
-    todo!()
+async fn is_deleted(caller: Caller<'_, State>, self_ptr: Object) -> bool {
+    let entity = caller.data().entity(self_ptr).await.unwrap();
+    caller.data().deletion.contains(&entity)
 }
 
 /// `IsDestroyed`

@@ -18,6 +18,7 @@ use futures_lite::future::block_on;
 use game_common::collections::bimap::BiMap;
 use game_tasks::TaskPool;
 use game_tracing::trace_span;
+use hashbrown::HashSet;
 use openfo4_core::ecs::{Entity, World};
 use openfo4_core::events::EventBus;
 use openfo4_pex::Module;
@@ -247,6 +248,7 @@ fn core_actor_values(
         globals,
         wait_for_effects: Arc::default(),
         esp_loader,
+        deletion: HashSet::new(),
     }
 }
 
