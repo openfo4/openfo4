@@ -1,11 +1,14 @@
+use game_common::string::Lowercase;
 use glam::Vec3;
 use openfo4_core::ecs::{Entity, World};
+use openfo4_core::record::RecordId;
 use openfo4_core::transform::ConvertCoordinateSystem;
+use openfo4_esp::FormId;
 use openfo4_script::engine::Engine;
 use openfo4_script::runtime::{Caller, Error};
 
 use crate::assets::nif::NIF_TO_METERS;
-use crate::components::{ActorMarker, ActorProperties, BaseObject, NiTransform, Player};
+use crate::components::{ActorMarker, ActorProperties, BaseObject, Player};
 use crate::state::hardcoded::cumulative_xp_for_level;
 use crate::systems::accel::{AccelerationStructure, IterElem};
 use crate::systems::controller::InputControllerMask;
@@ -534,12 +537,25 @@ fn get_form(caller: Caller<'_, State>, ai_form_id: i32) -> Result<Object, Error>
 /// ```text
 /// Form Function(int aiFormID, string asFilename) native global
 /// ```
-fn get_form_from_file(
-    caller: Caller<'_, State>,
-    ai_form_id: i32,
-    as_filename: Object,
-) -> Result<Object, Error> {
-    todo!()
+async fn get_form_from_file(caller: Caller<'_, State>, form: i32, file: Object) -> Object {
+    let form = FormId::new(0, form.cast_unsigned());
+    let file = Lowercase::new(caller.string(file));
+
+    // We should return `none` if the file is not loaded.
+    let Some(module) = caller.data().esp_loader.resolve_file(&file) else {
+        return Object::NULL;
+    };
+
+    let id = RecordId::new(module, form);
+
+    match caller.data().get_or_create_record_class(id, "Form").await {
+        Ok(s) => s.get().object.addr(),
+        // We should return `none` if the form does not exist.
+        Err(err) => {
+            tracing::error!("GetFormFromFile({form:?}, {file}) failed: {}", err);
+            Object::NULL
+        }
+    }
 }
 
 /// `GetGameSettingFloat`
@@ -855,8 +871,9 @@ async fn is_movement_controls_enabled(caller: Caller<'_, State>) -> Result<bool,
 /// ```text
 /// bool Function(string asName) native global
 /// ```
-fn is_plugin_installed(caller: Caller<'_, State>, as_name: Object) -> Result<bool, Error> {
-    todo!()
+fn is_plugin_installed(caller: Caller<'_, State>, name: Object) -> bool {
+    let name = Lowercase::new(&*caller.string(name));
+    caller.data().esp_loader.resolve_file(&name).is_some()
 }
 
 /// `IsPlayerInRadioRange`

@@ -289,12 +289,6 @@ impl EspLoader {
         self.resolve_form_from_module(form, origin.module)
     }
 
-    /// Resolves a plugin-local [`FormId`] from the given plugin file name into a global [`RecordId`].
-    pub fn resolve_form_file_name(&self, form: FormId, file: &Lowercase<str>) -> Option<RecordId> {
-        let module = *self.plugin_file_names.get(file)?;
-        self.resolve_form_from_module(form, module)
-    }
-
     fn resolve_form_from_module(&self, form: FormId, module: ModuleId) -> Option<RecordId> {
         let index = *self.plugins.get(module.0.get() as usize)?;
         let plugin = &self.files[index as usize];
@@ -308,6 +302,12 @@ impl EspLoader {
 
         let module = *plugin.dependencies.get(plugin_index)?;
         Some(RecordId { form, module })
+    }
+
+    /// Resolves a filename to a [`ModuleId`]. Returns `None` if no file with the given name is
+    /// loaded.
+    pub fn resolve_file(&self, file: &Lowercase<str>) -> Option<ModuleId> {
+        self.plugin_file_names.get(file).copied()
     }
 }
 

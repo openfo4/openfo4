@@ -46,7 +46,7 @@ pub struct ScriptLoader {
     pub(super) esp_loader: Arc<EspLoader>,
     load_events: Mutex<HashMap<RecordId, LoadEvent>>,
     cache: CompilationCache,
-    objects: Arc<ScriptObjects>,
+    pub(super) objects: Arc<ScriptObjects>,
     registration: Arc<RegistrationSet>,
 }
 

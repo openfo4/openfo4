@@ -15,6 +15,7 @@ use parking_lot::{
 use slab::Slab;
 
 use crate::components::BaseObject;
+use crate::state::esp::EspLoader;
 use crate::systems::global::GlobalProperties;
 use crate::systems::quests::QuestManager;
 use crate::systems::scripting::ScriptEntities;
@@ -37,6 +38,7 @@ pub struct State {
     pub loader: Arc<ScriptLoader>,
     pub globals: Arc<GlobalProperties>,
     pub wait_for_effects: Arc<Mutex<HashMap<EffectId, Event>>>,
+    pub esp_loader: Arc<EspLoader>,
 }
 
 #[derive(Clone, Debug, Default)]

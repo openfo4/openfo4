@@ -93,12 +93,19 @@ impl Executor {
 
         let loader = Arc::new(ScriptLoader::new(
             engine.clone(),
-            esp_loader,
+            esp_loader.clone(),
             objects.clone(),
             registration.clone(),
         ));
 
-        let state = core_actor_values(&engine, objects, registration, loader.clone(), globals);
+        let state = core_actor_values(
+            &engine,
+            objects,
+            registration,
+            loader.clone(),
+            globals,
+            esp_loader,
+        );
 
         let mut runner = Runner::new(state, pool.clone());
         let handle = runner.handle();
@@ -193,6 +200,7 @@ fn core_actor_values(
     registration: Arc<RegistrationSet>,
     loader: Arc<ScriptLoader>,
     globals: Arc<GlobalProperties>,
+    esp_loader: Arc<EspLoader>,
 ) -> State {
     block_on(engine.compile("Actor", &COMPILER_OPTIONS)).unwrap();
     block_on(engine.compile("ActorValue", &COMPILER_OPTIONS)).unwrap();
@@ -238,6 +246,7 @@ fn core_actor_values(
         loader,
         globals,
         wait_for_effects: Arc::default(),
+        esp_loader,
     }
 }
 
