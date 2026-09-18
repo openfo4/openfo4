@@ -1346,9 +1346,8 @@ pub struct TACT {
     pub obnd: Bounds,
     #[record("FULL")]
     pub full: Option<LString>,
-    // TODO
     #[record("MODL")]
-    pub modl: Option<()>,
+    pub model: Model,
     #[record("DEST")]
     pub dest: Option<()>,
     #[record("KSIZ")]
@@ -2095,7 +2094,7 @@ pub struct GRAS {
     pub obnd: Bounds,
     // TODO
     #[record("MODL")]
-    pub modl: Option<()>,
+    pub model: Model,
     #[record("DATA")]
     pub data: GRAS_DATA,
 }
@@ -2978,7 +2977,8 @@ pub struct Key {
     pub object_bounds: Bounds,
     #[record("FULL")]
     pub full: Option<LString>,
-    //model
+    #[record("MODL")]
+    pub model: Model,
     #[record("ICON")]
     pub inventory_image: Option<ZString>,
     #[record("MICO")]
@@ -3107,7 +3107,8 @@ pub struct Note {
     pub preview_transform: Option<FormId>,
     #[record("FULL")]
     pub full_name: Option<LString>,
-    // model
+    #[record("MODL")]
+    pub model: Model,
     #[record("ICON")]
     pub inventory_image: Option<ZString>,
     #[record("YNAM")]
@@ -3235,7 +3236,8 @@ pub struct Hazard {
     pub object_bounds: Bounds,
     #[record("FULL")]
     pub full_name: Option<LString>,
-    //modl
+    #[record("MODL")]
+    pub model: Model,
     #[record("MNAM")]
     pub image_space_modifier: Option<FormId>,
     #[record("DNAM")]

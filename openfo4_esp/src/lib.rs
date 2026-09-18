@@ -1523,6 +1523,10 @@ impl ZString {
     pub fn as_str(&self) -> Option<&str> {
         std::str::from_utf8(&self.0).ok()
     }
+
+    pub fn is_empty(&self) -> bool {
+        self.as_bytes().is_empty()
+    }
 }
 
 impl Debug for ZString {

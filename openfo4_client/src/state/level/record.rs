@@ -27,7 +27,7 @@ use crate::state::level::LoadContext;
 use crate::state::level::data_ext::RecordDataExt;
 use crate::state::level::items::{LoadItemProps, resolve_item};
 use crate::state::level::navmesh::load_navmesh;
-use crate::state::level::partial::{LodLevel, PartialEntityFlags};
+use crate::state::level::partial::PartialEntityFlags;
 use crate::state::level::terrain::load_land;
 use crate::state::npc::{Actor, ActorInstanceProps, ObjectKeywords};
 use crate::state::terrain::{TerrainManager, TerrainRegion};
@@ -350,12 +350,10 @@ impl SpawnEntity {
             return None;
         }
 
-        let mut model = None;
         let mut light = None;
         let mut light_flicker = None;
         let mut actor = None;
         let mut inventory = None;
-        let mut object_bounds = None;
 
         let mut keywords = HashSet::default();
         for keyword in base.local.data.keywords() {
@@ -378,36 +376,11 @@ impl SpawnEntity {
             return None;
         }
 
-        match base.local.data {
-            RecordData::STAT(data) => {
-                object_bounds = Some(data.object_bounds);
+        let model = base.local.data.model(flags.lod);
+        let object_bounds = base.local.data.object_bounds();
 
-                match flags.lod {
-                    LodLevel::Normal => {
-                        model = data.modl.model;
-                    }
-                    LodLevel::Distant0 => {
-                        if let Some(lods) = data.lods
-                            && !lods.level0.as_bytes().is_empty()
-                        {
-                            model = Some(lods.level0);
-                        } else {
-                            model = data.modl.model;
-                        }
-                    }
-                }
-            }
-            RecordData::StaticCollection(data) => {
-                model = data.model.model;
-                object_bounds = Some(data.object_bounds);
-            }
-            RecordData::MSTT(data) => {
-                model = data.model.model;
-                object_bounds = Some(data.obnd);
-            }
+        match &base.local.data {
             RecordData::Door(data) => {
-                model = data.model.model;
-
                 if data.flags.contains(DoorFlags::AUTOMATIC) {
                     door = door.map(|door| match door {
                         Door::Portal(door) => Door::AutoPortal(door),
@@ -416,12 +389,8 @@ impl SpawnEntity {
                 } else {
                     door = Some(Door::Normal(DoorState::Closed));
                 }
-
-                object_bounds = Some(data.object_bounds);
             }
             RecordData::Container(data) => {
-                model = data.model.model;
-
                 let mut inv = Inventory::default();
 
                 for item in &data.items {
@@ -445,8 +414,6 @@ impl SpawnEntity {
                 }
 
                 inventory = Some(inv);
-
-                object_bounds = Some(data.object_bounds);
             }
             RecordData::Npc(_) => {
                 if flags.actor {
@@ -470,21 +437,7 @@ impl SpawnEntity {
                 }
             }
             RecordData::IdleMarker(_) => return None,
-            RecordData::Activator(data) => {
-                model = data.model.model;
-                object_bounds = Some(data.object_bounds);
-            }
-            RecordData::MiscObject(data) => {
-                model = data.model.model;
-                object_bounds = Some(data.object_bounds);
-            }
-            RecordData::Furniture(data) => {
-                model = data.model.model;
-                object_bounds = Some(data.object_bounds);
-            }
             RecordData::Light(data) => {
-                model = data.model.model;
-
                 let intensity = (data.fade_value + light_mod.fade) * 10.0;
                 let radius = (data.data.radius as f32 + light_mod.radius) * NIF_TO_METERS;
 
@@ -519,15 +472,8 @@ impl SpawnEntity {
                         state: Default::default(),
                     });
                 }
-
-                object_bounds = Some(data.object_bounds);
             }
-            RecordData::Ingestible(data) => {
-                model = data.model.model;
-                object_bounds = Some(data.object_bounds);
-            }
-            _ => return None,
-            x => todo!("{:?}", x),
+            _ => {}
         }
 
         let mut nif_flags = LoadNifFlags::empty();
