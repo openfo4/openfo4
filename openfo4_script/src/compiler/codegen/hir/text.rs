@@ -342,28 +342,6 @@ where
                 op.array, op.index, op.count
             )?;
         }
-        Instruction::ArrayFind(op) => {
-            let elem_ty = ty_to_string(op.elem_ty);
-            writeln!(
-                writer,
-                "{} = array_find {} {} {} {}",
-                op.write_index, op.array, elem_ty, op.start_index, op.searched_value
-            )?;
-        }
-        Instruction::ArrayFindStruct(op) => {
-            let str = data.registry.struct_(op.struct_ty).unwrap();
-
-            writeln!(
-                writer,
-                "{} = array_find_struct {} {} {} {} {}",
-                op.write_index,
-                op.array,
-                str.debug_name,
-                op.struct_member,
-                op.start_index,
-                op.searched_value
-            )?;
-        }
         Instruction::CreateVar {
             src,
             dst,

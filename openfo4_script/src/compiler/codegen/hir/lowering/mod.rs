@@ -525,12 +525,6 @@ pub fn lower_function(
                 Instruction::ArrayRemove(op) => {
                     array::array_remove(&mut translator, op);
                 }
-                Instruction::ArrayFind(op) => {
-                    array::array_find(&mut translator, op);
-                }
-                Instruction::ArrayFindStruct(op) => {
-                    array::array_find_struct(&mut translator, op);
-                }
                 Instruction::CreateVar {
                     src,
                     dst,

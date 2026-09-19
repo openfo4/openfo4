@@ -135,8 +135,6 @@ enum Instruction {
         value: Value<Literal>,
         index: Value<i32>,
     },
-    ArrayFind(ArrayFind),
-    ArrayFindStruct(ArrayFindStruct),
     ArrayCreate {
         array: Value<Null>,
         len: Value<i32>,
@@ -852,47 +850,6 @@ impl FunctionBuilder {
 
     pub fn array_clear(&mut self, array: Value<Null>) {
         self.instructions.push(Instruction::ArrayClear { array });
-    }
-
-    pub fn array_find(
-        &mut self,
-        array: Value<Null>,
-        start_index: Value<i32>,
-        searched_value: Value<Literal>,
-        scan_backwards: bool,
-        write_index: Value<i32>,
-        elem_ty: TypeId,
-    ) {
-        self.instructions.push(Instruction::ArrayFind(ArrayFind {
-            array,
-            start_index,
-            searched_value,
-            scan_backwards,
-            write_index,
-            elem_ty,
-        }));
-    }
-
-    pub fn array_find_struct(
-        &mut self,
-        array: Value<Null>,
-        start_index: Value<i32>,
-        searched_value: Value<Literal>,
-        write_index: Value<i32>,
-        scan_backwards: bool,
-        struct_ty: StructId,
-        struct_member: Lowercase<String>,
-    ) {
-        self.instructions
-            .push(Instruction::ArrayFindStruct(ArrayFindStruct {
-                array,
-                start_index,
-                searched_value,
-                scan_backwards,
-                write_index,
-                struct_ty,
-                struct_member,
-            }));
     }
 
     pub fn string_concat(&mut self, lhs: Value<String>, rhs: Value<String>, dst: Value<String>) {

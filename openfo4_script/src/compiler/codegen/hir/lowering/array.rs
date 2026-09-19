@@ -1,21 +1,20 @@
 use std::mem::offset_of;
 use std::ptr;
 
-use openfo4_jit::{FloatCompareOp, IntCompareOp, Type as JitType, Value as JitValue};
+use openfo4_jit::{IntCompareOp, Type as JitType, Value as JitValue};
 
-use crate::compiler::codegen::function::type_to_id;
 use crate::compiler::codegen::hir::lowering::malloc::call_malloc;
 use crate::compiler::codegen::hir::lowering::{
-    BOOL_TYPE, FLOAT_TYPE, INT_TYPE, ISIZE_TYPE, PTR_TYPE, Translator, string,
+    BOOL_TYPE, FLOAT_TYPE, INT_TYPE, ISIZE_TYPE, PTR_TYPE, Translator,
 };
-use crate::compiler::codegen::hir::{
-    ArrayAdd, ArrayFind, ArrayFindStruct, ArrayInsert, ArrayRemove, Literal, Null, Value,
-};
+use crate::compiler::codegen::hir::{ArrayAdd, ArrayInsert, ArrayRemove, Literal, Null, Value};
 use crate::compiler::resources::{Type, TypeId, TypeRepr};
 use crate::runtime::ArrayObject;
 
 pub fn array_length(translator: &mut Translator<'_>, array: &Value<Null>, dst: &Value<i32>) {
     let array = translator.load(array);
+
+    translator.assert_true(array);
 
     // A null array is considered to be of length 0.
     let array_non_null_block = translator.builder.create_block(&[]);
@@ -316,162 +315,6 @@ pub fn array_remove(translator: &mut Translator<'_>, op: &ArrayRemove) {
     translator.current_block = exit_block;
 }
 
-pub fn array_find(translator: &mut Translator<'_>, op: &ArrayFind) {
-    let ty = translator.lowered_ty_from_id(op.elem_ty);
-    let stride = ty.size();
-
-    array_find_inner(translator, op, |translator, base_addr, index| {
-        let offset = translator.builder.imul_imm(index, stride);
-        let addr = translator.builder.ptroffset(base_addr, offset);
-        translator.builder.load(ty, addr, 0)
-    });
-}
-
-pub fn array_find_struct(translator: &mut Translator<'_>, op: &ArrayFindStruct) {
-    let struct_ = translator.data.registry.struct_(op.struct_ty).unwrap();
-    let member_offset = translator
-        .data
-        .struct_field_offsets
-        .get(&op.struct_ty)
-        .unwrap()
-        .get(&op.struct_member)
-        .unwrap();
-    let struct_ty = *translator.data.struct_types.get(&op.struct_ty).unwrap();
-
-    let stride = translator
-        .data
-        .resources
-        .types
-        .get(struct_ty)
-        .unwrap()
-        .repr
-        .size_padded();
-
-    let (_, member_ty) = struct_
-        .fields
-        .iter()
-        .find(|(name, _)| **name == op.struct_member)
-        .unwrap();
-    let member_ty = type_to_id(translator.data, member_ty);
-
-    let member_ty_lowered = translator.lowered_ty_from_id(member_ty);
-
-    array_find_inner(
-        translator,
-        &ArrayFind {
-            array: op.array.clone(),
-            start_index: op.start_index.clone(),
-            searched_value: op.searched_value.clone(),
-            scan_backwards: op.scan_backwards,
-            write_index: op.write_index.clone(),
-            elem_ty: member_ty,
-        },
-        |translator, base_addr, index| {
-            let offset = translator.builder.imul_imm(index, stride);
-            let addr = translator.builder.ptroffset(base_addr, offset);
-            let struct_addr = translator.builder.load(PTR_TYPE, addr, 0);
-            translator
-                .builder
-                .load(member_ty_lowered, struct_addr, *member_offset)
-        },
-    );
-}
-
-/// get_elem = fn(translator, base_addr, index) -> value
-fn array_find_inner<F>(translator: &mut Translator<'_>, op: &ArrayFind, get_elem: F)
-where
-    F: FnOnce(&mut Translator<'_>, JitValue, JitValue) -> JitValue,
-{
-    let array = translator.load(&op.array);
-    let start_index = translator.load(&op.start_index);
-    let searched_value = translator.load(&op.searched_value);
-
-    // Abort if array == null.
-    translator.assert_true(array);
-
-    let ptr = translator
-        .builder
-        .load(PTR_TYPE, array, offset_of!(ArrayObject, ptr));
-    let len = translator
-        .builder
-        .load(ISIZE_TYPE, array, offset_of!(ArrayObject, len));
-
-    // FIXME: What with other negative indices.
-
-    let entry_block = translator.builder.create_block(&[ISIZE_TYPE]);
-    let body_block = translator.builder.create_block(&[ISIZE_TYPE]);
-    let terminator_block = translator.builder.create_block(&[INT_TYPE]);
-
-    let start_index_wide = translator.builder.uextend(start_index, ISIZE_TYPE);
-
-    // The value `-1` indicates the end of the array.
-    let negative_one = translator.builder.iconst(INT_TYPE, -1);
-    let start_at_end = translator
-        .builder
-        .icmp_imm(start_index, -1, IntCompareOp::Equal);
-
-    // If len == 0, then len - 1 will be usize::MAX and be out of bounds
-    // immediately.
-    let last_index = translator.builder.isub_imm(len, 1);
-    translator.builder.brif(
-        start_at_end,
-        entry_block,
-        &[last_index],
-        entry_block,
-        &[start_index_wide],
-    );
-
-    {
-        translator.builder.switch_to_block(entry_block);
-
-        let index = translator.builder.block_params(entry_block)[0];
-        let is_ok = translator
-            .builder
-            .icmp(index, len, IntCompareOp::SignedLessThan);
-
-        translator.builder.brif(
-            is_ok,
-            body_block,
-            &[index],
-            terminator_block,
-            &[negative_one],
-        );
-    }
-
-    {
-        translator.builder.switch_to_block(body_block);
-        let index = translator.builder.block_params(body_block)[0];
-
-        let value = get_elem(translator, ptr, index);
-
-        let is_eq = check_elem_equality(translator, value, searched_value, op.elem_ty);
-
-        let index_i32 = translator.builder.ireduce(index, INT_TYPE);
-
-        let next_index = if op.scan_backwards {
-            translator.builder.isub_imm(index, 1)
-        } else {
-            translator.builder.iadd_imm(index, 1)
-        };
-
-        translator.builder.brif(
-            is_eq,
-            terminator_block,
-            &[index_i32],
-            entry_block,
-            &[next_index],
-        );
-    }
-
-    {
-        translator.builder.switch_to_block(terminator_block);
-        let index = translator.builder.block_params(terminator_block)[0];
-        translator.store(&op.write_index, index);
-    }
-
-    translator.current_block = terminator_block;
-}
-
 /// Returns the starting address of element `index` from the given `array`.
 /// Bounds checking is not included.
 ///
@@ -562,26 +405,6 @@ fn create_array_object(translator: &mut Translator<'_>, ptr: JitValue, len: JitV
         .store(len, array, offset_of!(ArrayObject, len));
 
     array
-}
-
-fn check_elem_equality(
-    translator: &mut Translator<'_>,
-    lhs: JitValue,
-    rhs: JitValue,
-    elem_ty: TypeId,
-) -> JitValue {
-    if elem_ty == translator.data.resources.primitives.bool {
-        translator.builder.icmp(lhs, rhs, IntCompareOp::Equal)
-    } else if elem_ty == translator.data.resources.primitives.int {
-        translator.builder.icmp(lhs, rhs, IntCompareOp::Equal)
-    } else if elem_ty == translator.data.resources.primitives.float {
-        translator.builder.fcmp(lhs, rhs, FloatCompareOp::Equal)
-    } else if elem_ty == translator.data.resources.primitives.string {
-        string::string_cmpeq(translator, lhs, rhs)
-    } else {
-        // Object/Struct/Array
-        translator.builder.icmp(lhs, rhs, IntCompareOp::Equal)
-    }
 }
 
 pub fn array_cast<F>(

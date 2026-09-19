@@ -1,3 +1,5 @@
+mod array;
+
 use std::fmt::Write;
 
 use game_common::string::Lowercase;
@@ -725,9 +727,7 @@ fn translate_state_body(
                         .struct_store(object, value, id, field_name);
                 }
                 Instruction::ArrayLength(op) => {
-                    let array = translator.load(&op.src);
-                    let dst = translator.load(&op.dst);
-                    translator.builder.array_length(array, dst);
+                    array::lower_array_len(translator, op);
                 }
                 Instruction::ArrayGet(op) => {
                     let array = translator.load(&op.array);
@@ -796,54 +796,12 @@ fn translate_state_body(
                     todo!();
                 }
                 Instruction::ArrayFind(op) | Instruction::ArrayRFind(op) => {
-                    let Type::Array(elem_ty) = translator.type_of_value(&op.array_value) else {
-                        unreachable!();
-                    };
-                    let elem_ty = type_to_id(translator.data, &elem_ty);
-
-                    let scan_backwards = matches!(instruction, Instruction::ArrayRFind(_));
-
-                    let array = translator.load(&op.array_value);
-                    let start_index = translator.load(&op.start_index);
-                    let searched_value = translator.load(&op.value);
-                    let write_index = translator.load(&op.return_index);
-
-                    translator.builder.array_find(
-                        array,
-                        start_index,
-                        searched_value,
-                        scan_backwards,
-                        write_index,
-                        elem_ty,
-                    );
+                    let reverse = matches!(instruction, Instruction::ArrayRFind(_));
+                    array::lower_array_find(translator, op, reverse);
                 }
                 Instruction::ArrayFindStruct(op) | Instruction::ArrayRFindStruct(op) => {
-                    let scan_backwards = matches!(instruction, Instruction::ArrayRFind(_));
-
-                    let array_ty = translator.type_of_value(&op.array_value);
-                    let Type::Array(struct_name) = array_ty else {
-                        unreachable!();
-                    };
-                    let Type::Struct(struct_name) = *struct_name else {
-                        unreachable!();
-                    };
-
-                    let member_name = Lowercase::new(&*op.member_name);
-
-                    let array = translator.load(&op.array_value);
-                    let start_index = translator.load(&op.start_index);
-                    let searched_value = translator.load(&op.value);
-                    let write_index = translator.load(&op.return_index);
-
-                    translator.builder.array_find_struct(
-                        array,
-                        start_index,
-                        searched_value,
-                        write_index,
-                        scan_backwards,
-                        struct_name,
-                        member_name,
-                    );
+                    let reverse = matches!(instruction, Instruction::ArrayRFind(_));
+                    array::lower_array_struct(translator, op, reverse);
                 }
                 Instruction::StringConcat(op) => {
                     let lhs = translator.load(&op.lhs);
