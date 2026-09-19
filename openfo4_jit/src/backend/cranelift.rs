@@ -12,7 +12,7 @@ use cranelift_codegen::control::ControlPlane;
 use cranelift_codegen::ir::condcodes::{FloatCC, IntCC};
 use cranelift_codegen::ir::{
     self, ArgumentExtension, ArgumentPurpose, BlockArg, ExtFuncData, ExternalName, Function,
-    InstBuilder, MemFlags, StackSlotData, StackSlotKind, UserExternalName, UserExternalNameRef,
+    InstBuilder, MemFlagsData, StackSlotData, StackSlotKind, UserExternalName, UserExternalNameRef,
     UserFuncName,
 };
 use cranelift_codegen::isa::{CallConv, OwnedTargetIsa};
@@ -637,7 +637,7 @@ impl Backend for CraneliftModule {
                                 // TODO: We can do manual address calcuation when offset is too big.
                                 let offset = i32::try_from(*offset).unwrap_or_else(|_| todo!());
 
-                                let res = builder.ins().stack_load(ty, slot, offset);
+                                let res = builder.ins().stack_load(ptr_type, ty, slot, offset);
                                 values[dst.0] = Some(res);
                                 added_inst_count += 1;
                             }
@@ -652,7 +652,7 @@ impl Backend for CraneliftModule {
                                 // TODO: We can do manual address calcuation when offset is too big.
                                 let offset = i32::try_from(*offset).unwrap_or_else(|_| todo!());
 
-                                builder.ins().stack_store(value, slot, offset);
+                                builder.ins().stack_store(ptr_type, value, slot, offset);
                                 added_inst_count += 1;
                             }
                             Instruction::StackAddr { slot, dst, offset } => {
@@ -726,7 +726,10 @@ impl Backend for CraneliftModule {
                                 // TODO: We can do manual address calcuation when offset is too big.
                                 let offset = i32::try_from(*offset).unwrap_or_else(|_| todo!());
 
-                                let res = builder.ins().load(ty, MemFlags::trusted(), addr, offset);
+                                let res =
+                                    builder
+                                        .ins()
+                                        .load(ty, MemFlagsData::trusted(), addr, offset);
                                 values[dst.0] = Some(res);
                                 added_inst_count += 1;
                             }
@@ -743,7 +746,7 @@ impl Backend for CraneliftModule {
 
                                 builder
                                     .ins()
-                                    .store(MemFlags::trusted(), value, addr, offset);
+                                    .store(MemFlagsData::trusted(), value, addr, offset);
                                 added_inst_count += 1;
                             }
                             Instruction::FToU { value, ty, dst } => {
@@ -829,7 +832,9 @@ impl Backend for CraneliftModule {
                             Instruction::Bitcast { value, dst, ty } => {
                                 let src = values[value.0].unwrap();
                                 let ty = map_type(*ty);
-                                let res = builder.ins().bitcast(ty, MemFlags::new(), src);
+                                // MemFlags is only relevant for endianess here.
+                                // Our instructions guarantees to always use native endian.
+                                let res = builder.ins().bitcast(ty, MemFlagsData::new(), src);
                                 values[dst.0] = Some(res);
                                 added_inst_count += 1;
                             }
@@ -944,7 +949,7 @@ impl Backend for CraneliftModule {
                 .then(|| builder.func.display().to_string())
                 .unwrap_or_default();
 
-            builder.finalize();
+            builder.finalize(self.isa.frontend_config());
 
             self.ctx.clear();
             self.ctx.func = func;

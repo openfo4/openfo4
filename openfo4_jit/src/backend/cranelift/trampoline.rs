@@ -1,5 +1,5 @@
 use cranelift_codegen::ir::{
-    self, ExtFuncData, ExternalName, InstBuilder, MemFlags, StackSlotData, StackSlotKind,
+    self, ExtFuncData, ExternalName, InstBuilder, MemFlagsData, StackSlotData, StackSlotKind,
     UserExternalName, UserExternalNameRef,
 };
 use cranelift_frontend::FunctionBuilder;
@@ -70,7 +70,7 @@ pub fn call_host_trampoline(
             offset = (offset + ty.align() - 1) & !(ty.align() - 1);
             builder
                 .ins()
-                .stack_store(*value, params_slot, offset as i32);
+                .stack_store(ptr_type, *value, params_slot, offset as i32);
             offset += ty.size();
         }
     }
@@ -106,7 +106,9 @@ pub fn call_host_trampoline(
         offset = (offset + ty.align() - 1) & !(ty.align() - 1);
 
         let ir_ty = map_type(ptr_type, *ty);
-        let value = builder.ins().stack_load(ir_ty, returns_slot, offset as i32);
+        let value = builder
+            .ins()
+            .stack_load(ptr_type, ir_ty, returns_slot, offset as i32);
         return_values.push(value);
 
         offset += ty.size();
@@ -137,7 +139,7 @@ pub fn call_guest_trampoline(
         offset = (offset + ty.align() - 1) & !(ty.align() - 1);
         let value = builder.ins().load(
             map_type(ptr_type, *ty),
-            MemFlags::trusted(),
+            MemFlagsData::trusted(),
             params_ptr,
             offset as i32,
         );
@@ -167,7 +169,7 @@ pub fn call_guest_trampoline(
         offset = (offset + ty.align() - 1) & !(ty.align() - 1);
         builder
             .ins()
-            .store(MemFlags::trusted(), value, returns_ptr, offset as i32);
+            .store(MemFlagsData::trusted(), value, returns_ptr, offset as i32);
         offset += ty.size();
     }
 
