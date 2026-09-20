@@ -7,6 +7,7 @@ use crossbeam::queue::SegQueue;
 use event_listener::EventListener;
 use futures_lite::FutureExt;
 use game_common::collections::bimap::BiMap;
+use game_common::components::Transform;
 use hashbrown::HashMap;
 use openfo4_asset::AssetLoader;
 use openfo4_core::ecs::Entity;
@@ -15,7 +16,7 @@ use openfo4_esp::FormId;
 use parking_lot::RwLock;
 
 use crate::cell::CellId;
-use crate::components::WorldSpace;
+use crate::components::{NiTransform, WorldSpace};
 use crate::loader::FileLoader;
 use crate::shared::SharedState;
 use crate::state::esp::EspLoader;
@@ -67,6 +68,57 @@ impl EntityLoader {
             }),
             tick: event_listener::Event::new(),
         }
+    }
+
+    pub async fn spawn(&self, base: RecordId, info: SpawnEntityInfo) -> Result<EntityRef, ()> {
+        let record = self.esp_loader.lookup(None, base).await.unwrap();
+
+        let ctx = LoadContext {
+            // FIXME: What do we use here?
+            cell: CellId::new(0, 0),
+            esp_loader: &self.esp_loader,
+            file_loader: &self.file_loader,
+            script_loader: &self.script_loader,
+            loader: &self.asset_loader,
+            shared: &self.shared,
+        };
+
+        let flags = PartialEntityFlags {
+            graphics: false,
+            physics: false,
+            actor: false,
+            scene: false,
+            script: false,
+            require_distant_lod: false,
+            lod: LodLevel::Normal,
+        };
+
+        let mut entity = SpawnEntity::load_base(&ctx, &record, flags).await.unwrap();
+        entity.transform = NiTransform::from(info.transform);
+        entity.worldspace = Some(info.worldspace);
+        entity.persistent = info.persistent;
+        entity.disabled = info.disabled;
+
+        let event = event_listener::Event::with_tag();
+        let listen = event.listen();
+
+        self.events.push(Event::SpawnEntity {
+            record: None,
+            entity,
+            make_ref: true,
+            signal: Some(event),
+        });
+
+        let entity = listen.await;
+
+        let entities = self.entities.read();
+        let ref_count = entities.ref_counts.get(&entity).unwrap().clone();
+
+        Ok(EntityRef {
+            ref_count,
+            queue: self.events.clone(),
+            entity,
+        })
     }
 
     /// Returns the entity of the given [`RecordId`].
@@ -211,7 +263,8 @@ impl EntityLoader {
         self.events.push(Event::SpawnEntity {
             entity,
             make_ref: true,
-            record: record.id,
+            record: Some(record.id),
+            signal: None,
         });
 
         // Now we wait until the game loop synchronizes with our future.
@@ -318,4 +371,14 @@ impl EntityRefInner {
             deleted: AtomicBool::new(false),
         }
     }
+}
+
+#[derive(Clone, Debug)]
+pub struct SpawnEntityInfo {
+    pub transform: Transform,
+    pub worldspace: WorldSpace,
+    /// Flag the new entity as disabled on creation.
+    pub disabled: bool,
+    /// Flag the new entity as persistent.
+    pub persistent: bool,
 }

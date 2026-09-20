@@ -34,6 +34,7 @@ use crate::events::inventory::{ItemAddedEvent, ItemEquippedEvent};
 use crate::events::trigger::{TriggerEnter, TriggerLeave};
 use crate::loader::FileLoader;
 use crate::state::esp::EspLoader;
+use crate::state::level::loader::EntityLoader;
 use crate::systems::DeathStartEvent;
 use crate::systems::global::GlobalProperties;
 use crate::systems::quests::QuestManager;
@@ -55,20 +56,19 @@ const COMPILER_OPTIONS: Options = Options {
     use_native_stubs: false,
 };
 
-pub struct Executor {
+pub struct ExecutorBuilder {
     loader: Arc<ScriptLoader>,
-    handle: RunnerHandle,
+    pool: Arc<TaskPool>,
 }
 
-impl Executor {
+impl ExecutorBuilder {
     pub async fn new(
         esp_loader: Arc<EspLoader>,
         file_loader: Arc<FileLoader>,
         pool: Arc<TaskPool>,
         config: config::Scripting,
-        globals: Arc<GlobalProperties>,
     ) -> Self {
-        let _span = trace_span!("Executor::new").entered();
+        let _span = trace_span!("ExecutorBuilder::new").entered();
 
         let mut engine = Engine::new(CompilerOptions {
             validation: config.validation,
@@ -99,22 +99,45 @@ impl Executor {
             registration.clone(),
         ));
 
-        let state = core_actor_values(
-            &engine,
-            objects,
-            registration,
-            loader.clone(),
-            globals,
-            esp_loader,
-        );
-
-        let mut runner = Runner::new(state, pool.clone());
-        let handle = runner.handle();
-        pool.spawn(async move { runner.run().await });
-
-        Self { loader, handle }
+        Self { loader, pool }
     }
 
+    pub fn loader(&self) -> &Arc<ScriptLoader> {
+        &self.loader
+    }
+
+    pub fn build(
+        self,
+        globals: Arc<GlobalProperties>,
+        entity_loader: Arc<EntityLoader>,
+    ) -> Executor {
+        let state = core_actor_values(
+            &self.loader.engine,
+            self.loader.objects.clone(),
+            self.loader.registration.clone(),
+            self.loader.clone(),
+            globals,
+            self.loader.esp_loader.clone(),
+            entity_loader,
+        );
+
+        let mut runner = Runner::new(state, self.pool.clone());
+        let handle = runner.handle();
+        self.pool.spawn(async move { runner.run().await });
+
+        Executor {
+            loader: self.loader,
+            handle,
+        }
+    }
+}
+
+pub struct Executor {
+    loader: Arc<ScriptLoader>,
+    handle: RunnerHandle,
+}
+
+impl Executor {
     pub fn loader(&self) -> &Arc<ScriptLoader> {
         &self.loader
     }
@@ -202,6 +225,7 @@ fn core_actor_values(
     loader: Arc<ScriptLoader>,
     globals: Arc<GlobalProperties>,
     esp_loader: Arc<EspLoader>,
+    entity_loader: Arc<EntityLoader>,
 ) -> State {
     block_on(engine.compile("Actor", &COMPILER_OPTIONS)).unwrap();
     block_on(engine.compile("ActorValue", &COMPILER_OPTIONS)).unwrap();
@@ -249,6 +273,7 @@ fn core_actor_values(
         wait_for_effects: Arc::default(),
         esp_loader,
         deletion: HashSet::new(),
+        entity_loader,
     }
 }
 

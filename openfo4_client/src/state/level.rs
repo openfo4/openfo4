@@ -12,6 +12,7 @@ use std::sync::Arc;
 
 use async_channel::Receiver;
 use crossbeam::queue::SegQueue;
+use event_listener::IntoNotification;
 use futures::StreamExt;
 use futures::stream::FuturesUnordered;
 use game_common::components::Transform;
@@ -40,8 +41,8 @@ use crate::state::level::loader::{EntityLoader, EntityRefInner};
 use crate::state::level::partial::{LodLevel, PartialEntityFlags};
 use crate::state::level::record::SpawnEntity;
 use crate::state::terrain::TerrainManager;
+use crate::systems::scripting::ScriptEntities;
 use crate::systems::scripting::loader::ScriptLoader;
-use crate::systems::scripting::{Executor, ScriptEntities};
 
 use super::esp::EspLoader;
 
@@ -68,7 +69,7 @@ impl Level {
         pool: Arc<TaskPool>,
         file_loader: Arc<FileLoader>,
         shared: Arc<SharedState>,
-        executor: &mut Executor,
+        script_loader: &Arc<ScriptLoader>,
         config: config::Streaming,
     ) -> Self {
         let terrain_manager = TerrainManager::new(shared.entities.clone());
@@ -110,7 +111,7 @@ impl Level {
             let file_loader = file_loader.clone();
             let shared = shared.clone();
             let asset_loader = asset_loader.clone();
-            let script_loader = executor.loader().clone();
+            let script_loader = script_loader.clone();
 
             async move {
                 load_cells_task(
@@ -140,7 +141,7 @@ impl Level {
                 file_loader,
                 shared,
                 asset_loader,
-                executor.loader().clone(),
+                script_loader.clone(),
                 events,
             )),
             config,
@@ -245,6 +246,7 @@ impl Level {
                     record,
                     entity,
                     make_ref,
+                    signal,
                 } => {
                     let worldspace = entity.worldspace.unwrap();
                     let cell = if worldspace.is_interior {
@@ -280,7 +282,9 @@ impl Level {
                         //    In this case `make_ref` is set of the second event and the `EntityLoader`
                         //    expects a ref-count of one to exist on the entity, i.e. we must create
                         //    the ref-count, but with the enity of the first event.
-                        if let Some(entity) = entities.entities.get_left(&record).copied() {
+                        if let Some(record) = record
+                            && let Some(entity) = entities.entities.get_left(&record).copied()
+                        {
                             if !make_ref {
                                 continue;
                             }
@@ -302,11 +306,18 @@ impl Level {
                             script_entities,
                         );
 
-                        entities.entities.insert(record, entity);
+                        if let Some(record) = record {
+                            entities.entities.insert(record, entity);
+                        }
+
                         if make_ref {
                             entities
                                 .ref_counts
                                 .insert(entity, Arc::new(EntityRefInner::new_with_one_rc()));
+                        }
+
+                        if let Some(signal) = signal {
+                            signal.notify(1.tag(entity));
                         }
 
                         self.alive_entities.insert(entity);
@@ -847,9 +858,10 @@ async fn load_cell(
                 }
 
                 events.push(Event::SpawnEntity {
-                    record: record.id,
+                    record: Some(record.id),
                     entity,
                     make_ref: false,
+                    signal: None,
                 });
             }
         });
@@ -884,10 +896,11 @@ impl LoadContext<'_> {
 #[derive(Debug)]
 enum Event {
     SpawnEntity {
-        record: RecordId,
+        record: Option<RecordId>,
         entity: SpawnEntity,
         // Make a ref count with value 1 in the EntitySet.
         make_ref: bool,
+        signal: Option<event_listener::Event<Entity>>,
     },
     /// Cell is fully loaded.
     CellLoadDone {

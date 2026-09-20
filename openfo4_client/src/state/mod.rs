@@ -67,7 +67,7 @@ use crate::systems::hierarchy::TransformHierarchyCache;
 use crate::systems::inventory::InventorySystem;
 use crate::systems::movement::apply_movement;
 use crate::systems::quests::QuestManager;
-use crate::systems::scripting::{Executor, ScriptEntities};
+use crate::systems::scripting::{Executor, ExecutorBuilder, ScriptEntities};
 use crate::systems::time::{init_time, update_time};
 use crate::systems::trigger_box::update_trigger_box_contacts;
 use crate::systems::weapon::{
@@ -137,12 +137,11 @@ impl GameState {
             playtime: PlayTime::default(),
         });
 
-        let mut executor = Executor::new(
+        let executor = ExecutorBuilder::new(
             loader.clone(),
             file_loader.clone(),
             pool.clone(),
             config.scripting,
-            globals.clone(),
         )
         .await;
 
@@ -152,9 +151,11 @@ impl GameState {
             pool.clone(),
             file_loader.clone(),
             shared.clone(),
-            &mut executor,
+            executor.loader(),
             config.streaming,
         );
+
+        let mut executor = executor.build(globals.clone(), level.loader().clone());
 
         let mut world = World::new();
         init_time(&mut world);

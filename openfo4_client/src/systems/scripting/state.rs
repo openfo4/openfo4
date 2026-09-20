@@ -16,6 +16,7 @@ use slab::Slab;
 
 use crate::components::BaseObject;
 use crate::state::esp::EspLoader;
+use crate::state::level::loader::EntityLoader;
 use crate::systems::global::GlobalProperties;
 use crate::systems::quests::QuestManager;
 use crate::systems::scripting::ScriptEntities;
@@ -40,6 +41,7 @@ pub struct State {
     pub wait_for_effects: Arc<Mutex<HashMap<EffectId, Event>>>,
     pub esp_loader: Arc<EspLoader>,
     pub deletion: HashSet<Entity>,
+    pub entity_loader: Arc<EntityLoader>,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -105,10 +107,25 @@ impl State {
         Borrow::map(s, |state| unsafe { &*state.entities })
     }
 
+    pub async fn entities_mut(&self) -> BorrowMut<'_, ScriptEntities> {
+        let s = self.borrowed.borrow_mut().await;
+        BorrowMut::map(s, |state| unsafe { &mut *state.entities })
+    }
+
     /// Returns the game world entity associated with a script object, if any exists.
     pub async fn entity(&self, addr: ObjectAddr) -> Option<Entity> {
         let id = self.objects.get_by_addr(addr)?.id();
         self.entities().await.0.get_left(&id).copied()
+    }
+
+    /// Loads the [`RecordId`] for the given `object`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the given `object` has no associated [`RecordId`].
+    pub fn record(&self, object: ObjectAddr) -> RecordId {
+        let scripts = self.objects.get_by_addr(object).unwrap();
+        scripts.record().expect("object has no associated record")
     }
 
     /// Returns the scripts associated with the given [`RecordId`].
@@ -180,8 +197,10 @@ impl State {
             base
         };
 
-        let obj = self.loader.load(base).await.unwrap().object;
-        let obj = self.loader.clone_object(&obj).await;
+        // All entities are an instantiation of the base record.
+        let obj = self.loader.load_instance(base).await.unwrap();
+
+        self.entities_mut().await.0.insert(obj.id(), entity);
 
         let scripts = self.objects.get_by_id(obj.id()).unwrap();
         Ok(scripts)
@@ -480,7 +499,7 @@ impl<'a, T> DerefMut for BorrowMut<'a, T> {
 pub struct BorrowedState {
     pub world: *mut World,
     pub quests: *mut QuestManager,
-    pub entities: *const ScriptEntities,
+    pub entities: *mut ScriptEntities,
     pub events: *mut EventBus,
 }
 

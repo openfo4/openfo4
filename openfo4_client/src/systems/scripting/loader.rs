@@ -47,7 +47,7 @@ pub struct ScriptLoader {
     load_events: Mutex<HashMap<RecordId, LoadEvent>>,
     cache: CompilationCache,
     pub(super) objects: Arc<ScriptObjects>,
-    registration: Arc<RegistrationSet>,
+    pub(super) registration: Arc<RegistrationSet>,
 }
 
 impl ScriptLoader {

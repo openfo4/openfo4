@@ -18,7 +18,7 @@ use openfo4_physics::components::{Collider, RigidBody};
 
 use crate::assets::nif::{Instantiate, LoadNifFlags, NIF_TO_METERS, NifKey, NifScene};
 use crate::components::{
-    ActorMarker, BaseObject, NiTransform, ObjectBounds, ObjectLockData, ObjectLockLevel,
+    ActorMarker, BaseObject, Disabled, NiTransform, ObjectBounds, ObjectLockData, ObjectLockLevel,
     ObjectProperties, Persistent, PlacedItem, Root, RootParent, TriggerBox, WorldSpace,
 };
 use crate::render::RenderObject;
@@ -65,6 +65,7 @@ pub struct SpawnEntity {
     pub navmesh: Option<NavMesh>,
     pub object_bounds: Option<ObjectBounds>,
     pub object_props: Option<ObjectProperties>,
+    pub disabled: bool,
 }
 
 impl SpawnEntity {
@@ -100,6 +101,7 @@ impl SpawnEntity {
             navmesh,
             object_bounds,
             object_props,
+            disabled,
         } = self;
 
         // If the object reference already exists we will overwrite it.
@@ -177,6 +179,10 @@ impl SpawnEntity {
 
         if persistent {
             world.insert_one(entity, Persistent).unwrap();
+        }
+
+        if disabled {
+            world.insert_one(entity, Disabled).unwrap();
         }
 
         world.insert_one(entity, Frozen::default()).unwrap();
@@ -534,6 +540,154 @@ impl SpawnEntity {
             script,
             object_bounds,
             object_props: Some(ObjectProperties { lock: lock_data }),
+            form: Some(record.id),
+            ..Default::default()
+        })
+    }
+
+    pub(super) async fn load_base(
+        ctx: &LoadContext<'_>,
+        record: &GlobalRecord,
+        flags: PartialEntityFlags,
+    ) -> Option<Self> {
+        let scale: f32 = 1.0;
+
+        let mut actor = None;
+        let mut inventory = None;
+
+        let mut keywords = HashSet::default();
+        for keyword in record.local.data.keywords() {
+            let keyword = ctx.esp_loader.resolve_form(*keyword, record.id).unwrap();
+            keywords.insert(keyword);
+        }
+
+        let item = load_item(ctx, &record).await;
+
+        if flags.require_distant_lod
+            && !record
+                .local
+                .flags
+                .contains(RecordHeaderFlags::HAS_DISTANT_LOD)
+            // FIXME: Lights don't have a distant lod flag and seem
+            // to be visible at distance, sometimes. Sometimes they
+            // are not visible.
+            && !matches!(record.local.data, RecordData::Light(_))
+        {
+            return None;
+        }
+
+        let model = record.local.data.model(flags.lod);
+        let object_bounds = record.local.data.object_bounds();
+
+        match &record.local.data {
+            RecordData::Door(_data) => {
+                todo!();
+            }
+            RecordData::Container(data) => {
+                let mut inv = Inventory::default();
+
+                for item in &data.items {
+                    let item_id = ctx.esp_loader.resolve_form(item.item, record.id).unwrap();
+
+                    let items = resolve_item(
+                        ctx.esp_loader,
+                        ctx.script_loader,
+                        item_id,
+                        item.count.into(),
+                        &[],
+                        &LoadItemProps {
+                            level: PLAYER_LEVEL,
+                            object_template_keywords: HashSet::new(),
+                        },
+                    )
+                    .await;
+                    for item in items {
+                        inv.insert(item);
+                    }
+                }
+
+                inventory = Some(inv);
+            }
+            RecordData::Npc(_) => {
+                if flags.actor {
+                    let props = ActorInstanceProps {
+                        dead: record.local.flags.contains(RecordHeaderFlags::STARTS_DEAD),
+                    };
+
+                    if let Some(mut res) = crate::state::npc::spawn_actor(
+                        ctx.loader,
+                        ctx.esp_loader,
+                        ctx.script_loader,
+                        record.id,
+                        &props,
+                    )
+                    .await
+                    .ok()
+                    {
+                        keywords = core::mem::take(&mut res.keywords);
+                        actor = Some(res);
+                    }
+                }
+            }
+            RecordData::IdleMarker(_) => return None,
+            RecordData::Light(_data) => {
+                todo!();
+            }
+            _ => {}
+        }
+
+        let mut nif_flags = LoadNifFlags::empty();
+        if flags.graphics {
+            nif_flags |= LoadNifFlags::RENDER_OBJECTS;
+            nif_flags |= LoadNifFlags::ANIMATIONS;
+        }
+        if flags.physics {
+            nif_flags |= LoadNifFlags::COLLIDERS;
+        }
+
+        let scene = match model {
+            Some(model) if flags.scene => {
+                let mut path = DataPathBuf::new(model.as_bytes());
+                path.push_front("meshes");
+
+                match ctx
+                    .loader
+                    .load::<NifScene, _>(&NifKey {
+                        path,
+                        flags: nif_flags,
+                    })
+                    .await
+                {
+                    Ok(scene) => Some(scene),
+                    Err(err) => {
+                        tracing::error!("{}", err);
+                        None
+                    }
+                }
+            }
+            Some(_) | None => None,
+        };
+
+        let object_bounds = object_bounds.map(|b| ObjectBounds {
+            min: (Vec3::new(b.min_x as f32, b.min_y as f32, b.min_z as f32) * scale).as_ivec3(),
+            max: (Vec3::new(b.max_x as f32, b.max_y as f32, b.max_z as f32) * scale).as_ivec3(),
+        });
+
+        let script = if record.local.data.virtual_machine_adapter().is_some() && flags.script {
+            ctx.script_loader.load_instance(record.id).await
+        } else {
+            None
+        };
+
+        Some(SpawnEntity {
+            scene,
+            actor,
+            rigid_body: flags.physics.then_some(RigidBody::FIXED),
+            inventory,
+            placed_item: item.map(PlacedItem),
+            keywords: ObjectKeywords::new(keywords),
+            script,
+            object_bounds,
             form: Some(record.id),
             ..Default::default()
         })

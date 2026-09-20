@@ -1,3 +1,5 @@
+use futures::StreamExt;
+use futures::stream::FuturesUnordered;
 use game_common::components::Transform;
 use hashbrown::HashSet;
 use openfo4_animation::Value;
@@ -8,7 +10,10 @@ use openfo4_core::transform::ConvertCoordinateSystem;
 use openfo4_script::engine::Engine;
 use openfo4_script::runtime::{Caller, Error};
 
-use crate::components::{Disabled, ObjectBounds, ObjectLockLevel, ObjectProperties, TriggerBox};
+use crate::components::{
+    Disabled, ObjectBounds, ObjectLockLevel, ObjectProperties, TriggerBox, WorldSpace,
+};
+use crate::state::level::loader::SpawnEntityInfo;
 use crate::state::npc::ObjectKeywords;
 use crate::systems::actor_value::ActorValueProperties;
 use crate::systems::inventory::Inventory;
@@ -1998,7 +2003,7 @@ fn is_created(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Error
 /// `IsDeleted`
 ///
 /// ```text
-/// bool Function() native
+/// bool Function IsDeleted() native
 /// ```
 async fn is_deleted(caller: Caller<'_, State>, self_ptr: Object) -> bool {
     let entity = caller.data().entity(self_ptr).await.unwrap();
@@ -2388,16 +2393,64 @@ fn raid_targets_available(
 /// ```text
 /// ObjectReference Function(Form akFormToPlace, int aiCount, bool abForcePersist, bool abInitiallyDisabled, bool abDeleteWhenAble) native
 /// ```
-fn place_at_me(
-    caller: Caller<'_, State>,
+async fn place_at_me(
+    mut caller: Caller<'_, State>,
     self_ptr: Object,
-    ak_form_to_place: Object,
-    ai_count: i32,
-    ab_force_persist: bool,
-    ab_initially_disabled: bool,
-    ab_delete_when_able: bool,
+    form: Object,
+    count: i32,
+    persistent: bool,
+    disabled: bool,
+    delete: bool,
 ) -> Result<Object, Error> {
-    todo!()
+    let state = caller.data_mut();
+
+    if count <= 0 {
+        return Ok(Object::NULL);
+    }
+
+    let record = state.record(form);
+
+    let transform;
+    let worldspace;
+    {
+        let entity = state.entity(self_ptr).await.unwrap();
+        let world = state.world().await;
+
+        transform = *world.get::<&Transform>(entity).unwrap();
+        worldspace = *world.get::<&WorldSpace>(entity).unwrap();
+    }
+
+    let mut futures = (0..count)
+        .map(|_| {
+            state.entity_loader.spawn(
+                record,
+                SpawnEntityInfo {
+                    transform,
+                    worldspace,
+                    disabled,
+                    persistent,
+                },
+            )
+        })
+        .collect::<FuturesUnordered<_>>();
+
+    // Note that the docs of this function state that the last object created is returned,
+    // however this behavior is unobservable by the caller. We can return any object here.
+    let mut entity = None;
+    while let Some(res) = futures.next().await {
+        let e = res.unwrap();
+
+        if delete {
+            state.deletion.insert(e.entity());
+        }
+
+        entity = Some(e);
+    }
+
+    let entity = entity.unwrap();
+    let scripts = state.get_or_create_entity(entity.entity()).await.unwrap();
+    let addr = scripts.get("ObjectReference").unwrap().get().object.addr();
+    Ok(addr)
 }
 
 /// `PlaceActorAtMe`
