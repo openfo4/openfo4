@@ -1,10 +1,12 @@
 use std::sync::Arc;
 
+use game_common::string::Lowercase;
 use hashbrown::hash_map::Entry;
 use hashbrown::{HashMap, HashSet};
 use openfo4_core::record::RecordId;
 use openfo4_esp::vmad::{Script, Value};
 use openfo4_esp::{FormId, RecordData, RecordKind};
+use openfo4_script::compiler::resources::TypeInfo;
 use openfo4_script::engine::{Engine, Instance};
 use openfo4_script::runtime::ObjectAddr;
 use openfo4_script::runtime::object::ObjectBuilder;
@@ -227,7 +229,7 @@ where
             debug_assert!(!listeners.contains_key(&record));
 
             queue.extend(loaded_rec.depends);
-            records.insert(record, loaded_rec.scripts);
+            records.insert(record, (loaded_rec.scripts, loaded_rec.data));
             record_aliases.extend(loaded_rec.aliases);
         }
 
@@ -243,10 +245,18 @@ where
         let local_records: Vec<_> = records.keys().copied().collect();
 
         let mut partial_object_addrs = HashMap::new();
-        for (id, scripts) in &records {
+        for (id, (scripts, _)) in &records {
             let mut addrs = HashMap::new();
-            for (name, script) in scripts {
-                addrs.insert(name.clone(), script.builder.addr());
+            for (_, script) in scripts {
+                let addr = script.builder.addr();
+
+                // We can also use any supertype of our type.
+                for id in &script.info.classes {
+                    let info = self.engine.type_info(*id);
+                    if let Some(name) = info.name {
+                        addrs.insert(name, addr);
+                    }
+                }
             }
             partial_object_addrs.insert(*id, addrs);
         }
@@ -254,8 +264,15 @@ where
         let mut partial_alias_addrs = HashMap::new();
         for (key, alias) in &record_aliases {
             let mut addrs = HashMap::new();
-            for (name, script) in alias {
-                addrs.insert(name.clone(), script.builder.addr());
+            for (_, script) in alias {
+                let addr = script.builder.addr();
+
+                for id in &script.info.classes {
+                    let info = self.engine.type_info(*id);
+                    if let Some(name) = info.name {
+                        addrs.insert(name, addr);
+                    }
+                }
             }
             partial_alias_addrs.insert(*key, addrs);
         }
@@ -316,13 +333,8 @@ where
 
         let mut built_objects = Vec::new();
 
-        for (record, mut scripts) in records {
+        for (record, (scripts, data)) in records {
             let mut final_instances = Vec::new();
-
-            let data = scripts
-                .values_mut()
-                .find_map(|obj| obj.data.take())
-                .unwrap();
 
             for (name, mut object) in scripts {
                 register_static_events(&object, &self.registration);
@@ -550,7 +562,7 @@ impl RecordInstantiationKind {
 
 #[derive(Debug, Default)]
 struct LoadEvent {
-    addrs: Option<HashMap<String, ObjectAddr>>,
+    addrs: Option<HashMap<Lowercase<String>, ObjectAddr>>,
     /// Event triggered when the object has received an [`ObjectAddr`].
     loaded: event_listener::Event,
     /// Event triggered when the object has fully completed building.
@@ -844,23 +856,24 @@ async fn load_record(
     let instance = compiled_classes
         .get_or_compile(engine, base_class_name)
         .await;
-    let layout = engine.get_type(base_class_name).unwrap();
-    let builder = engine.object_pool().insert(layout.clone());
-
-    scripts.insert(
-        base_class_name.to_owned(),
-        PartialObject {
-            instance: instance.clone(),
-            builder,
-            script: None,
-            data: Some(load_record_object_data(esp_loader, &record)),
-        },
-    );
+    let base_class_id = engine.get_type(base_class_name).unwrap();
+    let builder = engine.object_pool().insert(base_class_id.clone());
 
     for script in record_scripts.into_iter().flat_map(|v| v) {
         let instance = compiled_classes.get_or_compile(engine, &script.name).await;
         let layout = engine.get_type(&script.name).unwrap();
         let builder = engine.object_pool().insert(layout.clone());
+
+        let info = engine.type_info(layout);
+        if !info.classes.contains(&base_class_id) {
+            tracing::debug!(
+                "attached script {} on record {} does not inherit from base class {}, skipping",
+                script.name,
+                record.id,
+                base_class_name,
+            );
+            continue;
+        }
 
         scripts.insert(
             script.name.clone(),
@@ -868,7 +881,22 @@ async fn load_record(
                 instance: instance.clone(),
                 builder,
                 script: Some(script),
-                data: None,
+                info,
+            },
+        );
+    }
+
+    // If we have at least one script loaded we don't need to explicitly attach
+    // the base script, the base script is already included in the loaded script.
+    // All attached scripts must inherit from the base class.
+    if scripts.is_empty() {
+        scripts.insert(
+            base_class_name.to_owned(),
+            PartialObject {
+                instance: instance.clone(),
+                builder,
+                script: None,
+                info: engine.type_info(base_class_id),
             },
         );
     }
@@ -892,7 +920,7 @@ async fn load_record(
                 instance: instance.clone(),
                 builder,
                 script: None,
-                data: None,
+                info: engine.type_info(layout),
             },
         );
 
@@ -907,7 +935,7 @@ async fn load_record(
                     instance: instance.clone(),
                     builder,
                     script: Some(script),
-                    data: None,
+                    info: engine.type_info(layout),
                 },
             );
         }
@@ -926,6 +954,7 @@ async fn load_record(
         depends,
         scripts,
         aliases: record_aliases,
+        data: load_record_object_data(esp_loader, &record),
     })
 }
 
@@ -935,6 +964,7 @@ pub struct LoadedRecord {
     depends: HashSet<RecordId>,
     scripts: HashMap<String, PartialObject>,
     aliases: HashMap<AliasKey, HashMap<String, PartialObject>>,
+    data: ObjectData,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
@@ -1027,7 +1057,7 @@ struct PartialObject {
     instance: Instance,
     builder: ObjectBuilder,
     script: Option<Script>,
-    data: Option<ObjectData>,
+    info: TypeInfo,
 }
 
 fn record_script_name(data: &RecordData) -> Option<&'static str> {
@@ -1200,6 +1230,7 @@ mod tests {
             let builder = engine
                 .object_pool()
                 .insert(engine.get_type("MyClass").unwrap());
+            let info = engine.type_info(engine.get_type("MyClass").unwrap());
 
             Some(LoadedRecord {
                 depends: self.deps.get(&record).unwrap().clone(),
@@ -1209,12 +1240,13 @@ mod tests {
                         instance,
                         builder,
                         script: None,
-                        data: Some(ObjectData::None),
+                        info,
                     },
                 )]
                 .into_iter()
                 .collect(),
                 aliases: HashMap::new(),
+                data: ObjectData::None,
             })
         }
 

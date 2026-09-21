@@ -113,8 +113,8 @@ where
     engine: &'a Engine,
     resolve_form: F,
     scripts: &'a ScriptObjects,
-    addrs: &'a HashMap<RecordId, HashMap<String, ObjectAddr>>,
-    aliases: &'a HashMap<AliasKey, HashMap<String, ObjectAddr>>,
+    addrs: &'a HashMap<RecordId, HashMap<Lowercase<String>, ObjectAddr>>,
+    aliases: &'a HashMap<AliasKey, HashMap<Lowercase<String>, ObjectAddr>>,
     script_defined_in: RecordId,
     stack: Vec<Entry<'a>>,
     warnings: Vec<BuildScriptObjectWarning>,
@@ -249,11 +249,7 @@ where
                             return;
                         };
 
-                        // FIXME: Make the caller provide the HashMap with Lowercase<str>
-                        // so we can actually use the hashmap instead of linearly searching it.
-                        scripts.iter().find_map(|(name, addr)| {
-                            (Lowercase::new(&**name) == *class).then_some(*addr)
-                        })
+                        scripts.get(class).copied()
                     }
                     None => {
                         if let Some(scripts) = self.scripts.get_by_record(id) {
@@ -261,11 +257,7 @@ where
                                 .get(class.as_inner())
                                 .map(|obj| obj.get().object.addr())
                         } else if let Some(scripts) = self.addrs.get(&id) {
-                            // FIXME: Make the caller provide the HashMap with Lowercase<str>
-                            // so we can actually use the hashmap instead of linearly searching it.
-                            scripts.iter().find_map(|(name, addr)| {
-                                (Lowercase::new(&**name) == *class).then_some(*addr)
-                            })
+                            scripts.get(class).copied()
                         } else {
                             self.warnings
                                 .push(BuildScriptObjectWarning::UnknownObject(id));
@@ -368,8 +360,8 @@ pub fn build_script_object(
     engine: &Engine,
     script: &Script,
     scripts: &ScriptObjects,
-    partial_addrs: &HashMap<RecordId, HashMap<String, ObjectAddr>>,
-    aliases: &HashMap<AliasKey, HashMap<String, ObjectAddr>>,
+    partial_addrs: &HashMap<RecordId, HashMap<Lowercase<String>, ObjectAddr>>,
+    aliases: &HashMap<AliasKey, HashMap<Lowercase<String>, ObjectAddr>>,
     builder: &mut ObjectBuilder,
     script_defined_in: RecordId,
 ) -> (ObjectRef, Vec<BuildScriptObjectWarning>) {
@@ -435,6 +427,7 @@ mod tests {
     use std::num::NonZeroU32;
 
     use futures_lite::future::block_on;
+    use game_common::string::Lowercase;
     use hashbrown::HashMap;
     use openfo4_core::record::{ModuleId, RecordId};
     use openfo4_esp::FormId;
@@ -923,9 +916,9 @@ mod tests {
         let partial_addrs = [(
             RecordId::new(ModuleId(NonZeroU32::MIN), FormId(0x01)),
             [
-                ("A".to_owned(), a),
-                ("B".to_owned(), b),
-                ("C".to_owned(), c),
+                (Lowercase::new("A"), a),
+                (Lowercase::new("B"), b),
+                (Lowercase::new("C"), c),
             ]
             .into_iter()
             .collect(),
