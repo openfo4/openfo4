@@ -12,8 +12,7 @@ use cranelift_codegen::control::ControlPlane;
 use cranelift_codegen::ir::condcodes::{FloatCC, IntCC};
 use cranelift_codegen::ir::{
     self, ArgumentExtension, ArgumentPurpose, BlockArg, ExtFuncData, ExternalName, Function,
-    InstBuilder, MemFlagsData, StackSlotData, StackSlotKind, UserExternalName, UserExternalNameRef,
-    UserFuncName,
+    InstBuilder, MemFlagsData, UserExternalName, UserExternalNameRef, UserFuncName,
 };
 use cranelift_codegen::isa::{CallConv, OwnedTargetIsa};
 use cranelift_codegen::settings::Configurable;
@@ -25,9 +24,7 @@ use slab::Slab;
 
 use crate::backend::cranelift::memory::{Allocation, MemoryAllocator};
 use crate::backend::cranelift::relocs::perform_relocations;
-use crate::backend::{
-    Backend, FunctionDefinitionDesc, SourceLocMap, StackSlotDesc, TextWithSrcLocs,
-};
+use crate::backend::{Backend, FunctionDefinitionDesc, SourceLocMap, TextWithSrcLocs};
 use crate::func::HostFunc;
 use crate::{
     BlockProps, CompilerConfig, FloatCompareOp, FuncId, Instruction, IntCompareOp, Signature,
@@ -125,7 +122,6 @@ impl Backend for CraneliftModule {
         state.definition = Some(FunctionDefinition::Guest(GuestFunctionDefinition {
             instructions: definition.instructions,
             num_values: definition.num_values,
-            stack_slots: definition.stack_slots,
             num_variables: definition.num_variables,
             srcloc: definition.srcloc,
             blocks: definition.blocks,
@@ -253,22 +249,7 @@ impl Backend for CraneliftModule {
                 FunctionDefinition::Guest(func_def) => {
                     let mut values = vec![const { None }; func_def.num_values];
                     let mut blocks = vec![const { None }; func_def.blocks.len()];
-                    let mut stack_slots = vec![const { None }; func_def.stack_slots.len()];
                     let mut variables = vec![const { None }; func_def.num_variables];
-
-                    // Create stack slots
-                    for (id, slot) in &func_def.stack_slots {
-                        let res = builder.create_sized_stack_slot(StackSlotData {
-                            kind: StackSlotKind::ExplicitSlot,
-                            size: slot.size.try_into().unwrap(),
-                            // `slot.align` already must be a power of two.
-                            // FIXME: we can do better than ilog2.
-                            align_shift: slot.align.ilog2() as u8,
-                            key: None,
-                        });
-
-                        stack_slots[id] = Some(res);
-                    }
 
                     for block in &func_def.blocks {
                         let b = builder.create_block();
@@ -623,47 +604,6 @@ impl Backend for CraneliftModule {
                                     else_block,
                                     &else_block_args,
                                 );
-                                added_inst_count += 1;
-                            }
-                            Instruction::StackLoad {
-                                slot,
-                                dst,
-                                ty,
-                                offset,
-                            } => {
-                                let slot = stack_slots[slot.0].unwrap();
-                                let ty = map_type(*ty);
-
-                                // TODO: We can do manual address calcuation when offset is too big.
-                                let offset = i32::try_from(*offset).unwrap_or_else(|_| todo!());
-
-                                let res = builder.ins().stack_load(ptr_type, ty, slot, offset);
-                                values[dst.0] = Some(res);
-                                added_inst_count += 1;
-                            }
-                            Instruction::StackStore {
-                                slot,
-                                value,
-                                offset,
-                            } => {
-                                let value = values[value.0].unwrap();
-                                let slot = stack_slots[slot.0].unwrap();
-
-                                // TODO: We can do manual address calcuation when offset is too big.
-                                let offset = i32::try_from(*offset).unwrap_or_else(|_| todo!());
-
-                                builder.ins().stack_store(ptr_type, value, slot, offset);
-                                added_inst_count += 1;
-                            }
-                            Instruction::StackAddr { slot, dst, offset } => {
-                                let slot = stack_slots[slot.0].unwrap();
-                                let ty = map_type(Type::Pointer);
-
-                                // TODO: We can do manual address calcuation when offset is too big.
-                                let offset = i32::try_from(*offset).unwrap_or_else(|_| todo!());
-
-                                let res = builder.ins().stack_addr(ty, slot, offset);
-                                values[dst.0] = Some(res);
                                 added_inst_count += 1;
                             }
                             Instruction::ICmp { lhs, rhs, dst, op } => {
@@ -1073,7 +1013,6 @@ struct GuestFunctionDefinition {
     instructions: Vec<Instruction>,
     num_values: usize,
     num_variables: usize,
-    stack_slots: Slab<StackSlotDesc>,
     srcloc: SourceLocMap,
     blocks: Vec<BlockProps>,
 }

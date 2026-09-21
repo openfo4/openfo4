@@ -6,11 +6,8 @@ use std::fmt::{self, Debug, Formatter};
 use std::ptr;
 
 use game_common::collections::vec_map::{Index, VecMap};
-use slab::Slab;
 
-use crate::backend::{
-    Backend, BackendEnum, FunctionDefinitionDesc, StackSlotDesc, TextWithSrcLocs,
-};
+use crate::backend::{Backend, BackendEnum, FunctionDefinitionDesc, TextWithSrcLocs};
 
 pub use crate::backend::SourceLocMap;
 use crate::func::IntoHostFunc;
@@ -81,7 +78,6 @@ impl Compiler {
             instructions: Vec::new(),
             next_value: 0,
             next_variable: 0,
-            stack_slots: Slab::new(),
             current_block_full: false,
             current_block: None,
             blocks_filled: Vec::new(),
@@ -242,7 +238,6 @@ pub struct FunctionBuilder<'a> {
     instructions: Vec<Instruction>,
     next_value: usize,
     next_variable: usize,
-    stack_slots: Slab<StackSlotDesc>,
     current_block_full: bool,
     current_block: Option<Block>,
     current_srcloc: Option<(SourceLoc, usize)>,
@@ -888,6 +883,12 @@ impl<'a> FunctionBuilder<'a> {
         debug_assert!(false_block.0 < self.blocks.len());
         self.assert_block_not_filled();
 
+        assert_eq!(self.blocks[true_block.0].types.len(), true_block_args.len());
+        assert_eq!(
+            self.blocks[false_block.0].types.len(),
+            false_block_args.len()
+        );
+
         self.instructions.push(Instruction::Brif {
             condition,
             true_block,
@@ -897,108 +898,6 @@ impl<'a> FunctionBuilder<'a> {
         });
         self.current_block_full = true;
         self.blocks_filled[self.current_block.unwrap().0] = true;
-    }
-
-    pub fn create_stack_slot(&mut self, size: usize, align: usize) -> StackSlot {
-        debug_assert!(align.is_power_of_two());
-        StackSlot(self.stack_slots.insert(StackSlotDesc { size, align }))
-    }
-
-    pub fn create_typed_stack_slot(&mut self, ty: Type) -> StackSlot {
-        let (size, align) = match ty {
-            Type::I8 => (size_of::<i8>(), align_of::<i8>()),
-            Type::I16 => (size_of::<i16>(), align_of::<i16>()),
-            Type::I32 => (size_of::<i32>(), align_of::<i32>()),
-            Type::I64 => (size_of::<i64>(), align_of::<i64>()),
-            Type::F32 => (size_of::<f32>(), align_of::<f32>()),
-            Type::F64 => (size_of::<f64>(), align_of::<f64>()),
-            Type::Pointer | Type::Isize => (
-                self.compiler.isa().pointer_size(),
-                self.compiler.isa().pointer_align(),
-            ),
-        };
-
-        self.create_stack_slot(size, align)
-    }
-
-    /// Loads a value from a stack slot.
-    ///
-    /// Loads the value of the given [`Type`] from address `base+offset` where `base` is the base
-    /// address of the stack slot, as returned by [`stack_addr`].
-    ///
-    /// Returns a value of `ty`.
-    ///
-    /// # Codegen Safety
-    ///
-    /// - `base+offset` must be aligned to the given [`Type`].
-    /// - `base+offset+size` must be less than or equal to the size of the [`StackSlot`].
-    ///
-    /// [`stack_addr`]: Self::stack_addr
-    #[track_caller]
-    pub fn stack_load<T>(&mut self, slot: StackSlot, ty: Type, offset: T) -> Value
-    where
-        T: Into<Imm>,
-    {
-        self.assert_block_not_filled();
-
-        let dst = self.produce_value(ty);
-        self.instructions.push(Instruction::StackLoad {
-            ty,
-            slot,
-            dst,
-            offset: offset.into().to_word(),
-        });
-        dst
-    }
-
-    /// Stores a value into a stack slot.
-    ///
-    /// Stores the given [`Value`] at address `base+offset` where `base` is the base address of the
-    /// stack slot, as returned by [`stack_addr`].
-    ///
-    /// # Codegen Safety
-    ///
-    /// - `base+offset` must be aligned to the type of the given [`Value`].
-    /// - `base+offset+size` must be less than or equal to the size of the [`StackSlot`].
-    ///
-    /// [`stack_addr`]: Self::stack_addr
-    #[track_caller]
-    pub fn stack_store<T>(&mut self, slot: StackSlot, value: Value, offset: T)
-    where
-        T: Into<Imm>,
-    {
-        debug_assert!(value.0 < self.next_value);
-        self.assert_block_not_filled();
-
-        self.instructions.push(Instruction::StackStore {
-            slot,
-            value,
-            offset: offset.into().to_word(),
-        });
-    }
-
-    /// Returns the address of the stack slot.
-    ///
-    /// The `offset` is added to the base address.
-    ///
-    /// Returns a value of type [`Pointer`].
-    ///
-    /// [`Pointer`]: Type::Pointer
-    #[track_caller]
-    pub fn stack_addr<T>(&mut self, slot: StackSlot, offset: T) -> Value
-    where
-        T: Into<Imm>,
-    {
-        debug_assert!(self.stack_slots.contains(slot.0));
-        self.assert_block_not_filled();
-
-        let dst = self.produce_value(Type::Pointer);
-        self.instructions.push(Instruction::StackAddr {
-            slot,
-            offset: offset.into().to_word(),
-            dst,
-        });
-        dst
     }
 
     /// Integer comparision.
@@ -1412,7 +1311,6 @@ impl<'a> FunctionBuilder<'a> {
                 instructions: self.instructions,
                 num_values: self.next_value,
                 num_variables: self.next_variable,
-                stack_slots: self.stack_slots,
                 srcloc: self.srclocs,
                 blocks: self.blocks,
             },
@@ -1455,9 +1353,6 @@ impl Block {
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
-pub struct StackSlot(usize);
-
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Variable(usize);
 
 #[derive(Clone, Debug)]
@@ -1494,22 +1389,6 @@ enum Instruction {
         true_block_args: Vec<Value>,
         false_block: Block,
         false_block_args: Vec<Value>,
-    },
-    StackLoad {
-        ty: Type,
-        slot: StackSlot,
-        dst: Value,
-        offset: Word,
-    },
-    StackStore {
-        slot: StackSlot,
-        value: Value,
-        offset: Word,
-    },
-    StackAddr {
-        slot: StackSlot,
-        dst: Value,
-        offset: Word,
     },
     ICmp {
         lhs: Value,

@@ -1,7 +1,6 @@
 mod ops;
 
 use std::cmp::Ordering;
-use std::mem::MaybeUninit;
 use std::sync::Arc;
 
 use game_common::collections::aligned_box::AlignedBox;
@@ -9,7 +8,7 @@ use game_common::collections::vec_map::VecMap;
 use parking_lot::Mutex;
 use slab::Slab;
 
-use crate::backend::{Backend, FunctionDefinitionDesc, StackSlotDesc};
+use crate::backend::{Backend, FunctionDefinitionDesc};
 use crate::func::HostFunc;
 use crate::{CompilerConfig, FuncId, Instruction, Signature, Type, Value, Word};
 
@@ -64,11 +63,6 @@ impl Backend for Interpreter {
             }
         }
 
-        let mut stack_slots = VecMap::new();
-        for (slot, desc) in &definition.stack_slots {
-            stack_slots.insert(slot, *desc);
-        }
-
         self.rt.functions.lock().insert(
             id.0,
             Arc::new(FuncData {
@@ -78,7 +72,6 @@ impl Backend for Interpreter {
                 host: None,
                 signature: state.signature.clone(),
                 num_values: definition.num_values,
-                stack_slots,
             }),
         );
     }
@@ -97,7 +90,6 @@ impl Backend for Interpreter {
                 host: Some(func),
                 signature: state.signature.clone(),
                 num_values: 0,
-                stack_slots: VecMap::new(),
             }),
         );
     }
@@ -145,12 +137,6 @@ impl CompiledFunc {
             return;
         }
 
-        let mut stack_slots = VecMap::new();
-        for (index, slot) in &self.func.stack_slots {
-            let stack = AlignedBox::new_uninit_slice(slot.size, slot.align);
-            stack_slots.insert(index, stack);
-        }
-
         let mut ctx = Context {
             frames: vec![Frame {
                 data: self.func.clone(),
@@ -158,7 +144,6 @@ impl CompiledFunc {
                 values: ValuePool::new(self.func.num_values),
                 returns: Returns::Host(returns),
                 variables: VecMap::new(),
-                stack_slots,
             }],
         };
 
@@ -357,45 +342,6 @@ impl CompiledFunc {
                     let ptr = ptr.cast::<u8>().offset(offset);
                     ops::write(ty, value, ptr);
                 }
-            }
-            Instruction::StackLoad {
-                ty,
-                slot,
-                dst,
-                offset,
-            } => {
-                let stack = frame.stack_slots.get(slot.0).unwrap();
-                let offset = isize::from(*offset).cast_unsigned();
-
-                let ptr = unsafe { stack.as_ptr().add(offset).cast::<u8>() };
-                let value = unsafe { ops::read(*ty, ptr) };
-
-                frame.values.insert(*ty, value, *dst);
-            }
-            Instruction::StackStore {
-                slot,
-                value,
-                offset,
-            } => {
-                let stack = frame.stack_slots.get_mut(slot.0).unwrap();
-                let offset = isize::from(*offset).cast_unsigned();
-
-                let ty = frame.values.ty(*value);
-                let value = frame.values.get(*value);
-
-                let ptr = unsafe { stack.as_mut_ptr().add(offset).cast::<u8>() };
-                unsafe {
-                    ops::write(ty, value, ptr);
-                }
-            }
-            Instruction::StackAddr { slot, dst, offset } => {
-                let stack = frame.stack_slots.get_mut(slot.0).unwrap();
-                let offset = isize::from(*offset).cast_unsigned();
-
-                let ptr = unsafe { stack.as_mut_ptr().add(offset) };
-                let ptr = Word(ptr.cast());
-
-                frame.values.insert(Type::Pointer, ptr, *dst);
             }
             // Variables
             Instruction::DefVar { ty: _, var, value } => {
@@ -608,19 +554,12 @@ impl CompiledFunc {
                     values.insert(*ty, src, *dst);
                 }
 
-                let mut stack_slots = VecMap::new();
-                for (index, slot) in &data.stack_slots {
-                    let stack = AlignedBox::new_uninit_slice(slot.size, slot.align);
-                    stack_slots.insert(index, stack);
-                }
-
                 ctx.frames.push(Frame {
                     data,
                     values,
                     pc: 0,
                     returns: Returns::Guest(returns.to_vec()),
                     variables: VecMap::new(),
-                    stack_slots,
                 });
             }
         }
@@ -676,7 +615,6 @@ struct FuncData {
     host: Option<HostFunc>,
     signature: Signature,
     num_values: usize,
-    stack_slots: VecMap<usize, StackSlotDesc>,
 }
 
 #[derive(Clone, Debug)]
@@ -694,7 +632,6 @@ struct Frame {
     pc: usize,
     returns: Returns,
     variables: VecMap<usize, Value>,
-    stack_slots: VecMap<usize, AlignedBox<[MaybeUninit<u8>]>>,
 }
 
 #[derive(Clone, Debug)]

@@ -1,7 +1,5 @@
 use std::range::Range;
 
-use slab::Slab;
-
 use crate::backend::interpreter::Interpreter;
 use crate::func::HostFunc;
 use crate::{BackendKind, BlockProps, CompilerConfig, FuncId, Instruction, Signature, SourceLoc};
@@ -74,15 +72,8 @@ pub struct FunctionDefinitionDesc {
     pub instructions: Vec<Instruction>,
     pub num_values: usize,
     pub num_variables: usize,
-    pub stack_slots: Slab<StackSlotDesc>,
     pub srcloc: SourceLocMap,
     pub blocks: Vec<BlockProps>,
-}
-
-#[derive(Copy, Clone, Debug)]
-pub struct StackSlotDesc {
-    pub size: usize,
-    pub align: usize,
 }
 
 #[derive(Clone, Debug, Default)]
