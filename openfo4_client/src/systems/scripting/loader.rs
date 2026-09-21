@@ -4,7 +4,7 @@ use hashbrown::hash_map::Entry;
 use hashbrown::{HashMap, HashSet};
 use openfo4_core::record::RecordId;
 use openfo4_esp::vmad::{Script, Value};
-use openfo4_esp::{RecordData, RecordKind};
+use openfo4_esp::{FormId, RecordData, RecordKind};
 use openfo4_script::engine::{Engine, Instance};
 use openfo4_script::runtime::ObjectAddr;
 use openfo4_script::runtime::object::ObjectBuilder;
@@ -41,19 +41,19 @@ pub(super) struct ScriptObjectInner {
 }
 
 #[derive(Debug)]
-pub struct ScriptLoader {
+pub struct ScriptLoader<T = Arc<EspLoader>> {
     pub(super) engine: Arc<Engine>,
-    pub(super) esp_loader: Arc<EspLoader>,
+    pub(super) esp_loader: T,
     load_events: Mutex<HashMap<RecordId, LoadEvent>>,
     cache: CompilationCache,
     pub(super) objects: Arc<ScriptObjects>,
     pub(super) registration: Arc<RegistrationSet>,
 }
 
-impl ScriptLoader {
+impl<T> ScriptLoader<T> {
     pub(super) fn new(
         engine: Arc<Engine>,
-        esp_loader: Arc<EspLoader>,
+        esp_loader: T,
         objects: Arc<ScriptObjects>,
         registration: Arc<RegistrationSet>,
     ) -> Self {
@@ -66,7 +66,12 @@ impl ScriptLoader {
             registration,
         }
     }
+}
 
+impl<T> ScriptLoader<T>
+where
+    T: RecordLoader,
+{
     /// Loads the script object attached to a record.
     ///
     /// Returns `None` if no script is attached to the record.
@@ -76,7 +81,7 @@ impl ScriptLoader {
 
         let res = self
             .load_in(record, RecordInstantiationKind::BaseObject)
-            .await?;
+            .await;
 
         tracing::trace!("script for {:?} is {:?}", record, res.object.id());
 
@@ -91,8 +96,6 @@ impl ScriptLoader {
         let res = self
             .load_in(record, RecordInstantiationKind::Instance)
             .await;
-
-        let res = res?;
 
         tracing::trace!("script for {:?} is {:?}", record, res.object.id());
 
@@ -128,20 +131,20 @@ impl ScriptLoader {
         }))
     }
 
-    async fn load_in(&self, root: RecordId, kind: RecordInstantiationKind) -> Option<LoadResult> {
+    async fn load_in(&self, root: RecordId, kind: RecordInstantiationKind) -> LoadResult {
         if let Some(scripts) = self.objects.get_by_record(root)
         // FIXME: We should still cache default instances here
         // and clone the object for each call.
         && kind.is_base_object()
         {
-            return Some(LoadResult {
+            return LoadResult {
                 object: ScriptObject(Arc::new(ScriptObjectInner {
                     base: Some(root),
                     id: scripts.id(),
                 })),
                 // FIXME: What should we do here?
                 aliases: HashMap::new(),
-            });
+            };
         }
 
         let mut root_id = None;
@@ -196,8 +199,10 @@ impl ScriptLoader {
                 RecordInstantiationKind::Instance => RecordInstantiationKind::BaseObject,
             };
 
-            let Some(loaded_rec) =
-                load_record(&self.esp_loader, record, &self.engine, kind, &self.cache).await
+            let Some(loaded_rec) = self
+                .esp_loader
+                .load_record(record, &self.engine, kind, &self.cache)
+                .await
             else {
                 if !is_instance_root {
                     let mut events = self.load_events.lock();
@@ -411,8 +416,8 @@ impl ScriptLoader {
             }
         }
 
-        for (_, listener) in listeners {
-            listener.built.await;
+        for (_, listener) in &mut listeners {
+            (&mut listener.built).await;
         }
 
         // Once we insert the new objects into the object pool, they are allowed
@@ -452,18 +457,43 @@ impl ScriptLoader {
                 // The listener count cannot change, because we hold an exclusive lock.
                 event.loaded.notify(event.loaded.total_listeners());
                 event.built.notify(event.built.total_listeners());
+                event.ready.notify(event.ready.total_listeners());
             }
         }
 
-        let root_id = root_id?;
+        let root_id = match root_id {
+            Some(id) => id,
+            // We did not build the root object ourselves.
+            // This can happen when two threads load the same object at the
+            // same time and the other thread "wins". At any time there must
+            // only exist one object for each record, so must reuse the other
+            // threads object.
+            None => {
+                debug_assert!(kind.is_base_object());
 
-        Some(LoadResult {
+                // We need to wait until the thread that has our object has
+                // inserted the object into the pool and assigned it an ID.
+                let listen = listeners.get_mut(&root).unwrap();
+                (&mut listen.ready).await;
+
+                match self.objects.get_by_record(root) {
+                    Some(scripts) => scripts.id(),
+                    None => {
+                        // FIXME: Once we implement object cleanup, we need to restart
+                        // the loading process on failure here.
+                        todo!();
+                    }
+                }
+            }
+        };
+
+        LoadResult {
             object: ScriptObject(Arc::new(ScriptObjectInner {
                 base: Some(root),
                 id: root_id,
             })),
             aliases: compiled_aliases,
-        })
+        }
     }
 }
 
@@ -482,7 +512,7 @@ pub struct LoadResult {
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
-enum RecordInstantiationKind {
+pub enum RecordInstantiationKind {
     /// The base object itself.
     BaseObject,
     /// A runtime instance of the base object.
@@ -510,6 +540,7 @@ struct LoadEvent {
     built: event_listener::Event,
     // /// Number of references keeping this event alive, including the publisher.
     // ref_count: NonZeroUsize,
+    ready: event_listener::Event,
 }
 
 impl LoadEvent {
@@ -517,6 +548,7 @@ impl LoadEvent {
         LoadEventListener {
             loaded: self.loaded.listen(),
             built: self.built.listen(),
+            ready: self.ready.listen(),
         }
     }
 }
@@ -525,10 +557,11 @@ impl LoadEvent {
 struct LoadEventListener {
     loaded: event_listener::EventListener,
     built: event_listener::EventListener,
+    ready: event_listener::EventListener,
 }
 
 #[derive(Debug, Default)]
-struct CompilationCache {
+pub struct CompilationCache {
     classes: Mutex<HashMap<String, Instance>>,
 }
 
@@ -878,11 +911,11 @@ async fn load_record(
 }
 
 #[derive(Debug)]
-struct LoadedRecord {
+pub struct LoadedRecord {
     /// Records that this record depends upon.
-    pub depends: HashSet<RecordId>,
-    pub scripts: HashMap<String, PartialObject>,
-    pub aliases: HashMap<AliasKey, HashMap<String, PartialObject>>,
+    depends: HashSet<RecordId>,
+    scripts: HashMap<String, PartialObject>,
+    aliases: HashMap<AliasKey, HashMap<String, PartialObject>>,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
@@ -1079,5 +1112,161 @@ fn record_instance_script_name(data: &RecordData) -> Option<&'static str> {
         RecordData::Npc(_) => Some("Actor"),
         RecordData::Weapon(_) => Some("ObjectReference"),
         _ => todo!(),
+    }
+}
+
+pub trait RecordLoader {
+    async fn load_record(
+        &self,
+        record: RecordId,
+        engine: &Engine,
+        kind: RecordInstantiationKind,
+        compiled_classes: &CompilationCache,
+    ) -> Option<LoadedRecord>;
+
+    fn resolve_form(&self, form: FormId, origin: RecordId) -> Option<RecordId>;
+}
+
+impl RecordLoader for Arc<EspLoader> {
+    fn load_record(
+        &self,
+        record: RecordId,
+        engine: &Engine,
+        kind: RecordInstantiationKind,
+        compiled_classes: &CompilationCache,
+    ) -> impl Future<Output = Option<LoadedRecord>> {
+        load_record(self, record, engine, kind, compiled_classes)
+    }
+
+    fn resolve_form(&self, form: FormId, origin: RecordId) -> Option<RecordId> {
+        self.as_ref().resolve_form(form, origin)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use futures_lite::future::block_on;
+    use hashbrown::{HashMap, HashSet};
+    use openfo4_core::record::RecordId;
+    use openfo4_esp::FormId;
+    use openfo4_pex::{Class, Module, State};
+    use openfo4_script::compiler::CompilerOptions;
+    use openfo4_script::engine::Engine;
+
+    use crate::state::hardcoded::HARDCODED_MODULE_ID;
+    use crate::systems::scripting::loader::{
+        CompilationCache, LoadedRecord, PartialObject, RecordInstantiationKind, RecordLoader,
+        ScriptLoader,
+    };
+    use crate::systems::scripting::object_data::ObjectData;
+    use crate::systems::scripting::objects::ScriptObjects;
+    use crate::systems::scripting::registration::RegistrationSet;
+
+    #[derive(Clone, Debug)]
+    struct Loader {
+        deps: HashMap<RecordId, HashSet<RecordId>>,
+    }
+
+    impl RecordLoader for Loader {
+        async fn load_record(
+            &self,
+            record: RecordId,
+            engine: &Engine,
+            _kind: RecordInstantiationKind,
+            compiled_classes: &CompilationCache,
+        ) -> Option<LoadedRecord> {
+            let instance = compiled_classes.get_or_compile(engine, "MyClass").await;
+            let builder = engine
+                .object_pool()
+                .insert(engine.get_type("MyClass").unwrap());
+
+            Some(LoadedRecord {
+                depends: self.deps.get(&record).unwrap().clone(),
+                scripts: [(
+                    "MyClass".to_owned(),
+                    PartialObject {
+                        instance,
+                        builder,
+                        script: None,
+                        data: Some(ObjectData::None),
+                    },
+                )]
+                .into_iter()
+                .collect(),
+                aliases: HashMap::new(),
+            })
+        }
+
+        fn resolve_form(&self, _form: FormId, _origin: RecordId) -> Option<RecordId> {
+            unreachable!()
+        }
+    }
+
+    fn build_loader<T>(t: T) -> ScriptLoader<T> {
+        let mut engine = Engine::new(CompilerOptions::default());
+
+        engine.register(&Module {
+            classes: vec![Class {
+                name: "MyClass".to_owned(),
+                parent: "".to_owned(),
+                states: vec![State {
+                    name: "".to_owned(),
+                    functions: vec![],
+                }],
+                structs: Vec::new(),
+                default_state: "".to_owned(),
+                properties: Vec::new(),
+                variables: Vec::new(),
+            }],
+        });
+
+        let engine = Arc::new(engine);
+        let objects = Arc::new(ScriptObjects::default());
+        let registration = Arc::new(RegistrationSet::default());
+
+        ScriptLoader::new(engine, t, objects, registration)
+    }
+
+    fn make_rid(id: u32) -> RecordId {
+        RecordId::new(HARDCODED_MODULE_ID, FormId(id))
+    }
+
+    #[test]
+    fn script_loader_parallel_load() {
+        let loader = Arc::new(build_loader(Loader {
+            deps: [(make_rid(1), HashSet::new())].into_iter().collect(),
+        }));
+
+        let loadera = loader.clone();
+        let a = std::thread::spawn(move || block_on(loadera.load(make_rid(1))));
+        let loaderb = loader.clone();
+        let b = std::thread::spawn(move || block_on(loaderb.load(make_rid(1))));
+
+        let a = a.join().unwrap().unwrap().object;
+        let b = b.join().unwrap().unwrap().object;
+        assert_eq!(a.id(), b.id());
+    }
+
+    #[test]
+    fn script_loader_cyclic_dependency() {
+        let loader = Arc::new(build_loader(Loader {
+            deps: [
+                (make_rid(1), [make_rid(2)].into_iter().collect()),
+                (make_rid(2), [make_rid(1)].into_iter().collect()),
+            ]
+            .into_iter()
+            .collect(),
+        }));
+
+        let loadera = loader.clone();
+        let a = std::thread::spawn(move || block_on(loadera.load(make_rid(1))));
+        let loaderb = loader.clone();
+        let b = std::thread::spawn(move || block_on(loaderb.load(make_rid(2))));
+
+        let a = a.join().unwrap().unwrap().object;
+        let b = b.join().unwrap().unwrap().object;
+        assert_ne!(a.id(), b.id());
     }
 }
