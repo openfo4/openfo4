@@ -2,6 +2,7 @@ use std::mem::offset_of;
 
 use openfo4_jit::{IntCompareOp, Type as JitType, Value as JitValue};
 
+use crate::compiler::codegen::error::ErrorKind;
 use crate::compiler::codegen::hir::lowering::malloc::call_malloc;
 use crate::compiler::codegen::hir::lowering::{
     BOOL_TYPE, FLOAT_TYPE, INT_TYPE, ISIZE_TYPE, PTR_TYPE, Translator,
@@ -114,7 +115,7 @@ pub fn extract_var(
     let wanted_tag = tag.to_bits();
 
     // Abort if object == null.
-    translator.assert_true(object);
+    translator.assert_true(object, ErrorKind::NullVar);
 
     let actual_tag = translator
         .builder
@@ -124,7 +125,7 @@ pub fn extract_var(
         .icmp_imm(actual_tag, wanted_tag, IntCompareOp::Equal);
 
     // Abort if the actual tag doesn't match the requested tag.
-    translator.assert_true(is_eq);
+    translator.assert_true(is_eq, ErrorKind::WrongVarType);
 
     let data = match tag {
         ObjectTag::Class => translator
@@ -158,7 +159,7 @@ pub fn extract_var(
 
     if let Some(class) = class {
         let is_class = is_class(translator, data, class);
-        translator.assert_true(is_class);
+        translator.assert_true(is_class, ErrorKind::WrongVarType);
     }
 
     data

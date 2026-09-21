@@ -15,6 +15,7 @@ use openfo4_jit::{
 };
 
 use crate::compiler::codegen::CodegenData;
+use crate::compiler::codegen::error::ErrorKind;
 use crate::compiler::codegen::hir::lowering::stack::{InstructionPosition, SuspensionPoint};
 use crate::compiler::codegen::hir::{
     AddrCompareOp, Function, Instruction, Literal, Null, ScalarCompareOp, Value,
@@ -88,7 +89,7 @@ pub fn lower_function(
         builder.create_block(&[JitType::I32])
     };
 
-    let abort_block = builder.create_block(&[]);
+    let abort_block = builder.create_block(&[PTR_TYPE]);
 
     // The entry block needs to be special cased.
     let blocks: Vec<_> = (0..function.blocks.len().saturating_sub(1))
@@ -385,7 +386,7 @@ pub fn lower_function(
                     let ty = translator.lowered_ty(dst);
 
                     // Abort if struct == null
-                    translator.assert_true(st);
+                    translator.assert_true(st, ErrorKind::NullStruct);
 
                     let res = translator.builder.load(ty, st, offset);
                     translator.store(dst, res);
@@ -408,7 +409,7 @@ pub fn lower_function(
                     let value = translator.load(value);
 
                     // Abort if struct == null
-                    translator.assert_true(st);
+                    translator.assert_true(st, ErrorKind::NullStruct);
 
                     translator.builder.store(value, st, offset);
                 }
@@ -431,7 +432,7 @@ pub fn lower_function(
                     let ty = class.fields.get(field_name).unwrap().ty.to_jit();
 
                     // Abort if object == null.
-                    translator.assert_true(object);
+                    translator.assert_true(object, ErrorKind::NullStruct);
 
                     let value = translator.builder.load(ty, object, *offset);
                     translator.store(dst, value);
@@ -453,7 +454,7 @@ pub fn lower_function(
                         .unwrap();
 
                     // Abort if object == null.
-                    translator.assert_true(object);
+                    translator.assert_true(object, ErrorKind::NullStruct);
 
                     translator.builder.store(value, object, *offset);
                 }
@@ -865,7 +866,7 @@ impl<'a> Translator<'a> {
                 let object = self.builder.get_var(object.var);
 
                 // Abort if object == null.
-                self.assert_true(object);
+                self.assert_true(object, ErrorKind::NullClass);
 
                 let ty = self.lowered_ty(value);
 
@@ -929,18 +930,24 @@ impl<'a> Translator<'a> {
         }
     }
 
-    pub fn assert_true(&mut self, condition: JitValue) {
+    pub fn assert_true(&mut self, condition: JitValue, error: ErrorKind) {
+        let ptr: *mut &'static str = Box::leak(Box::new(error.to_str_leak()));
+        let ptr = self.builder.ptrconst(ptr);
+
         let block = self.builder.create_block(&[]);
         self.builder
-            .brif(condition, block, &[], self.abort_block, &[]);
+            .brif(condition, block, &[], self.abort_block, &[ptr]);
         self.current_block = block;
         self.builder.switch_to_block(block);
     }
 
-    pub fn assert_false(&mut self, condition: JitValue) {
+    pub fn assert_false(&mut self, condition: JitValue, error: ErrorKind) {
+        let ptr: *mut &'static str = Box::leak(Box::new(error.to_str_leak()));
+        let ptr = self.builder.ptrconst(ptr);
+
         let block = self.builder.create_block(&[]);
         self.builder
-            .brif(condition, self.abort_block, &[], block, &[]);
+            .brif(condition, self.abort_block, &[ptr], block, &[]);
         self.current_block = block;
         self.builder.switch_to_block(block);
     }
@@ -1125,8 +1132,9 @@ fn generate_abort_block(
     builder.switch_to_block(block);
 
     let result = builder.iconst(RESULT_TYPE, RESULT_ERROR);
+    let errptr = builder.block_params(block)[0];
 
-    builder.call(data.runtime_funcs.emit_error, &[ctx_ptr]);
+    builder.call(data.runtime_funcs.emit_error, &[ctx_ptr, errptr]);
 
     if let Some(ty) = function.returns {
         let ty = data.resources.types.get(ty).unwrap();

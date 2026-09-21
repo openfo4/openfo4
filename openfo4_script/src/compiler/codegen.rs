@@ -1,5 +1,6 @@
 // mod builtin;
 
+mod error;
 mod function;
 mod hir;
 mod pex;

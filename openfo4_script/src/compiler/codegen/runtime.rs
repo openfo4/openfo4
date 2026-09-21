@@ -104,7 +104,7 @@ impl RuntimeFunctions {
         let emit_error = declare_and_define(
             compiler,
             Signature {
-                params: vec![Type::Pointer],
+                params: vec![Type::Pointer, Type::Pointer],
                 returns: vec![],
             },
             host_functions::emit_error,

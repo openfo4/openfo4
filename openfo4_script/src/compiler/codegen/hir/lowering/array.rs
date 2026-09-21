@@ -3,6 +3,7 @@ use std::ptr;
 
 use openfo4_jit::{IntCompareOp, Type as JitType, Value as JitValue};
 
+use crate::compiler::codegen::error::ErrorKind;
 use crate::compiler::codegen::hir::lowering::malloc::call_malloc;
 use crate::compiler::codegen::hir::lowering::{
     BOOL_TYPE, FLOAT_TYPE, INT_TYPE, ISIZE_TYPE, PTR_TYPE, Translator,
@@ -14,7 +15,7 @@ use crate::runtime::ArrayObject;
 pub fn array_length(translator: &mut Translator<'_>, array: &Value<Null>, dst: &Value<i32>) {
     let array = translator.load(array);
 
-    translator.assert_true(array);
+    translator.assert_true(array, ErrorKind::NullArray);
 
     // A null array is considered to be of length 0.
     let array_non_null_block = translator.builder.create_block(&[]);
@@ -95,7 +96,7 @@ pub fn array_clear(translator: &mut Translator<'_>, array: &Value<Null>) {
     let array = translator.load(array);
 
     // Abort if array == null.
-    translator.assert_true(array);
+    translator.assert_true(array, ErrorKind::NullArray);
 
     let zero = translator.builder.iconst(ISIZE_TYPE, 0);
     translator
@@ -109,14 +110,14 @@ pub fn array_add(translator: &mut Translator<'_>, op: &ArrayAdd) {
     let count = translator.load(&op.count);
 
     // Abort if array == null.
-    translator.assert_true(array);
+    translator.assert_true(array, ErrorKind::NullArray);
 
     // Abort if count < 0.
     {
         let is_negative = translator
             .builder
             .icmp_imm(count, 0, IntCompareOp::SignedLessThan);
-        translator.assert_false(is_negative);
+        translator.assert_false(is_negative, ErrorKind::ArrayAddWithNegativeCount);
     }
 
     let entry_block = translator.builder.create_block(&[]);
@@ -349,13 +350,7 @@ fn emit_array_bounds_check(
     index: JitValue,
     count: JitValue,
 ) {
-    let is_non_null_block = translator.builder.create_block(&[]);
-
-    translator
-        .builder
-        .brif(array, is_non_null_block, &[], translator.abort_block, &[]);
-
-    translator.builder.switch_to_block(is_non_null_block);
+    translator.assert_true(array, ErrorKind::NullArray);
 
     // Bounds check
     let array_len = translator
@@ -382,13 +377,7 @@ fn emit_array_bounds_check(
 
     let is_ok = translator.builder.band(is_not_negative, is_within_len);
 
-    let continue_block = translator.builder.create_block(&[]);
-    translator
-        .builder
-        .brif(is_ok, continue_block, &[], translator.abort_block, &[]);
-
-    translator.builder.switch_to_block(continue_block);
-    translator.current_block = continue_block;
+    translator.assert_true(is_ok, ErrorKind::ArrayOutOfBounds);
 }
 
 fn create_array_object(translator: &mut Translator<'_>, ptr: JitValue, len: JitValue) -> JitValue {

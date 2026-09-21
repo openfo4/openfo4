@@ -5,6 +5,7 @@ use openfo4_jit::Type as JitType;
 use openfo4_jit::Value as JitValue;
 
 use crate::compiler::codegen::FunctionDef;
+use crate::compiler::codegen::error::ErrorKind;
 use crate::compiler::codegen::function::translate_function_signature;
 use crate::compiler::codegen::hir::Literal;
 use crate::compiler::codegen::hir::Null;
@@ -40,7 +41,12 @@ pub fn perform_checked_call(
     // value.
     if let Some(object) = object {
         let object = translator.load(object);
-        translator.assert_true(object);
+        translator.assert_true(
+            object,
+            ErrorKind::CallMethodOnNull {
+                callee: callee.debug_name.clone(),
+            },
+        );
     }
 
     // We need to allocate a single usize tag frame at the stack top.

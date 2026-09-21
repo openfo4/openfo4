@@ -105,10 +105,11 @@ pub fn stub() {
     })
 }
 
-pub fn emit_error(ctx: *mut RawContext) {
+pub fn emit_error(ctx: *mut RawContext, err: *const &'static str) {
     unsafe {
         let ctx = &mut *ctx;
-        *ctx.error.borrow_mut() = Some(Box::new(Error::msg("internal error")));
+        let err = &*err;
+        *ctx.error.borrow_mut() = Some(Box::new(Error::msg(err.to_owned())));
     }
 }
 
