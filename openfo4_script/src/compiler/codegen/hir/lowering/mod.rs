@@ -887,12 +887,34 @@ impl<'a> Translator<'a> {
     where
         T: LowerLiteral,
     {
-        let Value::Variable(var) = slot else {
-            return;
-        };
+        match slot {
+            Value::Variable(var) => {
+                let local = *self.locals.get(var.0).unwrap();
+                self.builder.set_var(local.var, value);
+            }
+            Value::ClassVar {
+                object,
+                class,
+                field,
+            } => {
+                let object = self.locals.get(object.0).unwrap();
+                let object = self.builder.get_var(object.var);
 
-        let local = *self.locals.get(var.0).unwrap();
-        self.builder.set_var(local.var, value);
+                // Abort if object == null.
+                self.assert_true(object, ErrorKind::NullClass);
+
+                let offset = self
+                    .data
+                    .class_field_offsets
+                    .get(class)
+                    .unwrap()
+                    .get(field)
+                    .unwrap();
+
+                self.builder.store(value, object, *offset);
+            }
+            Value::Const(_) => {}
+        }
     }
 
     /// Returns the lowered type of a [`Value`].
