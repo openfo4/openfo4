@@ -175,6 +175,15 @@ where
                 // let the other task provide it to us later, otherwise we setup an event
                 // for another task to synchronize to.
                 let mut events = self.load_events.lock();
+
+                // The other thread may have finished loading between our last check and locking.
+                // In this cast the entry will be vacant, but we MUST not create another object.
+                // We must do this check while holding the lock to prevent the other thread from
+                // removing the event that we synchronize with otherwise.
+                if self.objects.get_by_record(record).is_some() {
+                    continue;
+                }
+
                 match events.entry(record) {
                     Entry::Occupied(event) => {
                         debug_assert!(!records.contains_key(&record));
@@ -209,6 +218,7 @@ where
                     let event = events.remove(&record).unwrap();
                     event.loaded.notify(event.loaded.total_listeners());
                     event.built.notify(event.built.total_listeners());
+                    event.ready.notify(event.ready.total_listeners());
                 }
 
                 continue;
@@ -220,6 +230,15 @@ where
             records.insert(record, loaded_rec.scripts);
             record_aliases.extend(loaded_rec.aliases);
         }
+
+        // - We load the the record ourselves OR
+        // - We sync with another thread that is loading the record OR
+        // - The record is already loaded.
+        debug_assert!(
+            records.contains_key(&root)
+                || listeners.contains_key(&root)
+                || self.objects.get_by_record(root).is_some()
+        );
 
         let local_records: Vec<_> = records.keys().copied().collect();
 
@@ -471,17 +490,17 @@ where
             None => {
                 debug_assert!(kind.is_base_object());
 
-                // We need to wait until the thread that has our object has
-                // inserted the object into the pool and assigned it an ID.
-                let listen = listeners.get_mut(&root).unwrap();
-                (&mut listen.ready).await;
-
                 match self.objects.get_by_record(root) {
                     Some(scripts) => scripts.id(),
                     None => {
+                        // We need to wait until the thread that has our object has
+                        // inserted the object into the pool and assigned it an ID.
+                        let listen = listeners.get_mut(&root).unwrap();
+                        (&mut listen.ready).await;
+
                         // FIXME: Once we implement object cleanup, we need to restart
                         // the loading process on failure here.
-                        todo!();
+                        self.objects.get_by_record(root).unwrap().id()
                     }
                 }
             }
