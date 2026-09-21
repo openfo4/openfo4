@@ -167,6 +167,9 @@ pub struct BaseObject {
     pub record: RecordId,
 }
 
+#[derive(Copy, Clone, Debug)]
+pub struct PlacedReference(pub RecordId);
+
 /// Assorted object reference properties.
 #[derive(Clone, Debug)]
 pub struct ObjectProperties {

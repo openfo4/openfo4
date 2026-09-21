@@ -14,17 +14,16 @@ use parking_lot::{
 };
 use slab::Slab;
 
-use crate::components::BaseObject;
 use crate::state::esp::EspLoader;
 use crate::state::level::loader::EntityLoader;
 use crate::systems::global::GlobalProperties;
 use crate::systems::quests::QuestManager;
-use crate::systems::scripting::ScriptEntities;
 use crate::systems::scripting::classes::{Int, Object};
 use crate::systems::scripting::effects::{Effect, EffectId, Effects};
 use crate::systems::scripting::loader::ScriptLoader;
 use crate::systems::scripting::objects::{ScriptObjects, ScriptRef, ScriptsRef};
 use crate::systems::scripting::registration::RegistrationSet;
+use crate::systems::scripting::{LoadRecordKind, ScriptEntities};
 
 #[derive(Clone)]
 pub struct State {
@@ -42,6 +41,7 @@ pub struct State {
     pub esp_loader: Arc<EspLoader>,
     pub deletion: HashSet<Entity>,
     pub entity_loader: Arc<EntityLoader>,
+    pub entities: Arc<ScriptEntities>,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -102,20 +102,10 @@ impl State {
         BorrowMut::map(s, |state| unsafe { &mut *state.quests })
     }
 
-    pub async fn entities(&self) -> Borrow<'_, ScriptEntities> {
-        let s = self.borrowed.borrow().await;
-        Borrow::map(s, |state| unsafe { &*state.entities })
-    }
-
-    pub async fn entities_mut(&self) -> BorrowMut<'_, ScriptEntities> {
-        let s = self.borrowed.borrow_mut().await;
-        BorrowMut::map(s, |state| unsafe { &mut *state.entities })
-    }
-
     /// Returns the game world entity associated with a script object, if any exists.
-    pub async fn entity(&self, addr: ObjectAddr) -> Option<Entity> {
+    pub fn entity(&self, addr: ObjectAddr) -> Option<Entity> {
         let id = self.objects.get_by_addr(addr)?.id();
-        self.entities().await.0.get_left(&id).copied()
+        self.entities.resolve(id)
     }
 
     /// Loads the [`RecordId`] for the given `object`.
@@ -168,41 +158,28 @@ impl State {
     }
 
     pub async fn get_or_create_entity(&self, entity: Entity) -> Result<ScriptsRef<'_>, Error> {
+        if let Some(id) = self.entities.get(entity)
+            && let Some(object) = self.objects.get_by_id(id)
         {
-            let entities = self.entities().await;
-
-            if let Some(id) = entities.0.get_right(&entity)
-                && let Some(object) = self.objects.get_by_id(*id)
-            {
-                // The borrow checker is too conservative here and `self.objects` is
-                // borrowed for '_ if `None` is returned.
-                // We need to drop the lifetime here to keep using `self` mutable if this
-                // branch is not taken.
-                // This should not be necessary when the new borrow checker stabilizes:
-                // https://smallcultfollowing.com/babysteps/blog/2018/06/15/mir-based-borrow-check-nll-status-update/#polonius
-                let object =
-                    unsafe { core::mem::transmute::<ScriptsRef<'_>, ScriptsRef<'_>>(object) };
-                return Ok(object);
-            }
+            // The borrow checker is too conservative here and `self.objects` is
+            // borrowed for '_ if `None` is returned.
+            // We need to drop the lifetime here to keep using `self` mutable if this
+            // branch is not taken.
+            // This should not be necessary when the new borrow checker stabilizes:
+            // https://smallcultfollowing.com/babysteps/blog/2018/06/15/mir-based-borrow-check-nll-status-update/#polonius
+            let object = unsafe { core::mem::transmute::<ScriptsRef<'_>, ScriptsRef<'_>>(object) };
+            return Ok(object);
         }
 
-        let base = {
-            let world = self.world().await;
-            let Ok(base) = world.get::<&BaseObject>(entity).map(|v| v.record) else {
-                return Err(Error::msg(
-                    "failed to load script for entity {:?}: unknown base object",
-                ));
-            };
+        let kind = { LoadRecordKind::extract(&*self.world().await, entity) };
 
-            base
+        let object = kind.load(&self.loader).await;
+
+        let scripts = match self.entities.set(entity, object.id()) {
+            Ok(()) => self.objects.get_by_id(object.id()).unwrap(),
+            Err(id) => self.objects.get_by_id(id).unwrap(),
         };
 
-        // All entities are an instantiation of the base record.
-        let obj = self.loader.load_instance(base).await.unwrap();
-
-        self.entities_mut().await.0.insert(obj.id(), entity);
-
-        let scripts = self.objects.get_by_id(obj.id()).unwrap();
         Ok(scripts)
     }
 
@@ -499,7 +476,6 @@ impl<'a, T> DerefMut for BorrowMut<'a, T> {
 pub struct BorrowedState {
     pub world: *mut World,
     pub quests: *mut QuestManager,
-    pub entities: *mut ScriptEntities,
     pub events: *mut EventBus,
 }
 

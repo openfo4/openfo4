@@ -9,10 +9,11 @@ use futures::stream::FuturesUnordered;
 use futures_lite::StreamExt;
 use game_tasks::TaskPool;
 use game_tracing::trace_span;
-use openfo4_script::runtime::{Context, Val};
+use openfo4_script::runtime::{Context, ObjectAddr, Val};
 use slab::Slab;
 use tracing::instrument;
 
+use crate::systems::scripting::ScriptEntities;
 use crate::systems::scripting::events::queue::{EventQueue, EventQueueProducer};
 use crate::systems::scripting::invocations::{EventInvocation, Value};
 use crate::systems::scripting::loader::{ScriptLoader, ScriptObjectId};
@@ -51,10 +52,11 @@ pub struct Runner {
     tick: Arc<event_listener::Event>,
     invocation_queue: Arc<SegQueue<(EventInvocation, Arc<AtomicBool>)>>,
     invocations: Slab<InvocationState>,
+    entities: Arc<ScriptEntities>,
 }
 
 impl Runner {
-    pub fn new(state: State, pool: Arc<TaskPool>) -> Self {
+    pub fn new(state: State, pool: Arc<TaskPool>, entities: Arc<ScriptEntities>) -> Self {
         Self {
             events: EventQueue::default(),
             objects: state.objects.clone(),
@@ -67,6 +69,7 @@ impl Runner {
             tick: Arc::default(),
             invocation_queue: Arc::default(),
             invocations: Slab::new(),
+            entities,
         }
     }
 
@@ -151,7 +154,9 @@ impl Runner {
             }
         }
 
-        let dispatches = self.events.process(&self.objects, &self.pool, &self.loader);
+        let dispatches =
+            self.events
+                .process(&self.objects, &self.pool, &self.loader, &self.entities);
 
         for dispatch in dispatches {
             tracing::debug!(
@@ -235,7 +240,7 @@ impl Runner {
                     Value::Bool(v) => Val::Bool(v),
                     Value::Int(v) => Val::I32(v),
                     Value::ObjectRef(object) => Val::Object(object.addr()),
-                    Value::ObjectAddr(addr) => Val::Object(addr),
+                    Value::Null => Val::Object(ObjectAddr::NULL),
                 })
                 .collect::<Vec<_>>();
             params.insert(0, Val::Object(script.get().object.addr()));

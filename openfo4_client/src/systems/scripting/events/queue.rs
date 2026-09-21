@@ -4,17 +4,15 @@ use std::sync::Arc;
 use crossbeam::queue::SegQueue;
 use game_tasks::{TaskPool, TaskQueue};
 use game_tracing::trace_span;
-use hashbrown::hash_map::Entry;
 use hashbrown::{HashMap, HashSet};
 use openfo4_core::ecs::{Entity, World};
 use openfo4_core::record::RecordId;
-use openfo4_script::runtime::ObjectAddr;
 use slab::Slab;
 
-use crate::components::BaseObject;
 use crate::systems::scripting::invocations::Value;
-use crate::systems::scripting::loader::{ScriptLoader, ScriptObject};
+use crate::systems::scripting::loader::{ScriptLoader, ScriptObject, ScriptObjectId};
 use crate::systems::scripting::objects::{ScriptObjects, ScriptsRef};
+use crate::systems::scripting::{LoadRecordKind, ScriptEntities};
 
 use super::{DispatchEvent, ObjectValue, QueuedEvent, QueuedEventValue};
 
@@ -22,8 +20,7 @@ use super::{DispatchEvent, ObjectValue, QueuedEvent, QueuedEventValue};
 pub struct EventQueue {
     events: Slab<EventEntry>,
     queue: Arc<SegQueue<EventQueueEntry>>,
-    loading: HashMap<RecordId, LoadEntry>,
-    tasks: TaskQueue<(RecordId, Option<ScriptObject>)>,
+    tasks: TaskQueue<(usize, usize, ScriptObject)>,
     ready_events: Vec<usize>,
 }
 
@@ -33,67 +30,76 @@ impl EventQueue {
         objects: &ScriptObjects,
         pool: &TaskPool,
         loader: &Arc<ScriptLoader>,
+        script_entities: &ScriptEntities,
     ) -> Vec<DispatchEvent> {
         let _span = trace_span!("EventQueue::process").entered();
 
         while let Some(event) = self.queue.pop() {
             let entry = self.events.vacant_entry();
             let index = entry.key();
-            let mut loading = HashSet::new();
 
-            for object in &event.objects {
-                let record = match object {
-                    QueuedObject::Record(record) => *record,
-                };
+            let num_objects = event.entities.len() + event.records.len();
+            let mut objs = vec![None; num_objects];
+            let mut num_loading = 0;
 
-                loading.insert(record);
+            let mut entities = HashMap::new();
+            for (i, (entity, record)) in event.entities.into_iter().enumerate() {
+                entities.insert(entity, i);
 
-                match self.loading.entry(record) {
-                    Entry::Occupied(mut entry) => {
-                        let entry = entry.get_mut();
-
-                        debug_assert!(!entry.events.contains(&index));
-                        entry.events.insert(index);
-                    }
-                    Entry::Vacant(entry) => {
-                        let loader = Arc::clone(loader);
-                        self.tasks.push(pool.spawn(async move {
-                            let object = loader.load(record).await.map(|res| res.object);
-                            (record, object)
-                        }));
-
-                        entry.insert(LoadEntry {
-                            events: HashSet::from([index]),
-                            value: None,
-                        });
-                    }
+                if let Some(id) = script_entities.get(entity) {
+                    objs[i] = Some(id);
+                    continue;
                 }
+
+                let loader = Arc::clone(loader);
+                self.tasks.push(pool.spawn(async move {
+                    let object = record.load(&loader).await;
+                    (index, i, object)
+                }));
+                num_loading += 1;
             }
 
-            if loading.is_empty() {
-                self.ready_events.push(index);
+            let offset = entities.len();
+            let mut records = HashMap::new();
+            for (i, record) in event.records.into_iter().enumerate() {
+                let i = offset + i;
+                records.insert(record, i);
+
+                if let Some(scripts) = objects.get_by_record(record) {
+                    objs[i] = Some(scripts.id());
+                    continue;
+                }
+
+                let loader = Arc::clone(loader);
+                self.tasks.push(pool.spawn(async move {
+                    dbg!(&record);
+                    let object = loader.load(record).await.unwrap().object;
+                    (index, i, object)
+                }));
+                num_loading += 1;
             }
 
             entry.insert(EventEntry {
                 event: event.event,
-                num_loading: loading.len(),
-                objects: loading,
-                entities: event.entities,
+                num_loading,
+                objects: objs,
+                entities,
+                records,
             });
+
+            if num_loading == 0 {
+                self.ready_events.push(index);
+            }
         }
 
-        while let Some((record, object)) = self.tasks.pop() {
-            let entry = self.loading.get_mut(&record).unwrap();
-            entry.value = object;
+        while let Some((event_index, object_index, object)) = self.tasks.pop() {
+            let event = self.events.get_mut(event_index).unwrap();
 
-            for key in &entry.events {
-                let event = &mut self.events[*key];
+            event.num_loading -= 1;
+            event.objects[object_index] = Some(object.id());
 
-                event.num_loading -= 1;
-
-                if event.num_loading == 0 {
-                    self.ready_events.push(*key);
-                }
+            if event.num_loading == 0 {
+                self.ready_events.push(event_index);
             }
         }
 
@@ -105,7 +111,7 @@ impl EventQueue {
 
             let convert_object = |object| -> Result<Value, LoadError<'_>> {
                 match object {
-                    ObjectValue::None => Ok(Value::ObjectAddr(ObjectAddr::NULL)),
+                    ObjectValue::None => Ok(Value::Null),
                     ObjectValue::Script(object, name) => {
                         let object = objects.get_by_id(object.id()).unwrap();
                         let Some(script) = object.get(name) else {
@@ -115,14 +121,10 @@ impl EventQueue {
                         Ok(Value::ObjectRef(script.get().object.clone()))
                     }
                     ObjectValue::Entity(entity, name) => {
-                        let record = *event.entities.get(&entity).unwrap();
-                        let state = self.loading.get(&record).unwrap();
+                        let index = *event.entities.get(&entity).unwrap();
+                        let object = event.objects[index].unwrap();
 
-                        let Some(object) = &state.value else {
-                            return Err(LoadError::FailedToLoad { record });
-                        };
-
-                        let object = objects.get_by_id(object.id()).unwrap();
+                        let object = objects.get_by_id(object).unwrap();
                         let Some(script) = object.get(name) else {
                             return Err(LoadError::NoClass { object, name });
                         };
@@ -130,13 +132,10 @@ impl EventQueue {
                         Ok(Value::ObjectRef(script.get().object.clone()))
                     }
                     ObjectValue::Record(record, name) => {
-                        let state = self.loading.get(&record).unwrap();
+                        let index = *event.records.get(&record).unwrap();
+                        let object = event.objects[index].unwrap();
 
-                        let Some(object) = &state.value else {
-                            return Err(LoadError::FailedToLoad { record });
-                        };
-
-                        let object = objects.get_by_id(object.id()).unwrap();
+                        let object = objects.get_by_id(object).unwrap();
                         let Some(script) = object.get(name) else {
                             return Err(LoadError::NoClass { object, name });
                         };
@@ -184,17 +183,6 @@ impl EventQueue {
                 args.push(value);
             }
 
-            // Cleanup referenced records.
-            for record in event.objects {
-                let state = self.loading.get_mut(&record).unwrap();
-                let existed = state.events.remove(&key);
-                debug_assert!(existed);
-
-                if state.events.is_empty() {
-                    self.loading.remove(&record);
-                }
-            }
-
             events.push(DispatchEvent {
                 receiver,
                 kind: event.event.kind,
@@ -219,10 +207,8 @@ pub struct EventQueueProducer {
 
 impl EventQueueProducer {
     pub fn push(&mut self, world: &World, mut event: QueuedEvent) {
-        let mut records_visited = HashSet::new();
-
-        let mut objects = Vec::new();
         let mut entities = HashMap::new();
+        let mut records = HashSet::new();
 
         for value in event
             .args
@@ -233,7 +219,7 @@ impl EventQueueProducer {
                 continue;
             };
 
-            let object = match object {
+            match object {
                 ObjectValue::None => continue,
                 ObjectValue::Script(_, _) => continue,
                 ObjectValue::Entity(entity, name) => match world.get::<&ScriptObject>(*entity) {
@@ -242,37 +228,28 @@ impl EventQueueProducer {
                         continue;
                     }
                     Err(_) => {
-                        let Ok(object) = world.get::<&BaseObject>(*entity) else {
-                            tracing::error!("failed to load base object type for {:?}", entity);
-                            tracing::error!("lost an event of type {:?}", event.kind);
-                            return;
-                        };
-
-                        entities.insert(*entity, object.record);
-
-                        if !records_visited.insert(object.record) {
+                        if entities.contains_key(entity) {
                             continue;
                         }
 
-                        QueuedObject::Record(object.record)
+                        let object = LoadRecordKind::extract(world, *entity);
+                        entities.insert(*entity, object);
                     }
                 },
                 ObjectValue::Record(id, _) => {
-                    if !records_visited.insert(*id) {
+                    if records.contains(id) {
                         continue;
                     }
 
-                    QueuedObject::Record(*id)
+                    records.insert(*id);
                 }
-            };
-
-            objects.push(object);
+            }
         }
 
         self.queue.push(EventQueueEntry {
             event,
-            objects,
             entities,
+            records,
         });
     }
 }
@@ -280,14 +257,10 @@ impl EventQueueProducer {
 #[derive(Clone, Debug)]
 struct EventQueueEntry {
     event: QueuedEvent,
-    /// The list of objects that must be loaded for this event.
-    objects: Vec<QueuedObject>,
-    entities: HashMap<Entity, RecordId>,
-}
-
-#[derive(Clone, Debug)]
-enum QueuedObject {
-    Record(RecordId),
+    /// The list of entity records that must be loaded.
+    entities: HashMap<Entity, LoadRecordKind>,
+    /// The list of base records that must be loaded.
+    records: HashSet<RecordId>,
 }
 
 #[derive(Clone, Debug)]
@@ -295,23 +268,16 @@ struct EventEntry {
     event: QueuedEvent,
     /// Number of objects that are still loading.
     num_loading: usize,
-    /// Objects that are referenced by this event.
-    objects: HashSet<RecordId>,
-    entities: HashMap<Entity, RecordId>,
-}
-
-#[derive(Clone, Debug)]
-struct LoadEntry {
-    /// Events that are waiting for this entry to become ready.
-    events: HashSet<usize>,
-    value: Option<ScriptObject>,
+    objects: Vec<Option<ScriptObjectId>>,
+    entities: HashMap<Entity, usize>,
+    records: HashMap<RecordId, usize>,
 }
 
 #[derive(Clone, Debug)]
 enum LoadError<'a> {
-    FailedToLoad {
-        record: RecordId,
-    },
+    // FailedToLoad {
+    //     record: RecordId,
+    // },
     NoClass {
         object: ScriptsRef<'a>,
         name: &'static str,
@@ -321,9 +287,9 @@ enum LoadError<'a> {
 impl Display for LoadError<'_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
-            Self::FailedToLoad { record } => {
-                write!(f, "script for record {record} failed to load")
-            }
+            // Self::FailedToLoad { record } => {
+            //     write!(f, "script for record {record} failed to load")
+            // }
             Self::NoClass { object, name } => {
                 write!(f, "object has no attached script {name} (available are: ")?;
                 let mut iter = object.iter();

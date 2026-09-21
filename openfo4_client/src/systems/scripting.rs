@@ -21,13 +21,16 @@ use game_tracing::trace_span;
 use hashbrown::HashSet;
 use openfo4_core::ecs::{Entity, World};
 use openfo4_core::events::EventBus;
+use openfo4_core::record::RecordId;
 use openfo4_pex::Module;
 use openfo4_script::RegisterNativeError;
 use openfo4_script::compiler::CompilerOptions;
 use openfo4_script::compiler::resources::TypeId;
 use openfo4_script::engine::{Engine, Instance, Options};
 use openfo4_script::runtime::{IntoFunc, ObjectRef};
+use parking_lot::Mutex;
 
+use crate::components::{BaseObject, PlacedReference};
 use crate::config;
 use crate::events::combat::{BleedoutStartEvent, BodyPartCrippleEvent};
 use crate::events::inventory::{ItemAddedEvent, ItemEquippedEvent};
@@ -40,7 +43,7 @@ use crate::systems::global::GlobalProperties;
 use crate::systems::quests::QuestManager;
 use crate::systems::scripting::events::queue::EventQueueProducer;
 use crate::systems::scripting::invocations::EventInvocation;
-use crate::systems::scripting::loader::{ScriptLoader, ScriptObjectId};
+use crate::systems::scripting::loader::{ScriptLoader, ScriptObject, ScriptObjectId};
 use crate::systems::scripting::objects::ScriptObjects;
 use crate::systems::scripting::registration::RegistrationSet;
 use crate::systems::scripting::runner::{Runner, RunnerHandle};
@@ -58,6 +61,7 @@ const COMPILER_OPTIONS: Options = Options {
 
 pub struct ExecutorBuilder {
     loader: Arc<ScriptLoader>,
+    entities: Arc<ScriptEntities>,
     pool: Arc<TaskPool>,
 }
 
@@ -99,11 +103,19 @@ impl ExecutorBuilder {
             registration.clone(),
         ));
 
-        Self { loader, pool }
+        Self {
+            loader,
+            pool,
+            entities: Arc::default(),
+        }
     }
 
     pub fn loader(&self) -> &Arc<ScriptLoader> {
         &self.loader
+    }
+
+    pub fn entities(&self) -> &Arc<ScriptEntities> {
+        &self.entities
     }
 
     pub fn build(
@@ -119,15 +131,17 @@ impl ExecutorBuilder {
             globals,
             self.loader.esp_loader.clone(),
             entity_loader,
+            self.entities.clone(),
         );
 
-        let mut runner = Runner::new(state, self.pool.clone());
+        let mut runner = Runner::new(state, self.pool.clone(), self.entities.clone());
         let handle = runner.handle();
         self.pool.spawn(async move { runner.run().await });
 
         Executor {
             loader: self.loader,
             handle,
+            entities: self.entities,
         }
     }
 }
@@ -135,11 +149,16 @@ impl ExecutorBuilder {
 pub struct Executor {
     loader: Arc<ScriptLoader>,
     handle: RunnerHandle,
+    entities: Arc<ScriptEntities>,
 }
 
 impl Executor {
     pub fn loader(&self) -> &Arc<ScriptLoader> {
         &self.loader
+    }
+
+    pub fn entities(&self) -> &Arc<ScriptEntities> {
+        &self.entities
     }
 
     /// Spawns a new script invocation on the `Executor`.
@@ -152,13 +171,7 @@ impl Executor {
         self.handle.push_invocation(invocation.into())
     }
 
-    pub fn update(
-        &mut self,
-        world: &mut World,
-        events: &mut EventBus,
-        script_entities: &mut ScriptEntities,
-        quests: &mut QuestManager,
-    ) {
+    pub fn update(&mut self, world: &mut World, events: &mut EventBus, quests: &mut QuestManager) {
         let _span = trace_span!("Executor::update").entered();
 
         self.handle.tick();
@@ -166,7 +179,6 @@ impl Executor {
         self.handle.cell.set(BorrowedState {
             world: world,
             quests: quests,
-            entities: script_entities,
             events,
         });
 
@@ -226,6 +238,7 @@ fn core_actor_values(
     globals: Arc<GlobalProperties>,
     esp_loader: Arc<EspLoader>,
     entity_loader: Arc<EntityLoader>,
+    entities: Arc<ScriptEntities>,
 ) -> State {
     block_on(engine.compile("Actor", &COMPILER_OPTIONS)).unwrap();
     block_on(engine.compile("ActorValue", &COMPILER_OPTIONS)).unwrap();
@@ -274,6 +287,7 @@ fn core_actor_values(
         esp_loader,
         deletion: HashSet::new(),
         entity_loader,
+        entities,
     }
 }
 
@@ -283,10 +297,6 @@ pub struct ScriptInstance {
     pub layout: TypeId,
     pub object: ObjectRef,
 }
-
-/// Maps [`ScriptObject`]s to game world [`Entity`].
-#[derive(Clone, Debug, Default)]
-pub struct ScriptEntities(pub BiMap<ScriptObjectId, Entity>);
 
 trait EngineExt {
     fn register_if_exists<F, T, Marker, Params, Returns>(&mut self, class: &str, func: &str, f: F)
@@ -312,5 +322,59 @@ impl EngineExt for Engine {
                 );
             }
         }
+    }
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+enum LoadRecordKind {
+    /// The [`RecordId`] points directly to the record to load.
+    Base(RecordId),
+    /// The [`RecordId`] points to the base record of the wanted record.
+    Instance(RecordId),
+}
+
+impl LoadRecordKind {
+    fn extract(world: &World, entity: Entity) -> Self {
+        match world.get::<&PlacedReference>(entity) {
+            Ok(ref_) => Self::Base(ref_.0),
+            Err(_) => match world.get::<&BaseObject>(entity) {
+                Ok(base) => Self::Instance(base.record),
+                Err(_) => {
+                    unreachable!("entity has neither `PlacedReference` nor `BaseObject`")
+                }
+            },
+        }
+    }
+
+    async fn load(&self, loader: &ScriptLoader) -> ScriptObject {
+        match self {
+            Self::Base(id) => loader.load(*id).await.unwrap().object,
+            Self::Instance(id) => loader.load_instance(*id).await.unwrap(),
+        }
+    }
+}
+
+/// Maps [`ScriptObject`]s to game world [`Entity`].
+#[derive(Debug, Default)]
+pub struct ScriptEntities(Mutex<BiMap<ScriptObjectId, Entity>>);
+
+impl ScriptEntities {
+    pub fn get(&self, entity: Entity) -> Option<ScriptObjectId> {
+        self.0.lock().get_right(&entity).copied()
+    }
+
+    pub fn set(&self, entity: Entity, id: ScriptObjectId) -> Result<(), ScriptObjectId> {
+        let mut lock = self.0.lock();
+        match lock.get_right(&entity) {
+            Some(id) => Err(*id),
+            None => {
+                lock.insert(id, entity);
+                Ok(())
+            }
+        }
+    }
+
+    pub fn resolve(&self, id: ScriptObjectId) -> Option<Entity> {
+        self.0.lock().get_left(&id).copied()
     }
 }

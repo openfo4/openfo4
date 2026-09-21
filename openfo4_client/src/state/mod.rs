@@ -67,7 +67,7 @@ use crate::systems::hierarchy::TransformHierarchyCache;
 use crate::systems::inventory::InventorySystem;
 use crate::systems::movement::apply_movement;
 use crate::systems::quests::QuestManager;
-use crate::systems::scripting::{Executor, ExecutorBuilder, ScriptEntities};
+use crate::systems::scripting::{Executor, ExecutorBuilder};
 use crate::systems::time::{init_time, update_time};
 use crate::systems::trigger_box::update_trigger_box_contacts;
 use crate::systems::weapon::{
@@ -102,7 +102,6 @@ pub struct GameState {
     pub executor: Executor,
     quests: QuestManager,
     globals: Arc<GlobalProperties>,
-    script_entities: ScriptEntities,
     pub ai: AiSystem,
     real_time_elapsed: Duration,
     transform_hierarchy_cache: TransformHierarchyCache,
@@ -184,7 +183,6 @@ impl GameState {
             executor,
             quests,
             globals,
-            script_entities: ScriptEntities::default(),
             ai: AiSystem::default(),
             real_time_elapsed: Duration::ZERO,
             transform_hierarchy_cache: TransformHierarchyCache::default(),
@@ -215,7 +213,7 @@ impl GameState {
             &mut self.world,
             &mut self.event_bus,
             &mut self.object_ref_set,
-            &mut self.script_entities,
+            self.executor.entities(),
         );
         self.ai.run_events(&mut self.world, &mut self.event_bus);
 
@@ -238,12 +236,8 @@ impl GameState {
         self.animation
             .update(&mut self.world, &self.esp_loader, &self.globals);
 
-        self.executor.update(
-            &mut self.world,
-            &mut self.event_bus,
-            &mut self.script_entities,
-            &mut self.quests,
-        );
+        self.executor
+            .update(&mut self.world, &mut self.event_bus, &mut self.quests);
         self.quests
             .update(&mut self.world, &mut self.event_bus, &mut self.executor);
 
@@ -553,7 +547,7 @@ impl GameState {
 
         if id == ACTOR_PLAYER {
             if let Some(script) = self.executor.loader().load_instance(id).await {
-                self.script_entities.0.insert(script.id(), root);
+                self.executor.entities().set(root, script.id()).unwrap();
                 self.world.insert_one(root, script).unwrap();
             } else {
                 tracing::warn!("cloud not load script for player");

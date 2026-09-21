@@ -1,6 +1,6 @@
 use std::borrow::Cow;
 
-use openfo4_script::runtime::{ObjectAddr, ObjectRef};
+use openfo4_script::runtime::ObjectRef;
 
 use crate::systems::scripting::loader::ScriptObject;
 use crate::systems::scripting::state::TimerId;
@@ -19,7 +19,7 @@ pub enum Value {
     Bool(bool),
     Int(i32),
     ObjectRef(ObjectRef),
-    ObjectAddr(ObjectAddr),
+    Null,
 }
 
 #[derive(Clone, Debug)]

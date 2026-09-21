@@ -455,11 +455,7 @@ async fn equip_item(
     prevent_removal: bool,
     silent: bool,
 ) -> Result<(), Error> {
-    let actor = caller
-        .data()
-        .entity(self_ptr)
-        .await
-        .ok_or_else(|| todo!())?;
+    let actor = caller.data().entity(self_ptr).ok_or_else(|| todo!())?;
     let item = caller
         .data()
         .objects
@@ -635,7 +631,7 @@ async fn get_faction_rank(
         return Ok(-2);
     };
 
-    let entity = caller.data().entity(self_ptr).await.unwrap();
+    let entity = caller.data().entity(self_ptr).unwrap();
     let world = caller.data().world().await;
     let props = world.get::<&ActorProperties>(entity).unwrap();
 
@@ -721,11 +717,7 @@ fn get_killer(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Err
 /// int Function() native
 /// ```
 async fn get_level(caller: Caller<'_, State>, self_ptr: Object) -> Result<i32, Error> {
-    let entity = caller
-        .data()
-        .entity(self_ptr)
-        .await
-        .ok_or_else(|| todo!())?;
+    let entity = caller.data().entity(self_ptr).ok_or_else(|| todo!())?;
 
     let world = caller.data().world().await;
     let Ok(props) = world.get::<&ActorProperties>(entity) else {
@@ -771,11 +763,7 @@ async fn get_no_bleedout_recovery(
     caller: Caller<'_, State>,
     self_ptr: Object,
 ) -> Result<bool, Error> {
-    let entity = caller
-        .data()
-        .entity(self_ptr)
-        .await
-        .ok_or_else(|| todo!())?;
+    let entity = caller.data().entity(self_ptr).ok_or_else(|| todo!())?;
     let world = caller.data().world().await;
     let Ok(props) = world.get::<&ActorProperties>(entity) else {
         return Ok(false);
@@ -791,11 +779,7 @@ async fn get_no_bleedout_recovery(
 /// bool Function() native
 /// ```
 async fn get_player_controls(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Error> {
-    let entity = caller
-        .data()
-        .entity(self_ptr)
-        .await
-        .ok_or_else(|| todo!())?;
+    let entity = caller.data().entity(self_ptr).ok_or_else(|| todo!())?;
     let world = caller.data().world().await;
     let is_player = world.entity(entity).is_ok_and(|e| e.has::<Player>());
     Ok(is_player)
@@ -1104,11 +1088,7 @@ async fn is_equipped(
     self_ptr: Object,
     item: Object,
 ) -> Result<bool, Error> {
-    let actor = caller
-        .data()
-        .entity(self_ptr)
-        .await
-        .ok_or_else(|| todo!())?;
+    let actor = caller.data().entity(self_ptr).ok_or_else(|| todo!())?;
     let item = caller
         .data()
         .objects
@@ -1211,7 +1191,7 @@ async fn is_in_faction(
         return Ok(false);
     };
 
-    let entity = caller.data().entity(self_ptr).await.unwrap();
+    let entity = caller.data().entity(self_ptr).unwrap();
     let world = caller.data().world().await;
     let props = world.get::<&ActorProperties>(entity).unwrap();
 
@@ -1554,7 +1534,7 @@ async fn remove_from_faction(
         return Ok(());
     };
 
-    let entity = caller.data().entity(self_ptr).await.unwrap();
+    let entity = caller.data().entity(self_ptr).unwrap();
     let world = caller.data().world().await;
     let mut props = world.get::<&mut ActorProperties>(entity).unwrap();
 
@@ -1571,7 +1551,7 @@ async fn remove_from_all_factions(
     caller: Caller<'_, State>,
     self_ptr: Object,
 ) -> Result<(), Error> {
-    let entity = caller.data().entity(self_ptr).await.unwrap();
+    let entity = caller.data().entity(self_ptr).unwrap();
     let world = caller.data().world().await;
     let mut props = world.get::<&mut ActorProperties>(entity).unwrap();
 
@@ -1829,11 +1809,7 @@ async fn set_essential(
     self_ptr: Object,
     essential: bool,
 ) -> Result<(), Error> {
-    let entity = caller
-        .data()
-        .entity(self_ptr)
-        .await
-        .ok_or_else(|| todo!())?;
+    let entity = caller.data().entity(self_ptr).ok_or_else(|| todo!())?;
     let world = caller.data().world().await;
     let mut props = world
         .get::<&mut ActorProperties>(entity)
@@ -1955,11 +1931,7 @@ async fn set_no_bleedout_recovery(
     // The function sets whether bleedout recovery is disabled.
     let allowed = !not_allowed;
 
-    let entity = caller
-        .data()
-        .entity(self_ptr)
-        .await
-        .ok_or_else(|| todo!())?;
+    let entity = caller.data().entity(self_ptr).ok_or_else(|| todo!())?;
     let world = caller.data().world().await;
     let Ok(mut props) = world.get::<&mut ActorProperties>(entity) else {
         return Ok(());
@@ -2285,11 +2257,7 @@ async fn unequip_item(
     prevent_equip: bool,
     silent: bool,
 ) -> Result<(), Error> {
-    let actor = caller
-        .data()
-        .entity(self_ptr)
-        .await
-        .ok_or_else(|| todo!())?;
+    let actor = caller.data().entity(self_ptr).ok_or_else(|| todo!())?;
     let item = caller
         .data()
         .objects
@@ -2671,11 +2639,7 @@ async fn with_actor_props<T, F>(
 where
     F: FnOnce(&ActorProperties) -> T,
 {
-    let entity = caller
-        .data()
-        .entity(self_ptr)
-        .await
-        .ok_or_else(|| todo!())?;
+    let entity = caller.data().entity(self_ptr).ok_or_else(|| todo!())?;
     let world = caller.data().world().await;
     let props = world.get::<&ActorProperties>(entity).map_err(|_| todo!())?;
     Ok(f(&props))
@@ -2685,11 +2649,7 @@ async fn with_inventory<T, F>(caller: Caller<'_, State>, self_ptr: Object, f: F)
 where
     F: FnOnce(&Inventory) -> T,
 {
-    let entity = caller
-        .data()
-        .entity(self_ptr)
-        .await
-        .ok_or_else(|| todo!())?;
+    let entity = caller.data().entity(self_ptr).ok_or_else(|| todo!())?;
     let world = caller.data().world().await;
     let inventory = world.get::<&Inventory>(entity).map_err(|_| todo!())?;
     Ok(f(&inventory))

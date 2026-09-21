@@ -158,7 +158,7 @@ impl Level {
         world: &mut World,
         event_bus: &mut EventBus,
         object_ref_set: &mut ObjectReferenceSet,
-        script_entities: &mut ScriptEntities,
+        script_entities: &ScriptEntities,
     ) {
         let _span = trace_span!("Level::update").entered();
 
@@ -236,7 +236,7 @@ impl Level {
         world: &mut World,
         events: &mut EventBus,
         object_ref_set: &mut ObjectReferenceSet,
-        script_entities: &mut ScriptEntities,
+        script_entities: &ScriptEntities,
     ) {
         let _span = trace_span!("Level::instantiate_new_entities").entered();
 

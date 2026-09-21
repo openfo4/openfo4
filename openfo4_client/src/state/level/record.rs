@@ -19,7 +19,8 @@ use openfo4_physics::components::{Collider, RigidBody};
 use crate::assets::nif::{Instantiate, LoadNifFlags, NIF_TO_METERS, NifKey, NifScene};
 use crate::components::{
     ActorMarker, BaseObject, Disabled, NiTransform, ObjectBounds, ObjectLockData, ObjectLockLevel,
-    ObjectProperties, Persistent, PlacedItem, Root, RootParent, TriggerBox, WorldSpace,
+    ObjectProperties, Persistent, PlacedItem, PlacedReference, Root, RootParent, TriggerBox,
+    WorldSpace,
 };
 use crate::render::RenderObject;
 use crate::state::esp::GlobalRecord;
@@ -66,6 +67,7 @@ pub struct SpawnEntity {
     pub object_bounds: Option<ObjectBounds>,
     pub object_props: Option<ObjectProperties>,
     pub disabled: bool,
+    pub base: Option<RecordId>,
 }
 
 impl SpawnEntity {
@@ -75,7 +77,7 @@ impl SpawnEntity {
         events: &mut EventBus,
         object_ref_set: &mut ObjectReferenceSet,
         terrain_manager: &mut TerrainManager,
-        script_entities: &mut ScriptEntities,
+        script_entities: &ScriptEntities,
     ) -> Entity {
         // Destructure pattern so we get warned if we forget
         // to add new items here.
@@ -102,7 +104,10 @@ impl SpawnEntity {
             object_bounds,
             object_props,
             disabled,
+            base,
         } = self;
+
+        debug_assert!(base.is_some() || form.is_some());
 
         // If the object reference already exists we will overwrite it.
         if let Some(form) = form
@@ -167,7 +172,10 @@ impl SpawnEntity {
         }
 
         if let Some(script) = script {
-            script_entities.0.insert(script.id(), entity);
+            // We are creating this `entity` and have exclusive access to
+            // the `World`. It is not possible for another thread to observe
+            // the `entity` until we return.
+            script_entities.set(entity, script.id()).unwrap();
 
             // Insert into entity to keep the script alive.
             world.insert_one(entity, script).unwrap();
@@ -192,10 +200,13 @@ impl SpawnEntity {
         world.insert_one(entity, LinkedRefs::default()).unwrap();
         world.insert_one(entity, keywords).unwrap();
 
-        if let Some(form) = form {
+        if let Some(base) = base {
             world
-                .insert_one(entity, BaseObject { record: form })
+                .insert_one(entity, BaseObject { record: base })
                 .unwrap();
+        }
+        if let Some(form) = form {
+            world.insert_one(entity, PlacedReference(form)).unwrap();
         }
 
         if is_actor {
@@ -541,6 +552,7 @@ impl SpawnEntity {
             object_bounds,
             object_props: Some(ObjectProperties { lock: lock_data }),
             form: Some(record.id),
+            base: Some(base.id),
             ..Default::default()
         })
     }
@@ -688,7 +700,7 @@ impl SpawnEntity {
             keywords: ObjectKeywords::new(keywords),
             script,
             object_bounds,
-            form: Some(record.id),
+            base: Some(record.id),
             ..Default::default()
         })
     }
