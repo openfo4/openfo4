@@ -9,6 +9,7 @@ use futures::stream::FuturesUnordered;
 use futures_lite::StreamExt;
 use game_tasks::TaskPool;
 use game_tracing::trace_span;
+use hashbrown::HashSet;
 use openfo4_script::runtime::{Context, ObjectAddr, Val};
 use slab::Slab;
 use tracing::instrument;
@@ -165,9 +166,18 @@ impl Runner {
                 dispatch.receiver,
             );
 
+            let mut visited = HashSet::new();
+
             // Dispatch one event for every script object.
             let scripts = self.objects.get_by_id(dispatch.receiver).unwrap();
             for script in scripts.iter() {
+                // We only want to emit one event for every object.
+                // That is if there is a inheritance hierarchy like A->B->C
+                // we only emit one event for all of A, B and C, not for each class.
+                if !visited.insert(script.get().object.addr()) {
+                    continue;
+                }
+
                 self.registration.for_each(
                     &dispatch.kind,
                     &EventSender::Object(script.get().object.addr()),
