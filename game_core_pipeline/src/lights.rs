@@ -1,3 +1,5 @@
+use std::f32::consts::PI;
+
 use bytemuck::{Pod, Zeroable};
 use game_common::color::LinearRgb;
 use game_common::components::{Color, Transform};
@@ -19,6 +21,7 @@ pub struct DirectionalLight {
     pub transform: Transform,
     pub scene: SceneHandle,
     pub color: LinearRgb,
+    /// The illuminance of the light in lux.
     pub illuminance: f32,
 }
 
@@ -27,6 +30,7 @@ pub struct PointLight {
     pub transform: Transform,
     pub scene: SceneHandle,
     pub color: Color,
+    /// The luminious power of the light in lumen.
     pub intensity: f32,
     pub radius: f32,
 }
@@ -36,6 +40,7 @@ pub struct SpotLight {
     pub transform: Transform,
     pub scene: SceneHandle,
     pub color: Color,
+    /// The luminious power of the light in lumen.
     pub intensity: f32,
     pub radius: f32,
     pub inner_cutoff: f32,
@@ -60,7 +65,7 @@ pub(crate) struct DirectionalLightUniform {
     pub direction: [f32; 3],
     pub _pad0: u32,
     pub color: [f32; 3],
-    pub intensity: f32,
+    pub illuminance: f32,
 }
 
 impl DirectionalLightUniform {
@@ -68,7 +73,7 @@ impl DirectionalLightUniform {
         Self {
             direction: (entity.transform.rotation * -Vec3::Z).to_array(),
             color: entity.color.as_rgb(),
-            intensity: illuminance_to_candelas(entity.illuminance),
+            illuminance: entity.illuminance,
             _pad0: 0,
         }
     }
@@ -95,7 +100,7 @@ impl PointLightUniform {
         Self {
             position: entity.transform.translation.to_array(),
             color: entity.color.as_rgb(),
-            intensity: entity.intensity,
+            intensity: lumen_to_candela(entity.intensity),
             radius: entity.radius,
             _pad0: 0,
             _pad1: [0; 3],
@@ -129,7 +134,7 @@ impl SpotLightUniform {
             position: entity.transform.translation.to_array(),
             direction: (entity.transform.rotation * -Vec3::Z).to_array(),
             color: entity.color.as_rgb(),
-            intensity: entity.intensity,
+            intensity: lumen_to_candela(entity.intensity),
             radius: entity.radius,
             inner_cutoff: entity.inner_cutoff,
             outer_cutoff: entity.outer_cutoff,
@@ -145,14 +150,7 @@ impl GpuBuffer for SpotLightUniform {
     const ALIGN: usize = 16;
 }
 
-fn illuminance_to_candelas(lux: f32) -> f32 {
-    // FIXME: Un-harcode exposure in the future.
-    // https://google.github.io/filament/Filament.html#imagingpipeline/physicallybasedcamera/exposuresettings
-    let aperture = 4.0;
-    let shutter_speed = 1.0 / 250.0;
-    let sensitivity = 100.0;
-
-    let ev100 = f32::log2(aperture * aperture / shutter_speed) - f32::log2(sensitivity / 100.0);
-    let exposure = 1.0 / (f32::powf(2.0, ev100) * 1.2);
-    lux * exposure
+fn lumen_to_candela(lm: f32) -> f32 {
+    // https://google.github.io/filament/main/filament.html#mjx-eqn-pointLightLuminousPower
+    lm / (4.0 * PI)
 }
