@@ -20,6 +20,7 @@ pub struct MaterialKey {
 pub struct BgsmMaterial {
     pub material: MaterialHandle,
     pub textures: Vec<Handle<FileImageHandle>>,
+    pub tree: bool,
 }
 
 impl Asset for BgsmMaterial {
@@ -38,6 +39,7 @@ impl Asset for BgsmMaterial {
         Ok(Self {
             material,
             textures: standard.textures.clone(),
+            tree: standard.tree,
         })
     }
 }
@@ -46,6 +48,7 @@ impl Asset for BgsmMaterial {
 pub struct BgsmStandardMaterial {
     pub material: StandardMaterial,
     pub textures: Vec<Handle<FileImageHandle>>,
+    pub tree: bool,
 }
 
 impl Asset for BgsmStandardMaterial {
@@ -128,6 +131,10 @@ impl Asset for BgsmStandardMaterial {
             textures.push(handle);
         }
 
-        Ok(Self { material, textures })
+        Ok(Self {
+            material,
+            textures,
+            tree: bgsm.tree,
+        })
     }
 }

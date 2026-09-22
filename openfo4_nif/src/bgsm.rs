@@ -47,6 +47,7 @@ pub struct Bgsm {
     pub double_sided: bool,
     /// Whether blending is enabled.
     pub blending: bool,
+    pub tree: bool,
 }
 
 impl Bgsm {
@@ -253,6 +254,7 @@ impl Bgsm {
             decal,
             double_sided,
             blending,
+            tree,
         })
     }
 }

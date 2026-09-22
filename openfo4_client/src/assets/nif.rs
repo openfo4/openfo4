@@ -9,7 +9,7 @@ use game_core::hierarchy::{Hierarchy, Key};
 use game_core_pipeline::entities::{Entities, MaterialHandle};
 use game_core_pipeline::material::{AlphaMode, StandardMaterial};
 use game_render::mesh::{Indices, Mesh};
-use glam::{Quat, Vec2, Vec3, Vec4};
+use glam::{Quat, U8Vec4, Vec2, Vec3};
 use hashbrown::{HashMap, HashSet};
 use openfo4_asset::{Asset, AssetLoader, Handle, HandleOrAsset};
 use openfo4_core::ecs::{Entity, EntityBuilder, World};
@@ -17,7 +17,7 @@ use openfo4_core::hierarchy::Children;
 use openfo4_core::path::{DataPath, DataPathBuf};
 use openfo4_hkx::mesh::ExtractCompressedMeshShapeError;
 use openfo4_hkx::{HkObject, HkxFile};
-use openfo4_nif::material::{AlphaTestFunction, NiAlphaProperty, ShaderFlags1};
+use openfo4_nif::material::{AlphaTestFunction, NiAlphaProperty, ShaderFlags1, ShaderFlags2};
 use openfo4_nif::mesh::{BSMeshLODTriShape, BSSubIndexTriShape, BSTriShape};
 use openfo4_nif::{BSLeafAnimNode, BSXFlags, Block, BlockRef, BlockType, Nif};
 use openfo4_physics::components::{Collider, ColliderShape, CollisionLayer, TriMesh};
@@ -333,6 +333,7 @@ impl Asset for NifScene {
             let parent = parent.map(|parent| *block_to_node.get(&parent).unwrap());
 
             let mut material_attached = None;
+            let mut overwrite_mesh_alpha = false;
 
             let node = match nif.get(block) {
                 Some(Block::NiNode(node) | Block::BSLeafAnimNode(BSLeafAnimNode { node })) => {
@@ -431,11 +432,6 @@ impl Asset for NifScene {
                     };
 
                     let mut renderable = if key.flags.contains(LoadNifFlags::RENDER_OBJECTS) {
-                        let mesh = meshes.entry(block).or_insert_with(|| {
-                            let mesh = build_mesh(node);
-                            ctx.entities.create_mesh(mesh)
-                        });
-
                         let alpha_property =
                             node.alpha_property.and_then(|alpha_property| {
                                 match nif.get(alpha_property) {
@@ -472,9 +468,11 @@ impl Asset for NifScene {
                                     match &material {
                                         HandleOrAsset::Asset(material) => {
                                             texture_handles.extend(material.textures.clone());
+                                            overwrite_mesh_alpha = material.tree;
                                         }
                                         HandleOrAsset::Handle(handle) => {
                                             material_handles.push(handle.clone());
+                                            overwrite_mesh_alpha = material.tree;
                                         }
                                     }
 
@@ -486,6 +484,11 @@ impl Asset for NifScene {
                             }
                             None => &ctx.default_material,
                         };
+
+                        let mesh = meshes.entry(block).or_insert_with(|| {
+                            let mesh = build_mesh(node, overwrite_mesh_alpha);
+                            ctx.entities.create_mesh(mesh)
+                        });
 
                         Some(RenderObject {
                             mesh: mesh.clone(),
@@ -540,7 +543,7 @@ impl Asset for NifScene {
                                     let indices: Vec<_> =
                                         skinning.bone_indices.iter().map(|v| *v).collect();
 
-                                    let mut mesh = build_mesh(node);
+                                    let mut mesh = build_mesh(node, overwrite_mesh_alpha);
 
                                     let mut positions = vec![Vec3::ZERO; mesh.positions().len()];
 
@@ -742,7 +745,7 @@ async fn build_animation_controller(
     }
 }
 
-fn build_mesh(shape: &BSTriShape) -> Mesh {
+fn build_mesh(shape: &BSTriShape, overwrite_alpha: bool) -> Mesh {
     let mut mesh = Mesh::new();
 
     if let Some(positions) = &shape.mesh.positions {
@@ -765,7 +768,14 @@ fn build_mesh(shape: &BSTriShape) -> Mesh {
     if let Some(colors) = &shape.mesh.colors {
         let colors = colors
             .iter()
-            .map(|v| Vec4::new(v.r as f32, v.g as f32, v.b as f32, v.a as f32) / 255.0)
+            .map(|v| {
+                let mut color = U8Vec4::new(v.r, v.g, v.b, v.a).as_vec4() / 255.0;
+                if overwrite_alpha {
+                    color.w = 1.0;
+                }
+
+                color
+            })
             .collect();
         mesh.set_colors(colors);
     }
@@ -842,6 +852,10 @@ async fn load_material(
 
                 return Ok(HandleOrAsset::Handle(material));
             }
+
+            let tree = shader_property
+                .shader_flags2
+                .contains(ShaderFlags2::TREE_ANIM);
 
             let mut material = StandardMaterial {
                 alpha_mode: alpha_mode.unwrap_or(AlphaMode::Opaque),
@@ -932,7 +946,11 @@ async fn load_material(
             }
 
             let material = entities.create_material(material);
-            Ok(HandleOrAsset::Asset(BgsmMaterial { material, textures }))
+            Ok(HandleOrAsset::Asset(BgsmMaterial {
+                material,
+                textures,
+                tree,
+            }))
         }
         Some(Block::BSEffectShaderProperty(property)) => {
             if let Some(controller) = property.controller {
@@ -963,11 +981,16 @@ async fn load_material(
             }
 
             let material = entities.create_material(material);
-            Ok(HandleOrAsset::Asset(BgsmMaterial { material, textures }))
+            Ok(HandleOrAsset::Asset(BgsmMaterial {
+                material,
+                textures,
+                tree: false,
+            }))
         }
         _ => Ok(HandleOrAsset::Asset(BgsmMaterial {
             material: entities.create_material(StandardMaterial::default()),
             textures: Vec::new(),
+            tree: false,
         })),
     }
 }
