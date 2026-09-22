@@ -29,7 +29,8 @@ use crate::state::hardcoded::{HARDCODED_MODULE_ID, PATH_SKY_ATMOSPHERE, PATH_SKY
 use crate::systems::time::GameTime;
 
 // The clear weather image space uses a sunlight scale of 4.5 for the day sun.
-const SUNLIGHT_BASE_ILLUMINANCE: f32 = 120_000.0 / 4.5;
+// This seems to be the hardcoded base factor that maps to a value of 1.0 in the shader.
+const SUNLIGHT_BASE_ILLUMINANCE: f32 = 1.0 / 4.5;
 
 const AMBIENT_BRIGHTNESS: f32 = 1.0 / 3.0;
 
