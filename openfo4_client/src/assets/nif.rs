@@ -1,6 +1,10 @@
 pub mod animation;
 pub mod animation_controller;
 
+mod mesh;
+mod node;
+mod physics;
+
 use std::collections::VecDeque;
 
 use bitflags::bitflags;
@@ -8,19 +12,16 @@ use game_common::components::{Color, Transform};
 use game_core::hierarchy::{Hierarchy, Key};
 use game_core_pipeline::entities::{Entities, MaterialHandle};
 use game_core_pipeline::material::{AlphaMode, StandardMaterial};
-use game_render::mesh::{Indices, Mesh};
-use glam::{Quat, U8Vec4, Vec2, Vec3};
-use hashbrown::{HashMap, HashSet};
+use hashbrown::HashMap;
 use openfo4_asset::{Asset, AssetLoader, Handle, HandleOrAsset};
 use openfo4_core::ecs::{Entity, EntityBuilder, World};
 use openfo4_core::hierarchy::Children;
 use openfo4_core::path::{DataPath, DataPathBuf};
 use openfo4_hkx::mesh::ExtractCompressedMeshShapeError;
-use openfo4_hkx::{HkObject, HkxFile};
+use openfo4_nif::connect_points::BSConnectPointParents;
 use openfo4_nif::material::{AlphaTestFunction, NiAlphaProperty, ShaderFlags1, ShaderFlags2};
-use openfo4_nif::mesh::{BSMeshLODTriShape, BSSubIndexTriShape, BSTriShape};
-use openfo4_nif::{BSLeafAnimNode, BSXFlags, Block, BlockRef, BlockType, Nif};
-use openfo4_physics::components::{Collider, ColliderShape, CollisionLayer, TriMesh};
+use openfo4_nif::{BSLeafAnimNode, Block, BlockRef, BlockType, Nif};
+use openfo4_physics::components::Collider;
 use thiserror::Error;
 
 use crate::assets::Error;
@@ -283,11 +284,6 @@ impl Asset for NifScene {
             });
         };
 
-        let mut queue = VecDeque::new();
-        queue.push_back((None, root));
-
-        let mut contains_editor_marker = true;
-
         let mut connect_points_children = None;
         let mut connect_points_parents = None;
 
@@ -295,9 +291,6 @@ impl Asset for NifScene {
             Some(Block::NiNode(node) | Block::BSLeafAnimNode(BSLeafAnimNode { node })) => {
                 for block in &node.extra_data {
                     match nif.get(*block) {
-                        Some(Block::BSXFlags(flags)) => {
-                            contains_editor_marker = flags.contains(BSXFlags::EDITOR_MARKER);
-                        }
                         Some(Block::BSConnectPointChildren(node)) => {
                             connect_points_children = Some(node);
                         }
@@ -311,335 +304,41 @@ impl Asset for NifScene {
             _ => (),
         }
 
-        let is_marker = |name: &str| -> bool {
-            let name = name.to_lowercase();
-            name.contains("marker")
-        };
-
-        let mut meshes = HashMap::new();
-        let mut materials = HashMap::new();
-
         let mut nodes = Hierarchy::new();
         let mut block_to_node = HashMap::new();
 
-        let mut material_handles = Vec::new();
-        let mut texture_handles = Vec::new();
+        let mut visitor = Visitor {
+            key,
+            nif: &nif,
+            parents: HashMap::new(),
+            materials: HashMap::new(),
+            connect_points_parents,
+            controllers_to_load: Vec::new(),
+            loader,
+            ctx,
+            state: LoadState::default(),
+            material_handles: Vec::new(),
+            texture_handles: Vec::new(),
+            queue: VecDeque::new(),
+            id: BlockRef(0),
+        };
 
-        let mut controllers_to_load = Vec::new();
+        visitor.queue.extend(nif.root().map(|id| (None, id)));
 
-        let mut state = LoadState::default();
+        while let Some((parent, id)) = visitor.queue.pop_front() {
+            if let Some(parent) = parent {
+                visitor.parents.insert(id, parent);
+            }
 
-        while let Some((parent, block)) = queue.pop_front() {
-            let parent = parent.map(|parent| *block_to_node.get(&parent).unwrap());
-
-            let mut material_attached = None;
-            let mut overwrite_mesh_alpha = false;
-
-            let node = match nif.get(block) {
-                Some(Block::NiNode(node) | Block::BSLeafAnimNode(BSLeafAnimNode { node })) => {
-                    if is_marker(&node.name) {
-                        continue;
-                    }
-
-                    if let Some(collision_object) = node.collision_object {
-                        queue.push_back((Some(block), collision_object));
-                    }
-
-                    let mut node_transform = Transform {
-                        translation: node.translation,
-                        rotation: Quat::from_mat3(&node.rotation).normalize().conjugate(),
-                        scale: Vec3::splat(node.scale),
-                    };
-
-                    // For some scenes the transform of the root node breaks the
-                    // transform exactly by the root transform, so maybe the transform
-                    // of the root node is not applied?
-                    if parent.is_none() {
-                        node_transform = Transform::default();
-                    }
-
-                    // One would really expected that the parent transform
-                    // affects the children, but this is not the case?
-                    for children in &node.children {
-                        // queue.push_back((*children, transform * node_transform));
-                        queue.push_back((Some(block), *children));
-                    }
-
-                    let mut attachments = Vec::new();
-                    if let Some(points) = connect_points_parents {
-                        for point in &points.points {
-                            // point.parent contains the name of the node where the attachment
-                            // will be mounted, except for some "dummy" weapon base files with
-                            // no child nodes it is empty, so it should probably refer to the
-                            // root node then?
-                            if point.parent != node.name
-                                && parent.is_some()
-                                && !point.parent.is_empty()
-                            {
-                                continue;
-                            }
-
-                            let name = extract_attachment_name(&point.name);
-
-                            let offset = Transform {
-                                translation: point.translation,
-                                rotation: point.rotation,
-                                scale: Vec3::splat(point.scale),
-                            };
-
-                            attachments.push(AttachmentPoint {
-                                name: name.to_owned(),
-                                offset,
-                            });
-                        }
-                    }
-
-                    let mut attaches = node.name.clone();
-                    for block in &node.extra_data {
-                        match nif.get(*block) {
-                            Some(Block::NiStringExtraData(data))
-                                if data.name.eq_ignore_ascii_case("Prn") =>
-                            {
-                                attaches = data.data.clone();
-                            }
-                            _ => {}
-                        }
-                    }
-
-                    Node {
-                        name: node.name.clone(),
-                        transform: node_transform,
-                        attachments,
-                        attaches,
-                        ..Default::default()
-                    }
-                }
-                Some(Block::BSTriShape(node))
-                | Some(Block::BSSubIndexTriShape(BSSubIndexTriShape { shape: node }))
-                | Some(Block::BSMeshLODTriShape(BSMeshLODTriShape { shape: node })) => {
-                    if is_marker(&node.name) {
-                        continue;
-                    }
-
-                    if let Some(collision_object) = node.collision_object {
-                        queue.push_back((Some(block), collision_object));
-                    }
-
-                    let transform = Transform {
-                        translation: node.translation,
-                        rotation: Quat::from_mat3(&node.rotation).normalize().conjugate(),
-                        scale: Vec3::splat(node.scale),
-                    };
-
-                    let mut renderable = if key.flags.contains(LoadNifFlags::RENDER_OBJECTS) {
-                        let alpha_property =
-                            node.alpha_property.and_then(|alpha_property| {
-                                match nif.get(alpha_property) {
-                                    Some(Block::NiAlphaProperty(block)) => Some(block),
-                                    _ => None,
-                                }
-                            });
-
-                        let material = match node.shader_property {
-                            Some(shader_property) => {
-                                if let Some(alpha_property) = alpha_property {
-                                    state
-                                        .material_alpha_properties
-                                        .insert(shader_property, alpha_property);
-                                }
-
-                                if materials.get(&shader_property).is_none() {
-                                    let material = load_material(
-                                        loader,
-                                        &ctx.entities,
-                                        &nif,
-                                        shader_property,
-                                        alpha_property,
-                                        &mut controllers_to_load,
-                                    )
-                                    .await
-                                    .map_err(|err| {
-                                        Error::Other(format!(
-                                            "invalid material in nif file {}: {}",
-                                            key.path, err
-                                        ))
-                                    })?;
-
-                                    match &material {
-                                        HandleOrAsset::Asset(material) => {
-                                            texture_handles.extend(material.textures.clone());
-                                            overwrite_mesh_alpha = material.tree;
-                                        }
-                                        HandleOrAsset::Handle(handle) => {
-                                            material_handles.push(handle.clone());
-                                            overwrite_mesh_alpha = material.tree;
-                                        }
-                                    }
-
-                                    materials.insert(shader_property, material.material.clone());
-                                }
-
-                                material_attached = Some(shader_property);
-                                materials.get(&shader_property).unwrap()
-                            }
-                            None => &ctx.default_material,
-                        };
-
-                        let mesh = meshes.entry(block).or_insert_with(|| {
-                            let mesh = build_mesh(node, overwrite_mesh_alpha);
-                            ctx.entities.create_mesh(mesh)
-                        });
-
-                        Some(RenderObject {
-                            mesh: mesh.clone(),
-                            material: material.clone(),
-                        })
-                    } else {
-                        None
-                    };
-
-                    let skin = if key.flags.contains(LoadNifFlags::RENDER_OBJECTS) {
-                        match node.skin {
-                            Some(skin) => match nif.get(skin) {
-                                Some(Block::BSSkinInstance(skin)) => {
-                                    let bone_data = match nif.get(skin.data) {
-                                        Some(Block::BSSkinBoneData(data)) => data
-                                            .bones
-                                            .iter()
-                                            .map(|bone| Transform {
-                                                translation: bone.translation,
-                                                rotation: Quat::from_mat3(&bone.rotation)
-                                                    .conjugate(),
-                                                scale: Vec3::splat(bone.scale),
-                                            })
-                                            .collect::<Vec<_>>(),
-                                        _ => todo!(),
-                                    };
-
-                                    let mut bones = Vec::new();
-                                    let mut bone_transforms = Vec::new();
-
-                                    for bone in &skin.bones {
-                                        match nif.get(*bone) {
-                                            Some(Block::NiNode(node)) => {
-                                                bones.push(node.name.clone());
-                                                bone_transforms.push(Transform {
-                                                    translation: node.translation,
-                                                    rotation: Quat::from_mat3(&node.rotation)
-                                                        .conjugate(),
-                                                    scale: Vec3::splat(node.scale),
-                                                });
-                                            }
-                                            _ => todo!(),
-                                        }
-                                    }
-
-                                    let Some(skinning) = &node.mesh.skinning else {
-                                        todo!();
-                                    };
-
-                                    let weights: Vec<_> =
-                                        skinning.bone_weights.iter().map(|v| v.as_vec4()).collect();
-                                    let indices: Vec<_> =
-                                        skinning.bone_indices.iter().map(|v| *v).collect();
-
-                                    let mut mesh = build_mesh(node, overwrite_mesh_alpha);
-
-                                    let mut positions = vec![Vec3::ZERO; mesh.positions().len()];
-
-                                    for i in 0..weights.len() {
-                                        let weights = weights[i];
-                                        let indices = indices[i];
-                                        let pos = mesh.positions()[i];
-
-                                        let i0 = indices[0] as usize;
-                                        let i1 = indices[1] as usize;
-                                        let i2 = indices[2] as usize;
-                                        let i3 = indices[3] as usize;
-
-                                        let x = (bone_transforms[i0] * bone_data[i0])
-                                            .transform_point(pos);
-                                        let y = (bone_transforms[i1] * bone_data[i1])
-                                            .transform_point(pos);
-                                        let z = (bone_transforms[i2] * bone_data[i2])
-                                            .transform_point(pos);
-                                        let w = (bone_transforms[i3] * bone_data[i3])
-                                            .transform_point(pos);
-
-                                        positions[i] = x * weights.x
-                                            + y * weights.y
-                                            + z * weights.z
-                                            + w * weights.w;
-                                    }
-
-                                    mesh.set_positions(positions);
-
-                                    if let Some(renderable) = &mut renderable {
-                                        renderable.mesh = ctx.entities.create_mesh(mesh);
-                                    }
-
-                                    Some(Skin { bones })
-                                }
-                                _ => todo!(),
-                            },
-                            None => None,
-                        }
-                    } else {
-                        None
-                    };
-
-                    let mut attaches = node.name.clone();
-                    for block in &node.extra_data {
-                        match nif.get(*block) {
-                            Some(Block::NiStringExtraData(data))
-                                if data.name.eq_ignore_ascii_case("Prn") =>
-                            {
-                                attaches = data.data.clone();
-                            }
-                            _ => {}
-                        }
-                    }
-
-                    Node {
-                        name: node.name.clone(),
-                        transform,
-                        renderable,
-                        skin,
-                        attaches,
-                        ..Default::default()
-                    }
-                }
-                Some(Block::BhkNPCollisionObject(_)) => {
-                    if key.flags.contains(LoadNifFlags::COLLIDERS) {
-                        match load_collider(&nif, block) {
-                            Ok(Some(collider)) => Node {
-                                transform: Transform::from_scale(Vec3::splat(1.0 / NIF_TO_METERS))
-                                    * collider.transform,
-                                collider: Some(collider.collider),
-                                ..Default::default()
-                            },
-                            Ok(None) => Node::default(),
-                            Err(err) => {
-                                tracing::error!(
-                                    "failed to load collider from {}: {}",
-                                    key.path,
-                                    err
-                                );
-                                Node::default()
-                            }
-                        }
-                    } else {
-                        Node::default()
-                    }
-                }
-                _ => Node::default(),
+            let Some(block) = nif.get(id) else {
+                continue;
             };
 
-            let key = nodes.append(parent, node);
-            block_to_node.insert(block, key);
-
-            if let Some(material) = material_attached {
-                state.material_to_node.insert(material, key);
+            visitor.id = id;
+            if let Some(node) = block.visit(&mut visitor, id).await {
+                let parent = parent.map(|parent| *block_to_node.get(&parent).unwrap());
+                let node = nodes.append(parent, node);
+                block_to_node.insert(id, node);
             }
         }
 
@@ -652,14 +351,14 @@ impl Asset for NifScene {
         }
 
         let mut controller = AnimationController::default();
-        if key.flags.contains(LoadNifFlags::ANIMATIONS) {
+        if visitor.key.flags.contains(LoadNifFlags::ANIMATIONS) {
             controller = build_animation_controller(
                 &nif,
                 loader,
-                controllers_to_load,
-                &state,
+                visitor.controllers_to_load,
+                &visitor.state,
                 &block_to_node,
-                &key.path,
+                &visitor.key.path,
             )
             .await;
         };
@@ -668,8 +367,8 @@ impl Asset for NifScene {
             nodes,
             attaches,
             controller,
-            _materials: material_handles,
-            _textures: texture_handles,
+            _materials: visitor.material_handles,
+            _textures: visitor.texture_handles,
         })
     }
 }
@@ -743,64 +442,6 @@ async fn build_animation_controller(
         material: material_controllers,
         sequences,
     }
-}
-
-fn build_mesh(shape: &BSTriShape, overwrite_alpha: bool) -> Mesh {
-    let mut mesh = Mesh::new();
-
-    if let Some(positions) = &shape.mesh.positions {
-        mesh.set_positions(positions.clone());
-    }
-
-    if let Some(normals) = &shape.mesh.normals {
-        mesh.set_normals(normals.clone());
-    }
-
-    if let Some(tex_coords) = &shape.mesh.tex_coords {
-        let tex_coords = tex_coords.iter().map(|v| v.as_vec2()).collect();
-        mesh.set_uvs(tex_coords);
-    } else {
-        // We need tex coords to be able to render.
-        let tex_coords = std::iter::repeat_n(Vec2::ZERO, mesh.positions().len()).collect();
-        mesh.set_uvs(tex_coords);
-    }
-
-    if let Some(colors) = &shape.mesh.colors {
-        let colors = colors
-            .iter()
-            .map(|v| {
-                let mut color = U8Vec4::new(v.r, v.g, v.b, v.a).as_vec4() / 255.0;
-                if overwrite_alpha {
-                    color.w = 1.0;
-                }
-
-                color
-            })
-            .collect();
-        mesh.set_colors(colors);
-    }
-
-    let indices = shape
-        .mesh
-        .indices
-        .iter()
-        .flatten()
-        .map(|v| *v as u32)
-        .collect();
-    mesh.set_indices(Indices::U32(indices));
-
-    if let Some(tangents) = &shape.mesh.tangents {
-        mesh.set_tangents(tangents.clone());
-    } else {
-        mesh.compute_tangents();
-    }
-
-    if let Some(skin) = &shape.mesh.skinning {
-        mesh.set_skinning_joint_indices(skin.bone_indices.clone());
-        mesh.set_skinning_joint_weights(skin.bone_weights.iter().map(|v| v.as_vec4()).collect());
-    }
-
-    mesh
 }
 
 async fn load_material(
@@ -1184,166 +825,6 @@ enum LoadColliderError {
     InvalidCompressedMeshShape(ExtractCompressedMeshShapeError),
 }
 
-fn load_collider(
-    nif: &Nif,
-    collision_object: BlockRef,
-) -> Result<Option<ColliderNode>, LoadColliderError> {
-    // The collision object is a `bhkNPCollisionObject` node, which
-    // contains a reference to a `bhkPhysicsSystem` node that contains
-    // a HKX file.
-    // The `BodyID` of the `bhkNPCollisionObject` node contains the index
-    // of the body that should be selected from the HKX file.
-    let collision_object = match nif.get(collision_object) {
-        Some(Block::BhkNPCollisionObject(object)) => object,
-        _ => todo!(),
-    };
-
-    let data = match nif.get(collision_object.data) {
-        Some(Block::BhkPhysicsSystem(data)) => &data.data,
-        Some(Block::BhkRagdollSystem(data)) => &data.data,
-        _ => todo!(),
-    };
-
-    let hkx = HkxFile::decode(data).map_err(LoadColliderError::Hkx)?;
-
-    let system = hkx
-        .iter()
-        .find_map(|obj| match obj {
-            HkObject::PhysicsSystemData(data) => Some(data),
-            HkObject::RagdollData(data) => Some(&data.physics_system),
-            _ => None,
-        })
-        .unwrap();
-
-    let body = system
-        .body_cinfos
-        .get(collision_object.body_id as usize)
-        .unwrap();
-
-    let Some(material) = system.materials.get(usize::from(body.material_id)) else {
-        return Err(LoadColliderError::InvalidMaterialId(body.material_id));
-    };
-
-    let friction = material.static_friction.to_f32();
-    let restitution = material.restitution.to_f32();
-
-    // Note that unlike everything else in a NIF file,
-    // the hkx transforms/collider meshes use meters.
-    let transform = Transform {
-        // There are position and orientation attributes on the body,
-        // but they seem to not be applied?
-        ..Default::default()
-    };
-
-    let mut meshes = Vec::new();
-    let mut all_meshes_are_convex = true;
-
-    let mut visited = HashSet::new();
-    let mut queue = VecDeque::new();
-    queue.push_back((body.shape, Transform::default()));
-
-    while let Some((ptr, mut transform)) = queue.pop_front() {
-        // Since composite shapes can point to any other shape
-        // we need to catch cycles we may get stuck here forever.
-        if !visited.insert(ptr) {
-            return Err(LoadColliderError::PointerCylce);
-        }
-
-        match hkx.get(ptr) {
-            Some(HkObject::CompressedMeshShape(shape)) => {
-                let mesh = shape
-                    .data
-                    .mesh()
-                    .map_err(LoadColliderError::InvalidCompressedMeshShape)?;
-
-                meshes.push((mesh, transform));
-                all_meshes_are_convex = false;
-            }
-            Some(HkObject::ConvexPolytopeShape(shape)) => {
-                let mesh = shape.to_tri_mesh();
-                meshes.push((mesh, transform));
-            }
-            Some(HkObject::CapsuleShape(shape)) => {
-                let mesh = shape.to_tri_mesh();
-                meshes.push((mesh, transform));
-            }
-            Some(HkObject::ConvexShape(shape)) => {
-                let mesh = shape.mesh();
-                meshes.push((mesh, transform));
-            }
-            Some(HkObject::ScaledConvexShape(shape)) => {
-                // FIXME: Which of these two is applied first,
-                // or rather the question is whether translation
-                // should already be scaled by the new scale value.
-                transform.translation += shape.translation.truncate();
-                transform.scale *= shape.scale.truncate();
-
-                queue.push_back((shape.core_shape, transform));
-            }
-            Some(HkObject::DynamicCompoundShape(shape)) => {
-                for instance in &*shape.instances {
-                    let Some(shape) = instance.shape else {
-                        continue;
-                    };
-
-                    let (_, rotation, translation) =
-                        instance.transform.to_scale_rotation_translation();
-                    let scale = instance.scale.truncate();
-
-                    let transform = transform
-                        * Transform {
-                            translation,
-                            rotation,
-                            scale,
-                        };
-
-                    queue.push_back((shape, transform));
-                }
-            }
-            _ => return Err(LoadColliderError::UnknownMeshShape),
-        }
-    }
-
-    let mut vertices = Vec::new();
-    let mut indices = Vec::new();
-
-    for (mesh, transform) in meshes {
-        let base_index = vertices.len() as u32;
-
-        for vertex in mesh.vertices {
-            let vertex = transform.transform_point(vertex);
-            vertices.push(vertex);
-        }
-
-        for index in mesh.indices {
-            let index = base_index + index;
-            debug_assert!(index < vertices.len() as u32);
-            indices.push(index);
-        }
-    }
-
-    if indices.is_empty() {
-        return Ok(None);
-    }
-
-    let mesh = if all_meshes_are_convex {
-        TriMesh::new_convex(vertices, indices)
-    } else {
-        TriMesh::new(vertices, indices)
-    };
-
-    Ok(Some(ColliderNode {
-        transform,
-        collider: Collider {
-            // TODO: Load values from material property.
-            friction: 0.5,
-            restitution: 0.5,
-            shape: ColliderShape::TriMesh(mesh),
-            layer: CollisionLayer::STATIC,
-        },
-    }))
-}
-
 fn extract_attachment_name(mut name: &str) -> &str {
     if name.starts_with("P-") {
         name = name.strip_prefix("P-").unwrap_or(name);
@@ -1362,4 +843,52 @@ pub enum NifError {
         value: &'static str,
         parent: BlockType,
     },
+}
+
+struct Visitor<'a> {
+    key: NifKey,
+    nif: &'a Nif,
+    parents: HashMap<BlockRef, BlockRef>,
+    materials: HashMap<BlockRef, MaterialHandle>,
+    loader: &'a AssetLoader,
+    ctx: &'a NifLoaderContext,
+    state: LoadState<'a>,
+    texture_handles: Vec<Handle<FileImageHandle>>,
+    material_handles: Vec<Handle<BgsmMaterial>>,
+    controllers_to_load: Vec<BlockRef>,
+    connect_points_parents: Option<&'a BSConnectPointParents>,
+    queue: VecDeque<(Option<BlockRef>, BlockRef)>,
+    id: BlockRef,
+}
+
+impl Visitor<'_> {
+    fn enqueue(&mut self, block: BlockRef) {
+        self.queue.push_back((Some(self.id), block));
+    }
+
+    fn parent(&self, block: BlockRef) -> Option<BlockRef> {
+        self.parents.get(&block).copied()
+    }
+}
+
+trait Visit {
+    async fn visit(&self, visitor: &mut Visitor<'_>, id: BlockRef) -> Option<Node>;
+}
+
+fn is_marker(name: &str) -> bool {
+    name.to_lowercase().contains("marker")
+}
+
+impl Visit for Block {
+    async fn visit(&self, visitor: &mut Visitor<'_>, id: BlockRef) -> Option<Node> {
+        match self {
+            Self::NiNode(node) => node.visit(visitor, id).await,
+            Self::BSLeafAnimNode(node) => node.node.visit(visitor, id).await,
+            Self::BSTriShape(node) => node.visit(visitor, id).await,
+            Self::BSSubIndexTriShape(node) => node.shape.visit(visitor, id).await,
+            Self::BSMeshLODTriShape(node) => node.shape.visit(visitor, id).await,
+            Self::BhkNPCollisionObject(node) => node.visit(visitor, id).await,
+            _ => None,
+        }
+    }
 }
