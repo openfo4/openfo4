@@ -12,6 +12,7 @@ pub struct VisibilityTracker {
     visible: HashMap<u32, InventoryKey>,
     /// Items that have changed visible slots since the last rescan.
     visible_changed: HashSet<InventoryKey>,
+    slots: HashMap<u32, HashSet<InventoryKey>>,
 }
 
 impl VisibilityTracker {
@@ -22,14 +23,16 @@ impl VisibilityTracker {
     {
         let mut conflicts = HashSet::new();
         for slot in &item.slots {
-            let Some(other) = self.visible.get(slot).copied() else {
-                continue;
-            };
+            if let Some(others) = self.slots.get(slot) {
+                for other in others {
+                    let item = self.items.get_mut(other).unwrap();
 
-            let item = self.items.get_mut(&other).unwrap();
+                    conflicts.insert(*other);
+                    item.conflicts.insert(key);
+                }
+            }
 
-            conflicts.insert(other);
-            item.conflicts.insert(key);
+            self.slots.entry(*slot).or_default().insert(key);
         }
 
         let has_no_slots = item.slots.is_empty();
@@ -79,6 +82,14 @@ impl VisibilityTracker {
             let other = self.items.get_mut(&other).unwrap();
             debug_assert!(other.conflicts.contains(&key));
             other.conflicts.remove(&key);
+        }
+
+        for slot in state.item.slots {
+            let slots = self.slots.get_mut(&slot).unwrap();
+            slots.remove(&key);
+            if slots.is_empty() {
+                self.slots.remove(&slot);
+            }
         }
     }
 
@@ -273,5 +284,57 @@ mod tests {
             assert_eq!(key, InventoryKey(0));
             assert_eq!(slots, &HashSet::from([]))
         });
+    }
+
+    #[test]
+    fn visibility_tracker_multiple_conflicts() {
+        let mut tracker = VisibilityTracker::default();
+
+        tracker.add(
+            ItemVisibilityFlags {
+                slots: [1].into(),
+                priority: 0,
+            },
+            InventoryKey(0),
+            expect(&[(InventoryKey(0), HashSet::from([1]))]),
+        );
+        tracker.add(
+            ItemVisibilityFlags {
+                slots: [1].into(),
+                priority: 1,
+            },
+            InventoryKey(1),
+            expect(&[
+                (InventoryKey(0), HashSet::from([])),
+                (InventoryKey(1), HashSet::from([1])),
+            ]),
+        );
+        tracker.add(
+            ItemVisibilityFlags {
+                slots: [1].into(),
+                priority: 2,
+            },
+            InventoryKey(2),
+            expect(&[
+                (InventoryKey(1), HashSet::from([])),
+                (InventoryKey(2), HashSet::from([1])),
+            ]),
+        );
+
+        tracker.remove(
+            InventoryKey(1),
+            expect(&[(InventoryKey(1), HashSet::from([]))]),
+        );
+        tracker.remove(
+            InventoryKey(2),
+            expect(&[
+                (InventoryKey(2), HashSet::from([])),
+                (InventoryKey(0), HashSet::from([1])),
+            ]),
+        );
+        tracker.remove(
+            InventoryKey(2),
+            expect(&[(InventoryKey(0), HashSet::from([]))]),
+        );
     }
 }
