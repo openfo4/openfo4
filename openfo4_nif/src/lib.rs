@@ -88,30 +88,47 @@ impl Nif {
 
         let mut blocks = Vec::new();
         for index in 0..num_blocks {
-            let start_offset = reader.buf.position();
+            let start_offset = reader.buf.position() as usize;
 
             let block_type = block_types[index as usize];
-            let block_size = block_sizes[index as usize];
+            let block_size = block_sizes[index as usize] as usize;
+
+            let buf = reader
+                .buf
+                .get_ref()
+                .get(start_offset..start_offset + block_size)
+                .ok_or(Error::IncompleteBlock {
+                    block_type,
+                    block_index: index,
+                    offset: start_offset,
+                    expected_size: block_size,
+                    found_size: reader.buf.remaining(),
+                })?;
+            let mut nested_reader = Reader {
+                buf: Cursor::new(buf),
+                endian: reader.endian,
+                strings: reader.strings.clone(),
+            };
 
             let block = match block_type {
-                BlockType::NiNode => Block::NiNode(NiNode::decode(&mut reader).unwrap()),
+                BlockType::NiNode => Block::NiNode(NiNode::decode(&mut nested_reader).unwrap()),
                 BlockType::BSBehaviorGraphExtraData => {
-                    let behaviour_graph_file = reader.get_u32().unwrap();
+                    let behaviour_graph_file = nested_reader.get_u32().unwrap();
 
-                    let controls_base_skeleton = reader.get_bool().unwrap();
+                    let controls_base_skeleton = nested_reader.get_bool().unwrap();
                     Block::Skipped
                 }
                 BlockType::BSXFlags => {
-                    let name = reader.get_u32().unwrap();
+                    let name = nested_reader.get_u32().unwrap();
 
-                    let flags = reader.get_u32().unwrap();
+                    let flags = nested_reader.get_u32().unwrap();
                     Block::BSXFlags(BSXFlags::from_bits_truncate(flags))
                 }
                 BlockType::BhkNPCollisionObject => {
-                    let target = BlockRef::decode(&mut reader).unwrap();
-                    let flags = reader.get_u16().unwrap();
-                    let data = BlockRef::decode(&mut reader).unwrap();
-                    let body_id = reader.get_u32().unwrap();
+                    let target = BlockRef::decode(&mut nested_reader).unwrap();
+                    let flags = nested_reader.get_u16().unwrap();
+                    let data = BlockRef::decode(&mut nested_reader).unwrap();
+                    let body_id = nested_reader.get_u32().unwrap();
                     Block::BhkNPCollisionObject(BhkNPCollisionObject {
                         target,
                         flags,
@@ -120,159 +137,165 @@ impl Nif {
                     })
                 }
                 BlockType::BhkPhysicsSystem => {
-                    let data = reader.get_byte_array()?;
+                    let data = nested_reader.get_byte_array()?;
                     Block::BhkPhysicsSystem(BhkPhysicsSystem { data })
                 }
-                BlockType::BSTriShape => Block::BSTriShape(BSTriShape::decode(&mut reader)?),
+                BlockType::BSTriShape => Block::BSTriShape(BSTriShape::decode(&mut nested_reader)?),
                 BlockType::BSSubIndexTriShape => {
-                    Block::BSSubIndexTriShape(BSSubIndexTriShape::decode(&mut reader)?)
+                    Block::BSSubIndexTriShape(BSSubIndexTriShape::decode(&mut nested_reader)?)
                 }
                 BlockType::BSMeshLODTriShape => {
-                    Block::BSMeshLODTriShape(BSMeshLODTriShape::decode(&mut reader)?)
+                    Block::BSMeshLODTriShape(BSMeshLODTriShape::decode(&mut nested_reader)?)
                 }
-                BlockType::BSLightingShaderProperty => {
-                    Block::BSLightingShaderProperty(BSLightingShaderProperty::decode(&mut reader)?)
-                }
-                BlockType::BSEffectShaderProperty => {
-                    Block::BSEffectShaderProperty(BSEffectShaderProperty::decode(&mut reader)?)
-                }
+                BlockType::BSLightingShaderProperty => Block::BSLightingShaderProperty(
+                    BSLightingShaderProperty::decode(&mut nested_reader)?,
+                ),
+                BlockType::BSEffectShaderProperty => Block::BSEffectShaderProperty(
+                    BSEffectShaderProperty::decode(&mut nested_reader)?,
+                ),
                 BlockType::BSSkyShaderProperty => {
-                    Block::BSSkyShaderProperty(BSSkyShaderProperty::decode(&mut reader)?)
+                    Block::BSSkyShaderProperty(BSSkyShaderProperty::decode(&mut nested_reader)?)
                 }
                 BlockType::BSShaderTextureSet => {
-                    Block::BSShaderTextureSet(BSShaderTextureSet::decode(&mut reader)?)
+                    Block::BSShaderTextureSet(BSShaderTextureSet::decode(&mut nested_reader)?)
                 }
                 BlockType::NiAlphaProperty => {
-                    Block::NiAlphaProperty(NiAlphaProperty::decode(&mut reader)?)
+                    Block::NiAlphaProperty(NiAlphaProperty::decode(&mut nested_reader)?)
                 }
                 BlockType::BSSkinInstance => {
-                    Block::BSSkinInstance(BSSkinInstance::decode(&mut reader)?)
+                    Block::BSSkinInstance(BSSkinInstance::decode(&mut nested_reader)?)
                 }
                 BlockType::BSSkinBoneData => {
-                    let num_bones = reader.get_u32().unwrap();
+                    let num_bones = nested_reader.get_u32().unwrap();
                     let bones = (0..num_bones)
-                        .map(|_| Bone::decode(&mut reader))
+                        .map(|_| Bone::decode(&mut nested_reader))
                         .collect::<Result<_, _>>()
                         .unwrap();
 
                     Block::BSSkinBoneData(BSSkinBoneData { bones })
                 }
                 BlockType::BSBound => {
-                    let block = BSBound::decode(&mut reader)?;
+                    let block = BSBound::decode(&mut nested_reader)?;
                     Block::BSBound(block)
                 }
                 BlockType::BhkRagdollSystem => {
-                    let data = reader.get_byte_array()?;
+                    let data = nested_reader.get_byte_array()?;
                     Block::BhkRagdollSystem(BhkRagdollSystem { data })
                 }
-                BlockType::BSConnectPointChildren => {
-                    Block::BSConnectPointChildren(BSConnectPointChildren::decode(&mut reader)?)
-                }
+                BlockType::BSConnectPointChildren => Block::BSConnectPointChildren(
+                    BSConnectPointChildren::decode(&mut nested_reader)?,
+                ),
                 BlockType::BSConnectPointParents => {
-                    Block::BSConnectPointParents(BSConnectPointParents::decode(&mut reader)?)
+                    Block::BSConnectPointParents(BSConnectPointParents::decode(&mut nested_reader)?)
                 }
                 BlockType::BSClothExtraData => {
-                    Block::BSClothExtraData(BSClothExtraData::decode(&mut reader)?)
+                    Block::BSClothExtraData(BSClothExtraData::decode(&mut nested_reader)?)
                 }
                 BlockType::NiBinaryExtraData => {
-                    Block::NiBinaryExtraData(NiBinaryExtraData::decode(&mut reader)?)
+                    Block::NiBinaryExtraData(NiBinaryExtraData::decode(&mut nested_reader)?)
                 }
-                BlockType::NiCamera => Block::NiCamera(NiCamera::decode(&mut reader)?),
-                BlockType::BSFrustumFOVController => {
-                    Block::BSFrustumFOVController(BSFrustumFOVController::decode(&mut reader)?)
-                }
+                BlockType::NiCamera => Block::NiCamera(NiCamera::decode(&mut nested_reader)?),
+                BlockType::BSFrustumFOVController => Block::BSFrustumFOVController(
+                    BSFrustumFOVController::decode(&mut nested_reader)?,
+                ),
                 BlockType::NiStringExtraData => {
-                    Block::NiStringExtraData(NiStringExtraData::decode(&mut reader)?)
+                    Block::NiStringExtraData(NiStringExtraData::decode(&mut nested_reader)?)
                 }
                 BlockType::BSFurnitureMarkerNode => {
-                    Block::BSFurnitureMarkerNode(BSFurnitureMarkerNode::decode(&mut reader)?)
+                    Block::BSFurnitureMarkerNode(BSFurnitureMarkerNode::decode(&mut nested_reader)?)
                 }
-                BlockType::NiLightRadiusController => {
-                    Block::NiLightRadiusController(NiLightRadiusController::decode(&mut reader)?)
+                BlockType::NiLightRadiusController => Block::NiLightRadiusController(
+                    NiLightRadiusController::decode(&mut nested_reader)?,
+                ),
+                BlockType::NiLightDimmerController => Block::NiLightDimmerController(
+                    NiLightDimmerController::decode(&mut nested_reader)?,
+                ),
+                BlockType::NiPointLight => {
+                    Block::NiPointLight(NiPointLight::decode(&mut nested_reader)?)
                 }
-                BlockType::NiLightDimmerController => {
-                    Block::NiLightDimmerController(NiLightDimmerController::decode(&mut reader)?)
-                }
-                BlockType::NiPointLight => Block::NiPointLight(NiPointLight::decode(&mut reader)?),
-                BlockType::BSFadeNode => Block::BSFadeNode(BSFadeNode::decode(&mut reader)?),
+                BlockType::BSFadeNode => Block::BSFadeNode(BSFadeNode::decode(&mut nested_reader)?),
                 BlockType::BSLightingShaderPropertyFloatController => {
                     Block::BSLightingShaderPropertyFloatController(
-                        BSLightingShaderPropertyFloatController::decode(&mut reader)?,
+                        BSLightingShaderPropertyFloatController::decode(&mut nested_reader)?,
                     )
                 }
                 BlockType::NiFloatInterpolator => {
-                    Block::NiFloatInterpolator(NiFloatInterpolator::decode(&mut reader)?)
+                    Block::NiFloatInterpolator(NiFloatInterpolator::decode(&mut nested_reader)?)
                 }
-                BlockType::NiFloatData => Block::NiFloatData(NiFloatData::decode(&mut reader)?),
+                BlockType::NiFloatData => {
+                    Block::NiFloatData(NiFloatData::decode(&mut nested_reader)?)
+                }
                 BlockType::NiControllerManager => {
-                    Block::NiControllerManager(NiControllerManager::decode(&mut reader)?)
+                    Block::NiControllerManager(NiControllerManager::decode(&mut nested_reader)?)
                 }
                 BlockType::NiMultiTargetTransformController => {
                     Block::NiMultiTargetTransformController(
-                        NiMultiTargetTransformController::decode(&mut reader)?,
+                        NiMultiTargetTransformController::decode(&mut nested_reader)?,
                     )
                 }
                 BlockType::NiControllerSequence => {
-                    Block::NiControllerSequence(NiControllerSequence::decode(&mut reader)?)
+                    Block::NiControllerSequence(NiControllerSequence::decode(&mut nested_reader)?)
                 }
                 BlockType::NiTextKeyExtraData => {
-                    Block::NiTextKeyExtraData(NiTextKeyExtraData::decode(&mut reader)?)
+                    Block::NiTextKeyExtraData(NiTextKeyExtraData::decode(&mut nested_reader)?)
                 }
                 BlockType::BSLightingShaderPropertyColorController => {
                     Block::BSLightingShaderPropertyColorController(
-                        BSLightingShaderPropertyColorController::decode(&mut reader)?,
+                        BSLightingShaderPropertyColorController::decode(&mut nested_reader)?,
                     )
                 }
                 BlockType::BSEffectShaderPropertyFloatController => {
                     Block::BSEffectShaderPropertyFloatController(
-                        BSEffectShaderPropertyFloatController::decode(&mut reader)?,
+                        BSEffectShaderPropertyFloatController::decode(&mut nested_reader)?,
                     )
                 }
-                BlockType::NiTransformInterpolator => {
-                    Block::NiTransformInterpolator(NiTransformInterpolator::decode(&mut reader)?)
-                }
+                BlockType::NiTransformInterpolator => Block::NiTransformInterpolator(
+                    NiTransformInterpolator::decode(&mut nested_reader)?,
+                ),
                 BlockType::NiTransformData => {
-                    Block::NiTransformData(NiTransformData::decode(&mut reader)?)
+                    Block::NiTransformData(NiTransformData::decode(&mut nested_reader)?)
                 }
-                BlockType::NiDefaultAVObjectPalette => {
-                    Block::NiDefaultAVObjectPalette(NiDefaultAVObjectPalette::decode(&mut reader)?)
-                }
+                BlockType::NiDefaultAVObjectPalette => Block::NiDefaultAVObjectPalette(
+                    NiDefaultAVObjectPalette::decode(&mut nested_reader)?,
+                ),
                 BlockType::NiTransformController => {
-                    Block::NiTransformController(NiTransformController::decode(&mut reader)?)
+                    Block::NiTransformController(NiTransformController::decode(&mut nested_reader)?)
                 }
                 BlockType::BSNiAlphaPropertyTestRefController => {
                     Block::BSNiAlphaPropertyTestRefController(
-                        BSNiAlphaPropertyTestRefController::decode(&mut reader)?,
+                        BSNiAlphaPropertyTestRefController::decode(&mut nested_reader)?,
                     )
                 }
-                BlockType::NiBlendFloatInterpolator => {
-                    Block::NiBlendFloatInterpolator(NiBlendFloatInterpolator::decode(&mut reader)?)
-                }
-                BlockType::NiPSysEmitterSpeedCtlr => {
-                    Block::NiPSysEmitterSpeedCtlr(NiPSysEmitterSpeedCtlr::decode(&mut reader)?)
-                }
+                BlockType::NiBlendFloatInterpolator => Block::NiBlendFloatInterpolator(
+                    NiBlendFloatInterpolator::decode(&mut nested_reader)?,
+                ),
+                BlockType::NiPSysEmitterSpeedCtlr => Block::NiPSysEmitterSpeedCtlr(
+                    NiPSysEmitterSpeedCtlr::decode(&mut nested_reader)?,
+                ),
                 BlockType::NiPSysEmitterCtlr => {
-                    Block::NiPSysEmitterCtlr(NiPSysEmitterCtlr::decode(&mut reader)?)
+                    Block::NiPSysEmitterCtlr(NiPSysEmitterCtlr::decode(&mut nested_reader)?)
                 }
                 BlockType::NiPSysUpdateCtlr => {
-                    Block::NiPSysUpdateCtlr(NiPSysUpdateCtlr::decode(&mut reader)?)
+                    Block::NiPSysUpdateCtlr(NiPSysUpdateCtlr::decode(&mut nested_reader)?)
                 }
                 BlockType::NiBoolInterpolator => {
-                    Block::NiBoolInterpolator(NiBoolInterpolator::decode(&mut reader)?)
+                    Block::NiBoolInterpolator(NiBoolInterpolator::decode(&mut nested_reader)?)
                 }
-                BlockType::NiBlendBoolInterpolator => {
-                    Block::NiBlendBoolInterpolator(NiBlendBoolInterpolator::decode(&mut reader)?)
-                }
-                BlockType::NiBoolData => Block::NiBoolData(NiBoolData::decode(&mut reader)?),
+                BlockType::NiBlendBoolInterpolator => Block::NiBlendBoolInterpolator(
+                    NiBlendBoolInterpolator::decode(&mut nested_reader)?,
+                ),
+                BlockType::NiBoolData => Block::NiBoolData(NiBoolData::decode(&mut nested_reader)?),
                 BlockType::BSLeafAnimNode => {
-                    Block::BSLeafAnimNode(BSLeafAnimNode::decode(&mut reader)?)
+                    Block::BSLeafAnimNode(BSLeafAnimNode::decode(&mut nested_reader)?)
                 }
                 _ => Block::Skipped,
             };
 
             blocks.push(block);
 
-            reader.buf.set_position(start_offset + block_size as u64);
+            // Infalliable because we have checked that the entire
+            // `block_size` is remaining before.
+            reader.advance(block_size).unwrap();
         }
 
         Ok(Self { header, blocks })
@@ -303,6 +326,8 @@ pub enum Error {
     BadMagic,
     #[error("invalid string value: {0}")]
     InvalidString(std::string::FromUtf8Error),
+    #[error("invalid string value: {0}")]
+    InvalidStr(std::str::Utf8Error),
     #[error("invalid string pointer: {0}")]
     InvalidStringPointer(u32),
     #[error("bad block type: {0}")]
@@ -313,6 +338,16 @@ pub enum Error {
     InvalidAlphaTestFunction(u8),
     #[error("unknown enum value {0}: {1}")]
     UnknownEnumValue(&'static str, u64),
+    #[error(
+        "incomplete block {block_index} of type {block_type:?} at offset {offset}: expected {expected_size} bytes, found {found_size} bytes"
+    )]
+    IncompleteBlock {
+        block_type: BlockType,
+        block_index: u32,
+        offset: usize,
+        expected_size: usize,
+        found_size: usize,
+    },
 }
 
 pub trait Decode: Sized {
