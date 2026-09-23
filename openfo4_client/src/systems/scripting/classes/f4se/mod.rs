@@ -7,6 +7,7 @@ mod f4se;
 mod favorites_manger;
 mod form;
 mod game;
+mod head_part;
 mod input;
 mod location;
 mod math;
@@ -44,4 +45,5 @@ pub fn register(engine: &mut Engine) {
     perk::register(engine);
     encounter_zone::register(engine);
     object_reference::register(engine);
+    head_part::register(engine);
 }
