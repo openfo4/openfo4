@@ -387,7 +387,9 @@ pub async fn load_equipment_item(
                 npcs_use_ammo: combined_props.weapon_npcs_use_ammo,
             })
         }
-        ItemKind::Ammo | ItemKind::Misc | ItemKind::Aid | ItemKind::Junk => ItemData::None,
+        ItemKind::Ammo | ItemKind::Misc | ItemKind::Aid | ItemKind::Junk | ItemKind::HeadPart => {
+            ItemData::None
+        }
     };
 
     let script = load_item_script(record, script_loader).await;
@@ -490,6 +492,19 @@ pub async fn load_equipment_item_models(
                     let slot = esp_loader.resolve_form(*slot, record.id).unwrap();
                     attachment_point_parents.insert(slot, model_index);
                 }
+            }
+        }
+        RecordData::HeadPart(data) => {
+            if let Some(model) = &data.model.model {
+                let scene = loader
+                    .load::<NifScene, _>(&NifKey {
+                        path: DataPathBuf::new(model.as_bytes()),
+                        flags: LoadNifFlags::all(),
+                    })
+                    .await
+                    .unwrap();
+
+                models.push(scene);
             }
         }
         _ => unreachable!(),

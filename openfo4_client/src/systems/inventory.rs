@@ -206,6 +206,13 @@ pub enum ItemKind {
     Misc,
     Aid,
     Junk,
+    HeadPart,
+}
+
+impl ItemKind {
+    const fn is_equippable(&self) -> bool {
+        matches!(self, Self::Weapon | Self::Armor | Self::HeadPart)
+    }
 }
 
 #[derive(Clone, Debug, Default)]
@@ -452,12 +459,7 @@ impl InventorySystem {
                 continue;
             };
 
-            // Only weapons and armor can be equipped.
-            if item.kind != ItemKind::Weapon && item.kind != ItemKind::Armor {
-                continue;
-            }
-
-            if item.equipped {
+            if !item.kind.is_equippable() || item.equipped {
                 continue;
             }
 
@@ -519,12 +521,7 @@ impl InventorySystem {
                 continue;
             };
 
-            // Only weapons and armor can be equipped.
-            if item.kind != ItemKind::Weapon && item.kind != ItemKind::Armor {
-                continue;
-            }
-
-            if !item.equipped {
+            if !item.kind.is_equippable() || !item.equipped {
                 continue;
             }
 

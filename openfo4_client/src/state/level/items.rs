@@ -277,6 +277,25 @@ pub async fn resolve_item(
                     visibility: ItemVisibilityFlags::default(),
                 });
             }
+            RecordData::HeadPart(data) => {
+                items.push(ItemStack {
+                    item: record_id,
+                    name: data.id.as_str().unwrap().to_string(),
+                    hidden: false,
+                    kind: ItemKind::HeadPart,
+                    count,
+                    attachments,
+                    equipped: false,
+                    base_keywords: HashSet::new(),
+                    combined_keywords: HashSet::new(),
+                    data: ItemData::None,
+                    equipment_keys: Vec::new(),
+                    equipment_slots: HashSet::new(),
+                    visible: HashSet::new(),
+                    script: None,
+                    visibility: ItemVisibilityFlags::default(),
+                });
+            }
             x => todo!("{:?}", x),
         }
     }

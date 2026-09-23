@@ -2,7 +2,7 @@ use std::collections::VecDeque;
 use std::hash::Hash;
 
 use hashbrown::{HashMap, HashSet};
-use openfo4_asset::{AssetLoader, Handle};
+use openfo4_asset::AssetLoader;
 use openfo4_core::WorldExt;
 use openfo4_core::ecs::{Entity, World};
 use openfo4_core::events::EventBus;
@@ -15,7 +15,6 @@ use openfo4_esp::{RecordData, RecordKind, ZString};
 use openfo4_physics::components::{Collider, CollisionLayer, RigidBody};
 use openfo4_physics::controller::CharacterController;
 
-use crate::assets::nif::{LoadNifFlags, NifKey, NifScene};
 use crate::components::{ActorProperties, ActorProtection, DeadActor, MovementState};
 use crate::state::anim_starter::AnimationEventQueue;
 use crate::state::animation_test::{ActorCharacter, BodyPartBoneProps, load_character};
@@ -31,7 +30,7 @@ use crate::systems::FacingDirection;
 use crate::systems::actor_value::{ActorValue, ActorValueProperties};
 use crate::systems::ai::AiComponent;
 use crate::systems::controller::ControllerShape;
-use crate::systems::equipment::{Equipment, equip_item};
+use crate::systems::equipment::Equipment;
 use crate::systems::inventory::{
     AddItemEvent, AddItemEventAsync, EquipItemEvent, Inventory, ItemStack,
 };
@@ -132,7 +131,7 @@ pub struct Actor {
     properties: ActorValueProperties,
     body_parts: ActorBodyParts,
     dead: bool,
-    customization_scenes: Vec<Handle<NifScene>>,
+    customization_scenes: Vec<RecordId>,
     pub keywords: HashSet<RecordId>,
     outfit_items: Vec<RecordId>,
     protection: ActorProtection,
@@ -169,10 +168,15 @@ impl Actor {
             }
         }
 
-        let mut equipment = Equipment::default();
-
-        for scene in self.customization_scenes {
-            equip_item(root, &scene, &instance, world, &mut equipment, None);
+        for item in self.customization_scenes {
+            events.send(AddItemEventAsync {
+                actor: root,
+                item: item,
+                attachments: Vec::new(),
+                count: 1,
+                hidden: true,
+                equip: true,
+            });
         }
 
         for item in self.outfit_items {
@@ -202,7 +206,7 @@ impl Actor {
                 root,
                 (
                     Inventory::default(),
-                    equipment,
+                    Equipment::default(),
                     self.anim_graphs,
                     RigidBody::FIXED,
                     self.controller,
@@ -384,7 +388,7 @@ pub async fn spawn_actor(
             .map(|form| esp_loader.resolve_form(*form, race.id).unwrap()),
     );
 
-    let customization_scenes = load_actor_customization(loader, esp_loader, npc_form).await;
+    let customization_scenes = load_actor_customization(esp_loader, npc_form).await;
 
     let outfit_items = if let Some(outfit) = props.outfit {
         load_outfit(esp_loader, outfit).await
@@ -793,11 +797,7 @@ pub struct ActorAnimationGraph {
     pub search_paths: Vec<DataPathBuf>,
 }
 
-async fn load_actor_customization(
-    loader: &AssetLoader,
-    esp_loader: &EspLoader,
-    npc_form: RecordId,
-) -> Vec<Handle<NifScene>> {
+async fn load_actor_customization(esp_loader: &EspLoader, npc_form: RecordId) -> Vec<RecordId> {
     let RecordData::Npc(npc) = esp_loader
         .lookup(Some(RecordKind::Npc), npc_form)
         .await
@@ -817,6 +817,8 @@ async fn load_actor_customization(
     let mut scenes = Vec::new();
 
     while let Some(id) = queue.pop() {
+        scenes.push(id);
+
         let part_record = esp_loader
             .lookup(Some(RecordKind::HeadPart), id)
             .await
@@ -830,22 +832,6 @@ async fn load_actor_customization(
             let id = esp_loader.resolve_form(*form, part_record.id).unwrap();
             queue.push(id);
         }
-
-        let Some(path) = &part.model.model else {
-            continue;
-        };
-
-        let path = DataPathBuf::new(path.as_bytes());
-
-        let scene = loader
-            .load::<NifScene, _>(&NifKey {
-                path,
-                flags: LoadNifFlags::all(),
-            })
-            .await
-            .unwrap();
-
-        scenes.push(scene);
     }
 
     scenes
