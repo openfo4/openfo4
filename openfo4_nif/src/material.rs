@@ -29,9 +29,9 @@ pub struct BSLightingShaderProperty {
     pub grayscale_to_palette_scale: f32,
     pub fresnel_power: f32,
     pub wetness_params: WetnessParams,
-    pub environment_map_scale: f32,
-    pub use_screen_space_reflections: bool,
-    pub wetness_control_use_ssr: bool,
+    // pub environment_map_scale: f32,
+    // pub use_screen_space_reflections: bool,
+    // pub wetness_control_use_ssr: bool,
 }
 
 impl Decode for BSLightingShaderProperty {
@@ -76,9 +76,9 @@ impl Decode for BSLightingShaderProperty {
 
         let wetness_params = WetnessParams::decode(reader)?;
 
-        let environment_map_scale = reader.get_f32()?;
-        let use_screen_space_reflections = reader.get_bool()?;
-        let wetness_control_use_ssr = reader.get_bool()?;
+        // let environment_map_scale = reader.get_f32()?;
+        // let use_screen_space_reflections = reader.get_bool()?;
+        // let wetness_control_use_ssr = reader.get_bool()?;
 
         Ok(Self {
             shader_type,
@@ -105,9 +105,9 @@ impl Decode for BSLightingShaderProperty {
             grayscale_to_palette_scale,
             fresnel_power,
             wetness_params,
-            environment_map_scale,
-            use_screen_space_reflections,
-            wetness_control_use_ssr,
+            // environment_map_scale,
+            // use_screen_space_reflections,
+            // wetness_control_use_ssr,
         })
     }
 }
