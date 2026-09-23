@@ -520,6 +520,16 @@ impl Reader<'_> {
         self.copy_to_bytes(&mut buf)?;
         Ok(buf)
     }
+
+    fn get_u16_str(&mut self) -> Result<&str, Error> {
+        let len = self.get_u16()?;
+        let pos = self.buf.position() as usize;
+        self.buf
+            .get_ref()
+            .get(pos..pos + usize::from(len))
+            .ok_or(Error::Eof)
+            .and_then(|s| str::from_utf8(s).map_err(Error::InvalidStr))
+    }
 }
 
 /// Reads and skips over the BSHeader.

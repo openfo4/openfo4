@@ -1,4 +1,5 @@
 use bitflags::bitflags;
+use bytes::Buf;
 use glam::{FloatExt, Mat3, Vec3, Vec4};
 
 use crate::{BlockRef, Decode, Error, HVec2, HVec3, HVec4, NiNodeFlags, Reader, Rgba, Sphere};
@@ -37,6 +38,7 @@ pub struct BSTriShape {
     pub shader_property: Option<BlockRef>,
     pub alpha_property: Option<BlockRef>,
     pub mesh: Mesh,
+    pub segments: Option<MeshSegments>,
 }
 
 impl Decode for BSTriShape {
@@ -237,6 +239,14 @@ impl Decode for BSTriShape {
             }
         }
 
+        // FIXME: BSMeshLODTriShape has the MESH_LOD flag set,
+        // need to check whether it is possible for both segments and to be present
+        // and what order they have then.
+        let mut segments = None;
+        if reader.buf.has_remaining() && !flags.contains(NiNodeFlags::MESH_LOD) {
+            segments = Some(MeshSegments::decode(reader)?);
+        }
+
         Ok(Self {
             name,
             extra_data,
@@ -259,6 +269,7 @@ impl Decode for BSTriShape {
                 colors,
                 skinning,
             },
+            segments,
         })
     }
 }
@@ -333,5 +344,133 @@ impl Decode for BSMeshLODTriShape {
         let shape = BSTriShape::decode(reader)?;
 
         Ok(Self { shape })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct MeshSegments {
+    pub num_primitives: u32,
+    pub segments: Vec<Segment>,
+    pub ssf_file: Option<String>,
+}
+
+impl Decode for MeshSegments {
+    fn decode(reader: &mut Reader<'_>) -> Result<Self, Error> {
+        let num_primitives = reader.get_u32()?;
+        let num_segments = reader.get_u32()?;
+        let total_segments = reader.get_u32()?;
+
+        let mut segments: Vec<_> = (0..num_segments)
+            .map(|_| Segment::decode(reader))
+            .collect::<Result<_, _>>()?;
+
+        let mut ssf_file = None;
+        if reader.buf.has_remaining() {
+            // If present has the same counst as the previous segments.
+            let _num_segments = reader.get_u32()?;
+            let _total_segments = reader.get_u32()?;
+
+            for _ in 0..num_segments {
+                reader.get_u32()?;
+            }
+
+            let data: Vec<_> = (0..total_segments)
+                .map(|_| SegmentData::decode(reader))
+                .collect::<Result<_, _>>()?;
+
+            let mut data = data.into_iter();
+            for seg in &mut segments {
+                seg.data = data.next();
+                for subseg in &mut seg.subsegments {
+                    subseg.data = data.next();
+                }
+            }
+
+            ssf_file = Some(reader.get_u16_str()?.to_owned());
+        }
+
+        Ok(Self {
+            num_primitives,
+            segments,
+            ssf_file,
+        })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct Segment {
+    pub start_index: u32,
+    pub num_primitives: u32,
+    pub subsegments: Vec<SubSegment>,
+    pub data: Option<SegmentData>,
+}
+
+impl Decode for Segment {
+    fn decode(reader: &mut Reader<'_>) -> Result<Self, Error> {
+        let start_index = reader.get_u32()?;
+        let num_primitives = reader.get_u32()?;
+
+        // Always `u32::MAX` since we are a top-level element.
+        let _parent_array_index = reader.get_u32()?;
+
+        let num_subsegments = reader.get_u32()?;
+        let subsegments = (0..num_subsegments)
+            .map(|_| SubSegment::decode(reader))
+            .collect::<Result<_, _>>()?;
+
+        Ok(Self {
+            start_index,
+            num_primitives,
+            subsegments,
+            data: None,
+        })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct SubSegment {
+    pub start_index: u32,
+    pub num_primitives: u32,
+    pub data: Option<SegmentData>,
+}
+
+impl Decode for SubSegment {
+    fn decode(reader: &mut Reader<'_>) -> Result<Self, Error> {
+        let start_index = reader.get_u32()?;
+        let num_primitives = reader.get_u32()?;
+
+        let _parent_array_index = reader.get_u32()?;
+        let _unused = reader.get_u32()?;
+
+        Ok(Self {
+            start_index,
+            num_primitives,
+            data: None,
+        })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct SegmentData {
+    pub user_index: u32,
+    pub bone_id: u32,
+    pub cut_offsets: Vec<f32>,
+}
+
+impl Decode for SegmentData {
+    fn decode(reader: &mut Reader<'_>) -> Result<Self, Error> {
+        let user_index = reader.get_u32()?;
+        let bone_id = reader.get_u32()?;
+
+        let num_cut_offsets = reader.get_u32()?;
+        let cut_offsets = (0..num_cut_offsets)
+            .map(|_| reader.get_f32())
+            .collect::<Result<_, _>>()?;
+
+        Ok(Self {
+            user_index,
+            bone_id,
+            cut_offsets,
+        })
     }
 }
