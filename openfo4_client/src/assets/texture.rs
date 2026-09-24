@@ -12,6 +12,8 @@ use crate::assets::{Error, FileLoadContext};
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct FileImageKey {
     pub path: DataPathBuf,
+    /// Whether the image is forced to SRGB or linear RGB.
+    pub force_srgb: Option<bool>,
 }
 
 /// An [`ImageHandle`] that was loaded by a file.
@@ -58,7 +60,7 @@ impl Asset for FileImage {
                 .await
                 .map_err(|err| Error::Other(format!("failed to read file {}: {}", path, err)))?;
 
-            let format = convert_dds_format(image.format).ok_or_else(|| {
+            let format = convert_dds_format(image.format, key.force_srgb).ok_or_else(|| {
                 Error::Other(format!(
                     "unsupported DXGI format in {}: {:?}",
                     path, image.format
@@ -78,7 +80,29 @@ impl Asset for FileImage {
     }
 }
 
-fn convert_dds_format(format: Format) -> Option<TextureFormat> {
+fn convert_dds_format(mut format: Format, srgb: Option<bool>) -> Option<TextureFormat> {
+    match srgb {
+        Some(true) => match format {
+            Format::Bc1Unorm => format = Format::Bc1UnormSrgb,
+            Format::Bc2Unorm => format = Format::Bc2UnormSrgb,
+            Format::Bc3Unorm => format = Format::Bc3UnormSrgb,
+            Format::Bc7Unorm => format = Format::Bc7UnormSrgb,
+            Format::Rgba8Unorm => format = Format::Rgba8UnormSrgb,
+            Format::Bgra8Unorm => format = Format::Bgra8UnormSrgb,
+            _ => {}
+        },
+        Some(false) => match format {
+            Format::Bc1UnormSrgb => format = Format::Bc1Unorm,
+            Format::Bc2UnormSrgb => format = Format::Bc2Unorm,
+            Format::Bc3UnormSrgb => format = Format::Bc3Unorm,
+            Format::Bc7UnormSrgb => format = Format::Bc7Unorm,
+            Format::Rgba8UnormSrgb => format = Format::Rgba8Unorm,
+            Format::Bgra8UnormSrgb => format = Format::Bgra8UnormSrgb,
+            _ => {}
+        },
+        None => {}
+    }
+
     match format {
         Format::Rgba8Unorm => Some(TextureFormat::Rgba8Unorm),
         Format::Rgba8UnormSrgb => Some(TextureFormat::Rgba8UnormSrgb),
