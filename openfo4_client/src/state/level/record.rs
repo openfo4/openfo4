@@ -438,10 +438,15 @@ impl SpawnEntity {
                         dead: record.local.flags.contains(RecordHeaderFlags::STARTS_DEAD),
                     };
 
-                    if let Some(mut res) =
-                        crate::state::npc::spawn_actor(ctx.loader, ctx.esp_loader, base.id, &props)
-                            .await
-                            .ok()
+                    if let Some(mut res) = crate::state::npc::spawn_actor(
+                        ctx.loader,
+                        ctx.esp_loader,
+                        ctx.script_loader,
+                        base.id,
+                        &props,
+                    )
+                    .await
+                    .ok()
                     {
                         keywords = core::mem::take(&mut res.keywords);
                         actor = Some(res);

@@ -84,6 +84,7 @@ impl WeatherSystem {
         let lut =
             futures_lite::future::block_on(asset_loader.load::<FileImage, _>(&FileImageKey {
                 path: DataPathBuf::new("textures/effects/luts/lut_cw_clearday.dds"),
+                force_srgb: None,
             }))
             .unwrap();
         shared.entities.set_lut(lut.0.clone());

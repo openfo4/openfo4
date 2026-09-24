@@ -97,7 +97,7 @@ fn convert_dds_format(mut format: Format, srgb: Option<bool>) -> Option<TextureF
             Format::Bc3UnormSrgb => format = Format::Bc3Unorm,
             Format::Bc7UnormSrgb => format = Format::Bc7Unorm,
             Format::Rgba8UnormSrgb => format = Format::Rgba8Unorm,
-            Format::Bgra8UnormSrgb => format = Format::Bgra8UnormSrgb,
+            Format::Bgra8UnormSrgb => format = Format::Bgra8Unorm,
             _ => {}
         },
         None => {}
