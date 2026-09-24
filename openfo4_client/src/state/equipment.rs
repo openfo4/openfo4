@@ -63,6 +63,215 @@ pub struct EquipmentItemModels {
 }
 
 impl EquipmentItemModels {
+    pub async fn load(
+        loader: &AssetLoader,
+        esp_loader: &EspLoader,
+        record: RecordId,
+        attachments: &[RecordId],
+        female: bool,
+        visible_slots: &HashSet<u32>,
+    ) -> Self {
+        let mut models = Vec::new();
+        let mut attachment_point_parents = HashMap::new();
+
+        let mut default_addon_index = None;
+        let mut scenes_by_addon_index = HashMap::<_, Vec<_>>::new();
+
+        let record = esp_loader.lookup(None, record).await.unwrap();
+        match record.local.data {
+            RecordData::Armor(armor) => {
+                for model in &*armor.models {
+                    let armor_addon = esp_loader
+                        .resolve_form(model.armor_addon, record.id)
+                        .unwrap();
+
+                    let addon = esp_loader
+                        .lookup(Some(RecordKind::ArmorAddon), armor_addon)
+                        .await
+                        .unwrap();
+                    let addon = match addon.local.data {
+                        RecordData::ArmorAddon(data) => data,
+                        _ => unreachable!(),
+                    };
+
+                    // We only want to include armor addons where ALL slots of the
+                    // armor addon are also marked visible.
+                    let mut slots = HashSet::new();
+                    extract_biped_object_flags(addon.biped_body_template, &mut slots);
+                    if !slots.is_subset(visible_slots) {
+                        continue;
+                    }
+
+                    let model_path = if female {
+                        addon.female_model.model
+                    } else {
+                        addon.male_model.model
+                    };
+
+                    let Some(model_path) = model_path else {
+                        continue;
+                    };
+
+                    if default_addon_index.is_none() {
+                        default_addon_index = Some(model.addon_index);
+                    }
+
+                    scenes_by_addon_index
+                        .entry(model.addon_index)
+                        .or_default()
+                        .push(model_path);
+                }
+            }
+            RecordData::Weapon(weapon) => {
+                let model_index = models.len();
+                if let Some(model) = &weapon.model.model {
+                    let scene = loader
+                        .load::<NifScene, _>(&NifKey {
+                            path: DataPathBuf::new(model.as_bytes()),
+                            flags: LoadNifFlags::all(),
+                        })
+                        .await
+                        .unwrap();
+
+                    models.push(scene);
+                }
+
+                if let Some(attach_parent_slots) = weapon.attach_parent_slots {
+                    for slot in &attach_parent_slots {
+                        let slot = esp_loader.resolve_form(*slot, record.id).unwrap();
+                        attachment_point_parents.insert(slot, model_index);
+                    }
+                }
+            }
+            RecordData::HeadPart(data) => {
+                if let Some(model) = &data.model.model {
+                    let scene = loader
+                        .load::<NifScene, _>(&NifKey {
+                            path: DataPathBuf::new(model.as_bytes()),
+                            flags: LoadNifFlags::all(),
+                        })
+                        .await
+                        .unwrap();
+
+                    models.push(scene);
+                }
+            }
+            _ => unreachable!(),
+        }
+
+        let mut attachment_records = HashMap::new();
+        let mut requires = HashMap::new();
+        let mut provides = HashMap::<_, Vec<_>>::new();
+
+        let mut addon_index = default_addon_index;
+
+        for id in attachments {
+            let RecordData::ObjectModification(attachment) =
+                esp_loader.lookup(None, *id).await.unwrap().local.data
+            else {
+                unreachable!()
+            };
+
+            for prop in &attachment.data.properties {
+                match prop.ty {
+                    ObjectModificationPropertyType::AddonIndex(index) => match prop.function_type {
+                        ObjectModificationFunctionType::Set => {
+                            addon_index = u16::try_from(index).ok();
+                        }
+                        ty => {
+                            tracing::warn!(
+                                "object mod property addon index only supports funftion type set, found {:?}",
+                                ty
+                            );
+                        }
+                    },
+                    _ => {}
+                }
+            }
+
+            let attach_point = esp_loader
+                .resolve_form(attachment.data.attach_point, *id)
+                .unwrap();
+
+            // Don't depend on the root attachment point, it is always provided and
+            // loaded at the very first.
+            if !attachment_point_parents.contains_key(&attach_point) {
+                requires.insert(*id, attach_point);
+            }
+
+            for slot in &attachment.data.attach_parent_slots {
+                let slot = esp_loader.resolve_form(*slot, *id).unwrap();
+                provides.entry(*id).or_default().push(slot);
+            }
+
+            attachment_records.insert(*id, attachment);
+        }
+
+        if let Some(addon_index) = addon_index
+            && let Some(paths) = scenes_by_addon_index.remove(&addon_index)
+        {
+            for path in paths {
+                let scene = loader
+                    .load::<NifScene, _>(&NifKey {
+                        path: DataPathBuf::new(path.as_bytes()),
+                        flags: LoadNifFlags::all(),
+                    })
+                    .await
+                    .unwrap();
+                models.push(scene);
+            }
+        }
+
+        let mut attachment_parents = HashMap::new();
+
+        for id in load_attachments_order(attachments, &requires, &provides) {
+            let attachment = &attachment_records[&id];
+
+            let attach_point = esp_loader
+                .resolve_form(attachment.data.attach_point, id)
+                .unwrap();
+
+            let Some(parent) = attachment_point_parents.get(&attach_point) else {
+                continue;
+            };
+
+            let model_index = if let Some(model) = &attachment.model.model {
+                let scene = loader
+                    .load::<NifScene, _>(&NifKey {
+                        path: DataPathBuf::new(model.as_bytes()),
+                        flags: LoadNifFlags::all(),
+                    })
+                    .await
+                    .unwrap();
+
+                let model_index = models.len();
+                models.push(scene);
+
+                attachment_parents.insert(model_index, *parent);
+
+                model_index
+            } else {
+                // If the attachment does not have a model, but it does have further
+                // attachment points we directly attachment the parents to the parent.
+                *parent
+            };
+
+            for slot in &attachment.data.attach_parent_slots {
+                let slot = esp_loader.resolve_form(*slot, id).unwrap();
+                attachment_point_parents.insert(slot, model_index);
+            }
+        }
+
+        let projectile_node =
+            find_deepest_scene_with_attachment(&models, &attachment_parents, PROJECTILE_NODE_NAME);
+
+        Self {
+            models,
+            attachment_parents,
+            projectile_node,
+        }
+    }
+
     pub fn attach_scene(&self, world: &mut World, root: Entity) -> AttachedScenes {
         let _span = trace_span!("EquipmentItemModels::attach_scene").entered();
 
@@ -406,220 +615,6 @@ pub async fn load_equipment_item(
         equipment_slots,
         visibility_slots,
         script,
-    }
-}
-
-pub async fn load_equipment_item_models(
-    loader: &AssetLoader,
-    esp_loader: &EspLoader,
-    record: RecordId,
-    attachments: &[RecordId],
-    female: bool,
-    visible_slots: &HashSet<u32>,
-) -> EquipmentItemModels {
-    let mut models = Vec::new();
-    let mut attachment_point_parents = HashMap::new();
-
-    let mut default_addon_index = None;
-    let mut scenes_by_addon_index = HashMap::<_, Vec<_>>::new();
-
-    let record = esp_loader.lookup(None, record).await.unwrap();
-    match record.local.data {
-        RecordData::Armor(armor) => {
-            for model in &*armor.models {
-                let armor_addon = esp_loader
-                    .resolve_form(model.armor_addon, record.id)
-                    .unwrap();
-
-                let addon = esp_loader
-                    .lookup(Some(RecordKind::ArmorAddon), armor_addon)
-                    .await
-                    .unwrap();
-                let addon = match addon.local.data {
-                    RecordData::ArmorAddon(data) => data,
-                    _ => unreachable!(),
-                };
-
-                // We only want to include armor addons where ALL slots of the
-                // armor addon are also marked visible.
-                let mut slots = HashSet::new();
-                extract_biped_object_flags(addon.biped_body_template, &mut slots);
-                if !slots.is_subset(visible_slots) {
-                    continue;
-                }
-
-                let mut model_path = None;
-                if female {
-                    if let Some(model) = addon.female_model.model {
-                        model_path = Some(model);
-                    }
-                } else {
-                    if let Some(model) = addon.male_model.model {
-                        model_path = Some(model);
-                    }
-                }
-
-                let Some(model_path) = model_path else {
-                    continue;
-                };
-
-                if default_addon_index.is_none() {
-                    default_addon_index = Some(model.addon_index);
-                }
-
-                scenes_by_addon_index
-                    .entry(model.addon_index)
-                    .or_default()
-                    .push(model_path);
-            }
-        }
-        RecordData::Weapon(weapon) => {
-            let model_index = models.len();
-            if let Some(model) = &weapon.model.model {
-                let scene = loader
-                    .load::<NifScene, _>(&NifKey {
-                        path: DataPathBuf::new(model.as_bytes()),
-                        flags: LoadNifFlags::all(),
-                    })
-                    .await
-                    .unwrap();
-
-                models.push(scene);
-            }
-
-            if let Some(attach_parent_slots) = weapon.attach_parent_slots {
-                for slot in &attach_parent_slots {
-                    let slot = esp_loader.resolve_form(*slot, record.id).unwrap();
-                    attachment_point_parents.insert(slot, model_index);
-                }
-            }
-        }
-        RecordData::HeadPart(data) => {
-            if let Some(model) = &data.model.model {
-                let scene = loader
-                    .load::<NifScene, _>(&NifKey {
-                        path: DataPathBuf::new(model.as_bytes()),
-                        flags: LoadNifFlags::all(),
-                    })
-                    .await
-                    .unwrap();
-
-                models.push(scene);
-            }
-        }
-        _ => unreachable!(),
-    }
-
-    let mut attachment_records = HashMap::new();
-    let mut requires = HashMap::new();
-    let mut provides = HashMap::<_, Vec<_>>::new();
-
-    let mut addon_index = default_addon_index;
-
-    for id in attachments {
-        let RecordData::ObjectModification(attachment) =
-            esp_loader.lookup(None, *id).await.unwrap().local.data
-        else {
-            unreachable!()
-        };
-
-        for prop in &attachment.data.properties {
-            match prop.ty {
-                ObjectModificationPropertyType::AddonIndex(index) => match prop.function_type {
-                    ObjectModificationFunctionType::Set => {
-                        addon_index = u16::try_from(index).ok();
-                    }
-                    ty => {
-                        tracing::warn!(
-                            "object mod property addon index only supports funftion type set, found {:?}",
-                            ty
-                        );
-                    }
-                },
-                _ => {}
-            }
-        }
-
-        let attach_point = esp_loader
-            .resolve_form(attachment.data.attach_point, *id)
-            .unwrap();
-
-        // Don't depend on the root attachment point, it is always provided and
-        // loaded at the very first.
-        if !attachment_point_parents.contains_key(&attach_point) {
-            requires.insert(*id, attach_point);
-        }
-
-        for slot in &attachment.data.attach_parent_slots {
-            let slot = esp_loader.resolve_form(*slot, *id).unwrap();
-            provides.entry(*id).or_default().push(slot);
-        }
-
-        attachment_records.insert(*id, attachment);
-    }
-
-    if let Some(addon_index) = addon_index
-        && let Some(paths) = scenes_by_addon_index.remove(&addon_index)
-    {
-        for path in paths {
-            let scene = loader
-                .load::<NifScene, _>(&NifKey {
-                    path: DataPathBuf::new(path.as_bytes()),
-                    flags: LoadNifFlags::all(),
-                })
-                .await
-                .unwrap();
-            models.push(scene);
-        }
-    }
-
-    let mut attachment_parents = HashMap::new();
-
-    for id in load_attachments_order(attachments, &requires, &provides) {
-        let attachment = &attachment_records[&id];
-
-        let attach_point = esp_loader
-            .resolve_form(attachment.data.attach_point, id)
-            .unwrap();
-
-        let Some(parent) = attachment_point_parents.get(&attach_point) else {
-            continue;
-        };
-
-        let model_index = if let Some(model) = &attachment.model.model {
-            let scene = loader
-                .load::<NifScene, _>(&NifKey {
-                    path: DataPathBuf::new(model.as_bytes()),
-                    flags: LoadNifFlags::all(),
-                })
-                .await
-                .unwrap();
-
-            let model_index = models.len();
-            models.push(scene);
-
-            attachment_parents.insert(model_index, *parent);
-
-            model_index
-        } else {
-            // If the attachment does not have a model, but it does have further
-            // attachment points we directly attachment the parents to the parent.
-            *parent
-        };
-
-        for slot in &attachment.data.attach_parent_slots {
-            let slot = esp_loader.resolve_form(*slot, id).unwrap();
-            attachment_point_parents.insert(slot, model_index);
-        }
-    }
-
-    let projectile_node =
-        find_deepest_scene_with_attachment(&models, &attachment_parents, PROJECTILE_NODE_NAME);
-
-    EquipmentItemModels {
-        models,
-        attachment_parents,
-        projectile_node,
     }
 }
 

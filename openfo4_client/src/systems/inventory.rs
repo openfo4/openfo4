@@ -20,7 +20,7 @@ use crate::components::PlacedItem;
 use crate::events::inventory::{
     ItemAddedEvent, ItemEquippedEvent, ItemUnequippedEvent, RemoveItemEvent,
 };
-use crate::state::equipment::{EquipmentItemModels, load_equipment_item_models, load_item};
+use crate::state::equipment::{EquipmentItemModels, load_item};
 use crate::state::esp::EspLoader;
 use crate::state::hardcoded::KEYWORD_FEMALE;
 use crate::state::npc::ObjectKeywords;
@@ -566,7 +566,7 @@ impl InventorySystem {
                 let attachments = item.attachments.clone();
                 let visible = item.visible.clone();
                 self.tasks.push(self.pool.spawn(async move {
-                    let models = load_equipment_item_models(
+                    let models = EquipmentItemModels::load(
                         &loader,
                         &esp_loader,
                         record,
