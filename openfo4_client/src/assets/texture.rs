@@ -16,6 +16,20 @@ pub struct FileImageKey {
     pub force_srgb: Option<bool>,
 }
 
+impl FileImageKey {
+    pub fn new(path: DataPathBuf) -> Self {
+        Self {
+            path,
+            force_srgb: None,
+        }
+    }
+
+    pub fn with_force_srgb(mut self, srgb: bool) -> Self {
+        self.force_srgb = Some(srgb);
+        self
+    }
+}
+
 /// An [`ImageHandle`] that was loaded by a file.
 #[derive(Clone, Debug)]
 pub struct FileImageHandle(pub ImageHandle);

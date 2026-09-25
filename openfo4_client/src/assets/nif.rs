@@ -537,15 +537,22 @@ async fn load_material(
                 // 8. ?
                 // 9. ?
 
+                let has_grayscale_palette = texture_set
+                    .textures
+                    .get(3)
+                    .is_some_and(|path| !path.is_empty());
+
                 if let Some(path) = texture_set.textures.get(0) {
                     if !path.is_empty() {
                         let path = DataPathBuf::new(&**path);
-                        let handle = loader
-                            .load::<FileImageHandle, _>(&FileImageKey {
-                                path,
-                                force_srgb: Some(true),
-                            })
-                            .await?;
+                        let key = FileImageKey::new(path);
+                        // The base color texture is SRGB by default, however if we
+                        // have a grayscale palette texture the base color texture
+                        // is no longer really color, but just a lookup table and needs
+                        // to be UNORM.
+                        let key = key.with_force_srgb(!has_grayscale_palette);
+
+                        let handle = loader.load::<FileImageHandle, _>(&key).await?;
 
                         material.base_color_texture = Some(handle.0.clone());
                         textures.push(handle);
@@ -556,10 +563,7 @@ async fn load_material(
                     if !path.is_empty() {
                         let path = DataPathBuf::new(&**path);
                         let handle = loader
-                            .load::<FileImageHandle, _>(&FileImageKey {
-                                path,
-                                force_srgb: None,
-                            })
+                            .load::<FileImageHandle, _>(&FileImageKey::new(path))
                             .await?;
 
                         material.normal_texture = Some(handle.0.clone());
@@ -571,10 +575,9 @@ async fn load_material(
                     if !path.is_empty() {
                         let path = DataPathBuf::new(&**path);
                         let handle = loader
-                            .load::<FileImageHandle, _>(&FileImageKey {
-                                path,
-                                force_srgb: None,
-                            })
+                            .load::<FileImageHandle, _>(
+                                &FileImageKey::new(path).with_force_srgb(true),
+                            )
                             .await?;
 
                         material.grayscale_palette = Some(handle.0.clone());
@@ -586,10 +589,7 @@ async fn load_material(
                     if !path.is_empty() {
                         let path = DataPathBuf::new(&**path);
                         let handle = loader
-                            .load::<FileImageHandle, _>(&FileImageKey {
-                                path,
-                                force_srgb: None,
-                            })
+                            .load::<FileImageHandle, _>(&FileImageKey::new(path))
                             .await?;
 
                         material.specular_glossiness_texture = Some(handle.0.clone());
@@ -626,10 +626,7 @@ async fn load_material(
                 let path = DataPathBuf::new(&*property.source_texture);
 
                 let handle = loader
-                    .load::<FileImageHandle, _>(&FileImageKey {
-                        path,
-                        force_srgb: None,
-                    })
+                    .load::<FileImageHandle, _>(&FileImageKey::new(path))
                     .await?;
 
                 material.base_color_texture = Some(handle.0.clone());
@@ -739,15 +736,22 @@ async fn load_material_plain(
                 // 8. ?
                 // 9. ?
 
+                let has_grayscale_palette = texture_set
+                    .textures
+                    .get(3)
+                    .is_some_and(|path| !path.is_empty());
+
                 if let Some(path) = texture_set.textures.get(0) {
                     if !path.is_empty() {
                         let path = DataPathBuf::new(&**path);
-                        let handle = loader
-                            .load::<FileImageHandle, _>(&FileImageKey {
-                                path,
-                                force_srgb: Some(true),
-                            })
-                            .await?;
+                        let key = FileImageKey::new(path);
+                        // The base color texture is SRGB by default, however if we
+                        // have a grayscale palette texture the base color texture
+                        // is no longer really color, but just a lookup table and needs
+                        // to be UNORM.
+                        let key = key.with_force_srgb(!has_grayscale_palette);
+
+                        let handle = loader.load::<FileImageHandle, _>(&key).await?;
 
                         material.base_color_texture = Some(handle.0.clone());
                         textures.push(handle);
@@ -758,10 +762,7 @@ async fn load_material_plain(
                     if !path.is_empty() {
                         let path = DataPathBuf::new(&**path);
                         let handle = loader
-                            .load::<FileImageHandle, _>(&FileImageKey {
-                                path,
-                                force_srgb: None,
-                            })
+                            .load::<FileImageHandle, _>(&FileImageKey::new(path))
                             .await?;
 
                         material.normal_texture = Some(handle.0.clone());
@@ -773,10 +774,9 @@ async fn load_material_plain(
                     if !path.is_empty() {
                         let path = DataPathBuf::new(&**path);
                         let handle = loader
-                            .load::<FileImageHandle, _>(&FileImageKey {
-                                path,
-                                force_srgb: None,
-                            })
+                            .load::<FileImageHandle, _>(
+                                &FileImageKey::new(path).with_force_srgb(true),
+                            )
                             .await?;
 
                         material.grayscale_palette = Some(handle.0.clone());
@@ -788,10 +788,7 @@ async fn load_material_plain(
                     if !path.is_empty() {
                         let path = DataPathBuf::new(&**path);
                         let handle = loader
-                            .load::<FileImageHandle, _>(&FileImageKey {
-                                path,
-                                force_srgb: None,
-                            })
+                            .load::<FileImageHandle, _>(&FileImageKey::new(path))
                             .await?;
 
                         material.specular_glossiness_texture = Some(handle.0.clone());
@@ -819,10 +816,7 @@ async fn load_material_plain(
                 let path = DataPathBuf::new(&*property.source_texture);
 
                 let handle = loader
-                    .load::<FileImageHandle, _>(&FileImageKey {
-                        path,
-                        force_srgb: None,
-                    })
+                    .load::<FileImageHandle, _>(&FileImageKey::new(path))
                     .await?;
 
                 material.base_color_texture = Some(handle.0.clone());

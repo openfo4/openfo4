@@ -90,14 +90,18 @@ impl Asset for BgsmStandardMaterial {
 
         let mut textures = Vec::new();
 
+        let has_grayscale_palette = bgsm.grayscale_palette.is_some();
+
         if !bgsm.diffuse_texture.is_empty() {
             let path = DataPathBuf::new(&*bgsm.diffuse_texture);
-            let handle = loader
-                .load::<FileImageHandle, _>(&FileImageKey {
-                    path,
-                    force_srgb: Some(true),
-                })
-                .await?;
+            let key = FileImageKey::new(path);
+            // The base color texture is SRGB by default, however if we
+            // have a grayscale palette texture the base color texture
+            // is no longer really color, but just a lookup table and needs
+            // to be UNORM.
+            let key = key.with_force_srgb(!has_grayscale_palette);
+
+            let handle = loader.load::<FileImageHandle, _>(&key).await?;
 
             material.base_color_texture = Some(handle.0.clone());
             textures.push(handle);
@@ -106,10 +110,7 @@ impl Asset for BgsmStandardMaterial {
         if !bgsm.normal_texture.is_empty() {
             let path = DataPathBuf::new(&*bgsm.normal_texture);
             let handle = loader
-                .load::<FileImageHandle, _>(&FileImageKey {
-                    path,
-                    force_srgb: None,
-                })
+                .load::<FileImageHandle, _>(&FileImageKey::new(path))
                 .await?;
 
             material.normal_texture = Some(handle.0.clone());
@@ -119,10 +120,7 @@ impl Asset for BgsmStandardMaterial {
         if !bgsm.smooth_spec_texture.is_empty() {
             let path = DataPathBuf::new(&*bgsm.smooth_spec_texture);
             let handle = loader
-                .load::<FileImageHandle, _>(&FileImageKey {
-                    path,
-                    force_srgb: None,
-                })
+                .load::<FileImageHandle, _>(&FileImageKey::new(path))
                 .await?;
 
             material.specular_glossiness_texture = Some(handle.0.clone());
@@ -132,10 +130,7 @@ impl Asset for BgsmStandardMaterial {
         if let Some(grayscale_palette) = &bgsm.grayscale_palette {
             let path = DataPathBuf::new(&*grayscale_palette.grayscale_texture);
             let handle = loader
-                .load::<FileImageHandle, _>(&FileImageKey {
-                    path,
-                    force_srgb: None,
-                })
+                .load::<FileImageHandle, _>(&FileImageKey::new(path).with_force_srgb(true))
                 .await?;
 
             material.grayscale_palette_scale = grayscale_palette.scale;
