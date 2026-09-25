@@ -272,6 +272,9 @@ impl Node for UpdatePass {
                         }
                     }
                 }
+                // We must wait for the next frame before we are allowed to
+                // continue processing events.
+                Event::Barrier => break,
             }
         }
     }

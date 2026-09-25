@@ -287,6 +287,14 @@ impl RenderState {
         }
 
         skinning::mesh_skinning(world, &self.objects, &self.shared);
+
+        // Note that the renderer can run in parallel to our thread.
+        // If the renderer is slow it might still process the events
+        // from our last submission.
+        // For this case we notify it to stop after a single submission
+        // to prevent it from already reading the next submission which
+        // may still be incomplete.
+        self.entities.barrier();
     }
 }
 

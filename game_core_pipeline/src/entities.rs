@@ -222,6 +222,14 @@ impl Entities {
     pub fn set_lut(&self, lut: MipImage) {
         *self.new_lut.lock() = Some(lut);
     }
+
+    /// Emit a barrier in the event stream.
+    ///
+    /// A barrier signals the renderer to stop processing events and wait for next frame to
+    /// continue.
+    pub fn barrier(&self) {
+        self.inner.events.send(Event::Barrier).ok();
+    }
 }
 
 #[derive(Debug)]
@@ -559,6 +567,7 @@ pub(crate) enum Event {
     DestroyLight(SceneId, LightId),
     UpdateBoneTransforms(ObjectId, Vec<Transform>),
     UpdateTransform(ObjectId, SceneId, Transform),
+    Barrier,
 }
 
 #[derive(Clone, Debug)]
