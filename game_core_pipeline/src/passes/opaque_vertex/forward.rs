@@ -8,8 +8,8 @@ use game_render::api::{
 };
 use game_render::backend::allocator::UsageFlags;
 use game_render::backend::{
-    AddressMode, BufferUsage, CompareOp, DrawIndirectCommand, FilterMode, LoadOp,
-    SamplerDescriptor, StoreOp, TextureDescriptor, TextureFormat, TextureUsage,
+    AddressMode, BufferUsage, CompareOp, FilterMode, LoadOp, SamplerDescriptor, StoreOp,
+    TextureDescriptor, TextureFormat, TextureUsage,
 };
 use game_render::graph::{Node, RenderContext, SlotLabel};
 use game_tracing::trace_span;
@@ -18,17 +18,11 @@ use parking_lot::Mutex;
 
 use crate::camera::CameraUniform;
 use crate::entities::{CameraId, SceneId};
+use crate::passes::forward::ForwardParams;
+use crate::passes::forward::opaque::OpaqueForwardPass;
+use crate::passes::forward::transparent::TransparentForwardPass;
 use crate::passes::mesh::Instance;
-use crate::passes::opaque_vertex::pipelines::drawcall_gen::{
-    DrawcallGenParams, DrawcallGenPipeline,
-};
-use crate::passes::opaque_vertex::pipelines::shadow_map::{ShadowMapParams, ShadowMapPipeline};
-use crate::passes::opaque_vertex::pipelines::visbuffer_alpha_masked::{
-    AlphaMaskParams, VisbufferAlphaMaskPipeline,
-};
-use crate::passes::opaque_vertex::pipelines::visbuffer_opaque::{
-    ForwardParams, VisbufferForwardPipeline,
-};
+use crate::passes::opaque_vertex::pipelines::shadow_map::ShadowMapPipeline;
 use crate::passes::opaque_vertex::pipelines::visbuffer_shading::{
     ShadingParameters, ShadingPipeline,
 };
@@ -39,15 +33,14 @@ use crate::passes::{DEPTH_FORMAT, HDR_FORMAT, HDR_TEXTURE, OPAQUE_DEPTH, State};
 
 pub struct OpaqueVertexForwardPass {
     state: Arc<Mutex<State>>,
-    drawcall_gen_pipeline: Mutex<DrawcallGenPipeline>,
-    forward_opaque: Mutex<VisbufferForwardPipeline>,
-    forward_alpha_mask: Mutex<VisbufferAlphaMaskPipeline>,
     shading_pipeline: Mutex<ShadingPipeline>,
     linear_sampler: Sampler,
     shadow_map: Mutex<ShadowMapPipeline>,
     sky: SkyPass,
     shadow_sampler: Sampler,
     clamped_sampler: Sampler,
+    opaque: Mutex<OpaqueForwardPass>,
+    transparent: Mutex<TransparentForwardPass>,
 }
 
 impl OpaqueVertexForwardPass {
@@ -66,10 +59,7 @@ impl OpaqueVertexForwardPass {
             sky: { SkyPass::new(state.lock().sky.clone(), queue) },
             state,
             linear_sampler,
-            forward_opaque: Mutex::new(VisbufferForwardPipeline::new()),
             shading_pipeline: Mutex::new(ShadingPipeline::new()),
-            forward_alpha_mask: Mutex::new(VisbufferAlphaMaskPipeline::new()),
-            drawcall_gen_pipeline: Mutex::new(DrawcallGenPipeline::new()),
             shadow_map: Mutex::new(ShadowMapPipeline::new()),
             shadow_sampler: queue.create_sampler(&SamplerDescriptor {
                 address_mode_u: AddressMode::ClampToEdge,
@@ -89,6 +79,8 @@ impl OpaqueVertexForwardPass {
                 mipmap_filter: FilterMode::Linear,
                 compare: None,
             }),
+            opaque: Mutex::new(OpaqueForwardPass::new()),
+            transparent: Mutex::new(TransparentForwardPass::new()),
         }
     }
 
@@ -124,15 +116,6 @@ impl OpaqueVertexForwardPass {
             return;
         }
 
-        let positions = state.mesh.positions.buffer();
-        let normals = state.mesh.normals.buffer();
-        let tangents = state.mesh.tangents.buffer();
-        let uvs = state.mesh.uvs.buffer();
-        let colors = state.mesh.colors.buffer();
-
-        let offsets = state.mesh.mesh_offsets.buffer(ctx.queue);
-        let index_buffer = state.mesh.indices.buffer();
-
         let visbuffer = ctx.queue.create_texture(&TextureDescriptor {
             size,
             mip_levels: 1,
@@ -155,43 +138,31 @@ impl OpaqueVertexForwardPass {
         let mut shadow_light_vps = Vec::new();
         let mut shadow_maps = Vec::new();
 
+        let mut visbuffer_load_op = LoadOp::Clear(Color::BLACK);
+        let mut depth_load_op = LoadOp::Clear(0.0);
+
         // Opaque Forward
         if state.mesh.instances.num_opaque != 0 {
-            let mut pipeline = self.drawcall_gen_pipeline.lock();
-
-            let instances_in = state.mesh.instances.opaque.buffer(ctx.queue);
-            let draws = ctx.queue.create_buffer(&BufferDescriptor {
-                size: state.mesh.instances.num_opaque as usize * size_of::<DrawIndirectCommand>(),
-                usage: BufferUsage::STORAGE | BufferUsage::INDIRECT,
-                flags: UsageFlags::empty(),
-            });
-
-            pipeline.run(
-                ctx.queue,
-                DrawcallGenParams {
-                    instance_count: state.mesh.instances.num_opaque,
-                    instances_in,
-                    instances_out: &opauqe_instances,
-                    draws: &draws,
-                },
-            );
-
-            let mut pipeline = self.forward_opaque.lock();
+            let mut pipeline = self.opaque.lock();
 
             pipeline.run(
                 ctx.queue,
                 ForwardParams {
-                    camera: &camera,
-                    positions,
-                    offsets,
-                    instances: &opauqe_instances,
-                    index_buffer,
-                    materials,
-                    indirect_buffer: &draws,
-                    visbuffer: &visbuffer,
+                    camera: CameraUniform::new(camera.transform, camera.projection),
+                    mesh: &mut state.mesh,
                     depth: &depth_texture,
+                    visbuffer: &visbuffer.create_view(&TextureViewDescriptor::default()),
+                    instances_out: &opauqe_instances,
+                    depth_load_op,
+                    visbuffer_load_op,
+                    materials: materials,
+                    textures: &textures,
+                    sampler: &self.linear_sampler,
                 },
             );
+
+            visbuffer_load_op = LoadOp::Load;
+            depth_load_op = LoadOp::Load;
 
             // FIXME: More than one light.
             for light in scene.directional_lights.values().take(1) {
@@ -205,21 +176,21 @@ impl OpaqueVertexForwardPass {
                         usage: TextureUsage::RENDER_ATTACHMENT | TextureUsage::TEXTURE_BINDING,
                     });
 
-                    let mut pipeline = self.shadow_map.lock();
+                    // let mut pipeline = self.shadow_map.lock();
 
-                    pipeline.run(
-                        ctx.queue,
-                        ShadowMapParams {
-                            positions,
-                            offsets,
-                            instances: &opauqe_instances,
-                            materials,
-                            index_buffer,
-                            indirect_buffer: &draws,
-                            light: cascade.light_vp,
-                            shadow_depth: &shadow_depth,
-                        },
-                    );
+                    // pipeline.run(
+                    //     ctx.queue,
+                    //     ShadowMapParams {
+                    //         positions,
+                    //         offsets,
+                    //         instances: &opauqe_instances,
+                    //         materials,
+                    //         index_buffer,
+                    //         indirect_buffer: &draws,
+                    //         light: cascade.light_vp,
+                    //         shadow_depth: &shadow_depth,
+                    //     },
+                    // );
 
                     shadow_light_vps.push(cascade.light_vp);
                     shadow_maps.push(shadow_depth.create_view(&TextureViewDescriptor::default()));
@@ -241,51 +212,33 @@ impl OpaqueVertexForwardPass {
 
         // Alpha Mask forward
         if state.mesh.instances.num_transparent != 0 {
-            let instance_in = state.mesh.instances.transparent.buffer(ctx.queue);
+            let mut pipeline = self.transparent.lock();
 
-            let draws = ctx.queue.create_buffer(&BufferDescriptor {
-                size: state.mesh.instances.num_transparent as usize
-                    * size_of::<DrawIndirectCommand>(),
-                usage: BufferUsage::STORAGE | BufferUsage::INDIRECT,
-                flags: UsageFlags::empty(),
-            });
-
-            {
-                let mut pipeline = self.drawcall_gen_pipeline.lock();
-                pipeline.run(
-                    ctx.queue,
-                    DrawcallGenParams {
-                        instance_count: state.mesh.instances.num_transparent,
-                        instances_in: instance_in,
-                        instances_out: &alpha_mask_instances,
-                        draws: &draws,
-                    },
-                );
-            }
-
-            {
-                let mut pipeline = self.forward_alpha_mask.lock();
-                pipeline.run(
-                    ctx.queue,
-                    AlphaMaskParams {
-                        camera,
-                        positions,
-                        uvs,
-                        colors,
-                        index_buffer,
-                        materials,
-                        instances: &alpha_mask_instances,
-                        textures: &textures,
-                        sampler: &self.linear_sampler,
-                        visbuffer: &visbuffer,
-                        depth: &depth_texture,
-                        indirect_buffer: &draws,
-                        offsets,
-                        clear_output_and_depth: state.mesh.instances.num_opaque == 0,
-                    },
-                );
-            }
+            pipeline.run(
+                ctx.queue,
+                ForwardParams {
+                    mesh: &mut state.mesh,
+                    visbuffer: &visbuffer.create_view(&TextureViewDescriptor::default()),
+                    depth: &depth_texture,
+                    materials,
+                    camera: CameraUniform::new(camera.transform, camera.projection),
+                    textures: &textures,
+                    sampler: &self.linear_sampler,
+                    visbuffer_load_op,
+                    depth_load_op,
+                    instances_out: &alpha_mask_instances,
+                },
+            );
         }
+
+        let positions = state.mesh.positions.buffer();
+        let normals = state.mesh.normals.buffer();
+        let tangents = state.mesh.tangents.buffer();
+        let uvs = state.mesh.uvs.buffer();
+        let colors = state.mesh.colors.buffer();
+
+        let offsets = state.mesh.mesh_offsets.buffer(ctx.queue);
+        let index_buffer = state.mesh.indices.buffer();
 
         let output_texture = ctx.queue.create_texture(&TextureDescriptor {
             size,

@@ -1,50 +1,33 @@
-use game_common::components::Color;
 use game_render::api::{
-    BindingResource, Buffer, BufferInitDescriptor, CommandQueue, DepthStencilAttachment,
-    FragmentStage, PipelineStage, RenderPassColorAttachment, RenderPassDescriptor, Sampler,
-    Texture, TextureView, TextureViewDescriptor, VertexStage,
+    BindingResource, BufferDescriptor, BufferInitDescriptor, CommandQueue, DepthStencilAttachment,
+    FragmentStage, PipelineStage, RenderPassColorAttachment, RenderPassDescriptor, VertexStage,
 };
 use game_render::backend::allocator::UsageFlags;
 use game_render::backend::{
-    BufferUsage, ColorTargetState, CompareOp, DepthStencilState, DescriptorType, Face, FrontFace,
-    LoadOp, PrimitiveTopology, ShaderStages, StoreOp, TextureFormat,
+    BufferUsage, ColorTargetState, CompareOp, DepthStencilState, DescriptorType,
+    DrawIndirectCommand, Face, FrontFace, PrimitiveTopology, ShaderStages, StoreOp, TextureFormat,
 };
 use openfo4_shaderlib::pipeline::{Pipeline, PipelineBinding, PipelineConfig, ShaderConfig};
 use openfo4_shaderlib::{ShaderSource, include_shader};
 
-use crate::camera::{Camera, CameraUniform};
 use crate::passes::DEPTH_FORMAT;
+use crate::passes::forward::ForwardParams;
+use crate::passes::forward::drawgen::{DrawcallGenParams, DrawcallGenPipeline};
 
 static VS_SHADER: ShaderSource =
     include_shader!("/game_core_pipeline/shaders/opaque_vertex/transparent_mask_vert.slang");
 static FS_SHADER: ShaderSource =
     include_shader!("/game_core_pipeline/shaders/opaque_vertex/transparent_mask_frag.slang");
 
-#[derive(Copy, Clone, Debug)]
-pub struct AlphaMaskParams<'a> {
-    pub camera: &'a Camera,
-    pub positions: &'a Buffer,
-    pub uvs: &'a Buffer,
-    pub colors: &'a Buffer,
-    pub index_buffer: &'a Buffer,
-    pub materials: &'a Buffer,
-    pub instances: &'a Buffer,
-    pub textures: &'a [&'a TextureView],
-    pub sampler: &'a Sampler,
-    pub visbuffer: &'a Texture,
-    pub depth: &'a Texture,
-    pub indirect_buffer: &'a Buffer,
-    pub offsets: &'a Buffer,
-    pub clear_output_and_depth: bool,
-}
-
-pub struct VisbufferAlphaMaskPipeline {
+pub struct TransparentForwardPass {
+    drawcall_gen: DrawcallGenPipeline,
     pipeline: Pipeline,
 }
 
-impl VisbufferAlphaMaskPipeline {
+impl TransparentForwardPass {
     pub fn new() -> Self {
         Self {
+            drawcall_gen: DrawcallGenPipeline::new(),
             pipeline: Pipeline::new(PipelineConfig {
                 shaders: vec![
                     ShaderConfig { source: &VS_SHADER },
@@ -132,27 +115,51 @@ impl VisbufferAlphaMaskPipeline {
         }
     }
 
-    pub fn run(&mut self, queue: &CommandQueue<'_>, params: AlphaMaskParams<'_>) {
+    pub fn run(&mut self, queue: &CommandQueue<'_>, params: ForwardParams<'_>) {
+        if params.mesh.instances.num_transparent == 0 {
+            return;
+        }
+
+        let instances_in = params.mesh.instances.transparent.buffer(queue);
+        let draws = queue.create_buffer(&BufferDescriptor {
+            size: params.mesh.instances.num_transparent as usize * size_of::<DrawIndirectCommand>(),
+            usage: BufferUsage::STORAGE | BufferUsage::INDIRECT,
+            flags: UsageFlags::empty(),
+        });
+
+        self.drawcall_gen.run(
+            queue,
+            DrawcallGenParams {
+                instance_count: params.mesh.instances.num_transparent,
+                instances_in,
+                instances_out: params.instances_out,
+                draws: &draws,
+            },
+        );
+
         let camera = queue.create_buffer_init(&BufferInitDescriptor {
-            contents: bytemuck::bytes_of(&CameraUniform::new(
-                params.camera.transform,
-                params.camera.projection,
-            )),
+            contents: bytemuck::bytes_of(&params.camera),
             usage: BufferUsage::UNIFORM,
             flags: UsageFlags::empty(),
         });
 
+        let positions = params.mesh.positions.buffer();
+        let uvs = params.mesh.uvs.buffer();
+        let colors = params.mesh.colors.buffer();
+        let indcies = params.mesh.indices.buffer();
+        let offsets = params.mesh.mesh_offsets.buffer(queue);
+
         let mut pass = self.pipeline.prepare(queue);
         pass.set("camera", ShaderStages::VERTEX, &camera);
-        pass.set("positions", ShaderStages::VERTEX, params.positions);
-        pass.set("uvs", ShaderStages::VERTEX, params.uvs);
-        pass.set("colors", ShaderStages::VERTEX, params.colors);
-        pass.set("index_buffer", ShaderStages::VERTEX, params.index_buffer);
-        pass.set("offsets", ShaderStages::VERTEX, params.offsets);
+        pass.set("positions", ShaderStages::VERTEX, positions);
+        pass.set("uvs", ShaderStages::VERTEX, uvs);
+        pass.set("colors", ShaderStages::VERTEX, colors);
+        pass.set("offsets", ShaderStages::VERTEX, offsets);
+        pass.set("index_buffer", ShaderStages::VERTEX, indcies);
         pass.set(
             "instances",
             ShaderStages::VERTEX | ShaderStages::FRAGMENT,
-            params.instances,
+            params.instances_out,
         );
         pass.set(
             "materials",
@@ -166,31 +173,20 @@ impl VisbufferAlphaMaskPipeline {
         );
         pass.set("sampler", ShaderStages::FRAGMENT, params.sampler);
 
-        let visbuffer_view = params
-            .visbuffer
-            .create_view(&TextureViewDescriptor::default());
         let mut pass = pass.run_render_pass(&RenderPassDescriptor {
-            name: "Visbuffer Alpha Mask",
+            name: "Forward Transparent",
             color_attachments: &[RenderPassColorAttachment {
-                target: &visbuffer_view,
-                load_op: if params.clear_output_and_depth {
-                    LoadOp::Clear(Color::BLACK)
-                } else {
-                    LoadOp::Load
-                },
+                target: params.visbuffer,
+                load_op: params.visbuffer_load_op,
                 store_op: StoreOp::Store,
             }],
             depth_stencil_attachment: Some(&DepthStencilAttachment {
                 texture: params.depth,
-                load_op: if params.clear_output_and_depth {
-                    LoadOp::Clear(0.0)
-                } else {
-                    LoadOp::Load
-                },
+                load_op: params.depth_load_op,
                 store_op: StoreOp::Store,
             }),
         });
 
-        pass.draw_indirect(params.indirect_buffer);
+        pass.draw_indirect(&draws);
     }
 }

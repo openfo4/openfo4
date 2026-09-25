@@ -1,45 +1,34 @@
-use game_common::components::Color;
 use game_render::api::{
-    Buffer, BufferInitDescriptor, CommandQueue, DepthStencilAttachment, FragmentStage,
-    PipelineStage, RenderPassColorAttachment, RenderPassDescriptor, Texture, TextureViewDescriptor,
-    VertexStage,
+    BufferDescriptor, BufferInitDescriptor, CommandQueue, DepthStencilAttachment, FragmentStage,
+    PipelineStage, RenderPassColorAttachment, RenderPassDescriptor, VertexStage,
 };
 use game_render::backend::allocator::UsageFlags;
 use game_render::backend::{
-    BufferUsage, ColorTargetState, CompareOp, DepthStencilState, DescriptorType, Face, FrontFace,
-    LoadOp, PrimitiveTopology, ShaderStages, StoreOp, TextureFormat,
+    BufferUsage, ColorTargetState, CompareOp, DepthStencilState, DescriptorType,
+    DrawIndirectCommand, Face, FrontFace, PrimitiveTopology, ShaderStages, StoreOp, TextureFormat,
 };
 use openfo4_shaderlib::pipeline::{Pipeline, PipelineBinding, PipelineConfig, ShaderConfig};
 use openfo4_shaderlib::{ShaderSource, include_shader};
 
-use crate::camera::{Camera, CameraUniform};
 use crate::passes::DEPTH_FORMAT;
+use crate::passes::forward::ForwardParams;
+use crate::passes::forward::drawgen::{DrawcallGenParams, DrawcallGenPipeline};
 
 static VS_SHADER: ShaderSource =
     include_shader!("/game_core_pipeline/shaders/opaque_vertex/visbuffer_vert.slang");
 static FS_SAHDER: ShaderSource =
     include_shader!("/game_core_pipeline/shaders/opaque_vertex/visbuffer_frag.slang");
 
-pub struct ForwardParams<'a> {
-    pub camera: &'a Camera,
-    pub positions: &'a Buffer,
-    pub offsets: &'a Buffer,
-    pub instances: &'a Buffer,
-    pub index_buffer: &'a Buffer,
-    pub materials: &'a Buffer,
-    pub indirect_buffer: &'a Buffer,
-    pub visbuffer: &'a Texture,
-    pub depth: &'a Texture,
+pub struct OpaqueForwardPass {
+    drawcall_gen: DrawcallGenPipeline,
+    forward: Pipeline,
 }
 
-pub struct VisbufferForwardPipeline {
-    pipeline: Pipeline,
-}
-
-impl VisbufferForwardPipeline {
+impl OpaqueForwardPass {
     pub fn new() -> Self {
         Self {
-            pipeline: Pipeline::new(PipelineConfig {
+            drawcall_gen: DrawcallGenPipeline::new(),
+            forward: Pipeline::new(PipelineConfig {
                 shaders: vec![
                     ShaderConfig { source: &VS_SHADER },
                     ShaderConfig { source: &FS_SAHDER },
@@ -107,41 +96,59 @@ impl VisbufferForwardPipeline {
     }
 
     pub fn run(&mut self, queue: &CommandQueue<'_>, params: ForwardParams<'_>) {
-        let camera = queue.create_buffer_init(&BufferInitDescriptor {
-            contents: bytemuck::bytes_of(&CameraUniform::new(
-                params.camera.transform,
-                params.camera.projection,
-            )),
-            usage: BufferUsage::UNIFORM,
+        if params.mesh.instances.num_opaque == 0 {
+            return;
+        }
+
+        let instances_in = params.mesh.instances.opaque.buffer(queue);
+        let draws = queue.create_buffer(&BufferDescriptor {
+            size: params.mesh.instances.num_opaque as usize * size_of::<DrawIndirectCommand>(),
+            usage: BufferUsage::STORAGE | BufferUsage::INDIRECT,
             flags: UsageFlags::empty(),
         });
 
-        let mut pass = self.pipeline.prepare(queue);
+        self.drawcall_gen.run(
+            queue,
+            DrawcallGenParams {
+                instance_count: params.mesh.instances.num_opaque,
+                instances_in: instances_in,
+                instances_out: params.instances_out,
+                draws: &draws,
+            },
+        );
+
+        let camera = queue.create_buffer_init(&BufferInitDescriptor {
+            contents: bytemuck::bytes_of(&params.camera),
+            flags: UsageFlags::empty(),
+            usage: BufferUsage::UNIFORM,
+        });
+
+        let positions = params.mesh.positions.buffer();
+        let offsets = params.mesh.mesh_offsets.buffer(queue);
+        let indices = params.mesh.indices.buffer();
+
+        let mut pass = self.forward.prepare(queue);
         pass.set("camera", ShaderStages::VERTEX, &camera);
-        pass.set("positions", ShaderStages::VERTEX, params.positions);
-        pass.set("offsets", ShaderStages::VERTEX, params.offsets);
-        pass.set("instances", ShaderStages::VERTEX, params.instances);
-        pass.set("index_buffer", ShaderStages::VERTEX, params.index_buffer);
+        pass.set("positions", ShaderStages::VERTEX, positions);
+        pass.set("offsets", ShaderStages::VERTEX, offsets);
+        pass.set("instances", ShaderStages::VERTEX, params.instances_out);
+        pass.set("index_buffer", ShaderStages::VERTEX, indices);
         pass.set("materials", ShaderStages::VERTEX, params.materials);
 
-        let visbuffer_view = params
-            .visbuffer
-            .create_view(&TextureViewDescriptor::default());
-
         let mut pass = pass.run_render_pass(&RenderPassDescriptor {
-            name: "Forward",
+            name: "Forward Opaque",
             color_attachments: &[RenderPassColorAttachment {
-                target: &visbuffer_view,
-                load_op: LoadOp::Clear(Color::BLACK),
+                target: params.visbuffer,
+                load_op: params.visbuffer_load_op,
                 store_op: StoreOp::Store,
             }],
             depth_stencil_attachment: Some(&DepthStencilAttachment {
                 texture: params.depth,
-                load_op: LoadOp::Clear(0.0),
+                load_op: params.depth_load_op,
                 store_op: StoreOp::Store,
             }),
         });
 
-        pass.draw_indirect(params.indirect_buffer);
+        pass.draw_indirect(&draws);
     }
 }

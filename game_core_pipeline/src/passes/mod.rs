@@ -1,3 +1,4 @@
+mod forward;
 mod mesh;
 mod opaque_vertex;
 mod post_process;
