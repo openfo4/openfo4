@@ -22,11 +22,11 @@ use crate::passes::forward::ForwardParams;
 use crate::passes::forward::opaque::OpaqueForwardPass;
 use crate::passes::forward::transparent::TransparentForwardPass;
 use crate::passes::mesh::Instance;
-use crate::passes::opaque_vertex::pipelines::shadow_map::ShadowMapPipeline;
 use crate::passes::opaque_vertex::pipelines::visbuffer_shading::{
     ShadingParameters, ShadingPipeline,
 };
 use crate::passes::opaque_vertex::shadow::compute_directional_csm_shadow_params;
+use crate::passes::shadow_map::{ShadowMapParams, ShadowMapPass};
 use crate::passes::sky::SkyPass;
 use crate::passes::update::{RawAmbientLight, RawSceneData};
 use crate::passes::{DEPTH_FORMAT, HDR_FORMAT, HDR_TEXTURE, OPAQUE_DEPTH, State};
@@ -35,12 +35,12 @@ pub struct OpaqueVertexForwardPass {
     state: Arc<Mutex<State>>,
     shading_pipeline: Mutex<ShadingPipeline>,
     linear_sampler: Sampler,
-    shadow_map: Mutex<ShadowMapPipeline>,
     sky: SkyPass,
     shadow_sampler: Sampler,
     clamped_sampler: Sampler,
     opaque: Mutex<OpaqueForwardPass>,
     transparent: Mutex<TransparentForwardPass>,
+    shadow_map: Mutex<ShadowMapPass>,
 }
 
 impl OpaqueVertexForwardPass {
@@ -60,7 +60,6 @@ impl OpaqueVertexForwardPass {
             state,
             linear_sampler,
             shading_pipeline: Mutex::new(ShadingPipeline::new()),
-            shadow_map: Mutex::new(ShadowMapPipeline::new()),
             shadow_sampler: queue.create_sampler(&SamplerDescriptor {
                 address_mode_u: AddressMode::ClampToEdge,
                 address_mode_v: AddressMode::ClampToEdge,
@@ -81,6 +80,7 @@ impl OpaqueVertexForwardPass {
             }),
             opaque: Mutex::new(OpaqueForwardPass::new()),
             transparent: Mutex::new(TransparentForwardPass::new()),
+            shadow_map: Mutex::new(ShadowMapPass::new()),
         }
     }
 
@@ -168,6 +168,8 @@ impl OpaqueVertexForwardPass {
             for light in scene.directional_lights.values().take(1) {
                 let cascades = compute_directional_csm_shadow_params(camera, light.direction);
 
+                let mut pipeline = self.shadow_map.lock();
+
                 for cascade in cascades {
                     let shadow_depth = ctx.queue.create_texture(&TextureDescriptor {
                         size: cascade.size,
@@ -176,21 +178,15 @@ impl OpaqueVertexForwardPass {
                         usage: TextureUsage::RENDER_ATTACHMENT | TextureUsage::TEXTURE_BINDING,
                     });
 
-                    // let mut pipeline = self.shadow_map.lock();
-
-                    // pipeline.run(
-                    //     ctx.queue,
-                    //     ShadowMapParams {
-                    //         positions,
-                    //         offsets,
-                    //         instances: &opauqe_instances,
-                    //         materials,
-                    //         index_buffer,
-                    //         indirect_buffer: &draws,
-                    //         light: cascade.light_vp,
-                    //         shadow_depth: &shadow_depth,
-                    //     },
-                    // );
+                    pipeline.run(
+                        ctx.queue,
+                        ShadowMapParams {
+                            light: cascade.light_vp,
+                            mesh: &mut state.mesh,
+                            depth: &shadow_depth,
+                            materials,
+                        },
+                    );
 
                     shadow_light_vps.push(cascade.light_vp);
                     shadow_maps.push(shadow_depth.create_view(&TextureViewDescriptor::default()));

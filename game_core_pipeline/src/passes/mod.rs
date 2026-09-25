@@ -2,6 +2,7 @@ mod forward;
 mod mesh;
 mod opaque_vertex;
 mod post_process;
+mod shadow_map;
 mod skinning;
 pub mod sky;
 mod transparent_vertex;
