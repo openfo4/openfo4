@@ -1,0 +1,59 @@
+import types;
+import camera;
+import material;
+import shared;
+
+ConstantBuffer<Mat4> light_view_proj;
+
+StructuredBuffer<InstanceOut> instances;
+StructuredBuffer<MeshOffsets> offsets;
+StructuredBuffer<u32> index_buffer;
+StructuredBuffer<f32> positions;
+StructuredBuffer<f32> uvs;
+StructuredBuffer<f32> colors;
+StructuredBuffer<Material> materials;
+
+struct Input {
+    u32 draw_id: SV_DrawIndex;
+    // In Slang SV_VertexID is VertexIndex - BaseVertex.
+    // We dispatch one vertex shader invocation per index
+    // in the index buffer and then do indexing manually.
+    // This value refers to current index of the vertex.
+    u32 index: SV_VertexID;
+}
+
+struct Output {
+    Vec4 clip_position: SV_Position;
+    [[vk::location(0)]] u32 instance_id;
+    [[vk::location(1)]] Vec2 uv;
+    [[vk::location(2)]] f32 alpha;
+}
+
+[shader("vertex")]
+func main(input: Input) -> Output {
+    let instance = instances[input.draw_id];
+    let offsets = offsets[instance.offsets_index];
+    let material = materials[instance.material_index];
+
+    let vertex_index = index_buffer[instance.index_offset + input.index];
+
+    let position = fetch<3>(positions, offsets.position, vertex_index);
+    let uv = fetch<2>(uvs, offsets.uv, vertex_index);
+    let color = fetch<4>(colors, offsets.color, vertex_index);
+
+    Output output;
+    output.clip_position = mul(mul(light_view_proj, instance.transform), Vec4(position, 1.0));
+    output.clip_position.z += material.depth_bias;
+    output.uv = uv * material.uv_scale + material.uv_offset;
+    output.alpha = material.base_color.a * color.a;
+    output.instance_id = input.draw_id;
+    return output;
+}
+
+func fetch<let N: i32>(buffer: StructuredBuffer<f32>, offset: u32, index: u32) -> vector<f32, N> {
+    var value = vector<f32, N>(0.0);
+    for (var i = 0; i < N; i++) {
+        value[i] = buffer[offset + index * N + i];
+    }
+    return value;
+}

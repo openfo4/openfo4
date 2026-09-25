@@ -11,7 +11,7 @@ use openfo4_shaderlib::pipeline::{Pipeline, PipelineBinding, PipelineConfig, Sha
 use openfo4_shaderlib::{ShaderSource, include_shader};
 
 use crate::passes::forward::drawgen::{DrawcallGenParams, DrawcallGenPipeline};
-use crate::passes::shadow_map::{OpaqueShadowMapParams, SHADOW_MAP_FORMAT};
+use crate::passes::shadow_map::{SHADOW_MAP_FORMAT, ShadowMapParamsInner};
 
 static VS_SHADER: ShaderSource =
     include_shader!("/game_core_pipeline/shaders/shadows/shadow_map_vs.slang");
@@ -91,7 +91,7 @@ impl OpaqueShadowMapPass {
         }
     }
 
-    pub fn run(&mut self, queue: &CommandQueue<'_>, params: OpaqueShadowMapParams<'_>) {
+    pub fn run(&mut self, queue: &CommandQueue<'_>, params: ShadowMapParamsInner<'_>) {
         if params.mesh.instances.num_opaque == 0 {
             return;
         }
@@ -131,7 +131,7 @@ impl OpaqueShadowMapPass {
         pass.set("materials", ShaderStages::VERTEX, params.materials);
 
         let mut pass = pass.run_render_pass(&RenderPassDescriptor {
-            name: "Shadow Map Generation",
+            name: "Shadow Map Generation (Opaque)",
             color_attachments: &[],
             depth_stencil_attachment: Some(&DepthStencilAttachment {
                 texture: params.depth,

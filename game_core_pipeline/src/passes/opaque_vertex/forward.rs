@@ -185,6 +185,8 @@ impl OpaqueVertexForwardPass {
                             mesh: &mut state.mesh,
                             depth: &shadow_depth,
                             materials,
+                            textures: &textures,
+                            sampler: &self.linear_sampler,
                         },
                     );
 
