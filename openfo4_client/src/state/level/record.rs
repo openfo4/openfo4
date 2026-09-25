@@ -24,6 +24,7 @@ use crate::components::{
 };
 use crate::render::RenderObject;
 use crate::state::esp::GlobalRecord;
+use crate::state::hardcoded::PUNCTUAL_LIGHT_INTENSITY_FACTOR;
 use crate::state::level::LoadContext;
 use crate::state::level::data_ext::RecordDataExt;
 use crate::state::level::items::{LoadItemProps, resolve_item};
@@ -455,7 +456,7 @@ impl SpawnEntity {
             }
             RecordData::IdleMarker(_) => return None,
             RecordData::Light(data) => {
-                let intensity = (data.fade_value + light_mod.fade) * 10.0;
+                let intensity = data.fade_value + light_mod.fade;
                 let radius = (data.data.radius as f32 + light_mod.radius) * NIF_TO_METERS;
 
                 light = Some(PointLight {
@@ -464,7 +465,7 @@ impl SpawnEntity {
                         data.data.color.g as f32 / 255.0,
                         data.data.color.b as f32 / 255.0,
                     ]),
-                    intensity,
+                    intensity: intensity * PUNCTUAL_LIGHT_INTENSITY_FACTOR,
                     radius,
                 });
 

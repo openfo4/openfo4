@@ -149,28 +149,25 @@ void main(
     for (var i = 0; i < constants.num_directional_lights; i++) {
         let shadow = shadow_sample.sample_shadow_csm(world_position, shadow_maps, shadow_light_vps, shadow_sampler);
 
-        // FIXME: Early reject, good for performance or not?
         if (shadow == 0.0) {
             continue;
         }
 
         let light = directional_lights[i].eval();
-        luminance += pbr::surface_shading(pbr_material, view_dir, light) * shadow * 4.5;
-        // luminance += dot(pbr_material.normal, light.direction) * shadow * light.color;
+        luminance += pbr::surface_shading(pbr_material, view_dir, light) * shadow;
     }
 
-    // for (var i = 0; i < constants.num_point_lights; i++) {
-    //     let light = point_lights[i].eval(FragParams(world_position));
-    //     luminance += pbr::surface_shading(pbr_material, view_dir, light);
-    // }
+    for (var i = 0; i < constants.num_point_lights; i++) {
+        let light = point_lights[i].eval(FragParams(world_position));
+        luminance += pbr::surface_shading(pbr_material, view_dir, light);
+    }
 
     for (var i = 0; i < constants.num_spot_lights; i++) {
         let light = spot_lights[i].eval(FragParams(world_position));
         luminance += pbr::surface_shading(pbr_material, view_dir, light);
     }
 
-    output[coords] = Vec4(luminance  , 1.0);
-    // output[coords] = Vec4(pbr_material.base_color , 1.0);
+    output[coords] = Vec4(luminance, 1.0);
 }
 
 struct InputParams {
@@ -263,22 +260,6 @@ func sample_material_texture(texture_index: u32, uv: Gradient) -> Vec4 {
     return textures[NonUniformResourceIndex(texture_index)].SampleGrad(sampler, uv.value, uv.dx, uv.dy);
 }
 
-func srgb_to_linear(color: f32) -> f32 {
-    if (color <= 0.04045) {
-        return color / 12.92;
-    } else {
-        return pow((color + 0.055) / 1.055, 2.4);
-    }
-}
-
-func linear_to_srgb(color: f32) -> f32 {
-    if (color <= 0.0031308) {
-        return color * 12.92;
-    } else {
-        return (pow(color, 1.0 / 2.4) * 1.055) - 0.055;
-    }
-}
-
 func sample_material(material: Material, uv: Gradient, vert_color: Vec4, normal: VertexNormal) -> pbr::Material {
     let base_color_texture = material.base_color * sample_material_texture(material.base_color_texture, uv);
     var base_color = base_color_texture * vert_color;
@@ -287,14 +268,6 @@ func sample_material(material: Material, uv: Gradient, vert_color: Vec4, normal:
         let y = clamp(material.grayscale_palette_scale - (1.0 - vert_color.r), 0.0, 1.0);
         base_color =  textures[NonUniformResourceIndex(material.grayscale_palette_texture)].SampleLevel(sampler, Vec2(x, y), 0.0);
     }
-
-    // base_color.r = linear_to_srgb(base_color.r);
-    // base_color.g = linear_to_srgb(base_color.g);
-    // base_color.b = linear_to_srgb(base_color.b);
-    // base_color.r = srgb_to_linear(base_color.r);
-    // base_color.g = srgb_to_linear(base_color.g);
-    // base_color.b = srgb_to_linear(base_color.b);
-
 
     let specular_strength = material.specular_strength * sample_material_texture(material.specular_glossiness_texture, uv).r;
     let specular_color = material.specular_color.rgb;

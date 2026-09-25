@@ -25,14 +25,14 @@ use crate::assets::texture::{FileImage, FileImageKey};
 use crate::components::{Player, WorldSpace};
 use crate::shared::SharedState;
 use crate::state::esp::EspLoader;
-use crate::state::hardcoded::{HARDCODED_MODULE_ID, PATH_SKY_ATMOSPHERE, PATH_SKY_CLOUDS};
+use crate::state::hardcoded::{
+    DIRECTIONAL_LIGHT_ILLUMINANCE_FACTOR, HARDCODED_MODULE_ID, PATH_SKY_ATMOSPHERE, PATH_SKY_CLOUDS,
+};
 use crate::systems::time::GameTime;
 
 // The clear weather image space uses a sunlight scale of 4.5 for the day sun.
 // This seems to be the hardcoded base factor that maps to a value of 1.0 in the shader.
-const SUNLIGHT_BASE_ILLUMINANCE: f32 = 1.0 / 4.5;
-
-const AMBIENT_BRIGHTNESS: f32 = 1.0 / 3.0;
+const SUNLIGHT_BASE_ILLUMINANCE: f32 = 1.0 / 4.5 * DIRECTIONAL_LIGHT_ILLUMINANCE_FACTOR;
 
 pub struct WeatherSystem {
     climates: HashMap<RecordId, WorldspaceClimate>,
@@ -159,7 +159,7 @@ impl WeatherSystem {
                 right: params.ambient_right,
                 front: params.ambient_front,
                 back: params.ambient_right,
-                brightness: AMBIENT_BRIGHTNESS,
+                brightness: 1.0,
             },
             worldspace,
         )));

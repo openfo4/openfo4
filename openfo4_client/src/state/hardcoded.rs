@@ -2,6 +2,7 @@
 
 pub mod fallout4;
 
+use std::f32::consts::PI;
 use std::num::NonZeroU32;
 
 use hashbrown::HashMap;
@@ -193,3 +194,14 @@ pub fn cumulative_xp_for_level(level: u32) -> u64 {
     let e = level % 2;
     a + b + c + d + e - 124
 }
+
+// Fallout 4's shader seems to simply use `NoL * diffuse * light` for all lights.
+// Out renderer uses PBR based model that roughly results in
+// `NoL * diffuse * light * (1 / PI)`, meaing we need to premultiply by `PI` to
+// accurately reconstruct the expected lighting results.
+// The factor value `3.0` seems to be hardcoded in the shader for all light sources.
+pub const DIRECTIONAL_LIGHT_ILLUMINANCE_FACTOR: f32 = PI * 3.0;
+// Our PBR renderer uses lumen as the unit for punctual lights, but Fallout 4's shader
+// uses the value directly in the shader (i.e. the unit is candela in our PBR renderer).
+// Premultiply by 1sr (4PI) to go from candela to lumen.
+pub const PUNCTUAL_LIGHT_INTENSITY_FACTOR: f32 = (4.0 * PI) * DIRECTIONAL_LIGHT_ILLUMINANCE_FACTOR;
