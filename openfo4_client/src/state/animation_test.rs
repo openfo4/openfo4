@@ -14,13 +14,15 @@ use openfo4_core::path::{DataPath, DataPathBuf};
 use openfo4_esp::records::Race;
 use openfo4_hkx::behavior::VariableType;
 use openfo4_hkx::{HkObject, HkxFile};
-use openfo4_physics::components::{Capsule, ColliderShape};
+use openfo4_physics::components::{Capsule, Collider, ColliderShape};
 
 use crate::assets::animation::AnimationSet;
 use crate::assets::data_file::DataFile;
 use crate::assets::nif::{Instantiate, LoadNifFlags, NIF_TO_METERS, NifScene};
 use crate::state::animation::{self, SkeletonConfig, load_anim};
 use crate::state::npc::BodyPartBone;
+
+const NODE_CHARACTER_BUMPER: &str = "CharacterBumper";
 
 #[derive(Clone, Debug)]
 pub struct SkinInstance {
@@ -225,9 +227,17 @@ impl ActorCharacter {
         // Because the scene may have nodes with extra components we
         // will first spawn the scene and then "overlay" the HKX skeleton.
         let mut scene_nodes = HashMap::new();
+        let mut character_bumper = None;
         let scene = self.scene.instantiate_with_feedback(
             |node, entity| {
                 scene_nodes.insert(node.name.to_lowercase(), entity);
+
+                // The "CharacterBumper" node is present on some actor skeletons and contains
+                // a `bnkNPCollisionObject` node with a collider that only collides with other
+                // actors and pushes them away.
+                if node.name.eq_ignore_ascii_case(NODE_CHARACTER_BUMPER) {
+                    character_bumper = Some(entity);
+                }
             },
             Transform::default(),
             world,
@@ -289,6 +299,19 @@ impl ActorCharacter {
 
                         queue.push_back(*children);
                     }
+                }
+            }
+        }
+
+        // FIXME: We will always just hide the bumper collider for now.
+        // In the future we should allow dynamically enabling/disabling it.
+        if let Some(entity) = character_bumper {
+            let mut queue = vec![entity];
+            while let Some(entity) = queue.pop() {
+                world.remove_one::<Collider>(entity).ok();
+
+                if let Ok(children) = world.get::<&Children>(entity) {
+                    queue.extend(&children.0);
                 }
             }
         }
