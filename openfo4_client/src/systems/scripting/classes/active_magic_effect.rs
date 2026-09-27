@@ -56,15 +56,11 @@ fn get_target_actor(caller: Caller<'_, State>, self_ptr: Object) -> Result<Objec
 /// ```text
 /// Function StartObjectProfiling() native
 /// ```
-fn start_object_profiling(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Error> {
-    todo!()
-}
+fn start_object_profiling(_caller: Caller<'_, State>, _self_ptr: Object) {}
 
 /// `StopObjectProfiling`
 ///
 /// ```text
 /// Function StopObjectProfiling() native
 /// ```
-fn stop_object_profiling(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Error> {
-    todo!()
-}
+fn stop_object_profiling(_caller: Caller<'_, State>, _self_ptr: Object) {}
