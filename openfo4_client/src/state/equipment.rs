@@ -33,6 +33,10 @@ const PLAYER_LEVEL: u16 = 1000;
 // Note: The "P-" prefix is already stripped in the NifScene.
 const PROJECTILE_NODE_NAME: &str = "ProjectileNode";
 
+/// Flags used when loading attachable equipment scenes.
+// We don't want collisions on attached nodes.
+const NIF_FLAGS: LoadNifFlags = LoadNifFlags::all().difference(LoadNifFlags::COLLIDERS);
+
 #[derive(Clone, Debug)]
 pub struct EquipmentItem {
     pub name: String,
@@ -128,7 +132,7 @@ impl EquipmentItemModels {
                     let scene = loader
                         .load::<NifScene, _>(&NifKey {
                             path: DataPathBuf::new(model.as_bytes()),
-                            flags: LoadNifFlags::all(),
+                            flags: NIF_FLAGS,
                         })
                         .await
                         .unwrap();
@@ -148,7 +152,7 @@ impl EquipmentItemModels {
                     let scene = loader
                         .load::<NifScene, _>(&NifKey {
                             path: DataPathBuf::new(model.as_bytes()),
-                            flags: LoadNifFlags::all(),
+                            flags: NIF_FLAGS,
                         })
                         .await
                         .unwrap();
@@ -214,7 +218,7 @@ impl EquipmentItemModels {
                 let scene = loader
                     .load::<NifScene, _>(&NifKey {
                         path: DataPathBuf::new(path.as_bytes()),
-                        flags: LoadNifFlags::all(),
+                        flags: NIF_FLAGS,
                     })
                     .await
                     .unwrap();
@@ -239,7 +243,7 @@ impl EquipmentItemModels {
                 let scene = loader
                     .load::<NifScene, _>(&NifKey {
                         path: DataPathBuf::new(model.as_bytes()),
-                        flags: LoadNifFlags::all(),
+                        flags: NIF_FLAGS,
                     })
                     .await
                     .unwrap();
