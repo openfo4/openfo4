@@ -52,7 +52,7 @@ impl Visit for BSTriShape {
                 }
 
                 if visitor.materials.get(&shader_property).is_none() {
-                    let material = load_material(
+                    let Ok(material) = load_material(
                         visitor.loader,
                         &visitor.ctx.entities,
                         &visitor.nif,
@@ -61,14 +61,15 @@ impl Visit for BSTriShape {
                         &mut visitor.controllers_to_load,
                     )
                     .await
-                    .map_err(|err| {
-                        // Error::Other(format!(
-                        //     "invalid material in nif file {}: {}",
-                        //     key.path, err
-                        // ))
-                        todo!();
-                    })
-                    .unwrap();
+                    .inspect_err(|err| {
+                        tracing::error!(
+                            "invalid material in nif file {}: {}",
+                            visitor.key.path,
+                            err
+                        );
+                    }) else {
+                        return None;
+                    };
 
                     match &material {
                         HandleOrAsset::Asset(material) => {
