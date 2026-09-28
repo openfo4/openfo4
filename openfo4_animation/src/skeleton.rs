@@ -175,7 +175,8 @@ impl BoneTransformHierarchy {
 
     fn update_global(&mut self, root: Key, local_root: Transform) {
         let mut global_root = local_root;
-        if let Some(parent) = self.hierarchy.parent(root).copied() {
+        if let Some(parent) = self.hierarchy.parent_key(root) {
+            let parent = self.global[&parent];
             global_root = parent * local_root;
         }
 
