@@ -1,4 +1,8 @@
 use std::alloc::Layout;
+use std::fmt::{self, Debug, Formatter};
+use std::marker::PhantomData;
+use std::ops::Deref;
+use std::ptr::NonNull;
 use std::sync::Arc;
 
 use bytemuck::AnyBitPattern;
@@ -80,26 +84,36 @@ impl ObjectPool {
 
         let mut objects = self.objects.lock();
 
+        let ref_count = Arc::new(ObjectRefInner {
+            addr: ObjectAddr(ptr),
+            drop: self.dropped_refs.clone(),
+        });
+
         for i in 0..array_len {
             let elem_ptr = unsafe { ptr.add(stride * i) };
             let addr = ObjectAddr::from_raw(elem_ptr);
 
-            let object = unsafe { Object::new_at(ty, typ.clone(), elem_ptr) };
+            let object =
+                unsafe { Object::new_at(ty, typ.clone(), elem_ptr, Some(ref_count.clone())) };
 
             objects.insert(addr, object);
         }
 
-        ObjectRef(Arc::new(ObjectRefInner {
-            addr: ObjectAddr(ptr),
-            drop: self.dropped_refs.clone(),
-        }))
+        ObjectRef(ref_count)
     }
 
     pub fn insert(&self, ty: TypeId) -> ObjectBuilder {
         let object_ref = self.alloc(ty, 1);
         let typ = self.resources.types.get(ty).unwrap();
 
-        let object = unsafe { Object::new_at(ty, typ, object_ref.addr().0 as *mut u8) };
+        let object = unsafe {
+            Object::new_at(
+                ty,
+                typ,
+                object_ref.addr().0 as *mut u8,
+                Some(object_ref.0.clone()),
+            )
+        };
 
         ObjectBuilder {
             obj: object,
@@ -135,7 +149,14 @@ impl ObjectPool {
         for i in 0..array_len {
             let elem_ptr = unsafe { array_ref.as_ptr().add(stride * i) };
 
-            let object = unsafe { Object::new_at(elem_ty, elem_typ.clone(), elem_ptr) };
+            let object = unsafe {
+                Object::new_at(
+                    elem_ty,
+                    elem_typ.clone(),
+                    elem_ptr,
+                    Some(array_ref.0.clone()),
+                )
+            };
             objects.push(object);
         }
 
@@ -200,7 +221,7 @@ impl ObjectPool {
 
         let obj = self.resources.constants.object(addr)?;
         let ty = self.resources.types.get(obj.ty).unwrap();
-        Some(unsafe { Object::new_at(obj.ty, ty, obj.ptr.cast_mut()) })
+        Some(unsafe { Object::new_at(obj.ty, ty, obj.ptr.cast_mut(), None) })
     }
 
     pub unsafe fn array<U>(&self, addr: ObjectAddr) -> &[U] {
@@ -280,10 +301,16 @@ pub struct Object {
     memory: *mut u8,
     ty: Arc<Type>,
     ty_id: TypeId,
+    ref_count: Option<Arc<ObjectRefInner>>,
 }
 
 impl Object {
-    unsafe fn new_at(ty_id: TypeId, ty: Arc<Type>, ptr: *mut u8) -> Self {
+    unsafe fn new_at(
+        ty_id: TypeId,
+        ty: Arc<Type>,
+        ptr: *mut u8,
+        ref_count: Option<Arc<ObjectRefInner>>,
+    ) -> Self {
         if let TypeRepr::Composite(ty) = &ty.repr {
             for member in &ty.members {
                 let Some(value) = &member.default_value else {
@@ -302,6 +329,7 @@ impl Object {
             memory: ptr,
             ty,
             ty_id,
+            ref_count,
         }
     }
 
@@ -577,5 +605,102 @@ impl ObjectTag {
                 bits
             }
         }
+    }
+}
+
+/// An owned handle to a [`Object`].
+///
+/// While at least on `ObjectHandle` exists the underlying [`Object`] will not be deallocated.
+pub struct ObjectHandle(ObjectHandleInner);
+
+impl ObjectHandle {
+    pub fn addr(&self) -> ObjectAddr {
+        *self.0.addr()
+    }
+
+    pub(crate) unsafe fn new_borrowed(pool: NonNull<ObjectPool>, addr: ObjectAddr) -> Self {
+        debug_assert!(!addr.is_null());
+        Self(ObjectHandleInner::Borrowed { pool, addr })
+    }
+}
+
+impl Clone for ObjectHandle {
+    fn clone(&self) -> Self {
+        Self(self.0.clone_to_owned())
+    }
+}
+
+impl Debug for ObjectHandle {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "ObjectHandle({:p})", self.0.addr().0)
+    }
+}
+
+impl AsRef<ObjectAddr> for ObjectHandle {
+    fn as_ref(&self) -> &ObjectAddr {
+        self.0.addr()
+    }
+}
+
+enum ObjectHandleInner {
+    Owned(Arc<ObjectRefInner>),
+    Borrowed {
+        pool: NonNull<ObjectPool>,
+        addr: ObjectAddr,
+    },
+}
+
+impl ObjectHandleInner {
+    fn addr(&self) -> &ObjectAddr {
+        match self {
+            Self::Owned(inner) => &inner.addr,
+            Self::Borrowed { pool: _, addr } => addr,
+        }
+    }
+
+    fn clone_to_owned(&self) -> Self {
+        match self {
+            Self::Owned(inner) => Self::Owned(Arc::clone(inner)),
+            Self::Borrowed { pool, addr } => {
+                // The borrowed variant can only created by the runtime and
+                // is used for passing object references that exist in the guest
+                // stack to the host. While the reference exists in the guest stack
+                // it will not get destroyed.
+
+                let pool = unsafe { pool.as_ref() };
+                let object = pool.get(addr).unwrap();
+
+                let Some(ref_count) = object.ref_count else {
+                    todo!("static references cannot be cloned (yet)");
+                };
+
+                Self::Owned(ref_count)
+            }
+        }
+    }
+}
+
+/// A reference to a [`ObjectHandle`].
+#[derive(Debug)]
+pub struct ObjectHandleRef<'a> {
+    // Always contains the borrowed variant.
+    handle: ObjectHandle,
+    _marker: PhantomData<&'a ObjectHandle>,
+}
+
+impl<'a> ObjectHandleRef<'a> {
+    pub(crate) fn new(handle: ObjectHandle) -> Self {
+        Self {
+            handle,
+            _marker: PhantomData,
+        }
+    }
+}
+
+impl<'a> Deref for ObjectHandleRef<'a> {
+    type Target = ObjectHandle;
+
+    fn deref(&self) -> &Self::Target {
+        &self.handle
     }
 }

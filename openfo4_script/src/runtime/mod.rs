@@ -7,8 +7,9 @@ pub(crate) mod host_functions;
 use std::any::Any;
 use std::fmt::Display;
 use std::marker::PhantomData;
-use std::mem::MaybeUninit;
+use std::mem::{MaybeUninit, offset_of};
 use std::panic::{AssertUnwindSafe, catch_unwind};
+use std::ptr::NonNull;
 use std::sync::Arc;
 use std::task::{Poll, Waker};
 
@@ -23,6 +24,7 @@ use crate::compiler::PscSignature;
 use crate::compiler::resources::TypeId;
 use crate::engine::{Engine, EngineShared};
 use crate::runtime::host_functions::{enter_span, exit_span};
+use crate::runtime::object::{ObjectHandle, ObjectHandleRef};
 
 pub(crate) const RESULT_OK: i32 = 0;
 pub(crate) const RESULT_ERROR: i32 = 1;
@@ -319,19 +321,19 @@ macro_rules! impl_into_func {
         #[allow(unused_assignments)]
         #[allow(non_snake_case)]
         #[allow(unused)]
-        impl<F, T, $($params,)* $($returns,)*> IntoFunc<T, FnMarker, ($($params,)*), ($($returns,)*)> for F
+        impl<'a, F, T, $($params,)* $($returns,)*> IntoFunc<T, FnMarker, ($($params,)*), ($($returns,)*)> for F
         where
             F: Fn(Caller<'_, T>, $($params),*) -> Result<($($returns),*), Error> + Send + Sync + 'static,
             T: 'static,
             $(
-                $params: NativeType,
+                $params: FromGuest<'a>,
             )*
             $(
                 $returns: NativeType,
             )*
         {
             fn into_func(self, signature: PscSignature, name: String) -> HostFunc {
-                IntoHostFunc::into_host_func(move |ctx: *const RawContext, $($params: $params),*| -> (i32 $(,MaybeUninit<$returns>)*) {
+                IntoHostFunc::into_host_func(move |ctx: *const RawContext, $($params: <$params as FromGuest<'a>>::JitType),*| -> (i32 $(,MaybeUninit<$returns>)*) {
                     let _span = Span::new(ctx.cast_mut(), &name);
 
                     try_call!(ctx, $($returns),* => || {
@@ -341,6 +343,10 @@ macro_rules! impl_into_func {
                             ctx,
                             _marker: PhantomData,
                         };
+
+                        $(
+                            let $params = unsafe { $params::from_raw(ctx, $params) };
+                        )*
 
                         match self(caller, $($params),*) {
                             Ok(($($returns),*)) => {
@@ -375,22 +381,23 @@ macro_rules! impl_into_func {
             }
         }
 
+
         #[allow(unused_assignments)]
         #[allow(non_snake_case)]
         #[allow(unused)]
-        impl<F, T, $($params,)* $($returns,)*> IntoFunc<T, FalliableFnMarker, ($($params,)*), ($($returns,)*)> for F
+        impl<'a, F, T, $($params,)* $($returns,)*> IntoFunc<T, FalliableFnMarker, ($($params,)*), ($($returns,)*)> for F
         where
             F: Fn(Caller<'_, T>, $($params),*) -> ($($returns),*) + Send + Sync + 'static,
             T: 'static,
             $(
-                $params: NativeType,
+                $params: FromGuest<'a>,
             )*
             $(
                 $returns: NativeType,
             )*
         {
             fn into_func(self, signature: PscSignature, name: String) -> HostFunc {
-                IntoHostFunc::into_host_func(move |ctx: *const RawContext, $($params: $params),*| -> (i32 $(,MaybeUninit<$returns>)*) {
+                IntoHostFunc::into_host_func(move |ctx: *const RawContext, $($params: <$params as FromGuest<'a>>::JitType),*| -> (i32 $(,MaybeUninit<$returns>)*) {
                     let _span = Span::new(ctx.cast_mut(), &name);
 
                     try_call!(ctx, $($returns),* => || {
@@ -400,6 +407,10 @@ macro_rules! impl_into_func {
                             ctx,
                             _marker: PhantomData,
                         };
+
+                        $(
+                            let $params = unsafe { $params::from_raw(ctx, $params) };
+                        )*
 
                         let ($($returns),*) =  self(caller, $($params),*);
                         validate_return_value_types(ctx, &($($returns,)*), &signature);
@@ -433,14 +444,14 @@ macro_rules! impl_into_func {
             Fut: IntoFuture<Output = ($($returns),*)> + Send + 'a,
             T: 'static,
             $(
-                $params: NativeType,
+                $params: FromGuest<'a>,
             )*
             $(
                 $returns: NativeType,
             )*
         {
             fn into_func(self, signature: PscSignature, name: String) -> HostFunc {
-                IntoHostFunc::into_host_func(move |ctx: *const RawContext, $($params: $params),*| -> (i32 $(,MaybeUninit<$returns>)*) {
+                IntoHostFunc::into_host_func(move |ctx: *const RawContext, $($params: <$params as FromGuest<'a>>::JitType),*| -> (i32 $(,MaybeUninit<$returns>)*) {
                     let _span = Span::new(ctx.cast_mut(), &name);
 
                     try_call!(ctx, $($returns),* => || {
@@ -455,6 +466,10 @@ macro_rules! impl_into_func {
                                 ctx,
                                 _marker: PhantomData,
                             };
+
+                            $(
+                                let $params = unsafe { $params::from_raw(ctx, $params) };
+                            )*
 
                             let future = self(caller, $($params),*).into_future();
                             stack.future.set(future);
@@ -498,14 +513,14 @@ macro_rules! impl_into_func {
             Fut: IntoFuture<Output = Result<($($returns),*), Error>> + Send + 'a,
             T: 'static,
             $(
-                $params: NativeType,
+                $params: FromGuest<'a>,
             )*
             $(
                 $returns: NativeType,
             )*
         {
             fn into_func(self, signature: PscSignature, name: String) -> HostFunc {
-                IntoHostFunc::into_host_func(move |ctx: *const RawContext, $($params: $params),*| -> (i32 $(,MaybeUninit<$returns>)*) {
+                IntoHostFunc::into_host_func(move |ctx: *const RawContext, $($params: <$params as FromGuest<'a>>::JitType),*| -> (i32 $(,MaybeUninit<$returns>)*) {
                     let _span = Span::new(ctx.cast_mut(), &name);
 
                     try_call!(ctx, $($returns),* => || {
@@ -520,6 +535,10 @@ macro_rules! impl_into_func {
                                 ctx,
                                 _marker: PhantomData,
                             };
+
+                            $(
+                                let $params = unsafe { $params::from_raw(ctx, $params) };
+                            )*
 
                             let future = self(caller, $($params),*).into_future();
                             stack.future.set(future);
@@ -621,6 +640,50 @@ impl_into_func!(A0, A1, A2, A3, A4, A5, A6, A7, A8, A9, A10 =>);
 impl_into_func!(A0, A1, A2, A3, A4, A5, A6, A7, A8, A9, A10 => R0);
 impl_into_func!(A0, A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11 =>);
 impl_into_func!(A0, A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11 => R0);
+
+/// A type that can be passed to a host function from a guest function.
+pub unsafe trait FromGuest<'a> {
+    #[doc(hidden)]
+    const TYPE: Type;
+
+    #[doc(hidden)]
+    type JitType: HostType;
+
+    #[doc(hidden)]
+    #[expect(private_interfaces)]
+    unsafe fn from_raw(ctx: &RawContext, val: Self::JitType) -> Self;
+}
+
+unsafe impl<'a> FromGuest<'a> for Option<ObjectHandleRef<'a>> {
+    const TYPE: Type = Type::Pointer;
+    type JitType = ObjectAddr;
+
+    #[expect(private_interfaces)]
+    unsafe fn from_raw(ctx: &RawContext, addr: Self::JitType) -> Self {
+        if addr.is_null() {
+            None
+        } else {
+            unsafe {
+                let pool = ctx.state.byte_add(offset_of!(HostState, pool));
+                let pool = NonNull::new_unchecked(pool.cast::<ObjectPool>().cast_mut());
+                Some(ObjectHandleRef::new(ObjectHandle::new_borrowed(pool, addr)))
+            }
+        }
+    }
+}
+
+unsafe impl<'a, T> FromGuest<'a> for T
+where
+    T: NativeType,
+{
+    const TYPE: Type = T::TYPE;
+    type JitType = T;
+
+    #[expect(private_interfaces)]
+    unsafe fn from_raw(_ctx: &RawContext, val: Self::JitType) -> Self {
+        val
+    }
+}
 
 /// A type that can be send to Papyrus functions.
 pub unsafe trait NativeType: Copy + HostType {
