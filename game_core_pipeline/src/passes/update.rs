@@ -1,8 +1,8 @@
-use std::collections::HashMap;
 use std::sync::Arc;
 
 use bytemuck::{Pod, Zeroable};
 use crossbeam::channel::Receiver;
+use game_common::collections::vec_map::VecMap;
 use game_common::components::Transform;
 use game_render::api::{
     BindingResource, BufferInitDescriptor, CommandQueue, DescriptorSet, DescriptorSetDescriptor,
@@ -68,7 +68,7 @@ impl Node for UpdatePass {
                     state.scenes.insert(id, SceneData::new());
                 }
                 Event::DestroyScene(id) => {
-                    state.scenes.remove(&id);
+                    state.scenes.remove(id);
                 }
                 Event::CreateMesh(id, mesh) => {
                     assert!(mesh.validate_indices().is_ok());
@@ -77,7 +77,7 @@ impl Node for UpdatePass {
                     state.meshes.insert(id, key);
                 }
                 Event::DestroyMesh(id) => {
-                    if let Some(key) = state.meshes.remove(&id) {
+                    if let Some(key) = state.meshes.remove(id) {
                         state.mesh.remove_mesh(key);
                     }
                 }
@@ -87,7 +87,7 @@ impl Node for UpdatePass {
                     state.images.insert(id, texture);
                 }
                 Event::DestroyImage(id) => {
-                    if let Some(index) = state.images.remove(&id) {
+                    if let Some(index) = state.images.remove(id) {
                         state.textures.remove(index);
                     }
                 }
@@ -133,7 +133,7 @@ impl Node for UpdatePass {
                     };
                 }
                 Event::DestroyMaterial(id) => {
-                    if let Some(material) = state.materials.remove(&id) {
+                    if let Some(material) = state.materials.remove(id) {
                         state.material_slab.remove(material.index);
                     }
 
@@ -152,15 +152,15 @@ impl Node for UpdatePass {
                 Event::CreateObject(id, object) => {
                     let state = &mut *state;
 
-                    let Some(material) = state.materials.get(&object.material.id()).copied() else {
+                    let Some(material) = state.materials.get(object.material.id()).copied() else {
                         continue;
                     };
 
-                    let Some(mesh) = state.meshes.get(&object.mesh.id()).copied() else {
+                    let Some(mesh) = state.meshes.get(object.mesh.id()).copied() else {
                         continue;
                     };
 
-                    if let Some(scene) = state.scenes.get_mut(&object.scene.id()) {
+                    if let Some(scene) = state.scenes.get_mut(object.scene.id()) {
                         let key = state.mesh.create_instance(
                             ctx.queue,
                             object.transform,
@@ -173,7 +173,7 @@ impl Node for UpdatePass {
                 Event::UpdateTransform(id, scene, transform) => {
                     let state = &mut *state;
 
-                    if let Some(scene) = state.scenes.get(&scene)
+                    if let Some(scene) = state.scenes.get(scene)
                         && let Some(object) = scene.objects.get(&id)
                     {
                         state.mesh.update_transform(object.id, transform);
@@ -189,7 +189,7 @@ impl Node for UpdatePass {
                     }
                 }
                 Event::CreateCamera(id, camera) => {
-                    if let Some(scene) = state.scenes.get_mut(&camera.scene.id()) {
+                    if let Some(scene) = state.scenes.get_mut(camera.scene.id()) {
                         scene.cameras.insert(id, camera);
                     }
                 }
@@ -199,7 +199,7 @@ impl Node for UpdatePass {
                     }
                 }
                 Event::CreateLight(id, Light::Directional(light)) => {
-                    let Some(scene) = state.scenes.get_mut(&light.scene.id()) else {
+                    let Some(scene) = state.scenes.get_mut(light.scene.id()) else {
                         continue;
                     };
 
@@ -215,7 +215,7 @@ impl Node for UpdatePass {
                     );
                 }
                 Event::CreateLight(id, Light::Point(light)) => {
-                    let Some(scene) = state.scenes.get_mut(&light.scene.id()) else {
+                    let Some(scene) = state.scenes.get_mut(light.scene.id()) else {
                         continue;
                     };
 
@@ -225,7 +225,7 @@ impl Node for UpdatePass {
                     scene.point_lights.insert(id, index);
                 }
                 Event::CreateLight(id, Light::Spot(light)) => {
-                    let Some(scene) = state.scenes.get_mut(&light.scene.id()) else {
+                    let Some(scene) = state.scenes.get_mut(light.scene.id()) else {
                         continue;
                     };
 
@@ -235,14 +235,14 @@ impl Node for UpdatePass {
                     scene.spot_lights.insert(id, index);
                 }
                 Event::CreateLight(id, Light::Ambient(light)) => {
-                    let Some(scene) = state.scenes.get_mut(&light.scene.id()) else {
+                    let Some(scene) = state.scenes.get_mut(light.scene.id()) else {
                         continue;
                     };
 
                     scene.ambient_lights.insert(id, light);
                 }
                 Event::DestroyLight(scene, id) => {
-                    let Some(scene) = state.scenes.get_mut(&scene) else {
+                    let Some(scene) = state.scenes.get_mut(scene) else {
                         continue;
                     };
 
@@ -344,7 +344,7 @@ fn create_image(
 fn create_material(
     materials: &mut SlabBuffer<RawMaterialData>,
     default_textures: &DefaultTextures,
-    images: &HashMap<ImageId, TextureSlabIndex>,
+    images: &VecMap<ImageId, TextureSlabIndex>,
     material: StandardMaterial,
 ) -> MaterialState {
     let _span = trace_span!("create_material").entered();
@@ -370,7 +370,7 @@ fn create_material(
     }
 
     let base_color = match material.base_color_texture {
-        Some(handle) => match images.get(&handle.id()).copied() {
+        Some(handle) => match images.get(handle.id()).copied() {
             Some(texture) => texture,
             None => {
                 tracing::warn!("missing base color image: {:?}", handle);
@@ -381,7 +381,7 @@ fn create_material(
     };
 
     let normal = match material.normal_texture {
-        Some(handle) => match images.get(&handle.id()).copied() {
+        Some(handle) => match images.get(handle.id()).copied() {
             Some(texture) => texture,
             None => {
                 tracing::warn!("missing normal image: {:?}", handle);
@@ -392,7 +392,7 @@ fn create_material(
     };
 
     let metallic_roughness = match material.metallic_roughness_texture {
-        Some(handle) => match images.get(&handle.id()).copied() {
+        Some(handle) => match images.get(handle.id()).copied() {
             Some(texture) => texture,
             None => {
                 tracing::warn!("missing metallic/roughness image: {:?}", handle);
@@ -403,7 +403,7 @@ fn create_material(
     };
 
     let specular_glossiness = match material.specular_glossiness_texture {
-        Some(handle) => match images.get(&handle.id()).copied() {
+        Some(handle) => match images.get(handle.id()).copied() {
             Some(texture) => texture,
             None => {
                 tracing::warn!("missing specular/glossiness image: {:?}", handle);
@@ -416,7 +416,7 @@ fn create_material(
     // Default image does not matter here, we don't sample from it unless
     // the flag is set.
     let grayscale_palette = match material.grayscale_palette {
-        Some(handle) => match images.get(&handle.id()).copied() {
+        Some(handle) => match images.get(handle.id()).copied() {
             Some(texture) => {
                 flags |= MaterialFlags::GRAYSCALE_PALETTE;
                 texture
@@ -467,7 +467,7 @@ fn create_terrain_material(
     queue: &CommandQueue<'_>,
     materials: &mut SlabBuffer<RawMaterialData>,
     default_textures: &DefaultTextures,
-    images: &HashMap<ImageId, TextureSlabIndex>,
+    images: &VecMap<ImageId, TextureSlabIndex>,
     terrain_material: &mut SubAllocatedGrowableBuffer<RawTerrainLayer>,
     textures: &mut TextureSlab,
     mipgen: &MipMapGenerator,

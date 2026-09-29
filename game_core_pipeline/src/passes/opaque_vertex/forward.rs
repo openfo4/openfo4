@@ -101,7 +101,7 @@ impl OpaqueVertexForwardPass {
             usage: TextureUsage::RENDER_ATTACHMENT | TextureUsage::TEXTURE_BINDING,
         });
 
-        let scene = state.scenes.get_mut(&scene).unwrap();
+        let scene = state.scenes.get_mut(scene).unwrap();
         let camera = scene.cameras.get(&camera).unwrap();
 
         let textures = state.textures.views();
@@ -367,7 +367,6 @@ impl Node for OpaqueVertexForwardPass {
         for (scene_id, scene) in state.scenes.iter() {
             for (camera_id, camera) in scene.cameras.iter() {
                 if camera.target == ctx.render_target {
-                    let scene_id = *scene_id;
                     let camera_id = *camera_id;
                     self.render_scene_with_camera(ctx, &mut state, scene_id, camera_id, size);
                     return;

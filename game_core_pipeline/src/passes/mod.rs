@@ -14,6 +14,7 @@ use std::sync::Arc;
 use bitflags::bitflags;
 use bytemuck::{NoUninit, Pod, Zeroable};
 use crossbeam::channel::Receiver;
+use game_common::collections::vec_map::VecMap;
 use game_render::api::{CommandQueue, TextureRegion, TextureViewDescriptor};
 use game_render::backend::{
     BufferUsage, ImageDataLayout, TextureDescriptor, TextureFormat, TextureUsage,
@@ -110,11 +111,11 @@ struct State {
     mesh: MeshState,
     default_textures: DefaultTextures,
 
-    meshes: HashMap<MeshId, MeshKey>,
-    images: HashMap<ImageId, TextureSlabIndex>,
-    materials: HashMap<MaterialId, MaterialState>,
+    meshes: VecMap<MeshId, MeshKey>,
+    images: VecMap<ImageId, TextureSlabIndex>,
+    materials: VecMap<MaterialId, MaterialState>,
 
-    scenes: HashMap<SceneId, SceneData>,
+    scenes: VecMap<SceneId, SceneData>,
 
     textures: TextureSlab,
     material_slab: SlabBuffer<RawMaterialData>,
@@ -140,10 +141,10 @@ impl State {
 
         Self {
             default_textures,
-            meshes: HashMap::new(),
-            materials: HashMap::new(),
-            scenes: HashMap::new(),
-            images: HashMap::new(),
+            meshes: VecMap::new(),
+            materials: VecMap::new(),
+            scenes: VecMap::new(),
+            images: VecMap::new(),
             textures,
             material_slab: SlabBuffer::new(BufferUsage::STORAGE),
             mesh: MeshState::new(queue),

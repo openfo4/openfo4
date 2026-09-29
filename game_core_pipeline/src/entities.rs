@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use crossbeam::channel::{Receiver, Sender};
 use game_common::collections::slab::Slab;
+use game_common::collections::vec_map::Index;
 use game_common::components::{Color, Transform};
 use game_common::define_slab_key;
 use game_render::mesh::Mesh;
@@ -525,28 +526,70 @@ define_slab_key! {
     pub(crate) struct SceneId: usize;
 }
 
+impl Index for SceneId {
+    fn index(&self) -> usize {
+        self.0
+    }
+}
+
 define_slab_key! {
     pub(crate) struct MeshId: usize;
+}
+
+impl Index for MeshId {
+    fn index(&self) -> usize {
+        self.0
+    }
 }
 
 define_slab_key! {
     pub(crate) struct ImageId: usize;
 }
 
+impl Index for ImageId {
+    fn index(&self) -> usize {
+        self.0
+    }
+}
+
 define_slab_key! {
     pub(crate) struct MaterialId: usize;
+}
+
+impl Index for MaterialId {
+    fn index(&self) -> usize {
+        self.0
+    }
 }
 
 define_slab_key! {
     pub(crate) struct ObjectId: usize;
 }
 
+impl Index for ObjectId {
+    fn index(&self) -> usize {
+        self.0
+    }
+}
+
 define_slab_key! {
     pub(crate) struct CameraId: usize;
 }
 
+impl Index for CameraId {
+    fn index(&self) -> usize {
+        self.0
+    }
+}
+
 define_slab_key! {
     pub(crate) struct LightId: usize;
+}
+
+impl Index for LightId {
+    fn index(&self) -> usize {
+        self.0
+    }
 }
 
 #[derive(Clone, Debug)]
