@@ -27,7 +27,8 @@ use openfo4_script::RegisterNativeError;
 use openfo4_script::compiler::CompilerOptions;
 use openfo4_script::compiler::resources::TypeId;
 use openfo4_script::engine::{Engine, Instance, Options};
-use openfo4_script::runtime::{IntoFunc, ObjectRef};
+use openfo4_script::runtime::IntoFunc;
+use openfo4_script::runtime::object::ObjectHandle;
 use parking_lot::Mutex;
 
 use crate::components::{BaseObject, PlacedReference};
@@ -295,7 +296,7 @@ fn core_actor_values(
 pub struct ScriptInstance {
     instance: Instance,
     pub layout: TypeId,
-    pub object: ObjectRef,
+    pub object: ObjectHandle,
 }
 
 trait EngineExt {

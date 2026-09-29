@@ -72,7 +72,6 @@ impl EventQueue {
 
                 let loader = Arc::clone(loader);
                 self.tasks.push(pool.spawn(async move {
-                    dbg!(&record);
                     let object = loader.load(record).await.unwrap().object;
                     (index, i, object)
                 }));
@@ -118,7 +117,7 @@ impl EventQueue {
                             return Err(LoadError::NoClass { object, name });
                         };
 
-                        Ok(Value::ObjectRef(script.get().object.clone()))
+                        Ok(Value::Object(script.get().object.clone()))
                     }
                     ObjectValue::Entity(entity, name) => {
                         let index = *event.entities.get(&entity).unwrap();
@@ -129,7 +128,7 @@ impl EventQueue {
                             return Err(LoadError::NoClass { object, name });
                         };
 
-                        Ok(Value::ObjectRef(script.get().object.clone()))
+                        Ok(Value::Object(script.get().object.clone()))
                     }
                     ObjectValue::Record(record, name) => {
                         let index = *event.records.get(&record).unwrap();
@@ -140,7 +139,7 @@ impl EventQueue {
                             return Err(LoadError::NoClass { object, name });
                         };
 
-                        Ok(Value::ObjectRef(script.get().object.clone()))
+                        Ok(Value::Object(script.get().object.clone()))
                     }
                 }
             };
@@ -148,7 +147,7 @@ impl EventQueue {
             let receiver = match event.event.receiver {
                 QueuedEventValue::Object(object) => match convert_object(object) {
                     Ok(object) => match object {
-                        Value::ObjectRef(v) => {
+                        Value::Object(v) => {
                             let object = objects.get_by_addr(v.addr()).unwrap();
                             object.id()
                         }

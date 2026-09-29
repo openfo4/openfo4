@@ -8,7 +8,8 @@ use hashbrown::{HashMap, HashSet};
 use openfo4_core::ecs::{Entity, World};
 use openfo4_core::events::EventBus;
 use openfo4_core::record::RecordId;
-use openfo4_script::runtime::{Error, ObjectAddr, ObjectRef};
+use openfo4_script::runtime::object::ObjectHandle;
+use openfo4_script::runtime::{Error, ObjectAddr};
 use parking_lot::{
     MappedRwLockReadGuard, MappedRwLockWriteGuard, Mutex, RwLock, RwLockReadGuard, RwLockWriteGuard,
 };
@@ -226,19 +227,19 @@ unsafe impl Sync for State {}
 /// Set of engine-builtin objects that are always loaded.
 #[derive(Clone, Debug)]
 pub struct CoreObjects {
-    pub health: ObjectRef,
+    pub health: ObjectHandle,
     // SPECIAL
-    pub strength: ObjectRef,
-    pub perception: ObjectRef,
-    pub endurance: ObjectRef,
-    pub charisma: ObjectRef,
-    pub intelligence: ObjectRef,
-    pub agility: ObjectRef,
-    pub luck: ObjectRef,
+    pub strength: ObjectHandle,
+    pub perception: ObjectHandle,
+    pub endurance: ObjectHandle,
+    pub charisma: ObjectHandle,
+    pub intelligence: ObjectHandle,
+    pub agility: ObjectHandle,
+    pub luck: ObjectHandle,
     // AI
-    pub aggression: ObjectRef,
-    pub confidence: ObjectRef,
-    pub suspicious: ObjectRef,
+    pub aggression: ObjectHandle,
+    pub confidence: ObjectHandle,
+    pub suspicious: ObjectHandle,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]

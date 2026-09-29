@@ -194,7 +194,7 @@ impl Runner {
                             });
                         } else {
                             let mut args = dispatch.args.to_vec();
-                            args.insert(0, Value::ObjectRef(script.get().object.clone()));
+                            args.insert(0, Value::Object(script.get().object.clone()));
 
                             self.queue.push_back(ScheduledTask {
                                 object: receiver.id(),
@@ -215,7 +215,7 @@ impl Runner {
                     let alias = self.objects.get_by_addr(alias).unwrap();
 
                     let mut args = dispatch.args.to_vec();
-                    args.insert(0, Value::ObjectRef(script.get().object.clone()));
+                    args.insert(0, Value::Object(script.get().object.clone()));
 
                     self.queue.push_back(ScheduledTask {
                         object: alias.id(),
@@ -249,7 +249,7 @@ impl Runner {
                 .map(|value| match value {
                     Value::Bool(v) => Val::Bool(v),
                     Value::Int(v) => Val::I32(v),
-                    Value::ObjectRef(object) => Val::Object(object.addr()),
+                    Value::Object(object) => Val::Object(object.addr()),
                     Value::Null => Val::Object(ObjectAddr::NULL),
                 })
                 .collect::<Vec<_>>();

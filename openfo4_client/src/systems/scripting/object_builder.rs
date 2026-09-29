@@ -5,8 +5,8 @@ use openfo4_esp::FormId;
 use openfo4_esp::vmad::{Property, Script, Value};
 use openfo4_script::compiler::resources::{PropertyType, TypeId, TypeInfo};
 use openfo4_script::engine::Engine;
-use openfo4_script::runtime::object::{ObjectArrayBuilder, ObjectBuilder};
-use openfo4_script::runtime::{ObjectAddr, ObjectRef, Val};
+use openfo4_script::runtime::object::{ObjectArrayBuilder, ObjectBuilder, ObjectHandle};
+use openfo4_script::runtime::{ObjectAddr, Val};
 use thiserror::Error;
 
 use crate::systems::scripting::loader::AliasKey;
@@ -67,7 +67,7 @@ impl<'a> Builder<'a> {
         }
     }
 
-    fn finalize(self) -> ObjectRef {
+    fn finalize(self) -> ObjectHandle {
         match self {
             Self::ObjectRef(builder) => unsafe { builder.finalize_copy() },
             Self::Object(builder) => builder.finalize(),
@@ -364,7 +364,7 @@ pub fn build_script_object(
     aliases: &HashMap<AliasKey, HashMap<Lowercase<String>, ObjectAddr>>,
     builder: &mut ObjectBuilder,
     script_defined_in: RecordId,
-) -> (ObjectRef, Vec<BuildScriptObjectWarning>) {
+) -> (ObjectHandle, Vec<BuildScriptObjectWarning>) {
     let ty = engine.get_type(&script.name).unwrap();
     let info = engine.type_info(ty);
 
@@ -435,7 +435,8 @@ mod tests {
     use openfo4_script::assembler::assemble;
     use openfo4_script::compiler::CompilerOptions;
     use openfo4_script::engine::{Engine, Options};
-    use openfo4_script::runtime::{ArrayObject, ObjectAddr, ObjectRef};
+    use openfo4_script::runtime::object::ObjectHandle;
+    use openfo4_script::runtime::{ArrayObject, ObjectAddr};
 
     use crate::systems::scripting::objects::ScriptObjects;
 
@@ -446,7 +447,7 @@ mod tests {
         debug: true,
     };
 
-    fn build_direct(engine: &Engine, script: &Script) -> ObjectRef {
+    fn build_direct(engine: &Engine, script: &Script) -> ObjectHandle {
         let type_id = engine.get_type(&script.name).unwrap();
         let mut builder = engine.object_pool().insert(type_id);
 
@@ -471,7 +472,7 @@ mod tests {
 
     fn assert_array_contents_eq(
         engine: &Engine,
-        object: &ObjectRef,
+        object: &ObjectHandle,
         class: &str,
         name: &str,
         len: usize,

@@ -59,7 +59,7 @@ impl ObjectPool {
     }
 
     /// Allocates a new object with the given ty.
-    pub fn alloc(&self, ty: TypeId, array_len: usize) -> ObjectRef {
+    pub fn alloc(&self, ty: TypeId, array_len: usize) -> ObjectHandle {
         let typ = self.resources.types.get(ty).unwrap();
 
         let size = typ.repr.size();
@@ -99,7 +99,7 @@ impl ObjectPool {
             objects.insert(addr, object);
         }
 
-        ObjectRef(ref_count)
+        ObjectHandle(ObjectHandleInner::Owned(ref_count))
     }
 
     pub fn insert(&self, ty: TypeId) -> ObjectBuilder {
@@ -111,7 +111,7 @@ impl ObjectPool {
                 ty,
                 typ,
                 object_ref.addr().0 as *mut u8,
-                Some(object_ref.0.clone()),
+                Some(object_ref.0.clone_to_owned()),
             )
         };
 
@@ -121,11 +121,11 @@ impl ObjectPool {
         }
     }
 
-    pub fn insert_string(&self, s: &str) -> ObjectRef {
+    pub fn insert_string(&self, s: &str) -> ObjectHandle {
         let bytes_ref = self.alloc(self.resources.primitives.byte, s.len());
 
         unsafe {
-            core::ptr::copy_nonoverlapping(s.as_ptr(), bytes_ref.as_ptr(), s.len());
+            core::ptr::copy_nonoverlapping(s.as_ptr(), bytes_ref.addr().0, s.len());
         }
 
         let mut string_object = self.insert(self.resources.primitives.string);
@@ -147,14 +147,14 @@ impl ObjectPool {
         let stride = (size + align - 1) & !(align - 1);
 
         for i in 0..array_len {
-            let elem_ptr = unsafe { array_ref.as_ptr().add(stride * i) };
+            let elem_ptr = unsafe { array_ref.addr().0.add(stride * i) };
 
             let object = unsafe {
                 Object::new_at(
                     elem_ty,
                     elem_typ.clone(),
                     elem_ptr,
-                    Some(array_ref.0.clone()),
+                    Some(array_ref.0.clone_to_owned()),
                 )
             };
             objects.push(object);
@@ -175,8 +175,8 @@ impl ObjectPool {
     ///
     /// # Safety
     ///
-    /// No thread must currently access the given object referenced by the [`ObjectRef`].
-    pub unsafe fn clone_object(&self, object: &ObjectRef) -> ObjectBuilder {
+    /// No thread must currently access the given object referenced by the [`ObjectHandle`].
+    pub unsafe fn clone_object(&self, object: &ObjectHandle) -> ObjectBuilder {
         let ty_id = {
             let objects = self.objects.lock();
 
@@ -261,26 +261,6 @@ impl ObjectPool {
 
     pub(crate) fn resources(&self) -> &Resources {
         &self.resources
-    }
-}
-
-/// A reference handle to an [`Object`] in a pool.
-#[derive(Clone, Debug)]
-pub struct ObjectRef(Arc<ObjectRefInner>);
-
-impl ObjectRef {
-    pub fn addr(&self) -> ObjectAddr {
-        self.0.addr
-    }
-
-    fn as_ptr(&self) -> *mut u8 {
-        self.0.addr.0
-    }
-}
-
-impl AsRef<ObjectAddr> for ObjectRef {
-    fn as_ref(&self) -> &ObjectAddr {
-        &self.0.addr
     }
 }
 
@@ -450,7 +430,7 @@ unsafe impl Sync for Object {}
 #[derive(Debug)]
 pub struct ObjectBuilder {
     obj: Object,
-    obj_ref: ObjectRef,
+    obj_ref: ObjectHandle,
 }
 
 impl ObjectBuilder {
@@ -460,18 +440,18 @@ impl ObjectBuilder {
         T: IntoValue,
     {
         // SAFETY:
-        // We don't give access to the underlying `ObjectRef` until the `ObjectBuilder` is dropped.
+        // We don't give access to the underlying `ObjectHandle` until the `ObjectBuilder` is dropped.
         // This means the caller does not have access to the pointer to pass anywhere else yet.
         unsafe {
             self.obj.set(class, name, value);
         }
     }
 
-    pub unsafe fn finalize_copy(&self) -> ObjectRef {
+    pub unsafe fn finalize_copy(&self) -> ObjectHandle {
         self.obj_ref.clone()
     }
 
-    pub fn finalize(self) -> ObjectRef {
+    pub fn finalize(self) -> ObjectHandle {
         self.obj_ref
     }
 
@@ -490,7 +470,7 @@ impl ObjectBuilder {
 #[derive(Debug)]
 pub struct ObjectArrayBuilder {
     objects: Vec<Object>,
-    object_ref: ObjectRef,
+    object_ref: ObjectHandle,
 }
 
 impl ObjectArrayBuilder {
@@ -506,7 +486,7 @@ impl ObjectArrayBuilder {
         }
     }
 
-    pub fn finalize(self) -> ObjectRef {
+    pub fn finalize(self) -> ObjectHandle {
         self.object_ref
     }
 }
@@ -624,9 +604,12 @@ impl ObjectHandle {
     }
 }
 
+unsafe impl Send for ObjectHandle {}
+unsafe impl Sync for ObjectHandle {}
+
 impl Clone for ObjectHandle {
     fn clone(&self) -> Self {
-        Self(self.0.clone_to_owned())
+        Self(ObjectHandleInner::Owned(self.0.clone_to_owned()))
     }
 }
 
@@ -658,9 +641,9 @@ impl ObjectHandleInner {
         }
     }
 
-    fn clone_to_owned(&self) -> Self {
+    fn clone_to_owned(&self) -> Arc<ObjectRefInner> {
         match self {
-            Self::Owned(inner) => Self::Owned(Arc::clone(inner)),
+            Self::Owned(inner) => Arc::clone(inner),
             Self::Borrowed { pool, addr } => {
                 // The borrowed variant can only created by the runtime and
                 // is used for passing object references that exist in the guest
@@ -674,7 +657,7 @@ impl ObjectHandleInner {
                     todo!("static references cannot be cloned (yet)");
                 };
 
-                Self::Owned(ref_count)
+                ref_count
             }
         }
     }
