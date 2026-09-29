@@ -7,9 +7,8 @@ pub(crate) mod host_functions;
 use std::any::Any;
 use std::fmt::Display;
 use std::marker::PhantomData;
-use std::mem::{MaybeUninit, offset_of};
+use std::mem::MaybeUninit;
 use std::panic::{AssertUnwindSafe, catch_unwind};
-use std::ptr::NonNull;
 use std::sync::Arc;
 use std::task::{Poll, Waker};
 
@@ -24,7 +23,7 @@ use crate::compiler::PscSignature;
 use crate::compiler::resources::TypeId;
 use crate::engine::{Engine, EngineShared};
 use crate::runtime::host_functions::{enter_span, exit_span};
-use crate::runtime::object::{ObjectHandle, ObjectHandleRef};
+use crate::runtime::object::ObjectHandleRef;
 
 pub(crate) const RESULT_OK: i32 = 0;
 pub(crate) const RESULT_ERROR: i32 = 1;
@@ -664,9 +663,8 @@ unsafe impl<'a> FromGuest<'a> for Option<ObjectHandleRef<'a>> {
             None
         } else {
             unsafe {
-                let pool = ctx.state.byte_add(offset_of!(HostState, pool));
-                let pool = NonNull::new_unchecked(pool.cast::<ObjectPool>().cast_mut());
-                Some(ObjectHandleRef::new(ObjectHandle::new_borrowed(pool, addr)))
+                let pool = &(&*ctx.state).pool;
+                Some(ObjectHandleRef::new(pool, addr))
             }
         }
     }

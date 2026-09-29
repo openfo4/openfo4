@@ -1,8 +1,5 @@
 use std::alloc::Layout;
 use std::fmt::{self, Debug, Formatter};
-use std::marker::PhantomData;
-use std::ops::Deref;
-use std::ptr::NonNull;
 use std::sync::Arc;
 
 use bytemuck::AnyBitPattern;
@@ -99,7 +96,7 @@ impl ObjectPool {
             objects.insert(addr, object);
         }
 
-        ObjectHandle(ObjectHandleInner::Owned(ref_count))
+        ObjectHandle(ref_count)
     }
 
     pub fn insert(&self, ty: TypeId) -> ObjectBuilder {
@@ -111,7 +108,7 @@ impl ObjectPool {
                 ty,
                 typ,
                 object_ref.addr().0 as *mut u8,
-                Some(object_ref.0.clone_to_owned()),
+                Some(object_ref.0.clone()),
             )
         };
 
@@ -154,7 +151,7 @@ impl ObjectPool {
                     elem_ty,
                     elem_typ.clone(),
                     elem_ptr,
-                    Some(array_ref.0.clone_to_owned()),
+                    Some(array_ref.0.clone()),
                 )
             };
             objects.push(object);
@@ -591,99 +588,68 @@ impl ObjectTag {
 /// An owned handle to a [`Object`].
 ///
 /// While at least on `ObjectHandle` exists the underlying [`Object`] will not be deallocated.
-pub struct ObjectHandle(ObjectHandleInner);
+#[derive(Clone)]
+pub struct ObjectHandle(Arc<ObjectRefInner>);
 
 impl ObjectHandle {
     pub fn addr(&self) -> ObjectAddr {
-        *self.0.addr()
-    }
-
-    pub(crate) unsafe fn new_borrowed(pool: NonNull<ObjectPool>, addr: ObjectAddr) -> Self {
-        debug_assert!(!addr.is_null());
-        Self(ObjectHandleInner::Borrowed { pool, addr })
-    }
-}
-
-unsafe impl Send for ObjectHandle {}
-unsafe impl Sync for ObjectHandle {}
-
-impl Clone for ObjectHandle {
-    fn clone(&self) -> Self {
-        Self(ObjectHandleInner::Owned(self.0.clone_to_owned()))
+        self.0.addr
     }
 }
 
 impl Debug for ObjectHandle {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "ObjectHandle({:p})", self.0.addr().0)
+        write!(f, "ObjectHandle({:p})", self.addr().0)
     }
 }
 
 impl AsRef<ObjectAddr> for ObjectHandle {
     fn as_ref(&self) -> &ObjectAddr {
-        self.0.addr()
-    }
-}
-
-enum ObjectHandleInner {
-    Owned(Arc<ObjectRefInner>),
-    Borrowed {
-        pool: NonNull<ObjectPool>,
-        addr: ObjectAddr,
-    },
-}
-
-impl ObjectHandleInner {
-    fn addr(&self) -> &ObjectAddr {
-        match self {
-            Self::Owned(inner) => &inner.addr,
-            Self::Borrowed { pool: _, addr } => addr,
-        }
-    }
-
-    fn clone_to_owned(&self) -> Arc<ObjectRefInner> {
-        match self {
-            Self::Owned(inner) => Arc::clone(inner),
-            Self::Borrowed { pool, addr } => {
-                // The borrowed variant can only created by the runtime and
-                // is used for passing object references that exist in the guest
-                // stack to the host. While the reference exists in the guest stack
-                // it will not get destroyed.
-
-                let pool = unsafe { pool.as_ref() };
-                let object = pool.get(addr).unwrap();
-
-                let Some(ref_count) = object.ref_count else {
-                    todo!("static references cannot be cloned (yet)");
-                };
-
-                ref_count
-            }
-        }
+        &self.0.addr
     }
 }
 
 /// A reference to a [`ObjectHandle`].
-#[derive(Debug)]
+#[derive(Copy, Clone)]
 pub struct ObjectHandleRef<'a> {
-    // Always contains the borrowed variant.
-    handle: ObjectHandle,
-    _marker: PhantomData<&'a ObjectHandle>,
+    pool: &'a ObjectPool,
+    addr: ObjectAddr,
 }
 
 impl<'a> ObjectHandleRef<'a> {
-    pub(crate) fn new(handle: ObjectHandle) -> Self {
-        Self {
-            handle,
-            _marker: PhantomData,
-        }
+    /// Creates an `ObjectHandleRef` from an address and the pool where it is stored.
+    ///
+    /// # Safety
+    ///
+    /// - `addr` must exist in the given `pool` and reference a valid object.
+    /// - The referenced object must not be deallocated from the pool while this `ObjectHandleRef`
+    ///   exists.
+    pub(crate) unsafe fn new(pool: &'a ObjectPool, addr: ObjectAddr) -> Self {
+        debug_assert!(!addr.is_null());
+        debug_assert!(pool.get(addr).is_some());
+
+        Self { pool, addr }
+    }
+
+    pub fn to_owned(&self) -> ObjectHandle {
+        let object = self.pool.get(self.addr).unwrap();
+
+        let Some(ref_count) = object.ref_count else {
+            todo!("static references cannot be cloned (yet)");
+        };
+
+        ObjectHandle(ref_count)
     }
 }
 
-impl<'a> Deref for ObjectHandleRef<'a> {
-    type Target = ObjectHandle;
+impl Debug for ObjectHandleRef<'_> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "ObjectHandle({:p})", self.addr.0)
+    }
+}
 
-    fn deref(&self) -> &Self::Target {
-        &self.handle
+impl AsRef<ObjectAddr> for ObjectHandleRef<'_> {
+    fn as_ref(&self) -> &ObjectAddr {
+        &self.addr
     }
 }
