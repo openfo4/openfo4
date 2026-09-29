@@ -359,9 +359,6 @@ where
         raw_ctx.stack_ptr.len = 0;
         raw_ctx.waker = cx.waker();
 
-        // We must lock the call table before we call the guest function.
-        let _lock = this.ctx.engine.call_table_lock.read();
-
         let res = unsafe { this.func.call_in(raw_ctx, this.params, this.returns) };
 
         // If the callee calls into a native host function that panics,

@@ -45,7 +45,6 @@ impl Engine {
             ctx: Mutex::new(ctx),
             shared: Arc::new(EngineShared {
                 state: HostState { pool },
-                call_table_lock: RwLock::default(),
             }),
             instances: RwLock::new(HashMap::new()),
             classes: HashMap::new(),
@@ -96,8 +95,6 @@ impl Engine {
             .compute_function_signature(class, func)
             .map_err(|err| RegisterNativeError::UnknownFunction(err))?;
         let name = format!("{}.{}", class, func);
-
-        let _lock = self.shared.call_table_lock.write();
 
         let host_func = f.into_func(sig, name);
 
@@ -238,7 +235,6 @@ pub struct Options {
 }
 
 pub(crate) struct EngineShared {
-    pub(crate) call_table_lock: RwLock<()>,
     pub(crate) state: HostState,
 }
 
