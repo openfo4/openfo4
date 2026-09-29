@@ -258,7 +258,7 @@ where
 {
     let res = pool.resources();
 
-    for (is, expect) in params.type_ids(pool).zip(&signature.params) {
+    for (index, (is, expect)) in params.type_ids(pool).zip(&signature.params).enumerate() {
         match is {
             TypeRef::Concrete(is) => {
                 if is == *expect {
@@ -272,7 +272,12 @@ where
             }
             TypeRef::Null => {
                 let expect = res.types.get(*expect).unwrap();
-                if !expect.info.allows_null {
+
+                // For non-static functions the first argument is the callee object,
+                // which cannot be null.
+                let is_callee_object = !signature.is_static && index == 0;
+
+                if !expect.info.allows_null || is_callee_object {
                     panic!("type {:?} is null, but the type is non-nullable", expect);
                 }
             }

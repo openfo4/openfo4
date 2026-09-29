@@ -82,6 +82,7 @@ pub fn declare_function(
 
 pub fn translate_function_psc_signature(data: &CodegenData, func: &FunctionDef) -> PscSignature {
     let mut sig = PscSignature::default();
+    sig.is_static = func.is_static;
 
     if !func.is_static {
         let ty = type_to_id(data, &Type::Class(func.class));

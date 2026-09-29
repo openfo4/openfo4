@@ -739,4 +739,5 @@ fn get_parent_class_with_property(
 pub struct PscSignature {
     pub params: Vec<TypeId>,
     pub returns: Vec<TypeId>,
+    pub is_static: bool,
 }

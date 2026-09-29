@@ -46,6 +46,33 @@ fn call_with_incorrect_object_type() {
 
 #[test]
 #[should_panic]
+fn call_null_object() {
+    let mut engine = Engine::new(COMPILER_OPTIONS);
+
+    let module = assemble(
+        r#"
+        class A:
+        function F(a: A):
+        "#,
+    );
+
+    engine.register(&module);
+
+    let instance = block_on(engine.compile("A", &Options::default())).unwrap();
+
+    let func = instance.get_func("F").unwrap();
+    let func = func.typed::<ObjectAddr, ()>().unwrap();
+
+    let mut stack = engine.create_stack();
+    let mut ctx = Context::new(&engine, &mut stack, ());
+
+    func.call(&mut ctx, ObjectAddr::NULL)
+        .now_or_never()
+        .unwrap();
+}
+
+#[test]
+#[should_panic]
 fn return_wrong_type_from_native_func() {
     let mut engine = Engine::new(COMPILER_OPTIONS);
 
