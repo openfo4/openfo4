@@ -30,8 +30,6 @@ pub async fn load_navmesh(ctx: &LoadContext<'_>, data: &NavMesh) -> SpawnEntity 
     SpawnEntity {
         transform: NiTransform::from_translation(ctx.grid_offset().extend(0.0)),
         navmesh: Some(pathing::NavMesh { vertices, indices }),
-        // FIXME: Don't do this.
-        persistent: true,
         ..Default::default()
     }
 }

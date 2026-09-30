@@ -85,9 +85,6 @@ pub struct RootParent(pub Entity);
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Player;
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
-pub struct Persistent;
-
 /// Indicates the worldspace that the entity is contained in.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct WorldSpace {

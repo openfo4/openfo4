@@ -165,7 +165,6 @@ pub async fn load_land(ctx: &LoadContext<'_>, land_id: RecordId, land: &Land) ->
             layers: Arc::new(layers),
             entities: Vec::new(),
         }),
-        persistent: true,
         ..Default::default()
     }
 }

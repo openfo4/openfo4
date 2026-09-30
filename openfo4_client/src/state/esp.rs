@@ -7,7 +7,7 @@ use game_common::string::Lowercase;
 use hashbrown::{HashMap, HashSet};
 use openfo4_core::record::{ModuleId, RecordId};
 use openfo4_esp::vmad::{Object, Value};
-use openfo4_esp::{Error, EspFile, FormId, Record, RecordChildren, RecordData, RecordKind};
+use openfo4_esp::{EspFile, FormId, Record, RecordChildren, RecordData, RecordKind};
 use openfo4_io::fs::File;
 
 const HARDCODED_MODULE_ID: ModuleId = ModuleId(NonZeroU32::MIN);
@@ -356,3 +356,5 @@ fn apply_patches(record: &mut GlobalRecord) {
         }
     }
 }
+
+pub type Error = openfo4_esp::Error;

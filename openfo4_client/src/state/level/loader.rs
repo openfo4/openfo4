@@ -96,7 +96,6 @@ impl EntityLoader {
         let mut entity = SpawnEntity::load_base(&ctx, &record, flags).await.unwrap();
         entity.transform = NiTransform::from(info.transform);
         entity.worldspace = Some(info.worldspace);
-        entity.persistent = info.persistent;
         entity.disabled = info.disabled;
 
         let event = event_listener::Event::with_tag();

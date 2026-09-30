@@ -41,7 +41,7 @@ use parking_lot::Mutex;
 use crate::assets::animation::AnimationSet;
 use crate::assets::init_asset_loader;
 use crate::cell::CellId;
-use crate::components::{ActorMarker, Camera, NiTransform, Persistent, Player, Root, WorldSpace};
+use crate::components::{ActorMarker, Camera, NiTransform, Player, Root, WorldSpace};
 use crate::config::Config;
 use crate::loader::FileLoader;
 use crate::render::RenderObject;
@@ -564,7 +564,6 @@ impl GameState {
                         Streamer,
                         ActorMarker,
                         InputControllerMask::default(),
-                        Persistent,
                     ),
                 )
                 .unwrap();

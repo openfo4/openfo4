@@ -19,8 +19,7 @@ use openfo4_physics::components::{Collider, RigidBody};
 use crate::assets::nif::{Instantiate, LoadNifFlags, NIF_TO_METERS, NifKey, NifScene};
 use crate::components::{
     ActorMarker, BaseObject, Disabled, NiTransform, ObjectBounds, ObjectLockData, ObjectLockLevel,
-    ObjectProperties, Persistent, PlacedItem, PlacedReference, Root, RootParent, TriggerBox,
-    WorldSpace,
+    ObjectProperties, PlacedItem, PlacedReference, Root, RootParent, TriggerBox, WorldSpace,
 };
 use crate::render::RenderObject;
 use crate::state::esp::GlobalRecord;
@@ -54,7 +53,6 @@ pub struct SpawnEntity {
     pub light: Option<PointLight>,
     pub light_flicker: Option<LightFlicker>,
     pub actor: Option<Actor>,
-    pub persistent: bool,
     pub worldspace: Option<WorldSpace>,
     pub form: Option<RecordId>,
     pub door: Option<Door>,
@@ -91,7 +89,6 @@ impl SpawnEntity {
             light,
             light_flicker,
             actor,
-            persistent,
             worldspace,
             form,
             door,
@@ -184,10 +181,6 @@ impl SpawnEntity {
 
         if let Some(props) = object_props {
             world.insert_one(entity, props).unwrap();
-        }
-
-        if persistent {
-            world.insert_one(entity, Persistent).unwrap();
         }
 
         if disabled {

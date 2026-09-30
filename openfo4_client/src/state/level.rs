@@ -18,7 +18,7 @@ use futures::stream::FuturesUnordered;
 use game_common::components::Transform;
 use game_tasks::TaskPool;
 use game_tracing::trace_span;
-use glam::Vec2;
+use glam::{Vec2, Vec3};
 use hashbrown::HashMap;
 use openfo4_asset::AssetLoader;
 use openfo4_core::ecs::{Entity, World};
@@ -28,15 +28,16 @@ use openfo4_core::object_ref_set::ObjectReferenceSet;
 use openfo4_core::record::RecordId;
 use openfo4_core::{Frozen, WorldExt};
 use openfo4_esp::records::Cell;
-use openfo4_esp::{RecordChildren, RecordData, RecordHeaderFlags, RecordKind};
+use openfo4_esp::{RecordChildren, RecordData, RecordKind};
 use parking_lot::RwLock;
-use tracing::instrument;
 
 use crate::cell::CellId;
-use crate::components::{NiTransform, Persistent, Root, WorldSpace};
+use crate::components::{NiTransform, Root, WorldSpace};
 use crate::config;
 use crate::loader::FileLoader;
 use crate::shared::SharedState;
+use crate::state::esp;
+use crate::state::level::data_ext::RecordDataExt;
 use crate::state::level::loader::{EntityLoader, EntityRefInner};
 use crate::state::level::partial::{LodLevel, PartialEntityFlags};
 use crate::state::level::record::SpawnEntity;
@@ -76,56 +77,24 @@ impl Level {
 
         let (tx, rx) = async_channel::unbounded::<Request>();
         let events = Arc::new(SegQueue::new());
-        let state = Arc::new(LoaderState::default());
 
-        // pool.spawn({
-        //     let asset_loader = asset_loader.clone();
-        //     let loader = loader.clone();
-        //     let pool = pool.clone();
-        //     let events = events.clone();
-        //     let shared = shared.clone();
-        //     let file_loader = file_loader.clone();
-        //     let state = state.clone();
-        //     let script_loader = executor.loader().clone();
-
-        //     async move {
-        //         load_persistent(
-        //             &asset_loader,
-        //             &loader,
-        //             &events,
-        //             &pool,
-        //             &file_loader,
-        //             &shared,
-        //             &state,
-        //             &script_loader,
-        //             CellActivityMode::Active,
-        //         )
-        //         .await;
-        //     }
-        // });
+        let state = Arc::new(LoaderState {
+            persistent: futures_lite::future::block_on(PersistentRecordStore::load(&loader))
+                .unwrap(),
+            worldspaces: RwLock::default(),
+            interiors: RwLock::default(),
+            esp_loader: loader.clone(),
+            pool: pool.clone(),
+            script_loader: script_loader.clone(),
+            loader: asset_loader.clone(),
+            events: events.clone(),
+            file_loader: file_loader.clone(),
+            shared: shared.clone(),
+        });
 
         pool.spawn({
-            let events = events.clone();
-            let pool = pool.clone();
-            let loader = loader.clone();
-            let file_loader = file_loader.clone();
-            let shared = shared.clone();
-            let asset_loader = asset_loader.clone();
-            let script_loader = script_loader.clone();
-
             async move {
-                load_cells_task(
-                    rx,
-                    &loader,
-                    &asset_loader,
-                    &file_loader,
-                    &events,
-                    &pool,
-                    &shared,
-                    &state,
-                    &script_loader,
-                )
-                .await;
+                load_cells_task(rx, state).await;
             }
         })
         .deatch();
@@ -262,8 +231,7 @@ impl Level {
                     if !self.cells_loaded.contains_key(&CellKey {
                         worldspace: worldspace.record,
                         cell,
-                    }) && !entity.persistent
-                        && !make_ref
+                    }) && !make_ref
                     {
                         continue;
                     }
@@ -375,14 +343,10 @@ impl Level {
 
         let mut loader_entities = self.loader.entities.write();
 
-        for (entity, transform, worldspace, _, persistent) in
-            world.query_mut::<(Entity, &Transform, &WorldSpace, &Root, Option<&Persistent>)>()
+        for (entity, transform, worldspace, _) in
+            world.query_mut::<(Entity, &Transform, &WorldSpace, &Root)>()
         {
             self.alive_entities.insert(entity);
-
-            if persistent.is_some() {
-                continue;
-            }
 
             let cell = if worldspace.is_interior {
                 INTERIOR_CELL
@@ -478,6 +442,7 @@ impl Level {
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 struct CellKey {
+    /// The ID of the `WorldSpace` or standalone `Cell` record.
     worldspace: RecordId,
     cell: CellId,
 }
@@ -496,10 +461,18 @@ struct Request {
     mode: CellActivityMode,
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 struct LoaderState {
+    esp_loader: Arc<EspLoader>,
+    loader: AssetLoader,
+    script_loader: Arc<ScriptLoader>,
+    pool: Arc<TaskPool>,
+    events: Arc<SegQueue<Event>>,
+    shared: Arc<SharedState>,
+    file_loader: Arc<FileLoader>,
     worldspaces: RwLock<HashMap<RecordId, WorldspaceState>>,
     interiors: RwLock<HashSet<RecordId>>,
+    persistent: PersistentRecordStore,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -511,8 +484,6 @@ struct WorldspaceState {
 struct CellState {
     /// ID of the cell record.
     record: RecordId,
-    /// List of persistent records in this cell.
-    persistent: Vec<RecordId>,
 }
 
 async fn resolve_cell_to_record(
@@ -562,158 +533,99 @@ async fn resolve_cell_to_record(
             continue;
         }
 
-        worldspace.cells.insert(
-            id,
-            CellState {
-                record: record.id,
-                persistent: Vec::new(),
-            },
-        );
+        worldspace.cells.insert(id, CellState { record: record.id });
     }
 
     searched_id.unwrap()
 }
 
-async fn load_cells_task(
-    rx: Receiver<Request>,
-    esp_loader: &Arc<EspLoader>,
-    loader: &AssetLoader,
-    file_loader: &Arc<FileLoader>,
-    events: &Arc<SegQueue<Event>>,
-    pool: &Arc<TaskPool>,
-    shared: &Arc<SharedState>,
-    state: &Arc<LoaderState>,
-    script_loader: &Arc<ScriptLoader>,
-) {
+async fn load_cells_task(rx: Receiver<Request>, state: Arc<LoaderState>) {
     while let Ok(req) = rx.recv().await {
         let is_interior = state.interiors.read().contains(&req.worldspace);
 
         let cell = if !is_interior {
-            resolve_cell_to_record(esp_loader, state, req).await
+            resolve_cell_to_record(&state.esp_loader, &state, req).await
         } else {
             req.worldspace
         };
 
-        let loader = loader.clone();
-        let esp_loader = esp_loader.clone();
-        let events = events.clone();
-        let pool2 = pool.clone();
-        let file_loader = file_loader.clone();
-        let script_loader = script_loader.clone();
-        let shared = shared.clone();
+        let pool = state.pool.clone();
         let state = state.clone();
         pool.spawn(async move {
-            load_cell(
-                &loader,
-                &esp_loader,
-                &events,
-                &pool2,
-                &file_loader,
-                &shared,
-                cell,
-                req.worldspace,
-                false,
-                &state,
-                is_interior,
-                &script_loader,
-                req.mode,
-            )
-            .await;
+            load_cell(&state, cell, req.worldspace, is_interior, req.mode).await;
+
+            for id in state
+                .persistent
+                .persistent
+                .get(&CellKey {
+                    worldspace: req.worldspace,
+                    cell: req.cell,
+                })
+                .into_iter()
+                .flatten()
+            {
+                let ctx = LoadContext::new(req.cell, &state);
+
+                let record = state.esp_loader.lookup(None, *id).await.unwrap();
+
+                let flags = match req.mode {
+                    CellActivityMode::Active => PartialEntityFlags {
+                        graphics: true,
+                        physics: true,
+                        actor: true,
+                        scene: true,
+                        script: true,
+                        require_distant_lod: false,
+                        lod: LodLevel::Normal,
+                    },
+                    CellActivityMode::VisibleDistant => PartialEntityFlags {
+                        graphics: true,
+                        scene: true,
+                        physics: false,
+                        actor: false,
+                        script: false,
+                        require_distant_lod: true,
+                        lod: LodLevel::Distant0,
+                    },
+                };
+
+                if let Some(mut entity) = SpawnEntity::load(&ctx, &record, flags).await {
+                    entity.worldspace = Some(WorldSpace {
+                        record: req.worldspace,
+                        is_interior,
+                    });
+                    entity.form = Some(record.id);
+
+                    state.events.push(Event::SpawnEntity {
+                        record: Some(record.id),
+                        entity,
+                        make_ref: false,
+                        signal: None,
+                    });
+                }
+            }
+
+            state.events.push(Event::CellLoadDone {
+                worldspace: req.worldspace,
+                cell: req.cell,
+                mode: req.mode,
+            });
         });
     }
 }
 
-#[instrument(skip_all)]
-async fn load_persistent(
-    asset_loader: &AssetLoader,
-    loader: &Arc<EspLoader>,
-    events: &Arc<SegQueue<Event>>,
-    pool: &Arc<TaskPool>,
-    file_loader: &Arc<FileLoader>,
-    shared: &Arc<SharedState>,
-    state: &Arc<LoaderState>,
-    script_loader: &Arc<ScriptLoader>,
-    mode: CellActivityMode,
-) {
-    let mut worldspace_cells = HashSet::new();
-
-    for worldspace in loader
-        .lookup_all(Some(RecordKind::Worldspace))
-        .await
-        .unwrap()
-    {
-        for cell in loader
-            .children(RecordChildren::Cells, worldspace.id)
-            .await
-            .unwrap()
-        {
-            if !cell.local.flags.contains(RecordHeaderFlags::PERSISTENT) {
-                continue;
-            }
-
-            worldspace_cells.insert(cell.id);
-
-            load_cell(
-                asset_loader,
-                loader,
-                events,
-                pool,
-                file_loader,
-                shared,
-                cell.id,
-                worldspace.id,
-                true,
-                state,
-                false,
-                script_loader,
-                mode,
-            )
-            .await;
-        }
-    }
-
-    for cell in loader.lookup_all(Some(RecordKind::Cell)).await.unwrap() {
-        if worldspace_cells.contains(&cell.id) {
-            continue;
-        }
-
-        state.interiors.write().insert(cell.id);
-
-        load_cell(
-            asset_loader,
-            loader,
-            events,
-            pool,
-            file_loader,
-            shared,
-            cell.id,
-            cell.id,
-            true,
-            state,
-            true,
-            script_loader,
-            mode,
-        )
-        .await;
-    }
-}
-
 async fn load_cell(
-    asset_loader: &AssetLoader,
-    loader: &Arc<EspLoader>,
-    events: &Arc<SegQueue<Event>>,
-    pool: &TaskPool,
-    file_loader: &Arc<FileLoader>,
-    shared: &Arc<SharedState>,
+    state: &Arc<LoaderState>,
     cell_form: RecordId,
     worldspace: RecordId,
-    persistent_only: bool,
-    state: &Arc<LoaderState>,
     is_interior: bool,
-    script_loader: &Arc<ScriptLoader>,
     mode: CellActivityMode,
 ) {
-    let cell = match loader.lookup(Some(RecordKind::Cell), cell_form).await {
+    let cell = match state
+        .esp_loader
+        .lookup(Some(RecordKind::Cell), cell_form)
+        .await
+    {
         Ok(record) => match record.local.data {
             RecordData::Cell(cell) => cell,
             _ => {
@@ -732,47 +644,13 @@ async fn load_cell(
         cell_id = CellId::new(grid.x, grid.y);
     }
 
-    let records = if persistent_only {
-        let persistent = loader
-            .children(RecordChildren::PersistentEntities, cell_form)
-            .await
-            .unwrap();
-
-        persistent
-    } else {
-        let persistent_forms = {
-            let worldspaces = state.worldspaces.read();
-            worldspaces
-                .get(&worldspace)
-                .and_then(|wp| wp.cells.get(&cell_id))
-                .map(|cell| cell.persistent.to_vec())
-                .unwrap_or_default()
-        };
-
-        let mut persistent = Vec::new();
-        for form in persistent_forms {
-            persistent.push(loader.lookup(None, form).await.unwrap());
-        }
-
-        let temporary = loader
-            .children(RecordChildren::TemporaryEntities, cell_form)
-            .await
-            .unwrap();
-
-        persistent.extend(temporary);
-        persistent
-    };
+    let records = state
+        .esp_loader
+        .children(RecordChildren::TemporaryEntities, cell_form)
+        .await
+        .unwrap();
 
     let flags = match mode {
-        CellActivityMode::Active if persistent_only => PartialEntityFlags {
-            graphics: false,
-            physics: false,
-            actor: false,
-            scene: false,
-            script: true,
-            require_distant_lod: false,
-            lod: LodLevel::Normal,
-        },
         CellActivityMode::Active => PartialEntityFlags {
             graphics: true,
             physics: true,
@@ -795,14 +673,6 @@ async fn load_cell(
 
     let mut tasks = FuturesUnordered::new();
     for record in records {
-        let loader = loader.clone();
-        let file_loader = file_loader.clone();
-        let shared = shared.clone();
-        let events = events.clone();
-        let asset_loader = asset_loader.clone();
-        let state = state.clone();
-        let script_loader = script_loader.clone();
-
         // Skip loading these if we're loading distant objects,
         // they are either too inconsenquential or too expensive
         // to have loaded at long distance.
@@ -818,46 +688,19 @@ async fn load_cell(
             continue;
         }
 
+        let pool = state.pool.clone();
+        let state = state.clone();
         let task = pool.spawn(async move {
-            let ctx = LoadContext {
-                cell: cell_id,
-                loader: &asset_loader,
-                esp_loader: &loader,
-                file_loader: &file_loader,
-                script_loader: &script_loader,
-                shared: &shared,
-            };
+            let ctx = LoadContext::new(cell_id, &state);
 
             if let Some(mut entity) = SpawnEntity::load(&ctx, &record, flags).await {
-                entity.persistent |= record.local.flags.contains(RecordHeaderFlags::PERSISTENT);
                 entity.worldspace = Some(WorldSpace {
                     record: worldspace,
                     is_interior,
                 });
                 entity.form = Some(record.id);
 
-                if persistent_only && entity.persistent {
-                    let cell = if is_interior {
-                        CellId::new(0, 0)
-                    } else {
-                        CellId::from(entity.transform)
-                    };
-
-                    let mut worldspaces = state.worldspaces.write();
-                    worldspaces
-                        .entry(worldspace)
-                        .or_default()
-                        .cells
-                        .entry(cell)
-                        .or_insert_with(|| CellState {
-                            record: cell_form,
-                            persistent: Vec::new(),
-                        })
-                        .persistent
-                        .push(record.id);
-                }
-
-                events.push(Event::SpawnEntity {
+                state.events.push(Event::SpawnEntity {
                     record: Some(record.id),
                     entity,
                     make_ref: false,
@@ -870,11 +713,6 @@ async fn load_cell(
     }
 
     while let Some(()) = tasks.next().await {}
-    events.push(Event::CellLoadDone {
-        worldspace,
-        cell: cell_id,
-        mode,
-    });
 }
 
 #[derive(Copy, Clone, Debug)]
@@ -887,7 +725,18 @@ struct LoadContext<'a> {
     shared: &'a SharedState,
 }
 
-impl LoadContext<'_> {
+impl<'a> LoadContext<'a> {
+    fn new(cell: CellId, state: &'a LoaderState) -> Self {
+        Self {
+            cell,
+            loader: &state.loader,
+            esp_loader: &state.esp_loader,
+            file_loader: &state.file_loader,
+            script_loader: &state.script_loader,
+            shared: &state.shared,
+        }
+    }
+
     fn grid_offset(&self) -> Vec2 {
         self.cell.min()
     }
@@ -912,4 +761,58 @@ enum Event {
     CreateRef(Entity),
     DropLastRefByRecord(RecordId),
     DropLastRefByEntity(Entity),
+}
+
+#[derive(Clone, Debug, Default)]
+struct PersistentRecordStore {
+    persistent: HashMap<CellKey, Vec<RecordId>>,
+}
+
+impl PersistentRecordStore {
+    pub async fn load(loader: &EspLoader) -> Result<Self, esp::Error> {
+        let mut cells = Vec::new();
+
+        for cell in loader.lookup_all(Some(RecordKind::Cell)).await? {
+            cells.push((cell.id, true, cell.id));
+        }
+
+        for worldspace in loader.lookup_all(Some(RecordKind::Worldspace)).await? {
+            for cell in loader
+                .children(RecordChildren::Cells, worldspace.id)
+                .await?
+            {
+                cells.push((worldspace.id, false, cell.id));
+            }
+        }
+
+        let mut persistent: HashMap<CellKey, Vec<RecordId>> = HashMap::new();
+        for (worldspace, is_interior, cell) in cells {
+            for record in loader
+                .children(RecordChildren::PersistentEntities, cell)
+                .await?
+            {
+                let Some(position) = record.local.data.position() else {
+                    continue;
+                };
+                let translation = Vec3::new(
+                    position.position_x,
+                    position.position_y,
+                    position.position_z,
+                );
+
+                let cell = if is_interior {
+                    INTERIOR_CELL
+                } else {
+                    CellId::from(NiTransform::from_translation(translation))
+                };
+
+                persistent
+                    .entry(CellKey { worldspace, cell })
+                    .or_default()
+                    .push(record.id);
+            }
+        }
+
+        Ok(Self { persistent })
+    }
 }
