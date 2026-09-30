@@ -9,7 +9,6 @@ use futures_lite::FutureExt;
 use game_common::collections::bimap::BiMap;
 use game_common::components::Transform;
 use hashbrown::HashMap;
-use openfo4_asset::AssetLoader;
 use openfo4_core::ecs::Entity;
 use openfo4_core::record::RecordId;
 use openfo4_esp::FormId;
@@ -17,24 +16,15 @@ use parking_lot::RwLock;
 
 use crate::cell::CellId;
 use crate::components::{NiTransform, WorldSpace};
-use crate::loader::FileLoader;
-use crate::shared::SharedState;
-use crate::state::esp::EspLoader;
 use crate::state::hardcoded::HARDCODED_MODULE_ID;
 use crate::state::level::partial::{LodLevel, PartialEntityFlags};
 use crate::state::level::record::SpawnEntity;
-use crate::state::level::{Event, LoadContext};
-use crate::systems::scripting::loader::ScriptLoader;
+use crate::state::level::{Event, LoadContext, LoaderState};
 
 #[derive(Debug)]
 pub struct EntityLoader {
-    esp_loader: Arc<EspLoader>,
-    file_loader: Arc<FileLoader>,
-    shared: Arc<SharedState>,
-    asset_loader: AssetLoader,
-    script_loader: Arc<ScriptLoader>,
+    state: Arc<LoaderState>,
     pub(super) entities: RwLock<EntitySet>,
-    events: Arc<SegQueue<Event>>,
     pub(super) tick: event_listener::Event,
 }
 
@@ -47,21 +37,9 @@ pub(super) struct EntitySet {
 }
 
 impl EntityLoader {
-    pub(super) fn new(
-        esp_loader: Arc<EspLoader>,
-        file_loader: Arc<FileLoader>,
-        shared: Arc<SharedState>,
-        asset_loader: AssetLoader,
-        script_loader: Arc<ScriptLoader>,
-        events: Arc<SegQueue<Event>>,
-    ) -> Self {
+    pub(super) fn new(state: Arc<LoaderState>) -> Self {
         Self {
-            esp_loader,
-            file_loader,
-            shared,
-            asset_loader,
-            script_loader,
-            events,
+            state,
             entities: RwLock::new(EntitySet {
                 entities: BiMap::new(),
                 ref_counts: HashMap::new(),
@@ -71,17 +49,11 @@ impl EntityLoader {
     }
 
     pub async fn spawn(&self, base: RecordId, info: SpawnEntityInfo) -> Result<EntityRef, ()> {
-        let record = self.esp_loader.lookup(None, base).await.unwrap();
+        let record = self.state.esp_loader.lookup(None, base).await.unwrap();
 
-        let ctx = LoadContext {
-            // FIXME: What do we use here?
-            cell: CellId::new(0, 0),
-            esp_loader: &self.esp_loader,
-            file_loader: &self.file_loader,
-            script_loader: &self.script_loader,
-            loader: &self.asset_loader,
-            shared: &self.shared,
-        };
+        // FIXME: What do we use here?
+        let cell = CellId::new(0, 0);
+        let ctx = LoadContext::new(cell, &self.state);
 
         let flags = PartialEntityFlags {
             graphics: false,
@@ -101,7 +73,7 @@ impl EntityLoader {
         let event = event_listener::Event::with_tag();
         let listen = event.listen();
 
-        self.events.push(Event::SpawnEntity {
+        self.state.events.push(Event::SpawnEntity {
             record: None,
             entity,
             make_ref: true,
@@ -115,7 +87,7 @@ impl EntityLoader {
 
         Ok(EntityRef {
             ref_count,
-            queue: self.events.clone(),
+            queue: self.state.events.clone(),
             entity,
         })
     }
@@ -147,7 +119,7 @@ impl EntityLoader {
                     if ref_count.ref_count.fetch_add(1, Ordering::Relaxed) != 0 {
                         return Ok(EntityRef {
                             ref_count: ref_count.clone(),
-                            queue: self.events.clone(),
+                            queue: self.state.events.clone(),
                             entity,
                         });
                     }
@@ -159,7 +131,7 @@ impl EntityLoader {
                     while !ref_count.deleted.load(Ordering::Acquire) {}
                 }
 
-                self.events.push(Event::CreateRef(entity));
+                self.state.events.push(Event::CreateRef(entity));
 
                 drop(entities);
             }
@@ -192,7 +164,7 @@ impl EntityLoader {
             }
 
             let mut fut = WaitForRef {
-                queue: &self.events,
+                queue: &self.state.events,
                 event: self.tick.listen(),
                 entity,
                 drop_ref: true,
@@ -216,7 +188,7 @@ impl EntityLoader {
 
             return Ok(EntityRef {
                 ref_count: ref_count.clone(),
-                queue: self.events.clone(),
+                queue: self.state.events.clone(),
                 entity,
             });
         }
@@ -224,17 +196,11 @@ impl EntityLoader {
 
     #[tracing::instrument(name = "EntityLoader::load_single_entity", skip_all)]
     async fn load_single_entity(&self, id: RecordId) -> Result<EntityRef, ()> {
-        let record = self.esp_loader.lookup(None, id).await.unwrap();
+        let record = self.state.esp_loader.lookup(None, id).await.unwrap();
 
-        let ctx = LoadContext {
-            // FIXME: What do we use here?
-            cell: CellId::new(0, 0),
-            esp_loader: &self.esp_loader,
-            file_loader: &self.file_loader,
-            script_loader: &self.script_loader,
-            loader: &self.asset_loader,
-            shared: &self.shared,
-        };
+        // FIXME: What do we use here?
+        let cell = CellId::new(0, 0);
+        let ctx = LoadContext::new(cell, &self.state);
 
         let flags = PartialEntityFlags {
             graphics: false,
@@ -247,19 +213,28 @@ impl EntityLoader {
         };
 
         let mut entity = SpawnEntity::load(&ctx, &record, flags).await.unwrap();
-        // FIXME: We need to either:
-        // 1. Make the caller provide this (viable, since Locations include the WRLD record)
-        // 2. or compute this ourselves here, but the record doesn't contain it, we need
-        // to scan for the parent. Need to check how expensive that is.
-        entity.worldspace = Some(WorldSpace {
-            record: RecordId {
-                module: HARDCODED_MODULE_ID,
-                form: FormId(0x3c),
-            },
-            is_interior: false,
-        });
+        entity.worldspace = match self.state.persistent.persistent_worldspace.get(&id) {
+            Some(worldspace) => {
+                let is_interior = self.state.persistent.interiors.contains(worldspace);
+                Some(WorldSpace {
+                    record: *worldspace,
+                    is_interior,
+                })
+            }
+            // FIXME: We need to either:
+            // 1. Make the caller provide this (viable, since Locations include the WRLD record)
+            // 2. or compute this ourselves here, but the record doesn't contain it, we need
+            // to scan for the parent. Need to check how expensive that is.
+            None => Some(WorldSpace {
+                record: RecordId {
+                    module: HARDCODED_MODULE_ID,
+                    form: FormId(0x3c),
+                },
+                is_interior: false,
+            }),
+        };
 
-        self.events.push(Event::SpawnEntity {
+        self.state.events.push(Event::SpawnEntity {
             entity,
             make_ref: true,
             record: Some(record.id),
@@ -295,7 +270,7 @@ impl EntityLoader {
         }
 
         let mut fut = WaitForRef {
-            queue: &self.events,
+            queue: &self.state.events,
             event: self.tick.listen(),
             record: record.id,
             drop_ref: true,
@@ -309,7 +284,7 @@ impl EntityLoader {
 
         Ok(EntityRef {
             ref_count: ref_count.clone(),
-            queue: self.events.clone(),
+            queue: self.state.events.clone(),
             entity,
         })
     }

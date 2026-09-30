@@ -61,7 +61,7 @@ use crate::systems::camera::CameraMode;
 use crate::systems::controller::{
     InputControllerMask, apply_player_movements, update_facing_direction,
 };
-use crate::systems::door::{handle_automatic_doors, handle_door_activations};
+use crate::systems::door::DoorSystem;
 use crate::systems::global::{Difficulty, GameRules, GlobalProperties, PlayTime};
 use crate::systems::hierarchy::TransformHierarchyCache;
 use crate::systems::inventory::InventorySystem;
@@ -105,6 +105,7 @@ pub struct GameState {
     pub ai: AiSystem,
     real_time_elapsed: Duration,
     transform_hierarchy_cache: TransformHierarchyCache,
+    door: DoorSystem,
 }
 
 impl GameState {
@@ -162,6 +163,7 @@ impl GameState {
         world.spawn_one(AccelerationStructure::default());
 
         let quests = QuestManager::new(pool.clone(), &loader, &mut executor, &level.loader());
+        let door = DoorSystem::new(pool.clone(), level.loader().clone());
 
         Self {
             weather: WeatherSystem::new(loader.clone(), pool.clone(), &asset_loader, &shared),
@@ -186,6 +188,7 @@ impl GameState {
             ai: AiSystem::default(),
             real_time_elapsed: Duration::ZERO,
             transform_hierarchy_cache: TransformHierarchyCache::default(),
+            door,
         }
     }
 
@@ -275,8 +278,8 @@ impl GameState {
 
         combat::handle_zero_health_events(&mut self.world, &mut self.event_bus);
 
-        handle_door_activations(&mut self.world, &mut self.event_bus, &self.object_ref_set);
-        handle_automatic_doors(&mut self.world, &self.object_ref_set);
+        self.door.update(&mut self.world, &mut self.event_bus);
+
         update_player_looking_at_target(&mut self.world, &self.physics);
 
         self.ai.update(&mut self.world, &mut self.event_bus);

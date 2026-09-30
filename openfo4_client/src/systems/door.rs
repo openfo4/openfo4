@@ -1,4 +1,7 @@
+use std::sync::Arc;
+
 use game_common::components::Transform;
+use game_tasks::{TaskPool, TaskQueue};
 use game_tracing::trace_span;
 use openfo4_core::WorldExt;
 use openfo4_core::ecs::{Entity, World};
@@ -8,6 +11,7 @@ use openfo4_core::record::RecordId;
 
 use crate::components::{ActorMarker, NiTransform, WorldSpace};
 use crate::events::animation::StartNifAnimationSequence;
+use crate::state::level::loader::{EntityLoader, EntityRef};
 use crate::systems::ActivationEvent;
 
 /// The radius at which the autoload door is activated.
@@ -38,114 +42,130 @@ pub struct PortalDoor {
     pub target_position: NiTransform,
 }
 
-pub fn handle_door_activations(
-    world: &mut World,
-    events: &mut EventBus,
-    object_ref_set: &ObjectReferenceSet,
-) {
-    let _span = trace_span!("handle_door_activations").entered();
-
-    let mut anim_events = Vec::new();
-
-    for event in events.read::<ActivationEvent>() {
-        if !world.contains(event.actor) {
-            continue;
-        }
-
-        let Ok(door) = world.get::<&mut Door>(event.target).map(|v| *v) else {
-            continue;
-        };
-
-        match door {
-            Door::Normal(DoorState::Open) => {
-                anim_events.push(StartNifAnimationSequence {
-                    entity: event.target,
-                    name: DOOR_CLOSE_ANIM.into(),
-                });
-
-                // FIXME: This should happen when the animation is done.
-                world
-                    .insert_one(event.target, Door::Normal(DoorState::Closed))
-                    .unwrap();
-            }
-            Door::Normal(DoorState::Closed) => {
-                anim_events.push(StartNifAnimationSequence {
-                    entity: event.target,
-                    name: DOOR_OPEN_ANIM.into(),
-                });
-
-                // FIXME: This should happen when the animation is done.
-                world
-                    .insert_one(event.target, Door::Normal(DoorState::Open))
-                    .unwrap();
-            }
-            Door::Portal(door) => {
-                let Some(target) = object_ref_set.get_by_form(door.target) else {
-                    tracing::warn!("unconnected portal door: {:?}", door.target);
-                    continue;
-                };
-
-                let transform = Transform::from(door.target_position);
-                let worldspace = *world.get::<&WorldSpace>(target).unwrap();
-
-                world.insert(event.actor, (transform, worldspace)).unwrap();
-
-                for e in world.hierarchy_recursive(event.actor) {
-                    world.insert_one(e, worldspace).unwrap();
-                }
-            }
-            Door::AutoPortal(_) => {}
-        }
-    }
-
-    events.extend(anim_events)
+#[derive(Debug)]
+pub struct DoorSystem {
+    transitions: TaskQueue<Option<(Entity, EntityRef, NiTransform)>>,
+    pool: Arc<TaskPool>,
+    loader: Arc<EntityLoader>,
 }
 
-pub fn handle_automatic_doors(world: &mut World, object_ref_set: &ObjectReferenceSet) {
-    let _span = trace_span!("handle_automatic_doors").entered();
-
-    let mut transitions = Vec::new();
-
-    for (_, door_transform, door, door_worldspace) in world
-        .query::<(Entity, &Transform, &Door, &WorldSpace)>()
-        .iter()
-    {
-        let Door::AutoPortal(door) = *door else {
-            continue;
-        };
-
-        for (actor, actor_transform, _, actor_worldspace) in world
-            .query::<(Entity, &Transform, &ActorMarker, &WorldSpace)>()
-            .iter()
-        {
-            if *door_worldspace != *actor_worldspace {
-                continue;
-            }
-
-            let distance = door_transform
-                .translation
-                .distance(actor_transform.translation);
-            if distance >= AUTOLOAD_DOOR_RADIUS {
-                continue;
-            }
-
-            transitions.push((door, actor));
+impl DoorSystem {
+    pub fn new(pool: Arc<TaskPool>, loader: Arc<EntityLoader>) -> Self {
+        Self {
+            pool,
+            loader,
+            transitions: TaskQueue::new(),
         }
     }
 
-    for (door, actor) in transitions {
-        let Some(target) = object_ref_set.get_by_form(door.target) else {
-            tracing::warn!("unconnected portal door: {:?}", door.target);
-            continue;
-        };
+    pub fn update(&mut self, world: &mut World, events: &mut EventBus) {
+        self.handle_door_activations(world, events);
+        self.handle_automatic_doors(world);
 
-        let transform = Transform::from(door.target_position);
-        let worldspace = *world.get::<&WorldSpace>(target).unwrap();
+        while let Some(transition) = self.transitions.pop() {
+            let Some((entity, target, target_pos)) = transition else {
+                continue;
+            };
 
-        world.insert(actor, (transform, worldspace)).unwrap();
+            tracing::debug!("moving entity to target portal door {:?}", target.entity());
 
-        for e in world.hierarchy_recursive(actor) {
-            world.insert_one(e, worldspace).unwrap();
+            let transform = Transform::from(target_pos);
+            let worldspace = *world.get::<&WorldSpace>(target.entity()).unwrap();
+
+            world.insert(entity, (transform, worldspace)).unwrap();
+
+            for e in world.hierarchy_recursive(entity) {
+                world.insert_one(e, worldspace).unwrap();
+            }
         }
+    }
+
+    fn handle_door_activations(&mut self, world: &mut World, events: &mut EventBus) {
+        let _span = trace_span!("DoorSystem::handle_door_activations").entered();
+
+        let mut anim_events = Vec::new();
+
+        for event in events.read::<ActivationEvent>() {
+            if !world.contains(event.actor) {
+                continue;
+            }
+
+            let Ok(door) = world.get::<&mut Door>(event.target).map(|v| *v) else {
+                continue;
+            };
+
+            match door {
+                Door::Normal(DoorState::Open) => {
+                    anim_events.push(StartNifAnimationSequence {
+                        entity: event.target,
+                        name: DOOR_CLOSE_ANIM.into(),
+                    });
+
+                    // FIXME: This should happen when the animation is done.
+                    world
+                        .insert_one(event.target, Door::Normal(DoorState::Closed))
+                        .unwrap();
+                }
+                Door::Normal(DoorState::Closed) => {
+                    anim_events.push(StartNifAnimationSequence {
+                        entity: event.target,
+                        name: DOOR_OPEN_ANIM.into(),
+                    });
+
+                    // FIXME: This should happen when the animation is done.
+                    world
+                        .insert_one(event.target, Door::Normal(DoorState::Open))
+                        .unwrap();
+                }
+                Door::Portal(door) => {
+                    self.queue_transition(event.actor, door.target, door.target_position);
+                }
+                Door::AutoPortal(_) => {}
+            }
+        }
+    }
+
+    fn handle_automatic_doors(&mut self, world: &mut World) {
+        let _span = trace_span!("DoorSystem::handle_automatic_doors").entered();
+
+        for (_, door_transform, door, door_worldspace) in world
+            .query::<(Entity, &Transform, &Door, &WorldSpace)>()
+            .iter()
+        {
+            let Door::AutoPortal(door) = *door else {
+                continue;
+            };
+
+            for (actor, actor_transform, _, actor_worldspace) in world
+                .query::<(Entity, &Transform, &ActorMarker, &WorldSpace)>()
+                .iter()
+            {
+                if *door_worldspace != *actor_worldspace {
+                    continue;
+                }
+
+                let distance = door_transform
+                    .translation
+                    .distance(actor_transform.translation);
+                if distance >= AUTOLOAD_DOOR_RADIUS {
+                    continue;
+                }
+
+                self.queue_transition(actor, door.target, door.target_position);
+            }
+        }
+    }
+
+    fn queue_transition(&mut self, actor: Entity, target: RecordId, target_pos: NiTransform) {
+        let loader = self.loader.clone();
+        self.transitions.push(self.pool.spawn(async move {
+            match loader.load(target).await {
+                Ok(target) => Some((actor, target, target_pos)),
+                Err(()) => {
+                    tracing::error!("failed to load portal door target for target door {target}");
+                    None
+                }
+            }
+        }));
     }
 }

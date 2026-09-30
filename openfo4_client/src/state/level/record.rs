@@ -397,7 +397,7 @@ impl SpawnEntity {
                         Door::Portal(door) => Door::AutoPortal(door),
                         door => door,
                     });
-                } else {
+                } else if door.is_none() {
                     door = Some(Door::Normal(DoorState::Closed));
                 }
             }

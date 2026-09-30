@@ -82,7 +82,6 @@ impl Level {
             persistent: futures_lite::future::block_on(PersistentRecordStore::load(&loader))
                 .unwrap(),
             worldspaces: RwLock::default(),
-            interiors: RwLock::default(),
             esp_loader: loader.clone(),
             pool: pool.clone(),
             script_loader: script_loader.clone(),
@@ -93,6 +92,7 @@ impl Level {
         });
 
         pool.spawn({
+            let state = state.clone();
             async move {
                 load_cells_task(rx, state).await;
             }
@@ -105,14 +105,7 @@ impl Level {
             cells_loaded: HashMap::new(),
             terrain_manager,
             alive_entities: HashSet::new(),
-            loader: Arc::new(EntityLoader::new(
-                loader,
-                file_loader,
-                shared,
-                asset_loader,
-                script_loader.clone(),
-                events,
-            )),
+            loader: Arc::new(EntityLoader::new(state)),
             config,
         }
     }
@@ -471,7 +464,6 @@ struct LoaderState {
     shared: Arc<SharedState>,
     file_loader: Arc<FileLoader>,
     worldspaces: RwLock<HashMap<RecordId, WorldspaceState>>,
-    interiors: RwLock<HashSet<RecordId>>,
     persistent: PersistentRecordStore,
 }
 
@@ -541,7 +533,7 @@ async fn resolve_cell_to_record(
 
 async fn load_cells_task(rx: Receiver<Request>, state: Arc<LoaderState>) {
     while let Ok(req) = rx.recv().await {
-        let is_interior = state.interiors.read().contains(&req.worldspace);
+        let is_interior = state.persistent.interiors.contains(&req.worldspace);
 
         let cell = if !is_interior {
             resolve_cell_to_record(&state.esp_loader, &state, req).await
@@ -766,14 +758,20 @@ enum Event {
 #[derive(Clone, Debug, Default)]
 struct PersistentRecordStore {
     persistent: HashMap<CellKey, Vec<RecordId>>,
+    /// Placed Object => WorldSpace / Cell
+    persistent_worldspace: HashMap<RecordId, RecordId>,
+    /// Standalone Cell records without a parent Worldspace record.
+    interiors: HashSet<RecordId>,
 }
 
 impl PersistentRecordStore {
     pub async fn load(loader: &EspLoader) -> Result<Self, esp::Error> {
         let mut cells = Vec::new();
 
+        let mut interiors = HashSet::new();
         for cell in loader.lookup_all(Some(RecordKind::Cell)).await? {
             cells.push((cell.id, true, cell.id));
+            interiors.insert(cell.id);
         }
 
         for worldspace in loader.lookup_all(Some(RecordKind::Worldspace)).await? {
@@ -786,6 +784,7 @@ impl PersistentRecordStore {
         }
 
         let mut persistent: HashMap<CellKey, Vec<RecordId>> = HashMap::new();
+        let mut persistent_worldspace = HashMap::new();
         for (worldspace, is_interior, cell) in cells {
             for record in loader
                 .children(RecordChildren::PersistentEntities, cell)
@@ -810,9 +809,14 @@ impl PersistentRecordStore {
                     .entry(CellKey { worldspace, cell })
                     .or_default()
                     .push(record.id);
+                persistent_worldspace.insert(record.id, worldspace);
             }
         }
 
-        Ok(Self { persistent })
+        Ok(Self {
+            persistent,
+            persistent_worldspace,
+            interiors,
+        })
     }
 }
