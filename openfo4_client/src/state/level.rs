@@ -381,7 +381,11 @@ impl Level {
             .query::<(Entity, &Transform, &WorldSpace, &Frozen, &Root)>()
             .iter()
         {
-            let cell = CellId::from(NiTransform::from(*transform));
+            let cell = if worldspace.is_interior {
+                INTERIOR_CELL
+            } else {
+                CellId::from(NiTransform::from(*transform))
+            };
 
             if self
                 .cells_loaded
