@@ -89,7 +89,7 @@ pub struct SkeletonInstance {
     pub bones_bind_pose: HashMap<usize, Transform>,
     pub root_bones: Vec<Entity>,
     pub culled: HashSet<usize>,
-    pub(crate) transforms: BoneTransformHierarchy,
+    pub transforms: BoneTransformHierarchy,
 }
 
 impl SkeletonInstance {
@@ -147,7 +147,7 @@ impl SkeletonInstance {
 pub struct Culled;
 
 #[derive(Clone, Debug, Default)]
-pub(crate) struct BoneTransformHierarchy {
+pub struct BoneTransformHierarchy {
     hierarchy: Hierarchy<Transform>,
     // FIXME: Use VecMap instead.
     global: HashMap<Key, Transform>,
@@ -161,12 +161,13 @@ impl BoneTransformHierarchy {
         *self.hierarchy.get(key).unwrap()
     }
 
+    /// Returns the global [`Transform`] of the given `bone` relative to the skeleton root.
     pub fn global(&self, bone: usize) -> Transform {
         let key = self.bones.get(&bone).unwrap();
         *self.global.get(key).unwrap()
     }
 
-    pub fn set_local(&mut self, bone: usize, transform: Transform) {
+    pub(crate) fn set_local(&mut self, bone: usize, transform: Transform) {
         let key = *self.bones.get(&bone).unwrap();
         *self.hierarchy.get_mut(key).unwrap() = transform;
         self.update_global(key, transform);
@@ -190,7 +191,7 @@ impl BoneTransformHierarchy {
         }
     }
 
-    pub fn drain_updated_local(&mut self) -> impl Iterator<Item = (usize, Transform)> {
+    pub(crate) fn drain_updated_local(&mut self) -> impl Iterator<Item = (usize, Transform)> {
         self.updated.drain(..).map(|index| {
             let key = *self.bones.get(&index).unwrap();
             let transform = *self.hierarchy.get(key).unwrap();
