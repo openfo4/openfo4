@@ -210,7 +210,7 @@ where
                 RecordInstantiationKind::Instance => RecordInstantiationKind::BaseObject,
             };
 
-            let Some(loaded_rec) = self
+            let Some(mut loaded_rec) = self
                 .esp_loader
                 .load_record(record, &self.engine, kind, &self.cache)
                 .await
@@ -227,6 +227,10 @@ where
             };
 
             debug_assert!(!listeners.contains_key(&record));
+
+            // Avoid requeuing the same record again, doing so may result
+            // in the loop never terminating.
+            loaded_rec.depends.remove(&record);
 
             queue.extend(loaded_rec.depends);
             records.insert(record, (loaded_rec.scripts, loaded_rec.data));
@@ -1319,5 +1323,17 @@ mod tests {
         let a = a.join().unwrap().unwrap().object;
         let b = b.join().unwrap().unwrap().object;
         assert_ne!(a.id(), b.id());
+    }
+
+    #[test]
+    fn script_loader_self_cycle_instance() {
+        let loader = Arc::new(build_loader(Loader {
+            deps: [(make_rid(1), [make_rid(1)].into_iter().collect())]
+                .into_iter()
+                .collect(),
+        }));
+
+        let loadera = loader.clone();
+        block_on(loadera.load_instance(make_rid(1)));
     }
 }
