@@ -6,11 +6,8 @@ use game_common::collections::lru::LruCache;
 use game_common::string::Lowercase;
 use hashbrown::{HashMap, HashSet};
 use openfo4_core::record::{ModuleId, RecordId};
-use openfo4_esp::vmad::{Object, Value};
 use openfo4_esp::{EspFile, FormId, Record, RecordChildren, RecordData, RecordKind};
 use openfo4_io::fs::File;
-
-const HARDCODED_MODULE_ID: ModuleId = ModuleId(NonZeroU32::MIN);
 
 #[derive(Debug)]
 pub struct EspLoaderBuilder {
@@ -207,8 +204,7 @@ impl EspLoader {
 
         let record = file.file.lookup(kind, form).await?;
 
-        let mut record = GlobalRecord { id, local: record };
-        apply_patches(&mut record);
+        let record = GlobalRecord { id, local: record };
 
         self.cache.write().await.insert(id, record.clone());
 
@@ -224,7 +220,7 @@ impl EspLoader {
             let local_records = file.file.lookup_all(kind).collect::<Result<Vec<_>, _>>()?;
             records.reserve(local_records.len());
             for local in local_records {
-                let mut record = GlobalRecord {
+                let record = GlobalRecord {
                     id: RecordId {
                         module: file.id,
                         form: local.id,
@@ -232,7 +228,6 @@ impl EspLoader {
                     local,
                 };
 
-                apply_patches(&mut record);
                 records.push(record);
             }
         }
@@ -266,7 +261,7 @@ impl EspLoader {
             records.reserve(local_records.len());
 
             for local in local_records {
-                let mut record = GlobalRecord {
+                let record = GlobalRecord {
                     id: RecordId {
                         module: file.id,
                         form: local.id,
@@ -274,7 +269,6 @@ impl EspLoader {
                     local,
                 };
 
-                apply_patches(&mut record);
                 records.push(record);
             }
         }
@@ -322,39 +316,6 @@ struct PluginFile {
 pub struct GlobalRecord {
     pub id: RecordId,
     pub local: Record,
-}
-
-/// Apply hardcoded patches on the record.
-fn apply_patches(record: &mut GlobalRecord) {
-    // Only patch Fallout4.esm
-    if record.id.module != HARDCODED_MODULE_ID {
-        return;
-    }
-
-    // QUST: DialogueDrumlinDiner
-    // Contains a broken quest fragment property.
-    if record.id.form == FormId(0x1069a9) {
-        tracing::debug!("patching record {:?}", record.id.form);
-
-        let RecordData::Quest(data) = &mut record.local.data else {
-            return;
-        };
-
-        if let Some(vmad) = &mut data.virtual_machine_adapter
-            && let Some(frag) = &mut vmad.fragments
-            && let Some(script) = &mut frag.script
-        {
-            script.properties.retain(|prop| {
-                !matches!(
-                    prop.value,
-                    Value::Object(Object {
-                        form: FormId(0x1069aa),
-                        alias: None,
-                    })
-                )
-            });
-        }
-    }
 }
 
 pub type Error = openfo4_esp::Error;
