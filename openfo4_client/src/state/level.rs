@@ -794,12 +794,7 @@ struct PersistentRecordStore {
 impl PersistentRecordStore {
     pub async fn load(loader: &EspLoader) -> Result<Self, esp::Error> {
         let mut cells = Vec::new();
-
-        let mut interiors = HashSet::new();
-        for cell in loader.lookup_all(Some(RecordKind::Cell)).await? {
-            cells.push((cell.id, true, cell.id));
-            interiors.insert(cell.id);
-        }
+        let mut worldspace_cells = HashSet::new();
 
         let mut worldspaces = HashSet::new();
         for worldspace in loader.lookup_all(Some(RecordKind::Worldspace)).await? {
@@ -808,9 +803,22 @@ impl PersistentRecordStore {
                 .await?
             {
                 cells.push((worldspace.id, false, cell.id));
+                worldspace_cells.insert(cell.id);
             }
 
             worldspaces.insert(worldspace.id);
+        }
+
+        let mut interiors = HashSet::new();
+        for cell in loader.lookup_all(Some(RecordKind::Cell)).await? {
+            // Ignore all cells that are children of a worldspace records,
+            // those have already been queued.
+            if worldspace_cells.contains(&cell.id) {
+                continue;
+            }
+
+            cells.push((cell.id, true, cell.id));
+            interiors.insert(cell.id);
         }
 
         let mut persistent: HashMap<CellKey, Vec<RecordId>> = HashMap::new();
