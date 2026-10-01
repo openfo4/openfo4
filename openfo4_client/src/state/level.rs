@@ -471,6 +471,30 @@ struct LoaderState {
     persistent: PersistentRecordStore,
 }
 
+impl LoaderState {
+    fn worldspace(&self, mut id: RecordId) -> Option<WorldSpace> {
+        while let Some(parent) = self.esp_loader.parent(id) {
+            if self.persistent.interiors.contains(&parent) {
+                return Some(WorldSpace {
+                    record: parent,
+                    is_interior: true,
+                });
+            }
+
+            if self.persistent.worldspaces.contains(&parent) {
+                return Some(WorldSpace {
+                    record: parent,
+                    is_interior: false,
+                });
+            }
+
+            id = parent;
+        }
+
+        None
+    }
+}
+
 #[derive(Clone, Debug, Default)]
 struct WorldspaceState {
     cells: HashMap<CellId, CellState>,
@@ -762,10 +786,9 @@ enum Event {
 #[derive(Clone, Debug, Default)]
 struct PersistentRecordStore {
     persistent: HashMap<CellKey, Vec<RecordId>>,
-    /// Placed Object => WorldSpace / Cell
-    persistent_worldspace: HashMap<RecordId, RecordId>,
     /// Standalone Cell records without a parent Worldspace record.
     interiors: HashSet<RecordId>,
+    worldspaces: HashSet<RecordId>,
 }
 
 impl PersistentRecordStore {
@@ -778,6 +801,7 @@ impl PersistentRecordStore {
             interiors.insert(cell.id);
         }
 
+        let mut worldspaces = HashSet::new();
         for worldspace in loader.lookup_all(Some(RecordKind::Worldspace)).await? {
             for cell in loader
                 .children(RecordChildren::Cells, worldspace.id)
@@ -785,10 +809,11 @@ impl PersistentRecordStore {
             {
                 cells.push((worldspace.id, false, cell.id));
             }
+
+            worldspaces.insert(worldspace.id);
         }
 
         let mut persistent: HashMap<CellKey, Vec<RecordId>> = HashMap::new();
-        let mut persistent_worldspace = HashMap::new();
         for (worldspace, is_interior, cell) in cells {
             for record in loader
                 .children(RecordChildren::PersistentEntities, cell)
@@ -813,14 +838,13 @@ impl PersistentRecordStore {
                     .entry(CellKey { worldspace, cell })
                     .or_default()
                     .push(record.id);
-                persistent_worldspace.insert(record.id, worldspace);
             }
         }
 
         Ok(Self {
             persistent,
-            persistent_worldspace,
             interiors,
+            worldspaces,
         })
     }
 }

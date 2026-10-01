@@ -11,12 +11,10 @@ use game_common::components::Transform;
 use hashbrown::HashMap;
 use openfo4_core::ecs::Entity;
 use openfo4_core::record::RecordId;
-use openfo4_esp::FormId;
 use parking_lot::RwLock;
 
 use crate::cell::CellId;
 use crate::components::{NiTransform, WorldSpace};
-use crate::state::hardcoded::HARDCODED_MODULE_ID;
 use crate::state::level::partial::{LodLevel, PartialEntityFlags};
 use crate::state::level::record::SpawnEntity;
 use crate::state::level::{Event, LoadContext, LoaderState};
@@ -213,26 +211,7 @@ impl EntityLoader {
         };
 
         let mut entity = SpawnEntity::load(&ctx, &record, flags).await.unwrap();
-        entity.worldspace = match self.state.persistent.persistent_worldspace.get(&id) {
-            Some(worldspace) => {
-                let is_interior = self.state.persistent.interiors.contains(worldspace);
-                Some(WorldSpace {
-                    record: *worldspace,
-                    is_interior,
-                })
-            }
-            // FIXME: We need to either:
-            // 1. Make the caller provide this (viable, since Locations include the WRLD record)
-            // 2. or compute this ourselves here, but the record doesn't contain it, we need
-            // to scan for the parent. Need to check how expensive that is.
-            None => Some(WorldSpace {
-                record: RecordId {
-                    module: HARDCODED_MODULE_ID,
-                    form: FormId(0x3c),
-                },
-                is_interior: false,
-            }),
-        };
+        entity.worldspace = Some(self.state.worldspace(id).expect("entity has no worldspace"));
 
         self.state.events.push(Event::SpawnEntity {
             entity,

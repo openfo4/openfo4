@@ -303,6 +303,15 @@ impl EspLoader {
     pub fn resolve_file(&self, file: &Lowercase<str>) -> Option<ModuleId> {
         self.plugin_file_names.get(file).copied()
     }
+
+    /// Returns the [`RecordId`] that is the immediate parent of the given `id`.
+    ///
+    /// If the given `id` has no parent `None` is returned.
+    pub fn parent(&self, id: RecordId) -> Option<RecordId> {
+        let index = self.plugins[id.module.0.get() as usize] as usize;
+        let parent = self.files[index].file.parent(id.form)?;
+        self.resolve_form(parent, id)
+    }
 }
 
 #[derive(Debug)]
