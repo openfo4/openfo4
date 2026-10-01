@@ -31,7 +31,6 @@ use openfo4_asset::AssetLoader;
 use openfo4_core::Frozen;
 use openfo4_core::ecs::{CommandBuffer, Entity, World};
 use openfo4_core::events::EventBus;
-use openfo4_core::object_ref_set::ObjectReferenceSet;
 use openfo4_core::record::RecordId;
 use openfo4_physics::PhysicsPipeline;
 use openfo4_physics::components::{CollisionLayer, RigidBody};
@@ -96,7 +95,6 @@ pub struct GameState {
     physics_debug: bool,
     interval: Interval,
     esp_loader: Arc<EspLoader>,
-    object_ref_set: ObjectReferenceSet,
     weather: WeatherSystem,
     inventory: InventorySystem,
     pub executor: Executor,
@@ -181,7 +179,6 @@ impl GameState {
             physics_debug: false,
             interval: Interval::new(Duration::from_secs(1) / UPS),
             esp_loader: loader,
-            object_ref_set: ObjectReferenceSet::default(),
             executor,
             quests,
             globals,
@@ -215,7 +212,6 @@ impl GameState {
         self.level.update(
             &mut self.world,
             &mut self.event_bus,
-            &mut self.object_ref_set,
             self.executor.entities(),
         );
         self.ai.run_events(&mut self.world, &mut self.event_bus);

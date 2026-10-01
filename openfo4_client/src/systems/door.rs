@@ -6,7 +6,6 @@ use game_tracing::trace_span;
 use openfo4_core::WorldExt;
 use openfo4_core::ecs::{Entity, World};
 use openfo4_core::events::EventBus;
-use openfo4_core::object_ref_set::ObjectReferenceSet;
 use openfo4_core::record::RecordId;
 
 use crate::components::{ActorMarker, NiTransform, WorldSpace};

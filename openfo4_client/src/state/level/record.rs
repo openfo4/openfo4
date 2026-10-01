@@ -4,14 +4,13 @@ use game_common::components::{Color, PointLight, Transform};
 use glam::{EulerRot, Quat, Vec3};
 use hashbrown::HashSet;
 use openfo4_asset::Handle;
+use openfo4_core::Frozen;
 use openfo4_core::ecs::{Entity, World};
 use openfo4_core::events::EventBus;
 use openfo4_core::hierarchy::Children;
-use openfo4_core::object_ref_set::ObjectReferenceSet;
 use openfo4_core::path::DataPathBuf;
 use openfo4_core::record::RecordId;
 use openfo4_core::transform::ConvertCoordinateSystem;
-use openfo4_core::{Frozen, WorldExt};
 use openfo4_esp::records::{DoorFlags, LightDataFlags, LockLevel};
 use openfo4_esp::{RecordData, RecordHeaderFlags};
 use openfo4_physics::components::{Collider, RigidBody};
@@ -74,7 +73,6 @@ impl SpawnEntity {
         self,
         world: &mut World,
         events: &mut EventBus,
-        object_ref_set: &mut ObjectReferenceSet,
         terrain_manager: &mut TerrainManager,
         script_entities: &ScriptEntities,
     ) -> Entity {
@@ -106,13 +104,6 @@ impl SpawnEntity {
         } = self;
 
         debug_assert!(base.is_some() || form.is_some());
-
-        // If the object reference already exists we will overwrite it.
-        if let Some(form) = form
-            && let Some(entity) = object_ref_set.get_by_form(form)
-        {
-            world.despawn_recursive(entity);
-        }
 
         let is_actor = actor.is_some();
 
@@ -221,10 +212,6 @@ impl SpawnEntity {
 
         if let Some(door) = door {
             world.insert_one(entity, door).unwrap();
-        }
-
-        if let Some(form) = form {
-            object_ref_set.insert(form, entity);
         }
 
         if let Some(terrain) = terrain {

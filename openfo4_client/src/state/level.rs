@@ -24,7 +24,6 @@ use openfo4_asset::AssetLoader;
 use openfo4_core::ecs::{Entity, World};
 use openfo4_core::events::EventBus;
 use openfo4_core::hierarchy::Children;
-use openfo4_core::object_ref_set::ObjectReferenceSet;
 use openfo4_core::record::RecordId;
 use openfo4_core::{Frozen, WorldExt};
 use openfo4_esp::records::Cell;
@@ -119,7 +118,6 @@ impl Level {
         &mut self,
         world: &mut World,
         event_bus: &mut EventBus,
-        object_ref_set: &mut ObjectReferenceSet,
         script_entities: &ScriptEntities,
     ) {
         let _span = trace_span!("Level::update").entered();
@@ -187,7 +185,7 @@ impl Level {
         }
 
         self.unload_cells(world, &cells_to_unload);
-        self.instantiate_new_entities(world, event_bus, object_ref_set, script_entities);
+        self.instantiate_new_entities(world, event_bus, script_entities);
 
         self.terrain_manager.update(world);
         self.update_frozen_entities(world);
@@ -197,7 +195,6 @@ impl Level {
         &mut self,
         world: &mut World,
         events: &mut EventBus,
-        object_ref_set: &mut ObjectReferenceSet,
         script_entities: &ScriptEntities,
     ) {
         let _span = trace_span!("Level::instantiate_new_entities").entered();
@@ -262,7 +259,6 @@ impl Level {
                         let entity = entity.instantiate(
                             world,
                             events,
-                            object_ref_set,
                             &mut self.terrain_manager,
                             script_entities,
                         );
