@@ -107,8 +107,8 @@ where
             return Err(Error::BadMagic);
         }
 
-        let entries = reader.scan_headers().await?;
-        file.index = IndexTable { entries };
+        let table = reader.scan_headers().await?;
+        file.index = table;
 
         Ok(file)
     }
@@ -134,6 +134,13 @@ where
         let mut reader = Reader::new(&self.reader, &self.index);
         reader.children(kind, id).await
     }
+
+    /// Returns the [`FormId`] that is the immediate parent of the given `id`.
+    ///
+    /// If the given `id` has no parent `None` is returned.
+    pub fn parent(&self, id: FormId) -> Option<FormId> {
+        self.index.parent(id)
+    }
 }
 
 #[derive(Debug)]
@@ -153,31 +160,101 @@ where
         }
     }
 
-    async fn scan_headers(&mut self) -> Result<HashMap<FormId, u32>, Error> {
+    async fn scan_headers(&mut self) -> Result<IndexTable, Error> {
         let mut map = HashMap::new();
+        let mut parents = Vec::new();
 
         self.cursor.set_position(0);
+
+        let mut stack: Vec<Group> = Vec::new();
+
+        #[derive(Copy, Clone, Debug)]
+        struct Group {
+            last_seen: Option<FormId>,
+            remaining: u32,
+        }
+
+        let mut last_record = None;
+        let mut last_parent = None;
+        let mut parent_range = 0..0;
 
         loop {
             let offset = self.cursor.position();
 
             let header = match self.read_record_header().await {
                 Ok(header) => header,
-                Err(Error::EndOfFile) => return Ok(map),
+                Err(Error::EndOfFile) => break,
                 Err(err) => return Err(err),
             };
 
+            let parent = stack.iter().rev().find_map(|group| group.last_seen);
+
+            for group in &mut stack {
+                group.remaining -= RecordHeader::SIZE as u32;
+            }
+
             if header.typ == Text::GRUP {
+                let header = header.into_group();
+
+                if stack.is_empty() {
+                    last_record = None;
+                }
+
+                stack.push(Group {
+                    last_seen: last_record,
+                    remaining: header.size,
+                });
+
+                if header.size == 0 {
+                    while let Some(_) = stack.pop_if(|group| group.remaining == 0) {
+                        last_record = None;
+                    }
+                }
+
                 continue;
+            }
+
+            for group in &mut stack {
+                group.remaining -= header.size;
+            }
+
+            last_record = Some(header.form_id);
+            while let Some(_) = stack.pop_if(|group| group.remaining == 0) {
+                last_record = None;
             }
 
             // FIXME: We should have a fallback here.
             let offset = offset.try_into().unwrap();
             map.insert(header.form_id, offset);
 
+            if last_parent != parent {
+                if !parent_range.is_empty() {
+                    parents.push(ParentKey::new(parent_range.end, last_parent));
+                }
+
+                parent_range.start = offset;
+            }
+            last_parent = parent;
+            // The value we add here doesn't matter, but it must be greater than 0
+            // and less than the size of a `RecordHeader`.
+            parent_range.end = offset + 1;
+
             self.cursor
                 .set_position(self.cursor.position() + u64::from(header.size));
         }
+
+        if !parent_range.is_empty() {
+            parents.push(ParentKey::new(parent_range.end, last_parent));
+        }
+
+        // We will never update these again.
+        map.shrink_to_fit();
+        parents.shrink_to_fit();
+
+        Ok(IndexTable {
+            entries: map,
+            parents,
+        })
     }
 
     async fn read_record_header(&mut self) -> Result<RecordHeader, Error> {
@@ -1422,6 +1499,15 @@ impl RecordHeader {
     /// Fixed size of the header.
     const SIZE: usize = 24;
 
+    /// Returns the size of the record including the size of the header.
+    fn size_with_header(&self) -> u32 {
+        if self.typ == Text::GRUP {
+            self.size
+        } else {
+            self.size.saturating_add(Self::SIZE as u32)
+        }
+    }
+
     fn into_group(self) -> GroupHeader {
         debug_assert_eq!(self.typ, Text::GRUP);
 
@@ -1860,11 +1946,29 @@ struct IndexTable {
     // It is unrealisitc for a file be larger than 4GiB, but in case that happens we
     // will simply not cache the records anymore, however the lookup still works correctly.
     entries: HashMap<FormId, u32>,
+    // Most records in an ESP file are `PlacedObjects` that are children of a `Cell` record.
+    // The objects for a single cell are densly packed in one GRUP record and share the same
+    // parent cell.
+    // This means we can store the parent for an entire range instead of having a `HashMap`
+    // that maps each record to a parent. This massively reduces memory usage.
+    //
+    // The `Vec` is sorted by the end offset, meaning we can binary search to find the correct
+    // index.
+    parents: Vec<ParentKey>,
 }
 
 impl IndexTable {
     fn get(&self, form: FormId) -> Option<u32> {
         self.entries.get(&form).copied()
+    }
+
+    fn parent(&self, form: FormId) -> Option<FormId> {
+        let offset = self.get(form)?;
+        let index = self
+            .parents
+            .binary_search_by_key(&offset, |key| key.end_offset)
+            .unwrap_err();
+        self.parents[index].parent
     }
 }
 
@@ -1892,5 +1996,17 @@ impl<const SIZE: usize> Decode for FixedString<SIZE> {
 
         buf.advance(buf.remaining().min(remaining));
         Ok(Self(ZString(bytes)))
+    }
+}
+
+#[derive(Copy, Clone, Debug)]
+struct ParentKey {
+    end_offset: u32,
+    parent: Option<FormId>,
+}
+
+impl ParentKey {
+    fn new(end_offset: u32, parent: Option<FormId>) -> Self {
+        Self { end_offset, parent }
     }
 }
