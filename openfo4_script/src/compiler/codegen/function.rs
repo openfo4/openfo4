@@ -171,7 +171,7 @@ fn translate_function_body(
     func: &FunctionDef,
     builder: &mut FunctionBuilder,
 ) {
-    let self_ty = *data.class_types.get(&class).unwrap();
+    let self_ty = data.layouts.class(class).ty;
     let self_ptr = (!func.is_static).then(|| builder.add_param(self_ty));
 
     let mut params = Vec::new();
@@ -820,7 +820,7 @@ pub fn type_to_id(data: &CodegenData, ty: &Type) -> TypeId {
         Type::Float => data.resources.primitives.float,
         Type::String => data.resources.primitives.string,
         Type::Var => data.resources.primitives.var,
-        Type::Class(id) => data.class_types[id],
+        Type::Class(id) => data.layouts.class(*id).ty,
         Type::Struct(id) => data.struct_types[id],
         Type::Array(_) => data.resources.primitives.array,
     }

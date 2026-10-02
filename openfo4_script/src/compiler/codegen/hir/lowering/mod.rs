@@ -423,9 +423,9 @@ pub fn lower_function(
                     let class = translator.data.registry.class(*class_id).unwrap();
                     let offset = translator
                         .data
-                        .class_field_offsets
-                        .get(class_id)
-                        .unwrap()
+                        .layouts
+                        .class(*class_id)
+                        .offsets
                         .get(field_name)
                         .unwrap();
 
@@ -447,9 +447,9 @@ pub fn lower_function(
                     let value = translator.load(value);
                     let offset = translator
                         .data
-                        .class_field_offsets
-                        .get(class_id)
-                        .unwrap()
+                        .layouts
+                        .class(*class_id)
+                        .offsets
                         .get(field_name)
                         .unwrap();
 
@@ -870,13 +870,7 @@ impl<'a> Translator<'a> {
 
                 let ty = self.lowered_ty(value);
 
-                let offset = self
-                    .data
-                    .class_field_offsets
-                    .get(class)
-                    .unwrap()
-                    .get(field)
-                    .unwrap();
+                let offset = self.data.layouts.class(*class).offsets.get(field).unwrap();
 
                 self.builder.load(ty, object, *offset)
             }
@@ -903,13 +897,7 @@ impl<'a> Translator<'a> {
                 // Abort if object == null.
                 self.assert_true(object, ErrorKind::NullClass);
 
-                let offset = self
-                    .data
-                    .class_field_offsets
-                    .get(class)
-                    .unwrap()
-                    .get(field)
-                    .unwrap();
+                let offset = self.data.layouts.class(*class).offsets.get(field).unwrap();
 
                 self.builder.store(value, object, *offset);
             }

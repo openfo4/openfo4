@@ -99,9 +99,15 @@ pub struct Type {
 #[derive(Clone, Debug)]
 pub enum TypeRepr {
     Unit,
-    Int { bits: u32 },
-    Float { bits: u32 },
+    Int {
+        bits: u32,
+    },
+    Float {
+        bits: u32,
+    },
     Composite(CompositeType),
+    /// A pointer to another [`Type`].
+    Pointer(TypeId),
 }
 
 impl TypeRepr {
@@ -113,6 +119,7 @@ impl TypeRepr {
                 bits.div_ceil(8).next_power_of_two() as usize
             }
             Self::Composite(ty) => ty.size,
+            Self::Pointer(_) => size_of::<*const ()>(),
         }
     }
 
@@ -124,6 +131,7 @@ impl TypeRepr {
                 bits.div_ceil(8).next_power_of_two() as usize
             }
             Self::Composite(ty) => ty.align,
+            Self::Pointer(_) => align_of::<*const ()>(),
         }
     }
 

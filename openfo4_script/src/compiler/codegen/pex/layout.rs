@@ -1,143 +1,237 @@
-use std::sync::Arc;
-
 use game_common::string::Lowercase;
 use hashbrown::HashMap;
 use openfo4_pex::Value;
 
-use crate::compiler::codegen::pex::registry::{ClassDef, Registry, StructDef, Type};
+use crate::compiler::codegen::pex::registry::{ClassDef, ClassId, Registry, StructDef, Type};
 use crate::compiler::resources::{
     self, CompositeType, CompositeTypeMember, PropertyType, Resources, TypeId, TypeInfo,
     TypeProperty, TypeRepr, Words,
 };
 use crate::runtime::ArrayObject;
 
-pub fn compute_class_layout(
-    res: &Resources,
-    reg: &Registry,
-    class: &ClassDef,
-    id: TypeId,
-    parent_ty: Option<TypeId>,
-    parent_offsets: Option<HashMap<Lowercase<String>, usize>>,
-) -> (resources::Type, HashMap<Lowercase<String>, usize>) {
-    let mut offsets = parent_offsets.unwrap_or_else(|| HashMap::new());
+#[derive(Clone, Debug, Default)]
+pub struct Layouts {
+    classes: HashMap<ClassId, ClassLayout>,
+    class_ptr_types: HashMap<ClassId, TypeId>,
+    class_queue: Vec<ClassId>,
+}
 
-    let mut properties = HashMap::new();
-    let mut classes = Vec::new();
-
-    let mut ty = if let Some(parent) = parent_ty {
-        let parent = Arc::make_mut(&mut res.types.get(parent).unwrap()).clone();
-
-        properties = parent.info.properties;
-        classes = parent.info.classes;
-
-        match parent.repr {
-            TypeRepr::Composite(ty) => ty.clone(),
-            _ => unreachable!(),
-        }
-    } else {
-        // First member is for RTTI.
-        CompositeType {
-            members: vec![CompositeTypeMember {
-                ty: res.primitives.pointer,
-                offset: 0,
-                default_value: None,
-                size: size_of::<usize>(),
-            }],
-            align: align_of::<usize>(),
-            size: size_of::<usize>(),
-        }
-    };
-
-    let parent_field_count = ty.members.len();
-
-    classes.push(id);
-
-    for (field_name, field) in &class.fields {
-        let member_size = field.ty.to_jit().size();
-        let member_align = field.ty.to_jit().align();
-        let (member_ty, mut default_value) = resolve_ty_and_default_value(res, &field.ty);
-
-        match &field.value {
-            Value::Bool(v) => {
-                default_value = Words::bytes(&[u8::from(*v)]);
-            }
-            Value::Int(v) => {
-                default_value = Words::bytes(&v.to_ne_bytes());
-            }
-            Value::Float(v) => {
-                default_value = Words::bytes(&v.to_ne_bytes());
-            }
-            Value::String(v) => {
-                let ptr = res.constants.alloc(v.as_bytes(), 1);
-
-                let string_ptr = res.constants.alloc_object(
-                    ArrayObject {
-                        ptr: ptr.cast_mut(),
-                        len: v.len(),
-                    }
-                    .as_bytes(),
-                    align_of::<ArrayObject>(),
-                    res.primitives.string,
-                );
-
-                default_value = Words::ptr(string_ptr.cast_mut().cast());
-            }
-            Value::Null | Value::Ident(_) => {}
-        };
-
-        ty.size = (ty.size + member_align - 1) & !(member_align - 1);
-
-        ty.members.push(CompositeTypeMember {
-            ty: member_ty,
-            offset: ty.size,
-            default_value: Some(default_value),
-            size: member_size,
-        });
-        offsets.insert(field_name.clone(), ty.size);
-
-        ty.size += member_size;
-        ty.align = ty.align.max(member_align);
+impl Layouts {
+    pub fn class(&self, id: ClassId) -> &ClassLayout {
+        self.classes.get(&id).unwrap()
     }
 
-    for (name, prop) in &class.properties {
-        let Some(field) = &prop.field else {
-            continue;
+    pub fn compute_class(&mut self, res: &Resources, reg: &Registry, class: &ClassDef) {
+        if self.classes.contains_key(&class.id) {
+            return;
+        }
+
+        self.class_queue.push(class.id);
+        let mut class = class;
+        while let Some(parent) = class.parent
+            && !self.classes.contains_key(&parent)
+        {
+            self.class_queue.push(parent);
+            class = reg.class(parent).unwrap();
+        }
+
+        while let Some(id) = self.class_queue.pop() {
+            let class = reg.class(id).unwrap();
+            self.compute_class_single(res, reg, class);
+        }
+    }
+
+    fn compute_class_single(&mut self, res: &Resources, reg: &Registry, class: &ClassDef) {
+        if self.classes.contains_key(&class.id) {
+            return;
+        }
+
+        let (ty, mut offsets) = match class.parent {
+            Some(parent) => {
+                let parent = self.classes.get(&parent).unwrap();
+                (
+                    (*res.types.get(parent.ty).unwrap()).clone(),
+                    parent.offsets.clone(),
+                )
+            }
+            None => (build_class_header(res), HashMap::new()),
         };
 
-        // This is sound assuming the field ordering of the hashmap never changes,
-        // but this is given since a class can never be redefined and not changed
-        // after being registered.
-        let (index, (_, field)) = class
-            .fields
-            .iter()
-            .enumerate()
-            .find(|(_, (k, _))| *k == field)
-            .unwrap();
+        let mut properties = ty.info.properties.clone();
+        let mut classes = ty.info.classes.clone();
+        let TypeRepr::Composite(mut ty) = ty.repr else {
+            unreachable!()
+        };
 
-        let offset = parent_field_count;
-        let ty = resolve_property_type(res, reg, &field.ty);
+        // Sort class fields by alignment descending to minimize padding
+        // between fields.
+        let mut fields: Vec<_> = class.fields.iter().collect();
+        fields.sort_by_key(|(_, field)| field.ty.to_jit().align());
+        fields.reverse();
 
-        properties.insert(
-            (class.name.clone(), name.clone()),
-            TypeProperty {
-                ty,
-                field: offset + index,
+        let base_index = ty.members.len();
+        let mut indices = HashMap::new();
+        for (index, (name, field)) in fields.iter().enumerate() {
+            let size = field.ty.to_jit().size();
+            let align = field.ty.to_jit().align();
+            let (member_ty, mut default_value) = self.resolve_ty_and_default_value(res, &field.ty);
+
+            match &field.value {
+                Value::Bool(v) => {
+                    default_value = Words::bytes(&[u8::from(*v)]);
+                }
+                Value::Int(v) => {
+                    default_value = Words::bytes(&v.to_ne_bytes());
+                }
+                Value::Float(v) => {
+                    default_value = Words::bytes(&v.to_ne_bytes());
+                }
+                Value::String(v) => {
+                    let ptr = res.constants.alloc(v.as_bytes(), 1);
+
+                    let string_ptr = res.constants.alloc_object(
+                        ArrayObject {
+                            ptr: ptr.cast_mut(),
+                            len: v.len(),
+                        }
+                        .as_bytes(),
+                        align_of::<ArrayObject>(),
+                        res.primitives.string,
+                    );
+
+                    default_value = Words::ptr(string_ptr.cast_mut().cast());
+                }
+                Value::Null | Value::Ident(_) => {}
+            };
+
+            ty.size = (ty.size + align - 1) & !(align - 1);
+
+            ty.members.push(CompositeTypeMember {
+                ty: member_ty,
+                offset: ty.size,
+                default_value: Some(default_value),
+                size,
+            });
+            offsets.insert((*name).clone(), ty.size);
+            indices.insert(name, base_index + index);
+
+            ty.size += size;
+            ty.align = ty.align.max(align);
+        }
+
+        for (name, prop) in &class.properties {
+            let Some(field) = &prop.field else {
+                continue;
+            };
+
+            let index = indices.get(&field).unwrap();
+            let field = &fields[*index - base_index];
+            let ty = resolve_property_type(res, reg, &field.1.ty);
+
+            properties.insert(
+                (class.name.clone(), name.clone()),
+                TypeProperty { field: *index, ty },
+            );
+        }
+
+        let id = *res
+            .string_to_type
+            .lock()
+            .entry(class.name.clone())
+            .or_insert_with(|| res.types.declare());
+
+        classes.push(id);
+
+        res.types.define(
+            id,
+            resources::Type {
+                repr: TypeRepr::Composite(ty),
+                info: TypeInfo {
+                    name: Some(class.name.clone()),
+                    classes,
+                    properties,
+                    allows_null: true,
+                },
+            },
+        );
+
+        let ptr_ty = *self
+            .class_ptr_types
+            .entry(class.id)
+            .or_insert_with(|| res.types.declare());
+        res.types.define(
+            ptr_ty,
+            resources::Type {
+                repr: TypeRepr::Pointer(id),
+                info: TypeInfo {
+                    name: None,
+                    classes: Vec::new(),
+                    properties: HashMap::new(),
+                    allows_null: true,
+                },
+            },
+        );
+
+        self.classes.insert(
+            class.id,
+            ClassLayout {
+                ty: id,
+                ptr_ty,
+                offsets,
             },
         );
     }
 
-    (
-        resources::Type {
-            repr: TypeRepr::Composite(ty),
-            info: TypeInfo {
-                name: Some(class.name.clone()),
-                classes,
-                properties,
-                allows_null: true,
+    fn resolve_ty_and_default_value(&mut self, res: &Resources, ty: &Type) -> (TypeId, Words) {
+        match ty {
+            Type::None => (res.primitives.none, Words::bytes(&[])),
+            Type::Bool => (res.primitives.bool, Words::bytes(&[0; 1])),
+            Type::Int => (res.primitives.int, Words::bytes(&[0; size_of::<i32>()])),
+            Type::Float => (res.primitives.float, Words::bytes(&[0; size_of::<f32>()])),
+            Type::String | Type::Struct(_) | Type::Var | Type::Array(_) => (
+                res.primitives.pointer,
+                Words::bytes(&[0; size_of::<usize>()]),
+            ),
+            Type::Class(id) => {
+                let ty = self.class_ptr_types.entry(*id).or_insert_with(|| {
+                    let ty = res.types.declare();
+                    self.class_queue.push(*id);
+                    ty
+                });
+
+                (
+                    res.primitives.pointer,
+                    Words::bytes(&[0; size_of::<*const ()>()]),
+                )
+            }
+        }
+    }
+}
+
+fn build_class_header(res: &Resources) -> resources::Type {
+    resources::Type {
+        repr: TypeRepr::Composite(
+            // First member is for RTTI.
+            CompositeType {
+                members: vec![CompositeTypeMember {
+                    ty: res.primitives.pointer,
+                    offset: 0,
+                    default_value: None,
+                    size: size_of::<usize>(),
+                }],
+                align: align_of::<usize>(),
+                size: size_of::<usize>(),
             },
-        },
-        offsets,
-    )
+        ),
+        info: TypeInfo::default(),
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct ClassLayout {
+    pub ty: TypeId,
+    pub ptr_ty: TypeId,
+    pub offsets: HashMap<Lowercase<String>, usize>,
 }
 
 pub fn compute_struct_layout(
@@ -221,9 +315,12 @@ fn resolve_property_type(res: &Resources, reg: &Registry, ty: &Type) -> Property
         Type::String => PropertyType::Pointer(res.primitives.string),
         Type::Class(id) => {
             let class = reg.class(*id).unwrap();
-            let s = res.string_to_type.lock();
-            let id = s.get(&class.name).unwrap();
-            PropertyType::Pointer(*id)
+            let id = *res
+                .string_to_type
+                .lock()
+                .entry(class.name.clone())
+                .or_insert_with(|| res.types.declare());
+            PropertyType::Pointer(id)
         }
         Type::Struct(id) => {
             let st = reg.struct_(*id).unwrap();
@@ -243,8 +340,12 @@ fn resolve_property_type(res: &Resources, reg: &Registry, ty: &Type) -> Property
                 Type::String => res.primitives.string,
                 Type::Class(id) => {
                     let class = reg.class(*id).unwrap();
-                    let s = res.string_to_type.lock();
-                    *s.get(&class.name).unwrap()
+                    let id = *res
+                        .string_to_type
+                        .lock()
+                        .entry(class.name.clone())
+                        .or_insert_with(|| res.types.declare());
+                    id
                 }
                 Type::Struct(id) => {
                     let st = reg.struct_(*id).unwrap();

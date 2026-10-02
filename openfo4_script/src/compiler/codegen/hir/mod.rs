@@ -429,14 +429,6 @@ impl FunctionBuilder {
         });
     }
 
-    pub fn brif_false(&mut self, condition: Value<bool>, then_block: Block, else_block: Block) {
-        self.instructions.push(Instruction::Brif {
-            condition,
-            then_block: else_block,
-            else_block: then_block,
-        });
-    }
-
     pub fn iadd(&mut self, lhs: Value<i32>, rhs: Value<i32>, dst: Value<i32>) {
         self.instructions
             .push(Instruction::IAdd(Binop { lhs, rhs, dst }));

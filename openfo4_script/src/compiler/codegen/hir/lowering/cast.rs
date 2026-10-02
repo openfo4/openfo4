@@ -34,7 +34,7 @@ pub fn is_class(translator: &mut Translator<'_>, src: JitValue, class: ClassId) 
 }
 
 fn is_class_non_null(translator: &mut Translator<'_>, src: JitValue, class: ClassId) -> JitValue {
-    let dst_id = translator.data.class_types.get(&class).unwrap();
+    let dst_id = translator.data.layouts.class(class).ty;
 
     let type_info_ptr = translator.builder.load(PTR_TYPE, src, 0);
 

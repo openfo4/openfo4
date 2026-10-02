@@ -19,7 +19,7 @@ use openfo4_jit::{Compiler, CompilerConfig, FuncId, Signature};
 use openfo4_pex::{Class, Instruction, Module, Struct, Value};
 use thiserror::Error;
 
-use crate::compiler::codegen::pex::layout;
+use crate::compiler::codegen::pex::layout::{self, Layouts};
 use crate::compiler::codegen::pex::registry::{
     ClassDef, ClassId, FunctionDef, FunctionId, FunctionStateImpl, Registry, StructId, Type,
 };
@@ -166,19 +166,6 @@ impl CodegenPass {
             self.data.struct_types.insert(id, ty_id);
         }
 
-        let mut class_queue = VecDeque::new();
-        for (id, class) in &mut self.data.registry.classes() {
-            let ty_id = self.data.resources.types.declare();
-            self.data
-                .resources
-                .string_to_type
-                .lock()
-                .insert(class.name.clone(), ty_id);
-
-            self.data.class_types.insert(id, ty_id);
-            class_queue.push_back(id);
-        }
-
         for (id, st) in self.data.registry.structs() {
             let ty_id = self.data.struct_types[&id];
 
@@ -189,36 +176,10 @@ impl CodegenPass {
             self.data.struct_field_offsets.insert(id, offsets);
         }
 
-        while let Some(id) = class_queue.pop_front() {
-            let class = self.data.registry.class(id).unwrap();
-            let ty_id = self.data.class_types[&id];
-
-            let (parent_ty, parent_offsets) = if let Some(parent) = class.parent {
-                let (Some(ty), Some(offsets)) = (
-                    self.data.class_types.get(&parent),
-                    self.data.class_field_offsets.get(&parent),
-                ) else {
-                    class_queue.push_front(id);
-                    class_queue.push_front(parent);
-                    continue;
-                };
-
-                (Some(*ty), Some(offsets.clone()))
-            } else {
-                (None, None)
-            };
-
-            let (ty, offsets) = layout::compute_class_layout(
-                &self.data.resources,
-                &self.data.registry,
-                class,
-                ty_id,
-                parent_ty,
-                parent_offsets,
-            );
-
-            self.data.resources.types.define(ty_id, ty);
-            self.data.class_field_offsets.insert(id, offsets);
+        for (_, class) in self.data.registry.classes() {
+            self.data
+                .layouts
+                .compute_class(&self.data.resources, &self.data.registry, class);
         }
     }
 
@@ -319,7 +280,7 @@ impl CodegenPass {
             let mut data: Vec<IPtr> = vec![IPtr::from(vtables.len())];
 
             for (id, vtable) in vtables {
-                let ty = self.data.class_types[&id];
+                let ty = self.data.layouts.class(id).ty;
                 data.push(IPtr::from(ty.as_bits()));
 
                 let vtable = Words::ptrs(&vtable);
@@ -332,7 +293,7 @@ impl CodegenPass {
                 data.push(IPtr(vtable_ptr.cast_mut().cast()))
             }
 
-            let type_id = self.data.class_types[&class.id];
+            let type_id = self.data.layouts.class(class.id).ty;
 
             let data_words = Words::ptrs(&data);
 
@@ -561,14 +522,13 @@ struct CodegenData {
     registry: Registry,
     struct_types: HashMap<StructId, TypeId>,
     struct_field_offsets: HashMap<StructId, HashMap<Lowercase<String>, usize>>,
-    class_types: HashMap<ClassId, TypeId>,
-    class_field_offsets: HashMap<ClassId, HashMap<Lowercase<String>, usize>>,
     functions: HashMap<FunctionId, FuncId>,
     function_addrs: HashMap<FunctionId, IPtr>,
     native_funcs: HashMap<FunctionId, NativeFunction>,
     /// Functions defined in the guest that can be called from the host with `extern "C"` ABI.
     native_guest_funcs: HashMap<FunctionId, CompilationResult>,
     class_headers: HashMap<ClassId, Vec<IPtr>>,
+    layouts: Layouts,
 }
 
 impl CodegenData {
@@ -579,13 +539,12 @@ impl CodegenData {
             registry: Registry::default(),
             struct_types: HashMap::new(),
             struct_field_offsets: HashMap::new(),
-            class_types: HashMap::new(),
-            class_field_offsets: HashMap::new(),
             functions: HashMap::new(),
             native_funcs: HashMap::new(),
             native_guest_funcs: HashMap::new(),
             function_addrs: HashMap::new(),
             class_headers: HashMap::new(),
+            layouts: Layouts::default(),
         }
     }
 }

@@ -23,6 +23,7 @@ pub fn function_text(
             TypeRepr::Int { bits } => format!("i{}", bits),
             TypeRepr::Float { bits } => format!("f{}", bits),
             TypeRepr::Composite(_) => "composite".to_owned(),
+            TypeRepr::Pointer(_) => "ptr".to_owned(),
         }
     };
 
@@ -95,6 +96,7 @@ where
             TypeRepr::Int { bits } => format!("i{}", bits),
             TypeRepr::Float { bits } => format!("f{}", bits),
             TypeRepr::Composite(_) => "composite".to_owned(),
+            TypeRepr::Pointer(_) => "ptr".to_owned(),
         }
     };
 
