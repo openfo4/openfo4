@@ -60,6 +60,8 @@ pub struct Level {
     loader: Arc<EntityLoader>,
     alive_entities: HashSet<Entity>,
     config: config::Streaming,
+    /// Cells that are active and have all entities fully instantiated.
+    active_cells: HashSet<CellKey>,
 }
 
 impl Level {
@@ -106,6 +108,7 @@ impl Level {
             alive_entities: HashSet::new(),
             loader: Arc::new(EntityLoader::new(state)),
             config,
+            active_cells: HashSet::new(),
         }
     }
 
@@ -285,8 +288,8 @@ impl Level {
                     cell,
                     mode,
                 } => {
-                    if let Some(loaded) = self.cells_loaded.get_mut(&CellKey { worldspace, cell }) {
-                        *loaded = mode;
+                    if mode == CellActivityMode::Active {
+                        self.active_cells.insert(CellKey { worldspace, cell });
                     }
                 }
                 Event::CreateRef(entity) => {
@@ -326,6 +329,7 @@ impl Level {
 
         for cell in cells {
             tracing::debug!("unloading cell {:?}", cell);
+            self.active_cells.remove(cell);
         }
 
         let mut entities = Vec::new();
@@ -383,14 +387,10 @@ impl Level {
                 CellId::from(NiTransform::from(*transform))
             };
 
-            if self
-                .cells_loaded
-                .get(&CellKey {
-                    worldspace: worldspace.record,
-                    cell,
-                })
-                .is_some_and(|mode| *mode == CellActivityMode::Active)
-            {
+            if self.active_cells.contains(&CellKey {
+                worldspace: worldspace.record,
+                cell,
+            }) {
                 // Unfreeze
                 if !frozen.is_any_frozen() {
                     continue;
