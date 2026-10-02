@@ -169,6 +169,13 @@ impl<Ctx> Pipeline<Ctx> {
             return;
         }
 
+        // Grow all array counts as power-of-twos to reduce the number
+        // of pipeline compilations.
+        let array_counts = array_counts
+            .iter()
+            .map(|(key, count)| (key.clone(), count.next_power_of_two()))
+            .collect::<HashMap<_, _>>();
+
         self.shaders_changed = false;
 
         let mut layouts = Vec::new();
@@ -212,7 +219,7 @@ impl<Ctx> Pipeline<Ctx> {
         });
 
         self.cur_pipeline = Some(PipelineInstance {
-            limits: array_counts.clone(),
+            limits: array_counts,
             layouts,
             pipeline,
         });
