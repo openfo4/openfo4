@@ -36,15 +36,6 @@ impl Layouts {
         }
 
         self.class_queue.push(class.id);
-
-        let mut class = class;
-        while let Some(parent) = class.parent
-            && !self.classes.contains_key(&parent)
-        {
-            self.class_queue.push(parent);
-            class = reg.class(parent).unwrap();
-        }
-
         self.process_queues(res, reg);
     }
 
@@ -60,7 +51,16 @@ impl Layouts {
     fn process_queues(&mut self, res: &Resources, reg: &Registry) {
         while !self.class_queue.is_empty() || !self.struct_queue.is_empty() {
             while let Some(id) = self.class_queue.pop() {
+                // Compile the parent class before the sub class.
                 let class = reg.class(id).unwrap();
+                if let Some(parent) = class.parent
+                    && !self.classes.contains_key(&parent)
+                {
+                    self.class_queue.push(id);
+                    self.class_queue.push(parent);
+                    continue;
+                }
+
                 self.compute_class_single(res, reg, class);
             }
 
