@@ -227,6 +227,7 @@ impl Registry {
         }
 
         self.structs[id.0] = Some(StructDef {
+            id,
             name: Lowercase::new(&*st.name),
             fields,
             debug_name: st.name,
@@ -461,6 +462,7 @@ pub struct FunctionId(usize);
 
 #[derive(Clone, Debug)]
 pub struct StructDef {
+    pub id: StructId,
     pub name: Lowercase<String>,
     pub fields: HashMap<Lowercase<String>, Type>,
     pub debug_name: String,

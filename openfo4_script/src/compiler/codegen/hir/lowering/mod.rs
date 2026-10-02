@@ -376,9 +376,9 @@ pub fn lower_function(
                 } => {
                     let offset = *translator
                         .data
-                        .struct_field_offsets
-                        .get(struct_id)
-                        .unwrap()
+                        .layouts
+                        .struct_(*struct_id)
+                        .offsets
                         .get(field_name)
                         .unwrap();
 
@@ -399,9 +399,9 @@ pub fn lower_function(
                 } => {
                     let offset = *translator
                         .data
-                        .struct_field_offsets
-                        .get(struct_id)
-                        .unwrap()
+                        .layouts
+                        .struct_(*struct_id)
+                        .offsets
                         .get(field_name)
                         .unwrap();
 

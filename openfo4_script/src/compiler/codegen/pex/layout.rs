@@ -2,7 +2,9 @@ use game_common::string::Lowercase;
 use hashbrown::HashMap;
 use openfo4_pex::Value;
 
-use crate::compiler::codegen::pex::registry::{ClassDef, ClassId, Registry, StructDef, Type};
+use crate::compiler::codegen::pex::registry::{
+    ClassDef, ClassId, Registry, StructDef, StructId, Type,
+};
 use crate::compiler::resources::{
     self, CompositeType, CompositeTypeMember, PropertyType, Resources, TypeId, TypeInfo,
     TypeProperty, TypeRepr, Words,
@@ -14,11 +16,18 @@ pub struct Layouts {
     classes: HashMap<ClassId, ClassLayout>,
     class_ptr_types: HashMap<ClassId, TypeId>,
     class_queue: Vec<ClassId>,
+    structs: HashMap<StructId, ClassLayout>,
+    struct_ptr_types: HashMap<StructId, TypeId>,
+    struct_queue: Vec<StructId>,
 }
 
 impl Layouts {
     pub fn class(&self, id: ClassId) -> &ClassLayout {
         self.classes.get(&id).unwrap()
+    }
+
+    pub fn struct_(&self, id: StructId) -> &ClassLayout {
+        self.structs.get(&id).unwrap()
     }
 
     pub fn compute_class(&mut self, res: &Resources, reg: &Registry, class: &ClassDef) {
@@ -27,6 +36,7 @@ impl Layouts {
         }
 
         self.class_queue.push(class.id);
+
         let mut class = class;
         while let Some(parent) = class.parent
             && !self.classes.contains_key(&parent)
@@ -35,9 +45,29 @@ impl Layouts {
             class = reg.class(parent).unwrap();
         }
 
-        while let Some(id) = self.class_queue.pop() {
-            let class = reg.class(id).unwrap();
-            self.compute_class_single(res, reg, class);
+        self.process_queues(res, reg);
+    }
+
+    pub fn compute_struct(&mut self, res: &Resources, reg: &Registry, st: &StructDef) {
+        if self.structs.contains_key(&st.id) {
+            return;
+        }
+
+        self.struct_queue.push(st.id);
+        self.process_queues(res, reg);
+    }
+
+    fn process_queues(&mut self, res: &Resources, reg: &Registry) {
+        while !self.class_queue.is_empty() || !self.struct_queue.is_empty() {
+            while let Some(id) = self.class_queue.pop() {
+                let class = reg.class(id).unwrap();
+                self.compute_class_single(res, reg, class);
+            }
+
+            while let Some(id) = self.struct_queue.pop() {
+                let struct_ = reg.struct_(id).unwrap();
+                self.compute_struct_single(res, reg, struct_);
+            }
         }
     }
 
@@ -182,6 +212,96 @@ impl Layouts {
         );
     }
 
+    fn compute_struct_single(&mut self, res: &Resources, reg: &Registry, st: &StructDef) {
+        if self.structs.contains_key(&st.id) {
+            return;
+        }
+
+        let mut offset = 0;
+        let mut align = 1;
+        let mut members = Vec::new();
+        let mut offsets = HashMap::new();
+        let mut properties = HashMap::new();
+
+        for (name, ty) in &st.fields {
+            let member_size = ty.to_jit().size();
+            let member_align = ty.to_jit().align();
+
+            offset = (offset + member_align - 1) & !(member_align - 1);
+
+            let (ty_id, default_value) = resolve_ty_and_default_value(res, &ty);
+
+            let index = members.len();
+            properties.insert(
+                (st.name.clone(), name.clone()),
+                TypeProperty {
+                    field: index,
+                    ty: resolve_property_type(res, reg, &ty),
+                },
+            );
+
+            members.push(CompositeTypeMember {
+                ty: ty_id,
+                offset,
+                default_value: Some(default_value),
+                size: member_size,
+            });
+            offsets.insert(name.clone(), offset);
+
+            offset += member_size;
+            align = align.max(member_align);
+        }
+
+        let id = *res
+            .string_to_type
+            .lock()
+            .entry(st.name.clone())
+            .or_insert_with(|| res.types.declare());
+
+        res.types.define(
+            id,
+            resources::Type {
+                repr: TypeRepr::Composite(CompositeType {
+                    members,
+                    size: offset,
+                    align,
+                }),
+                info: TypeInfo {
+                    name: Some(st.name.clone()),
+                    classes: vec![id],
+                    properties,
+                    allows_null: true,
+                },
+            },
+        );
+
+        let ptr_ty = *self
+            .struct_ptr_types
+            .entry(st.id)
+            .or_insert_with(|| res.types.declare());
+        res.types.define(
+            ptr_ty,
+            resources::Type {
+                repr: TypeRepr::Pointer(id),
+                info: TypeInfo {
+                    name: None,
+                    classes: Vec::new(),
+                    properties: HashMap::new(),
+                    allows_null: true,
+                },
+            },
+        );
+
+        self.structs.insert(
+            st.id,
+            ClassLayout {
+                ty: id,
+                ptr_ty,
+                offsets,
+            },
+        );
+    }
+
     fn resolve_ty_and_default_value(&mut self, res: &Resources, ty: &Type) -> (TypeId, Words) {
         match ty {
             Type::None => (res.primitives.none, Words::bytes(&[])),
@@ -232,65 +352,6 @@ pub struct ClassLayout {
     pub ty: TypeId,
     pub ptr_ty: TypeId,
     pub offsets: HashMap<Lowercase<String>, usize>,
-}
-
-pub fn compute_struct_layout(
-    res: &Resources,
-    reg: &Registry,
-    id: TypeId,
-    st: &StructDef,
-) -> (resources::Type, HashMap<Lowercase<String>, usize>) {
-    let mut offset = 0;
-    let mut align = 1;
-    let mut members = Vec::new();
-    let mut offsets = HashMap::new();
-    let mut properties = HashMap::new();
-
-    for (name, ty) in &st.fields {
-        let member_size = ty.to_jit().size();
-        let member_align = ty.to_jit().align();
-
-        offset = (offset + member_align - 1) & !(member_align - 1);
-
-        let (ty_id, default_value) = resolve_ty_and_default_value(res, &ty);
-
-        let index = members.len();
-        properties.insert(
-            (st.name.clone(), name.clone()),
-            TypeProperty {
-                field: index,
-                ty: resolve_property_type(res, reg, &ty),
-            },
-        );
-
-        members.push(CompositeTypeMember {
-            ty: ty_id,
-            offset,
-            default_value: Some(default_value),
-            size: member_size,
-        });
-        offsets.insert(name.clone(), offset);
-
-        offset += member_size;
-        align = align.max(member_align);
-    }
-
-    (
-        resources::Type {
-            repr: TypeRepr::Composite(CompositeType {
-                members,
-                size: offset,
-                align,
-            }),
-            info: TypeInfo {
-                name: Some(st.name.clone()),
-                classes: vec![id],
-                properties,
-                allows_null: true,
-            },
-        },
-        offsets,
-    )
 }
 
 fn resolve_ty_and_default_value(res: &Resources, ty: &Type) -> (TypeId, Words) {

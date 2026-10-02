@@ -19,7 +19,7 @@ use openfo4_jit::{Compiler, CompilerConfig, FuncId, Signature};
 use openfo4_pex::{Class, Instruction, Module, Struct, Value};
 use thiserror::Error;
 
-use crate::compiler::codegen::pex::layout::{self, Layouts};
+use crate::compiler::codegen::pex::layout::Layouts;
 use crate::compiler::codegen::pex::registry::{
     ClassDef, ClassId, FunctionDef, FunctionId, FunctionStateImpl, Registry, StructId, Type,
 };
@@ -155,25 +155,10 @@ impl CodegenPass {
         }
         self.classes_updated = false;
 
-        for (id, st) in self.data.registry.structs() {
-            let ty_id = self.data.resources.types.declare();
+        for (_, st) in self.data.registry.structs() {
             self.data
-                .resources
-                .string_to_type
-                .lock()
-                .insert(st.name.to_owned(), ty_id);
-
-            self.data.struct_types.insert(id, ty_id);
-        }
-
-        for (id, st) in self.data.registry.structs() {
-            let ty_id = self.data.struct_types[&id];
-
-            let (ty, offsets) =
-                layout::compute_struct_layout(&self.data.resources, &self.data.registry, ty_id, st);
-
-            self.data.resources.types.define(ty_id, ty);
-            self.data.struct_field_offsets.insert(id, offsets);
+                .layouts
+                .compute_struct(&self.data.resources, &self.data.registry, st);
         }
 
         for (_, class) in self.data.registry.classes() {
@@ -520,8 +505,6 @@ struct CodegenData {
     resources: Arc<Resources>,
     runtime_funcs: RuntimeFunctions,
     registry: Registry,
-    struct_types: HashMap<StructId, TypeId>,
-    struct_field_offsets: HashMap<StructId, HashMap<Lowercase<String>, usize>>,
     functions: HashMap<FunctionId, FuncId>,
     function_addrs: HashMap<FunctionId, IPtr>,
     native_funcs: HashMap<FunctionId, NativeFunction>,
@@ -537,8 +520,6 @@ impl CodegenData {
             resources: Arc::default(),
             runtime_funcs: RuntimeFunctions::new(compiler),
             registry: Registry::default(),
-            struct_types: HashMap::new(),
-            struct_field_offsets: HashMap::new(),
             functions: HashMap::new(),
             native_funcs: HashMap::new(),
             native_guest_funcs: HashMap::new(),

@@ -737,8 +737,8 @@ fn perform_cast_inner(
                         conv_array,
                     );
                 }
-                Type::Struct(name) => {
-                    let id = *translator.data.struct_types.get(name).unwrap();
+                Type::Struct(id) => {
+                    let id = translator.data.layouts.struct_(*id).ty;
                     translator.builder.extract_var(
                         src,
                         dst,
@@ -764,8 +764,8 @@ fn perform_cast_inner(
                 Type::Float => ObjectTag::TypeId(translator.data.resources.primitives.float),
                 Type::String => ObjectTag::TypeId(translator.data.resources.primitives.string),
                 Type::Class(_) => ObjectTag::Class,
-                Type::Struct(name) => {
-                    let id = *translator.data.struct_types.get(name).unwrap();
+                Type::Struct(id) => {
+                    let id = translator.data.layouts.struct_(*id).ty;
                     ObjectTag::TypeId(id)
                 }
                 Type::Var => unreachable!(),
@@ -821,7 +821,7 @@ pub fn type_to_id(data: &CodegenData, ty: &Type) -> TypeId {
         Type::String => data.resources.primitives.string,
         Type::Var => data.resources.primitives.var,
         Type::Class(id) => data.layouts.class(*id).ty,
-        Type::Struct(id) => data.struct_types[id],
+        Type::Struct(id) => data.layouts.struct_(*id).ty,
         Type::Array(_) => data.resources.primitives.array,
     }
 }
