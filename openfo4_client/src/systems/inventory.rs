@@ -140,6 +140,14 @@ impl ItemStack {
             false
         }
     }
+
+    /// Returns whether the item is a "real" game item.
+    ///
+    /// This returns `false` for any items that are not tracked as such from the gameplay
+    /// perspecitive, like skins or head parts.
+    pub fn is_game_item(&self) -> bool {
+        !self.hidden
+    }
 }
 
 #[derive(Clone, Debug)]

@@ -72,6 +72,10 @@ impl ExtractEvent for ItemAddedEvent {
             return Vec::new();
         };
 
+        if !stack.is_game_item() {
+            return Vec::new();
+        }
+
         let item_ref = stack
             .script
             .as_ref()
@@ -110,6 +114,10 @@ impl ExtractEvent for ItemEquippedEvent {
         let Some(stack) = inventory.get(self.slot) else {
             return Vec::new();
         };
+
+        if !stack.is_game_item() {
+            return Vec::new();
+        }
 
         let item_ref = stack
             .script
