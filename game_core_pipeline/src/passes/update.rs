@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 
 use bytemuck::{Pod, Zeroable};
 use crossbeam::channel::Receiver;
@@ -24,7 +25,7 @@ use glam::{Mat3, Mat4, UVec2, Vec3, Vec4};
 use parking_lot::Mutex;
 
 use crate::StandardMaterial;
-use crate::entities::{Event, ImageId, MaterialInner};
+use crate::entities::{AsyncEvent, Event, ImageId, MaterialInner};
 use crate::lights::{DirectionalLightUniform, Light, PointLightUniform, SpotLightUniform};
 use crate::material::AlphaMode;
 use crate::passes::{DirectionalLightState, MaterialState, TerrainMaterialState};
@@ -35,10 +36,13 @@ use super::{
     TextureSlab, TextureSlabIndex,
 };
 
+const ASYNC_BUDGET: Duration = Duration::from_millis(1);
+
 #[derive(Debug)]
 pub(super) struct UpdatePass {
     state: Arc<Mutex<State>>,
     events: Receiver<Event>,
+    async_events: Receiver<AsyncEvent>,
     mipgen: MipMapGenerator,
 }
 
@@ -47,11 +51,13 @@ impl UpdatePass {
         queue: &CommandQueue<'_>,
         state: Arc<Mutex<State>>,
         events: Receiver<Event>,
+        async_events: Receiver<AsyncEvent>,
     ) -> Self {
         Self {
             state,
             events,
             mipgen: MipMapGenerator::new(queue),
+            async_events,
         }
     }
 }
@@ -275,6 +281,43 @@ impl Node for UpdatePass {
                 // We must wait for the next frame before we are allowed to
                 // continue processing events.
                 Event::Barrier => break,
+            }
+        }
+
+        self.process_async(ctx.queue, &mut state);
+    }
+}
+
+impl UpdatePass {
+    fn process_async(&self, queue: &CommandQueue<'_>, state: &mut State) {
+        let _span = trace_span!("UpdatePass::process_async").entered();
+
+        // We always want to process at least one event to prevent completely
+        // starving the sender.
+        let now = Instant::now();
+        while let Ok(event) = self.async_events.try_recv() {
+            match event {
+                AsyncEvent::CreateMesh(id, mesh, event) => {
+                    assert!(mesh.validate_indices().is_ok());
+
+                    let key = state.mesh.create_mesh_unchecked(queue, &mesh);
+                    state.meshes.insert(id, key);
+
+                    assert_eq!(event.total_listeners(), 1);
+                    event.notify(1);
+                }
+                AsyncEvent::CreateImage(id, image, event) => {
+                    let texture =
+                        create_image(queue, &mut state.textures, &self.mipgen, &image, true);
+                    state.images.insert(id, texture);
+
+                    assert_eq!(event.total_listeners(), 1);
+                    event.notify(1);
+                }
+            }
+
+            if now.elapsed() > ASYNC_BUDGET {
+                break;
             }
         }
     }

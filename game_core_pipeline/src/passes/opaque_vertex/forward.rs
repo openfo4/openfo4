@@ -277,6 +277,19 @@ impl OpaqueVertexForwardPass {
                 flags: UsageFlags::empty(),
             });
 
+            if shadow_light_vps.is_empty() {
+                assert!(shadow_maps.is_empty());
+                shadow_light_vps.push(glam::Mat4::ZERO);
+
+                let shadow_depth = ctx.queue.create_texture(&TextureDescriptor {
+                    size: UVec2 { x: 1, y: 1 },
+                    mip_levels: 1,
+                    format: TextureFormat::Depth32Float,
+                    usage: TextureUsage::RENDER_ATTACHMENT | TextureUsage::TEXTURE_BINDING,
+                });
+                shadow_maps.push(shadow_depth.create_view(&TextureViewDescriptor::default()));
+            }
+
             let shadow_light_vps = ctx.queue.create_buffer_init(&BufferInitDescriptor {
                 contents: bytemuck::must_cast_slice(&shadow_light_vps),
                 usage: BufferUsage::STORAGE,

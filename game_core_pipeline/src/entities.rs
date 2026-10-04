@@ -25,12 +25,14 @@ pub struct Entities {
 }
 
 impl Entities {
-    pub(super) fn new() -> (Self, Receiver<Event>) {
+    pub(super) fn new() -> (Self, Receiver<Event>, Receiver<AsyncEvent>) {
         let (tx, rx) = crossbeam::channel::unbounded();
+        let (atx, arx) = crossbeam::channel::unbounded();
         (
             Self {
                 inner: Arc::new(Inner {
                     events: tx,
+                    async_events: atx,
                     scenes: Mutex::new(Slab::new()),
                     meshes: Mutex::new(Slab::new()),
                     materials: Mutex::new(Slab::new()),
@@ -43,6 +45,7 @@ impl Entities {
                 new_lut: Arc::default(),
             },
             rx,
+            arx,
         )
     }
 
@@ -71,6 +74,27 @@ impl Entities {
     }
 
     #[must_use = "the entity will get destroyed immediately when the object is dropped"]
+    pub async fn create_mesh_async(&self, mesh: Mesh) -> MeshHandle {
+        let id = {
+            let mut meshes = self.inner.meshes.lock();
+            meshes.insert(1)
+        };
+
+        let event = event_listener::Event::new();
+        let listener = event.listen();
+
+        self.inner
+            .async_events
+            .send(AsyncEvent::CreateMesh(id, mesh, event))
+            .unwrap();
+        listener.await;
+        MeshHandle {
+            inner: self.inner.clone(),
+            id,
+        }
+    }
+
+    #[must_use = "the entity will get destroyed immediately when the object is dropped"]
     pub fn create_image<T>(&self, image: T) -> ImageHandle
     where
         T: Into<MipImage>,
@@ -82,6 +106,30 @@ impl Entities {
             .events
             .send(Event::CreateImage(id, image.into()))
             .ok();
+        ImageHandle {
+            inner: self.inner.clone(),
+            id,
+        }
+    }
+
+    #[must_use = "the entity will get destroyed immediately when the object is dropped"]
+    pub async fn create_image_async<T>(&self, image: T) -> ImageHandle
+    where
+        T: Into<MipImage>,
+    {
+        let id = {
+            let mut images = self.inner.images.lock();
+            images.insert(1)
+        };
+
+        let event = event_listener::Event::new();
+        let listener = event.listen();
+
+        self.inner
+            .async_events
+            .send(AsyncEvent::CreateImage(id, image.into(), event))
+            .unwrap();
+        listener.await;
         ImageHandle {
             inner: self.inner.clone(),
             id,
@@ -236,6 +284,7 @@ impl Entities {
 #[derive(Debug)]
 struct Inner {
     events: Sender<Event>,
+    async_events: Sender<AsyncEvent>,
     // Contains ref counts for all entities.
     scenes: Mutex<Slab<SceneId, usize>>,
     meshes: Mutex<Slab<MeshId, usize>>,
@@ -625,4 +674,10 @@ pub(crate) enum Event {
 pub(crate) enum MaterialInner {
     Standard(StandardMaterial),
     Terrain(TerrainMaterial),
+}
+
+#[derive(Debug)]
+pub(crate) enum AsyncEvent {
+    CreateMesh(MeshId, Mesh, event_listener::Event),
+    CreateImage(ImageId, MipImage, event_listener::Event),
 }

@@ -31,7 +31,9 @@ use post_process::PostProcessPass;
 use update::{TransformUniform, UpdatePass};
 
 use crate::camera::Camera;
-use crate::entities::{CameraId, Event, ImageId, LightId, MaterialId, MeshId, ObjectId, SceneId};
+use crate::entities::{
+    AsyncEvent, CameraId, Event, ImageId, LightId, MaterialId, MeshId, ObjectId, SceneId,
+};
 use crate::lights::{AmbientLight, DirectionalLightUniform, PointLightUniform, SpotLightUniform};
 use crate::material::AlphaMode;
 use crate::passes::mesh::{InstanceKey, MeshKey, MeshState};
@@ -58,12 +60,13 @@ pub(crate) fn init(
     graph: &mut RenderGraph,
     queue: &CommandQueue<'_>,
     events: Receiver<Event>,
+    async_events: Receiver<AsyncEvent>,
     sky: Arc<Mutex<SkyState>>,
     new_lut: Arc<Mutex<Option<MipImage>>>,
 ) {
     let state = Arc::new(Mutex::new(State::new(queue, sky)));
 
-    let update_pass = UpdatePass::new(queue, state.clone(), events);
+    let update_pass = UpdatePass::new(queue, state.clone(), events, async_events);
     graph.add_node(UPDATE_PASS, update_pass);
 
     let skinning_pass = SkinningPass::new(state.clone());

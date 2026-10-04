@@ -14,13 +14,14 @@ use game_render::Renderer;
 use material::StandardMaterial;
 
 pub fn init(renderer: &mut Renderer) -> Entities {
-    let (entities, rx) = Entities::new();
+    let (entities, rx, arx) = Entities::new();
 
     renderer.with_command_queue_and_graph(|graph, queue| {
         passes::init(
             graph,
             queue,
             rx,
+            arx,
             entities.sky.clone(),
             entities.new_lut.clone(),
         );
