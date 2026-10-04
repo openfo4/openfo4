@@ -113,7 +113,7 @@ fn main() -> ExitCode {
     let shared = Arc::new(SharedState::new(entities.clone()));
 
     let ui_renderer = Arc::new(UiRenderer::new(&mut renderer));
-    let egui_ctx = EguiContext::new(ui_renderer);
+    let egui_ctx = EguiContext::new(ui_renderer.clone());
 
     let ui = UiState::new(&mut renderer);
     let mut game =
@@ -137,6 +137,7 @@ fn main() -> ExitCode {
         time: Time::new(),
         egui_ctx,
         ui_state: ui::UiState::default(),
+        ui_renderer,
     };
 
     wm.run(app);
@@ -249,6 +250,7 @@ struct App {
     time: Time,
     egui_ctx: EguiContext,
     ui_state: ui::UiState,
+    ui_renderer: Arc<UiRenderer>,
 }
 
 impl game_window::App for App {
@@ -376,6 +378,8 @@ impl game_window::App for App {
         if self.ui_state.debug.draw_planned_ai_agent_paths {
             draw_planned_ai_agent_paths(&self.game.world, &self.game.ai, &self.state.gizmos);
         }
+
+        self.ui_renderer.barrier();
 
         self.state.render();
 

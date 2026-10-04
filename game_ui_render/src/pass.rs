@@ -242,6 +242,8 @@ impl State {
                     let index = self.texture_id_to_index.remove(&id).unwrap();
                     self.textures.remove(index);
                 }
+                // We must wait for the next frame to continue.
+                Event::Barrier => break,
             }
         }
     }

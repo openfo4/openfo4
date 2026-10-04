@@ -87,6 +87,10 @@ impl UiRenderer {
         drop(textures);
         self.events.send(Event::DestroyTexture(texture)).unwrap();
     }
+
+    pub fn barrier(&self) {
+        self.events.send(Event::Barrier).unwrap();
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -116,4 +120,5 @@ pub enum Event {
     CreateTexture(MipImage, TextureId),
     DestroyTexture(TextureId),
     DestroyMesh(MeshId),
+    Barrier,
 }
