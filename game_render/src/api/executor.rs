@@ -500,10 +500,13 @@ fn run_render_pass(
                 // completes.
                 tmp.descriptor_sets.insert(*id);
             }
-            DrawCmd::SetIndexBuffer(id, format) => {
+            DrawCmd::SetIndexBuffer(id, format, range) => {
                 let buffer = executor.buffers.get(*id).unwrap();
+                let view = buffer.buffer.slice(*range);
 
-                render_pass.bind_index_buffer(buffer.buffer.slice(..), *format);
+                unsafe {
+                    render_pass.bind_index_buffer(view, *format);
+                }
 
                 // Index buffer must be kept alive until the render pass
                 // completes.

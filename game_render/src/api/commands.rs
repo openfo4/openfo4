@@ -252,7 +252,7 @@ impl Command {
                         DrawCmd::SetPipeline(id) => {
                             pipeline = Some(resources.pipelines.get(id.0).unwrap());
                         }
-                        DrawCmd::SetIndexBuffer(buffer, _) => {
+                        DrawCmd::SetIndexBuffer(buffer, _, _range) => {
                             *buffers.entry(*buffer).or_default() |= AccessFlags::INDEX;
                         }
                         DrawCmd::SetDescriptorSet(group, id) => {

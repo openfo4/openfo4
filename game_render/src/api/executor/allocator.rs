@@ -14,7 +14,10 @@ use crate::backend::allocator::{
     AllocError, Allocator, BuddyAllocator, MemoryAllocation, MemoryManager, Region, UsageFlags,
 };
 use crate::backend::vulkan::{Device, DeviceMemorySlice};
-use crate::backend::{DedicatedResource, MemoryRequirements, MemoryTypeFlags, TextureDescriptor};
+use crate::backend::{
+    BufferUsage, DedicatedResource, IndexFormat, MemoryRequirements, MemoryTypeFlags,
+    TextureDescriptor,
+};
 use crate::statistics::{AllocationKind, MemoryAlloc, MemoryBlock, Statistics};
 
 const MIN_PAGE_SIZE: NonZeroUsize = NonZeroUsize::new(1 << 20).unwrap();
@@ -55,7 +58,14 @@ impl MemoryAllocator {
         let size = NonZeroUsize::new(descriptor.size).unwrap();
 
         let mut buffer = self.device.create_buffer(size, descriptor.usage).unwrap();
-        let req = self.device.buffer_memory_requirements(&buffer);
+        let mut req = self.device.buffer_memory_requirements(&buffer);
+
+        // When an index buffer is bound, the bound device memory must be aligned
+        // to the specified `IndexFormat`. We do not know which `IndexFormat` is used
+        // so we must align for the biggest possible `IndexFormat`.
+        if descriptor.usage.contains(BufferUsage::INDEX) {
+            req.align = req.align.max(IndexFormat::MAX_SIZE);
+        }
 
         let allocation = self
             .alloc(

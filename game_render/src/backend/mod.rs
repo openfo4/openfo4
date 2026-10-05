@@ -923,6 +923,8 @@ pub enum IndexFormat {
 }
 
 impl IndexFormat {
+    pub(crate) const MAX_SIZE: NonZeroUsize = NonZeroUsize::new(Self::U32.size() as usize).unwrap();
+
     /// Returns the number of bytes needed to represent an index.
     pub const fn size(&self) -> u8 {
         match self {

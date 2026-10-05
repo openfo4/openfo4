@@ -1281,6 +1281,7 @@ impl Device {
             device: self.device.clone(),
             size: size.get(),
             usages: buffer_usage_flags,
+            memory: None,
         })
     }
 
@@ -1537,6 +1538,8 @@ impl Device {
         unsafe {
             self.device.bind_buffer_memory2(&[info])?;
         }
+
+        buffer.memory = Some(memory.offset..memory.offset + memory.size);
 
         Ok(())
     }
@@ -3924,15 +3927,30 @@ impl<'encoder, 'resources> RenderPass<'encoder, 'resources> {
         }
     }
 
-    pub fn bind_index_buffer(&mut self, buffer: BufferView<'_>, format: IndexFormat) {
-        assert!(
+    /// Sets the index buffer used for future draw commands.
+    ///
+    /// # Safety
+    ///
+    /// - The given `buffer` must have the [`BufferUsage::INDEX`] bit set.
+    /// - The given `buffer` must have a [`DeviceMemory`] bound to it.
+    /// - The [`DeviceMemory`] bound to the given `buffer` must be aligned to [`IndexFormat::size`].
+    /// - The given `buffer` must be aligned to [`IndexFormat::size`].
+    /// - The given `buffer` must have a size that is a multiple of [`IndexFormat::size`].
+    #[track_caller]
+    pub unsafe fn bind_index_buffer(&mut self, buffer: BufferView<'_>, format: IndexFormat) {
+        debug_assert!(
             buffer
                 .buffer
                 .usages
                 .contains(vk::BufferUsageFlags::INDEX_BUFFER)
         );
 
-        assert_eq!(buffer.len() % usize::from(format.size()), 0);
+        let memory = buffer.buffer.memory.as_ref().unwrap();
+
+        let align = usize::from(format.size());
+        debug_assert_eq!(memory.start % align, 0);
+        debug_assert_eq!(buffer.view.start % align, 0);
+        debug_assert_eq!(buffer.view.len() % align, 0);
 
         unsafe {
             self.encoder.device.device.cmd_bind_index_buffer(
@@ -4483,6 +4501,7 @@ pub struct Buffer {
     buffer: vk::Buffer,
     size: usize,
     usages: vk::BufferUsageFlags,
+    memory: Option<Range<usize>>,
 }
 
 impl Buffer {

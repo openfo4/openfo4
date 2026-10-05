@@ -1479,7 +1479,7 @@ impl<'a> CommandQueue<'a> {
             depth_stencil_attachment,
             cmds: Vec::new(),
             last_pipeline: None,
-            last_index_buffer: None,
+            index_buffer: None,
             binding,
         }
     }
@@ -2116,7 +2116,7 @@ pub struct RenderPass<'a, 'b> {
     // Exists purely for validation.
     last_pipeline: Option<PipelineId>,
     // Exists purely for validation.
-    last_index_buffer: Option<(BufferId, IndexFormat)>,
+    index_buffer: Option<IndexBufferSpec>,
     /// Color and depth attachments are already included here.
     binding: PassBindingInfo,
 }
@@ -2183,24 +2183,46 @@ impl<'a, 'b> RenderPass<'a, 'b> {
             .push(DrawCmd::SetPushConstants(data.to_vec(), stages, offset));
     }
 
-    pub fn set_index_buffer(&mut self, buffer: &Buffer, format: IndexFormat) {
+    /// Sets the index buffer that is used for all following draw commands.
+    ///
+    /// # Panics
+    ///
+    /// - Panics if no pipeline was previously set using [`set_pipeline`].
+    /// - Panics if the given `buffer` does not have the [`INDEX`] bit set.
+    ///
+    /// [`set_pipeline`]: Self::set_pipeline
+    /// [`INDEX`]: BufferUsage::INDEX
+    #[track_caller]
+    pub fn set_index_buffer<T>(&mut self, buffer: &T, format: IndexFormat)
+    where
+        T: IntoBufferSlice,
+    {
+        let buffer = buffer.into_buffer_slice();
+
         assert!(self.last_pipeline.is_some(), "Pipeline is not set");
         assert!(
-            buffer.usage.contains(BufferUsage::INDEX),
+            buffer.buffer.usage.contains(BufferUsage::INDEX),
             "Buffer cannot be used as index buffer: INDEX not set",
         );
 
         self.ctx
             .executor
             .resources
-            .with_buffer_rc(buffer.id, |ref_count| {
+            .with_buffer_rc(buffer.buffer.id, |ref_count| {
                 ref_count.increment_internal();
             });
 
         self.binding.num_buffers += 1;
 
-        self.cmds.push(DrawCmd::SetIndexBuffer(buffer.id, format));
-        self.last_index_buffer = Some((buffer.id, format));
+        self.cmds.push(DrawCmd::SetIndexBuffer(
+            buffer.buffer.id,
+            format,
+            buffer.slice,
+        ));
+        self.index_buffer = Some(IndexBufferSpec {
+            size: buffer.len(),
+            format,
+        });
     }
 
     pub fn draw(&mut self, vertices: Range<u32>, instances: Range<u32>) {
@@ -2212,32 +2234,35 @@ impl<'a, 'b> RenderPass<'a, 'b> {
         })));
     }
 
+    /// Dispatches a draw command using indexed vertices.
+    ///
+    /// - `indices` specifies the offset and number of indices that are drawn from the index
+    ///    buffer.
+    /// - `vertex_offset` is added to each index value.
+    /// - `instances` specifies the number of instances that are drawn.
+    ///
+    /// # Panics
+    ///
+    /// - Panics if no pipeline was previously set using [`set_pipeline`].
+    /// - Panics if the index buffer set using [`set_index_buffer`] is too small to draw the given
+    ///   set of vertices.
+    #[track_caller]
     pub fn draw_indexed(&mut self, indices: Range<u32>, vertex_offset: i32, instances: Range<u32>) {
         assert!(self.last_pipeline.is_some(), "Pipeline is not set");
-        let Some((buffer, format)) = self.last_index_buffer else {
-            panic!("cannot call draw_indexed before binding a index buffer");
-        };
+        let index_buffer = self.index_buffer.expect("no index buffer set");
 
-        // The minimun index buffer size is:
-        // (first_index + index_count) * index_size =
-        // (indices.start + indices.end - indices.start) * index_size =
-        // indices.end * index_size
-        let Some(min_size) = indices.end.checked_mul(format.size().into()) else {
+        let last_index = indices.end as usize;
+        let index_size = index_buffer.format.size() as usize;
+        if last_index * index_size > index_buffer.size {
             panic!(
-                "overflow computing index buffer size: indices={:?} format={:?}",
-                indices, format
-            );
-        };
+                "index buffer end index {} is out of bounds for len {} and format {:?}",
+                indices.end, index_buffer.size, index_buffer.format,
+            )
+        }
 
-        // let buffer = self.ctx.executor.resources.buffers.get(buffer.0).unwrap();
-        // let buffer_size = unsafe { buffer.buffer.borrow().size() };
-        // assert!(
-        //     buffer_size >= min_size.into(),
-        //     "index buffer of size {} is too small for indices={:?} format={:?}",
-        //     buffer_size,
-        //     indices,
-        //     format,
-        // );
+        if indices.len() == 0 || instances.len() == 0 {
+            return;
+        }
 
         self.binding.num_buffers += 1;
 
@@ -2365,6 +2390,12 @@ impl<'a, 'b> Drop for RenderPass<'a, 'b> {
     fn drop(&mut self) {
         self.commit();
     }
+}
+
+#[derive(Copy, Clone, Debug)]
+struct IndexBufferSpec {
+    size: usize,
+    format: IndexFormat,
 }
 
 #[derive(Debug)]
@@ -2495,7 +2526,7 @@ struct DepthStencilAttachmentOwned {
 enum DrawCmd {
     SetPipeline(PipelineId),
     SetDescriptorSet(u32, DescriptorSetId),
-    SetIndexBuffer(BufferId, IndexFormat),
+    SetIndexBuffer(BufferId, IndexFormat, std::range::Range<usize>),
     SetPushConstants(Vec<u8>, ShaderStages, u32),
     Draw(DrawCall),
 }
