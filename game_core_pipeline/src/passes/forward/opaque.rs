@@ -100,6 +100,10 @@ impl OpaqueForwardPass {
             return;
         }
 
+        if params.base_out_instance != 0 {
+            todo!();
+        }
+
         let instances_in = params.mesh.instances.opaque.buffer(queue);
         let draws = queue.create_buffer(&BufferDescriptor {
             size: params.mesh.instances.num_opaque as usize * size_of::<DrawIndirectCommand>(),

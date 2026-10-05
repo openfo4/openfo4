@@ -113,7 +113,7 @@ impl OpaqueShadowMapPass {
             DrawcallGenParams {
                 instance_count: params.mesh.instances.num_opaque,
                 instances_in,
-                instances_out: &instances_out,
+                instances_out: instances_out.slice(..),
                 draws: &draws,
             },
         );

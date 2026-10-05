@@ -84,6 +84,11 @@ impl TransparentForwardPass {
                         stages: ShaderStages::FRAGMENT,
                         kind: DescriptorType::Sampler,
                     },
+                    PipelineBinding {
+                        name: "base_out_instance",
+                        stages: ShaderStages::VERTEX,
+                        kind: DescriptorType::Uniform,
+                    },
                 ],
                 builder: Box::new(|_queue, shaders, _ctx| {
                     vec![
@@ -124,6 +129,11 @@ impl TransparentForwardPass {
         let draws = queue.create_buffer(&BufferDescriptor {
             size: params.mesh.instances.num_transparent as usize * size_of::<DrawIndirectCommand>(),
             usage: BufferUsage::STORAGE | BufferUsage::INDIRECT,
+            flags: UsageFlags::empty(),
+        });
+        let base_out_instances = queue.create_buffer_init(&BufferInitDescriptor {
+            contents: bytemuck::bytes_of(&params.base_out_instance),
+            usage: BufferUsage::UNIFORM,
             flags: UsageFlags::empty(),
         });
 
@@ -172,6 +182,11 @@ impl TransparentForwardPass {
             BindingResource::TextureArray(params.textures),
         );
         pass.set("sampler", ShaderStages::FRAGMENT, params.sampler);
+        pass.set(
+            "base_out_instance",
+            ShaderStages::VERTEX,
+            &base_out_instances,
+        );
 
         let mut pass = pass.run_render_pass(&RenderPassDescriptor {
             name: "Forward Transparent",

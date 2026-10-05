@@ -13,6 +13,7 @@ struct Input {
     [[vk::location(1)]] u32 vertex_id;
     [[vk::location(2)]] Vec2 uv;
     [[vk::location(3)]] f32 alpha;
+    [[vk::location(4)]] u32 draw_id;
 }
 
 struct Output {
@@ -21,7 +22,7 @@ struct Output {
 
 [shader("fragment")]
 func main(input: Input) -> Output {
-    let instance = instances[input.instance_id];
+    let instance = instances[input.draw_id];
     let material = materials[instance.material_index];
 
     let alpha = textures[material.base_color_texture].Sample(sampler, input.uv).a * input.alpha * material.base_color.a;
@@ -31,7 +32,6 @@ func main(input: Input) -> Output {
 
     Output output;
     output.ids.x = input.instance_id;
-    output.ids.x = (input.instance_id + 1) | (1 << 31);
     output.ids.y = input.vertex_id;
     return output;
 }

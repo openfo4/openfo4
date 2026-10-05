@@ -24,7 +24,6 @@ pub struct ShadingParameters<'a> {
     pub offsets: &'a Buffer,
     pub instances: &'a Buffer,
     pub index_buffer: &'a Buffer,
-    pub instances_transparent_mask: &'a Buffer,
     pub directional_lights: &'a Buffer,
     pub point_lights: &'a Buffer,
     pub spot_lights: &'a Buffer,
@@ -102,11 +101,6 @@ impl ShadingPipeline {
                     },
                     PipelineBinding {
                         name: "index_buffer",
-                        stages: ShaderStages::COMPUTE,
-                        kind: DescriptorType::Storage,
-                    },
-                    PipelineBinding {
-                        name: "instances_transparent_mask",
                         stages: ShaderStages::COMPUTE,
                         kind: DescriptorType::Storage,
                     },
@@ -196,11 +190,6 @@ impl ShadingPipeline {
         pass.set("instances", ShaderStages::COMPUTE, params.instances);
         pass.set("index_buffer", ShaderStages::COMPUTE, params.index_buffer);
         pass.set(
-            "instances_transparent_mask",
-            ShaderStages::COMPUTE,
-            params.instances_transparent_mask,
-        );
-        pass.set(
             "directional_lights",
             ShaderStages::COMPUTE,
             params.directional_lights,
@@ -230,7 +219,7 @@ impl ShadingPipeline {
         pass.set(
             "shadow_light_vps",
             ShaderStages::COMPUTE,
-            BindingResource::Buffer(params.shadow_light_vps),
+            BindingResource::Buffer(params.shadow_light_vps.slice(..)),
         );
         pass.set(
             "shadow_sampler",

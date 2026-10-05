@@ -123,14 +123,9 @@ impl OpaqueVertexForwardPass {
             usage: TextureUsage::RENDER_ATTACHMENT | TextureUsage::TEXTURE_BINDING,
         });
 
-        let opauqe_instances = ctx.queue.create_buffer(&BufferDescriptor {
-            size: state
-                .mesh
-                .instances
-                .opaque
-                .buffer(ctx.queue)
-                .size()
-                .max(size_of::<Instance>()),
+        let num_instances = state.mesh.instances.num_opaque + state.mesh.instances.num_transparent;
+        let instances_out = ctx.queue.create_buffer(&BufferDescriptor {
+            size: usize::max(num_instances as usize, 1) * size_of::<Instance>(),
             usage: BufferUsage::STORAGE,
             flags: UsageFlags::empty(),
         });
@@ -141,9 +136,15 @@ impl OpaqueVertexForwardPass {
         let mut visbuffer_load_op = LoadOp::Clear(Color::BLACK);
         let mut depth_load_op = LoadOp::Clear(0.0);
 
+        let mut instances_out_offset = 0;
+
         // Opaque Forward
         if state.mesh.instances.num_opaque != 0 {
             let mut pipeline = self.opaque.lock();
+
+            let offset = instances_out_offset * size_of::<Instance>();
+            let count = state.mesh.instances.num_opaque as usize * size_of::<Instance>();
+            let instances_out = instances_out.slice(offset..offset + count);
 
             pipeline.run(
                 ctx.queue,
@@ -152,14 +153,17 @@ impl OpaqueVertexForwardPass {
                     mesh: &mut state.mesh,
                     depth: &depth_texture,
                     visbuffer: &visbuffer.create_view(&TextureViewDescriptor::default()),
-                    instances_out: &opauqe_instances,
+                    instances_out,
                     depth_load_op,
                     visbuffer_load_op,
                     materials: materials,
                     textures: &textures,
                     sampler: &self.linear_sampler,
+                    base_out_instance: instances_out_offset as u32,
                 },
             );
+
+            instances_out_offset += state.mesh.instances.num_opaque as usize;
 
             visbuffer_load_op = LoadOp::Load;
             depth_load_op = LoadOp::Load;
@@ -196,21 +200,13 @@ impl OpaqueVertexForwardPass {
             }
         }
 
-        let alpha_mask_instances = ctx.queue.create_buffer(&BufferDescriptor {
-            size: state
-                .mesh
-                .instances
-                .transparent
-                .buffer(ctx.queue)
-                .size()
-                .max(size_of::<Instance>()),
-            flags: UsageFlags::empty(),
-            usage: BufferUsage::STORAGE,
-        });
-
         // Alpha Mask forward
         if state.mesh.instances.num_transparent != 0 {
             let mut pipeline = self.transparent.lock();
+
+            let offset = instances_out_offset * size_of::<Instance>();
+            let count = state.mesh.instances.num_transparent as usize * size_of::<Instance>();
+            let instances_out = instances_out.slice(offset..offset + count);
 
             pipeline.run(
                 ctx.queue,
@@ -224,9 +220,12 @@ impl OpaqueVertexForwardPass {
                     sampler: &self.linear_sampler,
                     visbuffer_load_op,
                     depth_load_op,
-                    instances_out: &alpha_mask_instances,
+                    instances_out,
+                    base_out_instance: instances_out_offset as u32,
                 },
             );
+
+            instances_out_offset += state.mesh.instances.num_transparent as usize;
         }
 
         let positions = state.mesh.positions.buffer();
@@ -310,9 +309,8 @@ impl OpaqueVertexForwardPass {
                     tangents,
                     colors,
                     offsets,
-                    instances: &opauqe_instances,
+                    instances: &instances_out,
                     index_buffer,
-                    instances_transparent_mask: &alpha_mask_instances,
                     directional_lights,
                     point_lights,
                     spot_lights,

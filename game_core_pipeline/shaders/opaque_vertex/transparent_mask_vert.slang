@@ -4,6 +4,7 @@ import material;
 import shared;
 
 ConstantBuffer<Camera> camera;
+ConstantBuffer<u32> base_out_instance;
 
 StructuredBuffer<InstanceOut> instances;
 StructuredBuffer<MeshOffsets> offsets;
@@ -28,6 +29,7 @@ struct Output {
     [[vk::location(1)]] u32 vertex_id;
     [[vk::location(2)]] Vec2 uv;
     [[vk::location(3)]] f32 alpha;
+    [[vk::location(4)]] u32 draw_id;
 }
 
 [shader("vertex")]
@@ -47,8 +49,10 @@ func main(input: Input) -> Output {
     output.clip_position.z += material.depth_bias;
     output.uv = uv * material.uv_scale + material.uv_offset;
     output.alpha = color.a;
-    output.instance_id = input.draw_id;
+    // ID 0 is reserved for no triangle.
+    output.instance_id = input.draw_id + 1 + base_out_instance;
     output.vertex_id = input.index / 3;
+    output.draw_id = input.draw_id;
     return output;
 }
 

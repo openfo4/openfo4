@@ -31,7 +31,6 @@ StructuredBuffer<f32> colors;
 StructuredBuffer<MeshOffsets> offsets;
 StructuredBuffer<InstanceOut> instances;
 StructuredBuffer<u32> index_buffer;
-StructuredBuffer<InstanceOut> instances_transparent_mask;
 
 StructuredBuffer<DirectionalLight> directional_lights;
 StructuredBuffer<PointLight> point_lights;
@@ -81,16 +80,7 @@ void main(
     let instance_id = input.x - 1;
     let triangle_id = input.y;
 
-    // TODO: For now the MSB indicates that the instance comes from the
-    // transparent instance buffer. In the future we would like to
-    // combine both buffers such that this is not necessary.
-    InstanceOut instance;
-    if ((instance_id & (1 << 31)) != 0) {
-        static const u32 MASK = (1 << 31) - 1;
-        instance = instances_transparent_mask[instance_id & MASK];
-    } else {
-        instance = instances[instance_id];
-    }
+    let instance = instances[instance_id];
 
     let offsets = offsets[instance.offsets_index];
     let material = materials[instance.material_index];

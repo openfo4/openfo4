@@ -1,5 +1,6 @@
 use game_render::api::{
-    Buffer, BufferInitDescriptor, CommandQueue, ComputePassDescriptor, ComputeStage, PipelineStage,
+    Buffer, BufferInitDescriptor, BufferSlice, CommandQueue, ComputePassDescriptor, ComputeStage,
+    PipelineStage,
 };
 use game_render::backend::allocator::UsageFlags;
 use game_render::backend::{BufferUsage, DescriptorType, ShaderStages};
@@ -15,7 +16,7 @@ const WORKGROUP_SIZE: u32 = 64;
 pub struct DrawcallGenParams<'a> {
     pub instance_count: u32,
     pub instances_in: &'a Buffer,
-    pub instances_out: &'a Buffer,
+    pub instances_out: BufferSlice<'a>,
     pub draws: &'a Buffer,
 }
 

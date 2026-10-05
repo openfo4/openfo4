@@ -133,7 +133,7 @@ impl TransparentShadowMapPass {
             DrawcallGenParams {
                 instance_count: params.mesh.instances.num_transparent,
                 instances_in,
-                instances_out: &instances_out,
+                instances_out: instances_out.slice(..),
                 draws: &draws,
             },
         );

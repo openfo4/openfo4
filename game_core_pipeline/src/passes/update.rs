@@ -597,7 +597,7 @@ fn create_object(
         layout,
         entries: &[DescriptorSetEntry {
             binding: 0,
-            resource: BindingResource::Buffer(&transform_buffer),
+            resource: BindingResource::Buffer(transform_buffer.slice(..)),
         }],
     })
 }
