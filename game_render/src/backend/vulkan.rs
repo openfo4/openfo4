@@ -4867,8 +4867,6 @@ impl<'a> DescriptorSet<'a> {
                     for texture in textures {
                         let info = vk::DescriptorImageInfo::default()
                             .image_view(texture.view)
-                            // TODO: Use a more suitable format than GENERAL
-                            // depending on usage.
                             .image_layout(vk::ImageLayout::GENERAL)
                             .sampler(vk::Sampler::null());
 
