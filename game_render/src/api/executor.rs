@@ -315,7 +315,8 @@ impl Executor {
         // be big chunks of data to be uploaded and that would result
         // in significant memory waste for most frames. Reallocating the
         // Vec is relatively cheap.
-        let staging_memory_pool = core::mem::take(&mut *resources.staging_memory.lock());
+        // let staging_memory_pool = core::mem::take(&mut *resources.staging_memory.lock());
+        let mut staging_memory_pool = resources.staging_memory.lock();
 
         let mut offset = 0;
         let mut buffers = Vec::new();
@@ -368,6 +369,10 @@ impl Executor {
                 texture: &[],
             });
         }
+
+        let new_cap = staging_memory_pool.len().next_power_of_two();
+        staging_memory_pool.clear();
+        staging_memory_pool.shrink_to(new_cap);
 
         StagingPool { buffers }
     }
@@ -666,16 +671,16 @@ fn build_descriptor_set(
 
     for (binding, resource) in descriptor_set.bindings.iter() {
         let resource = match resource {
-            DescriptorSetResource::UniformBuffer(buffer) => {
+            DescriptorSetResource::UniformBuffer(buffer, range) => {
                 let buffer = executor.buffers.get(*buffer).unwrap();
-                let view = buffer.buffer.slice(..);
+                let view = buffer.buffer.slice(*range);
                 let view = buffer_views.insert(view);
 
                 WriteDescriptorResource::UniformBuffer(slice::from_ref(view))
             }
-            DescriptorSetResource::StorageBuffer(buffer) => {
+            DescriptorSetResource::StorageBuffer(buffer, range) => {
                 let buffer = executor.buffers.get(*buffer).unwrap();
-                let view = buffer.buffer.slice(..);
+                let view = buffer.buffer.slice(*range);
                 let view = buffer_views.insert(view);
 
                 WriteDescriptorResource::StorageBuffer(slice::from_ref(view))

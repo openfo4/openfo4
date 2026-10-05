@@ -169,8 +169,8 @@ impl CommandExecutor {
 
                     for resource in set.bindings.into_values() {
                         match resource {
-                            DescriptorSetResource::UniformBuffer(id)
-                            | DescriptorSetResource::StorageBuffer(id) => {
+                            DescriptorSetResource::UniformBuffer(id, _range)
+                            | DescriptorSetResource::StorageBuffer(id, _range) => {
                                 self.resources.with_buffer_rc(id, |ref_count| {
                                     if ref_count.decrement_internal() {
                                         self.resources
@@ -351,11 +351,10 @@ impl<'a> CommandQueue<'a> {
             "Buffer cannot be written to: TRANSFER_DST not set",
         );
 
-        let buffer_len = buffer.end - buffer.start;
         assert!(
-            buffer_len as usize >= data.len(),
+            buffer.len() >= data.len(),
             "destination buffer slice ({}) is too small for write of {} bytes",
-            buffer_len,
+            buffer.len(),
             data.len(),
         );
 
@@ -375,7 +374,7 @@ impl<'a> CommandQueue<'a> {
             &self.executor.resources,
             Command::WriteBuffer(WriteBuffer {
                 buffer: buffer.buffer.id,
-                offset: buffer.start,
+                offset: buffer.slice.start,
                 staging_memory_offset,
                 count: data.len(),
             }),
@@ -634,8 +633,8 @@ impl<'a> CommandQueue<'a> {
             "Buffer cannot be written to: TRANSFER_DST not set",
         );
 
-        let src_len = src.end - src.start;
-        let dst_len = dst.end - dst.start;
+        let src_len = src.len();
+        let dst_len = dst.len();
         assert_eq!(
             src_len, dst_len,
             "invalid buffer copy: source len {} must be equal to destination len {}",
@@ -646,17 +645,17 @@ impl<'a> CommandQueue<'a> {
         // source and destination do not overlap.
         if src.buffer.id == dst.buffer.id {
             assert!(
-                src.start >= dst.end || dst.start >= src.end,
+                src.slice.start >= dst.slice.end || dst.slice.start >= src.slice.end,
                 "if copying within the same buffer source {:?} and destination {:?} must not overlap",
-                src.start..src.end,
-                dst.start..dst.end,
+                src.slice.start..src.slice.end,
+                dst.slice.start..dst.slice.end,
             );
         }
 
         // Ensure that both buffers are big enough for the copy.
         // This invariant is guaranteed by the `BufferSlice` impl.
-        debug_assert!(src.buffer.size >= src.start + src_len);
-        debug_assert!(dst.buffer.size >= dst.start + dst_len);
+        debug_assert!(src.buffer.size >= src.slice.start + src_len);
+        debug_assert!(dst.buffer.size >= dst.slice.start + dst_len);
 
         // We don't actually have to copy anything if the destination is
         // empty.
@@ -681,9 +680,9 @@ impl<'a> CommandQueue<'a> {
             &self.executor.resources,
             Command::CopyBufferToBuffer(CopyBufferToBuffer {
                 src: src.buffer.id,
-                src_offset: src.start,
+                src_offset: src.slice.start,
                 dst: dst.buffer.id,
-                dst_offset: dst.start,
+                dst_offset: dst.slice.start,
                 count,
             }),
         );
@@ -832,35 +831,35 @@ impl<'a> CommandQueue<'a> {
             let resource = match entry.resource {
                 BindingResource::Buffer(buffer) if layout_ty == DescriptorType::Uniform => {
                     assert!(
-                        buffer.usage.contains(BufferUsage::UNIFORM),
+                        buffer.buffer.usage.contains(BufferUsage::UNIFORM),
                         "Binding uniform buffer requires UNIFORM bit",
                     );
 
                     self.executor
                         .resources
-                        .with_buffer_rc(buffer.id, |ref_count| {
+                        .with_buffer_rc(buffer.buffer.id, |ref_count| {
                             ref_count.increment_internal();
                         });
 
                     num_buffers += 1;
 
-                    DescriptorSetResource::UniformBuffer(buffer.id)
+                    DescriptorSetResource::UniformBuffer(buffer.buffer.id, buffer.slice)
                 }
                 BindingResource::Buffer(buffer) if layout_ty == DescriptorType::Storage => {
                     assert!(
-                        buffer.usage.contains(BufferUsage::STORAGE),
+                        buffer.buffer.usage.contains(BufferUsage::STORAGE),
                         "Binding storage buffer requires STORAGE bit",
                     );
 
                     self.executor
                         .resources
-                        .with_buffer_rc(buffer.id, |ref_count| {
+                        .with_buffer_rc(buffer.buffer.id, |ref_count| {
                             ref_count.increment_internal();
                         });
 
                     num_buffers += 1;
 
-                    DescriptorSetResource::StorageBuffer(buffer.id)
+                    DescriptorSetResource::StorageBuffer(buffer.buffer.id, buffer.slice)
                 }
                 BindingResource::Buffer(_) => unreachable!(),
                 BindingResource::Sampler(sampler) => {
@@ -1771,28 +1770,16 @@ impl Buffer {
         self.size
     }
 
+    /// Creates a slice of this `Buffer`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the given `range` is out of bounds for this `Buffer`.
     pub fn slice<T>(&self, range: T) -> BufferSlice<'_>
     where
         T: RangeBounds<usize>,
     {
-        let start = match range.start_bound() {
-            Bound::Included(index) => *index,
-            Bound::Excluded(index) => *index + 1,
-            Bound::Unbounded => 0,
-        };
-        let end = match range.end_bound() {
-            Bound::Included(index) => *index + 1,
-            Bound::Excluded(index) => *index,
-            Bound::Unbounded => self.size,
-        };
-
-        assert!(start <= self.size && end <= self.size && start <= end);
-
-        BufferSlice {
-            buffer: self,
-            start,
-            end,
-        }
+        BufferSlice::new(&BufferSlice::from_entire_buffer(self), range)
     }
 }
 
@@ -1855,11 +1842,101 @@ pub trait IntoBufferSlice {
     fn into_buffer_slice(&self) -> BufferSlice<'_>;
 }
 
+/// A potentially partial view of a [`Buffer`].
 #[derive(Copy, Clone, Debug)]
 pub struct BufferSlice<'a> {
     buffer: &'a Buffer,
-    start: usize,
-    end: usize,
+    slice: std::range::Range<usize>,
+}
+
+impl<'a> BufferSlice<'a> {
+    #[track_caller]
+    fn new<T>(buffer: &BufferSlice<'a>, range: T) -> Self
+    where
+        T: RangeBounds<usize>,
+    {
+        let start = match range.start_bound() {
+            Bound::Included(index) => *index,
+            Bound::Excluded(index) => match index.checked_add(1) {
+                Some(index) if index < buffer.len() => index,
+                _ => {
+                    panic!(
+                        "range start index {} out of range for buffer slice of lenth {}",
+                        index,
+                        buffer.len()
+                    );
+                }
+            },
+            Bound::Unbounded => 0,
+        };
+        let end = match range.end_bound() {
+            Bound::Included(index) => match index.checked_add(1) {
+                Some(index) if index < buffer.len() => index,
+                _ => {
+                    panic!(
+                        "range end index {} out of range for buffer slice of lenth {}",
+                        index,
+                        buffer.len()
+                    );
+                }
+            },
+            Bound::Excluded(index) => *index,
+            Bound::Unbounded => buffer.len(),
+        };
+
+        assert!(
+            end >= start,
+            "range starts at {} but ends at {}",
+            start,
+            end
+        );
+
+        // We know that the given `BufferSlice` has valid bounds and the
+        // given range bounds are valid within the `BufferSlice`, so the
+        // sub-`BufferSlice` also has valid bounds.
+        let slice = std::range::Range {
+            start: buffer.slice.start + start,
+            end: buffer.slice.start + end,
+        };
+
+        Self {
+            buffer: buffer.buffer,
+            slice,
+        }
+    }
+
+    fn from_entire_buffer(buffer: &'a Buffer) -> Self {
+        Self {
+            buffer,
+            slice: std::range::Range {
+                start: 0,
+                end: buffer.size,
+            },
+        }
+    }
+
+    /// Returns the size of the slice in bytes.
+    pub const fn len(&self) -> usize {
+        self.slice.end - self.slice.start
+    }
+
+    /// Returns `true` if the slice is empty.
+    pub const fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
+    /// Creates a subslice of this [`BufferSlice`].
+    ///
+    /// # Panics
+    ///
+    /// Panics if the given `range` is out of bounds for this `BufferSlice`.
+    #[track_caller]
+    pub fn slice<T>(&self, range: T) -> BufferSlice<'a>
+    where
+        T: RangeBounds<usize>,
+    {
+        Self::new(self, range)
+    }
 }
 
 impl<'a> IntoBufferSlice for BufferSlice<'a> {
@@ -1880,7 +1957,7 @@ pub struct DescriptorSetEntry<'a> {
 
 #[derive(Copy, Clone, Debug)]
 pub enum BindingResource<'a> {
-    Buffer(&'a Buffer),
+    Buffer(BufferSlice<'a>),
     Sampler(&'a Sampler),
     Texture(&'a TextureView),
     TextureArray(&'a [&'a TextureView]),
@@ -1888,6 +1965,12 @@ pub enum BindingResource<'a> {
 
 impl<'a> From<&'a Buffer> for BindingResource<'a> {
     fn from(value: &'a Buffer) -> Self {
+        Self::from(value.slice(..))
+    }
+}
+
+impl<'a> From<BufferSlice<'a>> for BindingResource<'a> {
+    fn from(value: BufferSlice<'a>) -> Self {
         Self::Buffer(value)
     }
 }
@@ -2187,7 +2270,7 @@ impl<'a, 'b> RenderPass<'a, 'b> {
         assert!(self.last_pipeline.is_some(), "Pipeline is not set");
         assert!(indirect_buffer.buffer.usage.contains(BufferUsage::INDIRECT));
 
-        let len = indirect_buffer.end - indirect_buffer.start;
+        let len = indirect_buffer.len();
         assert_eq!(len % size_of::<DrawIndirectCommand>(), 0);
         let count = len / size_of::<DrawIndirectCommand>();
 
@@ -2203,7 +2286,7 @@ impl<'a, 'b> RenderPass<'a, 'b> {
         self.cmds
             .push(DrawCmd::Draw(DrawCall::DrawIndirect(DrawIndirect {
                 buffer: indirect_buffer.buffer.id,
-                offset: indirect_buffer.start,
+                offset: indirect_buffer.slice.start,
                 count: count as u32,
             })));
     }
@@ -2229,7 +2312,7 @@ impl<'a, 'b> RenderPass<'a, 'b> {
         assert!(self.last_pipeline.is_some(), "Pipeline is not set");
         assert!(indirect_buffer.buffer.usage.contains(BufferUsage::INDIRECT));
 
-        let len = indirect_buffer.end - indirect_buffer.start;
+        let len = indirect_buffer.len();
         assert_eq!(len % size_of::<DrawIndexedIndirectCommand>(), 0);
         let count = len / size_of::<DrawIndexedIndirectCommand>();
 
@@ -2245,7 +2328,7 @@ impl<'a, 'b> RenderPass<'a, 'b> {
         self.cmds.push(DrawCmd::Draw(DrawCall::DrawIndexedIndirect(
             DrawIndexedIndirect {
                 buffer: indirect_buffer.buffer.id,
-                offset: indirect_buffer.start,
+                offset: indirect_buffer.slice.start,
                 count: count as u32,
             },
         )));

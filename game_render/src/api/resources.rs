@@ -1,3 +1,4 @@
+use std::range::Range;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
@@ -253,8 +254,8 @@ pub struct DescriptorSetInner {
 /// A resource that can be bound to a descriptor set.
 #[derive(Debug)]
 pub enum DescriptorSetResource {
-    UniformBuffer(BufferId),
-    StorageBuffer(BufferId),
+    UniformBuffer(BufferId, Range<usize>),
+    StorageBuffer(BufferId, Range<usize>),
     Sampler(SamplerId),
     SampledTexture(Vec<RawTextureView>),
     StorageTexture(Vec<RawTextureView>),

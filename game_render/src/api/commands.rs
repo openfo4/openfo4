@@ -269,8 +269,8 @@ impl Command {
 
                             for (binding, resource) in &descriptor_set.bindings {
                                 match resource {
-                                    DescriptorSetResource::UniformBuffer(buffer)
-                                    | DescriptorSetResource::StorageBuffer(buffer) => {
+                                    DescriptorSetResource::UniformBuffer(buffer, _range)
+                                    | DescriptorSetResource::StorageBuffer(buffer, _range) => {
                                         if let Some(access) = pipeline.bindings.get(*group, binding)
                                         {
                                             *buffers.entry(*buffer).or_default() |= access;
@@ -402,8 +402,8 @@ impl Command {
 
                             for (binding, resource) in &descriptor_set.bindings {
                                 match resource {
-                                    DescriptorSetResource::UniformBuffer(buffer)
-                                    | DescriptorSetResource::StorageBuffer(buffer) => {
+                                    DescriptorSetResource::UniformBuffer(buffer, _range)
+                                    | DescriptorSetResource::StorageBuffer(buffer, _range) => {
                                         if let Some(access) = pipeline.bindings.get(*group, binding)
                                         {
                                             *buffers.entry(*buffer).or_default() |= access;

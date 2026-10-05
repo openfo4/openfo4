@@ -1076,6 +1076,18 @@ impl Adapter {
             max_push_constants_size: props.properties.limits.max_push_constants_size,
             max_bound_descriptor_sets: props.properties.limits.max_bound_descriptor_sets,
             max_memory_allocation_count: props.properties.limits.max_memory_allocation_count,
+            max_uniform_buffer_range: props
+                .properties
+                .limits
+                .max_uniform_buffer_range
+                .try_into()
+                .unwrap_or(usize::MAX),
+            max_storage_buffer_range: props
+                .properties
+                .limits
+                .max_storage_buffer_range
+                .try_into()
+                .unwrap_or(usize::MAX),
             buffer_image_granularity: props.properties.limits.buffer_image_granularity,
             max_per_stage_descriptor_samplers: props
                 .properties
@@ -4480,7 +4492,7 @@ impl Buffer {
     {
         let start = match range.start_bound() {
             Bound::Included(start) => *start,
-            Bound::Excluded(start) => *start - 1,
+            Bound::Excluded(start) => *start + 1,
             Bound::Unbounded => 0,
         };
 
@@ -4489,6 +4501,10 @@ impl Buffer {
             Bound::Excluded(end) => *end,
             Bound::Unbounded => self.size,
         };
+
+        debug_assert!(start <= self.size);
+        debug_assert!(end <= self.size);
+        debug_assert!(end >= start);
 
         BufferView {
             buffer: self,
@@ -4792,10 +4808,28 @@ impl<'a> DescriptorSet<'a> {
                 WriteDescriptorResource::UniformBuffer(buffers)
                 | WriteDescriptorResource::StorageBuffer(buffers) => {
                     for buffer in buffers {
+                        let offset = buffer.view.start;
+                        let range = buffer.view.len();
+
+                        // The buffer view range must be in bounds and not empty.
+                        debug_assert!(offset <= buffer.buffer.size());
+                        debug_assert!(offset + range <= buffer.buffer.size());
+                        debug_assert_ne!(range, 0);
+
+                        if matches!(binding.resource, WriteDescriptorResource::UniformBuffer(_)) {
+                            debug_assert!(
+                                range <= self.pool.device.limits.max_uniform_buffer_range
+                            );
+                        } else {
+                            debug_assert!(
+                                range <= self.pool.device.limits.max_storage_buffer_range
+                            );
+                        }
+
                         let info = vk::DescriptorBufferInfo::default()
                             .buffer(buffer.buffer().buffer)
-                            .offset(buffer.offset() as vk::DeviceSize)
-                            .range(buffer.len() as vk::DeviceSize);
+                            .offset(buffer.view.start as vk::DeviceSize)
+                            .range(buffer.view.len() as vk::DeviceSize);
 
                         infos.push(Info { buffer: info });
                     }
@@ -5272,6 +5306,10 @@ pub struct DeviceLimits {
     max_push_constants_size: u32,
     max_bound_descriptor_sets: u32,
     max_memory_allocation_count: u32,
+    /// The maximum size in bytes of a uniform buffer binding of a descriptor.
+    max_uniform_buffer_range: usize,
+    /// The maximum size in bytes of a storage buffer binding of a descriptor.
+    max_storage_buffer_range: usize,
     /// Is always a power of two.
     buffer_image_granularity: u64,
     max_per_stage_descriptor_samplers: u32,
