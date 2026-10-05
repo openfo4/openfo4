@@ -144,7 +144,7 @@ public namespace pbr {
     }
 
     func F_Schlick(u: f32, f0: Vec3, f90: f32) -> Vec3 {
-        return f0 + (Vec3(f90) - f0) * pow(1.0 - u, 5.0);
+        return f0 + (Vec3(f90) - f0) * pow5(1.0 - u);
     }
 
     func fresnel(LoH: f32, f0: Vec3) -> Vec3 {
@@ -178,5 +178,12 @@ public namespace pbr {
         // F = fresnel(f0, LoH);
 
         return (D * V) * F;
+    }
+
+    /// Returns `pow(x, 5)`.
+    ///
+    /// Unlike `pow` this function is defined for all inputs.
+    func pow5(x: f32) -> f32 {
+        return x * x * x * x * x;
     }
 }
