@@ -5,8 +5,6 @@ edition = "2021"
 
 [features]
 default = []
-net = []
-wasm = []
 
 [lib]
 proc-macro = true
