@@ -2,6 +2,8 @@
 /vendor
 /build
 
+*.log
+
 # Game files
 # Don't accidently commit these.
 *.esp
