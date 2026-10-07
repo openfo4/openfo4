@@ -30,6 +30,9 @@ pub struct EguiContext {
     textures: HashMap<egui::TextureId, TextureState>,
 
     ui_scale: f32,
+
+    /// Textures to be freed in the next frame.
+    free_textures: Vec<egui::TextureId>,
 }
 
 impl EguiContext {
@@ -54,6 +57,7 @@ impl EguiContext {
             textures: HashMap::new(),
             ui_scale: 1.0,
             start_time: Instant::now(),
+            free_textures: Vec::new(),
         }
     }
 
@@ -197,7 +201,7 @@ impl EguiContext {
             self.renderer.destroy_mesh(mesh);
         }
 
-        for id in output.textures_delta.free {
+        for id in self.free_textures.drain(..) {
             let Some(state) = self.textures.remove(&id) else {
                 continue;
             };
@@ -263,6 +267,9 @@ impl EguiContext {
                 },
             );
         }
+
+        // Defer frees until the next frame, the texture may be used in this frame.
+        self.free_textures.extend(output.textures_delta.free);
 
         let primitives = self
             .context
