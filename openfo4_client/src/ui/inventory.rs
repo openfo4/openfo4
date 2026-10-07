@@ -32,6 +32,10 @@ pub fn draw_inventory(
                 write!(text, " ({})", item.count).unwrap();
             }
 
+            if item.equipped {
+                write!(text, " [EQ]").unwrap();
+            }
+
             if ui.button(RichText::new(text)).clicked() {
                 if item.equipped {
                     events.send(UnequipItemEvent {
