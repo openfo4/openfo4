@@ -23,11 +23,9 @@ use game_gizmos::Gizmos;
 use game_render::RenderTarget;
 use game_render::Renderer;
 use game_tasks::TaskPool;
-use game_ui::runtime::DocumentId;
-use game_ui::{UiState, WindowProperties};
 use game_ui_render::UiRenderer;
 use game_window::events::WindowEvent;
-use game_window::windows::{WindowBuilder, WindowId};
+use game_window::windows::WindowBuilder;
 use game_window::{WindowManager, WindowManagerContext};
 use glam::IVec2;
 use glam::UVec2;
@@ -112,7 +110,6 @@ fn main() -> ExitCode {
     let ui_renderer = Arc::new(UiRenderer::new(&mut renderer));
     let egui_ctx = EguiContext::new(ui_renderer.clone());
 
-    let ui = UiState::new(&mut renderer);
     let mut game =
         futures_lite::future::block_on(create_game(shared.clone(), pool, &data_dirs, config));
     game.init_camera();
@@ -127,9 +124,6 @@ fn main() -> ExitCode {
     let app = App {
         game,
         state,
-        ui,
-        doc: None,
-        window,
         size: UVec2::ZERO,
         time: Time::new(),
         egui_ctx,
@@ -240,9 +234,6 @@ async fn spawn_player(game: &mut GameState) {
 struct App {
     game: GameState,
     state: RenderState,
-    ui: UiState,
-    doc: Option<DocumentId>,
-    window: WindowId,
     size: UVec2,
     time: Time,
     egui_ctx: EguiContext,
@@ -256,20 +247,10 @@ impl game_window::App for App {
             WindowEvent::WindowCreated(event) => {
                 if let Some(window) = ctx.windows.state(event.window) {
                     self.state.renderer.create(event.window, window.clone());
-                    self.ui.create(
-                        event.window.into(),
-                        WindowProperties {
-                            size: window.inner_size(),
-                            scale_factor: window.scale_factor(),
-                            state: window,
-                        },
-                    );
-                    self.doc = self.ui.runtime().create_document(event.window.into());
                 }
             }
             WindowEvent::WindowResized(event) => {
                 self.state.renderer.resize(event.window, event.size());
-                self.ui.resize(event.window.into(), event.size());
                 self.state.target_size = event.size();
                 self.size = event.size();
             }
@@ -301,20 +282,7 @@ impl game_window::App for App {
         self.game.send_event(event);
     }
 
-    fn update(&mut self, ctx: WindowManagerContext<'_>) {
-        if let Some(doc) = &mut self.doc {
-            self.ui.runtime().destroy_document(*doc);
-            *doc = self
-                .ui
-                .runtime()
-                .create_document(self.window.into())
-                .unwrap();
-            self.ui.resize(self.window.into(), self.size);
-
-            let root = self.ui.runtime().root_context(*doc);
-            root.clear_children();
-        }
-
+    fn update(&mut self, _ctx: WindowManagerContext<'_>) {
         self.egui_ctx.draw(|ctx| {
             ui::draw_ui(
                 ctx,
@@ -328,7 +296,6 @@ impl game_window::App for App {
 
         self.game.update(&self.time, &self.state.gizmos);
         self.state.sync(self.game.world());
-        self.ui.update();
 
         if self.ui_state.debug.draw_colliders {
             draw_colliers(self.game.world(), &self.state.gizmos);
