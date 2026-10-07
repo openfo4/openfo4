@@ -23,10 +23,7 @@ use game_gizmos::Gizmos;
 use game_render::RenderTarget;
 use game_render::Renderer;
 use game_tasks::TaskPool;
-use game_ui::debug_widgets::gpu_timings::GpuTimings;
-use game_ui::debug_widgets::memory_visualizer::MemoryVisualizer;
 use game_ui::runtime::DocumentId;
-use game_ui::widgets::Widget;
 use game_ui::{UiState, WindowProperties};
 use game_ui_render::UiRenderer;
 use game_window::events::WindowEvent;
@@ -316,18 +313,6 @@ impl game_window::App for App {
 
             let root = self.ui.runtime().root_context(*doc);
             root.clear_children();
-
-            // if self.ui_state.debug.draw_gpu_memory_visualizer {
-            //     MemoryVisualizer {
-            //         size: UVec2::splat(1024),
-            //         stats: self.state.renderer.statistics().clone(),
-            //     }
-            //     .mount(&root);
-            //     GpuTimings {
-            //         stats: self.state.renderer.statistics().clone(),
-            //     }
-            //     .mount(&root);
-            // }
         }
 
         self.egui_ctx.draw(|ctx| {

@@ -1,6 +1,6 @@
 use game_egui::egui::{
     Align2, Area, Color32, ColorImage, Context, Label, Painter, Pos2, Rect, RichText, Sense,
-    TextureOptions, Vec2,
+    TextureOptions, Ui, Vec2,
 };
 use game_render::Renderer;
 use game_render::statistics::{AllocationKind, MemoryBlock};
@@ -13,14 +13,14 @@ const COLOR_BUFFER: Color32 = Color32::RED;
 const COLOR_TEXTURE: Color32 = Color32::BLUE;
 
 pub fn draw_gpu_memory_visualizer(ctx: &Context, renderer: &Renderer) {
-    let mem = renderer.statistics().memory.read();
-
     Area::new("gpu_memory_visualizer".into())
         .anchor(Align2::LEFT_TOP, Vec2::ZERO)
         .sense(Sense::empty())
         .interactable(false)
         .movable(false)
         .show(ctx, |ui| {
+            let mem = renderer.statistics().memory.read();
+
             for (_, block) in mem.blocks.iter() {
                 let mut text = format!(
                     "Size: {} Used: {} Usage Ratio: {:.2} Allocations: {}",
@@ -62,6 +62,9 @@ pub fn draw_gpu_memory_visualizer(ctx: &Context, renderer: &Renderer) {
                     Color32::WHITE,
                 );
             }
+
+            drop(mem);
+            draw_gpu_timings(ui, renderer);
         });
 }
 
@@ -109,4 +112,16 @@ fn bytes_to_human_readable(mut bytes: usize) -> String {
     }
 
     format!("{} MiB", bytes)
+}
+
+fn draw_gpu_timings(ui: &mut Ui, renderer: &Renderer) {
+    let timings = renderer.statistics().gpu_timings.read();
+
+    for pass in &timings.passes {
+        let text = format!("{}: {:?}", pass.name, pass.time);
+        let text = RichText::new(text)
+            .background_color(Color32::BLACK)
+            .color(Color32::WHITE);
+        ui.add(Label::new(text).selectable(false).sense(Sense::empty()));
+    }
 }
