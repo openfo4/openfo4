@@ -275,6 +275,12 @@ where
     }
 
     fn read_next(map: &mut FieldMap, key: Text<4>) -> Result<Self, Self::Error> {
-        Self::read(map, key)
+        match map.next_key() {
+            Some(next_key) if next_key == key => {
+                let section = T::read_next(map, key)?;
+                Ok(Some(SubField(section)))
+            }
+            None | Some(_) => Ok(None),
+        }
     }
 }
