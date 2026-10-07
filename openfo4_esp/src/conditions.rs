@@ -255,10 +255,13 @@ pub enum ConditionFunction {
     GetPlayerControlsDisabled(i32, i32, i32),
     #[tag(99)]
     GetHeadingAngle { reference: FormId },
+    /// Returns `true` if the actor has a weapon or a magic spell equipped and drawn.
     #[tag(101)]
     IsWeaponMagicOut,
+    /// Returns `true` if the actor has a torch equipped and drawn.
     #[tag(102)]
     IsTorchOut,
+    /// Returns `true` if the actor has a shield equipped and drawn.
     #[tag(103)]
     IsShieldOut,
     #[tag(106)]

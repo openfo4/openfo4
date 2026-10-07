@@ -31,7 +31,18 @@ pub struct ObjectModificationData {
     pub form_type: ObjectModificationFormType,
     pub max_rank: u8,
     pub level_tier_scaled_offset: u8,
+    /// Where this [`ObjectModification`] is attached to.
+    ///
+    /// Reference to a [`Keyword`].
+    ///
+    /// [`Keyword`]: crate::records::Keyword
     pub attach_point: FormId,
+    /// Attachment points that this [`ObjectModification`] provides for other
+    /// [`ObjectModification`]s to attach to.
+    ///
+    /// Reference to a [`Keyword`].
+    ///
+    /// [`Keyword`]: crate::records::Keyword
     pub attach_parent_slots: Vec<FormId>,
     pub includes: Vec<ObjectModificationInclude>,
     pub properties: Vec<ObjectModificationProperty>,
