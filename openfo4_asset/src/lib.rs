@@ -516,7 +516,8 @@ where
 #[cfg(test)]
 mod tests {
     use std::convert::Infallible;
-    use std::sync::Once;
+    use std::sync::{Arc, Once};
+    use std::thread;
 
     use futures_lite::future::block_on;
 
@@ -640,5 +641,33 @@ mod tests {
         loader.register::<PanickingAsset>("test".to_owned());
 
         block_on(loader.load::<PanickingAsset, _>("hello world")).unwrap();
+    }
+
+    #[test]
+    fn parallel_load_once() {
+        let loader = AssetLoader::new();
+        loader.register::<AssetA>(());
+
+        thread::scope(|s| {
+            let a = s.spawn(|| block_on(loader.load::<AssetA, _>("")).unwrap());
+            let b = s.spawn(|| block_on(loader.load::<AssetA, _>("")).unwrap());
+
+            let a = a.join().unwrap();
+            let b = b.join().unwrap();
+            assert!(Arc::ptr_eq(&a.asset, &b.asset));
+        });
+    }
+
+    #[test]
+    fn parallel_load_and_drop() {
+        let loader = AssetLoader::new();
+        loader.register::<AssetA>(());
+
+        let a = block_on(loader.load::<AssetA, _>("")).unwrap();
+
+        thread::scope(|s| {
+            s.spawn(move || drop(a));
+            s.spawn(|| block_on(loader.load::<AssetA, _>("")).unwrap());
+        });
     }
 }
