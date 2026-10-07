@@ -45,7 +45,7 @@ impl Asset for FileImageHandle {
         ctx: &Self::Context,
     ) -> Result<Self, Self::Error> {
         let image = loader.load::<FileImage, _>(key).await?;
-        let handle = ctx.entities.create_image(image.0.clone());
+        let handle = ctx.entities.create_image_async(image.0.clone()).await;
         Ok(Self(handle))
     }
 }

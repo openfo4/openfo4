@@ -176,11 +176,13 @@ impl Visit for BSTriShape {
             }
         }
 
+        let mesh = visitor.ctx.entities.create_mesh_async(mesh).await;
+
         Some(Node {
             name: self.name.clone(),
             transform,
             renderable: Some(RenderObject {
-                mesh: visitor.ctx.entities.create_mesh(mesh),
+                mesh,
                 material: material.clone(),
             }),
             skin,
