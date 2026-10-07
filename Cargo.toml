@@ -5,7 +5,6 @@ members = [
     "game_core",
     "game_common",
     "game_crash_handler",
-    "game_ui",
     "game_input",
     "game_macros",
     "game_render",
