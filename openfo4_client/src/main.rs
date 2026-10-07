@@ -317,21 +317,27 @@ impl game_window::App for App {
             let root = self.ui.runtime().root_context(*doc);
             root.clear_children();
 
-            if self.ui_state.debug.draw_gpu_memory_visualizer {
-                MemoryVisualizer {
-                    size: UVec2::splat(1024),
-                    stats: self.state.renderer.statistics().clone(),
-                }
-                .mount(&root);
-                GpuTimings {
-                    stats: self.state.renderer.statistics().clone(),
-                }
-                .mount(&root);
-            }
+            // if self.ui_state.debug.draw_gpu_memory_visualizer {
+            //     MemoryVisualizer {
+            //         size: UVec2::splat(1024),
+            //         stats: self.state.renderer.statistics().clone(),
+            //     }
+            //     .mount(&root);
+            //     GpuTimings {
+            //         stats: self.state.renderer.statistics().clone(),
+            //     }
+            //     .mount(&root);
+            // }
         }
 
-        self.egui_ctx
-            .draw(|ctx| ui::draw_ui(ctx, &mut self.ui_state, &mut self.game));
+        self.egui_ctx.draw(|ctx| {
+            ui::draw_ui(
+                ctx,
+                &mut self.ui_state,
+                &mut self.game,
+                &self.state.renderer,
+            )
+        });
 
         self.time.update();
 
