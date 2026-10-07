@@ -262,10 +262,6 @@ fn load_transform_interpolator(
     match nif.get(block) {
         Some(Block::NiTransformInterpolator(interpolator)) => match nif.get(interpolator.data) {
             Some(Block::NiTransformData(data)) => {
-                if let Some(translations) = &data.translations {
-                    Interpolator::new(translations, mode, duration);
-                }
-
                 let translation = data
                     .translations
                     .as_ref()
