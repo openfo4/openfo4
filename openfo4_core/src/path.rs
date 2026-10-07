@@ -237,6 +237,10 @@ impl DataPath {
 
         Some(Self::from_bytes_ref(bytes))
     }
+
+    pub fn as_bstr(&self) -> &BStr {
+        &self.bytes
+    }
 }
 
 impl AsRef<BStr> for DataPath {
