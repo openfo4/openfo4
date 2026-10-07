@@ -79,15 +79,7 @@ impl Image {
                 ));
             }
 
-            if header
-                .pixel_format
-                .flags
-                .contains(PixelFormatFlags::ALPHAPIXELS)
-            {
-                (Format::Rgba8Unorm, AlphaMode::Straight)
-            } else {
-                (Format::Rgba8Unorm, AlphaMode::Straight)
-            }
+            (Format::Rgba8Unorm, AlphaMode::Straight)
         } else {
             return Err(Error::NoData);
         };
@@ -152,13 +144,9 @@ fn read_uncompressed(
             bytes.push(g as u8);
             bytes.push(b as u8);
 
-            if header
-                .pixel_format
-                .flags
-                .contains(PixelFormatFlags::ALPHAPIXELS)
-            {
-                bytes.push(a as u8);
-            }
+            // We always emit the alpha channel because we always return RGBA8
+            // for uncompressed textures.
+            bytes.push(a as u8);
         }
 
         mips.push(MipLevel {
