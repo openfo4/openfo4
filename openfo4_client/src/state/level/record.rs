@@ -178,7 +178,7 @@ impl SpawnEntity {
             world.insert_one(entity, Disabled).unwrap();
         }
 
-        world.insert_one(entity, Frozen::default()).unwrap();
+        world.insert_one(entity, Frozen::FROZEN).unwrap();
 
         world.insert_one(entity, Root).unwrap();
 

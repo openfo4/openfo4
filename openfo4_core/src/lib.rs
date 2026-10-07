@@ -71,6 +71,11 @@ pub struct Frozen {
 }
 
 impl Frozen {
+    pub const FROZEN: Frozen = Frozen {
+        physics: true,
+        controls: true,
+    };
+
     /// Whether any behavior is frozen.
     pub fn is_any_frozen(&self) -> bool {
         let Self { physics, controls } = self;
