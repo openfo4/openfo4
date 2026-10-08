@@ -884,11 +884,6 @@ impl Backend for CraneliftModule {
 
             builder.seal_all_blocks();
 
-            let clif = self
-                .debug
-                .then(|| builder.func.display().to_string())
-                .unwrap_or_default();
-
             builder.finalize(self.isa.frontend_config());
 
             self.ctx.clear();
@@ -898,6 +893,11 @@ impl Backend for CraneliftModule {
                 .compile(&*self.isa, &mut ControlPlane::default())
                 .unwrap();
             let code = self.ctx.take_compiled_code().unwrap();
+
+            let clif = self
+                .debug
+                .then(|| self.ctx.func.display().to_string())
+                .unwrap_or_default();
 
             let mut text = None;
             if self.debug {
