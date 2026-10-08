@@ -2,6 +2,7 @@
 name = "openfo4_ba2"
 version = "0.1.0"
 edition = "2024"
+publish = false
 
 [dependencies]
 openfo4_io = { version = "0.1.0", path = "../openfo4_io" }

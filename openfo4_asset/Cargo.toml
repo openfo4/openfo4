@@ -2,6 +2,7 @@
 name = "openfo4_asset"
 version = "0.1.0"
 edition = "2024"
+publish = false
 
 [dependencies]
 game_tasks = { version = "0.1.0", path = "../game_tasks" }

@@ -2,6 +2,7 @@
 name = "openfo4_client"
 version = "0.1.0"
 edition = "2024"
+publish = false
 
 [dependencies]
 game_window = { version = "0.1.0", path = "../game_window" }
