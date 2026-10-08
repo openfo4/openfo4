@@ -112,6 +112,9 @@ impl AssetLoader {
                         // If we were awoken from another thread that thread
                         // will already have inserted our refcount value.
                         if !was_awoken {
+                            // We hold a shared lock to the bucket while increasing the refcount
+                            // here. Dropping the shared lock performs a `Release` barrier, so
+                            // using a `Relaxed` fetch-add is all we need here.
                             asset.ref_count.fetch_add(1, Ordering::Relaxed);
                         }
 
@@ -187,7 +190,7 @@ impl AssetLoader {
         // NOTE: We have to use the entry API here, even if we know that
         // the entry exists, because we need to have the ability to atomically
         // remove the entry without releasing the slot previously.
-        let Entry::Occupied(mut entry) = assets.assets.entry(key.to_owned()) else {
+        let Entry::Occupied(mut entry) = assets.assets.entry(owned_key.clone()) else {
             unreachable!();
         };
 
@@ -224,7 +227,7 @@ impl AssetLoader {
 
         let asset = Arc::new(AssetState {
             value,
-            key: owned_key.clone(),
+            key: owned_key,
             ref_count,
         });
 
@@ -258,7 +261,7 @@ pub trait Asset: Sized + Send + Sync + 'static {
     ) -> impl Future<Output = Result<Self, Self::Error>>;
 }
 
-pub struct Assets<T>
+struct Assets<T>
 where
     T: Asset,
 {
@@ -444,12 +447,11 @@ where
             // acquired the lock, preventing access from the AssetLoader.
             // Only if the refcount is still zero are we able to delete
             // the asset.
-            let state = self.asset.ref_count.load(Ordering::Acquire);
-            if state != 0 {
-                return false;
-            }
-
-            true
+            // We can use a `Relaxed` load here, because locking the bucket
+            // already includes an `Acquire` barrier that any loading threads
+            // synchronize with.
+            let state = self.asset.ref_count.load(Ordering::Relaxed);
+            state == 0
         });
     }
 }
