@@ -438,7 +438,7 @@ where
         let assets = unsafe { registry.get::<T>().unwrap_unchecked() };
 
         // Exclusively lock the bucket while we check the refcount.
-        assets.assets.remove_if(&self.asset.key, |_, _| {
+        assets.assets.remove_if(&self.asset.key, |_, entry| {
             // Note that it is possible for another thread to
             // increment the refcount just after it hit 0.
             // This is because unlike a Arc we have an additional "weak"
@@ -451,7 +451,29 @@ where
             // already includes an `Acquire` barrier that any loading threads
             // synchronize with.
             let state = self.asset.ref_count.load(Ordering::Relaxed);
-            state == 0
+            if state != 0 {
+                return false;
+            }
+
+            // We must only drop the entry if it actually still refers to the
+            // asset that we own. This is needed since two threads can detect
+            // a refcount at 0 at zero at the same time and therefore attempt
+            // to remove the asset twice.
+            // Consider the following thread interleaving:
+            // - T0: Load Asset A
+            // - T0: Begin Drop Asset A (The `fetch_sub` suceeds so refcount becomes
+            //   0, then T0 is preempted.)
+            // - T1: Load Asset A, increasing refcount from 0 to 1
+            // - T1: Drop Asset A, decreasing refcount from 1 to 0 again.
+            // - T1: Remove Asset A
+            // - T2: Load Asset B
+            // - T0: Remove Asset A (Resume from previous Drop, the bucket for asset A
+            //   is now used for asset B!, which we MUST NOT remove).
+            if let AssetEntry::Loaded(loaded) = entry {
+                Arc::ptr_eq(loaded, &self.asset)
+            } else {
+                false
+            }
         });
     }
 }
@@ -669,6 +691,18 @@ mod tests {
 
         thread::scope(|s| {
             s.spawn(move || drop(a));
+            s.spawn(|| block_on(loader.load::<AssetA, _>("")).unwrap());
+        });
+    }
+
+    #[test]
+    fn parallel_load_and_load_drop() {
+        let loader = AssetLoader::new();
+        loader.register::<AssetA>(());
+
+        thread::scope(|s| {
+            s.spawn(|| block_on(loader.load::<AssetA, _>("")).unwrap());
+            s.spawn(|| block_on(loader.load::<AssetA, _>("")).unwrap());
             s.spawn(|| block_on(loader.load::<AssetA, _>("")).unwrap());
         });
     }
