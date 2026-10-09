@@ -103,7 +103,7 @@ impl EventQueue {
         }
 
         let mut events = Vec::new();
-        while let Some(key) = self.ready_events.pop() {
+        'next_event: while let Some(key) = self.ready_events.pop() {
             let event = self.events.remove(key);
 
             debug_assert_eq!(event.num_loading, 0);
@@ -174,7 +174,7 @@ impl EventQueue {
                         Err(err) => {
                             tracing::error!("failed to prepare object for event: {}", err);
                             tracing::error!("lost an event of type {:?}", event.event.kind);
-                            continue;
+                            continue 'next_event;
                         }
                     },
                 };
