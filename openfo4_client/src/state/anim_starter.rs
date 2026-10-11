@@ -8,6 +8,7 @@ use openfo4_core::record::RecordId;
 use openfo4_esp::conditions::Condition;
 use openfo4_esp::{RecordData, RecordKind};
 
+use crate::state::actions::{Action, Actions};
 use crate::state::esp::EspLoader;
 use crate::systems::conditions;
 use crate::systems::global::GlobalProperties;
@@ -24,13 +25,14 @@ struct Reaction {
 
 #[derive(Clone, Debug)]
 pub struct AnimationSystem {
+    actions: Actions,
     reactions: HashMap<RecordId, Vec<Reaction>>,
 }
 
 impl AnimationSystem {
-    pub fn new(esp: &EspLoader) -> Self {
-        let animations =
-            futures_lite::future::block_on(esp.lookup_all(Some(RecordKind::Animation))).unwrap();
+    pub async fn new(esp: &EspLoader) -> Self {
+        let actions = Actions::load(esp).await;
+        let animations = esp.lookup_all(Some(RecordKind::Animation)).await.unwrap();
 
         let mut reactions: HashMap<RecordId, Vec<Reaction>> = HashMap::new();
 
@@ -64,7 +66,7 @@ impl AnimationSystem {
             });
         }
 
-        Self { reactions }
+        Self { reactions, actions }
     }
 
     pub fn update(
@@ -113,6 +115,57 @@ impl AnimationSystem {
         for (entity, event) in events_to_send {
             if let Ok(mut driver) = world.get::<&mut AnimationDriver>(entity) {
                 driver.send_event(event);
+            }
+        }
+    }
+
+    pub fn send_action(
+        &self,
+        world: &World,
+        entity: Entity,
+        action: Action,
+        esp_loader: &EspLoader,
+        globals: &GlobalProperties,
+    ) {
+        let Some(action) = self.actions.0.get(&action) else {
+            return;
+        };
+
+        let Ok(active_graphs) = world.get::<&ActiveBehaviorGraphs>(entity) else {
+            return;
+        };
+        let Ok(mut driver) = world.get::<&mut AnimationDriver>(entity) else {
+            return;
+        };
+
+        let mut events = vec![*action];
+        while let Some(id) = events.pop() {
+            let Some(reactions) = self.reactions.get(&id) else {
+                return;
+            };
+
+            for reaction in reactions {
+                if !active_graphs.0.contains(&reaction.behavior_graph) {
+                    continue;
+                }
+
+                if !conditions::evaluate(
+                    world,
+                    esp_loader,
+                    globals,
+                    reaction.id,
+                    &reaction.conditions,
+                    entity,
+                    entity,
+                ) {
+                    continue;
+                }
+
+                if let Some(event) = &reaction.event {
+                    driver.send_event(event);
+                }
+
+                events.push(reaction.id);
             }
         }
     }

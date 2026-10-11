@@ -118,7 +118,7 @@ impl GameState {
 
         let actions = Actions::load(&loader).await;
 
-        let animation = AnimationSystem::new(&loader);
+        let animation = AnimationSystem::new(&loader).await;
 
         let global_variables = globals::load_global_variables(&loader).await;
         let form_lists = globals::load_form_lists(&loader).await;
@@ -306,9 +306,11 @@ impl GameState {
         systems::camera::handle_free_camera(&mut self.world, &event);
         systems::controller::handle_inputs(
             &mut self.world,
-            &self.actions,
             &event,
             &mut self.event_bus,
+            &self.animation,
+            &self.esp_loader,
+            &self.globals,
         );
         systems::activation::handle_activation_inputs(
             &mut self.world,
@@ -316,6 +318,16 @@ impl GameState {
             &mut self.event_bus,
             &self.physics,
         );
+
+        let Some(player) = self
+            .world
+            .query::<(Entity, &Player)>()
+            .iter()
+            .map(|(entity, _)| entity)
+            .next()
+        else {
+            return;
+        };
 
         match event {
             WindowEvent::KeyboardInput(event) => {
@@ -381,107 +393,67 @@ impl GameState {
                 }
 
                 if event.key_code == Some(KeyCode::Z) {
-                    if let Some(action) = self.actions.0.get(&Action::FireAuto) {
-                        for mut events in self.world.query_mut::<&mut AnimationEventQueue>() {
-                            events.0.push_back(*action);
-                        }
-                    }
+                    self.animation.send_action(
+                        &self.world,
+                        player,
+                        Action::FireAuto,
+                        &self.esp_loader,
+                        &self.globals,
+                    );
                 }
 
                 if event.key_code == Some(KeyCode::R) {
-                    for (actor, _) in self.world.query_mut::<(Entity, &Player)>() {
-                        self.event_bus.send(GunReloadRequest { actor });
-                    }
+                    self.event_bus.send(GunReloadRequest { actor: player });
                 }
 
                 if event.key_code == Some(KeyCode::Q) {
-                    for (actor, _) in self.world.query_mut::<(Entity, &Player)>() {
-                        self.event_bus.send(WeaponDrawRequest { actor });
-                    }
+                    self.event_bus.send(WeaponDrawRequest { actor: player });
                 }
 
                 if event.key_code == Some(KeyCode::O) {
-                    // self.anim_event = Some("g_weapForceEquip");
-                    // self.anim_event = Some("MoveStart");
-
-                    if let Some(action) = self.actions.0.get(&Action::Draw) {
-                        for mut events in self.world.query_mut::<&mut AnimationEventQueue>() {
-                            events.0.push_back(*action);
-                        }
-                    }
+                    self.animation.send_action(
+                        &self.world,
+                        player,
+                        Action::Draw,
+                        &self.esp_loader,
+                        &self.globals,
+                    );
                 }
                 if event.key_code == Some(KeyCode::P) {
-                    // self.anim_event = Some("weapUnequip");
-                    // self.anim_event = Some("CameraSneakStart");
-
-                    if let Some(action) = self.actions.0.get(&Action::Sheath) {
-                        for mut events in self.world.query_mut::<&mut AnimationEventQueue>() {
-                            events.0.push_back(*action);
-                        }
-                    }
-                }
-                if event.key_code == Some(KeyCode::I) {
-                    // self.anim_event = Some("attackStart");
-                    // self.anim_event = Some("CameraSneakStop");
-                }
-                if event.key_code == Some(KeyCode::U) {
-                    // self.anim_event = Some("attackEnd");
-                    // self.anim_event = Some("moveStartForward");
-                    // self.anim_event = Some("CameraMoveStartSlave");
-
-                    if let Some(action) = self.actions.0.get(&Action::MoveStart) {
-                        for mut events in self.world.query_mut::<&mut AnimationEventQueue>() {
-                            events.0.push_back(*action);
-                        }
-                    }
-                }
-                if event.key_code == Some(KeyCode::J) {
-                    // self.anim_event = Some("attackStartAuto");
-                    // self.anim_event = Some("moveStop");
-                    // self.anim_event = Some("CameraMoveStopSlave");
-
-                    if let Some(action) = self.actions.0.get(&Action::MoveStop) {
-                        for mut events in self.world.query_mut::<&mut AnimationEventQueue>() {
-                            events.0.push_back(*action);
-                        }
-                    }
-                }
-                if event.key_code == Some(KeyCode::K) {
-                    // self.anim_event = Some("attackRelease");
-                    // self.anim_event = Some("speedup");
-                    if let Some(action) = self.actions.0.get(&Action::Jump) {
-                        for mut events in self.world.query_mut::<&mut AnimationEventQueue>() {
-                            events.0.push_back(*action);
-                        }
-                    }
+                    self.animation.send_action(
+                        &self.world,
+                        player,
+                        Action::Sheath,
+                        &self.esp_loader,
+                        &self.globals,
+                    );
                 }
                 if event.key_code == Some(KeyCode::L) {
-                    // self.anim_event = Some("PerkCannibalFeed");
-                    // self.anim_event = Some("speeddown");
-
-                    if let Some(action) = self.actions.0.get(&Action::PerkCannibal) {
-                        for mut events in self.world.query_mut::<&mut AnimationEventQueue>() {
-                            events.0.push_back(*action);
-                        }
-                    }
+                    self.animation.send_action(
+                        &self.world,
+                        player,
+                        Action::PerkCannibal,
+                        &self.esp_loader,
+                        &self.globals,
+                    );
                 }
                 if event.key_code == Some(KeyCode::G) {
-                    // self.anim_event = Some("EssentialDownStart");
-
-                    if let Some(action) = self.actions.0.get(&Action::BleedoutStart) {
-                        for mut events in self.world.query_mut::<&mut AnimationEventQueue>() {
-                            events.0.push_back(*action);
-                        }
-                    }
+                    self.animation.send_action(
+                        &self.world,
+                        player,
+                        Action::BleedoutStart,
+                        &self.esp_loader,
+                        &self.globals,
+                    );
                 }
                 if event.key_code == Some(KeyCode::H) {
-                    // self.anim_event = Some("EssentialDownExit");
-
-                    if let Some(action) = self.actions.0.get(&Action::BleedoutStop) {
-                        for mut events in self.world.query_mut::<&mut AnimationEventQueue>() {
-                            events.0.push_back(*action);
-                        }
-                    }
+                    self.animation.send_action(
+                        &self.world,
+                        player,
+                        Action::BleedoutStop,
+                        &self.esp_loader,
+                        &self.globals,
+                    );
                 }
                 if event.key_code == Some(KeyCode::E) {
                     self.anim_event = Some("dump");

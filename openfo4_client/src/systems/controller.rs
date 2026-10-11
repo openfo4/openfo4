@@ -10,18 +10,22 @@ use openfo4_physics::components::ColliderShape;
 use slab::Slab;
 
 use crate::components::{Camera, MovementState, Player};
-use crate::state::actions::{Action, Actions};
-use crate::state::anim_starter::AnimationEventQueue;
+use crate::state::actions::Action;
+use crate::state::anim_starter::AnimationSystem;
+use crate::state::esp::EspLoader;
 use crate::state::npc::ActorMovementSpeeds;
 use crate::systems::camera::{CameraMode, CameraOffset, PlayerControlled};
+use crate::systems::global::GlobalProperties;
 use crate::systems::movement::{MovementDirection, MovementSpeed};
 use crate::systems::{FacingDirection, GunFireEvent, PlayerControlState};
 
 pub fn handle_inputs(
     world: &mut World,
-    actions: &Actions,
     event: &WindowEvent,
     events: &mut EventBus,
+    animation: &AnimationSystem,
+    esp_loader: &EspLoader,
+    globals: &GlobalProperties,
 ) {
     for camera in world.query_mut::<&Camera>() {
         if matches!(camera.mode, CameraMode::Free) {
@@ -29,14 +33,16 @@ pub fn handle_inputs(
         }
     }
 
-    for (entity, mut transform, mut offset, _, mut queue, mut state) in world.query_mut::<(
-        Entity,
-        &mut Transform,
-        &mut CameraOffset,
-        &PlayerControlled,
-        &mut AnimationEventQueue,
-        &mut PlayerControlState,
-    )>() {
+    for (entity, mut transform, mut offset, _, mut state) in world
+        .query::<(
+            Entity,
+            &mut Transform,
+            &mut CameraOffset,
+            &PlayerControlled,
+            &mut PlayerControlState,
+        )>()
+        .iter()
+    {
         match event {
             WindowEvent::MouseMotion(event) => {
                 let yaw = event.delta.x * 0.001;
@@ -66,27 +72,27 @@ pub fn handle_inputs(
                         continue;
                     }
 
-                    if let Some(form) = actions.0.get(&Action::Sneak) {
-                        queue.0.push_back(*form);
-                    }
+                    animation.send_action(world, entity, Action::Sneak, esp_loader, globals);
 
                     state.sneaking ^= true;
                 }
                 Some(KeyCode::LShift) => {
+                    // Stop sneaking when we start sprinting.
+                    // When we stop sprinting this is already false.
+                    if state.sneaking {
+                        animation.send_action(world, entity, Action::Sneak, esp_loader, globals);
+                        state.sneaking = false;
+                    }
+
                     let action = if state.sprinting {
                         Action::SprintStop
                     } else {
                         Action::SprintStart
                     };
 
-                    if let Some(form) = actions.0.get(&action) {
-                        queue.0.push_back(*form);
-                    }
+                    animation.send_action(world, entity, action, esp_loader, globals);
 
                     state.sprinting ^= true;
-                    // Stop sneaking when we start sprinting.
-                    // When we stop sprinting this is already false.
-                    state.sneaking = false;
                 }
                 Some(KeyCode::Space) => {
                     if !event.state.is_pressed() {
@@ -101,10 +107,7 @@ pub fn handle_inputs(
                         Action::Jump
                     };
 
-                    if let Some(form) = actions.0.get(&action) {
-                        dbg!(form);
-                        queue.0.push_back(*form);
-                    }
+                    animation.send_action(world, entity, action, esp_loader, globals);
                 }
                 Some(KeyCode::Key1) if event.state.is_pressed() => {
                     state.walking ^= true;
