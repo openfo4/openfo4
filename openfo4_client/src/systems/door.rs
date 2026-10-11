@@ -11,6 +11,7 @@ use openfo4_core::record::RecordId;
 use crate::components::{ActorMarker, NiTransform, WorldSpace};
 use crate::events::animation::StartNifAnimationSequence;
 use crate::state::level::loader::{EntityLoader, EntityRef};
+use crate::state::level::partial::PartialEntityFlags;
 use crate::systems::ActivationEvent;
 
 /// The radius at which the autoload door is activated.
@@ -158,7 +159,7 @@ impl DoorSystem {
     fn queue_transition(&mut self, actor: Entity, target: RecordId, target_pos: NiTransform) {
         let loader = self.loader.clone();
         self.transitions.push(self.pool.spawn(async move {
-            match loader.load(target).await {
+            match loader.load(target, PartialEntityFlags::NONE).await {
                 Ok(target) => Some((actor, target, target_pos)),
                 Err(()) => {
                     tracing::error!("failed to load portal door target for target door {target}");

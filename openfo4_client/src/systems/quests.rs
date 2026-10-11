@@ -20,6 +20,7 @@ use crate::events::quest::{StartQuestScene, StopQuestScene};
 use crate::state::esp::EspLoader;
 use crate::state::hardcoded::HARDCODED_MODULE_ID;
 use crate::state::level::loader::{EntityLoader, EntityRef};
+use crate::state::level::partial::PartialEntityFlags;
 use crate::systems::scripting::invocations::{
     AliasInit, AliasShutdown, Init, QuestFragmentSetStage, QuestInit, QuestSetStage, QuestShutdown,
 };
@@ -593,7 +594,7 @@ async fn load_reference_alias(
 ) -> Result<Option<EntityRef>, AliasLoadError> {
     if let Some(form) = alias.forced_reference {
         let id = esp_loader.resolve_form(form, quest_id).unwrap();
-        let entity = loader.load(id).await.unwrap();
+        let entity = loader.load(id, PartialEntityFlags::NONE).await.unwrap();
         return Ok(Some(entity));
     }
 
@@ -625,7 +626,10 @@ async fn load_reference_alias(
                 .unwrap();
 
             if entry_npc == npc_id {
-                let entity = loader.load(entry_ref).await.unwrap();
+                let entity = loader
+                    .load(entry_ref, PartialEntityFlags::NONE)
+                    .await
+                    .unwrap();
                 return Ok(Some(entity));
             }
         }

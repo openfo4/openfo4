@@ -84,8 +84,14 @@ pub struct NifScene {
 pub trait Instantiate {
     type Node;
 
-    fn instantiate(&self, transform: Transform, world: &mut World, flags: LoadNifFlags) -> Entity {
-        self.instantiate_with_feedback(|_, _| {}, transform, world, flags)
+    fn instantiate(
+        &self,
+        transform: Transform,
+        world: &mut World,
+        root: Entity,
+        flags: LoadNifFlags,
+    ) {
+        self.instantiate_with_feedback(|_, _| {}, transform, world, root, flags)
     }
 
     fn instantiate_with_feedback<'a, F>(
@@ -93,9 +99,9 @@ pub trait Instantiate {
         callback: F,
         transform: Transform,
         world: &mut World,
+        root: Entity,
         flags: LoadNifFlags,
-    ) -> Entity
-    where
+    ) where
         F: FnMut(&'a Self::Node, Entity);
 }
 
@@ -107,9 +113,9 @@ impl Instantiate for Handle<NifScene> {
         mut callback: F,
         transform: Transform,
         world: &mut World,
+        root: Entity,
         flags: LoadNifFlags,
-    ) -> Entity
-    where
+    ) where
         F: FnMut(&'a Node, Entity),
     {
         let mut entities = HashMap::new();
@@ -151,13 +157,14 @@ impl Instantiate for Handle<NifScene> {
             callback(node, entity);
         }
 
-        let root = self
+        let root_children = self
             .nodes
             .root_keys()
             .map(|key| *entities.get(&key).unwrap())
             .collect();
 
-        let root = world.spawn((transform, Children(root)));
+        world.insert_one(root, Children(root_children)).unwrap();
+        world.insert_one(root, transform).unwrap();
 
         // This will keep the scene cached until the root entity
         // is destroyed.
@@ -173,8 +180,6 @@ impl Instantiate for Handle<NifScene> {
 
             world.insert_one(root, controller).unwrap();
         }
-
-        root
     }
 }
 

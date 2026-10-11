@@ -528,9 +528,11 @@ impl GameState {
         .await
         .unwrap();
 
-        let root = actor
+        let root = self.world.reserve_entity();
+
+        actor
             .clone()
-            .instantiate(&mut self.world, &mut self.event_bus);
+            .instantiate(&mut self.world, &mut self.event_bus, root);
         self.world
             .insert(
                 root,

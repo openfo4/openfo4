@@ -11,7 +11,7 @@ use openfo4_core::hierarchy::Children;
 use openfo4_core::path::DataPathBuf;
 use openfo4_core::record::RecordId;
 use openfo4_core::transform::ConvertCoordinateSystem;
-use openfo4_esp::records::{DoorFlags, LightDataFlags, LockLevel};
+use openfo4_esp::records::{DoorFlags, LightDataFlags, LockLevel, PositionRotation};
 use openfo4_esp::{RecordData, RecordHeaderFlags};
 use openfo4_physics::components::{Collider, RigidBody};
 
@@ -75,6 +75,7 @@ impl SpawnEntity {
         events: &mut EventBus,
         terrain_manager: &mut TerrainManager,
         script_entities: &ScriptEntities,
+        entity: Entity,
     ) -> Entity {
         // Destructure pattern so we get warned if we forget
         // to add new items here.
@@ -108,13 +109,11 @@ impl SpawnEntity {
         let is_actor = actor.is_some();
 
         // FIXME: Modify this such that both scene and actor are valid.
-        let entity = if let Some(scene) = scene {
-            scene.instantiate(transform.into(), world, LoadNifFlags::all())
+        if let Some(scene) = scene {
+            scene.instantiate(transform.into(), world, entity, LoadNifFlags::all())
         } else if let Some(actor) = actor {
-            actor.instantiate(world, events)
-        } else {
-            world.reserve_entity()
-        };
+            actor.instantiate(world, events, entity)
+        }
 
         world
             .insert_one(entity, Transform::from(transform))
@@ -219,6 +218,49 @@ impl SpawnEntity {
         }
 
         entity
+    }
+
+    pub fn null(position: PositionRotation) -> Self {
+        let transform = Transform {
+            translation: Vec3::new(
+                position.position_x,
+                position.position_y,
+                position.position_z,
+            ),
+            // Rotation is negative for some reason?
+            rotation: Quat::from_euler(
+                EulerRot::XYZ,
+                -position.rotation_x,
+                -position.rotation_y,
+                -position.rotation_z,
+            ),
+            scale: Vec3::splat(1.0),
+        };
+
+        Self {
+            transform: NiTransform::from_ni_transform(transform),
+            scene: None,
+            collider: None,
+            object: None,
+            rigid_body: None,
+            light: None,
+            light_flicker: None,
+            actor: None,
+            worldspace: None,
+            form: None,
+            door: None,
+            inventory: None,
+            placed_item: None,
+            terrain: None,
+            script: None,
+            keywords: ObjectKeywords::new(HashSet::new()),
+            trigger_box: None,
+            navmesh: None,
+            object_bounds: None,
+            object_props: None,
+            disabled: false,
+            base: None,
+        }
     }
 
     pub(super) async fn load(

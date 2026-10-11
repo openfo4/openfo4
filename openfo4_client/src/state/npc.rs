@@ -143,7 +143,7 @@ pub struct Actor {
 }
 
 impl Actor {
-    pub fn instantiate(self, world: &mut World, events: &mut EventBus) -> Entity {
+    pub fn instantiate(self, world: &mut World, events: &mut EventBus, root: Entity) {
         let collider = world.spawn((
             self.controller.offset,
             Collider {
@@ -154,7 +154,6 @@ impl Actor {
             },
         ));
 
-        let root = world.reserve_entity();
         let spawned_actor = self.character.instantiate(root, world);
         let instance = spawned_actor.skeleton;
 
@@ -241,8 +240,6 @@ impl Actor {
             .insert_one(root, AnimationEventQueue::default())
             .unwrap();
         world.insert_one(root, MovementState::default()).unwrap();
-
-        root
     }
 }
 

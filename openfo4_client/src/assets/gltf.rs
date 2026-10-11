@@ -30,9 +30,9 @@ impl Instantiate for Handle<GltfScene> {
         mut callback: F,
         transform: Transform,
         world: &mut World,
+        root: Entity,
         _flags: super::nif::LoadNifFlags,
-    ) -> Entity
-    where
+    ) where
         F: FnMut(&'a Node, Entity),
     {
         let mut entities = HashMap::new();
@@ -61,7 +61,7 @@ impl Instantiate for Handle<GltfScene> {
             callback(node, entity);
         }
 
-        let root = self
+        let root_children = self
             .nodes
             .root_keys()
             .map(|key| *entities.get(&key).unwrap())
@@ -70,9 +70,9 @@ impl Instantiate for Handle<GltfScene> {
         // The Handle<Self> component will keep the scene cached until
         // the entity is despawned.
         let scene: Handle<GltfScene> = self.clone();
-        let root = world.spawn((transform, Children(root), scene));
-
-        root
+        world
+            .insert(root, (transform, Children(root_children), scene))
+            .unwrap();
     }
 }
 

@@ -228,7 +228,7 @@ impl ActorCharacter {
         // will first spawn the scene and then "overlay" the HKX skeleton.
         let mut scene_nodes = HashMap::new();
         let mut character_bumper = None;
-        let scene = self.scene.instantiate_with_feedback(
+        self.scene.instantiate_with_feedback(
             |node, entity| {
                 scene_nodes.insert(node.name.to_lowercase(), entity);
 
@@ -241,10 +241,9 @@ impl ActorCharacter {
             },
             Transform::default(),
             world,
+            root,
             LoadNifFlags::all(),
         );
-
-        world.add_children(root, scene);
 
         let body_parts = self.build_body_parts(root);
 

@@ -14,6 +14,7 @@ use crate::components::{
     Disabled, ObjectBounds, ObjectLockLevel, ObjectProperties, TriggerBox, WorldSpace,
 };
 use crate::state::level::loader::SpawnEntityInfo;
+use crate::state::level::partial::PartialEntityFlags;
 use crate::state::npc::ObjectKeywords;
 use crate::systems::actor_value::ActorValueProperties;
 use crate::systems::inventory::Inventory;
@@ -2365,6 +2366,7 @@ async fn place_at_me(
                     worldspace,
                     disabled,
                     persistent,
+                    flags: PartialEntityFlags::NONE,
                 },
             )
         })
