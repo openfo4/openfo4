@@ -27,7 +27,7 @@ use crate::state::level::LoadContext;
 use crate::state::level::data_ext::RecordDataExt;
 use crate::state::level::items::{LoadItemProps, resolve_item};
 use crate::state::level::navmesh::load_navmesh;
-use crate::state::level::partial::PartialEntityFlags;
+use crate::state::level::partial::{LodLevel, PartialEntityFlags};
 use crate::state::level::terrain::load_land;
 use crate::state::npc::{Actor, ActorInstanceProps, ObjectKeywords};
 use crate::state::terrain::{TerrainManager, TerrainRegion};
@@ -403,7 +403,7 @@ impl SpawnEntity {
 
         let item = load_item(ctx, &base).await;
 
-        if flags.require_distant_lod
+        if flags.lod != LodLevel::Normal
             && !base
                 .local
                 .flags
@@ -598,7 +598,7 @@ impl SpawnEntity {
 
         let item = load_item(ctx, &record).await;
 
-        if flags.require_distant_lod
+        if flags.lod != LodLevel::Normal
             && !record
                 .local
                 .flags

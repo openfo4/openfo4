@@ -407,7 +407,6 @@ impl CellActivityMode {
                 actor: true,
                 scene: true,
                 script: true,
-                require_distant_lod: false,
                 lod: LodLevel::Normal,
             },
             Self::VisibleDistant => PartialEntityFlags {
@@ -416,7 +415,6 @@ impl CellActivityMode {
                 physics: false,
                 actor: false,
                 script: false,
-                require_distant_lod: true,
                 lod: LodLevel::Distant0,
             },
         }

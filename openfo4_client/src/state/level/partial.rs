@@ -9,8 +9,6 @@ pub struct PartialEntityFlags {
     pub actor: bool,
     pub scene: bool,
     pub script: bool,
-    /// Only build this entity if it has the `HAS_DISTANT_LOD` flag set.
-    pub require_distant_lod: bool,
     pub lod: LodLevel,
 }
 
@@ -21,7 +19,6 @@ impl PartialEntityFlags {
         actor: false,
         scene: false,
         script: false,
-        require_distant_lod: false,
         lod: LodLevel::Normal,
     };
 
@@ -33,7 +30,6 @@ impl PartialEntityFlags {
         res &= self.actor == other.actor || !other.actor;
         res &= self.scene == other.scene || !other.scene;
         res &= self.script == other.script || !other.script;
-        res &= self.require_distant_lod == other.require_distant_lod || !other.require_distant_lod;
         res &= self.lod <= other.lod;
         res
     }
@@ -65,7 +61,6 @@ impl PartialEntityFlagCounts {
             actor: self.actor > 0,
             scene: self.scene > 0,
             script: self.script > 0,
-            require_distant_lod: self.require_distant_lod > 0,
             lod: if self.lod_normal > 0 {
                 LodLevel::Normal
             } else if self.lod_distant0 > 0 {
@@ -85,7 +80,6 @@ impl AddAssign<PartialEntityFlags> for PartialEntityFlagCounts {
         self.actor += usize::from(flags.actor);
         self.scene += usize::from(flags.scene);
         self.scene += usize::from(flags.script);
-        self.require_distant_lod += usize::from(flags.require_distant_lod);
         self.lod_normal += usize::from(flags.lod == LodLevel::Normal);
         self.lod_distant0 += usize::from(flags.lod == LodLevel::Distant0);
     }
@@ -107,7 +101,6 @@ impl SubAssign<PartialEntityFlags> for PartialEntityFlagCounts {
         self.actor -= usize::from(flags.actor);
         self.scene -= usize::from(flags.scene);
         self.scene -= usize::from(flags.script);
-        self.require_distant_lod -= usize::from(flags.require_distant_lod);
         self.lod_normal -= usize::from(flags.lod == LodLevel::Normal);
         self.lod_distant0 -= usize::from(flags.lod == LodLevel::Distant0);
     }
