@@ -148,12 +148,8 @@ fn is_faction_in_crime_group(
 /// ```text
 /// bool Function IsPlayerEnemy() native
 /// ```
-async fn is_player_enemy(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Error> {
-    Ok(
-        with_faction(&caller, self_ptr, |faction| faction.player_enemy)
-            .await
-            .unwrap_or(false),
-    )
+fn is_player_enemy(caller: Caller<'_, State>, self_ptr: Object) -> bool {
+    with_faction(&caller, self_ptr, |faction| faction.player_enemy).unwrap_or(false)
 }
 
 /// `IsPlayerExpelled`
@@ -161,12 +157,8 @@ async fn is_player_enemy(caller: Caller<'_, State>, self_ptr: Object) -> Result<
 /// ```text
 /// bool Function IsPlayerExpelled() native
 /// ```
-async fn is_player_expelled(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Error> {
-    Ok(
-        with_faction(&caller, self_ptr, |faction| faction.player_expelled)
-            .await
-            .unwrap_or(false),
-    )
+fn is_player_expelled(caller: Caller<'_, State>, self_ptr: Object) -> bool {
+    with_faction(&caller, self_ptr, |faction| faction.player_expelled).unwrap_or(false)
 }
 
 /// `ModCrimeGold`
@@ -225,13 +217,13 @@ fn send_player_to_jail(
 /// ```text
 /// Function SetAlly(Faction akOther, bool abSelfIsFriendToOther, bool abOtherIsFriendToSelf) native
 /// ```
-async fn set_ally(
+fn set_ally(
     mut caller: Caller<'_, State>,
     self_ptr: Object,
     other: Object,
     self_is_friend_to_other: bool,
     other_is_friend_to_self: bool,
-) -> Result<(), Error> {
+) {
     let Some(self_faction) = caller
         .data()
         .objects
@@ -239,7 +231,7 @@ async fn set_ally(
         .and_then(|s| s.record())
     else {
         debug_assert!(self_ptr.is_null());
-        return Ok(());
+        return;
     };
     let Some(other_faction) = caller
         .data()
@@ -248,7 +240,7 @@ async fn set_ally(
         .and_then(|s| s.record())
     else {
         debug_assert!(other.is_null());
-        return Ok(());
+        return;
     };
 
     with_faction_mut(&mut caller, self_ptr, |faction| {
@@ -259,8 +251,7 @@ async fn set_ally(
         };
 
         faction.relations.insert(other_faction, reaction);
-    })
-    .await;
+    });
 
     with_faction_mut(&mut caller, other, |faction| {
         let reaction = if other_is_friend_to_self {
@@ -270,10 +261,7 @@ async fn set_ally(
         };
 
         faction.relations.insert(self_faction, reaction);
-    })
-    .await;
-
-    Ok(())
+    });
 }
 
 /// `SetCrimeGold`
@@ -303,13 +291,13 @@ fn set_crime_gold_violent(
 /// ```text
 /// Function SetEnemy(Faction akOther, bool abSelfIsNeutralToOther, bool abOtherIsNeutralToSelf) native
 /// ```
-async fn set_enemy(
+fn set_enemy(
     mut caller: Caller<'_, State>,
     self_ptr: Object,
     other: Object,
     self_is_neutral_to_other: bool,
     other_is_neutral_to_self: bool,
-) -> Result<(), Error> {
+) {
     let Some(self_faction) = caller
         .data()
         .objects
@@ -317,7 +305,7 @@ async fn set_enemy(
         .and_then(|s| s.record())
     else {
         debug_assert!(self_ptr.is_null());
-        return Ok(());
+        return;
     };
     let Some(other_faction) = caller
         .data()
@@ -326,7 +314,7 @@ async fn set_enemy(
         .and_then(|s| s.record())
     else {
         debug_assert!(other.is_null());
-        return Ok(());
+        return;
     };
 
     with_faction_mut(&mut caller, self_ptr, |faction| {
@@ -337,8 +325,7 @@ async fn set_enemy(
         };
 
         faction.relations.insert(other_faction, reaction);
-    })
-    .await;
+    });
 
     with_faction_mut(&mut caller, other, |faction| {
         let reaction = if other_is_neutral_to_self {
@@ -348,10 +335,7 @@ async fn set_enemy(
         };
 
         faction.relations.insert(self_faction, reaction);
-    })
-    .await;
-
-    Ok(())
+    });
 }
 
 /// `SetPlayerEnemy`
@@ -359,16 +343,10 @@ async fn set_enemy(
 /// ```text
 /// Function SetPlayerEnemy(bool abIsEnemy) native
 /// ```
-async fn set_player_enemy(
-    mut caller: Caller<'_, State>,
-    self_ptr: Object,
-    is_enemy: bool,
-) -> Result<(), Error> {
+fn set_player_enemy(mut caller: Caller<'_, State>, self_ptr: Object, is_enemy: bool) {
     with_faction_mut(&mut caller, self_ptr, |faction| {
         faction.player_enemy = is_enemy;
-    })
-    .await;
-    Ok(())
+    });
 }
 
 /// `SetPlayerExpelled`
@@ -376,19 +354,13 @@ async fn set_player_enemy(
 /// ```text
 /// Function SetPlayerExpelled(bool abIsExpelled) native
 /// ```
-async fn set_player_expelled(
-    mut caller: Caller<'_, State>,
-    self_ptr: Object,
-    is_expelled: bool,
-) -> Result<(), Error> {
+fn set_player_expelled(mut caller: Caller<'_, State>, self_ptr: Object, is_expelled: bool) {
     with_faction_mut(&mut caller, self_ptr, |faction| {
         faction.player_expelled = is_expelled;
-    })
-    .await;
-    Ok(())
+    });
 }
 
-async fn with_faction<T, F>(caller: &Caller<'_, State>, faction: Object, f: F) -> Option<T>
+fn with_faction<T, F>(caller: &Caller<'_, State>, faction: Object, f: F) -> Option<T>
 where
     F: FnOnce(&Faction) -> T,
 {
@@ -402,7 +374,7 @@ where
     Some(f(faction))
 }
 
-async fn with_faction_mut<T, F>(caller: &mut Caller<'_, State>, faction: Object, f: F) -> Option<T>
+fn with_faction_mut<T, F>(caller: &mut Caller<'_, State>, faction: Object, f: F) -> Option<T>
 where
     F: FnOnce(&mut Faction) -> T,
 {
