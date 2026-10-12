@@ -1117,54 +1117,6 @@ pub struct AcousticSpace {
     pub weather_attenuation: Option<u16>,
 }
 
-#[derive(Copy, Clone, Debug, BinaryStruct)]
-pub struct MGEF_DATA {
-    pub flags: u32,
-    pub base_cost: f32,
-    pub related_id: FormId,
-    pub skill: i32,
-    pub resistance_av: u32,
-    _unknown0: u32,
-    pub light_id: FormId,
-    pub taper_weight: f32,
-    pub hit_shader: FormId,
-    pub enchant_shader: FormId,
-    pub skill_level: u32,
-    pub area: u32,
-    pub casting_time: f32,
-    pub taper_curve: f32,
-    pub taper_duration: f32,
-    pub second_av_weight: f32,
-    pub effect_type: u32,
-    pub primary_av: i32,
-    pub projectile_id: FormId,
-    pub explosion_id: FormId,
-    pub cast_type: u32,
-    pub delivery_type: u32,
-    pub second_av: i32,
-    pub casting_art_id: FormId,
-    pub hit_effect_art_id: FormId,
-    pub impact_data_id: FormId,
-    pub skill_usage_mult: f32,
-    pub dual_cast_id: FormId,
-    pub dual_cast_scale: f32,
-    pub enchant_art_id: FormId,
-    _pad0: u32,
-    _pad1: u32,
-    pub equip_ability: FormId,
-    pub image_space_mod_id: FormId,
-    pub perk_id: FormId,
-    pub sound_volume: u32,
-    pub script_ai_data_score: f32,
-    pub script_ai_data_delay_time: f32,
-}
-
-#[derive(Copy, Clone, Debug, BinaryStruct)]
-pub struct MGEF_SNDD {
-    pub typ: u32,
-    pub sound_desc: FormId,
-}
-
 #[derive(Clone, Debug, Record)]
 pub struct LandTexture {
     #[record("EDID")]
