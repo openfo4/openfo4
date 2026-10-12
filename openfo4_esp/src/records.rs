@@ -1,3 +1,4 @@
+pub mod magic_effect;
 pub mod object_modification;
 
 use std::ops::{Deref, DerefMut};
@@ -15,12 +16,12 @@ use crate::{Decode, Error, FixedString, FormId, LString, Rgb, RgbPadded, Text, Z
 macro_rules! impl_decode_bitflags {
     ($($t:ty:$i:ty),*) => {
         $(
-            impl Decode for $t {
-                type Error = <$i as Decode>::Error;
+            impl crate::Decode for $t {
+                type Error = <$i as crate::Decode>::Error;
 
                 fn decode<B>(buf: B) -> Result<Self, Self::Error>
                 where
-                    B: Buf,
+                    B: bytes::Buf,
                 {
                     <$i>::decode(buf).map(Self::from_bits_truncate)
                 }
@@ -28,6 +29,8 @@ macro_rules! impl_decode_bitflags {
         )*
     };
 }
+
+pub(crate) use impl_decode_bitflags;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Empty;
@@ -1112,32 +1115,6 @@ pub struct AcousticSpace {
     /// Attenuation in db as a factor of 100.
     #[record("WNAM")]
     pub weather_attenuation: Option<u16>,
-}
-
-#[derive(Clone, Debug, Record)]
-pub struct MagicEffect {
-    #[record("EDID")]
-    pub id: ZString,
-    #[record("VMAD")]
-    pub virtual_machine_adpater: Option<VirtualMachineAdapter>,
-    #[record("FULL")]
-    pub full_name: Option<LString>,
-    #[record("MDOB")]
-    pub menu_display_object: Option<FormId>,
-    #[record("KSIZ")]
-    _keywords_len: Option<u32>,
-    #[record("KWDA")]
-    pub keywords: Option<Array<FormId>>,
-    #[record("DATA")]
-    pub data: (),
-    #[record("ESCE")]
-    pub counter_effects: Vec<FormId>,
-    #[record("SNDD")]
-    pub sounds: Option<()>,
-    #[record("DNAM")]
-    pub magic_item_description: Option<ZString>,
-    #[record("CTDA")]
-    pub conditions: Conditions,
 }
 
 #[derive(Copy, Clone, Debug, BinaryStruct)]

@@ -20,12 +20,12 @@ use records::{
     AcousticSpace, Action, Activator, Ammo, Armor, Book, Cell, Class, Climate, Component,
     Container, DMGT, Door, ENCH, FACT, FLOR, Furniture, GLOB, GRAS, GameSetting, Hazard, HeadPart,
     INGR, IdleMarker, Ingestible, Key, Keyword, Land, LandTexture, LeveledActor, LeveledItem,
-    Light, LocationReferenceType, MSTT, MagicEffect, MiscObject, Note, Npc, PlacedGrenade,
-    PlacedHazard, PlacedNpc, PlacedObject, Projectile, Race, SOUN, SPEL, STAT,
-    ShaderParticleGeometry, StaticCollection, TACT, TRNS, Tes4, TextureSet, VisualEffect, Weather,
-    Worldspace,
+    Light, LocationReferenceType, MSTT, MiscObject, Note, Npc, PlacedGrenade, PlacedHazard,
+    PlacedNpc, PlacedObject, Projectile, Race, SOUN, SPEL, STAT, ShaderParticleGeometry,
+    StaticCollection, TACT, TRNS, Tes4, TextureSet, VisualEffect, Weather, Worldspace,
 };
 
+use crate::records::magic_effect::MagicEffect;
 use crate::records::object_modification::ObjectModification;
 use crate::records::{
     ActorValueInfo, AddonNode, AimModel, AnimatedObject, Animation, AnimationSoundTagSet,
