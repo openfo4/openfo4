@@ -266,8 +266,15 @@ impl SpawnEntity {
     pub(super) async fn load(
         ctx: &LoadContext<'_>,
         record: &GlobalRecord,
-        flags: PartialEntityFlags,
+        mut flags: PartialEntityFlags,
     ) -> Option<Self> {
+        // Some objects are always rendered with LOD0.
+        // This effectively disables distance culling for all objects
+        // where the base object is not a `Static`.
+        if record.local.flags.contains(RecordHeaderFlags::IS_FULL_LOD) {
+            flags.lod = LodLevel::Normal;
+        }
+
         let position;
         let scale;
         let base_object;
@@ -403,16 +410,9 @@ impl SpawnEntity {
 
         let item = load_item(ctx, &base).await;
 
-        if flags.lod != LodLevel::Normal
-            && !base
-                .local
-                .flags
-                .contains(RecordHeaderFlags::HAS_DISTANT_LOD)
-            // FIXME: Lights don't have a distant lod flag and seem
-            // to be visible at distance, sometimes. Sometimes they
-            // are not visible.
-            && !matches!(base.local.data, RecordData::Light(_))
-        {
+        // Only Static records have LODs.
+        // All other objects are not visible when LOD0 is not rendered.
+        if flags.lod != LodLevel::Normal && !matches!(base.local.data, RecordData::STAT(_)) {
             return None;
         }
 
