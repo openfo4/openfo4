@@ -25,7 +25,7 @@ pub fn register(engine: &mut Engine) {
 /// ```text
 /// Location Function GetLocation() native
 /// ```
-fn get_location(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Error> {
+fn get_location(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<Object, Error> {
     todo!()
 }
 
@@ -34,7 +34,11 @@ fn get_location(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, E
 /// ```text
 /// Function SetLocation(Location akLoc) native
 /// ```
-fn set_location(caller: Caller<'_, State>, self_ptr: Object, ak_loc: Object) -> Result<(), Error> {
+fn set_location(
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _ak_loc: Object,
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -43,7 +47,7 @@ fn set_location(caller: Caller<'_, State>, self_ptr: Object, ak_loc: Object) -> 
 /// ```text
 /// int Function GetRank() native
 /// ```
-fn get_rank(caller: Caller<'_, State>, self_ptr: Object) -> Result<i32, Error> {
+fn get_rank(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<i32, Error> {
     todo!()
 }
 
@@ -52,7 +56,7 @@ fn get_rank(caller: Caller<'_, State>, self_ptr: Object) -> Result<i32, Error> {
 /// ```text
 /// Function SetRank(int rank) native
 /// ```
-fn set_rank(caller: Caller<'_, State>, self_ptr: Object, rank: i32) -> Result<(), Error> {
+fn set_rank(_caller: Caller<'_, State>, _self_ptr: Object, _rank: i32) -> Result<(), Error> {
     todo!()
 }
 
@@ -61,7 +65,7 @@ fn set_rank(caller: Caller<'_, State>, self_ptr: Object, rank: i32) -> Result<()
 /// ```text
 /// int Function GetMinLevel() native
 /// ```
-fn get_min_level(caller: Caller<'_, State>, self_ptr: Object) -> Result<i32, Error> {
+fn get_min_level(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<i32, Error> {
     todo!()
 }
 
@@ -70,7 +74,7 @@ fn get_min_level(caller: Caller<'_, State>, self_ptr: Object) -> Result<i32, Err
 /// ```text
 /// Function SetMinLevel(int level) native
 /// ```
-fn set_min_level(caller: Caller<'_, State>, self_ptr: Object, level: i32) -> Result<(), Error> {
+fn set_min_level(_caller: Caller<'_, State>, _self_ptr: Object, _level: i32) -> Result<(), Error> {
     todo!()
 }
 
@@ -79,7 +83,7 @@ fn set_min_level(caller: Caller<'_, State>, self_ptr: Object, level: i32) -> Res
 /// ```text
 /// int Function GetMaxLevel() native
 /// ```
-fn get_max_level(caller: Caller<'_, State>, self_ptr: Object) -> Result<i32, Error> {
+fn get_max_level(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<i32, Error> {
     todo!()
 }
 
@@ -88,7 +92,7 @@ fn get_max_level(caller: Caller<'_, State>, self_ptr: Object) -> Result<i32, Err
 /// ```text
 /// Function SetMaxLevel(int level) native
 /// ```
-fn set_max_level(caller: Caller<'_, State>, self_ptr: Object, level: i32) -> Result<(), Error> {
+fn set_max_level(_caller: Caller<'_, State>, _self_ptr: Object, _level: i32) -> Result<(), Error> {
     todo!()
 }
 
@@ -97,7 +101,7 @@ fn set_max_level(caller: Caller<'_, State>, self_ptr: Object, level: i32) -> Res
 /// ```text
 /// bool Function IsNeverResetable() native
 /// ```
-fn is_never_resetable(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Error> {
+fn is_never_resetable(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<bool, Error> {
     todo!()
 }
 
@@ -107,9 +111,9 @@ fn is_never_resetable(caller: Caller<'_, State>, self_ptr: Object) -> Result<boo
 /// Function SetNeverResetable(bool resetable) native
 /// ```
 fn set_never_resetable(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    resetable: bool,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _resetable: bool,
 ) -> Result<(), Error> {
     todo!()
 }
@@ -119,7 +123,7 @@ fn set_never_resetable(
 /// ```text
 /// bool Function IsWorkshop() native
 /// ```
-fn is_workshop(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Error> {
+fn is_workshop(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<bool, Error> {
     todo!()
 }
 
@@ -128,6 +132,6 @@ fn is_workshop(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Erro
 /// ```text
 /// Function SetWorkshop(bool ws) native
 /// ```
-fn set_workshop(caller: Caller<'_, State>, self_ptr: Object, ws: bool) -> Result<(), Error> {
+fn set_workshop(_caller: Caller<'_, State>, _self_ptr: Object, _ws: bool) -> Result<(), Error> {
     todo!()
 }

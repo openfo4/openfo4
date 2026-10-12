@@ -41,7 +41,7 @@ pub fn register(engine: &mut Engine) {
 /// ```text
 /// string Function() native
 /// ```
-fn get_name(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Error> {
+fn get_name(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<Object, Error> {
     todo!()
 }
 
@@ -50,7 +50,7 @@ fn get_name(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Error
 /// ```text
 /// Function(string name) native
 /// ```
-fn set_name(caller: Caller<'_, State>, self_ptr: Object, name: Object) -> Result<(), Error> {
+fn set_name(_caller: Caller<'_, State>, _self_ptr: Object, _name: Object) -> Result<(), Error> {
     todo!()
 }
 
@@ -59,7 +59,7 @@ fn set_name(caller: Caller<'_, State>, self_ptr: Object, name: Object) -> Result
 /// ```text
 /// string Function() native
 /// ```
-fn get_description(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Error> {
+fn get_description(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<Object, Error> {
     todo!()
 }
 
@@ -68,7 +68,7 @@ fn get_description(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object
 /// ```text
 /// float Function() native
 /// ```
-fn get_weight(caller: Caller<'_, State>, self_ptr: Object) -> Result<f32, Error> {
+fn get_weight(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<f32, Error> {
     todo!()
 }
 
@@ -77,7 +77,7 @@ fn get_weight(caller: Caller<'_, State>, self_ptr: Object) -> Result<f32, Error>
 /// ```text
 /// Function(float weight) native
 /// ```
-fn set_weight(caller: Caller<'_, State>, self_ptr: Object, weight: f32) -> Result<(), Error> {
+fn set_weight(_caller: Caller<'_, State>, _self_ptr: Object, _weight: f32) -> Result<(), Error> {
     todo!()
 }
 
@@ -86,7 +86,7 @@ fn set_weight(caller: Caller<'_, State>, self_ptr: Object, weight: f32) -> Resul
 /// ```text
 /// Function(int value) native
 /// ```
-fn set_gold_value(caller: Caller<'_, State>, self_ptr: Object, value: i32) -> Result<(), Error> {
+fn set_gold_value(_caller: Caller<'_, State>, _self_ptr: Object, _value: i32) -> Result<(), Error> {
     todo!()
 }
 
@@ -95,7 +95,7 @@ fn set_gold_value(caller: Caller<'_, State>, self_ptr: Object, value: i32) -> Re
 /// ```text
 /// Keyword[] Function() native
 /// ```
-fn get_keywords(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Error> {
+fn get_keywords(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<Object, Error> {
     todo!()
 }
 
@@ -104,7 +104,7 @@ fn get_keywords(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, E
 /// ```text
 /// bool Function() native
 /// ```
-fn has_world_model(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Error> {
+fn has_world_model(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<bool, Error> {
     todo!()
 }
 
@@ -113,7 +113,7 @@ fn has_world_model(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, 
 /// ```text
 /// string Function() native
 /// ```
-fn get_world_model_path(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Error> {
+fn get_world_model_path(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<Object, Error> {
     todo!()
 }
 
@@ -123,9 +123,9 @@ fn get_world_model_path(caller: Caller<'_, State>, self_ptr: Object) -> Result<O
 /// Function(string path) native
 /// ```
 fn set_world_model_path(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    path: Object,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _path: Object,
 ) -> Result<(), Error> {
     todo!()
 }
@@ -135,7 +135,7 @@ fn set_world_model_path(
 /// ```text
 /// string Function() native
 /// ```
-fn get_icon_path(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Error> {
+fn get_icon_path(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<Object, Error> {
     todo!()
 }
 
@@ -144,7 +144,11 @@ fn get_icon_path(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, 
 /// ```text
 /// Function(string path) native
 /// ```
-fn set_icon_path(caller: Caller<'_, State>, self_ptr: Object, path: Object) -> Result<(), Error> {
+fn set_icon_path(
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _path: Object,
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -153,7 +157,7 @@ fn set_icon_path(caller: Caller<'_, State>, self_ptr: Object, path: Object) -> R
 /// ```text
 /// string Function() native
 /// ```
-fn get_message_icon_path(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Error> {
+fn get_message_icon_path(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<Object, Error> {
     todo!()
 }
 
@@ -163,9 +167,9 @@ fn get_message_icon_path(caller: Caller<'_, State>, self_ptr: Object) -> Result<
 /// Function(string path) native
 /// ```
 fn set_message_icon_path(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    path: Object,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _path: Object,
 ) -> Result<(), Error> {
     todo!()
 }
@@ -175,7 +179,7 @@ fn set_message_icon_path(
 /// ```text
 /// Enchantment Function() native
 /// ```
-fn get_enchantment(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Error> {
+fn get_enchantment(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<Object, Error> {
     todo!()
 }
 
@@ -184,7 +188,7 @@ fn get_enchantment(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object
 /// ```text
 /// Function(Enchantment e) native
 /// ```
-fn set_enchantment(caller: Caller<'_, State>, self_ptr: Object, e: Object) -> Result<(), Error> {
+fn set_enchantment(_caller: Caller<'_, State>, _self_ptr: Object, _e: Object) -> Result<(), Error> {
     todo!()
 }
 
@@ -193,7 +197,7 @@ fn set_enchantment(caller: Caller<'_, State>, self_ptr: Object, e: Object) -> Re
 /// ```text
 /// int Function() native
 /// ```
-fn get_enchantment_value(caller: Caller<'_, State>, self_ptr: Object) -> Result<i32, Error> {
+fn get_enchantment_value(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<i32, Error> {
     todo!()
 }
 
@@ -203,9 +207,9 @@ fn get_enchantment_value(caller: Caller<'_, State>, self_ptr: Object) -> Result<
 /// Function(int value) native
 /// ```
 fn set_enchantment_value(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    value: i32,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _value: i32,
 ) -> Result<(), Error> {
     todo!()
 }
@@ -215,7 +219,7 @@ fn set_enchantment_value(
 /// ```text
 /// EquipSlot Function() native
 /// ```
-fn get_equip_type(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Error> {
+fn get_equip_type(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<Object, Error> {
     todo!()
 }
 
@@ -225,9 +229,9 @@ fn get_equip_type(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object,
 /// Function(EquipSlot type) native
 /// ```
 fn set_equip_type(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    r#type: Object,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    r#_type: Object,
 ) -> Result<(), Error> {
     todo!()
 }
@@ -237,7 +241,7 @@ fn set_equip_type(
 /// ```text
 /// Race Function() native
 /// ```
-fn get_race_form(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Error> {
+fn get_race_form(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<Object, Error> {
     todo!()
 }
 
@@ -247,9 +251,9 @@ fn get_race_form(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, 
 /// Function(Race newRace) native
 /// ```
 fn set_race_form(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    new_race: Object,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _new_race: Object,
 ) -> Result<(), Error> {
     todo!()
 }
@@ -259,7 +263,7 @@ fn set_race_form(
 /// ```text
 /// int Function() native
 /// ```
-fn get_slot_mask(caller: Caller<'_, State>, self_ptr: Object) -> Result<i32, Error> {
+fn get_slot_mask(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<i32, Error> {
     todo!()
 }
 
@@ -268,7 +272,11 @@ fn get_slot_mask(caller: Caller<'_, State>, self_ptr: Object) -> Result<i32, Err
 /// ```text
 /// Function(int slotMask) native
 /// ```
-fn set_slot_mask(caller: Caller<'_, State>, self_ptr: Object, slot_mask: i32) -> Result<(), Error> {
+fn set_slot_mask(
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _slot_mask: i32,
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -278,9 +286,9 @@ fn set_slot_mask(caller: Caller<'_, State>, self_ptr: Object, slot_mask: i32) ->
 /// int Function(int slotMask) native
 /// ```
 fn add_slot_to_mask(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    slot_mask: i32,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _slot_mask: i32,
 ) -> Result<i32, Error> {
     todo!()
 }
@@ -291,9 +299,9 @@ fn add_slot_to_mask(
 /// int Function(int slotMask) native
 /// ```
 fn remove_slot_from_mask(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    slot_mask: i32,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _slot_mask: i32,
 ) -> Result<i32, Error> {
     todo!()
 }
@@ -303,6 +311,6 @@ fn remove_slot_from_mask(
 /// ```text
 /// int Function(int slot) native global
 /// ```
-fn get_mask_for_slot(caller: Caller<'_, State>, slot: i32) -> Result<i32, Error> {
+fn get_mask_for_slot(_caller: Caller<'_, State>, _slot: i32) -> Result<i32, Error> {
     todo!()
 }

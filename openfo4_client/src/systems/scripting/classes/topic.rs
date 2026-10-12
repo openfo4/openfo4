@@ -14,6 +14,6 @@ pub fn register(engine: &mut Engine) {
 /// ```text
 /// Function Add() native
 /// ```
-fn add(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Error> {
+fn add(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<(), Error> {
     todo!()
 }

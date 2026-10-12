@@ -16,9 +16,9 @@ pub fn register(engine: &mut Engine) {
 /// int Function GetObjectComponentCount(Component akComponent) native
 /// ```
 fn get_object_component_count(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    ak_component: Object,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _ak_component: Object,
 ) -> Result<i32, Error> {
     todo!()
 }

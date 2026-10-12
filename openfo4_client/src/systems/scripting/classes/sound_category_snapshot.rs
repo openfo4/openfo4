@@ -16,7 +16,11 @@ pub fn register(engine: &mut Engine) {
 /// ```text
 /// Function Push(float afTransitionSecs) native
 /// ```
-fn push(caller: Caller<'_, State>, self_ptr: Object, af_transition_secs: f32) -> Result<(), Error> {
+fn push(
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _af_transition_secs: f32,
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -25,6 +29,6 @@ fn push(caller: Caller<'_, State>, self_ptr: Object, af_transition_secs: f32) ->
 /// ```text
 /// Function Remove() native
 /// ```
-fn remove(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Error> {
+fn remove(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<(), Error> {
     todo!()
 }

@@ -31,10 +31,10 @@ pub fn register(engine: &mut Engine) {
 /// Function AddLinkedLocation(Location akLoc, Keyword akKeyword) native
 /// ```
 fn add_linked_location(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    ak_loc: Object,
-    ak_keyword: Object,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _ak_loc: Object,
+    _ak_keyword: Object,
 ) -> Result<(), Error> {
     todo!()
 }
@@ -45,9 +45,9 @@ fn add_linked_location(
 /// Location[] Function GetAllLinkedLocations(Keyword akKeyword) native
 /// ```
 fn get_all_linked_locations(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    ak_keyword: Object,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _ak_keyword: Object,
 ) -> Result<Object, Error> {
     todo!()
 }
@@ -58,9 +58,9 @@ fn get_all_linked_locations(
 /// float Function GetKeywordData(Keyword akKeyword) native
 /// ```
 fn get_keyword_data(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    ak_keyword: Object,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _ak_keyword: Object,
 ) -> Result<f32, Error> {
     todo!()
 }
@@ -71,9 +71,9 @@ fn get_keyword_data(
 /// int Function GetRefTypeAliveCount(LocationRefType akRefType) native
 /// ```
 fn get_ref_type_alive_count(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    ak_ref_type: Object,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _ak_ref_type: Object,
 ) -> Result<i32, Error> {
     todo!()
 }
@@ -84,9 +84,9 @@ fn get_ref_type_alive_count(
 /// int Function GetRefTypeDeadCount(LocationRefType akRefType) native
 /// ```
 fn get_ref_type_dead_count(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    ak_ref_type: Object,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _ak_ref_type: Object,
 ) -> Result<i32, Error> {
     todo!()
 }
@@ -97,10 +97,10 @@ fn get_ref_type_dead_count(
 /// bool Function HasCommonParent(Location akOther, Keyword akFilter) native
 /// ```
 fn has_common_parent(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    ak_other: Object,
-    ak_filter: Object,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _ak_other: Object,
+    _ak_filter: Object,
 ) -> Result<bool, Error> {
     todo!()
 }
@@ -110,7 +110,7 @@ fn has_common_parent(
 /// ```text
 /// bool Function HasEverBeenCleared() native
 /// ```
-fn has_ever_been_cleared(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Error> {
+fn has_ever_been_cleared(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<bool, Error> {
     todo!()
 }
 
@@ -120,9 +120,9 @@ fn has_ever_been_cleared(caller: Caller<'_, State>, self_ptr: Object) -> Result<
 /// bool Function HasRefType(LocationRefType akRefType) native
 /// ```
 fn has_ref_type(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    ak_ref_type: Object,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _ak_ref_type: Object,
 ) -> Result<bool, Error> {
     todo!()
 }
@@ -132,7 +132,7 @@ fn has_ref_type(
 /// ```text
 /// bool Function IsCleared() native
 /// ```
-fn is_cleared(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Error> {
+fn is_cleared(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<bool, Error> {
     todo!()
 }
 
@@ -141,7 +141,11 @@ fn is_cleared(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Error
 /// ```text
 /// bool Function IsChild(Location akOther) native
 /// ```
-fn is_child(caller: Caller<'_, State>, self_ptr: Object, ak_other: Object) -> Result<bool, Error> {
+fn is_child(
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _ak_other: Object,
+) -> Result<bool, Error> {
     todo!()
 }
 
@@ -151,10 +155,10 @@ fn is_child(caller: Caller<'_, State>, self_ptr: Object, ak_other: Object) -> Re
 /// bool Function IsLinkedLocation(Location akLocation, Keyword akKeyword) native
 /// ```
 fn is_linked_location(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    ak_location: Object,
-    ak_keyword: Object,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _ak_location: Object,
+    _ak_keyword: Object,
 ) -> Result<bool, Error> {
     todo!()
 }
@@ -164,7 +168,7 @@ fn is_linked_location(
 /// ```text
 /// bool Function IsLoaded() native
 /// ```
-fn is_loaded(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Error> {
+fn is_loaded(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<bool, Error> {
     todo!()
 }
 
@@ -174,10 +178,10 @@ fn is_loaded(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Error>
 /// Function RemoveLinkedLocation(Location akLoc, Keyword akKeyword) native
 /// ```
 fn remove_linked_location(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    ak_loc: Object,
-    ak_keyword: Object,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _ak_loc: Object,
+    _ak_keyword: Object,
 ) -> Result<(), Error> {
     todo!()
 }
@@ -187,7 +191,7 @@ fn remove_linked_location(
 /// ```text
 /// Function Reset() native
 /// ```
-fn reset(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Error> {
+fn reset(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<(), Error> {
     todo!()
 }
 
@@ -197,10 +201,10 @@ fn reset(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Error> {
 /// Function SetKeywordData(Keyword akKeyword, float afData) native
 /// ```
 fn set_keyword_data(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    ak_keyword: Object,
-    af_data: f32,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _ak_keyword: Object,
+    _af_data: f32,
 ) -> Result<(), Error> {
     todo!()
 }
@@ -210,6 +214,10 @@ fn set_keyword_data(
 /// ```text
 /// Function SetCleared(bool abCleared) native
 /// ```
-fn set_cleared(caller: Caller<'_, State>, self_ptr: Object, ab_cleared: bool) -> Result<(), Error> {
+fn set_cleared(
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _ab_cleared: bool,
+) -> Result<(), Error> {
     todo!()
 }

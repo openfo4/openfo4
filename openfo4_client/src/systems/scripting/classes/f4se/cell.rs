@@ -14,6 +14,6 @@ pub fn register(engine: &mut Engine) {
 /// ```text
 /// WaterType Function GetWaterType() native
 /// ```
-fn get_water_type(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Error> {
+fn get_water_type(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<Object, Error> {
     todo!()
 }

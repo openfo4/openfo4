@@ -9,6 +9,6 @@ use super::{Bool, Object};
 /// ```text
 /// bool Function IsHostile() native
 /// ```
-pub fn is_hostile(caller: Caller<'_, State>, self_ptr: Object) -> Result<Bool, Error> {
+pub fn is_hostile(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<Bool, Error> {
     todo!()
 }

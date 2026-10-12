@@ -17,10 +17,10 @@ pub fn register(engine: &mut Engine) {
 /// Function Fire(ObjectReference akSource, Ammo akAmmo) native
 /// ```
 fn fire(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    ak_source: Object,
-    ak_ammo: Object,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _ak_source: Object,
+    _ak_ammo: Object,
 ) -> Result<(), Error> {
     todo!()
 }
@@ -30,6 +30,6 @@ fn fire(
 /// ```text
 /// Ammo Function GetAmmo() native
 /// ```
-fn get_ammo(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Error> {
+fn get_ammo(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<Object, Error> {
     todo!()
 }

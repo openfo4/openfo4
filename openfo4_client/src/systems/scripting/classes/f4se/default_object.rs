@@ -17,7 +17,7 @@ pub fn register(engine: &mut Engine) {
 /// ```text
 /// Form Function GetDefaultObject(string editorId) native global
 /// ```
-fn get_default_object(caller: Caller<'_, State>, editor_id: Object) -> Result<Object, Error> {
+fn get_default_object(_caller: Caller<'_, State>, _editor_id: Object) -> Result<Object, Error> {
     todo!()
 }
 
@@ -26,7 +26,7 @@ fn get_default_object(caller: Caller<'_, State>, editor_id: Object) -> Result<Ob
 /// ```text
 /// Form Function Get() native
 /// ```
-fn get(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Error> {
+fn get(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<Object, Error> {
     todo!()
 }
 
@@ -35,6 +35,6 @@ fn get(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Error> {
 /// ```text
 /// Function Set(Form newForm) native
 /// ```
-fn set(caller: Caller<'_, State>, self_ptr: Object, new_form: Object) -> Result<(), Error> {
+fn set(_caller: Caller<'_, State>, _self_ptr: Object, _new_form: Object) -> Result<(), Error> {
     todo!()
 }

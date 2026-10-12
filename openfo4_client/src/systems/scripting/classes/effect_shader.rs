@@ -16,10 +16,10 @@ pub fn register(engine: &mut Engine) {
 /// Function Play(ObjectReference akObject, float afDuration) native
 /// ```
 fn play(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    ak_object: Object,
-    af_duration: f32,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _ak_object: Object,
+    _af_duration: f32,
 ) -> Result<(), Error> {
     todo!()
 }
@@ -29,6 +29,6 @@ fn play(
 /// ```text
 /// Function Stop(ObjectReference akObject) native
 /// ```
-fn stop(caller: Caller<'_, State>, self_ptr: Object, ak_object: Object) -> Result<(), Error> {
+fn stop(_caller: Caller<'_, State>, _self_ptr: Object, _ak_object: Object) -> Result<(), Error> {
     todo!()
 }

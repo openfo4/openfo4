@@ -18,7 +18,7 @@ pub fn register(engine: &mut Engine) {
 /// ```text
 /// Location Function GetParent() native
 /// ```
-fn get_parent(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Error> {
+fn get_parent(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<Object, Error> {
     todo!()
 }
 
@@ -28,9 +28,9 @@ fn get_parent(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Err
 /// Function SetParent(Location akLocation) native
 /// ```
 fn set_parent(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    ak_location: Object,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _ak_location: Object,
 ) -> Result<(), Error> {
     todo!()
 }
@@ -41,9 +41,9 @@ fn set_parent(
 /// EncounterZone Function GetEncounterZone(bool recursive) native
 /// ```
 fn get_encounter_zone(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    recursive: bool,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _recursive: bool,
 ) -> Result<Object, Error> {
     todo!()
 }
@@ -54,9 +54,9 @@ fn get_encounter_zone(
 /// Function SetEncounterZone(EncounterZone ez) native
 /// ```
 fn set_encounter_zone(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    ez: Object,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _ez: Object,
 ) -> Result<(), Error> {
     todo!()
 }

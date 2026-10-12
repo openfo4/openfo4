@@ -22,7 +22,7 @@ pub fn register(engine: &mut Engine) {
 /// ```text
 /// Function() native
 /// ```
-fn force_start(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Error> {
+fn force_start(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<(), Error> {
     todo!()
 }
 
@@ -73,7 +73,7 @@ async fn stop(mut caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Err
 /// ```text
 /// bool Function() native
 /// ```
-fn is_playing(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Error> {
+fn is_playing(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<bool, Error> {
     todo!()
 }
 

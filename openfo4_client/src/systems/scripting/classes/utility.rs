@@ -47,10 +47,10 @@ pub fn register(engine: &mut Engine) {
 /// Var Function(string asScriptName, string asFuncName, Var[] aParams) native global
 /// ```
 fn call_global_function(
-    caller: Caller<'_, State>,
-    as_script_name: Object,
-    as_func_name: Object,
-    a_params: Object,
+    _caller: Caller<'_, State>,
+    _as_script_name: Object,
+    _as_func_name: Object,
+    _a_params: Object,
 ) -> Result<Object, Error> {
     todo!()
 }
@@ -61,10 +61,10 @@ fn call_global_function(
 /// Function(string asScriptName, string asFuncName, Var[] aParams) native global
 /// ```
 fn call_global_function_no_wait(
-    caller: Caller<'_, State>,
-    as_script_name: Object,
-    as_func_name: Object,
-    a_params: Object,
+    _caller: Caller<'_, State>,
+    _as_script_name: Object,
+    _as_func_name: Object,
+    _a_params: Object,
 ) -> Result<(), Error> {
     todo!()
 }
@@ -74,7 +74,7 @@ fn call_global_function_no_wait(
 /// ```text
 /// string Function(float afGameTime) native global
 /// ```
-fn game_time_to_string(caller: Caller<'_, State>, af_game_time: f32) -> Result<Object, Error> {
+fn game_time_to_string(_caller: Caller<'_, State>, _af_game_time: f32) -> Result<Object, Error> {
     todo!()
 }
 
@@ -83,7 +83,7 @@ fn game_time_to_string(caller: Caller<'_, State>, af_game_time: f32) -> Result<O
 /// ```text
 /// float Function() native global
 /// ```
-fn get_current_game_time(caller: Caller<'_, State>) -> Result<f32, Error> {
+fn get_current_game_time(_caller: Caller<'_, State>) -> Result<f32, Error> {
     todo!()
 }
 
@@ -92,7 +92,7 @@ fn get_current_game_time(caller: Caller<'_, State>) -> Result<f32, Error> {
 /// ```text
 /// float Function() native global
 /// ```
-fn get_current_real_time(caller: Caller<'_, State>) -> Result<f32, Error> {
+fn get_current_real_time(_caller: Caller<'_, State>) -> Result<f32, Error> {
     todo!()
 }
 
@@ -101,8 +101,8 @@ fn get_current_real_time(caller: Caller<'_, State>) -> Result<f32, Error> {
 /// ```text
 /// int Function() native global
 /// ```
-fn get_current_stack_id(_caller: Caller<'_, State>) -> Result<i32, Error> {
-    Ok(0)
+fn get_current_stack_id(_caller: Caller<'_, State>) -> i32 {
+    0
 }
 
 /// `IsInMenuMode`
@@ -110,7 +110,7 @@ fn get_current_stack_id(_caller: Caller<'_, State>) -> Result<i32, Error> {
 /// ```text
 /// bool Function() native global
 /// ```
-fn is_in_menu_mode(caller: Caller<'_, State>) -> Result<bool, Error> {
+fn is_in_menu_mode(_caller: Caller<'_, State>) -> Result<bool, Error> {
     todo!()
 }
 
@@ -173,7 +173,7 @@ fn set_ini_string(_caller: Caller<'_, State>, _ini: Object, _value: Object) -> R
 /// ```text
 /// Function(float afSeconds) native global
 /// ```
-fn wait(mut caller: Caller<'_, State>, seconds: f32) -> Result<(), Error> {
+fn wait(_caller: Caller<'_, State>, seconds: f32) -> Result<(), Error> {
     let duration = Duration::from_secs_f32(seconds);
     if duration.is_zero() {
         return Ok(());
@@ -187,7 +187,7 @@ fn wait(mut caller: Caller<'_, State>, seconds: f32) -> Result<(), Error> {
 /// ```text
 /// Function(float afHours) native global
 /// ```
-fn wait_game_time(caller: Caller<'_, State>, af_hours: f32) -> Result<(), Error> {
+fn wait_game_time(_caller: Caller<'_, State>, _af_hours: f32) -> Result<(), Error> {
     todo!()
 }
 
@@ -196,7 +196,7 @@ fn wait_game_time(caller: Caller<'_, State>, af_hours: f32) -> Result<(), Error>
 /// ```text
 /// Function(float afSeconds) native global
 /// ```
-fn wait_menu_mode(caller: Caller<'_, State>, af_seconds: f32) -> Result<(), Error> {
+fn wait_menu_mode(_caller: Caller<'_, State>, _af_seconds: f32) -> Result<(), Error> {
     todo!()
 }
 

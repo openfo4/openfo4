@@ -16,7 +16,7 @@ pub fn register(engine: &mut Engine) {
 /// ```text
 /// Quest Function GetOwningQuest() native
 /// ```
-fn get_owning_quest(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Error> {
+fn get_owning_quest(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<Object, Error> {
     todo!()
 }
 
@@ -25,6 +25,6 @@ fn get_owning_quest(caller: Caller<'_, State>, self_ptr: Object) -> Result<Objec
 /// ```text
 /// bool Function HasBeenSaid() native
 /// ```
-fn has_been_said(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Error> {
+fn has_been_said(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<bool, Error> {
     todo!()
 }

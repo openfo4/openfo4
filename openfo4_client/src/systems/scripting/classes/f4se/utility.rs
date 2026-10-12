@@ -16,7 +16,7 @@ pub fn register(engine: &mut Engine) {
 /// ```text
 /// Var[] Function VarToVarArray(Var v) native global
 /// ```
-fn var_to_var_array(caller: Caller<'_, State>, v: Object) -> Result<Object, Error> {
+fn var_to_var_array(_caller: Caller<'_, State>, _v: Object) -> Result<Object, Error> {
     todo!()
 }
 
@@ -25,6 +25,6 @@ fn var_to_var_array(caller: Caller<'_, State>, v: Object) -> Result<Object, Erro
 /// ```text
 /// Var Function VarArrayToVar(Var[] v) native global
 /// ```
-fn var_array_to_var(caller: Caller<'_, State>, v: Object) -> Result<Object, Error> {
+fn var_array_to_var(_caller: Caller<'_, State>, _v: Object) -> Result<Object, Error> {
     todo!()
 }

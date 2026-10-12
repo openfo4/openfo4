@@ -9,6 +9,9 @@ use super::Object;
 /// ```text
 /// string Function GetAssociatedSkill() native
 /// ```
-pub fn get_assocaited_skill(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Error> {
+pub fn get_assocaited_skill(
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+) -> Result<Object, Error> {
     todo!()
 }

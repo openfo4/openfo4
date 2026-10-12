@@ -24,7 +24,7 @@ pub fn register(engine: &mut Engine) {
 /// ```text
 /// ObjectReference Function GetCurrentConsoleRef() native global
 /// ```
-fn get_current_console_ref(caller: Caller<'_, State>) -> Result<Object, Error> {
+fn get_current_console_ref(_caller: Caller<'_, State>) -> Result<Object, Error> {
     todo!()
 }
 
@@ -33,7 +33,7 @@ fn get_current_console_ref(caller: Caller<'_, State>) -> Result<Object, Error> {
 /// ```text
 /// PluginInfo[] Function GetInstalledPlugins() native global
 /// ```
-fn get_installed_plugins(caller: Caller<'_, State>) -> Result<Object, Error> {
+fn get_installed_plugins(_caller: Caller<'_, State>) -> Result<Object, Error> {
     todo!()
 }
 
@@ -42,7 +42,7 @@ fn get_installed_plugins(caller: Caller<'_, State>) -> Result<Object, Error> {
 /// ```text
 /// PluginInfo[] Function GetInstalledLightPlugins() native global
 /// ```
-fn get_installed_light_plugins(caller: Caller<'_, State>) -> Result<Object, Error> {
+fn get_installed_light_plugins(_caller: Caller<'_, State>) -> Result<Object, Error> {
     todo!()
 }
 
@@ -51,7 +51,7 @@ fn get_installed_light_plugins(caller: Caller<'_, State>) -> Result<Object, Erro
 /// ```text
 /// string[] Function GetPluginDependencies(string plugin) native global
 /// ```
-fn get_plugin_dependencies(caller: Caller<'_, State>, plugin: Object) -> Result<Object, Error> {
+fn get_plugin_dependencies(_caller: Caller<'_, State>, _plugin: Object) -> Result<Object, Error> {
     todo!()
 }
 
@@ -61,9 +61,9 @@ fn get_plugin_dependencies(caller: Caller<'_, State>, plugin: Object) -> Result<
 /// Function SetGameSettingFloat(string setting, float value) native global
 /// ```
 fn set_game_setting_float(
-    caller: Caller<'_, State>,
-    setting: Object,
-    value: f32,
+    _caller: Caller<'_, State>,
+    _setting: Object,
+    _value: f32,
 ) -> Result<(), Error> {
     todo!()
 }
@@ -74,9 +74,9 @@ fn set_game_setting_float(
 /// Function SetGameSettingInt(string setting, int value) native global
 /// ```
 fn set_game_setting_int(
-    caller: Caller<'_, State>,
-    setting: Object,
-    value: i32,
+    _caller: Caller<'_, State>,
+    _setting: Object,
+    _value: i32,
 ) -> Result<(), Error> {
     todo!()
 }
@@ -87,9 +87,9 @@ fn set_game_setting_int(
 /// Function SetGameSettingBool(string setting, bool value) native global
 /// ```
 fn set_game_setting_bool(
-    caller: Caller<'_, State>,
-    setting: Object,
-    value: bool,
+    _caller: Caller<'_, State>,
+    _setting: Object,
+    _value: bool,
 ) -> Result<(), Error> {
     todo!()
 }
@@ -100,9 +100,9 @@ fn set_game_setting_bool(
 /// Function SetGameSettingString(string setting, string value) native global
 /// ```
 fn set_game_setting_string(
-    caller: Caller<'_, State>,
-    setting: Object,
-    value: Object,
+    _caller: Caller<'_, State>,
+    _setting: Object,
+    _value: Object,
 ) -> Result<(), Error> {
     todo!()
 }
@@ -112,7 +112,7 @@ fn set_game_setting_string(
 /// ```text
 /// Function UpdateThirdPerson() native global
 /// ```
-fn update_third_person(caller: Caller<'_, State>) -> Result<(), Error> {
+fn update_third_person(_caller: Caller<'_, State>) -> Result<(), Error> {
     todo!()
 }
 
@@ -121,6 +121,6 @@ fn update_third_person(caller: Caller<'_, State>) -> Result<(), Error> {
 /// ```text
 /// int Function GetCameraState() native global
 /// ```
-fn get_camera_state(caller: Caller<'_, State>) -> Result<i32, Error> {
+fn get_camera_state(_caller: Caller<'_, State>) -> Result<i32, Error> {
     todo!()
 }

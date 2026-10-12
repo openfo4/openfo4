@@ -52,7 +52,7 @@ pub fn register(engine: &mut Engine) {
 /// ```text
 /// InputEnableLayer Function() native global
 /// ```
-fn create(caller: Caller<'_, State>) -> Result<Object, Error> {
+fn create(_caller: Caller<'_, State>) -> Result<Object, Error> {
     todo!()
 }
 

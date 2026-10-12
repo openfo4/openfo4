@@ -10,8 +10,8 @@ pub fn register(engine: &mut Engine) {
     engine.register_if_exists("SoundCategory", "Pause", pause);
     engine.register_if_exists("SoundCategory", "SetFrequency", set_frequency);
     engine.register_if_exists("SoundCategory", "SetVolume", set_volume);
-    engine.register_if_exists("SoundCategory", "UnMute", un_mute);
-    engine.register_if_exists("SoundCategory", "UnPause", un_pause);
+    engine.register_if_exists("SoundCategory", "UnMute", unmute);
+    engine.register_if_exists("SoundCategory", "UnPause", unpause);
 }
 
 /// `Mute`
@@ -19,7 +19,7 @@ pub fn register(engine: &mut Engine) {
 /// ```text
 /// Function Mute() native
 /// ```
-fn mute(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Error> {
+fn mute(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<(), Error> {
     todo!()
 }
 
@@ -28,7 +28,7 @@ fn mute(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Error> {
 /// ```text
 /// Function Pause() native
 /// ```
-fn pause(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Error> {
+fn pause(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<(), Error> {
     todo!()
 }
 
@@ -38,9 +38,9 @@ fn pause(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Error> {
 /// Function SetFrequency(float afFrequencyCoeffecient) native
 /// ```
 fn set_frequency(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    af_frequency_coeffecient: f32,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _af_frequency_coeffecient: f32,
 ) -> Result<(), Error> {
     todo!()
 }
@@ -50,7 +50,7 @@ fn set_frequency(
 /// ```text
 /// Function SetVolume(float afVolume) native
 /// ```
-fn set_volume(caller: Caller<'_, State>, self_ptr: Object, af_volume: f32) -> Result<(), Error> {
+fn set_volume(_caller: Caller<'_, State>, _self_ptr: Object, _af_volume: f32) -> Result<(), Error> {
     todo!()
 }
 
@@ -59,7 +59,7 @@ fn set_volume(caller: Caller<'_, State>, self_ptr: Object, af_volume: f32) -> Re
 /// ```text
 /// Function UnMute() native
 /// ```
-fn un_mute(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Error> {
+fn unmute(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<(), Error> {
     todo!()
 }
 
@@ -68,6 +68,6 @@ fn un_mute(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Error> {
 /// ```text
 /// Function UnPause() native
 /// ```
-fn un_pause(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Error> {
+fn unpause(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<(), Error> {
     todo!()
 }

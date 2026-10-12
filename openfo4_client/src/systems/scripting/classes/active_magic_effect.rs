@@ -20,7 +20,7 @@ pub fn register(engine: &mut Engine) {
 /// ```text
 /// Function Dispel() native
 /// ```
-fn dispel(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Error> {
+fn dispel(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<(), Error> {
     todo!()
 }
 
@@ -29,7 +29,7 @@ fn dispel(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Error> {
 /// ```text
 /// MagicEffect Function GetBaseObject() native
 /// ```
-fn get_base_object(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Error> {
+fn get_base_object(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<Object, Error> {
     todo!()
 }
 
@@ -38,7 +38,7 @@ fn get_base_object(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object
 /// ```text
 /// Actor Function GetCasterActor() native
 /// ```
-fn get_caster_actor(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Error> {
+fn get_caster_actor(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<Object, Error> {
     todo!()
 }
 
@@ -47,7 +47,7 @@ fn get_caster_actor(caller: Caller<'_, State>, self_ptr: Object) -> Result<Objec
 /// ```text
 /// Actor Function GetTargetActor() native
 /// ```
-fn get_target_actor(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Error> {
+fn get_target_actor(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<Object, Error> {
     todo!()
 }
 

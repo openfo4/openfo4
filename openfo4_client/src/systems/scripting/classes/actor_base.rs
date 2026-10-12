@@ -49,7 +49,7 @@ async fn get_class(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object
 /// ```text
 /// int Function GetDeadCount() native
 /// ```
-fn get_dead_count(caller: Caller<'_, State>, self_ptr: Object) -> Result<i32, Error> {
+fn get_dead_count(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<i32, Error> {
     todo!()
 }
 
@@ -58,7 +58,7 @@ fn get_dead_count(caller: Caller<'_, State>, self_ptr: Object) -> Result<i32, Er
 /// ```text
 /// FormList Function GetGiftFilter() native
 /// ```
-fn get_gift_filter(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Error> {
+fn get_gift_filter(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<Object, Error> {
     todo!()
 }
 
@@ -83,7 +83,7 @@ async fn get_race(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object,
 /// ```text
 /// int Function GetLevel() native
 /// ```
-fn get_level(caller: Caller<'_, State>, self_ptr: Object) -> Result<i32, Error> {
+fn get_level(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<i32, Error> {
     todo!()
 }
 
@@ -92,7 +92,7 @@ fn get_level(caller: Caller<'_, State>, self_ptr: Object) -> Result<i32, Error> 
 /// ```text
 /// int Function GetLevelExact() native
 /// ```
-fn get_level_exact(caller: Caller<'_, State>, self_ptr: Object) -> Result<i32, Error> {
+fn get_level_exact(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<i32, Error> {
     todo!()
 }
 
@@ -101,7 +101,7 @@ fn get_level_exact(caller: Caller<'_, State>, self_ptr: Object) -> Result<i32, E
 /// ```text
 /// int Function GetSex() native
 /// ```
-fn get_sex(caller: Caller<'_, State>, self_ptr: Object) -> Result<i32, Error> {
+fn get_sex(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<i32, Error> {
     todo!()
 }
 
@@ -110,7 +110,7 @@ fn get_sex(caller: Caller<'_, State>, self_ptr: Object) -> Result<i32, Error> {
 /// ```text
 /// Actor Function GetUniqueActor() native
 /// ```
-fn get_unique_actor(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Error> {
+fn get_unique_actor(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<Object, Error> {
     todo!()
 }
 
@@ -164,9 +164,9 @@ fn is_unique(caller: Caller<'_, State>, self_ptr: Object) -> bool {
 /// Function SetEssential(bool abEssential) native
 /// ```
 fn set_essential(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    ab_essential: bool,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _ab_essential: bool,
 ) -> Result<(), Error> {
     todo!()
 }
@@ -177,9 +177,9 @@ fn set_essential(
 /// Function SetInvulnerable(bool abInvulnerable) native
 /// ```
 fn set_invulnerable(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    ab_invulnerable: bool,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _ab_invulnerable: bool,
 ) -> Result<(), Error> {
     todo!()
 }
@@ -190,9 +190,9 @@ fn set_invulnerable(
 /// Function SetProtected(bool abProtected) native
 /// ```
 fn set_protected(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    ab_protected: bool,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _ab_protected: bool,
 ) -> Result<(), Error> {
     todo!()
 }
@@ -203,10 +203,10 @@ fn set_protected(
 /// Function SetOutfit(Outfit akOutfit, bool abSleepOutfit) native
 /// ```
 fn set_outfit(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    ak_outfit: Object,
-    ab_sleep_outfit: bool,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _ak_outfit: Object,
+    _ab_sleep_outfit: bool,
 ) -> Result<(), Error> {
     todo!()
 }

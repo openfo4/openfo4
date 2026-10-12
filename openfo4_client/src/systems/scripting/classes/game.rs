@@ -154,9 +154,9 @@ async fn add_perk_points(caller: Caller<'_, State>, perk_points: i32) -> Result<
 /// Function(string asSkillName, float afMagnitude) native global
 /// ```
 fn advance_skill(
-    caller: Caller<'_, State>,
-    as_skill_name: Object,
-    af_magnitude: f32,
+    _caller: Caller<'_, State>,
+    _as_skill_name: Object,
+    _af_magnitude: f32,
 ) -> Result<(), Error> {
     todo!()
 }
@@ -166,7 +166,7 @@ fn advance_skill(
 /// ```text
 /// Function() native global
 /// ```
-fn clear_prison(caller: Caller<'_, State>) -> Result<(), Error> {
+fn clear_prison(_caller: Caller<'_, State>) -> Result<(), Error> {
     todo!()
 }
 
@@ -175,7 +175,7 @@ fn clear_prison(caller: Caller<'_, State>) -> Result<(), Error> {
 /// ```text
 /// Function() native global
 /// ```
-fn clear_temp_effects(caller: Caller<'_, State>) -> Result<(), Error> {
+fn clear_temp_effects(_caller: Caller<'_, State>) -> Result<(), Error> {
     todo!()
 }
 
@@ -184,7 +184,7 @@ fn clear_temp_effects(caller: Caller<'_, State>) -> Result<(), Error> {
 /// ```text
 /// Function(bool abEnable) native global
 /// ```
-fn enable_pipboy_hdr_mask(caller: Caller<'_, State>, ab_enable: bool) -> Result<(), Error> {
+fn enable_pipboy_hdr_mask(_caller: Caller<'_, State>, _ab_enable: bool) -> Result<(), Error> {
     todo!()
 }
 
@@ -205,12 +205,12 @@ fn error(caller: Caller<'_, State>, msg: Object) -> Result<(), Error> {
 /// Function(bool abFadingOut, bool abBlackFade, float afSecsBeforeFade, float afFadeDuration, bool abStayFaded) native global
 /// ```
 fn fade_out_game(
-    caller: Caller<'_, State>,
-    ab_fading_out: bool,
-    ab_black_fade: bool,
-    af_secs_before_fade: f32,
-    af_fade_duration: f32,
-    ab_stay_faded: bool,
+    _caller: Caller<'_, State>,
+    _ab_fading_out: bool,
+    _ab_black_fade: bool,
+    _af_secs_before_fade: f32,
+    _af_fade_duration: f32,
+    _ab_stay_faded: bool,
 ) -> Result<(), Error> {
     todo!()
 }
@@ -220,7 +220,7 @@ fn fade_out_game(
 /// ```text
 /// Function(ObjectReference akDestination) native global
 /// ```
-fn fast_travel(caller: Caller<'_, State>, ak_destination: Object) -> Result<(), Error> {
+fn fast_travel(_caller: Caller<'_, State>, _ak_destination: Object) -> Result<(), Error> {
     todo!()
 }
 
@@ -414,10 +414,10 @@ async fn find_random_actor(
 /// Function(bool abDisableSSR, bool abDisableGodrays, bool abDisableDirLight) native global
 /// ```
 fn force_disable_ssr_godrays_dir_light(
-    caller: Caller<'_, State>,
-    ab_disable_ssr: bool,
-    ab_disable_godrays: bool,
-    ab_disable_dir_light: bool,
+    _caller: Caller<'_, State>,
+    _ab_disable_ssr: bool,
+    _ab_disable_godrays: bool,
+    _ab_disable_dir_light: bool,
 ) -> Result<(), Error> {
     todo!()
 }
@@ -427,7 +427,7 @@ fn force_disable_ssr_godrays_dir_light(
 /// ```text
 /// Function() native global
 /// ```
-fn force_third_person(caller: Caller<'_, State>) -> Result<(), Error> {
+fn force_third_person(_caller: Caller<'_, State>) -> Result<(), Error> {
     todo!()
 }
 
@@ -436,7 +436,7 @@ fn force_third_person(caller: Caller<'_, State>) -> Result<(), Error> {
 /// ```text
 /// Function() native global
 /// ```
-fn force_first_person(caller: Caller<'_, State>) -> Result<(), Error> {
+fn force_first_person(_caller: Caller<'_, State>) -> Result<(), Error> {
     todo!()
 }
 
@@ -456,7 +456,7 @@ fn get_xp_for_level(_caller: Caller<'_, State>, level: i32) -> i32 {
 /// ```text
 /// Function(bool abShow) native global
 /// ```
-fn show_first_person_geometry(caller: Caller<'_, State>, ab_show: bool) -> Result<(), Error> {
+fn show_first_person_geometry(_caller: Caller<'_, State>, _ab_show: bool) -> Result<(), Error> {
     todo!()
 }
 
@@ -465,7 +465,7 @@ fn show_first_person_geometry(caller: Caller<'_, State>, ab_show: bool) -> Resul
 /// ```text
 /// Function() native global
 /// ```
-fn show_all_map_markers(caller: Caller<'_, State>) -> Result<(), Error> {
+fn show_all_map_markers(_caller: Caller<'_, State>) -> Result<(), Error> {
     todo!()
 }
 
@@ -528,7 +528,7 @@ fn get_endurance_av(caller: Caller<'_, State>) -> Object {
 /// ```text
 /// Form Function(int aiFormID) native global
 /// ```
-fn get_form(caller: Caller<'_, State>, ai_form_id: i32) -> Result<Object, Error> {
+fn get_form(_caller: Caller<'_, State>, _ai_form_id: i32) -> Result<Object, Error> {
     todo!()
 }
 
@@ -564,8 +564,8 @@ async fn get_form_from_file(caller: Caller<'_, State>, form: i32, file: Object) 
 /// float Function(string asGameSetting) native global
 /// ```
 fn get_game_setting_float(
-    caller: Caller<'_, State>,
-    as_game_setting: Object,
+    _caller: Caller<'_, State>,
+    _as_game_setting: Object,
 ) -> Result<f32, Error> {
     todo!()
 }
@@ -575,7 +575,10 @@ fn get_game_setting_float(
 /// ```text
 /// int Function(string asGameSetting) native global
 /// ```
-fn get_game_setting_int(caller: Caller<'_, State>, as_game_setting: Object) -> Result<i32, Error> {
+fn get_game_setting_int(
+    _caller: Caller<'_, State>,
+    _as_game_setting: Object,
+) -> Result<i32, Error> {
     todo!()
 }
 
@@ -585,8 +588,8 @@ fn get_game_setting_int(caller: Caller<'_, State>, as_game_setting: Object) -> R
 /// string Function(string asGameSetting) native global
 /// ```
 fn get_game_setting_string(
-    caller: Caller<'_, State>,
-    as_game_setting: Object,
+    _caller: Caller<'_, State>,
+    _as_game_setting: Object,
 ) -> Result<Object, Error> {
     todo!()
 }
@@ -655,7 +658,7 @@ async fn get_player(mut caller: Caller<'_, State>) -> Result<Object, Error> {
 /// ```text
 /// Actor[] Function() native global
 /// ```
-fn get_player_followers(caller: Caller<'_, State>) -> Result<Object, Error> {
+fn get_player_followers(_caller: Caller<'_, State>) -> Result<Object, Error> {
     todo!()
 }
 
@@ -664,7 +667,7 @@ fn get_player_followers(caller: Caller<'_, State>) -> Result<Object, Error> {
 /// ```text
 /// ObjectReference Function() native global
 /// ```
-fn get_player_grabbed_ref(caller: Caller<'_, State>) -> Result<Object, Error> {
+fn get_player_grabbed_ref(_caller: Caller<'_, State>) -> Result<Object, Error> {
     todo!()
 }
 
@@ -673,7 +676,7 @@ fn get_player_grabbed_ref(caller: Caller<'_, State>) -> Result<Object, Error> {
 /// ```text
 /// float Function() native global
 /// ```
-fn get_player_radio_frequency(caller: Caller<'_, State>) -> Result<f32, Error> {
+fn get_player_radio_frequency(_caller: Caller<'_, State>) -> Result<f32, Error> {
     todo!()
 }
 
@@ -682,7 +685,7 @@ fn get_player_radio_frequency(caller: Caller<'_, State>) -> Result<f32, Error> {
 /// ```text
 /// Actor Function() native global
 /// ```
-fn get_players_last_ridden_horse(caller: Caller<'_, State>) -> Result<Object, Error> {
+fn get_players_last_ridden_horse(_caller: Caller<'_, State>) -> Result<Object, Error> {
     todo!()
 }
 
@@ -720,9 +723,9 @@ fn get_strength_av(caller: Caller<'_, State>) -> Object {
 /// Function(ActorValue akActorValue, int aiCount) native global
 /// ```
 fn increment_skill(
-    caller: Caller<'_, State>,
-    ak_actor_value: Object,
-    ai_count: i32,
+    _caller: Caller<'_, State>,
+    _ak_actor_value: Object,
+    _ai_count: i32,
 ) -> Result<(), Error> {
     todo!()
 }
@@ -733,9 +736,9 @@ fn increment_skill(
 /// Function(string asStatName, int aiModAmount) native global
 /// ```
 fn increment_stat(
-    caller: Caller<'_, State>,
-    as_stat_name: Object,
-    ai_mod_amount: i32,
+    _caller: Caller<'_, State>,
+    _as_stat_name: Object,
+    _ai_mod_amount: i32,
 ) -> Result<(), Error> {
     todo!()
 }
@@ -745,7 +748,7 @@ fn increment_stat(
 /// ```text
 /// Function() native global
 /// ```
-fn initialize_marker_distances(caller: Caller<'_, State>) -> Result<(), Error> {
+fn initialize_marker_distances(_caller: Caller<'_, State>) -> Result<(), Error> {
     todo!()
 }
 
@@ -772,7 +775,7 @@ async fn is_vats_controls_enabled(caller: Caller<'_, State>) -> Result<bool, Err
 /// ```text
 /// bool Function() native global
 /// ```
-fn is_vats_playback_active(caller: Caller<'_, State>) -> Result<bool, Error> {
+fn is_vats_playback_active(_caller: Caller<'_, State>) -> Result<bool, Error> {
     todo!()
 }
 
@@ -799,7 +802,7 @@ async fn is_fast_travel_controls_enabled(caller: Caller<'_, State>) -> Result<bo
 /// ```text
 /// bool Function() native global
 /// ```
-fn is_fast_travel_enabled(caller: Caller<'_, State>) -> Result<bool, Error> {
+fn is_fast_travel_enabled(_caller: Caller<'_, State>) -> Result<bool, Error> {
     todo!()
 }
 
@@ -881,7 +884,7 @@ fn is_plugin_installed(caller: Caller<'_, State>, name: Object) -> bool {
 /// ```text
 /// bool Function(float afFrequency) native global
 /// ```
-fn is_player_in_radio_range(caller: Caller<'_, State>, af_frequency: f32) -> Result<bool, Error> {
+fn is_player_in_radio_range(_caller: Caller<'_, State>, _af_frequency: f32) -> Result<bool, Error> {
     todo!()
 }
 
@@ -890,7 +893,7 @@ fn is_player_in_radio_range(caller: Caller<'_, State>, af_frequency: f32) -> Res
 /// ```text
 /// bool Function(float afFrequency) native global
 /// ```
-fn is_player_listening(caller: Caller<'_, State>, af_frequency: f32) -> Result<bool, Error> {
+fn is_player_listening(_caller: Caller<'_, State>, _af_frequency: f32) -> Result<bool, Error> {
     todo!()
 }
 
@@ -899,7 +902,7 @@ fn is_player_listening(caller: Caller<'_, State>, af_frequency: f32) -> Result<b
 /// ```text
 /// bool Function() native global
 /// ```
-fn is_player_radio_on(caller: Caller<'_, State>) -> Result<bool, Error> {
+fn is_player_radio_on(_caller: Caller<'_, State>) -> Result<bool, Error> {
     todo!()
 }
 
@@ -917,7 +920,7 @@ async fn is_sneaking_controls_enabled(caller: Caller<'_, State>) -> Result<bool,
 /// ```text
 /// Function(int aiHours) native global
 /// ```
-fn pass_time(caller: Caller<'_, State>, ai_hours: i32) -> Result<(), Error> {
+fn pass_time(_caller: Caller<'_, State>, _ai_hours: i32) -> Result<(), Error> {
     todo!()
 }
 
@@ -927,13 +930,13 @@ fn pass_time(caller: Caller<'_, State>, ai_hours: i32) -> Result<(), Error> {
 /// Function PlayBink(string asFileName, bool abInterruptible = false, bool abMuteAudio = true, bool abMuteMusic = true, bool abLetterbox = true, bool abIsNewGameBink = false) native global
 /// ```
 fn play_bink(
-    caller: Caller<'_, State>,
-    file_name: Object,
-    interruptible: bool,
-    mute_audio: bool,
-    mute_music: bool,
-    letterbox: bool,
-    is_new_game_bink: bool,
+    _caller: Caller<'_, State>,
+    _file_name: Object,
+    _interruptible: bool,
+    _mute_audio: bool,
+    _mute_music: bool,
+    _letterbox: bool,
+    _is_new_game_bink: bool,
 ) -> Result<(), Error> {
     todo!()
 }
@@ -957,7 +960,7 @@ fn precache_char_gen_clear(_caller: Caller<'_, State>) {}
 /// ```text
 /// int Function(string asStat) native global
 /// ```
-fn query_stat(caller: Caller<'_, State>, as_stat: Object) -> Result<i32, Error> {
+fn query_stat(_caller: Caller<'_, State>, _as_stat: Object) -> Result<i32, Error> {
     todo!()
 }
 
@@ -966,7 +969,7 @@ fn query_stat(caller: Caller<'_, State>, as_stat: Object) -> Result<i32, Error> 
 /// ```text
 /// Function() native global
 /// ```
-fn quit_to_main_menu(caller: Caller<'_, State>) -> Result<(), Error> {
+fn quit_to_main_menu(_caller: Caller<'_, State>) -> Result<(), Error> {
     todo!()
 }
 
@@ -975,7 +978,7 @@ fn quit_to_main_menu(caller: Caller<'_, State>) -> Result<(), Error> {
 /// ```text
 /// Function() native global
 /// ```
-fn request_auto_save(caller: Caller<'_, State>) -> Result<(), Error> {
+fn request_auto_save(_caller: Caller<'_, State>) -> Result<(), Error> {
     todo!()
 }
 
@@ -991,7 +994,7 @@ fn request_model(_caller: Caller<'_, State>, _model_name: Object) {}
 /// ```text
 /// Function() native global
 /// ```
-fn request_save(caller: Caller<'_, State>) -> Result<(), Error> {
+fn request_save(_caller: Caller<'_, State>) -> Result<(), Error> {
     todo!()
 }
 
@@ -1001,9 +1004,9 @@ fn request_save(caller: Caller<'_, State>) -> Result<(), Error> {
 /// Function(int auiXPAmount, bool abDirect) native global
 /// ```
 fn reward_player_xp(
-    caller: Caller<'_, State>,
-    aui_xp_amount: i32,
-    ab_direct: bool,
+    _caller: Caller<'_, State>,
+    _aui_xp_amount: i32,
+    _ab_direct: bool,
 ) -> Result<(), Error> {
     todo!()
 }
@@ -1013,7 +1016,7 @@ fn reward_player_xp(
 /// ```text
 /// Function() native global
 /// ```
-fn serve_time(caller: Caller<'_, State>) -> Result<(), Error> {
+fn serve_time(_caller: Caller<'_, State>) -> Result<(), Error> {
     todo!()
 }
 
@@ -1022,7 +1025,7 @@ fn serve_time(caller: Caller<'_, State>) -> Result<(), Error> {
 /// ```text
 /// Function(Actor arTarget) native global
 /// ```
-fn set_camera_target(caller: Caller<'_, State>, ar_target: Object) -> Result<(), Error> {
+fn set_camera_target(_caller: Caller<'_, State>, _ar_target: Object) -> Result<(), Error> {
     todo!()
 }
 
@@ -1031,7 +1034,7 @@ fn set_camera_target(caller: Caller<'_, State>, ar_target: Object) -> Result<(),
 /// ```text
 /// Function(int aiCGHUDMode) native global
 /// ```
-fn set_char_gen_hud_mode(caller: Caller<'_, State>, ai_cghud_mode: i32) -> Result<(), Error> {
+fn set_char_gen_hud_mode(_caller: Caller<'_, State>, _ai_cghud_mode: i32) -> Result<(), Error> {
     todo!()
 }
 
@@ -1041,8 +1044,8 @@ fn set_char_gen_hud_mode(caller: Caller<'_, State>, ai_cghud_mode: i32) -> Resul
 /// Function(bool aInsideMemory) native global
 /// ```
 fn set_inside_memory_hud_mode(
-    caller: Caller<'_, State>,
-    a_inside_memory: bool,
+    _caller: Caller<'_, State>,
+    _a_inside_memory: bool,
 ) -> Result<(), Error> {
     todo!()
 }
@@ -1053,9 +1056,9 @@ fn set_inside_memory_hud_mode(
 /// Function(string aVaultBoySwf, Sound aSoundDescriptor) native global
 /// ```
 fn show_perk_vault_boy_on_hud(
-    caller: Caller<'_, State>,
-    a_vault_boy_swf: Object,
-    a_sound_descriptor: Object,
+    _caller: Caller<'_, State>,
+    _a_vault_boy_swf: Object,
+    _a_sound_descriptor: Object,
 ) -> Result<(), Error> {
     todo!()
 }
@@ -1066,10 +1069,10 @@ fn show_perk_vault_boy_on_hud(
 /// Function(bool abDisableSaving, bool abDisableWaiting, bool abShowControlsDisabledMessage) native global
 /// ```
 fn set_in_chargen(
-    caller: Caller<'_, State>,
-    ab_disable_saving: bool,
-    ab_disable_waiting: bool,
-    ab_show_controls_disabled_message: bool,
+    _caller: Caller<'_, State>,
+    _ab_disable_saving: bool,
+    _ab_disable_waiting: bool,
+    _ab_show_controls_disabled_message: bool,
 ) -> Result<(), Error> {
     todo!()
 }
@@ -1079,7 +1082,7 @@ fn set_in_chargen(
 /// ```text
 /// Function(bool abAIDriven) native global
 /// ```
-fn set_player_ai_driven(caller: Caller<'_, State>, ab_ai_driven: bool) -> Result<(), Error> {
+fn set_player_ai_driven(_caller: Caller<'_, State>, _ab_ai_driven: bool) -> Result<(), Error> {
     todo!()
 }
 
@@ -1088,7 +1091,7 @@ fn set_player_ai_driven(caller: Caller<'_, State>, ab_ai_driven: bool) -> Result
 /// ```text
 /// Function(bool abOnElevator=) native global
 /// ```
-fn set_player_on_elevator(caller: Caller<'_, State>, ab_on_elevator: bool) -> Result<(), Error> {
+fn set_player_on_elevator(_caller: Caller<'_, State>, _ab_on_elevator: bool) -> Result<(), Error> {
     todo!()
 }
 
@@ -1097,7 +1100,7 @@ fn set_player_on_elevator(caller: Caller<'_, State>, ab_on_elevator: bool) -> Re
 /// ```text
 /// Function(float afFrequency) native global
 /// ```
-fn set_player_radio_frequency(caller: Caller<'_, State>, af_frequency: f32) -> Result<(), Error> {
+fn set_player_radio_frequency(_caller: Caller<'_, State>, _af_frequency: f32) -> Result<(), Error> {
     todo!()
 }
 
@@ -1106,7 +1109,10 @@ fn set_player_radio_frequency(caller: Caller<'_, State>, af_frequency: f32) -> R
 /// ```text
 /// Function(bool abReportCrime) native global
 /// ```
-fn set_player_report_crime(caller: Caller<'_, State>, ab_report_crime: bool) -> Result<(), Error> {
+fn set_player_report_crime(
+    _caller: Caller<'_, State>,
+    _ab_report_crime: bool,
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -1115,7 +1121,7 @@ fn set_player_report_crime(caller: Caller<'_, State>, ab_report_crime: bool) -> 
 /// ```text
 /// Function(float afValue) native global
 /// ```
-fn set_sitting_rotation(caller: Caller<'_, State>, af_value: f32) -> Result<(), Error> {
+fn set_sitting_rotation(_caller: Caller<'_, State>, _af_value: f32) -> Result<(), Error> {
     todo!()
 }
 
@@ -1125,10 +1131,10 @@ fn set_sitting_rotation(caller: Caller<'_, State>, af_value: f32) -> Result<(), 
 /// Function(ObjectReference akSource, float afStrength, float afDuration) native global
 /// ```
 fn shake_camera(
-    caller: Caller<'_, State>,
-    ak_source: Object,
-    af_strength: f32,
-    af_duration: f32,
+    _caller: Caller<'_, State>,
+    _ak_source: Object,
+    _af_strength: f32,
+    _af_duration: f32,
 ) -> Result<(), Error> {
     todo!()
 }
@@ -1139,10 +1145,10 @@ fn shake_camera(
 /// Function(float afSmallMotorStrength, float afBigMotorStreangth, float afDuration) native global
 /// ```
 fn shake_controller(
-    caller: Caller<'_, State>,
-    af_small_motor_strength: f32,
-    af_big_motor_streangth: f32,
-    af_duration: f32,
+    _caller: Caller<'_, State>,
+    _af_small_motor_strength: f32,
+    _af_big_motor_streangth: f32,
+    _af_duration: f32,
 ) -> Result<(), Error> {
     todo!()
 }
@@ -1152,7 +1158,7 @@ fn shake_controller(
 /// ```text
 /// Function() native global
 /// ```
-fn show_fatigue_warning_on_hud(caller: Caller<'_, State>) -> Result<(), Error> {
+fn show_fatigue_warning_on_hud(_caller: Caller<'_, State>) -> Result<(), Error> {
     todo!()
 }
 
@@ -1162,12 +1168,12 @@ fn show_fatigue_warning_on_hud(caller: Caller<'_, State>) -> Result<(), Error> {
 /// Function(ObjectReference akMenuTarget, int uiMode, ObjectReference akMenuSpouseFemale, ObjectReference akMenuSpouseMale, ObjectReference akVendor) native global
 /// ```
 fn show_race_menu(
-    caller: Caller<'_, State>,
-    ak_menu_target: Object,
-    ui_mode: i32,
-    ak_menu_spouse_female: Object,
-    ak_menu_spouse_male: Object,
-    ak_vendor: Object,
+    _caller: Caller<'_, State>,
+    _ak_menu_target: Object,
+    _ui_mode: i32,
+    _ak_menu_spouse_female: Object,
+    _ak_menu_spouse_male: Object,
+    _ak_vendor: Object,
 ) -> Result<(), Error> {
     todo!()
 }
@@ -1177,7 +1183,7 @@ fn show_race_menu(
 /// ```text
 /// Function() native global
 /// ```
-fn show_special_menu(caller: Caller<'_, State>) -> Result<(), Error> {
+fn show_special_menu(_caller: Caller<'_, State>) -> Result<(), Error> {
     todo!()
 }
 
@@ -1186,7 +1192,7 @@ fn show_special_menu(caller: Caller<'_, State>) -> Result<(), Error> {
 /// ```text
 /// Function() native global
 /// ```
-fn show_title_sequence_menu(caller: Caller<'_, State>) -> Result<(), Error> {
+fn show_title_sequence_menu(_caller: Caller<'_, State>) -> Result<(), Error> {
     todo!()
 }
 
@@ -1195,7 +1201,7 @@ fn show_title_sequence_menu(caller: Caller<'_, State>) -> Result<(), Error> {
 /// ```text
 /// Function() native global
 /// ```
-fn hide_title_sequence_menu(caller: Caller<'_, State>) -> Result<(), Error> {
+fn hide_title_sequence_menu(_caller: Caller<'_, State>) -> Result<(), Error> {
     todo!()
 }
 
@@ -1204,7 +1210,10 @@ fn hide_title_sequence_menu(caller: Caller<'_, State>) -> Result<(), Error> {
 /// ```text
 /// Function(string asSequenceName) native global
 /// ```
-fn start_title_sequence(caller: Caller<'_, State>, as_sequence_name: Object) -> Result<(), Error> {
+fn start_title_sequence(
+    _caller: Caller<'_, State>,
+    _as_sequence_name: Object,
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -1214,8 +1223,8 @@ fn start_title_sequence(caller: Caller<'_, State>, as_sequence_name: Object) -> 
 /// Function(string asAnimationName) native global
 /// ```
 fn show_pipboy_boot_sequence(
-    caller: Caller<'_, State>,
-    as_animation_name: Object,
+    _caller: Caller<'_, State>,
+    _as_animation_name: Object,
 ) -> Result<(), Error> {
     todo!()
 }
@@ -1225,7 +1234,7 @@ fn show_pipboy_boot_sequence(
 /// ```text
 /// Function() native global
 /// ```
-fn show_pipboy_plugin(caller: Caller<'_, State>) -> Result<(), Error> {
+fn show_pipboy_plugin(_caller: Caller<'_, State>) -> Result<(), Error> {
     todo!()
 }
 
@@ -1234,7 +1243,7 @@ fn show_pipboy_plugin(caller: Caller<'_, State>) -> Result<(), Error> {
 /// ```text
 /// Function(Actor aTrainer) native global
 /// ```
-fn show_training_menu(caller: Caller<'_, State>, a_trainer: Object) -> Result<(), Error> {
+fn show_training_menu(_caller: Caller<'_, State>, _a_trainer: Object) -> Result<(), Error> {
     todo!()
 }
 
@@ -1243,7 +1252,7 @@ fn show_training_menu(caller: Caller<'_, State>, a_trainer: Object) -> Result<()
 /// ```text
 /// Function(int aiValue) native global
 /// ```
-fn trigger_screen_blood(caller: Caller<'_, State>, ai_value: i32) -> Result<(), Error> {
+fn trigger_screen_blood(_caller: Caller<'_, State>, _ai_value: i32) -> Result<(), Error> {
     todo!()
 }
 
@@ -1253,9 +1262,9 @@ fn trigger_screen_blood(caller: Caller<'_, State>, ai_value: i32) -> Result<(), 
 /// Function(CameraShot akCamera, ObjectReference akRef) native global
 /// ```
 fn play_event_camera(
-    caller: Caller<'_, State>,
-    ak_camera: Object,
-    ak_ref: Object,
+    _caller: Caller<'_, State>,
+    _ak_camera: Object,
+    _ak_ref: Object,
 ) -> Result<(), Error> {
     todo!()
 }
@@ -1266,8 +1275,8 @@ fn play_event_camera(
 /// Function(ObjectReference akCameraTarget) native global
 /// ```
 fn start_dialogue_camera_or_center_on_target(
-    caller: Caller<'_, State>,
-    ak_camera_target: Object,
+    _caller: Caller<'_, State>,
+    _ak_camera_target: Object,
 ) -> Result<(), Error> {
     todo!()
 }
@@ -1278,9 +1287,9 @@ fn start_dialogue_camera_or_center_on_target(
 /// Function(bool abConsiderResume, bool abSwitchingTo1stP) native global
 /// ```
 fn stop_dialogue_camera(
-    caller: Caller<'_, State>,
-    ab_consider_resume: bool,
-    ab_switching_to1st_p: bool,
+    _caller: Caller<'_, State>,
+    _ab_consider_resume: bool,
+    _ab_switching_to1st_p: bool,
 ) -> Result<(), Error> {
     todo!()
 }
@@ -1290,7 +1299,7 @@ fn stop_dialogue_camera(
 /// ```text
 /// Function(bool abRadioOn) native global
 /// ```
-fn turn_player_radio_on(caller: Caller<'_, State>, ab_radio_on: bool) -> Result<(), Error> {
+fn turn_player_radio_on(_caller: Caller<'_, State>, _ab_radio_on: bool) -> Result<(), Error> {
     todo!()
 }
 
@@ -1299,7 +1308,7 @@ fn turn_player_radio_on(caller: Caller<'_, State>, ab_radio_on: bool) -> Result<
 /// ```text
 /// bool Function() native global
 /// ```
-fn using_gamepad(caller: Caller<'_, State>) -> Result<bool, Error> {
+fn using_gamepad(_caller: Caller<'_, State>) -> Result<bool, Error> {
     todo!()
 }
 

@@ -10,9 +10,9 @@ use super::{Bool, Float, Int, Object};
 /// Function SetInstanceVolume(int aiPlaybackInstance, float afVolume) native global
 /// ```
 pub fn set_instance_volume(
-    caller: Caller<'_, State>,
-    instance: Int,
-    volume: Float,
+    _caller: Caller<'_, State>,
+    _instance: Int,
+    _volume: Float,
 ) -> Result<(), Error> {
     todo!()
 }
@@ -22,7 +22,7 @@ pub fn set_instance_volume(
 /// ```text
 /// Function StopInstance(int aiPlaybackInstance) native global
 /// ```
-pub fn stop_instance(caller: Caller<'_, State>, instance: Int) -> Result<(), Error> {
+pub fn stop_instance(_caller: Caller<'_, State>, _instance: Int) -> Result<(), Error> {
     todo!()
 }
 
@@ -31,7 +31,7 @@ pub fn stop_instance(caller: Caller<'_, State>, instance: Int) -> Result<(), Err
 /// ```text
 /// int Function Play(ObjectReference akSource) native
 /// ```
-pub fn play(caller: Caller<'_, State>, self_ptr: Object, source: Object) -> Result<Int, Error> {
+pub fn play(_caller: Caller<'_, State>, _self_ptr: Object, _source: Object) -> Result<Int, Error> {
     todo!();
 }
 
@@ -41,9 +41,9 @@ pub fn play(caller: Caller<'_, State>, self_ptr: Object, source: Object) -> Resu
 /// bool Function PlayAndWait(ObjectReference akSource) native
 /// ```
 pub fn play_and_wait(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    source: Object,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _source: Object,
 ) -> Result<Bool, Error> {
     todo!()
 }

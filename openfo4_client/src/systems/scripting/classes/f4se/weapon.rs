@@ -16,7 +16,7 @@ pub fn register(engine: &mut Engine) {
 /// ```text
 /// ObjectMod Function GetEmbeddedMod() native
 /// ```
-fn get_embedded_mod(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Error> {
+fn get_embedded_mod(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<Object, Error> {
     todo!()
 }
 
@@ -26,9 +26,9 @@ fn get_embedded_mod(caller: Caller<'_, State>, self_ptr: Object) -> Result<Objec
 /// Function SetEmbeddedMod(ObjectMod mod) native
 /// ```
 fn set_embedded_mod(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    r#mod: Object,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    r#_mod: Object,
 ) -> Result<(), Error> {
     todo!()
 }

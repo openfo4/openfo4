@@ -7,7 +7,7 @@ use crate::systems::scripting::state::State;
 /// ```text
 /// bool Function IsInstalled() native global
 /// ```
-pub fn is_installed(caller: Caller<'_, State>) -> Result<bool, Error> {
+pub fn is_installed(_caller: Caller<'_, State>) -> Result<bool, Error> {
     todo!()
 }
 
@@ -16,7 +16,7 @@ pub fn is_installed(caller: Caller<'_, State>) -> Result<bool, Error> {
 /// ```text
 /// int Function GetVersionCode() native global
 /// ```
-pub fn get_version_code(caller: Caller<'_, State>) -> Result<i32, Error> {
+pub fn get_version_code(_caller: Caller<'_, State>) -> Result<i32, Error> {
     todo!()
 }
 
@@ -25,7 +25,7 @@ pub fn get_version_code(caller: Caller<'_, State>) -> Result<i32, Error> {
 /// ```text
 /// Function RefreshMenu() native global
 /// ```
-pub fn refresh_menu(caller: Caller<'_, State>) -> Result<(), Error> {
+pub fn refresh_menu(_caller: Caller<'_, State>) -> Result<(), Error> {
     todo!()
 }
 
@@ -35,9 +35,9 @@ pub fn refresh_menu(caller: Caller<'_, State>) -> Result<(), Error> {
 /// int Function GetModSettingInt(string asModName, string asSetting) native global
 /// ```
 pub fn get_mod_setting_int(
-    caller: Caller<'_, State>,
-    mod_name: ObjectAddr,
-    setting: ObjectAddr,
+    _caller: Caller<'_, State>,
+    _mod_name: ObjectAddr,
+    _setting: ObjectAddr,
 ) -> Result<i32, Error> {
     todo!()
 }
@@ -48,9 +48,9 @@ pub fn get_mod_setting_int(
 /// bool Function GetModSettingBool(string asModName, string asSetting) native global
 /// ```
 pub fn get_mod_setting_bool(
-    caller: Caller<'_, State>,
-    mod_name: ObjectAddr,
-    setting: ObjectAddr,
+    _caller: Caller<'_, State>,
+    _mod_name: ObjectAddr,
+    _setting: ObjectAddr,
 ) -> Result<bool, Error> {
     todo!()
 }
@@ -61,9 +61,9 @@ pub fn get_mod_setting_bool(
 /// float Function GetModSettingFloat(string asModName, string asSetting) native global
 /// ```
 pub fn get_mod_setting_float(
-    caller: Caller<'_, State>,
-    mod_name: ObjectAddr,
-    setting: ObjectAddr,
+    _caller: Caller<'_, State>,
+    _mod_name: ObjectAddr,
+    _setting: ObjectAddr,
 ) -> Result<f32, Error> {
     todo!()
 }
@@ -74,9 +74,9 @@ pub fn get_mod_setting_float(
 /// string Function GetModSettingString(string asModName, string asSetting) native global
 /// ```
 pub fn get_mod_setting_string(
-    caller: Caller<'_, State>,
-    mod_name: ObjectAddr,
-    setting: ObjectAddr,
+    _caller: Caller<'_, State>,
+    _mod_name: ObjectAddr,
+    _setting: ObjectAddr,
 ) -> Result<ObjectAddr, Error> {
     todo!()
 }
@@ -87,10 +87,10 @@ pub fn get_mod_setting_string(
 /// Function SetModSettingInt(string asModName, string asSettingName, int aiValue) native global
 /// ```
 pub fn set_mod_setting_int(
-    caller: Caller<'_, State>,
-    mod_name: ObjectAddr,
-    setting: ObjectAddr,
-    value: i32,
+    _caller: Caller<'_, State>,
+    _mod_name: ObjectAddr,
+    _setting: ObjectAddr,
+    _value: i32,
 ) -> Result<(), Error> {
     todo!()
 }
@@ -101,10 +101,10 @@ pub fn set_mod_setting_int(
 /// Function SetModSettingBool(string asModName, string asSettingName, bool abValue) native global
 /// ```
 pub fn set_mod_setting_bool(
-    caller: Caller<'_, State>,
-    mod_name: ObjectAddr,
-    setting: ObjectAddr,
-    value: bool,
+    _caller: Caller<'_, State>,
+    _mod_name: ObjectAddr,
+    _setting: ObjectAddr,
+    _value: bool,
 ) -> Result<(), Error> {
     todo!()
 }
@@ -115,10 +115,10 @@ pub fn set_mod_setting_bool(
 /// Function SetModSettingFloat(string asModName, string asSettingName, float afValue) native global
 /// ```
 pub fn set_mod_setting_float(
-    caller: Caller<'_, State>,
-    mod_name: ObjectAddr,
-    setting: ObjectAddr,
-    value: f32,
+    _caller: Caller<'_, State>,
+    _mod_name: ObjectAddr,
+    _setting: ObjectAddr,
+    _value: f32,
 ) -> Result<(), Error> {
     todo!()
 }
@@ -129,10 +129,10 @@ pub fn set_mod_setting_float(
 /// Function SetModSettingString(string asModName, string asSettingName, string asValue) native global
 /// ```
 pub fn set_mod_setting_string(
-    caller: Caller<'_, State>,
-    mod_name: ObjectAddr,
-    setting: ObjectAddr,
-    value: ObjectAddr,
+    _caller: Caller<'_, State>,
+    _mod_name: ObjectAddr,
+    _setting: ObjectAddr,
+    _value: ObjectAddr,
 ) -> Result<(), Error> {
     todo!()
 }

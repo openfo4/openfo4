@@ -18,7 +18,7 @@ pub fn register(engine: &mut Engine) {
 /// ```text
 /// Spell Function GetConsumeSpell() native
 /// ```
-fn get_consume_spell(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Error> {
+fn get_consume_spell(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<Object, Error> {
     todo!()
 }
 
@@ -27,7 +27,11 @@ fn get_consume_spell(caller: Caller<'_, State>, self_ptr: Object) -> Result<Obje
 /// ```text
 /// Function SetConsumeSpell(Spell sp) native
 /// ```
-fn set_consume_spell(caller: Caller<'_, State>, self_ptr: Object, sp: Object) -> Result<(), Error> {
+fn set_consume_spell(
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _sp: Object,
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -36,7 +40,7 @@ fn set_consume_spell(caller: Caller<'_, State>, self_ptr: Object, sp: Object) ->
 /// ```text
 /// Spell Function GetContactSpell() native
 /// ```
-fn get_contact_spell(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Error> {
+fn get_contact_spell(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<Object, Error> {
     todo!()
 }
 
@@ -45,6 +49,10 @@ fn get_contact_spell(caller: Caller<'_, State>, self_ptr: Object) -> Result<Obje
 /// ```text
 /// Function SetContactSpell(Spell sp) native
 /// ```
-fn set_contact_spell(caller: Caller<'_, State>, self_ptr: Object, sp: Object) -> Result<(), Error> {
+fn set_contact_spell(
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _sp: Object,
+) -> Result<(), Error> {
     todo!()
 }

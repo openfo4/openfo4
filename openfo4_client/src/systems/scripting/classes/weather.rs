@@ -24,7 +24,7 @@ pub fn register(engine: &mut Engine) {
 /// ```text
 /// Function EnableAmbientParticles(bool abEnable) native global
 /// ```
-fn enable_ambient_particles(caller: Caller<'_, State>, ab_enable: bool) -> Result<(), Error> {
+fn enable_ambient_particles(_caller: Caller<'_, State>, _ab_enable: bool) -> Result<(), Error> {
     todo!()
 }
 
@@ -33,7 +33,7 @@ fn enable_ambient_particles(caller: Caller<'_, State>, ab_enable: bool) -> Resul
 /// ```text
 /// Weather Function FindWeather(int auiType) native global
 /// ```
-fn find_weather(caller: Caller<'_, State>, aui_type: i32) -> Result<Object, Error> {
+fn find_weather(_caller: Caller<'_, State>, _aui_type: i32) -> Result<Object, Error> {
     todo!()
 }
 
@@ -43,9 +43,9 @@ fn find_weather(caller: Caller<'_, State>, aui_type: i32) -> Result<Object, Erro
 /// Function ForceActive(bool abOverride=false) native
 /// ```
 fn force_active(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    ab_override: bool,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _ab_override: bool,
 ) -> Result<(), Error> {
     todo!()
 }
@@ -55,7 +55,7 @@ fn force_active(
 /// ```text
 /// int Function GetClassification() native
 /// ```
-fn get_classification(caller: Caller<'_, State>, self_ptr: Object) -> Result<i32, Error> {
+fn get_classification(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<i32, Error> {
     todo!()
 }
 
@@ -64,7 +64,7 @@ fn get_classification(caller: Caller<'_, State>, self_ptr: Object) -> Result<i32
 /// ```text
 /// Weather Function GetCurrentWeather() native global
 /// ```
-fn get_current_weather(caller: Caller<'_, State>) -> Result<Object, Error> {
+fn get_current_weather(_caller: Caller<'_, State>) -> Result<Object, Error> {
     todo!()
 }
 
@@ -73,7 +73,7 @@ fn get_current_weather(caller: Caller<'_, State>) -> Result<Object, Error> {
 /// ```text
 /// float Function GetCurrentWeatherTransition() native global
 /// ```
-fn get_current_weather_transition(caller: Caller<'_, State>) -> Result<f32, Error> {
+fn get_current_weather_transition(_caller: Caller<'_, State>) -> Result<f32, Error> {
     todo!()
 }
 
@@ -82,7 +82,7 @@ fn get_current_weather_transition(caller: Caller<'_, State>) -> Result<f32, Erro
 /// ```text
 /// Weather Function GetOutgoingWeather() native global
 /// ```
-fn get_outgoing_weather(caller: Caller<'_, State>) -> Result<Object, Error> {
+fn get_outgoing_weather(_caller: Caller<'_, State>) -> Result<Object, Error> {
     todo!()
 }
 
@@ -91,7 +91,7 @@ fn get_outgoing_weather(caller: Caller<'_, State>) -> Result<Object, Error> {
 /// ```text
 /// int Function GetSkyMode() native global
 /// ```
-fn get_sky_mode(caller: Caller<'_, State>) -> Result<i32, Error> {
+fn get_sky_mode(_caller: Caller<'_, State>) -> Result<i32, Error> {
     todo!()
 }
 
@@ -100,7 +100,7 @@ fn get_sky_mode(caller: Caller<'_, State>) -> Result<i32, Error> {
 /// ```text
 /// Function ReleaseOverride() native global
 /// ```
-fn release_override(caller: Caller<'_, State>) -> Result<(), Error> {
+fn release_override(_caller: Caller<'_, State>) -> Result<(), Error> {
     todo!()
 }
 
@@ -110,10 +110,10 @@ fn release_override(caller: Caller<'_, State>) -> Result<(), Error> {
 /// Function SetActive(bool abOverride=false, bool abAccelerate=false) native
 /// ```
 fn set_active(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    ab_override: bool,
-    ab_accelerate: bool,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _ab_override: bool,
+    _ab_accelerate: bool,
 ) -> Result<(), Error> {
     todo!()
 }

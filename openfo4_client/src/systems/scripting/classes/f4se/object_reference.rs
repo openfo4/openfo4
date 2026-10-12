@@ -26,10 +26,10 @@ pub fn register(engine: &mut Engine) {
 /// MatSwap:RemapData[] Function ApplyMaterialSwap(MatSwap mSwap, bool renameMaterial = false) Native
 /// ```
 fn apply_material_swap(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    material_swap: Object,
-    rename_material: bool,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _material_swap: Object,
+    _rename_material: bool,
 ) -> Result<Object, Error> {
     todo!()
 }
@@ -40,10 +40,10 @@ fn apply_material_swap(
 /// ObjectReference Function AttachWire(ObjectReference akRef, Form akSpline = None) Native
 /// ```
 fn attach_wire(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    object: Object,
-    spline: Object,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _object: Object,
+    _spline: Object,
 ) -> Result<Object, Error> {
     todo!()
 }
@@ -53,7 +53,7 @@ fn attach_wire(
 /// ```text
 /// ObjectMod[] Function GetAllMods() Native
 /// ```
-fn get_all_mods(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Error> {
+fn get_all_mods(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<Object, Error> {
     todo!()
 }
 
@@ -62,7 +62,7 @@ fn get_all_mods(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, E
 /// ```text
 /// ConnectPoint[] Function GetConnectPoints() Native
 /// ```
-fn get_connect_points(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Error> {
+fn get_connect_points(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<Object, Error> {
     todo!()
 }
 
@@ -71,7 +71,7 @@ fn get_connect_points(caller: Caller<'_, State>, self_ptr: Object) -> Result<Obj
 /// ```text
 /// ObjectReference[] Function GetConnectedObjects() Native
 /// ```
-fn get_connected_objects(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Error> {
+fn get_connected_objects(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<Object, Error> {
     todo!()
 }
 
@@ -80,7 +80,7 @@ fn get_connected_objects(caller: Caller<'_, State>, self_ptr: Object) -> Result<
 /// ```text
 /// string Function GetDisplayName() Native
 /// ```
-fn get_display_name(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Error> {
+fn get_display_name(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<Object, Error> {
     todo!()
 }
 
@@ -89,7 +89,7 @@ fn get_display_name(caller: Caller<'_, State>, self_ptr: Object) -> Result<Objec
 /// ```text
 /// Form[] Function GetInventoryItems() Native
 /// ```
-fn get_inventory_items(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Error> {
+fn get_inventory_items(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<Object, Error> {
     todo!()
 }
 
@@ -98,7 +98,7 @@ fn get_inventory_items(caller: Caller<'_, State>, self_ptr: Object) -> Result<Ob
 /// ```text
 /// float Function GetInventoryWeight() Native
 /// ```
-fn get_inventory_weight(caller: Caller<'_, State>, self_ptr: Object) -> Result<f32, Error> {
+fn get_inventory_weight(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<f32, Error> {
     todo!()
 }
 
@@ -107,7 +107,7 @@ fn get_inventory_weight(caller: Caller<'_, State>, self_ptr: Object) -> Result<f
 /// ```text
 /// GetMaterialSwap
 /// ```
-fn get_material_swap(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Error> {
+fn get_material_swap(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<Object, Error> {
     todo!()
 }
 
@@ -117,9 +117,9 @@ fn get_material_swap(caller: Caller<'_, State>, self_ptr: Object) -> Result<Obje
 /// Function SetMaterialSwap(MatSwap mSwap) Native
 /// ```
 fn set_material_swap(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    material_swap: Object,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _material_swap: Object,
 ) -> Result<(), Error> {
     todo!()
 }
@@ -129,6 +129,6 @@ fn set_material_swap(
 /// ```text
 /// bool Function TransmitConnectedPower() Native
 /// ```
-fn transmit_connected_power(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Error> {
+fn transmit_connected_power(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<bool, Error> {
     todo!()
 }

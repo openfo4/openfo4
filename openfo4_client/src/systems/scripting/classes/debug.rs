@@ -45,7 +45,7 @@ pub fn register(engine: &mut Engine) {
 /// ```text
 /// Function(string asCellname) native global
 /// ```
-fn center_on_cell(caller: Caller<'_, State>, as_cellname: Object) -> Result<(), Error> {
+fn center_on_cell(_caller: Caller<'_, State>, _as_cellname: Object) -> Result<(), Error> {
     todo!()
 }
 
@@ -54,7 +54,7 @@ fn center_on_cell(caller: Caller<'_, State>, as_cellname: Object) -> Result<(), 
 /// ```text
 /// float Function(string asCellname) native global
 /// ```
-fn center_on_cell_and_wait(caller: Caller<'_, State>, as_cellname: Object) -> Result<f32, Error> {
+fn center_on_cell_and_wait(_caller: Caller<'_, State>, _as_cellname: Object) -> Result<f32, Error> {
     todo!()
 }
 
@@ -63,7 +63,7 @@ fn center_on_cell_and_wait(caller: Caller<'_, State>, as_cellname: Object) -> Re
 /// ```text
 /// float Function(string asDestRef) native global
 /// ```
-fn player_move_to_and_wait(caller: Caller<'_, State>, as_dest_ref: Object) -> Result<f32, Error> {
+fn player_move_to_and_wait(_caller: Caller<'_, State>, _as_dest_ref: Object) -> Result<f32, Error> {
     todo!()
 }
 
@@ -93,7 +93,7 @@ fn dump_event_registrations(_caller: Caller<'_, State>, _script: Object) {}
 /// ```text
 /// Function(bool abEnable) native global
 /// ```
-fn enable_ai(caller: Caller<'_, State>, ab_enable: bool) -> Result<(), Error> {
+fn enable_ai(_caller: Caller<'_, State>, _ab_enable: bool) -> Result<(), Error> {
     todo!()
 }
 
@@ -102,7 +102,7 @@ fn enable_ai(caller: Caller<'_, State>, ab_enable: bool) -> Result<(), Error> {
 /// ```text
 /// Function(bool abEnable) native global
 /// ```
-fn enable_collisions(caller: Caller<'_, State>, ab_enable: bool) -> Result<(), Error> {
+fn enable_collisions(_caller: Caller<'_, State>, _ab_enable: bool) -> Result<(), Error> {
     todo!()
 }
 
@@ -111,7 +111,7 @@ fn enable_collisions(caller: Caller<'_, State>, ab_enable: bool) -> Result<(), E
 /// ```text
 /// Function(bool abEnable) native global
 /// ```
-fn enable_detection(caller: Caller<'_, State>, ab_enable: bool) -> Result<(), Error> {
+fn enable_detection(_caller: Caller<'_, State>, _ab_enable: bool) -> Result<(), Error> {
     todo!()
 }
 
@@ -120,7 +120,7 @@ fn enable_detection(caller: Caller<'_, State>, ab_enable: bool) -> Result<(), Er
 /// ```text
 /// Function(bool abEnable) native global
 /// ```
-fn enable_menus(caller: Caller<'_, State>, ab_enable: bool) -> Result<(), Error> {
+fn enable_menus(_caller: Caller<'_, State>, _ab_enable: bool) -> Result<(), Error> {
     todo!()
 }
 
@@ -129,7 +129,7 @@ fn enable_menus(caller: Caller<'_, State>, ab_enable: bool) -> Result<(), Error>
 /// ```text
 /// string Function() native global
 /// ```
-fn get_config_name(caller: Caller<'_, State>) -> Result<Object, Error> {
+fn get_config_name(_caller: Caller<'_, State>) -> Result<Object, Error> {
     todo!()
 }
 
@@ -138,7 +138,7 @@ fn get_config_name(caller: Caller<'_, State>) -> Result<Object, Error> {
 /// ```text
 /// string Function() native global
 /// ```
-fn get_platform_name(caller: Caller<'_, State>) -> Result<Object, Error> {
+fn get_platform_name(_caller: Caller<'_, State>) -> Result<Object, Error> {
     todo!()
 }
 
@@ -147,7 +147,7 @@ fn get_platform_name(caller: Caller<'_, State>) -> Result<Object, Error> {
 /// ```text
 /// string Function() native global
 /// ```
-fn get_version_number(caller: Caller<'_, State>) -> Result<Object, Error> {
+fn get_version_number(_caller: Caller<'_, State>) -> Result<Object, Error> {
     todo!()
 }
 
@@ -156,7 +156,7 @@ fn get_version_number(caller: Caller<'_, State>) -> Result<Object, Error> {
 /// ```text
 /// Function(string asMessageBoxText) native global
 /// ```
-fn message_box(caller: Caller<'_, State>, as_message_box_text: Object) -> Result<(), Error> {
+fn message_box(_caller: Caller<'_, State>, _as_message_box_text: Object) -> Result<(), Error> {
     todo!()
 }
 
@@ -165,7 +165,7 @@ fn message_box(caller: Caller<'_, State>, as_message_box_text: Object) -> Result
 /// ```text
 /// Function(string asNotificationText) native global
 /// ```
-fn notification(caller: Caller<'_, State>, as_notification_text: Object) -> Result<(), Error> {
+fn notification(_caller: Caller<'_, State>, _as_notification_text: Object) -> Result<(), Error> {
     todo!()
 }
 
@@ -183,7 +183,7 @@ fn open_user_log(_caller: Caller<'_, State>, _log_name: Object) -> bool {
 /// ```text
 /// Function() native global
 /// ```
-fn quit_game(caller: Caller<'_, State>) -> Result<(), Error> {
+fn quit_game(_caller: Caller<'_, State>) -> Result<(), Error> {
     todo!()
 }
 
@@ -192,7 +192,7 @@ fn quit_game(caller: Caller<'_, State>) -> Result<(), Error> {
 /// ```text
 /// Function(bool abFootIK) native global
 /// ```
-fn set_foot_ik(caller: Caller<'_, State>, ab_foot_ik: bool) -> Result<(), Error> {
+fn set_foot_ik(_caller: Caller<'_, State>, _ab_foot_ik: bool) -> Result<(), Error> {
     todo!()
 }
 
@@ -201,7 +201,7 @@ fn set_foot_ik(caller: Caller<'_, State>, ab_foot_ik: bool) -> Result<(), Error>
 /// ```text
 /// Function(bool abGodMode) native global
 /// ```
-fn set_god_mode(caller: Caller<'_, State>, ab_god_mode: bool) -> Result<(), Error> {
+fn set_god_mode(_caller: Caller<'_, State>, _ab_god_mode: bool) -> Result<(), Error> {
     todo!()
 }
 

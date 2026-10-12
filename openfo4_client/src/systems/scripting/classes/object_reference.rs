@@ -253,10 +253,10 @@ pub fn register(engine: &mut Engine) {
 /// bool Function(ObjectReference akActivator, bool abDefaultProcessingOnly) native
 /// ```
 fn activate(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    ak_activator: Object,
-    ab_default_processing_only: bool,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _ak_activator: Object,
+    _ab_default_processing_only: bool,
 ) -> Result<bool, Error> {
     todo!()
 }
@@ -267,9 +267,9 @@ fn activate(
 /// bool Function(ObjectReference akDependent) native
 /// ```
 fn add_dependent_animated_object_reference(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    ak_dependent: Object,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _ak_dependent: Object,
 ) -> Result<bool, Error> {
     todo!()
 }
@@ -344,10 +344,10 @@ async fn add_keyword(
 /// Function(string asTokenLabel, Form akForm) native
 /// ```
 fn add_text_replacement_data(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    as_token_label: Object,
-    ak_form: Object,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _as_token_label: Object,
+    _ak_form: Object,
 ) -> Result<(), Error> {
     todo!()
 }
@@ -358,9 +358,9 @@ fn add_text_replacement_data(
 /// Function(bool abAllowFastTravel) native
 /// ```
 fn add_to_map(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    ab_allow_fast_travel: bool,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _ab_allow_fast_travel: bool,
 ) -> Result<(), Error> {
     todo!()
 }
@@ -371,14 +371,14 @@ fn add_to_map(
 /// Function(string aTarget, float aLinVelX, float aLinVelY, float aLinVelZ, bool abOn, bool abReverse) native
 /// ```
 fn apply_conveyor_belt(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    a_target: Object,
-    a_lin_vel_x: f32,
-    a_lin_vel_y: f32,
-    a_lin_vel_z: f32,
-    ab_on: bool,
-    ab_reverse: bool,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _a_target: Object,
+    _a_lin_vel_x: f32,
+    _a_lin_vel_y: f32,
+    _a_lin_vel_z: f32,
+    _ab_on: bool,
+    _ab_reverse: bool,
 ) -> Result<(), Error> {
     todo!()
 }
@@ -389,12 +389,12 @@ fn apply_conveyor_belt(
 /// Function(float afX, float afY, float afZ, float afMagnitude) native
 /// ```
 fn apply_havok_impulse(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    af_x: f32,
-    af_y: f32,
-    af_z: f32,
-    af_magnitude: f32,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _af_x: f32,
+    _af_y: f32,
+    _af_z: f32,
+    _af_magnitude: f32,
 ) -> Result<(), Error> {
     todo!()
 }
@@ -405,14 +405,14 @@ fn apply_havok_impulse(
 /// Function(string aTarget, float aAxisX, float aAxisY, float aAxisZ, float aForce, bool abOn) native
 /// ```
 fn apply_fan_motor(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    a_target: Object,
-    a_axis_x: f32,
-    a_axis_y: f32,
-    a_axis_z: f32,
-    a_force: f32,
-    ab_on: bool,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _a_target: Object,
+    _a_axis_x: f32,
+    _a_axis_y: f32,
+    _a_axis_z: f32,
+    _a_force: f32,
+    _ab_on: bool,
 ) -> Result<(), Error> {
     todo!()
 }
@@ -422,7 +422,7 @@ fn apply_fan_motor(
 /// ```text
 /// Function(bool abOn) native
 /// ```
-fn fan_motor_on(caller: Caller<'_, State>, self_ptr: Object, ab_on: bool) -> Result<(), Error> {
+fn fan_motor_on(_caller: Caller<'_, State>, _self_ptr: Object, _ab_on: bool) -> Result<(), Error> {
     todo!()
 }
 
@@ -431,7 +431,7 @@ fn fan_motor_on(caller: Caller<'_, State>, self_ptr: Object, ab_on: bool) -> Res
 /// ```text
 /// bool Function() native
 /// ```
-fn is_fan_motor_on(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Error> {
+fn is_fan_motor_on(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<bool, Error> {
     todo!()
 }
 
@@ -441,10 +441,10 @@ fn is_fan_motor_on(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, 
 /// bool Function(ObjectMod akMod, int aiAttachIndex) native
 /// ```
 fn attach_mod(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    ak_mod: Object,
-    ai_attach_index: i32,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _ak_mod: Object,
+    _ai_attach_index: i32,
 ) -> Result<bool, Error> {
     todo!()
 }
@@ -455,10 +455,10 @@ fn attach_mod(
 /// bool Function(Form akItem, ObjectMod akMod) native
 /// ```
 fn attach_mod_to_inventory_item(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    ak_item: Object,
-    ak_mod: Object,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _ak_item: Object,
+    _ak_mod: Object,
 ) -> Result<bool, Error> {
     todo!()
 }
@@ -468,7 +468,11 @@ fn attach_mod_to_inventory_item(
 /// ```text
 /// Function(ObjectReference akParent) native
 /// ```
-fn attach_to(caller: Caller<'_, State>, self_ptr: Object, ak_parent: Object) -> Result<(), Error> {
+fn attach_to(
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _ak_parent: Object,
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -478,10 +482,10 @@ fn attach_to(caller: Caller<'_, State>, self_ptr: Object, ak_parent: Object) -> 
 /// Function(bool abBlocked, bool abHideActivateText) native
 /// ```
 fn block_activation(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    ab_blocked: bool,
-    ab_hide_activate_text: bool,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _ab_blocked: bool,
+    _ab_hide_activate_text: bool,
 ) -> Result<(), Error> {
     todo!()
 }
@@ -492,9 +496,9 @@ fn block_activation(
 /// int Function(int aiDifficulty) native
 /// ```
 fn calculate_encounter_level(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    ai_difficulty: i32,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _ai_difficulty: i32,
 ) -> Result<i32, Error> {
     todo!()
 }
@@ -504,7 +508,7 @@ fn calculate_encounter_level(
 /// ```text
 /// bool Function() native
 /// ```
-fn can_fast_travel_to_marker(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Error> {
+fn can_fast_travel_to_marker(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<bool, Error> {
     todo!()
 }
 
@@ -513,7 +517,7 @@ fn can_fast_travel_to_marker(caller: Caller<'_, State>, self_ptr: Object) -> Res
 /// ```text
 /// bool Function() native
 /// ```
-fn can_produce_for_workshop(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Error> {
+fn can_produce_for_workshop(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<bool, Error> {
     todo!()
 }
 
@@ -522,7 +526,7 @@ fn can_produce_for_workshop(caller: Caller<'_, State>, self_ptr: Object) -> Resu
 /// ```text
 /// Function() native
 /// ```
-fn clear_destruction(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Error> {
+fn clear_destruction(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<(), Error> {
     todo!()
 }
 
@@ -531,7 +535,7 @@ fn clear_destruction(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), 
 /// ```text
 /// Function() native
 /// ```
-fn clear_from_old_locations(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Error> {
+fn clear_from_old_locations(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<(), Error> {
     todo!()
 }
 
@@ -540,7 +544,11 @@ fn clear_from_old_locations(caller: Caller<'_, State>, self_ptr: Object) -> Resu
 /// ```text
 /// Function(bool abOn) native
 /// ```
-fn conveyor_belt_on(caller: Caller<'_, State>, self_ptr: Object, ab_on: bool) -> Result<(), Error> {
+fn conveyor_belt_on(
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _ab_on: bool,
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -550,10 +558,10 @@ fn conveyor_belt_on(caller: Caller<'_, State>, self_ptr: Object, ab_on: bool) ->
 /// int Function(Keyword apLinkKeyword, Keyword apExcludeKeyword) native
 /// ```
 fn count_actors_linked_to_me(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    ap_link_keyword: Object,
-    ap_exclude_keyword: Object,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _ap_link_keyword: Object,
+    _ap_exclude_keyword: Object,
 ) -> Result<i32, Error> {
     todo!()
 }
@@ -593,10 +601,10 @@ async fn count_linked_ref_chain(
 /// int Function(Keyword apLinkKeyword, Keyword apExcludeKeyword) native
 /// ```
 fn count_refs_linked_to_me(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    ap_link_keyword: Object,
-    ap_exclude_keyword: Object,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _ap_link_keyword: Object,
+    _ap_exclude_keyword: Object,
 ) -> Result<i32, Error> {
     todo!()
 }
@@ -607,10 +615,10 @@ fn count_refs_linked_to_me(
 /// Function(Actor akOwner, int aiSoundLevel) native
 /// ```
 fn create_detection_event(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    ak_owner: Object,
-    ai_sound_level: i32,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _ak_owner: Object,
+    _ai_sound_level: i32,
 ) -> Result<(), Error> {
     todo!()
 }
@@ -620,7 +628,11 @@ fn create_detection_event(
 /// ```text
 /// Function(float afDamage) native
 /// ```
-fn damage_object(caller: Caller<'_, State>, self_ptr: Object, af_damage: f32) -> Result<(), Error> {
+fn damage_object(
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _af_damage: f32,
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -750,7 +762,7 @@ async fn disable_no_wait(
 /// ```text
 /// Function(bool abSilent) native
 /// ```
-fn drop(caller: Caller<'_, State>, self_ptr: Object, ab_silent: bool) -> Result<(), Error> {
+fn drop(_caller: Caller<'_, State>, _self_ptr: Object, _ab_silent: bool) -> Result<(), Error> {
     todo!()
 }
 
@@ -760,9 +772,9 @@ fn drop(caller: Caller<'_, State>, self_ptr: Object, ab_silent: bool) -> Result<
 /// ObjectReference Function(bool abInitiallyDisabled) native
 /// ```
 fn drop_first_object(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    ab_initially_disabled: bool,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _ab_initially_disabled: bool,
 ) -> Result<Object, Error> {
     todo!()
 }
@@ -773,10 +785,10 @@ fn drop_first_object(
 /// ObjectReference Function(Form akObject, int aiCount) native
 /// ```
 fn drop_object(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    ak_object: Object,
-    ai_count: i32,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _ak_object: Object,
+    _ai_count: i32,
 ) -> Result<Object, Error> {
     todo!()
 }
@@ -809,9 +821,9 @@ async fn enable(
 /// Function(bool abEnable) native
 /// ```
 fn enable_fast_travel(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    ab_enable: bool,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _ab_enable: bool,
 ) -> Result<(), Error> {
     todo!()
 }
@@ -877,10 +889,10 @@ async fn enable_no_wait(
 /// ObjectReference[] Function(Form akObjectOrList, float afRadius) native
 /// ```
 fn find_all_references_of_type(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    ak_object_or_list: Object,
-    af_radius: f32,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _ak_object_or_list: Object,
+    _af_radius: f32,
 ) -> Result<Object, Error> {
     todo!()
 }
@@ -891,10 +903,10 @@ fn find_all_references_of_type(
 /// ObjectReference[] Function(Form akKeywordOrList, float afRadius) native
 /// ```
 fn find_all_references_with_keyword(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    ak_keyword_or_list: Object,
-    af_radius: f32,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _ak_keyword_or_list: Object,
+    _af_radius: f32,
 ) -> Result<Object, Error> {
     todo!()
 }
@@ -904,7 +916,7 @@ fn find_all_references_with_keyword(
 /// ```text
 /// Function() native
 /// ```
-fn force_add_ragdoll_to_world(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Error> {
+fn force_add_ragdoll_to_world(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<(), Error> {
     todo!()
 }
 
@@ -914,8 +926,8 @@ fn force_add_ragdoll_to_world(caller: Caller<'_, State>, self_ptr: Object) -> Re
 /// Function() native
 /// ```
 fn force_remove_ragdoll_from_world(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
 ) -> Result<(), Error> {
     todo!()
 }
@@ -925,7 +937,7 @@ fn force_remove_ragdoll_from_world(
 /// ```text
 /// ActorBase Function() native
 /// ```
-fn get_actor_owner(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Error> {
+fn get_actor_owner(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<Object, Error> {
     todo!()
 }
 
@@ -934,7 +946,7 @@ fn get_actor_owner(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object
 /// ```text
 /// Actor Function() native
 /// ```
-fn get_actor_ref_owner(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Error> {
+fn get_actor_ref_owner(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<Object, Error> {
     todo!()
 }
 
@@ -944,10 +956,10 @@ fn get_actor_ref_owner(caller: Caller<'_, State>, self_ptr: Object) -> Result<Ob
 /// Actor[] Function(Keyword apLinkKeyword, Keyword apExcludeKeyword) native
 /// ```
 fn get_actors_linked_to_me(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    ap_link_keyword: Object,
-    ap_exclude_keyword: Object,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _ap_link_keyword: Object,
+    _ap_exclude_keyword: Object,
 ) -> Result<Object, Error> {
     todo!()
 }
@@ -957,7 +969,7 @@ fn get_actors_linked_to_me(
 /// ```text
 /// float Function() native
 /// ```
-fn get_angle_x(caller: Caller<'_, State>, self_ptr: Object) -> Result<f32, Error> {
+fn get_angle_x(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<f32, Error> {
     todo!()
 }
 
@@ -966,7 +978,7 @@ fn get_angle_x(caller: Caller<'_, State>, self_ptr: Object) -> Result<f32, Error
 /// ```text
 /// float Function() native
 /// ```
-fn get_angle_y(caller: Caller<'_, State>, self_ptr: Object) -> Result<f32, Error> {
+fn get_angle_y(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<f32, Error> {
     todo!()
 }
 
@@ -975,7 +987,7 @@ fn get_angle_y(caller: Caller<'_, State>, self_ptr: Object) -> Result<f32, Error
 /// ```text
 /// float Function() native
 /// ```
-fn get_angle_z(caller: Caller<'_, State>, self_ptr: Object) -> Result<f32, Error> {
+fn get_angle_z(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<f32, Error> {
     todo!()
 }
 
@@ -1059,7 +1071,7 @@ async fn get_animation_variable_float(
 /// ```text
 /// Form Function() native
 /// ```
-fn get_base_object(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Error> {
+fn get_base_object(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<Object, Error> {
     todo!()
 }
 
@@ -1069,9 +1081,9 @@ fn get_base_object(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object
 /// float Function(ActorValue akAV) native
 /// ```
 fn get_base_value(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    ak_av: Object,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _ak_av: Object,
 ) -> Result<f32, Error> {
     todo!()
 }
@@ -1082,8 +1094,8 @@ fn get_base_value(
 /// int Function() native
 /// ```
 fn get_current_destruction_stage(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
 ) -> Result<i32, Error> {
     todo!()
 }
@@ -1093,7 +1105,7 @@ fn get_current_destruction_stage(
 /// ```text
 /// Location Function() native
 /// ```
-fn get_current_location(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Error> {
+fn get_current_location(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<Object, Error> {
     todo!()
 }
 
@@ -1102,7 +1114,7 @@ fn get_current_location(caller: Caller<'_, State>, self_ptr: Object) -> Result<O
 /// ```text
 /// Scene Function() native
 /// ```
-fn get_current_scene(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Error> {
+fn get_current_scene(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<Object, Error> {
     todo!()
 }
 
@@ -1136,7 +1148,7 @@ async fn get_distance(
 /// ```text
 /// Location Function() native
 /// ```
-fn get_editor_location(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Error> {
+fn get_editor_location(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<Object, Error> {
     todo!()
 }
 
@@ -1145,7 +1157,7 @@ fn get_editor_location(caller: Caller<'_, State>, self_ptr: Object) -> Result<Ob
 /// ```text
 /// EncounterZone Function() native
 /// ```
-fn get_encounter_zone(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Error> {
+fn get_encounter_zone(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<Object, Error> {
     todo!()
 }
 
@@ -1154,7 +1166,7 @@ fn get_encounter_zone(caller: Caller<'_, State>, self_ptr: Object) -> Result<Obj
 /// ```text
 /// Faction Function() native
 /// ```
-fn get_faction_owner(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Error> {
+fn get_faction_owner(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<Object, Error> {
     todo!()
 }
 
@@ -1164,9 +1176,9 @@ fn get_faction_owner(caller: Caller<'_, State>, self_ptr: Object) -> Result<Obje
 /// float Function(ObjectReference akOther) native
 /// ```
 fn get_heading_angle(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    ak_other: Object,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _ak_other: Object,
 ) -> Result<f32, Error> {
     todo!()
 }
@@ -1186,7 +1198,7 @@ async fn get_height(caller: Caller<'_, State>, self_ptr: Object) -> Result<f32, 
 /// ```text
 /// int Function() native
 /// ```
-fn get_inventory_value(caller: Caller<'_, State>, self_ptr: Object) -> Result<i32, Error> {
+fn get_inventory_value(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<i32, Error> {
     todo!()
 }
 
@@ -1232,9 +1244,9 @@ async fn get_item_count(
 /// int Function(Form akItem) native
 /// ```
 fn get_component_count(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    ak_item: Object,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _ak_item: Object,
 ) -> Result<i32, Error> {
     todo!()
 }
@@ -1244,7 +1256,7 @@ fn get_component_count(
 /// ```text
 /// ObjectReference Function() native
 /// ```
-fn get_container(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Error> {
+fn get_container(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<Object, Error> {
     todo!()
 }
 
@@ -1253,7 +1265,7 @@ fn get_container(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, 
 /// ```text
 /// float Function() native
 /// ```
-fn get_item_health_percent(caller: Caller<'_, State>, self_ptr: Object) -> Result<f32, Error> {
+fn get_item_health_percent(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<f32, Error> {
     todo!()
 }
 
@@ -1317,10 +1329,10 @@ async fn get_linked_ref(
 /// ObjectReference[] Function(keyword apKeyword, int iMaxExpectedLinkedRefs) native
 /// ```
 fn get_linked_ref_chain(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    keyword: Object,
-    max_linked_refs: i32,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _keyword: Object,
+    _max_linked_refs: i32,
 ) -> Result<Object, Error> {
     todo!()
 }
@@ -1331,9 +1343,9 @@ fn get_linked_ref_chain(
 /// ObjectReference[] Function(keyword apKeyword) native
 /// ```
 fn get_linked_ref_children(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    ap_keyword: Object,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _ap_keyword: Object,
 ) -> Result<Object, Error> {
     todo!()
 }
@@ -1373,7 +1385,7 @@ async fn get_lock_level(caller: Caller<'_, State>, self_ptr: Object) -> Result<i
 /// ```text
 /// LocationRefType[] Function() native
 /// ```
-fn get_loc_ref_types(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Error> {
+fn get_loc_ref_types(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<Object, Error> {
     todo!()
 }
 
@@ -1411,7 +1423,7 @@ async fn get_nth_linked_ref(
 /// ```text
 /// float Function() native
 /// ```
-fn get_mass(caller: Caller<'_, State>, self_ptr: Object) -> Result<f32, Error> {
+fn get_mass(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<f32, Error> {
     todo!()
 }
 
@@ -1420,7 +1432,7 @@ fn get_mass(caller: Caller<'_, State>, self_ptr: Object) -> Result<f32, Error> {
 /// ```text
 /// int Function() native
 /// ```
-fn get_open_state(caller: Caller<'_, State>, self_ptr: Object) -> Result<i32, Error> {
+fn get_open_state(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<i32, Error> {
     todo!()
 }
 
@@ -1429,7 +1441,7 @@ fn get_open_state(caller: Caller<'_, State>, self_ptr: Object) -> Result<i32, Er
 /// ```text
 /// Cell Function() native
 /// ```
-fn get_parent_cell(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Error> {
+fn get_parent_cell(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<Object, Error> {
     todo!()
 }
 
@@ -1474,7 +1486,7 @@ async fn get_position_z(caller: Caller<'_, State>, self_ptr: Object) -> Result<f
 /// ```text
 /// float Function() native
 /// ```
-fn get_radio_frequency(caller: Caller<'_, State>, self_ptr: Object) -> Result<f32, Error> {
+fn get_radio_frequency(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<f32, Error> {
     todo!()
 }
 
@@ -1483,7 +1495,7 @@ fn get_radio_frequency(caller: Caller<'_, State>, self_ptr: Object) -> Result<f3
 /// ```text
 /// float Function() native
 /// ```
-fn get_radio_volume(caller: Caller<'_, State>, self_ptr: Object) -> Result<f32, Error> {
+fn get_radio_volume(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<f32, Error> {
     todo!()
 }
 
@@ -1493,9 +1505,9 @@ fn get_radio_volume(caller: Caller<'_, State>, self_ptr: Object) -> Result<f32, 
 /// float Function(ActorValue akValue=None) native
 /// ```
 fn get_resource_damage(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    ak_value_none: Object,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _ak_value_none: Object,
 ) -> Result<f32, Error> {
     todo!()
 }
@@ -1506,10 +1518,10 @@ fn get_resource_damage(
 /// float[] Function(float aSearchRadius, float aSafeRadius) native
 /// ```
 fn get_safe_position(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    a_search_radius: f32,
-    a_safe_radius: f32,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _a_search_radius: f32,
+    _a_safe_radius: f32,
 ) -> Result<Object, Error> {
     todo!()
 }
@@ -1520,10 +1532,10 @@ fn get_safe_position(
 /// ObjectReference[] Function(Keyword apLinkKeyword, Keyword apExcludeKeyword) native
 /// ```
 fn get_refs_linked_to_me(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    ap_link_keyword: Object,
-    ap_exclude_keyword: Object,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _ap_link_keyword: Object,
+    _ap_exclude_keyword: Object,
 ) -> Result<Object, Error> {
     todo!()
 }
@@ -1534,9 +1546,9 @@ fn get_refs_linked_to_me(
 /// ObjectReference[] Function(Actor akActor) native
 /// ```
 fn get_workshop_owned_objects(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    ak_actor: Object,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _ak_actor: Object,
 ) -> Result<Object, Error> {
     todo!()
 }
@@ -1547,9 +1559,9 @@ fn get_workshop_owned_objects(
 /// float Function(ActorValue akValue) native
 /// ```
 fn get_workshop_resource_damage(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    ak_value: Object,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _ak_value: Object,
 ) -> Result<f32, Error> {
     todo!()
 }
@@ -1560,10 +1572,10 @@ fn get_workshop_resource_damage(
 /// ObjectReference[] Function(ActorValue akAV, int aiOption) native
 /// ```
 fn get_workshop_resource_objects(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    ak_av: Object,
-    ai_option: i32,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _ak_av: Object,
+    _ai_option: i32,
 ) -> Result<Object, Error> {
     todo!()
 }
@@ -1586,7 +1598,7 @@ async fn get_scale(caller: Caller<'_, State>, self_ptr: Object) -> Result<f32, E
 /// ```text
 /// Cell Function() native
 /// ```
-fn get_teleport_cell(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Error> {
+fn get_teleport_cell(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<Object, Error> {
     todo!()
 }
 
@@ -1595,7 +1607,7 @@ fn get_teleport_cell(caller: Caller<'_, State>, self_ptr: Object) -> Result<Obje
 /// ```text
 /// Cell Function() native
 /// ```
-fn get_transition_cell(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Error> {
+fn get_transition_cell(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<Object, Error> {
     todo!()
 }
 
@@ -1604,7 +1616,7 @@ fn get_transition_cell(caller: Caller<'_, State>, self_ptr: Object) -> Result<Ob
 /// ```text
 /// float Function() native
 /// ```
-fn get_transmitter_distance(caller: Caller<'_, State>, self_ptr: Object) -> Result<f32, Error> {
+fn get_transmitter_distance(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<f32, Error> {
     todo!()
 }
 
@@ -1704,7 +1716,7 @@ async fn get_value_percentage(
 /// ```text
 /// VoiceType Function() native
 /// ```
-fn get_voice_type(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Error> {
+fn get_voice_type(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<Object, Error> {
     todo!()
 }
 
@@ -1723,7 +1735,7 @@ async fn get_width(caller: Caller<'_, State>, self_ptr: Object) -> Result<f32, E
 /// ```text
 /// WorldSpace Function() native
 /// ```
-fn get_world_space(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Error> {
+fn get_world_space(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<Object, Error> {
     todo!()
 }
 
@@ -1732,7 +1744,7 @@ fn get_world_space(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object
 /// ```text
 /// bool Function() native
 /// ```
-fn has_actor_ref_owner(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Error> {
+fn has_actor_ref_owner(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<bool, Error> {
     todo!()
 }
 
@@ -1742,11 +1754,11 @@ fn has_actor_ref_owner(caller: Caller<'_, State>, self_ptr: Object) -> Result<bo
 /// bool Function(ObjectReference akTarget, string asSourceNode, string asTargetNode) native
 /// ```
 fn has_direct_los(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    ak_target: Object,
-    as_source_node: Object,
-    as_target_node: Object,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _ak_target: Object,
+    _as_source_node: Object,
+    _as_target_node: Object,
 ) -> Result<bool, Error> {
     todo!()
 }
@@ -1757,9 +1769,9 @@ fn has_direct_los(
 /// bool Function(Keyword akKeyword) native
 /// ```
 fn has_effect_keyword(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    ak_keyword: Object,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _ak_keyword: Object,
 ) -> Result<bool, Error> {
     todo!()
 }
@@ -1830,9 +1842,9 @@ async fn has_keyword_in_form_list(
 /// bool Function(LocationRefType akRefType) native
 /// ```
 fn has_loc_ref_type(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    ak_ref_type: Object,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _ak_ref_type: Object,
 ) -> Result<bool, Error> {
     todo!()
 }
@@ -1843,9 +1855,9 @@ fn has_loc_ref_type(
 /// bool Function(string asNodeName) native
 /// ```
 fn has_node(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    as_node_name: Object,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _as_node_name: Object,
 ) -> Result<bool, Error> {
     todo!()
 }
@@ -1856,9 +1868,9 @@ fn has_node(
 /// bool Function(ObjectReference akCompare) native
 /// ```
 fn has_shared_power_grid(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    ak_compare: Object,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _ak_compare: Object,
 ) -> Result<bool, Error> {
     todo!()
 }
@@ -1869,9 +1881,9 @@ fn has_shared_power_grid(
 /// Function(bool abIgnore) native
 /// ```
 fn ignore_friendly_hits(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    ab_ignore: bool,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _ab_ignore: bool,
 ) -> Result<(), Error> {
     todo!()
 }
@@ -1881,7 +1893,7 @@ fn ignore_friendly_hits(
 /// ```text
 /// Function() native
 /// ```
-fn interrupt_cast(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Error> {
+fn interrupt_cast(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<(), Error> {
     todo!()
 }
 
@@ -1891,9 +1903,9 @@ fn interrupt_cast(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Err
 /// bool Function(ObjectReference akChild) native
 /// ```
 fn is_activate_child(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    ak_child: Object,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _ak_child: Object,
 ) -> Result<bool, Error> {
     todo!()
 }
@@ -1903,7 +1915,7 @@ fn is_activate_child(
 /// ```text
 /// bool Function() native
 /// ```
-fn is_activation_blocked(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Error> {
+fn is_activation_blocked(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<bool, Error> {
     todo!()
 }
 
@@ -1912,7 +1924,7 @@ fn is_activation_blocked(caller: Caller<'_, State>, self_ptr: Object) -> Result<
 /// ```text
 /// bool Function() native
 /// ```
-fn is3_d_loaded(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Error> {
+fn is3_d_loaded(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<bool, Error> {
     todo!()
 }
 
@@ -1921,7 +1933,7 @@ fn is3_d_loaded(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Err
 /// ```text
 /// bool Function() native
 /// ```
-fn is_conveyor_belt_on(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Error> {
+fn is_conveyor_belt_on(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<bool, Error> {
     todo!()
 }
 
@@ -1956,7 +1968,7 @@ fn is_deleted(caller: Caller<'_, State>, self_ptr: Object) -> bool {
 /// ```text
 /// bool Function() native
 /// ```
-fn is_destroyed(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Error> {
+fn is_destroyed(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<bool, Error> {
     todo!()
 }
 
@@ -1978,9 +1990,9 @@ async fn is_disabled(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool
 /// bool Function(bool abIgnoreReserved) native
 /// ```
 fn is_furniture_in_use(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    ab_ignore_reserved: bool,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _ab_ignore_reserved: bool,
 ) -> Result<bool, Error> {
     todo!()
 }
@@ -1991,10 +2003,10 @@ fn is_furniture_in_use(
 /// bool Function(int aiMarker, bool abIgnoreReserved) native
 /// ```
 fn is_furniture_marker_in_use(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    ai_marker: i32,
-    ab_ignore_reserved: bool,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _ai_marker: i32,
+    _ab_ignore_reserved: bool,
 ) -> Result<bool, Error> {
     todo!()
 }
@@ -2004,7 +2016,7 @@ fn is_furniture_marker_in_use(
 /// ```text
 /// bool Function() native
 /// ```
-fn is_ignoring_friendly_hits(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Error> {
+fn is_ignoring_friendly_hits(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<bool, Error> {
     todo!()
 }
 
@@ -2013,7 +2025,10 @@ fn is_ignoring_friendly_hits(caller: Caller<'_, State>, self_ptr: Object) -> Res
 /// ```text
 /// bool Function() native
 /// ```
-fn is_in_dialogue_with_player(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Error> {
+fn is_in_dialogue_with_player(
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+) -> Result<bool, Error> {
     todo!()
 }
 
@@ -2022,7 +2037,7 @@ fn is_in_dialogue_with_player(caller: Caller<'_, State>, self_ptr: Object) -> Re
 /// ```text
 /// bool Function() native
 /// ```
-fn is_lock_broken(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Error> {
+fn is_lock_broken(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<bool, Error> {
     todo!()
 }
 
@@ -2031,7 +2046,7 @@ fn is_lock_broken(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, E
 /// ```text
 /// bool Function() native
 /// ```
-fn is_locked(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Error> {
+fn is_locked(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<bool, Error> {
     todo!()
 }
 
@@ -2040,7 +2055,7 @@ fn is_locked(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Error>
 /// ```text
 /// bool Function() native
 /// ```
-fn is_map_marker_visible(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Error> {
+fn is_map_marker_visible(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<bool, Error> {
     todo!()
 }
 
@@ -2050,9 +2065,9 @@ fn is_map_marker_visible(caller: Caller<'_, State>, self_ptr: Object) -> Result<
 /// bool Function(Actor akOwner) native
 /// ```
 fn is_owned_by(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    ak_owner: Object,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _ak_owner: Object,
 ) -> Result<bool, Error> {
     todo!()
 }
@@ -2062,7 +2077,7 @@ fn is_owned_by(
 /// ```text
 /// bool Function() native
 /// ```
-fn is_powered(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Error> {
+fn is_powered(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<bool, Error> {
     todo!()
 }
 
@@ -2071,7 +2086,7 @@ fn is_powered(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Error
 /// ```text
 /// bool Function() native
 /// ```
-fn is_quest_item(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Error> {
+fn is_quest_item(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<bool, Error> {
     todo!()
 }
 
@@ -2080,7 +2095,7 @@ fn is_quest_item(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Er
 /// ```text
 /// bool Function() native
 /// ```
-fn is_radio_on(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Error> {
+fn is_radio_on(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<bool, Error> {
     todo!()
 }
 
@@ -2090,9 +2105,9 @@ fn is_radio_on(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Erro
 /// bool Function(ObjectReference akRef) native
 /// ```
 fn is_ref_in_transition_cell(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    ak_ref: Object,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _ak_ref: Object,
 ) -> Result<bool, Error> {
     todo!()
 }
@@ -2102,7 +2117,7 @@ fn is_ref_in_transition_cell(
 /// ```text
 /// bool Function() native
 /// ```
-fn is_teleport_area_loaded(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Error> {
+fn is_teleport_area_loaded(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<bool, Error> {
     todo!()
 }
 
@@ -2112,9 +2127,9 @@ fn is_teleport_area_loaded(caller: Caller<'_, State>, self_ptr: Object) -> Resul
 /// bool Function(ObjectReference akRef) native
 /// ```
 fn is_within_buildable_area(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    ak_ref: Object,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _ak_ref: Object,
 ) -> Result<bool, Error> {
     todo!()
 }
@@ -2125,10 +2140,10 @@ fn is_within_buildable_area(
 /// Function(float afMagnitude, float afRadius) native
 /// ```
 fn knock_area_effect(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    af_magnitude: f32,
-    af_radius: f32,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _af_magnitude: f32,
+    _af_radius: f32,
 ) -> Result<(), Error> {
     todo!()
 }
@@ -2139,10 +2154,10 @@ fn knock_area_effect(
 /// Function(bool abLock, bool abAsOwner) native
 /// ```
 fn lock(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    ab_lock: bool,
-    ab_as_owner: bool,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _ab_lock: bool,
+    _ab_as_owner: bool,
 ) -> Result<(), Error> {
     todo!()
 }
@@ -2153,13 +2168,13 @@ fn lock(
 /// Function(float afFrequency, float afVolume, OutputModel aOverrideModel, bool abActive, bool abNoStatic) native
 /// ```
 fn make_radio_receiver(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    af_frequency: f32,
-    af_volume: f32,
-    a_override_model: Object,
-    ab_active: bool,
-    ab_no_static: bool,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _af_frequency: f32,
+    _af_volume: f32,
+    _a_override_model: Object,
+    _ab_active: bool,
+    _ab_no_static: bool,
 ) -> Result<(), Error> {
     todo!()
 }
@@ -2170,12 +2185,12 @@ fn make_radio_receiver(
 /// Function(ObjectReference akTransmitterToRepeat, float afInnerRadius, float afOuterRadius, bool abUnlimitedRange) native
 /// ```
 fn make_transmitter_repeater(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    ak_transmitter_to_repeat: Object,
-    af_inner_radius: f32,
-    af_outer_radius: f32,
-    ab_unlimited_range: bool,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _ak_transmitter_to_repeat: Object,
+    _af_inner_radius: f32,
+    _af_outer_radius: f32,
+    _ab_unlimited_range: bool,
 ) -> Result<(), Error> {
     todo!()
 }
@@ -2219,13 +2234,13 @@ async fn mod_value(
 /// Function(ObjectReference akTarget, float afXOffset, float afYOffset, float afZOffset, bool abMatchRotation) native
 /// ```
 fn move_to(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    ak_target: Object,
-    af_x_offset: f32,
-    af_y_offset: f32,
-    af_z_offset: f32,
-    ab_match_rotation: bool,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _ak_target: Object,
+    _af_x_offset: f32,
+    _af_y_offset: f32,
+    _af_z_offset: f32,
+    _ab_match_rotation: bool,
 ) -> Result<(), Error> {
     todo!()
 }
@@ -2235,7 +2250,7 @@ fn move_to(
 /// ```text
 /// Function() native
 /// ```
-fn move_to_my_editor_location(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Error> {
+fn move_to_my_editor_location(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<(), Error> {
     todo!()
 }
 
@@ -2245,8 +2260,8 @@ fn move_to_my_editor_location(caller: Caller<'_, State>, self_ptr: Object) -> Re
 /// Function() native
 /// ```
 fn move_to_nearest_navmesh_location(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
 ) -> Result<(), Error> {
     todo!()
 }
@@ -2257,11 +2272,11 @@ fn move_to_nearest_navmesh_location(
 /// Function(ObjectReference akTarget, string asNodeName, string asMatchNodeName) native
 /// ```
 fn move_to_node(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    ak_target: Object,
-    as_node_name: Object,
-    as_match_node_name: Object,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _ak_target: Object,
+    _as_node_name: Object,
+    _as_match_node_name: Object,
 ) -> Result<(), Error> {
     todo!()
 }
@@ -2272,11 +2287,11 @@ fn move_to_node(
 /// Location Function(Keyword akActionKW, Message astrConfirm, Location aLocToHighlight) native
 /// ```
 fn open_workshop_settlement_menu(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    ak_action_kw: Object,
-    astr_confirm: Object,
-    a_loc_to_highlight: Object,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _ak_action_kw: Object,
+    _astr_confirm: Object,
+    _a_loc_to_highlight: Object,
 ) -> Result<Object, Error> {
     todo!()
 }
@@ -2287,18 +2302,18 @@ fn open_workshop_settlement_menu(
 /// Location Function(Keyword akActionKW, Message astrConfirm, Location aLocToHighlight, FormList akIncludeKeywordList, FormList akExcludeKeywordList, bool abExcludeZeroPopulation, bool abOnlyOwnedWorkshops, bool abTurnOffHeader, bool abOnlyPotentialVassalSettlements, bool abDisableReservedByQuests) native
 /// ```
 fn open_workshop_settlement_menu_ex(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    ak_action_kw: Object,
-    astr_confirm: Object,
-    a_loc_to_highlight: Object,
-    ak_include_keyword_list: Object,
-    ak_exclude_keyword_list: Object,
-    ab_exclude_zero_population: bool,
-    ab_only_owned_workshops: bool,
-    ab_turn_off_header: bool,
-    ab_only_potential_vassal_settlements: bool,
-    ab_disable_reserved_by_quests: bool,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _ak_action_kw: Object,
+    _astr_confirm: Object,
+    _a_loc_to_highlight: Object,
+    _ak_include_keyword_list: Object,
+    _ak_exclude_keyword_list: Object,
+    _ab_exclude_zero_population: bool,
+    _ab_only_owned_workshops: bool,
+    _ab_turn_off_header: bool,
+    _ab_only_potential_vassal_settlements: bool,
+    _ab_disable_reserved_by_quests: bool,
 ) -> Result<Object, Error> {
     todo!()
 }
@@ -2309,18 +2324,18 @@ fn open_workshop_settlement_menu_ex(
 /// int Function(Keyword akActionKW, Message astrConfirm, Location aLocToHighlight, FormList akIncludeKeywordList, FormList akExcludeKeywordList, bool abExcludeZeroPopulation, bool abOnlyOwnedWorkshops, bool abTurnOffHeader, bool abOnlyPotentialVassalSettlements, bool abDisableReservedByQuests) native
 /// ```
 fn raid_targets_available(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    ak_action_kw: Object,
-    astr_confirm: Object,
-    a_loc_to_highlight: Object,
-    ak_include_keyword_list: Object,
-    ak_exclude_keyword_list: Object,
-    ab_exclude_zero_population: bool,
-    ab_only_owned_workshops: bool,
-    ab_turn_off_header: bool,
-    ab_only_potential_vassal_settlements: bool,
-    ab_disable_reserved_by_quests: bool,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _ak_action_kw: Object,
+    _astr_confirm: Object,
+    _a_loc_to_highlight: Object,
+    _ak_include_keyword_list: Object,
+    _ak_exclude_keyword_list: Object,
+    _ab_exclude_zero_population: bool,
+    _ab_only_owned_workshops: bool,
+    _ab_turn_off_header: bool,
+    _ab_only_potential_vassal_settlements: bool,
+    _ab_disable_reserved_by_quests: bool,
 ) -> Result<i32, Error> {
     todo!()
 }
@@ -2397,11 +2412,11 @@ async fn place_at_me(
 /// Actor Function(ActorBase akActorToPlace, int aiLevelMod, EncounterZone akZone) native
 /// ```
 fn place_actor_at_me(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    ak_actor_to_place: Object,
-    ai_level_mod: i32,
-    ak_zone: Object,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _ak_actor_to_place: Object,
+    _ai_level_mod: i32,
+    _ak_zone: Object,
 ) -> Result<Object, Error> {
     todo!()
 }
@@ -2412,15 +2427,15 @@ fn place_actor_at_me(
 /// ObjectReference Function(string asNodeName, Form akFormToPlace, int aiCount, bool abForcePersist, bool abInitiallyDisabled, bool abDeleteWhenAble, bool abAttach) native
 /// ```
 fn place_at_node(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    as_node_name: Object,
-    ak_form_to_place: Object,
-    ai_count: i32,
-    ab_force_persist: bool,
-    ab_initially_disabled: bool,
-    ab_delete_when_able: bool,
-    ab_attach: bool,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _as_node_name: Object,
+    _ak_form_to_place: Object,
+    _ai_count: i32,
+    _ab_force_persist: bool,
+    _ab_initially_disabled: bool,
+    _ab_delete_when_able: bool,
+    _ab_attach: bool,
 ) -> Result<Object, Error> {
     todo!()
 }
@@ -2431,9 +2446,9 @@ fn place_at_node(
 /// bool Function(string asAnimation) native
 /// ```
 fn play_animation(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    as_animation: Object,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _as_animation: Object,
 ) -> Result<bool, Error> {
     todo!()
 }
@@ -2444,10 +2459,10 @@ fn play_animation(
 /// bool Function(string asAnimation, string asEventName) native
 /// ```
 fn play_animation_and_wait(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    as_animation: Object,
-    as_event_name: Object,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _as_animation: Object,
+    _as_event_name: Object,
 ) -> Result<bool, Error> {
     todo!()
 }
@@ -2458,11 +2473,11 @@ fn play_animation_and_wait(
 /// bool Function(string asAnimation, bool abStartOver, float afEaseInTime) native
 /// ```
 fn play_gamebryo_animation(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    as_animation: Object,
-    ab_start_over: bool,
-    af_ease_in_time: f32,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _as_animation: Object,
+    _ab_start_over: bool,
+    _af_ease_in_time: f32,
 ) -> Result<bool, Error> {
     todo!()
 }
@@ -2473,16 +2488,16 @@ fn play_gamebryo_animation(
 /// bool Function(ImpactDataSet akImpactEffect, string asNodeName, float afPickDirX, float afPickDirY, float afPickDirZ, float afPickLength, bool abApplyNodeRotation, bool abUseNodeLocalRotation) native
 /// ```
 fn play_impact_effect(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    ak_impact_effect: Object,
-    as_node_name: Object,
-    af_pick_dir_x: f32,
-    af_pick_dir_y: f32,
-    af_pick_dir_z: f32,
-    af_pick_length: f32,
-    ab_apply_node_rotation: bool,
-    ab_use_node_local_rotation: bool,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _ak_impact_effect: Object,
+    _as_node_name: Object,
+    _af_pick_dir_x: f32,
+    _af_pick_dir_y: f32,
+    _af_pick_dir_z: f32,
+    _af_pick_length: f32,
+    _ab_apply_node_rotation: bool,
+    _ab_use_node_local_rotation: bool,
 ) -> Result<bool, Error> {
     todo!()
 }
@@ -2493,11 +2508,11 @@ fn play_impact_effect(
 /// bool Function(string asAnimation1, ObjectReference akObj2, string asAnimation2) native
 /// ```
 fn play_synced_animation_ss(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    as_animation1: Object,
-    ak_obj2: Object,
-    as_animation2: Object,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _as_animation1: Object,
+    _ak_obj2: Object,
+    _as_animation2: Object,
 ) -> Result<bool, Error> {
     todo!()
 }
@@ -2508,13 +2523,13 @@ fn play_synced_animation_ss(
 /// bool Function(string asAnimation1, string asEvent1, ObjectReference akObj2, string asAnimation2, string asEvent2) native
 /// ```
 fn play_synced_animation_and_wait_ss(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    as_animation1: Object,
-    as_event1: Object,
-    ak_obj2: Object,
-    as_animation2: Object,
-    as_event2: Object,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _as_animation1: Object,
+    _as_event1: Object,
+    _ak_obj2: Object,
+    _as_animation2: Object,
+    _as_event2: Object,
 ) -> Result<bool, Error> {
     todo!()
 }
@@ -2525,10 +2540,10 @@ fn play_synced_animation_and_wait_ss(
 /// Function(string asEffectModelName, string asAttachBoneName) native
 /// ```
 fn play_terrain_effect(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    as_effect_model_name: Object,
-    as_attach_bone_name: Object,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _as_effect_model_name: Object,
+    _as_attach_bone_name: Object,
 ) -> Result<(), Error> {
     todo!()
 }
@@ -2538,7 +2553,7 @@ fn play_terrain_effect(
 /// ```text
 /// Function() native
 /// ```
-fn pause_audio(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Error> {
+fn pause_audio(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<(), Error> {
     todo!()
 }
 
@@ -2547,18 +2562,14 @@ fn pause_audio(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Error>
 /// ```text
 /// Function() native
 /// ```
-fn preload_exterior_cell(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<(), Error> {
-    Ok(())
-}
+fn preload_exterior_cell(_caller: Caller<'_, State>, _self_ptr: Object) {}
 
 /// `PreloadTargetArea`
 ///
 /// ```text
 /// Function() native
 /// ```
-fn preload_target_area(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<(), Error> {
-    Ok(())
-}
+fn preload_target_area(_caller: Caller<'_, State>, _self_ptr: Object) {}
 
 /// `ProcessTrapHit`
 ///
@@ -2566,19 +2577,19 @@ fn preload_target_area(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<
 /// Function(ObjectReference akTrap, float afDamage, float afPushback, float afXVel, float afYVel, float afZVel, float afXPos, float afYPos, float afZPos, int aeMaterial, float afStagger) native
 /// ```
 fn process_trap_hit(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    ak_trap: Object,
-    af_damage: f32,
-    af_pushback: f32,
-    af_x_vel: f32,
-    af_y_vel: f32,
-    af_z_vel: f32,
-    af_x_pos: f32,
-    af_y_pos: f32,
-    af_z_pos: f32,
-    ae_material: i32,
-    af_stagger: f32,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _ak_trap: Object,
+    _af_damage: f32,
+    _af_pushback: f32,
+    _af_x_vel: f32,
+    _af_y_vel: f32,
+    _af_z_vel: f32,
+    _af_x_pos: f32,
+    _af_y_pos: f32,
+    _af_z_pos: f32,
+    _ae_material: i32,
+    _af_stagger: f32,
 ) -> Result<(), Error> {
     todo!()
 }
@@ -2589,10 +2600,10 @@ fn process_trap_hit(
 /// Function(Actor akActorToPush, float aiKnockbackForce) native
 /// ```
 fn push_actor_away(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    ak_actor_to_push: Object,
-    ai_knockback_force: f32,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _ak_actor_to_push: Object,
+    _ai_knockback_force: f32,
 ) -> Result<(), Error> {
     todo!()
 }
@@ -2602,9 +2613,7 @@ fn push_actor_away(
 /// ```text
 /// Function() native
 /// ```
-fn recalculate_resources(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<(), Error> {
-    Ok(())
-}
+fn recalculate_resources(_caller: Caller<'_, State>, _self_ptr: Object) {}
 
 /// `RemoveAllItems`
 ///
@@ -2612,10 +2621,10 @@ fn recalculate_resources(_caller: Caller<'_, State>, _self_ptr: Object) -> Resul
 /// Function(ObjectReference akTransferTo, bool abKeepOwnership) native
 /// ```
 fn remove_all_items(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    ak_transfer_to: Object,
-    ab_keep_ownership: bool,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _ak_transfer_to: Object,
+    _ab_keep_ownership: bool,
 ) -> Result<(), Error> {
     todo!()
 }
@@ -2626,11 +2635,11 @@ fn remove_all_items(
 /// Function(Component akComponent, int aiCount, bool abSilent) native
 /// ```
 fn remove_components(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    ak_component: Object,
-    ai_count: i32,
-    ab_silent: bool,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _ak_component: Object,
+    _ai_count: i32,
+    _ab_silent: bool,
 ) -> Result<(), Error> {
     todo!()
 }
@@ -2641,12 +2650,12 @@ fn remove_components(
 /// Function(Form akItemToRemove, int aiCount, bool abSilent, ObjectReference akOtherContainer) native
 /// ```
 fn remove_item(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    ak_item_to_remove: Object,
-    ai_count: i32,
-    ab_silent: bool,
-    ak_other_container: Object,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _ak_item_to_remove: Object,
+    _ai_count: i32,
+    _ab_silent: bool,
+    _ak_other_container: Object,
 ) -> Result<(), Error> {
     todo!()
 }
@@ -2657,12 +2666,12 @@ fn remove_item(
 /// Function(Form akComponentToRemove, int aiCount, bool abSilent, ObjectReference akOtherContainer) native
 /// ```
 fn remove_item_by_component(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    ak_component_to_remove: Object,
-    ai_count: i32,
-    ab_silent: bool,
-    ak_other_container: Object,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _ak_component_to_remove: Object,
+    _ai_count: i32,
+    _ab_silent: bool,
+    _ak_other_container: Object,
 ) -> Result<(), Error> {
     todo!()
 }
@@ -2697,7 +2706,7 @@ async fn remove_keyword(
 /// ```text
 /// Function() native
 /// ```
-fn remove_all_mods(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Error> {
+fn remove_all_mods(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<(), Error> {
     todo!()
 }
 
@@ -2707,9 +2716,9 @@ fn remove_all_mods(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Er
 /// Function(Form akItem) native
 /// ```
 fn remove_all_mods_from_inventory_item(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    ak_item: Object,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _ak_item: Object,
 ) -> Result<(), Error> {
     todo!()
 }
@@ -2719,7 +2728,7 @@ fn remove_all_mods_from_inventory_item(
 /// ```text
 /// Function(ObjectMod akMod) native
 /// ```
-fn remove_mod(caller: Caller<'_, State>, self_ptr: Object, ak_mod: Object) -> Result<(), Error> {
+fn remove_mod(_caller: Caller<'_, State>, _self_ptr: Object, _ak_mod: Object) -> Result<(), Error> {
     todo!()
 }
 
@@ -2729,10 +2738,10 @@ fn remove_mod(caller: Caller<'_, State>, self_ptr: Object, ak_mod: Object) -> Re
 /// Function(Form akItem, ObjectMod akMod) native
 /// ```
 fn remove_mod_from_inventory_item(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    ak_item: Object,
-    ak_mod: Object,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _ak_item: Object,
+    _ak_mod: Object,
 ) -> Result<(), Error> {
     todo!()
 }
@@ -2743,9 +2752,9 @@ fn remove_mod_from_inventory_item(
 /// bool Function(ObjectReference akDependent) native
 /// ```
 fn remove_dependent_animated_object_reference(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    ak_dependent: Object,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _ak_dependent: Object,
 ) -> Result<bool, Error> {
     todo!()
 }
@@ -2755,7 +2764,7 @@ fn remove_dependent_animated_object_reference(
 /// ```text
 /// Function() native
 /// ```
-fn repair(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Error> {
+fn repair(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<(), Error> {
     todo!()
 }
 
@@ -2764,7 +2773,7 @@ fn repair(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Error> {
 /// ```text
 /// Function(ObjectReference akTarget) native
 /// ```
-fn reset(caller: Caller<'_, State>, self_ptr: Object, ak_target: Object) -> Result<(), Error> {
+fn reset(_caller: Caller<'_, State>, _self_ptr: Object, _ak_target: Object) -> Result<(), Error> {
     todo!()
 }
 
@@ -2832,7 +2841,7 @@ async fn restore_value(
 /// ```text
 /// Function() native
 /// ```
-fn resume_audio(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Error> {
+fn resume_audio(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<(), Error> {
     todo!()
 }
 
@@ -2842,9 +2851,9 @@ fn resume_audio(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Error
 /// Function(bool abReverse) native
 /// ```
 fn reverse_conveyor_belt(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    ab_reverse: bool,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _ab_reverse: bool,
 ) -> Result<(), Error> {
     todo!()
 }
@@ -2855,12 +2864,12 @@ fn reverse_conveyor_belt(
 /// Function(Topic akTopicToSay, Actor akActorToSpeakAs, bool abSpeakInPlayersHead, ObjectReference akTarget) native
 /// ```
 fn say(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    ak_topic_to_say: Object,
-    ak_actor_to_speak_as: Object,
-    ab_speak_in_players_head: bool,
-    ak_target: Object,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _ak_topic_to_say: Object,
+    _ak_actor_to_speak_as: Object,
+    _ab_speak_in_players_head: bool,
+    _ak_target: Object,
 ) -> Result<(), Error> {
     todo!()
 }
@@ -2871,12 +2880,12 @@ fn say(
 /// Function(Keyword akKeywordToSay, Actor akActorToSpeakAs, bool abSpeakInPlayersHead, ObjectReference akTarget) native
 /// ```
 fn say_custom(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    ak_keyword_to_say: Object,
-    ak_actor_to_speak_as: Object,
-    ab_speak_in_players_head: bool,
-    ak_target: Object,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _ak_keyword_to_say: Object,
+    _ak_actor_to_speak_as: Object,
+    _ab_speak_in_players_head: bool,
+    _ak_target: Object,
 ) -> Result<(), Error> {
     todo!()
 }
@@ -2887,9 +2896,9 @@ fn say_custom(
 /// Function(Actor akThief) native
 /// ```
 fn send_steal_alarm(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    ak_thief: Object,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _ak_thief: Object,
 ) -> Result<(), Error> {
     todo!()
 }
@@ -2900,9 +2909,9 @@ fn send_steal_alarm(
 /// Function(Message akText) native
 /// ```
 fn set_activate_text_override(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    ak_text: Object,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _ak_text: Object,
 ) -> Result<(), Error> {
     todo!()
 }
@@ -2913,9 +2922,9 @@ fn set_activate_text_override(
 /// Function(Actor akActor) native
 /// ```
 fn set_actor_cause(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    ak_actor: Object,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _ak_actor: Object,
 ) -> Result<(), Error> {
     todo!()
 }
@@ -2926,10 +2935,10 @@ fn set_actor_cause(
 /// Function(ActorBase akActorBase, bool abNoCrime) native
 /// ```
 fn set_actor_owner(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    ak_actor_base: Object,
-    ab_no_crime: bool,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _ak_actor_base: Object,
+    _ab_no_crime: bool,
 ) -> Result<(), Error> {
     todo!()
 }
@@ -2940,10 +2949,10 @@ fn set_actor_owner(
 /// Function(Actor akActor, bool abNoCrime) native
 /// ```
 fn set_actor_ref_owner(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    ak_actor: Object,
-    ab_no_crime: bool,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _ak_actor: Object,
+    _ab_no_crime: bool,
 ) -> Result<(), Error> {
     todo!()
 }
@@ -2954,11 +2963,11 @@ fn set_actor_ref_owner(
 /// Function(float afXAngle, float afYAngle, float afZAngle) native
 /// ```
 fn set_angle(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    af_x_angle: f32,
-    af_y_angle: f32,
-    af_z_angle: f32,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _af_x_angle: f32,
+    _af_y_angle: f32,
+    _af_z_angle: f32,
 ) -> Result<(), Error> {
     todo!()
 }
@@ -3047,10 +3056,10 @@ async fn set_animation_variable_float(
 /// Function(Keyword apKeyword, bool abActive) native
 /// ```
 fn set_attraction_active(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    ap_keyword: Object,
-    ab_active: bool,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _ap_keyword: Object,
+    _ab_active: bool,
 ) -> Result<(), Error> {
     todo!()
 }
@@ -3061,11 +3070,11 @@ fn set_attraction_active(
 /// Function(float afLinVelX, float afLinVelY, float afLinVelZ) native
 /// ```
 fn set_conveyor_belt_velocity(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    af_lin_vel_x: f32,
-    af_lin_vel_y: f32,
-    af_lin_vel_z: f32,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _af_lin_vel_x: f32,
+    _af_lin_vel_y: f32,
+    _af_lin_vel_z: f32,
 ) -> Result<(), Error> {
     todo!()
 }
@@ -3076,9 +3085,9 @@ fn set_conveyor_belt_velocity(
 /// Function(bool abDestroyed) native
 /// ```
 fn set_destroyed(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    ab_destroyed: bool,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _ab_destroyed: bool,
 ) -> Result<(), Error> {
     todo!()
 }
@@ -3089,9 +3098,9 @@ fn set_destroyed(
 /// Function(ObjectReference akTarget) native
 /// ```
 fn set_direct_at_target(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    ak_target: Object,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _ak_target: Object,
 ) -> Result<(), Error> {
     todo!()
 }
@@ -3102,10 +3111,10 @@ fn set_direct_at_target(
 /// Function(Faction akFaction, bool abNoCrime) native
 /// ```
 fn set_faction_owner(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    ak_faction: Object,
-    ab_no_crime: bool,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _ak_faction: Object,
+    _ab_no_crime: bool,
 ) -> Result<(), Error> {
     todo!()
 }
@@ -3116,9 +3125,9 @@ fn set_faction_owner(
 /// Function(bool abHarvested) native
 /// ```
 fn set_harvested(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    ab_harvested: bool,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _ab_harvested: bool,
 ) -> Result<(), Error> {
     todo!()
 }
@@ -3166,9 +3175,9 @@ async fn set_linked_ref(
 /// Function(int aiLockLevel) native
 /// ```
 fn set_lock_level(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    ai_lock_level: i32,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _ai_lock_level: i32,
 ) -> Result<(), Error> {
     todo!()
 }
@@ -3179,10 +3188,10 @@ fn set_lock_level(
 /// Function(Location akLoc, LocationRefType akRefType) native
 /// ```
 fn set_loc_ref_type(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    ak_loc: Object,
-    ak_ref_type: Object,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _ak_loc: Object,
+    _ak_ref_type: Object,
 ) -> Result<(), Error> {
     todo!()
 }
@@ -3193,10 +3202,10 @@ fn set_loc_ref_type(
 /// Function(int aeMotionType, bool abAllowActivate) native
 /// ```
 fn set_motion_type(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    ae_motion_type: i32,
-    ab_allow_activate: bool,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _ae_motion_type: i32,
+    _ab_allow_activate: bool,
 ) -> Result<(), Error> {
     todo!()
 }
@@ -3207,9 +3216,9 @@ fn set_motion_type(
 /// Function(bool abNoFavor) native
 /// ```
 fn set_no_favor_allowed(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    ab_no_favor: bool,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _ab_no_favor: bool,
 ) -> Result<(), Error> {
     todo!()
 }
@@ -3219,7 +3228,7 @@ fn set_no_favor_allowed(
 /// ```text
 /// Function(bool abOpen) native
 /// ```
-fn set_open(caller: Caller<'_, State>, self_ptr: Object, ab_open: bool) -> Result<(), Error> {
+fn set_open(_caller: Caller<'_, State>, _self_ptr: Object, _ab_open: bool) -> Result<(), Error> {
     todo!()
 }
 
@@ -3229,9 +3238,9 @@ fn set_open(caller: Caller<'_, State>, self_ptr: Object, ab_open: bool) -> Resul
 /// Function(Location akLoc) native
 /// ```
 fn set_persist_loc(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    ak_loc: Object,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _ak_loc: Object,
 ) -> Result<(), Error> {
     todo!()
 }
@@ -3242,9 +3251,9 @@ fn set_persist_loc(
 /// Function(bool abTaken) native
 /// ```
 fn set_player_has_taken(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    ab_taken: bool,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _ab_taken: bool,
 ) -> Result<(), Error> {
     todo!()
 }
@@ -3255,11 +3264,11 @@ fn set_player_has_taken(
 /// Function(float afX, float afY, float afZ) native
 /// ```
 fn set_position(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    af_x: f32,
-    af_y: f32,
-    af_z: f32,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _af_x: f32,
+    _af_y: f32,
+    _af_z: f32,
 ) -> Result<(), Error> {
     todo!()
 }
@@ -3269,7 +3278,7 @@ fn set_position(
 /// ```text
 /// Function(bool abOn) native
 /// ```
-fn set_radio_on(caller: Caller<'_, State>, self_ptr: Object, ab_on: bool) -> Result<(), Error> {
+fn set_radio_on(_caller: Caller<'_, State>, _self_ptr: Object, _ab_on: bool) -> Result<(), Error> {
     todo!()
 }
 
@@ -3279,9 +3288,9 @@ fn set_radio_on(caller: Caller<'_, State>, self_ptr: Object, ab_on: bool) -> Res
 /// Function(float afFrequency) native
 /// ```
 fn set_radio_frequency(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    af_frequency: f32,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _af_frequency: f32,
 ) -> Result<(), Error> {
     todo!()
 }
@@ -3292,9 +3301,9 @@ fn set_radio_frequency(
 /// Function(float afVolume) native
 /// ```
 fn set_radio_volume(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    af_volume: f32,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _af_volume: f32,
 ) -> Result<(), Error> {
     todo!()
 }
@@ -3304,7 +3313,7 @@ fn set_radio_volume(
 /// ```text
 /// Function(float afScale) native
 /// ```
-fn set_scale(caller: Caller<'_, State>, self_ptr: Object, af_scale: f32) -> Result<(), Error> {
+fn set_scale(_caller: Caller<'_, State>, _self_ptr: Object, _af_scale: f32) -> Result<(), Error> {
     todo!()
 }
 
@@ -3349,16 +3358,16 @@ async fn set_value(
 /// Function(float afX, float afY, float afZ, float afXAngle, float afYAngle, float afZAngle, float afSpeed, float afMaxRotationSpeed) native
 /// ```
 fn translate_to(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    af_x: f32,
-    af_y: f32,
-    af_z: f32,
-    af_x_angle: f32,
-    af_y_angle: f32,
-    af_z_angle: f32,
-    af_speed: f32,
-    af_max_rotation_speed: f32,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _af_x: f32,
+    _af_y: f32,
+    _af_z: f32,
+    _af_x_angle: f32,
+    _af_y_angle: f32,
+    _af_z_angle: f32,
+    _af_speed: f32,
+    _af_max_rotation_speed: f32,
 ) -> Result<(), Error> {
     todo!()
 }
@@ -3369,17 +3378,17 @@ fn translate_to(
 /// Function(float afX, float afY, float afZ, float afXAngle, float afYAngle, float afZAngle, float afTangentMagnitude, float afSpeed, float afMaxRotationSpeed) native
 /// ```
 fn spline_translate_to(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    af_x: f32,
-    af_y: f32,
-    af_z: f32,
-    af_x_angle: f32,
-    af_y_angle: f32,
-    af_z_angle: f32,
-    af_tangent_magnitude: f32,
-    af_speed: f32,
-    af_max_rotation_speed: f32,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _af_x: f32,
+    _af_y: f32,
+    _af_z: f32,
+    _af_x_angle: f32,
+    _af_y_angle: f32,
+    _af_z_angle: f32,
+    _af_tangent_magnitude: f32,
+    _af_speed: f32,
+    _af_max_rotation_speed: f32,
 ) -> Result<(), Error> {
     todo!()
 }
@@ -3390,13 +3399,13 @@ fn spline_translate_to(
 /// Function(ObjectReference arTarget, string arNodeName, float afTangentMagnitude, float afSpeed, float afMaxRotationSpeed) native
 /// ```
 fn spline_translate_to_ref_node(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    ar_target: Object,
-    ar_node_name: Object,
-    af_tangent_magnitude: f32,
-    af_speed: f32,
-    af_max_rotation_speed: f32,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _ar_target: Object,
+    _ar_node_name: Object,
+    _af_tangent_magnitude: f32,
+    _af_speed: f32,
+    _af_max_rotation_speed: f32,
 ) -> Result<(), Error> {
     todo!()
 }
@@ -3407,9 +3416,9 @@ fn spline_translate_to_ref_node(
 /// Function(bool abStart) native
 /// ```
 fn start_workshop(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    ab_start: bool,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _ab_start: bool,
 ) -> Result<(), Error> {
     todo!()
 }
@@ -3419,20 +3428,20 @@ fn start_workshop(
 /// ```text
 /// Function() native
 /// ```
-fn stop_translation(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Error> {
+fn stop_translation(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<(), Error> {
     todo!()
 }
 
 /// `StoreInWorkshop`
 ///
 /// ```text
-/// Function(Form akBaseItem, int aiCount=1) native
+/// Function(Form akBaseItem, int aiCount) native
 /// ```
 fn store_in_workshop(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    ak_base_item: Object,
-    ai_count_1: i32,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _ak_base_item: Object,
+    _ai_count: i32,
 ) -> Result<(), Error> {
     todo!()
 }
@@ -3443,9 +3452,9 @@ fn store_in_workshop(
 /// Function(ObjectReference akHorse) native
 /// ```
 fn tether_to_horse(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    ak_horse: Object,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _ak_horse: Object,
 ) -> Result<(), Error> {
     todo!()
 }
@@ -3456,9 +3465,9 @@ fn tether_to_horse(
 /// bool Function(string asEventName) native
 /// ```
 fn wait_for_animation_event(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    as_event_name: Object,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _as_event_name: Object,
 ) -> Result<bool, Error> {
     todo!()
 }
@@ -3468,7 +3477,7 @@ fn wait_for_animation_event(
 /// ```text
 /// bool Function() native
 /// ```
-fn wait_for3_d_load(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Error> {
+fn wait_for3_d_load(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<bool, Error> {
     todo!()
 }
 
@@ -3478,8 +3487,8 @@ fn wait_for3_d_load(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool,
 /// Function() native
 /// ```
 fn wait_for_workshop_resource_recalc(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
 ) -> Result<(), Error> {
     todo!()
 }
@@ -3489,7 +3498,11 @@ fn wait_for_workshop_resource_recalc(
 /// ```text
 /// bool Function(ObjectReference akWorkshop) native
 /// ```
-fn scrap(caller: Caller<'_, State>, self_ptr: Object, ak_workshop: Object) -> Result<bool, Error> {
+fn scrap(
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _ak_workshop: Object,
+) -> Result<bool, Error> {
     todo!()
 }
 

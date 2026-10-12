@@ -27,9 +27,9 @@ pub fn register(engine: &mut Engine) {
 /// Function EnableFastTravel(bool abEnable) native
 /// ```
 fn enable_fast_travel(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    ab_enable: bool,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _ab_enable: bool,
 ) -> Result<(), Error> {
     todo!()
 }
@@ -39,7 +39,7 @@ fn enable_fast_travel(
 /// ```text
 /// ActorBase Function GetActorOwner() native
 /// ```
-fn get_actor_owner(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Error> {
+fn get_actor_owner(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<Object, Error> {
     todo!()
 }
 
@@ -48,7 +48,7 @@ fn get_actor_owner(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object
 /// ```text
 /// Faction Function GetFactionOwner() native
 /// ```
-fn get_faction_owner(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Error> {
+fn get_faction_owner(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<Object, Error> {
     todo!()
 }
 
@@ -57,7 +57,7 @@ fn get_faction_owner(caller: Caller<'_, State>, self_ptr: Object) -> Result<Obje
 /// ```text
 /// bool Function IsAttached() native
 /// ```
-fn is_attached(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Error> {
+fn is_attached(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<bool, Error> {
     todo!()
 }
 
@@ -66,7 +66,7 @@ fn is_attached(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Erro
 /// ```text
 /// bool Function IsInterior() native
 /// ```
-fn is_interior(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Error> {
+fn is_interior(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<bool, Error> {
     todo!()
 }
 
@@ -75,7 +75,7 @@ fn is_interior(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Erro
 /// ```text
 /// bool Function IsLoaded() native
 /// ```
-fn is_loaded(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Error> {
+fn is_loaded(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<bool, Error> {
     todo!()
 }
 
@@ -84,7 +84,7 @@ fn is_loaded(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Error>
 /// ```text
 /// Function Reset() native
 /// ```
-fn reset(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Error> {
+fn reset(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<(), Error> {
     todo!()
 }
 
@@ -94,9 +94,9 @@ fn reset(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Error> {
 /// Function SetActorOwner(ActorBase akActor) native
 /// ```
 fn set_actor_owner(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    ak_actor: Object,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _ak_actor: Object,
 ) -> Result<(), Error> {
     todo!()
 }
@@ -107,9 +107,9 @@ fn set_actor_owner(
 /// Function SetFactionOwner(Faction akFaction) native
 /// ```
 fn set_faction_owner(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    ak_faction: Object,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _ak_faction: Object,
 ) -> Result<(), Error> {
     todo!()
 }
@@ -120,14 +120,14 @@ fn set_faction_owner(
 /// Function SetFogColor(int aiNearRed, int aiNearGreen, int aiNearBlue, int aiFarRed, int aiFarGreen, int aiFarBlue) native
 /// ```
 fn set_fog_color(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    near_red: i32,
-    near_green: i32,
-    near_blue: i32,
-    far_red: i32,
-    far_green: i32,
-    far_blue: i32,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _near_red: i32,
+    _near_green: i32,
+    _near_blue: i32,
+    _far_red: i32,
+    _far_green: i32,
+    _far_blue: i32,
 ) -> Result<(), Error> {
     todo!()
 }
@@ -138,10 +138,10 @@ fn set_fog_color(
 /// Function SetFogPlanes(float afNear, float afFar) native
 /// ```
 fn set_fog_planes(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    af_near: f32,
-    af_far: f32,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _af_near: f32,
+    _af_far: f32,
 ) -> Result<(), Error> {
     todo!()
 }
@@ -151,7 +151,11 @@ fn set_fog_planes(
 /// ```text
 /// Function SetFogPower(float afPower) native
 /// ```
-fn set_fog_power(caller: Caller<'_, State>, self_ptr: Object, af_power: f32) -> Result<(), Error> {
+fn set_fog_power(
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _af_power: f32,
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -160,6 +164,10 @@ fn set_fog_power(caller: Caller<'_, State>, self_ptr: Object, af_power: f32) -> 
 /// ```text
 /// Function SetPublic(bool abPublic) native
 /// ```
-fn set_public(caller: Caller<'_, State>, self_ptr: Object, ab_public: bool) -> Result<(), Error> {
+fn set_public(
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _ab_public: bool,
+) -> Result<(), Error> {
     todo!()
 }

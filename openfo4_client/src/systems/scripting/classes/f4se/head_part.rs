@@ -19,7 +19,7 @@ pub fn register(engine: &mut Engine) {
 /// ```text
 /// HeadPart[] Function GetExtraParts() native
 /// ```
-fn get_extra_parts(caller: Caller<'_, State>, self_ptr: Object) -> Object {
+fn get_extra_parts(_caller: Caller<'_, State>, _self_ptr: Object) -> Object {
     todo!()
 }
 
@@ -28,7 +28,7 @@ fn get_extra_parts(caller: Caller<'_, State>, self_ptr: Object) -> Object {
 /// ```text
 /// int Function GetType() native
 /// ```
-fn get_type(caller: Caller<'_, State>, self_ptr: Object) -> i32 {
+fn get_type(_caller: Caller<'_, State>, _self_ptr: Object) -> i32 {
     todo!()
 }
 
@@ -37,7 +37,7 @@ fn get_type(caller: Caller<'_, State>, self_ptr: Object) -> i32 {
 /// ```text
 /// FormList Function GetValidRaces() native
 /// ```
-fn get_valid_races(caller: Caller<'_, State>, self_ptr: Object) -> Object {
+fn get_valid_races(_caller: Caller<'_, State>, _self_ptr: Object) -> Object {
     todo!()
 }
 
@@ -46,7 +46,7 @@ fn get_valid_races(caller: Caller<'_, State>, self_ptr: Object) -> Object {
 /// ```text
 /// bool Function HasExtraPart(HeadPart p) native
 /// ```
-fn has_extra_part(caller: Caller<'_, State>, self_ptr: Object, part: Object) -> bool {
+fn has_extra_part(_caller: Caller<'_, State>, _self_ptr: Object, _part: Object) -> bool {
     todo!()
 }
 
@@ -55,7 +55,7 @@ fn has_extra_part(caller: Caller<'_, State>, self_ptr: Object, part: Object) -> 
 /// ```text
 /// bool Function IsExtraPart() native
 /// ```
-fn is_extra_part(caller: Caller<'_, State>, self_ptr: Object) -> bool {
+fn is_extra_part(_caller: Caller<'_, State>, _self_ptr: Object) -> bool {
     todo!()
 }
 
@@ -64,6 +64,6 @@ fn is_extra_part(caller: Caller<'_, State>, self_ptr: Object) -> bool {
 /// ```text
 /// Function SetValidRaces(FormList vRaces) native
 /// ```
-fn set_valid_races(caller: Caller<'_, State>, self_ptr: Object, races: Object) {
+fn set_valid_races(_caller: Caller<'_, State>, _self_ptr: Object, _races: Object) {
     todo!()
 }

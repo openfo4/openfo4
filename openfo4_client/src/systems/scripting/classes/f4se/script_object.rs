@@ -24,7 +24,7 @@ pub fn register(engine: &mut Engine) {
 /// ```text
 /// Function RegisterForKey(int key) native
 /// ```
-fn register_for_key(caller: Caller<'_, State>, self_ptr: Object, key: i32) -> Result<(), Error> {
+fn register_for_key(_caller: Caller<'_, State>, _self_ptr: Object, _key: i32) -> Result<(), Error> {
     todo!()
 }
 
@@ -33,7 +33,11 @@ fn register_for_key(caller: Caller<'_, State>, self_ptr: Object, key: i32) -> Re
 /// ```text
 /// Function UnregisterForKey(int key) native
 /// ```
-fn unregister_for_key(caller: Caller<'_, State>, self_ptr: Object, key: i32) -> Result<(), Error> {
+fn unregister_for_key(
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _key: i32,
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -43,9 +47,9 @@ fn unregister_for_key(caller: Caller<'_, State>, self_ptr: Object, key: i32) -> 
 /// Function RegisterForControl(string control) native
 /// ```
 fn register_for_control(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    control: Object,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _control: Object,
 ) -> Result<(), Error> {
     todo!()
 }
@@ -56,9 +60,9 @@ fn register_for_control(
 /// Function UnregisterForControl(string control) native
 /// ```
 fn unregister_for_control(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    control: Object,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _control: Object,
 ) -> Result<(), Error> {
     todo!()
 }
@@ -69,10 +73,10 @@ fn unregister_for_control(
 /// Function RegisterForExternalEvent(string eventName, string callback) native
 /// ```
 fn register_for_external_event(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    event_name: Object,
-    callback: Object,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _event_name: Object,
+    _callback: Object,
 ) -> Result<(), Error> {
     todo!()
 }
@@ -83,9 +87,9 @@ fn register_for_external_event(
 /// Function UnregisterForExternalEvent(string eventName) native
 /// ```
 fn unregister_for_external_event(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    event_name: Object,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _event_name: Object,
 ) -> Result<(), Error> {
     todo!()
 }
@@ -95,7 +99,7 @@ fn unregister_for_external_event(
 /// ```text
 /// Function RegisterForCameraState() native
 /// ```
-fn register_for_camera_state(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Error> {
+fn register_for_camera_state(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<(), Error> {
     todo!()
 }
 
@@ -104,7 +108,7 @@ fn register_for_camera_state(caller: Caller<'_, State>, self_ptr: Object) -> Res
 /// ```text
 /// Function UnregisterForCameraState() native
 /// ```
-fn unregister_for_camera_state(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Error> {
+fn unregister_for_camera_state(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<(), Error> {
     todo!()
 }
 
@@ -114,9 +118,9 @@ fn unregister_for_camera_state(caller: Caller<'_, State>, self_ptr: Object) -> R
 /// Function RegisterForFurnitureEvent(Var filter) native
 /// ```
 fn register_for_furniture_event(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    filter: Object,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _filter: Object,
 ) -> Result<(), Error> {
     todo!()
 }
@@ -127,9 +131,9 @@ fn register_for_furniture_event(
 /// Function UnregisterForFurnitureEvent(Var filter) native
 /// ```
 fn unregister_for_furniture_event(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    filter: Object,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _filter: Object,
 ) -> Result<(), Error> {
     todo!()
 }

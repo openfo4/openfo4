@@ -76,9 +76,9 @@ pub fn register(engine: &mut Engine) {
 /// Function(Form akFilter) native
 /// ```
 fn add_inventory_event_filter(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    ak_filter: Object,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _ak_filter: Object,
 ) -> Result<(), Error> {
     todo!()
 }
@@ -89,10 +89,10 @@ fn add_inventory_event_filter(
 /// Var Function(string asFuncName, Var[] aParams) native
 /// ```
 fn call_function(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    as_func_name: Object,
-    a_params: Object,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _as_func_name: Object,
+    _a_params: Object,
 ) -> Result<Object, Error> {
     todo!()
 }
@@ -103,10 +103,10 @@ fn call_function(
 /// Function(string asFuncName, Var[] aParams) native
 /// ```
 fn call_function_no_wait(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    as_func_name: Object,
-    a_params: Object,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _as_func_name: Object,
+    _a_params: Object,
 ) -> Result<(), Error> {
     todo!()
 }
@@ -147,9 +147,9 @@ fn cancel_timer_game_time(
 /// Var Function(string asPropertyName) native
 /// ```
 fn get_property_value(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    as_property_name: Object,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _as_property_name: Object,
 ) -> Result<Object, Error> {
     todo!()
 }
@@ -183,8 +183,8 @@ fn cast_as(caller: Caller<'_, State>, self_ptr: Object, script_name: Object) -> 
 /// bool Function() native
 /// ```
 fn is_bound_game_object_available(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
 ) -> Result<bool, Error> {
     todo!()
 }
@@ -749,8 +749,8 @@ fn register_for_tutorial_event(
 /// Function() native
 /// ```
 fn remove_all_inventory_event_filters(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
 ) -> Result<(), Error> {
     todo!()
 }
@@ -761,9 +761,9 @@ fn remove_all_inventory_event_filters(
 /// Function(Form akFilter) native
 /// ```
 fn remove_inventory_event_filter(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    ak_filter: Object,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _ak_filter: Object,
 ) -> Result<(), Error> {
     todo!()
 }
@@ -774,10 +774,10 @@ fn remove_inventory_event_filter(
 /// Function(CustomEventName asEvent, Var[] akArgs) native
 /// ```
 fn send_custom_event(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    as_event: Object,
-    ak_args: Object,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _as_event: Object,
+    _ak_args: Object,
 ) -> Result<(), Error> {
     todo!()
 }
@@ -788,10 +788,10 @@ fn send_custom_event(
 /// Function(string asPropertyName, Var aValue) native
 /// ```
 fn set_property_value(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    as_property_name: Object,
-    a_value: Object,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _as_property_name: Object,
+    _a_value: Object,
 ) -> Result<(), Error> {
     todo!()
 }
@@ -802,10 +802,10 @@ fn set_property_value(
 /// Function(string asPropertyName, Var aValue) native
 /// ```
 fn set_property_value_no_wait(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    as_property_name: Object,
-    a_value: Object,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _as_property_name: Object,
+    _a_value: Object,
 ) -> Result<(), Error> {
     todo!()
 }
@@ -1409,17 +1409,17 @@ fn unregister_for_looks_menu_event(
 /// Function UnregisterForHitEvent(ScriptObject akTarget, ScriptObject akAggressorFilter, Form akSourceFilter, Form akProjectileFilter = None, int aiPowerFilter, int aiSneakFilter, int aiBashFilter, int aiBlockFilter, bool abMatch) native
 /// ```
 fn unregister_for_hit_event(
-    mut caller: Caller<'_, State>,
-    self_ptr: Object,
-    target: Object,
-    aggressor_filter: Object,
-    source_filter: Object,
-    projectile_filter: Object,
-    power_filter: i32,
-    sneak_filter: i32,
-    bash_filter: i32,
-    block_filter: i32,
-    must_match: bool,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _target: Object,
+    _aggressor_filter: Object,
+    _source_filter: Object,
+    _projectile_filter: Object,
+    _power_filter: i32,
+    _sneak_filter: i32,
+    _bash_filter: i32,
+    _block_filter: i32,
+    _must_match: bool,
 ) -> Result<(), Error> {
     todo!()
 }

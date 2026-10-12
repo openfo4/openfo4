@@ -14,6 +14,6 @@ pub fn register(engine: &mut Engine) {
 /// ```text
 /// ArmorAddon[] Function GetArmorAddons() native
 /// ```
-fn get_armor_addons(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Error> {
+fn get_armor_addons(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<Object, Error> {
     todo!()
 }

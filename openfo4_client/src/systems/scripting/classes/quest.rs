@@ -42,7 +42,7 @@ pub fn register(engine: &mut Engine) {
 /// ```text
 /// Function CompleteAllObjectives() native
 /// ```
-fn complete_all_objectives(caller: Caller<'_, State>, quest: Object) -> Result<(), Error> {
+fn complete_all_objectives(_caller: Caller<'_, State>, _quest: Object) -> Result<(), Error> {
     todo!()
 }
 
@@ -51,7 +51,7 @@ fn complete_all_objectives(caller: Caller<'_, State>, quest: Object) -> Result<(
 /// ```text
 /// CompleteQuest
 /// ```
-fn complete_quest(caller: Caller<'_, State>, quest: Object) -> Result<(), Error> {
+fn complete_quest(_caller: Caller<'_, State>, _quest: Object) -> Result<(), Error> {
     todo!()
 }
 
@@ -60,7 +60,7 @@ fn complete_quest(caller: Caller<'_, State>, quest: Object) -> Result<(), Error>
 /// ```text
 /// Function FailAllObjectives() native
 /// ```
-fn fail_all_objectives(caller: Caller<'_, State>, quest: Object) -> Result<(), Error> {
+fn fail_all_objectives(_caller: Caller<'_, State>, _quest: Object) -> Result<(), Error> {
     todo!()
 }
 
@@ -69,7 +69,7 @@ fn fail_all_objectives(caller: Caller<'_, State>, quest: Object) -> Result<(), E
 /// ```text
 /// Alias Function GetAlias(int aiAliasID) native
 /// ```
-fn get_alias(caller: Caller<'_, State>, quest: Object, alias_id: Int) -> Result<Object, Error> {
+fn get_alias(_caller: Caller<'_, State>, _quest: Object, _alias_id: Int) -> Result<Object, Error> {
     todo!()
 }
 
@@ -96,7 +96,11 @@ async fn get_current_stage_id(mut caller: Caller<'_, State>, quest: Object) -> R
 /// ```text
 /// bool Function HasObjective(int aiObjective) native
 /// ```
-fn has_objective(caller: Caller<'_, State>, quest: Object, objective: Int) -> Result<bool, Error> {
+fn has_objective(
+    _caller: Caller<'_, State>,
+    _quest: Object,
+    _objective: Int,
+) -> Result<bool, Error> {
     todo!()
 }
 
@@ -105,7 +109,7 @@ fn has_objective(caller: Caller<'_, State>, quest: Object, objective: Int) -> Re
 /// ```text
 /// bool Function IsActive() native
 /// ```
-fn is_active(caller: Caller<'_, State>, quest: Object) -> Result<bool, Error> {
+fn is_active(_caller: Caller<'_, State>, _quest: Object) -> Result<bool, Error> {
     todo!()
 }
 
@@ -114,7 +118,7 @@ fn is_active(caller: Caller<'_, State>, quest: Object) -> Result<bool, Error> {
 /// ```text
 /// bool Function IsCompleted() native
 /// ```
-fn is_completed(caller: Caller<'_, State>, quest: Object) -> Result<bool, Error> {
+fn is_completed(_caller: Caller<'_, State>, _quest: Object) -> Result<bool, Error> {
     todo!()
 }
 
@@ -124,9 +128,9 @@ fn is_completed(caller: Caller<'_, State>, quest: Object) -> Result<bool, Error>
 /// bool Function IsObjectiveCompleted(int aiObjective) native
 /// ```
 fn is_objective_completed(
-    caller: Caller<'_, State>,
-    quest: Object,
-    objective: Int,
+    _caller: Caller<'_, State>,
+    _quest: Object,
+    _objective: Int,
 ) -> Result<bool, Error> {
     todo!()
 }
@@ -137,9 +141,9 @@ fn is_objective_completed(
 /// bool Function IsObjectiveDisplayed(int aiObjective) native
 /// ```
 fn is_objective_displayed(
-    caller: Caller<'_, State>,
-    quest: Object,
-    objective: Int,
+    _caller: Caller<'_, State>,
+    _quest: Object,
+    _objective: Int,
 ) -> Result<bool, Error> {
     todo!()
 }
@@ -150,9 +154,9 @@ fn is_objective_displayed(
 /// bool Function IsObjectiveFailed(int aiObjective) native
 /// ```
 fn is_objective_failed(
-    caller: Caller<'_, State>,
-    quest: Object,
-    objective: Int,
+    _caller: Caller<'_, State>,
+    _quest: Object,
+    _objective: Int,
 ) -> Result<bool, Error> {
     todo!()
 }
@@ -265,7 +269,7 @@ async fn is_stopped(mut caller: Caller<'_, State>, quest: Object) -> Result<bool
 /// ```text
 /// Function Reset() native
 /// ```
-fn reset(caller: Caller<'_, State>, quest: Object) -> Result<(), Error> {
+fn reset(_caller: Caller<'_, State>, _quest: Object) -> Result<(), Error> {
     todo!()
 }
 
@@ -274,7 +278,7 @@ fn reset(caller: Caller<'_, State>, quest: Object) -> Result<(), Error> {
 /// ```text
 /// Function ResetSpeechChallenges() native
 /// ```
-fn reset_speech_challenges(caller: Caller<'_, State>, quest: Object) -> Result<(), Error> {
+fn reset_speech_challenges(_caller: Caller<'_, State>, _quest: Object) -> Result<(), Error> {
     todo!()
 }
 
@@ -283,7 +287,7 @@ fn reset_speech_challenges(caller: Caller<'_, State>, quest: Object) -> Result<(
 /// ```text
 /// Function SetActive(bool abActive = true) native
 /// ```
-fn set_active(caller: Caller<'_, State>, quest: Object, active: bool) -> Result<(), Error> {
+fn set_active(_caller: Caller<'_, State>, _quest: Object, _active: bool) -> Result<(), Error> {
     todo!()
 }
 
@@ -323,10 +327,10 @@ async fn set_current_stage_id(
 /// Function SetObjectiveCompleted(int aiObjective, bool abCompleted = true) native
 /// ```
 fn set_objective_completed(
-    caller: Caller<'_, State>,
-    quest: Object,
-    objective: Int,
-    completed: bool,
+    _caller: Caller<'_, State>,
+    _quest: Object,
+    _objective: Int,
+    _completed: bool,
 ) -> Result<(), Error> {
     todo!()
 }
@@ -337,11 +341,11 @@ fn set_objective_completed(
 /// Function SetObjectiveDisplayed(int aiObjective, bool abDisplayed = true, bool abForce = false) native
 /// ```
 fn set_objective_displayed(
-    caller: Caller<'_, State>,
-    quest: Object,
-    objective: Int,
-    displayed: bool,
-    force: bool,
+    _caller: Caller<'_, State>,
+    _quest: Object,
+    _objective: Int,
+    _displayed: bool,
+    _force: bool,
 ) -> Result<(), Error> {
     todo!()
 }
@@ -352,10 +356,10 @@ fn set_objective_displayed(
 /// Function SetObjectiveFailed(int aiObjective, bool abFailed = true) native
 /// ```
 fn set_objective_failed(
-    caller: Caller<'_, State>,
-    quest: Object,
-    objective: Int,
-    failed: bool,
+    _caller: Caller<'_, State>,
+    _quest: Object,
+    _objective: Int,
+    _failed: bool,
 ) -> Result<(), Error> {
     todo!()
 }
@@ -403,9 +407,9 @@ async fn stop(mut caller: Caller<'_, State>, quest: Object) -> Result<(), Error>
 /// bool Function UpdateCurrentInstanceGlobal(GlobalVariable aUpdateGlobal) native
 /// ```
 fn update_current_instance_global(
-    caller: Caller<'_, State>,
-    quest: Object,
-    gobal: Object,
+    _caller: Caller<'_, State>,
+    _quest: Object,
+    _gobal: Object,
 ) -> Result<bool, Error> {
     todo!()
 }

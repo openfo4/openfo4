@@ -14,6 +14,6 @@ pub fn register(engine: &mut Engine) {
 /// ```text
 /// bool Function IsRadio() native
 /// ```
-fn is_radio(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Error> {
+fn is_radio(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<bool, Error> {
     todo!()
 }

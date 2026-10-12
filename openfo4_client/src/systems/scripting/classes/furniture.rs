@@ -15,6 +15,6 @@ pub fn register(engine: &mut Engine) {
 /// ```text
 /// Form Function GetAssociatedForm() native
 /// ```
-fn get_associated_form(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Error> {
+fn get_associated_form(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<Object, Error> {
     todo!()
 }

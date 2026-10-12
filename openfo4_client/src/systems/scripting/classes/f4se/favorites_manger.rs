@@ -20,7 +20,7 @@ pub fn register(engine: &mut Engine) {
 /// ```text
 /// Form[] Function GetTaggedForms() native global
 /// ```
-fn get_tagged_forms(caller: Caller<'_, State>) -> Result<Object, Error> {
+fn get_tagged_forms(_caller: Caller<'_, State>) -> Result<Object, Error> {
     todo!()
 }
 
@@ -29,7 +29,7 @@ fn get_tagged_forms(caller: Caller<'_, State>) -> Result<Object, Error> {
 /// ```text
 /// Function AddTaggedForms(Form[] forms) native global
 /// ```
-fn add_tagged_forms(caller: Caller<'_, State>, forms: Object) -> Result<(), Error> {
+fn add_tagged_forms(_caller: Caller<'_, State>, _forms: Object) -> Result<(), Error> {
     todo!()
 }
 
@@ -38,7 +38,7 @@ fn add_tagged_forms(caller: Caller<'_, State>, forms: Object) -> Result<(), Erro
 /// ```text
 /// Function RemoveTaggedForms(Form[] forms) native global
 /// ```
-fn remove_tagged_forms(caller: Caller<'_, State>, forms: Object) -> Result<(), Error> {
+fn remove_tagged_forms(_caller: Caller<'_, State>, _forms: Object) -> Result<(), Error> {
     todo!()
 }
 
@@ -47,7 +47,7 @@ fn remove_tagged_forms(caller: Caller<'_, State>, forms: Object) -> Result<(), E
 /// ```text
 /// bool Function IsTaggedForm(Form akForm) native global
 /// ```
-fn is_tagged_form(caller: Caller<'_, State>, ak_form: Object) -> Result<bool, Error> {
+fn is_tagged_form(_caller: Caller<'_, State>, _ak_form: Object) -> Result<bool, Error> {
     todo!()
 }
 
@@ -56,7 +56,7 @@ fn is_tagged_form(caller: Caller<'_, State>, ak_form: Object) -> Result<bool, Er
 /// ```text
 /// Form[] Function GetFavorites() native global
 /// ```
-fn get_favorites(caller: Caller<'_, State>) -> Result<Object, Error> {
+fn get_favorites(_caller: Caller<'_, State>) -> Result<Object, Error> {
     todo!()
 }
 
@@ -65,6 +65,6 @@ fn get_favorites(caller: Caller<'_, State>) -> Result<Object, Error> {
 /// ```text
 /// Function SetFavorites(Form[] favorites) native global
 /// ```
-fn set_favorites(caller: Caller<'_, State>, favorites: Object) -> Result<(), Error> {
+fn set_favorites(_caller: Caller<'_, State>, _favorites: Object) -> Result<(), Error> {
     todo!()
 }

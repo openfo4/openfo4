@@ -20,9 +20,9 @@ pub fn register(engine: &mut Engine) {
 /// Function ApplyToRef(ObjectReference akRef) native
 /// ```
 fn apply_to_ref(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    object_ref: Object,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _object_ref: Object,
 ) -> Result<(), Error> {
     todo!()
 }
@@ -78,9 +78,9 @@ fn get_reference(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, 
 /// Function RemoveFromRef(ObjectReference akRef) native
 /// ```
 fn remove_from_ref(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    object_ref: Object,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _object_ref: Object,
 ) -> Result<(), Error> {
     todo!()
 }

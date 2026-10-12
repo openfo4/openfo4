@@ -15,7 +15,7 @@ pub fn register(engine: &mut Engine) {
 /// ```text
 /// Quest Function GetOwningQuest() native
 /// ```
-fn get_owning_quest(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Error> {
+fn get_owning_quest(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<Object, Error> {
     todo!()
 }
 
@@ -24,6 +24,6 @@ fn get_owning_quest(caller: Caller<'_, State>, self_ptr: Object) -> Result<Objec
 /// ```text
 /// Package Function GetTemplate() native
 /// ```
-fn get_template(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Error> {
+fn get_template(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<Object, Error> {
     todo!()
 }

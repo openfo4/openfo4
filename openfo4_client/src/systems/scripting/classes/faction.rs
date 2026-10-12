@@ -38,7 +38,7 @@ pub fn register(engine: &mut Engine) {
 /// ```text
 /// bool Function CanPayCrimeGold() native
 /// ```
-fn can_pay_crime_gold(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Error> {
+fn can_pay_crime_gold(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<bool, Error> {
     todo!()
 }
 
@@ -47,7 +47,7 @@ fn can_pay_crime_gold(caller: Caller<'_, State>, self_ptr: Object) -> Result<boo
 /// ```text
 /// int Function GetCrimeGold() native
 /// ```
-fn get_crime_gold(caller: Caller<'_, State>, self_ptr: Object) -> Result<i32, Error> {
+fn get_crime_gold(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<i32, Error> {
     todo!()
 }
 
@@ -56,7 +56,7 @@ fn get_crime_gold(caller: Caller<'_, State>, self_ptr: Object) -> Result<i32, Er
 /// ```text
 /// int Function GetCrimeGoldNonViolent() native
 /// ```
-fn get_crime_gold_non_violent(caller: Caller<'_, State>, self_ptr: Object) -> Result<i32, Error> {
+fn get_crime_gold_non_violent(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<i32, Error> {
     todo!()
 }
 
@@ -65,7 +65,7 @@ fn get_crime_gold_non_violent(caller: Caller<'_, State>, self_ptr: Object) -> Re
 /// ```text
 /// int Function GetCrimeGoldViolent() native
 /// ```
-fn get_crime_gold_violent(caller: Caller<'_, State>, self_ptr: Object) -> Result<i32, Error> {
+fn get_crime_gold_violent(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<i32, Error> {
     todo!()
 }
 
@@ -74,7 +74,7 @@ fn get_crime_gold_violent(caller: Caller<'_, State>, self_ptr: Object) -> Result
 /// ```text
 /// int Function GetInfamy() native
 /// ```
-fn get_infamy(caller: Caller<'_, State>, self_ptr: Object) -> Result<i32, Error> {
+fn get_infamy(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<i32, Error> {
     todo!()
 }
 
@@ -83,7 +83,7 @@ fn get_infamy(caller: Caller<'_, State>, self_ptr: Object) -> Result<i32, Error>
 /// ```text
 /// int Function GetInfamyNonViolent() native
 /// ```
-fn get_infamy_non_violent(caller: Caller<'_, State>, self_ptr: Object) -> Result<i32, Error> {
+fn get_infamy_non_violent(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<i32, Error> {
     todo!()
 }
 
@@ -92,7 +92,7 @@ fn get_infamy_non_violent(caller: Caller<'_, State>, self_ptr: Object) -> Result
 /// ```text
 /// int Function GetInfamyViolent() native
 /// ```
-fn get_infamy_violent(caller: Caller<'_, State>, self_ptr: Object) -> Result<i32, Error> {
+fn get_infamy_violent(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<i32, Error> {
     todo!()
 }
 
@@ -102,9 +102,9 @@ fn get_infamy_violent(caller: Caller<'_, State>, self_ptr: Object) -> Result<i32
 /// int Function GetFactionReaction(Actor akOther) native
 /// ```
 fn get_faction_reaction(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    ak_other: Object,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _ak_other: Object,
 ) -> Result<i32, Error> {
     todo!()
 }
@@ -114,7 +114,10 @@ fn get_faction_reaction(
 /// ```text
 /// int Function GetStolenItemValueCrime() native
 /// ```
-fn get_stolen_item_value_crime(caller: Caller<'_, State>, self_ptr: Object) -> Result<i32, Error> {
+fn get_stolen_item_value_crime(
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+) -> Result<i32, Error> {
     todo!()
 }
 
@@ -124,8 +127,8 @@ fn get_stolen_item_value_crime(caller: Caller<'_, State>, self_ptr: Object) -> R
 /// int Function GetStolenItemValueNoCrime() native
 /// ```
 fn get_stolen_item_value_no_crime(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
 ) -> Result<i32, Error> {
     todo!()
 }
@@ -136,9 +139,9 @@ fn get_stolen_item_value_no_crime(
 /// bool Function IsFactionInCrimeGroup(Faction akOther) native
 /// ```
 fn is_faction_in_crime_group(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    ak_other: Object,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _ak_other: Object,
 ) -> Result<bool, Error> {
     todo!()
 }
@@ -167,10 +170,10 @@ fn is_player_expelled(caller: Caller<'_, State>, self_ptr: Object) -> bool {
 /// Function ModCrimeGold(int aiAmount, bool abViolent) native
 /// ```
 fn mod_crime_gold(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    ai_amount: i32,
-    ab_violent: bool,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _ai_amount: i32,
+    _ab_violent: bool,
 ) -> Result<(), Error> {
     todo!()
 }
@@ -181,10 +184,10 @@ fn mod_crime_gold(
 /// Function PlayerPayCrimeGold(bool abRemoveStolenItems, bool abGoToJail) native
 /// ```
 fn player_pay_crime_gold(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    ab_remove_stolen_items: bool,
-    ab_go_to_jail: bool,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _ab_remove_stolen_items: bool,
+    _ab_go_to_jail: bool,
 ) -> Result<(), Error> {
     todo!()
 }
@@ -194,7 +197,7 @@ fn player_pay_crime_gold(
 /// ```text
 /// Function SendAssaultAlarm() native
 /// ```
-fn send_assault_alarm(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Error> {
+fn send_assault_alarm(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<(), Error> {
     todo!()
 }
 
@@ -204,10 +207,10 @@ fn send_assault_alarm(caller: Caller<'_, State>, self_ptr: Object) -> Result<(),
 /// Function SendPlayerToJail(bool abRemoveInventory, bool abRealJail) native
 /// ```
 fn send_player_to_jail(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    ab_remove_inventory: bool,
-    ab_real_jail: bool,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _ab_remove_inventory: bool,
+    _ab_real_jail: bool,
 ) -> Result<(), Error> {
     todo!()
 }
@@ -269,7 +272,11 @@ fn set_ally(
 /// ```text
 /// Function SetCrimeGold(int aiGold) native
 /// ```
-fn set_crime_gold(caller: Caller<'_, State>, self_ptr: Object, ai_gold: i32) -> Result<(), Error> {
+fn set_crime_gold(
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _ai_gold: i32,
+) -> Result<(), Error> {
     todo!()
 }
 
@@ -279,9 +286,9 @@ fn set_crime_gold(caller: Caller<'_, State>, self_ptr: Object, ai_gold: i32) -> 
 /// Function SetCrimeGoldViolent(int aiGold) native
 /// ```
 fn set_crime_gold_violent(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    ai_gold: i32,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _ai_gold: i32,
 ) -> Result<(), Error> {
     todo!()
 }

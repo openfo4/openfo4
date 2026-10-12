@@ -14,6 +14,6 @@ pub fn register(engine: &mut Engine) {
 /// ```text
 /// Function ShowOnPipboy() native
 /// ```
-fn show_on_pipboy(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Error> {
+fn show_on_pipboy(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<(), Error> {
     todo!()
 }

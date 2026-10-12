@@ -16,7 +16,7 @@ pub fn register(engine: &mut Engine) {
 /// ```text
 /// Function() native
 /// ```
-fn add(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Error> {
+fn add(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<(), Error> {
     todo!()
 }
 
@@ -25,6 +25,6 @@ fn add(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Error> {
 /// ```text
 /// Function() native
 /// ```
-fn remove(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Error> {
+fn remove(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<(), Error> {
     todo!()
 }

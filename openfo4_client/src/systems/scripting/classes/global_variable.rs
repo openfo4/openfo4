@@ -33,7 +33,7 @@ fn get_value(caller: Caller<'_, State>, self_ptr: Object) -> Result<Float, Error
 /// ```text
 /// Function SetValue(float afNewValue) native
 /// ```
-fn set_value(mut caller: Caller<'_, State>, self_ptr: Object, value: Float) -> Result<(), Error> {
+fn set_value(caller: Caller<'_, State>, self_ptr: Object, value: Float) -> Result<(), Error> {
     let id = caller
         .data()
         .objects

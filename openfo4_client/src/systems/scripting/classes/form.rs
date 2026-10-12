@@ -91,7 +91,7 @@ fn has_keyword_in_form_list(caller: Caller<'_, State>, self_ptr: Object, formlis
 /// ```text
 /// bool Function PlayerKnows() native
 /// ```
-fn player_knows(caller: Caller<'_, State>, self_ptr: Object) -> Result<Bool, Error> {
+fn player_knows(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<Bool, Error> {
     todo!()
 }
 

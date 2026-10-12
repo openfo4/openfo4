@@ -18,10 +18,10 @@ pub fn register(engine: &mut Engine) {
 /// int Function CountActors(Keyword apRequiredLinkedRefKeyword, Keyword apExcludeLinkedRefKeyword) native
 /// ```
 fn count_actors(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    ap_required_linked_ref_keyword: Object,
-    ap_exclude_linked_ref_keyword: Object,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _ap_required_linked_ref_keyword: Object,
+    _ap_exclude_linked_ref_keyword: Object,
 ) -> Result<i32, Error> {
     todo!()
 }
@@ -32,10 +32,10 @@ fn count_actors(
 /// Actor[] Function GetActors(Keyword apRequiredLinkedRefKeyword, Keyword apExcludeLinkedRefKeyword) native
 /// ```
 fn get_actors(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    ap_required_linked_ref_keyword: Object,
-    ap_exclude_linked_ref_keyword: Object,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _ap_required_linked_ref_keyword: Object,
+    _ap_exclude_linked_ref_keyword: Object,
 ) -> Result<Object, Error> {
     todo!()
 }
@@ -45,6 +45,6 @@ fn get_actors(
 /// ```text
 /// Function Reset() native
 /// ```
-fn reset(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Error> {
+fn reset(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<(), Error> {
     todo!()
 }

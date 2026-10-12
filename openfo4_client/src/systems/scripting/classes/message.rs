@@ -19,7 +19,7 @@ pub fn register(engine: &mut Engine) {
 /// ```text
 /// Function ClearHelpMessages() native global
 /// ```
-pub fn clear_help_messages(caller: Caller<'_, State>) -> Result<(), Error> {
+pub fn clear_help_messages(_caller: Caller<'_, State>) -> Result<(), Error> {
     todo!()
 }
 
@@ -28,22 +28,22 @@ pub fn clear_help_messages(caller: Caller<'_, State>) -> Result<(), Error> {
 /// ```text
 /// Function ResetHelpMessage(string asEvent) native global
 /// ```
-pub fn reset_help_message(caller: Caller<'_, State>, event: Object) -> Result<(), Error> {
+pub fn reset_help_message(_caller: Caller<'_, State>, _event: Object) -> Result<(), Error> {
     todo!()
 }
 
 pub fn show(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    arg1: Float,
-    arg2: Float,
-    arg3: Float,
-    arg4: Float,
-    arg5: Float,
-    arg6: Float,
-    arg7: Float,
-    arg8: Float,
-    arg9: Float,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _arg1: Float,
+    _arg2: Float,
+    _arg3: Float,
+    _arg4: Float,
+    _arg5: Float,
+    _arg6: Float,
+    _arg7: Float,
+    _arg8: Float,
+    _arg9: Float,
 ) -> Result<Int, Error> {
     todo!()
 }
@@ -54,14 +54,14 @@ pub fn show(
 /// Function ShowAsHelpMessage(string asEvent, float afDuration, float afInterval, int aiMaxTimes, string asContext, int aiPriority) native
 /// ```
 pub fn show_as_help_message(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    event: Object,
-    duration: Float,
-    interval: Float,
-    max_times: Int,
-    context: Object,
-    priority: Int,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _event: Object,
+    _duration: Float,
+    _interval: Float,
+    _max_times: Int,
+    _context: Object,
+    _priority: Int,
 ) -> Result<(), Error> {
     todo!()
 }
@@ -71,6 +71,6 @@ pub fn show_as_help_message(
 /// ```text
 /// Function UnshowAsHelpMessage() native
 /// ```
-pub fn unshow_as_help_message(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Error> {
+pub fn unshow_as_help_message(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<(), Error> {
     todo!()
 }

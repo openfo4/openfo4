@@ -10,10 +10,10 @@ use super::{Bool, Object};
 /// Function Cast(ObjectReference akSource, ObjectReference akTarget = None) native
 /// ```
 pub fn cast(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    source: Object,
-    target: Object,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _source: Object,
+    _target: Object,
 ) -> Result<(), Error> {
     todo!()
 }
@@ -23,7 +23,7 @@ pub fn cast(
 /// ```text
 /// bool Function IsHostile() native
 /// ```
-pub fn is_hostile(caller: Caller<'_, State>, self_ptr: Object) -> Result<Bool, Error> {
+pub fn is_hostile(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<Bool, Error> {
     todo!()
 }
 
@@ -33,11 +33,11 @@ pub fn is_hostile(caller: Caller<'_, State>, self_ptr: Object) -> Result<Bool, E
 /// Function RemoteCast(ObjectReference akSource, Actor akBlameActor, ObjectReference akTarget = None) native
 /// ```
 pub fn remote_cast(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    source: Object,
-    blame_actor: Object,
-    target: Object,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _source: Object,
+    _blame_actor: Object,
+    _target: Object,
 ) -> Result<(), Error> {
     todo!()
 }

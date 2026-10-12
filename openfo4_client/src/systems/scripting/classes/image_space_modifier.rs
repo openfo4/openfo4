@@ -19,7 +19,7 @@ pub fn register(engine: &mut Engine) {
 /// ```text
 /// Function Apply(float afStrength) native
 /// ```
-fn apply(caller: Caller<'_, State>, self_ptr: Object, af_strength: f32) -> Result<(), Error> {
+fn apply(_caller: Caller<'_, State>, _self_ptr: Object, _af_strength: f32) -> Result<(), Error> {
     todo!()
 }
 
@@ -29,9 +29,9 @@ fn apply(caller: Caller<'_, State>, self_ptr: Object, af_strength: f32) -> Resul
 /// Function ApplyCrossFade(float afFadeDuration) native
 /// ```
 fn apply_cross_fade(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    af_fade_duration: f32,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _af_fade_duration: f32,
 ) -> Result<(), Error> {
     todo!()
 }
@@ -42,10 +42,10 @@ fn apply_cross_fade(
 /// Function PopTo(ImageSpaceModifier akNewModifier, float afStrength) native
 /// ```
 fn pop_to(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    ak_new_modifier: Object,
-    af_strength: f32,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _ak_new_modifier: Object,
+    _af_strength: f32,
 ) -> Result<(), Error> {
     todo!()
 }
@@ -55,7 +55,7 @@ fn pop_to(
 /// ```text
 /// Function Remove() native
 /// ```
-fn remove(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Error> {
+fn remove(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<(), Error> {
     todo!()
 }
 
@@ -64,6 +64,6 @@ fn remove(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Error> {
 /// ```text
 /// Function RemoveCrossFade(float afFadeDuration) native global
 /// ```
-fn remove_cross_fade(caller: Caller<'_, State>, af_fade_duration: f32) -> Result<(), Error> {
+fn remove_cross_fade(_caller: Caller<'_, State>, _af_fade_duration: f32) -> Result<(), Error> {
     todo!()
 }
