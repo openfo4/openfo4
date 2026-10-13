@@ -1,6 +1,5 @@
 use std::num::NonZeroU32;
 
-use game_common::components::Color;
 use game_tracing::trace_span;
 use hashbrown::HashMap;
 use naga::back::spv::PipelineOptions;
@@ -13,8 +12,8 @@ use crate::api::{
     Texture, TextureViewDescriptor, VertexStage,
 };
 use crate::backend::{
-    AddressMode, ColorTargetState, DescriptorBinding, DescriptorType, Face, FilterMode, FrontFace,
-    LoadOp, PrimitiveTopology, SamplerDescriptor, ShaderStages, StoreOp, TextureFormat,
+    AddressMode, ClearValue, ColorTargetState, DescriptorBinding, DescriptorType, Face, FilterMode,
+    FrontFace, LoadOp, PrimitiveTopology, SamplerDescriptor, ShaderStages, StoreOp, TextureFormat,
 };
 use crate::shader::Shader;
 
@@ -183,7 +182,7 @@ impl MipMapGenerator {
                 name: "Mipmap Generation",
                 color_attachments: &[RenderPassColorAttachment {
                     target: dst_view,
-                    load_op: LoadOp::Clear(Color::BLACK),
+                    load_op: LoadOp::Clear(ClearValue::BLACK),
                     store_op: StoreOp::Store,
                 }],
                 depth_stencil_attachment: None,

@@ -1,15 +1,14 @@
 use std::sync::Arc;
 
 use bytemuck::{Pod, Zeroable};
-use game_common::components::Color;
 use game_render::api::{
     BufferDescriptor, BufferInitDescriptor, CommandQueue, DepthStencilAttachment,
     RenderPassColorAttachment, RenderPassDescriptor, Sampler, Texture, TextureViewDescriptor,
 };
 use game_render::backend::allocator::UsageFlags;
 use game_render::backend::{
-    AddressMode, BufferUsage, CompareOp, FilterMode, LoadOp, SamplerDescriptor, StoreOp,
-    TextureDescriptor, TextureFormat, TextureUsage,
+    AddressMode, BufferUsage, ClearValue, CompareOp, FilterMode, LoadOp, SamplerDescriptor,
+    StoreOp, TextureDescriptor, TextureFormat, TextureUsage,
 };
 use game_render::graph::{Node, RenderContext, SlotLabel};
 use game_tracing::trace_span;
@@ -133,7 +132,7 @@ impl OpaqueVertexForwardPass {
         let mut shadow_light_vps = Vec::new();
         let mut shadow_maps = Vec::new();
 
-        let mut visbuffer_load_op = LoadOp::Clear(Color::BLACK);
+        let mut visbuffer_load_op = LoadOp::Clear(ClearValue::BLACK);
         let mut depth_load_op = LoadOp::Clear(0.0);
 
         let mut instances_out_offset = 0;
@@ -353,7 +352,7 @@ impl OpaqueVertexForwardPass {
             name: "Forward",
             color_attachments: &[RenderPassColorAttachment {
                 target: &texture.create_view(&TextureViewDescriptor::default()),
-                load_op: LoadOp::Clear(Color::BLACK),
+                load_op: LoadOp::Clear(ClearValue::BLACK),
                 store_op: StoreOp::Store,
             }],
             depth_stencil_attachment: Some(&DepthStencilAttachment {

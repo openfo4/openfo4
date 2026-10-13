@@ -21,7 +21,6 @@ use executor::TemporaryResources;
 use game_common::cell::UnsafeRefCell;
 use game_common::collections::scratch_buffer::ScratchBuffer;
 use game_common::collections::vec_map::VecMap;
-use game_common::components::Color;
 use game_common::utils::exclusive::Exclusive;
 use game_tracing::trace_span;
 use glam::UVec2;
@@ -40,11 +39,11 @@ use crate::api::executor::Executor;
 use crate::backend::allocator::{MemoryManager, UsageFlags};
 use crate::backend::vulkan::{self, CommandEncoder, Device};
 use crate::backend::{
-    self, AccessFlags, AdapterMemoryProperties, AdapterProperties, BufferUsage, ColorTargetState,
-    DepthStencilState, DescriptorType, DrawIndexedIndirectCommand, DrawIndirectCommand, Face,
-    Features, FrontFace, ImageDataLayout, IndexFormat, LoadOp, PrimitiveTopology,
-    PushConstantRange, SamplerDescriptor, ShaderStage, ShaderStages, StoreOp, TextureDescriptor,
-    TextureFormat, TextureUsage,
+    self, AccessFlags, AdapterMemoryProperties, AdapterProperties, BufferUsage, ClearValue,
+    ColorTargetState, DepthStencilState, DescriptorType, DrawIndexedIndirectCommand,
+    DrawIndirectCommand, Face, Features, FrontFace, ImageDataLayout, IndexFormat, LoadOp,
+    PrimitiveTopology, PushConstantRange, SamplerDescriptor, ShaderStage, ShaderStages, StoreOp,
+    TextureDescriptor, TextureFormat, TextureUsage,
 };
 use crate::shader::{
     self, BindingInfo, Shader, ShaderAccess, ShaderInstanceBinding, SpecConstantId,
@@ -2496,7 +2495,7 @@ pub struct RenderPassDescriptor<'a> {
 
 pub struct RenderPassColorAttachment<'a> {
     pub target: &'a TextureView,
-    pub load_op: LoadOp<Color>,
+    pub load_op: LoadOp<ClearValue>,
     pub store_op: StoreOp,
 }
 
@@ -2509,7 +2508,7 @@ pub struct DepthStencilAttachment<'a> {
 #[derive(Clone, Debug)]
 struct ColorAttachmentOwned {
     target: RawTextureView,
-    load_op: LoadOp<Color>,
+    load_op: LoadOp<ClearValue>,
     store_op: StoreOp,
     format: TextureFormat,
 }

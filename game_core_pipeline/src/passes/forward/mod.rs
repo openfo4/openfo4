@@ -1,6 +1,5 @@
-use game_common::components::Color;
 use game_render::api::{Buffer, BufferSlice, Sampler, Texture, TextureView};
-use game_render::backend::LoadOp;
+use game_render::backend::{ClearValue, LoadOp};
 
 use crate::camera::CameraUniform;
 use crate::passes::mesh::MeshState;
@@ -17,7 +16,7 @@ pub struct ForwardParams<'a> {
     pub camera: CameraUniform,
     pub textures: &'a [&'a TextureView],
     pub sampler: &'a Sampler,
-    pub visbuffer_load_op: LoadOp<Color>,
+    pub visbuffer_load_op: LoadOp<ClearValue>,
     pub depth_load_op: LoadOp<f32>,
     pub instances_out: BufferSlice<'a>,
     pub base_out_instance: u32,

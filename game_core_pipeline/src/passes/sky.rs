@@ -11,9 +11,9 @@ use game_render::api::{
 };
 use game_render::backend::allocator::UsageFlags;
 use game_render::backend::{
-    AddressMode, BlendState, BufferUsage, ColorTargetState, DescriptorType, Face, FilterMode,
-    FrontFace, ImageDataLayout, IndexFormat, LoadOp, PrimitiveTopology, SamplerDescriptor,
-    ShaderStages, StoreOp, TextureDescriptor, TextureUsage,
+    AddressMode, BlendState, BufferUsage, ClearValue, ColorTargetState, DescriptorType, Face,
+    FilterMode, FrontFace, ImageDataLayout, IndexFormat, LoadOp, PrimitiveTopology,
+    SamplerDescriptor, ShaderStages, StoreOp, TextureDescriptor, TextureUsage,
 };
 use game_render::graph::RenderContext;
 use game_render::mesh::Mesh;
@@ -371,7 +371,7 @@ impl SkyPass {
             name: "Sky",
             color_attachments: &[RenderPassColorAttachment {
                 target: &target_view,
-                load_op: LoadOp::Clear(Color::BLACK),
+                load_op: LoadOp::Clear(ClearValue::BLACK),
                 store_op: StoreOp::Store,
             }],
             depth_stencil_attachment: None,

@@ -3584,9 +3584,9 @@ impl<'a> CommandEncoder<'a> {
             };
 
             let clear_value = match attachment.load_op {
-                LoadOp::Clear(color) => vk::ClearValue {
+                LoadOp::Clear(value) => vk::ClearValue {
                     color: vk::ClearColorValue {
-                        float32: color.as_rgba(),
+                        uint32: value.bits(),
                     },
                 },
                 LoadOp::Load => vk::ClearValue::default(),

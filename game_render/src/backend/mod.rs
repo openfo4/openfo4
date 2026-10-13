@@ -440,7 +440,7 @@ pub struct RenderPassDescriptor<'a, 'res> {
 #[derive(Debug)]
 pub struct RenderPassColorAttachment<'res> {
     pub view: &'res TextureView<'res>,
-    pub load_op: LoadOp<Color>,
+    pub load_op: LoadOp<ClearValue>,
     pub store_op: StoreOp,
     pub access: AccessFlags,
 }
@@ -475,6 +475,30 @@ pub enum LoadOp<T> {
 pub enum StoreOp {
     Discard,
     Store,
+}
+
+/// A value a texture can be cleared to.
+#[derive(Copy, Clone, Debug)]
+pub struct ClearValue([u32; 4]);
+
+impl ClearValue {
+    /// A value with all bits set to `0`.
+    pub const ZEROES: Self = Self([0; 4]);
+
+    /// A value with all bits set to `1`.
+    pub const ONES: Self = Self([u32::MAX; 4]);
+
+    /// The black color (`0, 0, 0, 1`).
+    pub const BLACK: Self = Self([
+        f32::to_bits(0.0),
+        f32::to_bits(0.0),
+        f32::to_bits(0.0),
+        f32::to_bits(1.0),
+    ]);
+
+    const fn bits(&self) -> [u32; 4] {
+        self.0
+    }
 }
 
 // FIXME: Maybe not the best name.

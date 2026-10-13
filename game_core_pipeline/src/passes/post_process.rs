@@ -1,7 +1,6 @@
 use std::num::NonZeroU32;
 use std::sync::Arc;
 
-use game_common::components::Color;
 use game_render::api::{
     BindingResource, CommandQueue, DescriptorSetDescriptor, DescriptorSetEntry,
     DescriptorSetLayout, DescriptorSetLayoutDescriptor, FragmentStage, Pipeline,
@@ -9,9 +8,9 @@ use game_render::api::{
     Texture, TextureRegion, TextureViewDescriptor, VertexStage,
 };
 use game_render::backend::{
-    AddressMode, ColorTargetState, DescriptorBinding, DescriptorType, FilterMode, FrontFace,
-    ImageDataLayout, LoadOp, PrimitiveTopology, SamplerDescriptor, ShaderStages, StoreOp,
-    TextureDescriptor, TextureFormat, TextureUsage,
+    AddressMode, ClearValue, ColorTargetState, DescriptorBinding, DescriptorType, FilterMode,
+    FrontFace, ImageDataLayout, LoadOp, PrimitiveTopology, SamplerDescriptor, ShaderStages,
+    StoreOp, TextureDescriptor, TextureFormat, TextureUsage,
 };
 use game_render::graph::{Node, RenderContext, SlotLabel};
 use game_render::pipeline_cache::{PipelineBuilder, PipelineCache};
@@ -168,7 +167,7 @@ impl Node for PostProcessPass {
             name: "Post Process",
             color_attachments: &[RenderPassColorAttachment {
                 target: &output.create_view(&TextureViewDescriptor::default()),
-                load_op: LoadOp::Clear(Color::BLACK),
+                load_op: LoadOp::Clear(ClearValue::BLACK),
                 store_op: StoreOp::Store,
             }],
             depth_stencil_attachment: None,
