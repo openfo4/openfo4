@@ -19,3 +19,4 @@ num-traits = "0.2.19"
 parking_lot = "0.12.3"
 allocator-api2 = "0.2.21"
 hashbrown = { workspace = true }
+pin-project = "1.1.13"

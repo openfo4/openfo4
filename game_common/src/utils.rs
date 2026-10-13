@@ -4,12 +4,15 @@ pub mod vec_ext;
 mod duration;
 
 use std::fmt::{Arguments, Debug};
+use std::pin::Pin;
 use std::range::Range;
+use std::task::{Context, Poll};
 
 use glam::{Quat, Vec2, Vec3, Vec4};
 use num_traits::Float;
 
 pub use duration::DurationExt;
+use pin_project::{pin_project, pinned_drop};
 
 /// Floating-point approximate equality comparssion.
 ///
@@ -247,6 +250,66 @@ impl_extract_bits!(u16);
 impl_extract_bits!(u32);
 impl_extract_bits!(u64);
 impl_extract_bits!(usize);
+
+/// Wrapper for a [`Future`] that runs the given closure when it is dropped before becoming ready.
+///
+/// When `F` returns [`Poll::Ready`] the closure is dropped without being executed.
+#[pin_project(PinnedDrop)]
+pub struct AbortOnDrop<F, A>
+where
+    F: Future,
+    A: FnOnce(),
+{
+    #[pin]
+    future: F,
+    abort: Option<A>,
+}
+
+impl<F, A> AbortOnDrop<F, A>
+where
+    F: Future,
+    A: FnOnce(),
+{
+    /// Creates a new `AbortOnDrop` wrapping the given [`Future`] `F` and abort closure `A`.
+    pub fn new(future: F, abort: A) -> Self {
+        Self {
+            future,
+            abort: Some(abort),
+        }
+    }
+}
+
+impl<F, A> Future for AbortOnDrop<F, A>
+where
+    F: Future,
+    A: FnOnce(),
+{
+    type Output = F::Output;
+
+    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        let this = self.project();
+        match this.future.poll(cx) {
+            Poll::Pending => Poll::Pending,
+            Poll::Ready(val) => {
+                *this.abort = None;
+                Poll::Ready(val)
+            }
+        }
+    }
+}
+
+#[pinned_drop]
+impl<F, A> PinnedDrop for AbortOnDrop<F, A>
+where
+    F: Future,
+    A: FnOnce(),
+{
+    fn drop(self: Pin<&mut Self>) {
+        if let Some(abort) = self.project().abort.take() {
+            abort();
+        }
+    }
+}
 
 #[cfg(test)]
 mod tests {
