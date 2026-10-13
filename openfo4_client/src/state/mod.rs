@@ -270,7 +270,7 @@ impl GameState {
         handle_weapon_reload_requests(&mut self.world, &self.actions, &self.event_bus);
         handle_weapon_fire_events(&mut self.world, &self.physics, &mut self.event_bus);
         handle_weapon_reload_events(&mut self.world, &mut self.event_bus);
-        handle_weapon_hit_damage(&mut self.world, &mut self.event_bus);
+        handle_weapon_hit_damage(&mut self.world, &mut self.event_bus, &self.globals);
         handle_weapon_draw_events(&mut self.world, &mut self.event_bus);
 
         combat::handle_zero_health_events(&mut self.world, &mut self.event_bus);

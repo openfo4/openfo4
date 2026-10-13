@@ -82,6 +82,7 @@ pub async fn resolve_item(
                     visible: HashSet::new(),
                     script,
                     visibility: ItemVisibilityFlags::default(),
+                    resistances: Default::default(),
                 });
             }
             RecordData::Weapon(_) | RecordData::Armor(_) => {
@@ -121,6 +122,7 @@ pub async fn resolve_item(
                         slots: item.visibility_slots,
                         priority: VISIBILITY_PRIORITY_WEAPON_ARMOR,
                     },
+                    resistances: item.resistances,
                 });
             }
             RecordData::Ammo(data) => {
@@ -149,6 +151,7 @@ pub async fn resolve_item(
                     visible: HashSet::new(),
                     script,
                     visibility: ItemVisibilityFlags::default(),
+                    resistances: Default::default(),
                 });
             }
             RecordData::Ingestible(data) => {
@@ -177,6 +180,7 @@ pub async fn resolve_item(
                     visible: HashSet::new(),
                     script,
                     visibility: ItemVisibilityFlags::default(),
+                    resistances: Default::default(),
                 });
             }
             RecordData::Key(data) => {
@@ -205,6 +209,7 @@ pub async fn resolve_item(
                     visible: HashSet::new(),
                     script,
                     visibility: ItemVisibilityFlags::default(),
+                    resistances: Default::default(),
                 });
             }
             RecordData::Book(data) => {
@@ -233,6 +238,7 @@ pub async fn resolve_item(
                     visible: HashSet::new(),
                     script,
                     visibility: ItemVisibilityFlags::default(),
+                    resistances: Default::default(),
                 });
             }
             RecordData::Component(data) => {
@@ -254,6 +260,7 @@ pub async fn resolve_item(
                     visible: HashSet::new(),
                     script,
                     visibility: ItemVisibilityFlags::default(),
+                    resistances: Default::default(),
                 });
             }
             RecordData::Note(data) => {
@@ -275,6 +282,7 @@ pub async fn resolve_item(
                     visible: HashSet::new(),
                     script,
                     visibility: ItemVisibilityFlags::default(),
+                    resistances: Default::default(),
                 });
             }
             RecordData::HeadPart(data) => {
@@ -294,6 +302,7 @@ pub async fn resolve_item(
                     visible: HashSet::new(),
                     script: None,
                     visibility: ItemVisibilityFlags::default(),
+                    resistances: Default::default(),
                 });
             }
             x => todo!("{:?}", x),

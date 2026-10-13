@@ -15,9 +15,10 @@ use crate::events::combat::{BodyPartCrippleEvent, ReachedZeroHealthEvent};
 use crate::render::physics_debug::{DespawnAt, HitscanRaycast};
 use crate::state::actions::{Action, Actions};
 use crate::state::anim_starter::AnimationEventQueue;
-use crate::state::hardcoded::fallout4::ACTOR_VALUE_HEALTH;
+use crate::state::hardcoded::fallout4::{ACTOR_VALUE_HEALTH, apply_weapon_damage};
 use crate::state::npc::{ActorBodyParts, BodyPartBone};
 use crate::systems::actor_value::ActorValueProperties;
+use crate::systems::global::GlobalProperties;
 use crate::systems::inventory::{Inventory, ItemData};
 use crate::systems::{
     FacingDirection, GunFireEvent, GunFireRequest, GunReloadEvent, GunReloadRequest,
@@ -314,7 +315,11 @@ pub fn handle_weapon_reload_events(world: &mut World, events: &mut EventBus) {
     }
 }
 
-pub fn handle_weapon_hit_damage(world: &mut World, events: &mut EventBus) {
+pub fn handle_weapon_hit_damage(
+    world: &mut World,
+    events: &mut EventBus,
+    globals: &GlobalProperties,
+) {
     let mut zero_health_events = Vec::new();
     let mut cripple_events = Vec::new();
 
@@ -325,6 +330,7 @@ pub fn handle_weapon_hit_damage(world: &mut World, events: &mut EventBus) {
 
         let mut properties = entity.get::<&mut ActorValueProperties>().unwrap();
         let body_parts = entity.get::<&ActorBodyParts>().unwrap();
+        let inventory = entity.get::<&Inventory>();
 
         let Some(body_part) = body_parts.get(event.body_part) else {
             continue;
@@ -332,8 +338,29 @@ pub fn handle_weapon_hit_damage(world: &mut World, events: &mut EventBus) {
 
         let mut damage = 0.0;
         for (damage_type, damage_value) in &event.damage {
-            damage += *damage_value as f32 * body_part.damage_factor;
-            // TODO: Damage resistance
+            let resistance = if let Some(inventory) = inventory.as_ref() {
+                inventory
+                    .items()
+                    .map(|(_, item)| item)
+                    .filter(|item| item.equipped)
+                    .map(|item| {
+                        item.resistances
+                            .get(damage_type)
+                            .copied()
+                            .unwrap_or_default()
+                    })
+                    .sum()
+            } else {
+                0
+            };
+
+            let dmg = apply_weapon_damage(
+                *damage_type,
+                *damage_value as f32,
+                resistance as f32,
+                &globals.settings,
+            );
+            damage += dmg * body_part.damage_factor;
         }
 
         // If an actor gets hit twice this frame and the first

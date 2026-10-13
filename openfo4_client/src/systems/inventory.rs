@@ -118,6 +118,7 @@ pub struct ItemStack {
     pub script: Option<ScriptObject>,
     pub visibility: ItemVisibilityFlags,
     pub visible: HashSet<u32>,
+    pub resistances: HashMap<RecordId, u32>,
 }
 
 impl ItemStack {
