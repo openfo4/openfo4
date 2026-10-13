@@ -48,7 +48,6 @@ pub(super) struct PartialEntityFlagCounts {
     pub actor: usize,
     pub scene: usize,
     pub script: usize,
-    pub require_distant_lod: usize,
     pub lod_normal: usize,
     pub lod_distant0: usize,
 }
