@@ -3,6 +3,7 @@ use std::sync::Arc;
 use event_listener::EventListener;
 use game_common::collections::slab::Slab;
 use game_common::components::Transform;
+use game_common::utils::AbortOnDrop;
 use openfo4_core::ecs::Entity;
 use openfo4_core::record::RecordId;
 
@@ -62,7 +63,7 @@ impl EntityLoader {
             drop(entities);
         }
 
-        listener.await;
+        self.wait_until_loaded(id, info.flags, listener).await;
 
         let mut entities = self.state.entities.lock();
         let state = entities.entities.get_mut(id).unwrap();
@@ -195,24 +196,38 @@ impl EntityLoader {
         Ok(entity)
     }
 
-    async fn wait_until_loaded(
+    /// Wait until the given [`EntityId`] has been spawned by the [`Level`] after an [`Spawn`]
+    /// event was sent.
+    ///
+    /// [`Level`]: super::Level
+    /// [`Spawn`]: Event::Spawn
+    fn wait_until_loaded(
         &self,
         id: EntityId,
         flags: PartialEntityFlags,
         listener: EventListener,
-    ) -> EntityRef {
-        listener.await;
+    ) -> impl Future<Output = EntityRef> {
+        AbortOnDrop::new(
+            async move {
+                listener.await;
 
-        let mut entities = self.state.entities.lock();
-        let state = entities.entities.get_mut(id).unwrap();
+                let mut entities = self.state.entities.lock();
+                let state = entities.entities.get_mut(id).unwrap();
 
-        let entity = state.entity.unwrap();
-        EntityRef(Arc::new(EntityRefInner {
-            id,
-            entity,
-            flags,
-            state: Arc::clone(&self.state),
-        }))
+                let entity = state.entity.unwrap();
+                EntityRef(Arc::new(EntityRefInner {
+                    id,
+                    entity,
+                    flags,
+                    state: Arc::clone(&self.state),
+                }))
+            },
+            move || {
+                // We have already send a `Spawn` and the entity may already have been spawned
+                // so we must abort the same way as Dropping an EntityRef.
+                discard_entity_ref(id, flags, &self.state);
+            },
+        )
     }
 }
 
@@ -238,27 +253,7 @@ pub struct EntityRefInner {
 
 impl Drop for EntityRefInner {
     fn drop(&mut self) {
-        let mut entities = self.state.entities.lock();
-        let state = entities.entities.get_mut(self.id).unwrap();
-
-        state.ref_count -= 1;
-        if state.ref_count == 0 {
-            self.state.events.push(Event::Despawn { id: self.id });
-
-            if let Some(record) = state.record {
-                entities.records.remove(&record);
-            }
-
-            return;
-        }
-
-        let prev_flags = state.flags.flags();
-        state.flags -= self.flags;
-        if state.flags.flags() == prev_flags {
-            return;
-        }
-
-        // TODO: "Downgrade" the entity by dropping some data.
+        discard_entity_ref(self.id, self.flags, &self.state);
     }
 }
 
@@ -271,4 +266,28 @@ pub struct SpawnEntityInfo {
     /// Flag the new entity as persistent.
     pub persistent: bool,
     pub flags: PartialEntityFlags,
+}
+
+fn discard_entity_ref(id: EntityId, flags: PartialEntityFlags, lstate: &LoaderState) {
+    let mut entities = lstate.entities.lock();
+    let state = entities.entities.get_mut(id).unwrap();
+
+    state.ref_count -= 1;
+    if state.ref_count == 0 {
+        lstate.events.push(Event::Despawn { id });
+
+        if let Some(record) = state.record {
+            entities.records.remove(&record);
+        }
+
+        return;
+    }
+
+    let prev_flags = state.flags.flags();
+    state.flags -= flags;
+    if state.flags.flags() == prev_flags {
+        return;
+    }
+
+    // TODO: "Downgrade" the entity by dropping some data.
 }
