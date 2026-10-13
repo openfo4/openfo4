@@ -5,6 +5,7 @@ edition = "2024"
 publish = false
 
 [dependencies]
+game_common = { version = "0.1.0", path = "../game_common" }
 game_tasks = { version = "0.1.0", path = "../game_tasks" }
 
 parking_lot = "0.12.4"

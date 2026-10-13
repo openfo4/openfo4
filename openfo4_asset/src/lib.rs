@@ -8,6 +8,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 
 use dashmap::{DashMap, Entry};
 use event_listener::Event;
+use game_common::utils::AbortOnDrop;
 use hashbrown::{DefaultHashBuilder, HashMap};
 use parking_lot::RwLock;
 
@@ -180,7 +181,37 @@ impl AssetLoader {
         let ctx = unsafe { &*ctx };
 
         let owned_key = key.to_owned();
-        let res = T::load(self, &owned_key, ctx).await;
+        let res = AbortOnDrop::new(T::load(self, &owned_key, ctx), || {
+            let registry = self.registry.read();
+            // SAFETY: We have already accessed the registry for `T`
+            // above and if an asset exists once it can never be removed.
+            let assets = unsafe { registry.get::<T>().unwrap_unchecked() };
+
+            // NOTE: We have to use the entry API here, even if we know that
+            // the entry exists, because we need to have the ability to atomically
+            // remove the entry without releasing the slot previously.
+            let Entry::Occupied(entry) = assets.assets.entry(owned_key.clone()) else {
+                unreachable!();
+            };
+
+            // let entry = assets.assets.get_mut(key).unwrap();
+            let AssetEntry::Loading(waker) = entry.get() else {
+                unreachable!();
+            };
+
+            // Wake up all threads listening for our result.
+            // Note that the number of listeners cannot change while we have
+            // an exclusive lock on the slot.
+            waker.notify(waker.total_listeners());
+
+            // Remove the entry slot. All other threads listening
+            // on this slot are already awoken from the previous
+            // wake and may now try to access this slot.
+            // This means we must remove the slot from the map
+            // atomically.
+            entry.remove();
+        })
+        .await;
 
         let registry = self.registry.read();
         // SAFETY: We have already accessed the registry for `T`
@@ -543,7 +574,7 @@ mod tests {
     use std::sync::{Arc, Once};
     use std::thread;
 
-    use futures_lite::future::block_on;
+    use futures_lite::future::{block_on, poll_once, yield_now};
 
     use crate::{Asset, AssetLoader};
 
@@ -587,6 +618,23 @@ mod tests {
             }
 
             ONCE.call_once(|| {});
+            Ok(Self)
+        }
+    }
+
+    struct YieldOnceAsset;
+
+    impl Asset for YieldOnceAsset {
+        type Error = Infallible;
+        type Key = ();
+        type Context = ();
+
+        async fn load(
+            _loader: &AssetLoader,
+            _key: &Self::Key,
+            _ctx: &Self::Context,
+        ) -> Result<Self, Self::Error> {
+            yield_now().await;
             Ok(Self)
         }
     }
@@ -705,5 +753,15 @@ mod tests {
             s.spawn(|| block_on(loader.load::<AssetA, _>("")).unwrap());
             s.spawn(|| block_on(loader.load::<AssetA, _>("")).unwrap());
         });
+    }
+
+    #[test]
+    fn abort_load() {
+        let loader = AssetLoader::new();
+        loader.register::<YieldOnceAsset>(());
+
+        block_on(poll_once(loader.load::<YieldOnceAsset, _>(&())));
+        block_on(poll_once(loader.load::<YieldOnceAsset, _>(&())));
+        block_on(loader.load::<YieldOnceAsset, _>(&()));
     }
 }
