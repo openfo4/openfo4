@@ -61,7 +61,7 @@ use crate::systems::controller::{
     InputControllerMask, apply_player_movements, update_facing_direction,
 };
 use crate::systems::door::DoorSystem;
-use crate::systems::global::{Difficulty, GameRules, GlobalProperties, PlayTime};
+use crate::systems::global::{Difficulty, GameRules, GameSettings, GlobalProperties, PlayTime};
 use crate::systems::hierarchy::TransformHierarchyCache;
 use crate::systems::inventory::InventorySystem;
 use crate::systems::movement::apply_movement;
@@ -133,6 +133,7 @@ impl GameState {
             factions: Mutex::new(factions),
             mods: Default::default(),
             playtime: PlayTime::default(),
+            settings: GameSettings::load(&loader).await.unwrap(),
         });
 
         let executor = ExecutorBuilder::new(

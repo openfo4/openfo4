@@ -4,7 +4,11 @@ use std::time::Duration;
 use hashbrown::{HashMap, HashSet};
 use indexmap::IndexSet;
 use openfo4_core::record::RecordId;
+use openfo4_esp::records::TypedValue;
+use openfo4_esp::{RecordData, RecordKind};
 use parking_lot::Mutex;
+
+use crate::state::esp::{self, EspLoader};
 
 /// Globals valid across the entire game state.
 #[derive(Debug)]
@@ -16,6 +20,7 @@ pub struct GlobalProperties {
     pub factions: Mutex<HashMap<RecordId, Faction>>,
     pub mods: RecordModifications,
     pub playtime: PlayTime,
+    pub settings: GameSettings,
 }
 
 /// Set of game rules.
@@ -182,5 +187,60 @@ impl PlayTime {
     pub fn increase(&self, delta: Duration) {
         let mut dur = self.0.lock();
         *dur = dur.saturating_add(delta);
+    }
+}
+
+#[derive(Debug)]
+pub struct GameSettings {
+    values: Mutex<HashMap<RecordId, GameSettingValue>>,
+}
+
+impl GameSettings {
+    pub async fn load(loader: &EspLoader) -> Result<Self, esp::Error> {
+        let mut values = HashMap::new();
+        for record in loader.lookup_all(Some(RecordKind::GameSetting)).await? {
+            let RecordData::GameSetting(data) = record.local.data else {
+                continue;
+            };
+
+            let value = match data.data {
+                TypedValue::Int(v) => GameSettingValue::I32(v),
+                TypedValue::Float(v) => GameSettingValue::F32(v),
+                // TODO
+                _ => continue,
+            };
+
+            values.insert(record.id, value);
+        }
+
+        Ok(Self {
+            values: Mutex::new(values),
+        })
+    }
+
+    pub fn get(&self, id: RecordId) -> Option<GameSettingValue> {
+        self.values.lock().get(&id).copied()
+    }
+
+    pub fn set(&self, id: RecordId, value: GameSettingValue) {
+        // Don't insert the value if the key does not exist.
+        self.values.lock().entry(id).and_modify(|v| {
+            *v = value;
+        });
+    }
+}
+
+#[derive(Copy, Clone, Debug, PartialEq)]
+pub enum GameSettingValue {
+    I32(i32),
+    F32(f32),
+}
+
+impl GameSettingValue {
+    pub const fn as_f32(&self) -> Option<f32> {
+        match self {
+            Self::F32(v) => Some(*v),
+            _ => None,
+        }
     }
 }
