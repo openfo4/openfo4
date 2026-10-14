@@ -27,6 +27,7 @@ use records::{
 
 use crate::records::magic_effect::MagicEffect;
 use crate::records::object_modification::ObjectModification;
+use crate::records::package::Package;
 use crate::records::{
     ActorValueInfo, AddonNode, AimModel, AnimatedObject, Animation, AnimationSoundTagSet,
     ArmorAddon, ArtObject, AssocationType, AttractionRule, AudioCategorySnapshot, AudioEffectChain,
@@ -36,11 +37,10 @@ use crate::records::{
     FootstepSet, FormList, GodRays, ImageSpace, ImageSpaceAdapter, Impact, ImpactDataSet,
     InstanceNamingRules, Layer, LensFlare, LightingTemplate, LoadScreen, Location, MaterialObject,
     MaterialSwap, MaterialType, Message, MovementType, MusicTrack, MusicType, NAVI, NavMesh,
-    NavigationMeshObstacleManager, ObjectVisibilityManager, Outfit, PackIn, Package, Perk,
-    PlacedMissile, Quest, ReferenceGroup, Region, Relationship, ReverbParameters, Scene,
-    SceneCollection, SoundCategory, SoundDescriptor, SoundKeywordMapping, SoundOutputModel,
-    StoryManagerBranchNode, StoryManagerEventNode, StoryManagerQuestNode, Terminal, Tree,
-    VoiceType, Water, Weapon, Zoom,
+    NavigationMeshObstacleManager, ObjectVisibilityManager, Outfit, PackIn, Perk, PlacedMissile,
+    Quest, ReferenceGroup, Region, Relationship, ReverbParameters, Scene, SceneCollection,
+    SoundCategory, SoundDescriptor, SoundKeywordMapping, SoundOutputModel, StoryManagerBranchNode,
+    StoryManagerEventNode, StoryManagerQuestNode, Terminal, Tree, VoiceType, Water, Weapon, Zoom,
 };
 
 #[derive(Debug, Error)]
