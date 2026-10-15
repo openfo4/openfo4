@@ -172,7 +172,7 @@ pub fn apply_movement(world: &mut World, pipeline: &mut PhysicsPipeline, actions
         buffer.insert_one(
             entity,
             AnimMoveState {
-                is_moving: move_state.is_moving,
+                is_moving: move_state.is_moving && direction != Vec3::ZERO,
             },
         );
     }
