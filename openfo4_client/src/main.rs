@@ -80,7 +80,7 @@ struct Args {
 fn main() -> ExitCode {
     let args = Args::parse();
 
-    game_core::logger::init();
+    openfo4_core::logger::init();
 
     let config = match Config::from_file(&args.config) {
         Ok(config) => config,

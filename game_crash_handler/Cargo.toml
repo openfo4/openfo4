@@ -9,7 +9,7 @@ default = []
 tracy = ["game_tracing"]
 
 [dependencies]
-game_core = { version = "0.1.0", path = "../game_core" }
+openfo4_core = { version = "0.1.0", path = "../openfo4_core" }
 game_macros = { version = "0.1.0", path = "../game_macros" }
 game_tracing = { version = "0.1.0", path = "../game_tracing", features = ["tracy"], optional = true }
 

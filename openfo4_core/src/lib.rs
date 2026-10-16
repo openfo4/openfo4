@@ -4,6 +4,7 @@ use crate::hierarchy::Children;
 pub mod ecs;
 pub mod events;
 pub mod hierarchy;
+pub mod logger;
 pub mod path;
 pub mod record;
 pub mod transform;

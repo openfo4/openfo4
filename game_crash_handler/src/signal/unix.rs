@@ -4,7 +4,6 @@ use std::fmt::Write;
 use std::io;
 use std::os::raw::c_void;
 
-use game_core::logger::Logger;
 use linux_raw_sys::general::{
     BUS_ADRALN, BUS_ADRERR, BUS_OBJERR, FPE_FLTDIV, FPE_FLTINV, FPE_FLTOVF, FPE_FLTSUB, FPE_FLTUND,
     FPE_INTDIV, FPE_INTOVF, ILL_BADSTK, ILL_COPROC, ILL_ILLOPC, ILL_ILLOPN, ILL_ILLTRP, ILL_PRVOPC,
@@ -12,6 +11,7 @@ use linux_raw_sys::general::{
 };
 use nix::libc::{sigaltstack, siginfo_t, stack_t, sysconf, _SC_PAGESIZE};
 use nix::sys::signal::{sigaction, SaFlags, SigAction, SigHandler, SigSet, Signal};
+use openfo4_core::logger::Logger;
 use rustix::mm::{MapFlags, MprotectFlags, ProtFlags};
 
 const STACK_SIZE: usize = 64 * 1024;

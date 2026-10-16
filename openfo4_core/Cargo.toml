@@ -4,9 +4,14 @@ version = "0.1.0"
 edition = "2024"
 publish = false
 
+[features]
+default = []
+tracy = []
+
 [dependencies]
 game_common = { version = "0.1.0", path = "../game_common" }
 openfo4_esp = { version = "0.1.0", path = "../openfo4_esp" }
+game_tracing = { version = "0.1.0", path = "../game_tracing" }
 
 hecs = { workspace = true }
 glam = { workspace = true, features = ["bytemuck"] }
@@ -15,6 +20,11 @@ bstr = "1.12.1"
 parking_lot = "0.12.5"
 thiserror = "2.0.17"
 nohash-hasher = "0.2.0"
+
+# Logger
+tracing = { workspace = true }
+tracing-subscriber = { version = "0.3.18", default-features = false, features = ["registry"] }
+chrono = "0.4.38"
 
 [lints]
 workspace = true

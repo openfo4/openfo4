@@ -24,7 +24,7 @@ openfo4_nif = { version = "0.1.0", path = "../openfo4_nif" }
 openfo4_esp = { version = "0.1.0", path = "../openfo4_esp" }
 openfo4_dds = { version = "0.1.0", path = "../openfo4_dds" }
 openfo4_hkx = { version = "0.1.0", path = "../openfo4_hkx" }
-openfo4_core = { version = "0.1.0", path = "../openfo4_core" }
+openfo4_core = { version = "0.1.0", path = "../openfo4_core", features = ["tracy"] }
 openfo4_physics = { version = "0.1.0", path = "../openfo4_physics" }
 openfo4_animation = { version = "0.1.0", path = "../openfo4_animation" }
 openfo4_asset = { version = "0.1.0", path = "../openfo4_asset" }

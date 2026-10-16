@@ -12,9 +12,9 @@ use tracing::field::{Field, Visit};
 use tracing::metadata::LevelFilter;
 use tracing::subscriber::set_global_default;
 use tracing::{Event, Level, Subscriber};
+use tracing_subscriber::Layer;
 use tracing_subscriber::layer::{Context, SubscriberExt};
 use tracing_subscriber::registry::LookupSpan;
-use tracing_subscriber::Layer;
 
 static LOGGER: OnceLock<Logger> = OnceLock::new();
 
