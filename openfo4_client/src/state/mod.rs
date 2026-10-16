@@ -17,7 +17,6 @@ use std::time::{Duration, Instant};
 
 use esp::EspLoader;
 use game_common::components::{Color, Transform};
-use game_core::counter::Interval;
 use game_core_pipeline::material::StandardMaterial;
 use game_gizmos::Gizmos;
 use game_input::keyboard::KeyCode;
@@ -41,6 +40,7 @@ use crate::assets::init_asset_loader;
 use crate::cell::CellId;
 use crate::components::{ActorMarker, Camera, NiTransform, Player, Root, WorldSpace};
 use crate::config::Config;
+use crate::interval::Interval;
 use crate::loader::FileLoader;
 use crate::render::RenderObject;
 use crate::render::physics_debug::despawn_expired;

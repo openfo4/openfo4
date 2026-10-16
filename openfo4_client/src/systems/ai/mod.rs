@@ -3,7 +3,6 @@ use std::time::Instant;
 use game_ai::navmesh::{Agent, Mesh, NavMesh, Path};
 use game_common::components::Transform;
 use game_common::math::Ray;
-use game_core::counter::Interval;
 use game_tracing::trace_span;
 use glam::Vec3;
 use hashbrown::HashMap;
@@ -14,6 +13,7 @@ use openfo4_esp::FormId;
 use slab::Slab;
 
 use crate::components::{Grounded, Player, WorldSpace};
+use crate::interval::Interval;
 use crate::state::hardcoded::HARDCODED_MODULE_ID;
 use crate::systems::ai::combat::{CombatBehavior, DefaultCombatPackageConfig};
 use crate::systems::ai::movement::MoveTo;

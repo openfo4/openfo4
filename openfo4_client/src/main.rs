@@ -3,6 +3,7 @@ mod cell;
 mod components;
 mod config;
 mod events;
+mod interval;
 mod loader;
 mod render;
 mod shared;
