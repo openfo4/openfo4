@@ -958,9 +958,9 @@ dependencies = [
 
 [[package]]
 name = "crossbeam-queue"
-version = "0.3.12"
+version = "0.3.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0f58bbc28f91df819d0aa2a2c00cd19754769c2fad90579b3592b1c9ba7a3115"
+checksum = "03e8bd762f7479489c70ed6c768ddca99d7296857de437a68dcb2a94365b3fae"
 dependencies = [
  "crossbeam-utils",
 ]
@@ -1379,21 +1379,8 @@ dependencies = [
  "hashbrown 0.16.1",
  "num-traits",
  "parking_lot",
+ "pin-project",
  "thiserror 1.0.69",
-]
-
-[[package]]
-name = "game_core"
-version = "0.1.0"
-dependencies = [
- "async-io",
- "chrono",
- "game_common",
- "game_tracing",
- "glam 0.33.3",
- "parking_lot",
- "tracing",
- "tracing-subscriber",
 ]
 
 [[package]]
@@ -1418,11 +1405,11 @@ dependencies = [
 name = "game_crash_handler"
 version = "0.1.0"
 dependencies = [
- "game_core",
  "game_macros",
  "game_tracing",
  "linux-raw-sys 0.6.5",
  "nix",
+ "openfo4_core",
  "rustix 0.38.44",
 ]
 
@@ -1462,7 +1449,6 @@ dependencies = [
  "bevy_mikktspace",
  "bytes",
  "game_common",
- "game_core",
  "game_render",
  "game_tracing",
  "glam 0.33.3",
@@ -2461,7 +2447,6 @@ version = "0.1.0"
 dependencies = [
  "bitflags 2.10.0",
  "game_common",
- "game_core",
  "game_tracing",
  "glam 0.33.3",
  "hecs",
@@ -2481,6 +2466,7 @@ dependencies = [
  "dashmap",
  "event-listener",
  "futures-lite",
+ "game_common",
  "game_tasks",
  "hashbrown 0.16.1",
  "parking_lot",
@@ -2515,7 +2501,6 @@ dependencies = [
  "futures-lite",
  "game_ai",
  "game_common",
- "game_core",
  "game_core_pipeline",
  "game_crash_handler",
  "game_egui",
@@ -2559,7 +2544,9 @@ name = "openfo4_core"
 version = "0.1.0"
 dependencies = [
  "bstr",
+ "chrono",
  "game_common",
+ "game_tracing",
  "glam 0.33.3",
  "hashbrown 0.16.1",
  "hecs",
@@ -2567,6 +2554,8 @@ dependencies = [
  "openfo4_esp",
  "parking_lot",
  "thiserror 2.0.17",
+ "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]
