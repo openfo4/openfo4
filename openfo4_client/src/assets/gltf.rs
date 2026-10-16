@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
+use game_common::collections::hierarchy::Hierarchy;
 use game_common::components::Transform;
-use game_core::hierarchy::Hierarchy;
 use game_core_pipeline::entities::{ImageHandle, MaterialHandle, MeshHandle};
 use game_core_pipeline::material::{AlphaMode, StandardMaterial};
 use game_gltf::types::{GltfMaterial, GltfMesh, TextureIndex};

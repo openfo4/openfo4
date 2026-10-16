@@ -3,8 +3,7 @@ use std::{
     time::Duration,
 };
 
-use game_common::{components::Transform, utils::DurationExt};
-use game_core::hierarchy::Key;
+use game_common::{collections::hierarchy::Key, components::Transform, utils::DurationExt};
 use glam::{EulerRot, Quat, Vec3, Vec4};
 use hashbrown::HashMap;
 use openfo4_nif::{Block, BlockRef, Nif};

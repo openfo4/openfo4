@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use game_core::hierarchy::Key;
+use game_common::collections::hierarchy::Key;
 use game_core_pipeline::material::StandardMaterial;
 use hashbrown::HashMap;
 use openfo4_asset::Handle;

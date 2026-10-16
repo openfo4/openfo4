@@ -1,6 +1,7 @@
 use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
 
+use game_common::collections::hierarchy;
 use game_common::components::Transform;
 use game_tasks::TaskPool;
 use game_tracing::trace_span;
@@ -179,7 +180,7 @@ fn merge_skeletons(nif: &NifScene, hkx: &Skeleton) -> Skeleton {
         bone.name = bone.name.to_lowercase();
     }
 
-    let mut bones: HashMap<game_core::hierarchy::Key, usize> = HashMap::new();
+    let mut bones: HashMap<hierarchy::Key, usize> = HashMap::new();
 
     let mut queue = VecDeque::new();
     queue.extend(nif.nodes.root_keys());

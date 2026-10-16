@@ -8,8 +8,8 @@ mod physics;
 use std::collections::VecDeque;
 
 use bitflags::bitflags;
+use game_common::collections::hierarchy::{Hierarchy, Key};
 use game_common::components::{Color, Transform};
-use game_core::hierarchy::{Hierarchy, Key};
 use game_core_pipeline::entities::{Entities, MaterialHandle};
 use game_core_pipeline::material::{AlphaMode, StandardMaterial};
 use hashbrown::HashMap;

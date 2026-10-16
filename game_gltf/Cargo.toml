@@ -12,7 +12,6 @@ base64 = "0.22.1"
 bytes = "1.6.0"
 game_render = { version = "0.1.0", path = "../game_render" }
 game_common = { version = "0.1.0", path = "../game_common" }
-game_core = { version = "0.1.0", path = "../game_core" }
 game_tracing = { version = "0.1.0", path = "../game_tracing" }
 
 glam = { workspace = true }

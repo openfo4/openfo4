@@ -1,4 +1,4 @@
-use game_core::hierarchy::Hierarchy;
+use game_common::collections::hierarchy::Hierarchy;
 
 use crate::GltfNode;
 

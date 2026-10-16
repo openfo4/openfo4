@@ -2,6 +2,7 @@ pub mod aligned_box;
 pub mod arena;
 pub mod bimap;
 pub mod bit_vec;
+pub mod hierarchy;
 pub mod linked_list;
 pub mod lru;
 pub mod scratch_buffer;
