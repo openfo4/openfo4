@@ -8,6 +8,7 @@ mod render;
 mod shared;
 mod state;
 mod systems;
+mod time;
 mod ui;
 
 use std::num::NonZeroUsize;
@@ -16,7 +17,6 @@ use std::process::ExitCode;
 use std::sync::Arc;
 
 use clap::Parser;
-use game_core::time::Time;
 use game_crash_handler::main;
 use game_egui::EguiContext;
 use game_gizmos::Gizmos;
@@ -55,6 +55,7 @@ use crate::state::hardcoded::ACTOR_PLAYER;
 use crate::state::hardcoded::HARDCODED_MODULE_ID;
 use crate::systems::inventory::AddItemEventAsync;
 use crate::systems::inventory::EquipItemEvent;
+use crate::time::Time;
 
 #[derive(Clone, Debug, Parser)]
 #[command(version, about, long_about = None)]

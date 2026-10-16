@@ -18,7 +18,6 @@ use std::time::{Duration, Instant};
 use esp::EspLoader;
 use game_common::components::{Color, Transform};
 use game_core::counter::Interval;
-use game_core::time::Time;
 use game_core_pipeline::material::StandardMaterial;
 use game_gizmos::Gizmos;
 use game_input::keyboard::KeyCode;
@@ -77,6 +76,7 @@ use crate::systems::weather::WeatherSystem;
 use crate::systems::{
     self, GunFireRequest, GunReloadRequest, PlayerControlState, WeaponDrawRequest, combat,
 };
+use crate::time::Time;
 
 pub const UPS: u32 = 60;
 
