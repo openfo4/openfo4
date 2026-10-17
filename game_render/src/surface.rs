@@ -2,7 +2,7 @@ use std::collections::{HashMap, VecDeque};
 
 use game_window::windows::{WindowId, WindowState};
 use glam::UVec2;
-use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
+use raw_window_handle::{HasDisplayHandle, HasWindowHandle};
 
 use crate::FpsLimit;
 use crate::api::Texture;
@@ -131,8 +131,8 @@ fn create_surface(
     let surface = unsafe {
         instance
             .create_surface(
-                window.raw_display_handle().unwrap(),
-                window.raw_window_handle().unwrap(),
+                window.display_handle().unwrap().as_raw(),
+                window.window_handle().unwrap().as_raw(),
             )
             .unwrap()
     };
