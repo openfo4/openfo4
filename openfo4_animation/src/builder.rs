@@ -9,6 +9,7 @@ mod bs_is_active_modifier;
 mod bs_modify_once_modifier;
 mod bs_offset_animation_generator;
 mod bs_random_alarm_modifier;
+mod bs_root_twist_modifier;
 mod bs_timer_modifier;
 mod bsi_state_tagging_generator;
 mod clip_generator;
@@ -497,7 +498,7 @@ impl BuildNode for HkObject {
             Self::ReferencePoseGenerator(node) => Ok(Vec::new()),
             Self::GetHandleOnBoneModifier(node) => Ok(Vec::new()),
             Self::HandIkControlsModifier(node) => Ok(Vec::new()),
-            Self::BSRootTwistModifier(node) => Ok(Vec::new()),
+            Self::BSRootTwistModifier(node) => node.dependencies(ctx),
             Self::BSLookAtModifier(node) => Ok(Vec::new()),
             Self::BSGetTimeStepModifier(node) => Ok(Vec::new()),
             Self::BSBoneSwitchGenerator(node) => Ok(Vec::new()),
@@ -550,7 +551,7 @@ impl BuildNode for HkObject {
             Self::ReferencePoseGenerator(node) => Ok(None),
             Self::GetHandleOnBoneModifier(node) => Ok(None),
             Self::HandIkControlsModifier(node) => Ok(None),
-            Self::BSRootTwistModifier(node) => Ok(None),
+            Self::BSRootTwistModifier(node) => node.build(state),
             Self::BSLookAtModifier(node) => Ok(None),
             Self::BSGetTimeStepModifier(node) => Ok(None),
             Self::BSBoneSwitchGenerator(node) => Ok(None),

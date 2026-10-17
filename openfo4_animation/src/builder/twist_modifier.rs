@@ -7,6 +7,7 @@ use crate::{Value, ValueExpression};
 
 impl BuildNode for TwistModifier {
     fn build(&self, ctx: &mut BuilderContext<'_>) -> Result<Option<Node>, Error> {
+        let mut enable = ValueExpression::Const(Value::Bool(self.parent.enable));
         let axis = self.axis_of_rotation.truncate();
         let mut angle = ValueExpression::Const(Value::F32(self.twist_angle));
         let start_bone = self.start_bone_index;
@@ -19,6 +20,7 @@ impl BuildNode for TwistModifier {
                     .unwrap();
 
                 match &*binding.member_path {
+                    "enable" => enable = ValueExpression::Variable(variable),
                     "twistAngle" => angle = ValueExpression::Variable(variable),
                     name => {
                         return Err(Error::UnknownVariableName(UnknownVariableName {
@@ -33,6 +35,7 @@ impl BuildNode for TwistModifier {
         Ok(Some(Node {
             name: self.parent.node.name.clone(),
             inner: NodeInner::Twist(Twist {
+                enable,
                 axis,
                 angle,
                 start_bone: start_bone as usize,

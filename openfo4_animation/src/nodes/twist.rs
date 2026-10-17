@@ -6,6 +6,7 @@ use crate::nodes::{Context, GraphNode, Modifier, OffsetModifier};
 
 #[derive(Clone, Debug)]
 pub struct Twist {
+    pub enable: ValueExpression,
     pub axis: Vec3,
     pub angle: ValueExpression,
     pub start_bone: usize,
@@ -17,6 +18,10 @@ impl GraphNode for Twist {
     where
         T: Context,
     {
+        if self.enable.eval(ctx.variables()).to_bool() != Some(true) {
+            return;
+        }
+
         let angle = self.angle.eval(ctx.variables()).to_f32().unwrap();
 
         let mut bones = Vec::new();
