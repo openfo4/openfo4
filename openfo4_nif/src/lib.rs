@@ -45,7 +45,7 @@ impl Nif {
             strings: Vec::new(),
         };
 
-        let user_version = reader.get_u32()?;
+        let _user_version = reader.get_u32()?;
         let num_blocks = reader.get_u32()?;
 
         read_bs_header(&mut reader)?;
@@ -1121,29 +1121,6 @@ impl Decode for Quat {
     }
 }
 
-#[derive(Copy, Clone, Debug)]
-pub struct VertexDesc {
-    pub flags: VertexFlags,
-}
-
-bitflags! {
-    #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
-    pub struct VertexFlags: u64 {
-        const VERTEX = 1 << 0;
-        const TEX_COORD_0 = 1 << 1;
-        const TEX_COORD_1 = 1 << 2;
-        const NORMAL = 1 << 3;
-        const TANGENT = 1 << 4;
-        const COLOR = 1 << 5;
-        const SKINNING = 1 << 6;
-        const LANDDATA = 1 << 7;
-        const EYEDATA = 1 << 8;
-        const FULL_PRECISION = 0x400;
-    }
-}
-
-const DESC_MASK_OFFSET: u64 = 0xFFFFFF0000000000;
-
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub struct HVec3 {
     pub x: f16,
@@ -1191,36 +1168,6 @@ impl Decode for HVec2 {
         let y = reader.get_f16()?;
         Ok(Self { x, y })
     }
-}
-
-#[derive(Copy, Clone, Debug)]
-struct VertexDescriptor(u64);
-
-impl VertexDescriptor {
-    const fn flags(&self) -> VertexFlags {
-        VertexFlags::from_bits_truncate(self.0 >> 44)
-    }
-
-    const fn vertex_size(&self) -> u64 {
-        (self.0 & 0xf) * 4
-    }
-
-    const fn attribute_offset(&self, attr: VertexAttribute) -> u64 {
-        (self.0 >> (4 * attr as u8 + 2)) & 0x3c
-    }
-}
-
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
-enum VertexAttribute {
-    Position = 0,
-    TexCoord0 = 1,
-    TexCoord1 = 2,
-    Normal = 3,
-    Tangent = 4,
-    Color = 5,
-    Skinning = 6,
-    Landdata = 7,
-    EyeData = 8,
 }
 
 #[derive(Copy, Clone, Debug)]

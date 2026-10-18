@@ -306,7 +306,7 @@ enum VertexAttribute {
 
 bitflags! {
     #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
-    pub struct VertexFlags: u64 {
+    struct VertexFlags: u64 {
         const VERTEX = 1 << 0;
         const TEX_COORD_0 = 1 << 1;
         const TEX_COORD_1 = 1 << 2;
