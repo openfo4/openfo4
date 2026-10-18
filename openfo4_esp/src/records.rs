@@ -398,12 +398,9 @@ pub struct Model {
 
 #[derive(Clone, Debug)]
 pub struct ModelInfo {
-    a: u32,
-    b: u32,
-    c: u32,
-    d: u32,
-    e: u32,
-    textures: Vec<ZString>,
+    pub textures: Vec<ModelFileInfo>,
+    pub addons: Vec<u32>,
+    pub materials: Vec<ModelFileInfo>,
 }
 
 impl Decode for ModelInfo {
@@ -414,44 +411,46 @@ impl Decode for ModelInfo {
         B: Buf,
     {
         let header_size = u32::decode(&mut buf)?;
-        let texture_count = if header_size >= 1 {
-            u32::decode(&mut buf)?
-        } else {
-            0
-        };
-        let addon_count = if header_size >= 2 {
-            u32::decode(&mut buf)?
-        } else {
-            0
-        };
-        let texture_sets = if header_size >= 3 {
-            u32::decode(&mut buf)?
-        } else {
-            0
-        };
-        let material_count = if header_size >= 4 {
-            u32::decode(&mut buf)?
-        } else {
-            0
-        };
+        let texture_count = (header_size >= 1)
+            .then(|| u32::decode(&mut buf))
+            .transpose()?
+            .unwrap_or_default();
+        let addon_count = (header_size >= 2)
+            .then(|| u32::decode(&mut buf))
+            .transpose()?
+            .unwrap_or_default();
+        let _unknown = (header_size >= 3)
+            .then(|| u32::decode(&mut buf))
+            .transpose()?
+            .unwrap_or_default();
+        let material_count = (header_size >= 4)
+            .then(|| u32::decode(&mut buf))
+            .transpose()?
+            .unwrap_or_default();
 
-        let mut textures = Vec::new();
-        for _ in 0..texture_count {
-            // let x = u32::decode(&mut buf)?;
-            // let x = <[u8; 4]>::decode(&mut buf)?;
-            // let texture = ZString::decode(&mut buf)?;
-            // textures.push(texture);
-        }
+        let textures = (0..texture_count)
+            .map(|_| ModelFileInfo::decode(&mut buf))
+            .collect::<Result<_, _>>()?;
+        let addons = (0..addon_count)
+            .map(|_| u32::decode(&mut buf))
+            .collect::<Result<_, _>>()?;
+        let materials = (0..material_count)
+            .map(|_| ModelFileInfo::decode(&mut buf))
+            .collect::<Result<_, _>>()?;
 
         Ok(Self {
-            a: header_size,
-            b: texture_count,
-            c: addon_count,
-            d: texture_sets,
-            e: material_count,
             textures,
+            addons,
+            materials,
         })
     }
+}
+
+#[derive(Copy, Clone, Debug, BinaryStruct)]
+pub struct ModelFileInfo {
+    pub file_hash: u32,
+    pub extension: Text<4>,
+    pub directory_hash: u32,
 }
 
 #[derive(Clone, Debug, Record)]
