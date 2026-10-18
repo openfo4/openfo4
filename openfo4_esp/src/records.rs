@@ -1,3 +1,4 @@
+pub mod faction;
 pub mod magic_effect;
 pub mod object_modification;
 pub mod package;
@@ -315,94 +316,6 @@ pub struct Class {
     pub inventory_image: Option<ZString>,
     #[record("PRPS")]
     pub properties: Array<Property>,
-}
-
-#[derive(Clone, Debug, Record)]
-pub struct FACT {
-    /// Editor ID
-    #[record("EDID")]
-    pub id: Option<ZString>,
-    #[record("FULL")]
-    pub full_name: Option<LString>,
-    #[record("XNAM")]
-    pub relations: Vec<FactionRelation>,
-    #[record("DATA")]
-    pub flags: u32,
-    #[record("JAIL")]
-    pub jail_marker: Option<FormId>,
-    #[record("WAIT")]
-    pub follower_wait_marker: Option<FormId>,
-    #[record("STOL")]
-    pub stolen_items_container: Option<FormId>,
-    #[record("PLCN")]
-    pub player_inventory_container: Option<FormId>,
-    #[record("CRGR")]
-    pub shared_crime_faction_list: Option<FormId>,
-    #[record("JOUT")]
-    pub jail_outfit: Option<FormId>,
-    #[record("CRVA")]
-    pub crime_values: Option<FactionCrimeValues>,
-    #[record("RNAM")]
-    pub ranks: Vec<u32>,
-    #[record("MNAM")]
-    pub mnam: Vec<LString>,
-    #[record("FNAM")]
-    pub fnam: Vec<LString>,
-    #[record("VEND")]
-    pub vend: Option<FormId>,
-    #[record("VENC")]
-    pub venc: Option<FormId>,
-    #[record("VENV")]
-    pub venv: Option<FACT_VENV>,
-    #[record("PLVD")]
-    pub plvd: Option<FACT_PLVD>,
-}
-
-#[derive(Copy, Clone, Debug, BinaryStruct)]
-pub struct FactionRelation {
-    pub faction: FormId,
-    _unknown0: i32,
-    pub combat_reaction: FactionCombatReaction,
-}
-
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, BinaryStruct)]
-#[primitive(u32)]
-pub enum FactionCombatReaction {
-    Neutral = 0,
-    Enemy = 1,
-    Ally = 2,
-    Friend = 3,
-}
-
-#[derive(Copy, Clone, Debug, BinaryStruct)]
-pub struct FactionCrimeValues {
-    arrest: u8,
-    attack_on_sight: u8,
-    murder: u16,
-    assault: u16,
-    trespass: u16,
-    pickpocket: u16,
-    _unused: u16,
-    steal_mult: f32,
-    escape: u16,
-    werewolf: u16,
-}
-
-#[derive(Copy, Clone, Debug, BinaryStruct)]
-pub struct FACT_VENV {
-    pub start_hour: u16,
-    pub end_hour: u16,
-    pub radius: u32,
-    pub buys_stolen: u8,
-    pub invert_sell_buy_list: u8,
-    _unused0: u16,
-}
-
-#[derive(Copy, Clone, Debug, BinaryStruct)]
-pub struct FACT_PLVD {
-    pub specification_type: u32,
-    pub form: FormId,
-    _unused: u32,
 }
 
 #[derive(Clone, Debug, Record)]

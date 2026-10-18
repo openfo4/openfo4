@@ -18,13 +18,14 @@ use std::mem::MaybeUninit;
 use bytes::Buf;
 use records::{
     AcousticSpace, Action, Activator, Ammo, Armor, Book, Cell, Class, Climate, Component,
-    Container, DMGT, Door, ENCH, FACT, FLOR, Furniture, GLOB, GRAS, GameSetting, Hazard, HeadPart,
-    INGR, IdleMarker, Ingestible, Key, Keyword, Land, LandTexture, LeveledActor, LeveledItem,
-    Light, LocationReferenceType, MSTT, MiscObject, Note, Npc, PlacedGrenade, PlacedHazard,
-    PlacedNpc, PlacedObject, Projectile, Race, SOUN, SPEL, STAT, ShaderParticleGeometry,
-    StaticCollection, TACT, TRNS, Tes4, TextureSet, VisualEffect, Weather, Worldspace,
+    Container, DMGT, Door, ENCH, FLOR, Furniture, GLOB, GRAS, GameSetting, Hazard, HeadPart, INGR,
+    IdleMarker, Ingestible, Key, Keyword, Land, LandTexture, LeveledActor, LeveledItem, Light,
+    LocationReferenceType, MSTT, MiscObject, Note, Npc, PlacedGrenade, PlacedHazard, PlacedNpc,
+    PlacedObject, Projectile, Race, SOUN, SPEL, STAT, ShaderParticleGeometry, StaticCollection,
+    TACT, TRNS, Tes4, TextureSet, VisualEffect, Weather, Worldspace,
 };
 
+use crate::records::faction::Faction;
 use crate::records::magic_effect::MagicEffect;
 use crate::records::object_modification::ObjectModification;
 use crate::records::package::Package;
@@ -581,7 +582,7 @@ where
             GlobalVariable => GLOB,
             DamageType => DMGT,
             Class => Class,
-            Faction => FACT,
+            Faction => Faction,
             HeadPart => HeadPart,
             Race => Race,
             Sound => SOUN,
@@ -801,7 +802,7 @@ pub enum RecordData {
     GLOB(GLOB),
     DMGT(DMGT),
     Class(Class),
-    FACT(FACT),
+    Faction(Faction),
     HeadPart(HeadPart),
     Race(Race),
     SOUN(SOUN),
@@ -992,7 +993,7 @@ as_record_kind_impl! {
     GLOB => RecordKind::GlobalVariable,
     DMGT => RecordKind::DamageType,
     Class => RecordKind::Class,
-    FACT => RecordKind::Faction,
+    Faction => RecordKind::Faction,
     HeadPart => RecordKind::HeadPart,
     Race => RecordKind::Race,
     SOUN => RecordKind::Sound,

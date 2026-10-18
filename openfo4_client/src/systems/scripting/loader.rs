@@ -1085,7 +1085,7 @@ fn record_script_name(data: &RecordData) -> Option<&'static str> {
         RecordData::EffectShader(_) => Some("EffectShader"),
         RecordData::EncounterZone(_) => Some("EncounterZone"),
         RecordData::Explosion(_) => Some("Explosion"),
-        RecordData::FACT(_) => Some("Faction"),
+        RecordData::Faction(_) => Some("Faction"),
         RecordData::FLOR(_) => Some("Flora"),
         RecordData::FormList(_) => Some("FormList"),
         RecordData::Furniture(_) => Some("Furniture"),

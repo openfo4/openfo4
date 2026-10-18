@@ -1,6 +1,6 @@
 use hashbrown::HashMap;
 use openfo4_core::record::RecordId;
-use openfo4_esp::records::FactionCombatReaction;
+use openfo4_esp::records::faction::FactionCombatReaction;
 use openfo4_esp::{RecordData, RecordKind};
 
 use crate::state::esp::EspLoader;
@@ -57,7 +57,7 @@ pub async fn load_factions(esp_loader: &EspLoader) -> HashMap<RecordId, Faction>
         .await
         .unwrap()
     {
-        let RecordData::FACT(faction) = record.local.data else {
+        let RecordData::Faction(faction) = record.local.data else {
             unreachable!();
         };
 
@@ -67,7 +67,7 @@ pub async fn load_factions(esp_loader: &EspLoader) -> HashMap<RecordId, Faction>
                 .resolve_form(relation.faction, record.id)
                 .unwrap();
 
-            let reaction = match relation.combat_reaction {
+            let reaction = match relation.reaction {
                 FactionCombatReaction::Neutral => FactionReaction::Neutral,
                 FactionCombatReaction::Ally => FactionReaction::Ally,
                 FactionCombatReaction::Enemy => FactionReaction::Enemy,
