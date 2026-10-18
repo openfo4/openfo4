@@ -44,10 +44,7 @@ flate2 = { version = "1.1.9", default-features = false, features = ["zlib-rs"] }
 [workspace.lints.rust]
 renamed_and_removed_lints = "forbid"
 unsafe_op_in_unsafe_fn = "forbid"
-ffi-unwind-calls = "forbid"
-missing-abi = "forbid"
-non-ascii-idents = "forbid"
-#pointer_structural_match = "forbid"
+non_ascii_idents = "forbid"
 unexpected_cfgs = { level = "warn", check-cfg = [
     'cfg(loom)',
     'cfg(openfo4_embed_shaders)',
