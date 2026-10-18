@@ -1145,7 +1145,7 @@ pub struct Activator {
     #[record("DEST")]
     pub dest: Option<()>,
     #[record("KSIZ")]
-    keyword_count: Option<u32>,
+    _keyword_count: Option<u32>,
     #[record("KWDA")]
     pub keywords: Option<Array<FormId>>,
     #[record("PRPS")]
@@ -1463,7 +1463,7 @@ pub struct Container {
     #[record("MODL")]
     pub model: Model,
     #[record("COCT")]
-    items_count: Option<u32>,
+    _items_count: Option<u32>,
     #[record("CNTO")]
     pub items: Vec<ContainerItem>,
     // TODO: Add this
@@ -1472,7 +1472,7 @@ pub struct Container {
     #[record("DATA")]
     pub data: ContainerData,
     #[record("KSIZ")]
-    keyword_count: Option<u32>,
+    _keyword_count: Option<u32>,
     #[record("KWDA")]
     pub keywords: Option<Array<FormId>>,
     #[record("FTYP")]
@@ -2009,7 +2009,7 @@ pub struct Furniture {
     #[record("DEST")]
     pub dest: Option<()>,
     #[record("KSIZ")]
-    keyword_size: Option<u32>,
+    _keyword_size: Option<u32>,
     #[record("KWDA")]
     pub keywords: Option<Array<FormId>>,
     #[record("PNAM")]
@@ -2468,13 +2468,13 @@ pub struct Npc {
     #[record("RCLR")]
     pub follower_elevator_package_list: Option<FormId>,
     #[record("PRKZ")]
-    perk_count: Option<u32>,
+    _perk_count: Option<u32>,
     #[record("PRKR")]
     pub perks: Vec<NpcPerk>,
     #[record("PRPS")]
     pub properties: Array<Property>,
     #[record("COCT")]
-    count_of_container: Option<u32>,
+    _count_of_container: Option<u32>,
     #[record("CNTO")]
     pub items: Vec<NpcContainerObject>,
     #[record("COED")]
@@ -2484,7 +2484,7 @@ pub struct Npc {
     #[record("PKID")]
     pub ai_packages: Vec<FormId>,
     #[record("KSIZ")]
-    keyword_count: Option<u32>,
+    _keyword_count: Option<u32>,
     #[record("KWDA")]
     pub keywords: Option<Array<FormId>>,
     // attach_parent_slot
@@ -2913,13 +2913,13 @@ pub struct IdleMarker {
     #[record("OBND")]
     pub object_bounds: Bounds,
     #[record("KSIZ")]
-    keyword_count: Option<u32>,
+    _keyword_count: Option<u32>,
     #[record("KWDA")]
     pub keywords: Vec<FormId>,
     #[record("IDLF")]
     pub flags: Option<IdleMarkerFlags>,
     #[record("IDLC")]
-    idle_animation_count: Option<u8>,
+    _idle_animation_count: Option<u8>,
     #[record("IDLT")]
     pub idle_timer_setting: Option<f32>,
     #[record("IDLA")]
@@ -3244,7 +3244,7 @@ pub struct LeveledItem {
     #[record("LVLG")]
     pub use_global: Option<FormId>,
     #[record("LLCT")]
-    leveled_list_entries_count: Option<u8>,
+    _leveled_list_entries_count: Option<u8>,
     #[record("LVLO")]
     pub entries: Vec<LeveledListEntry>,
     //COED
