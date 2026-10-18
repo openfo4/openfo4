@@ -16,7 +16,6 @@ use game_core_pipeline::lights::{AmbientLight, DirectionalLight, Light, PointLig
 use game_gizmos::Gizmos;
 use game_render::RenderTarget;
 use game_render::Renderer;
-use game_tasks::TaskPool;
 use game_tracing::trace_span;
 use glam::UVec2;
 use hashbrown::HashMap;
@@ -32,7 +31,6 @@ pub struct RenderState {
     cameras: HashMap<Entity, CameraHandle>,
     target: RenderTarget,
     pub target_size: UVec2,
-    task_pool: TaskPool,
     shared: Arc<SharedState>,
     // FIXME: worldspace cleanup,
     // for now we never destroy scenes when all entities are dropped.
@@ -60,7 +58,6 @@ impl RenderState {
             cameras: HashMap::new(),
             target,
             target_size: UVec2::ZERO,
-            task_pool: TaskPool::new(1),
             objects: HashMap::new(),
             shared,
             gizmos,
@@ -73,7 +70,7 @@ impl RenderState {
 
     pub fn render(&mut self) {
         self.gizmos.swap_buffers();
-        self.renderer.render(&self.task_pool);
+        self.renderer.render();
     }
 
     pub fn sync(&mut self, world: &World) {

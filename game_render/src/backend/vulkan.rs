@@ -1334,20 +1334,20 @@ impl Device {
             self.device.limits.max_memory_allocation_size,
         );
 
-        if let Err(_) = self.device.num_allocations.fetch_update(
-            Ordering::Release,
-            Ordering::Acquire,
-            |count| {
-                // Unreachable using the CAS logic.
-                debug_assert!(count <= self.device.limits.max_memory_allocation_count);
+        if let Err(_) =
+            self.device
+                .num_allocations
+                .try_update(Ordering::Release, Ordering::Acquire, |count| {
+                    // Unreachable using the CAS logic.
+                    debug_assert!(count <= self.device.limits.max_memory_allocation_count);
 
-                // Increase the allocation count by one, but don't go over
-                // `max_memory_allocation_count`.
-                count
-                    .checked_add(1)
-                    .filter(|count| *count <= self.device.limits.max_memory_allocation_count)
-            },
-        ) {
+                    // Increase the allocation count by one, but don't go over
+                    // `max_memory_allocation_count`.
+                    count
+                        .checked_add(1)
+                        .filter(|count| *count <= self.device.limits.max_memory_allocation_count)
+                })
+        {
             return Err(Error::NoAllocationsLeft);
         }
 

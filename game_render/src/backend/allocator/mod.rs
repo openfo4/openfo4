@@ -73,7 +73,7 @@ impl MemoryManager {
 
         if let Err(_) = heap
             .used
-            .fetch_update(Ordering::Release, Ordering::Acquire, |used| {
+            .try_update(Ordering::Release, Ordering::Acquire, |used| {
                 used.checked_add(size.get())
                     .filter(|used| *used <= heap.size)
             })
