@@ -244,7 +244,6 @@ pub struct DescriptorSetLayoutInner {
 pub struct DescriptorSetInner {
     pub bindings: VecMap<u32, DescriptorSetResource>,
     pub num_buffers: u32,
-    pub num_samplers: u32,
     pub num_sampled_texture_arrays: u32,
     pub num_storage_texture_arrays: u32,
     pub layout: DescriptorSetLayoutId,

@@ -772,7 +772,6 @@ impl<'a> CommandQueue<'a> {
     pub fn create_descriptor_set(&self, descriptor: &DescriptorSetDescriptor<'_>) -> DescriptorSet {
         let mut bindings = VecMap::new();
         let mut num_buffers = 0;
-        let mut num_samplers = 0;
         let mut num_sampled_texture_arrays = 0;
         let mut num_storage_texture_arrays = 0;
         let mut num_texture_mips = 0;
@@ -869,7 +868,6 @@ impl<'a> CommandQueue<'a> {
                         .unwrap()
                         .ref_count
                         .increment_internal();
-                    num_samplers += 1;
 
                     DescriptorSetResource::Sampler(sampler.id)
                 }
@@ -1011,7 +1009,6 @@ impl<'a> CommandQueue<'a> {
                 .insert(DescriptorSetInner {
                     bindings,
                     num_buffers,
-                    num_samplers,
                     num_sampled_texture_arrays,
                     num_storage_texture_arrays,
                     layout: descriptor.layout.id,
@@ -2148,7 +2145,7 @@ impl<'a, 'b> RenderPass<'a, 'b> {
             self.depth_stencil_attachment.is_some(),
             pipeline.depth_attachment.is_some()
         );
-        if let ((Some(pass_attachment), Some(pipeline_attachment))) =
+        if let (Some(pass_attachment), Some(pipeline_attachment)) =
             (&self.depth_stencil_attachment, &pipeline.depth_attachment)
         {
             assert_eq!(pass_attachment.format, pipeline_attachment.format);
@@ -2423,15 +2420,7 @@ impl<'a> ComputePass<'a> {
     }
 
     pub fn set_descriptor_set(&mut self, index: u32, descriptor_set: &DescriptorSet) {
-        let pipeline = self.last_pipeline.expect("Pipeline is not set");
-
-        let pipeline = self
-            .queue
-            .executor
-            .resources
-            .pipelines
-            .get(pipeline.0)
-            .unwrap();
+        assert!(self.last_pipeline.is_some(), "Pipeline is not set");
 
         self.queue
             .executor

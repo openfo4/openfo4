@@ -1,5 +1,3 @@
-use std::path::PathBuf;
-
 use bytes::Bytes;
 use glam::UVec2;
 

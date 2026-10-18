@@ -1,6 +1,4 @@
 mod buddy;
-mod bump;
-mod free_list;
 
 pub use buddy::BuddyAllocator;
 use game_tracing::trace_span;

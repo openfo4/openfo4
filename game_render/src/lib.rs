@@ -27,7 +27,6 @@ use std::collections::HashMap;
 use std::num::NonZeroU32;
 use std::sync::Arc;
 
-use game_tasks::TaskPool;
 use game_tracing::trace_span;
 
 use game_window::windows::{WindowId, WindowState};
@@ -234,7 +233,7 @@ impl Renderer {
         }
     }
 
-    pub fn render(&mut self, pool: &TaskPool) {
+    pub fn render(&mut self) {
         let _span = trace_span!("Renderer::render").entered();
 
         // Park until the previous rendering command has finished.

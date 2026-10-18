@@ -8,7 +8,6 @@ use std::ops::Range;
 use ash::vk;
 use bitflags::bitflags;
 use bytemuck::{Pod, Zeroable};
-use game_common::components::Color;
 use glam::UVec2;
 use hashbrown::HashMap;
 use vulkan::{Buffer, DescriptorSetLayout, Fence, Sampler, Semaphore, Texture, TextureView};
