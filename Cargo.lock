@@ -1343,226 +1343,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "game_ai"
-version = "0.1.0"
-dependencies = [
- "game_common",
- "game_tracing",
- "glam 0.33.3",
- "petgraph",
- "rstar 0.12.2",
-]
-
-[[package]]
-name = "game_audio"
-version = "0.1.0"
-dependencies = [
- "bytemuck",
- "cpal",
- "game_common",
- "game_tracing",
- "glam 0.33.3",
- "parking_lot",
- "rubato",
- "symphonia",
- "thiserror 1.0.69",
- "tracing",
-]
-
-[[package]]
-name = "game_common"
-version = "0.1.0"
-dependencies = [
- "allocator-api2",
- "bytemuck",
- "glam 0.33.3",
- "hashbrown 0.16.1",
- "num-traits",
- "parking_lot",
- "pin-project",
- "thiserror 1.0.69",
-]
-
-[[package]]
-name = "game_core_pipeline"
-version = "0.1.0"
-dependencies = [
- "bitflags 2.10.0",
- "bytemuck",
- "crossbeam",
- "event-listener",
- "game_common",
- "game_render",
- "game_tracing",
- "glam 0.33.3",
- "hashbrown 0.16.1",
- "openfo4_shaderlib",
- "parking_lot",
- "tracing",
-]
-
-[[package]]
-name = "game_crash_handler"
-version = "0.1.0"
-dependencies = [
- "game_macros",
- "game_tracing",
- "linux-raw-sys 0.6.5",
- "nix",
- "openfo4_core",
- "rustix 0.38.44",
-]
-
-[[package]]
-name = "game_egui"
-version = "0.1.0"
-dependencies = [
- "egui",
- "game_input",
- "game_render",
- "game_tasks",
- "game_ui_render",
- "game_window",
- "glam 0.33.3",
-]
-
-[[package]]
-name = "game_gizmos"
-version = "0.1.0"
-dependencies = [
- "bytemuck",
- "game_common",
- "game_core_pipeline",
- "game_render",
- "game_tracing",
- "glam 0.33.3",
- "openfo4_shaderlib",
- "parking_lot",
- "tracing",
-]
-
-[[package]]
-name = "game_gltf"
-version = "0.1.0"
-dependencies = [
- "base64 0.22.1",
- "bevy_mikktspace",
- "bytes",
- "game_common",
- "game_render",
- "game_tracing",
- "glam 0.33.3",
- "gltf",
- "image",
- "serde_json",
- "thiserror 1.0.69",
- "tracing",
-]
-
-[[package]]
-name = "game_input"
-version = "0.1.0"
-dependencies = [
- "game_common",
- "glam 0.33.3",
-]
-
-[[package]]
-name = "game_macros"
-version = "0.1.0"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn",
-]
-
-[[package]]
-name = "game_render"
-version = "0.1.0"
-dependencies = [
- "allocator-api2",
- "ash",
- "bevy_mikktspace",
- "bitflags 2.10.0",
- "bumpalo",
- "bytemuck",
- "bytes",
- "crossbeam-queue",
- "game_common",
- "game_tasks",
- "game_tracing",
- "game_window",
- "glam 0.33.3",
- "hashbrown 0.16.1",
- "naga",
- "nohash-hasher",
- "notify",
- "parking_lot",
- "raw-window-handle",
- "sharded-slab",
- "slab",
- "slangc",
- "spirv",
- "spirv-tools",
- "thiserror 1.0.69",
- "tracing",
-]
-
-[[package]]
-name = "game_tasks"
-version = "0.1.0"
-dependencies = [
- "atomic-waker",
- "criterion",
- "crossbeam-queue",
- "futures-core",
- "futures-lite",
- "futures-util",
- "loom",
- "parking_lot",
-]
-
-[[package]]
-name = "game_tracing"
-version = "0.1.0"
-dependencies = [
- "glam 0.33.3",
- "hashbrown 0.16.1",
- "parking_lot",
- "tracing",
- "tracing-subscriber",
- "tracy-client",
- "tracy-client-sys",
-]
-
-[[package]]
-name = "game_ui_render"
-version = "0.1.0"
-dependencies = [
- "bytemuck",
- "crossbeam-channel",
- "game_common",
- "game_render",
- "glam 0.33.3",
- "openfo4_shaderlib",
- "tracing",
-]
-
-[[package]]
-name = "game_window"
-version = "0.1.0"
-dependencies = [
- "game_common",
- "game_input",
- "game_tracing",
- "glam 0.33.3",
- "parking_lot",
- "raw-window-handle",
- "tracing",
- "winit",
-]
-
-[[package]]
 name = "generator"
 version = "0.8.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2077,8 +1857,8 @@ dependencies = [
 name = "macros"
 version = "0.1.0"
 dependencies = [
- "game_render",
  "naga",
+ "openfo4_render",
  "proc-macro2",
  "quote",
  "slangc",
@@ -2442,16 +2222,27 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d6790f58c7ff633d8771f42965289203411a5e5c68388703c06e14f24770b41e"
 
 [[package]]
+name = "openfo4_ai"
+version = "0.1.0"
+dependencies = [
+ "glam 0.33.3",
+ "openfo4_common",
+ "openfo4_tracing",
+ "petgraph",
+ "rstar 0.12.2",
+]
+
+[[package]]
 name = "openfo4_animation"
 version = "0.1.0"
 dependencies = [
  "bitflags 2.10.0",
- "game_common",
- "game_tracing",
  "glam 0.33.3",
  "hecs",
+ "openfo4_common",
  "openfo4_core",
  "openfo4_hkx",
+ "openfo4_tracing",
  "petgraph",
  "rand",
  "slab",
@@ -2466,10 +2257,25 @@ dependencies = [
  "dashmap",
  "event-listener",
  "futures-lite",
- "game_common",
- "game_tasks",
  "hashbrown 0.16.1",
+ "openfo4_common",
  "parking_lot",
+]
+
+[[package]]
+name = "openfo4_audio"
+version = "0.1.0"
+dependencies = [
+ "bytemuck",
+ "cpal",
+ "glam 0.33.3",
+ "openfo4_common",
+ "openfo4_tracing",
+ "parking_lot",
+ "rubato",
+ "symphonia",
+ "thiserror 1.0.69",
+ "tracing",
 ]
 
 [[package]]
@@ -2499,36 +2305,36 @@ dependencies = [
  "event-listener",
  "futures",
  "futures-lite",
- "game_ai",
- "game_common",
- "game_core_pipeline",
- "game_crash_handler",
- "game_egui",
- "game_gizmos",
- "game_gltf",
- "game_input",
- "game_render",
- "game_tasks",
- "game_tracing",
- "game_ui_render",
- "game_window",
  "glam 0.33.3",
  "hashbrown 0.16.1",
  "hecs",
  "indexmap",
  "nohash-hasher",
+ "openfo4_ai",
  "openfo4_animation",
  "openfo4_asset",
  "openfo4_ba2",
+ "openfo4_common",
  "openfo4_core",
+ "openfo4_core_pipeline",
+ "openfo4_crash_handler",
  "openfo4_dds",
+ "openfo4_egui",
  "openfo4_esp",
+ "openfo4_gizmos",
+ "openfo4_gltf",
  "openfo4_hkx",
+ "openfo4_input",
  "openfo4_io",
  "openfo4_nif",
  "openfo4_pex",
  "openfo4_physics",
+ "openfo4_render",
  "openfo4_script",
+ "openfo4_tasks",
+ "openfo4_tracing",
+ "openfo4_ui_render",
+ "openfo4_window",
  "parking_lot",
  "rand",
  "rstar 0.13.0",
@@ -2540,22 +2346,66 @@ dependencies = [
 ]
 
 [[package]]
+name = "openfo4_common"
+version = "0.1.0"
+dependencies = [
+ "allocator-api2",
+ "bytemuck",
+ "glam 0.33.3",
+ "hashbrown 0.16.1",
+ "num-traits",
+ "parking_lot",
+ "pin-project",
+ "thiserror 1.0.69",
+]
+
+[[package]]
 name = "openfo4_core"
 version = "0.1.0"
 dependencies = [
  "bstr",
  "chrono",
- "game_common",
- "game_tracing",
  "glam 0.33.3",
  "hashbrown 0.16.1",
  "hecs",
  "nohash-hasher",
+ "openfo4_common",
  "openfo4_esp",
+ "openfo4_tracing",
  "parking_lot",
  "thiserror 2.0.17",
  "tracing",
  "tracing-subscriber",
+]
+
+[[package]]
+name = "openfo4_core_pipeline"
+version = "0.1.0"
+dependencies = [
+ "bitflags 2.10.0",
+ "bytemuck",
+ "crossbeam",
+ "event-listener",
+ "glam 0.33.3",
+ "hashbrown 0.16.1",
+ "openfo4_common",
+ "openfo4_render",
+ "openfo4_shaderlib",
+ "openfo4_tracing",
+ "parking_lot",
+ "tracing",
+]
+
+[[package]]
+name = "openfo4_crash_handler"
+version = "0.1.0"
+dependencies = [
+ "linux-raw-sys 0.6.5",
+ "nix",
+ "openfo4_core",
+ "openfo4_macros",
+ "openfo4_tracing",
+ "rustix 0.38.44",
 ]
 
 [[package]]
@@ -2564,9 +2414,21 @@ version = "0.1.0"
 dependencies = [
  "bitflags 2.10.0",
  "bytes",
- "game_common",
  "glam 0.33.3",
+ "openfo4_common",
  "thiserror 2.0.17",
+]
+
+[[package]]
+name = "openfo4_egui"
+version = "0.1.0"
+dependencies = [
+ "egui",
+ "glam 0.33.3",
+ "openfo4_input",
+ "openfo4_render",
+ "openfo4_ui_render",
+ "openfo4_window",
 ]
 
 [[package]]
@@ -2596,6 +2458,39 @@ dependencies = [
 ]
 
 [[package]]
+name = "openfo4_gizmos"
+version = "0.1.0"
+dependencies = [
+ "bytemuck",
+ "glam 0.33.3",
+ "openfo4_common",
+ "openfo4_core_pipeline",
+ "openfo4_render",
+ "openfo4_shaderlib",
+ "openfo4_tracing",
+ "parking_lot",
+ "tracing",
+]
+
+[[package]]
+name = "openfo4_gltf"
+version = "0.1.0"
+dependencies = [
+ "base64 0.22.1",
+ "bevy_mikktspace",
+ "bytes",
+ "glam 0.33.3",
+ "gltf",
+ "image",
+ "openfo4_common",
+ "openfo4_render",
+ "openfo4_tracing",
+ "serde_json",
+ "thiserror 1.0.69",
+ "tracing",
+]
+
+[[package]]
 name = "openfo4_hkx"
 version = "0.1.0"
 dependencies = [
@@ -2619,6 +2514,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "openfo4_input"
+version = "0.1.0"
+dependencies = [
+ "glam 0.33.3",
+ "openfo4_common",
+]
+
+[[package]]
 name = "openfo4_io"
 version = "0.1.0"
 dependencies = [
@@ -2634,13 +2537,22 @@ dependencies = [
  "cranelift-codegen",
  "cranelift-frontend",
  "cranelift-native",
- "game_common",
- "game_tracing",
  "hashbrown 0.16.1",
+ "openfo4_common",
+ "openfo4_tracing",
  "parking_lot",
  "rustix 1.1.3",
  "slab",
  "wasmtime-internal-jit-icache-coherence",
+]
+
+[[package]]
+name = "openfo4_macros"
+version = "0.1.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
 ]
 
 [[package]]
@@ -2667,14 +2579,46 @@ dependencies = [
 name = "openfo4_physics"
 version = "0.1.0"
 dependencies = [
- "game_common",
- "game_gizmos",
- "game_tracing",
  "glam 0.33.3",
  "hashbrown 0.16.1",
+ "openfo4_common",
  "openfo4_core",
+ "openfo4_gizmos",
+ "openfo4_tracing",
  "parking_lot",
  "rapier3d",
+ "tracing",
+]
+
+[[package]]
+name = "openfo4_render"
+version = "0.1.0"
+dependencies = [
+ "allocator-api2",
+ "ash",
+ "bevy_mikktspace",
+ "bitflags 2.10.0",
+ "bumpalo",
+ "bytemuck",
+ "bytes",
+ "crossbeam-queue",
+ "glam 0.33.3",
+ "hashbrown 0.16.1",
+ "naga",
+ "nohash-hasher",
+ "notify",
+ "openfo4_common",
+ "openfo4_tasks",
+ "openfo4_tracing",
+ "openfo4_window",
+ "parking_lot",
+ "raw-window-handle",
+ "sharded-slab",
+ "slab",
+ "slangc",
+ "spirv",
+ "spirv-tools",
+ "thiserror 1.0.69",
  "tracing",
 ]
 
@@ -2685,12 +2629,12 @@ dependencies = [
  "async-lock",
  "bytemuck",
  "futures-lite",
- "game_common",
- "game_tracing",
  "hashbrown 0.16.1",
  "indexmap",
+ "openfo4_common",
  "openfo4_jit",
  "openfo4_pex",
+ "openfo4_tracing",
  "parking_lot",
  "pin-project",
  "slab",
@@ -2702,14 +2646,68 @@ dependencies = [
 name = "openfo4_shaderlib"
 version = "0.1.0"
 dependencies = [
- "game_render",
  "hashbrown 0.16.1",
  "macros",
  "naga",
  "notify",
+ "openfo4_render",
  "slangc",
  "thiserror 2.0.17",
  "tracing",
+]
+
+[[package]]
+name = "openfo4_tasks"
+version = "0.1.0"
+dependencies = [
+ "atomic-waker",
+ "criterion",
+ "crossbeam-queue",
+ "futures-core",
+ "futures-lite",
+ "futures-util",
+ "loom",
+ "parking_lot",
+]
+
+[[package]]
+name = "openfo4_tracing"
+version = "0.1.0"
+dependencies = [
+ "glam 0.33.3",
+ "hashbrown 0.16.1",
+ "parking_lot",
+ "tracing",
+ "tracing-subscriber",
+ "tracy-client",
+ "tracy-client-sys",
+]
+
+[[package]]
+name = "openfo4_ui_render"
+version = "0.1.0"
+dependencies = [
+ "bytemuck",
+ "crossbeam-channel",
+ "glam 0.33.3",
+ "openfo4_common",
+ "openfo4_render",
+ "openfo4_shaderlib",
+ "tracing",
+]
+
+[[package]]
+name = "openfo4_window"
+version = "0.1.0"
+dependencies = [
+ "glam 0.33.3",
+ "openfo4_common",
+ "openfo4_input",
+ "openfo4_tracing",
+ "parking_lot",
+ "raw-window-handle",
+ "tracing",
+ "winit",
 ]
 
 [[package]]

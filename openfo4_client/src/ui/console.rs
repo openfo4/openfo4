@@ -1,6 +1,6 @@
-use game_egui::egui::{Context, Key, Window};
 use openfo4_core::ecs::{Entity, World};
 use openfo4_core::events::EventBus;
+use openfo4_egui::egui::{Context, Key, Window};
 
 use crate::components::Player;
 use crate::systems::inventory::AddItemEventAsync;

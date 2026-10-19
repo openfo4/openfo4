@@ -8,8 +8,9 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 
 use dashmap::{DashMap, Entry};
 use event_listener::Event;
-use game_common::utils::AbortOnDrop;
 use hashbrown::{DefaultHashBuilder, HashMap};
+use openfo4_common::utils::AbortOnDrop;
+
 use parking_lot::RwLock;
 
 /// A loader for [`Asset`]s.

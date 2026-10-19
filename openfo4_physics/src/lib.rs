@@ -8,16 +8,16 @@ use std::cell::Cell;
 use std::collections::VecDeque;
 
 use components::{ColliderShape, RigidBody, RigidBodyKind};
-use game_common::collections::bimap::BiMap;
-use game_common::components::{Axis, GlobalTransform, Transform};
-use game_common::math::Ray;
-use game_gizmos::Gizmos;
-use game_tracing::trace_span;
 use glam::Vec3;
 use hashbrown::HashMap;
+use openfo4_common::collections::bimap::BiMap;
+use openfo4_common::components::{Axis, GlobalTransform, Transform};
+use openfo4_common::math::Ray;
 use openfo4_core::Frozen;
 use openfo4_core::ecs::{Entity, Satisfies, ViewBorrow, World};
 use openfo4_core::hierarchy::Children;
+use openfo4_gizmos::Gizmos;
+use openfo4_tracing::trace_span;
 use rapier3d::math::Pose;
 use rapier3d::parry::query::{DefaultQueryDispatcher, ShapeCastOptions};
 use rapier3d::prelude::{
@@ -550,8 +550,8 @@ pub struct QueryFilter<'a> {
 
 #[cfg(test)]
 mod tests {
-    use game_common::components::{Axis, Transform};
     use glam::Vec3;
+    use openfo4_common::components::{Axis, Transform};
     use openfo4_core::ecs::{Satisfies, World};
     use openfo4_core::hierarchy::Children;
 

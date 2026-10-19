@@ -1,9 +1,9 @@
-use game_common::components::{GlobalTransform, Transform};
-use game_input::keyboard::KeyCode;
-use game_window::events::WindowEvent;
 use glam::{Quat, Vec3};
 use openfo4_animation::skeleton::SkeletonInstance;
+use openfo4_common::components::{GlobalTransform, Transform};
 use openfo4_core::ecs::{CommandBuffer, Entity, World};
+use openfo4_input::keyboard::KeyCode;
+use openfo4_window::events::WindowEvent;
 
 // Distances in CK units.
 const CAMERA_DISTANCE_MIN: f32 = 150.0;

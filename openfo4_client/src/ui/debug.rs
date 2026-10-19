@@ -1,4 +1,4 @@
-use game_egui::egui::{Context, Window};
+use openfo4_egui::egui::{Context, Window};
 
 #[derive(Clone, Debug, Default)]
 pub struct DebugState {

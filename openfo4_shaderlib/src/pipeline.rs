@@ -2,14 +2,14 @@ use std::collections::HashMap;
 use std::num::NonZeroU32;
 
 use crate::ShaderSource;
-use game_render::api::{
+use openfo4_render::api::{
     self, BindingResource, CommandQueue, ComputePass, ComputePassDescriptor, DescriptorSet,
     DescriptorSetDescriptor, DescriptorSetEntry, DescriptorSetLayout,
     DescriptorSetLayoutDescriptor, PipelineDescriptor, PipelineStage, RenderPass,
     RenderPassDescriptor,
 };
-use game_render::backend::{DescriptorBinding, DescriptorType, ShaderStage, ShaderStages};
-use game_render::shader::{BindingId, BindingLocation, Shader};
+use openfo4_render::backend::{DescriptorBinding, DescriptorType, ShaderStage, ShaderStages};
+use openfo4_render::shader::{BindingId, BindingLocation, Shader};
 
 #[derive(Clone, Debug)]
 pub struct PipelineBinding {

@@ -1,7 +1,7 @@
 use std::io;
 use std::path::{Path, PathBuf};
 
-use game_tracing::trace_span;
+use openfo4_tracing::trace_span;
 
 const PLUGIN_EXT: &[&str] = &["esp", "esl", "esm"];
 const ARCHIVE_EXT: &[&str] = &["ba2"];

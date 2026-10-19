@@ -1,5 +1,5 @@
-use game_common::string::Lowercase;
 use hashbrown::HashMap;
+use openfo4_common::string::Lowercase;
 use openfo4_pex::{Function, Instruction, Value};
 use thiserror::Error;
 

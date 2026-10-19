@@ -3,12 +3,12 @@ use std::collections::VecDeque;
 use std::num::NonZeroU64;
 use std::sync::Arc;
 
-use game_common::collections::arena::{Arena, Key};
-use game_tasks::{Task, TaskPool};
-use game_tracing::trace_span;
+use openfo4_common::collections::arena::{Arena, Key};
 use openfo4_core::ecs::{Entity, World};
 use openfo4_core::events::EventBus;
 use openfo4_core::record::RecordId;
+use openfo4_tasks::{Task, TaskPool};
+use openfo4_tracing::trace_span;
 
 use crate::components::Disabled;
 use crate::events::inventory::RemoveItemEvent;

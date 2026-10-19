@@ -1,0 +1,683 @@
+use std::sync::Arc;
+
+use crossbeam::channel::{Receiver, Sender};
+use glam::Vec2;
+use openfo4_common::collections::slab::Slab;
+use openfo4_common::collections::vec_map::Index;
+use openfo4_common::components::{Color, Transform};
+use openfo4_common::define_slab_key;
+use openfo4_render::mesh::Mesh;
+use openfo4_render::texture::image::MipImage;
+use parking_lot::Mutex;
+
+use crate::StandardMaterial;
+use crate::camera::Camera;
+use crate::lights::Light;
+use crate::passes::sky::SkyState;
+use crate::sky::SkyMaterial;
+use crate::terrain::TerrainMaterial;
+
+#[derive(Clone, Debug)]
+pub struct Entities {
+    inner: Arc<Inner>,
+    pub(super) sky: Arc<Mutex<SkyState>>,
+    pub(super) new_lut: Arc<Mutex<Option<MipImage>>>,
+}
+
+impl Entities {
+    pub(super) fn new() -> (Self, Receiver<Event>, Receiver<AsyncEvent>) {
+        let (tx, rx) = crossbeam::channel::unbounded();
+        let (atx, arx) = crossbeam::channel::unbounded();
+        (
+            Self {
+                inner: Arc::new(Inner {
+                    events: tx,
+                    async_events: atx,
+                    scenes: Mutex::new(Slab::new()),
+                    meshes: Mutex::new(Slab::new()),
+                    materials: Mutex::new(Slab::new()),
+                    images: Mutex::new(Slab::new()),
+                    cameras: Mutex::new(Slab::new()),
+                    objects: Mutex::new(Slab::new()),
+                    lights: Mutex::new(Slab::new()),
+                }),
+                sky: Arc::default(),
+                new_lut: Arc::default(),
+            },
+            rx,
+            arx,
+        )
+    }
+
+    #[must_use = "the entity will get destroyed immediately when the object is dropped"]
+    pub fn create_scene(&self) -> SceneHandle {
+        let mut scenes = self.inner.scenes.lock();
+        let id = scenes.insert(1);
+
+        self.inner.events.send(Event::CreateScene(id)).ok();
+        SceneHandle {
+            inner: self.inner.clone(),
+            id,
+        }
+    }
+
+    #[must_use = "the entity will get destroyed immediately when the object is dropped"]
+    pub fn create_mesh(&self, mesh: Mesh) -> MeshHandle {
+        let mut meshes = self.inner.meshes.lock();
+        let id = meshes.insert(1);
+
+        self.inner.events.send(Event::CreateMesh(id, mesh)).ok();
+        MeshHandle {
+            inner: self.inner.clone(),
+            id,
+        }
+    }
+
+    #[must_use = "the entity will get destroyed immediately when the object is dropped"]
+    pub async fn create_mesh_async(&self, mesh: Mesh) -> MeshHandle {
+        let id = {
+            let mut meshes = self.inner.meshes.lock();
+            meshes.insert(1)
+        };
+
+        let event = event_listener::Event::new();
+        let listener = event.listen();
+
+        self.inner
+            .async_events
+            .send(AsyncEvent::CreateMesh(id, mesh, event))
+            .unwrap();
+        listener.await;
+        MeshHandle {
+            inner: self.inner.clone(),
+            id,
+        }
+    }
+
+    #[must_use = "the entity will get destroyed immediately when the object is dropped"]
+    pub fn create_image<T>(&self, image: T) -> ImageHandle
+    where
+        T: Into<MipImage>,
+    {
+        let mut images = self.inner.images.lock();
+        let id = images.insert(1);
+
+        self.inner
+            .events
+            .send(Event::CreateImage(id, image.into()))
+            .ok();
+        ImageHandle {
+            inner: self.inner.clone(),
+            id,
+        }
+    }
+
+    #[must_use = "the entity will get destroyed immediately when the object is dropped"]
+    pub async fn create_image_async<T>(&self, image: T) -> ImageHandle
+    where
+        T: Into<MipImage>,
+    {
+        let id = {
+            let mut images = self.inner.images.lock();
+            images.insert(1)
+        };
+
+        let event = event_listener::Event::new();
+        let listener = event.listen();
+
+        self.inner
+            .async_events
+            .send(AsyncEvent::CreateImage(id, image.into(), event))
+            .unwrap();
+        listener.await;
+        ImageHandle {
+            inner: self.inner.clone(),
+            id,
+        }
+    }
+
+    #[must_use = "the entity will get destroyed immediately when the object is dropped"]
+    pub fn create_material(&self, material: StandardMaterial) -> MaterialHandle {
+        let mut materials = self.inner.materials.lock();
+        let id = materials.insert(1);
+
+        self.inner
+            .events
+            .send(Event::CreateMaterial(
+                id,
+                MaterialInner::Standard(material.clone()),
+            ))
+            .ok();
+        MaterialHandle {
+            inner: self.inner.clone(),
+            id,
+            material: vec![material],
+        }
+    }
+
+    #[must_use = "the entity will get destroyed immediately when the object is dropped"]
+    pub fn create_object(&self, object: Object) -> ObjectHandle {
+        let mut objects = self.inner.objects.lock();
+        let id = objects.insert(1);
+
+        self.inner
+            .events
+            .send(Event::CreateObject(id, object.clone()))
+            .ok();
+        ObjectHandle {
+            inner: self.inner.clone(),
+            id,
+            mesh: object.mesh,
+            material: object.material,
+            scene: object.scene.id,
+        }
+    }
+
+    #[must_use = "the entity will get destroyed immediately when the object is dropped"]
+    pub fn create_camera(&self, camera: Camera) -> CameraHandle {
+        let mut cameras = self.inner.cameras.lock();
+        let id = cameras.insert(1);
+
+        self.inner.events.send(Event::CreateCamera(id, camera)).ok();
+        CameraHandle {
+            inner: self.inner.clone(),
+            id,
+        }
+    }
+
+    #[must_use = "the entity will get destroyed immediately when the object is dropped"]
+    pub fn create_light(&self, light: Light) -> LightHandle {
+        let mut lights = self.inner.lights.lock();
+        let id = lights.insert(1);
+
+        let scene = match &light {
+            Light::Directional(light) => light.scene.id(),
+            Light::Point(light) => light.scene.id(),
+            Light::Spot(light) => light.scene.id(),
+            Light::Ambient(light) => light.scene.id(),
+        };
+
+        self.inner.events.send(Event::CreateLight(id, light)).ok();
+        LightHandle {
+            inner: self.inner.clone(),
+            id,
+            scene,
+        }
+    }
+
+    pub fn set_sky_mesh(&self, mesh: Mesh) {
+        self.sky.lock().atomosphere = Some(mesh);
+    }
+
+    pub fn set_sky_material(&self, material: SkyMaterial) {
+        self.sky.lock().sky_colors = Some(material);
+    }
+
+    pub fn set_sun_texture<T>(&self, img: T)
+    where
+        T: Into<MipImage>,
+    {
+        self.sky.lock().sun = Some(img.into());
+    }
+
+    pub fn update_bone_transforms(&self, object: &ObjectHandle, transforms: Vec<Transform>) {
+        self.inner
+            .events
+            .send(Event::UpdateBoneTransforms(object.id, transforms))
+            .ok();
+    }
+
+    pub fn set_clouds_meshes(&self, meshes: Vec<Mesh>) {
+        self.sky.lock().cloud_meshes = Some(meshes);
+    }
+
+    pub fn set_cloud_texture(&self, layer: usize, texture: Option<MipImage>) {
+        self.sky.lock().cloud_textures.push((layer, texture));
+    }
+
+    pub fn set_cloud_color(&self, layer: usize, color: Color) {
+        self.sky.lock().cloud_colors.push((layer, color));
+    }
+
+    pub fn set_cloud_uv_offset(&self, layer: usize, offset: Vec2) {
+        self.sky.lock().cloud_uvs.push((layer, offset));
+    }
+
+    pub fn create_terrain_material(&self, material: TerrainMaterial) -> MaterialHandle {
+        let mut materials = self.inner.materials.lock();
+        let id = materials.insert(1);
+
+        self.inner
+            .events
+            .send(Event::CreateMaterial(
+                id,
+                MaterialInner::Terrain(material.clone()),
+            ))
+            .ok();
+        MaterialHandle {
+            inner: self.inner.clone(),
+            id,
+            material: material.layers.into_iter().map(|v| v.material).collect(),
+        }
+    }
+
+    pub fn set_transform(&mut self, object: &ObjectHandle, transform: Transform) {
+        self.inner
+            .events
+            .send(Event::UpdateTransform(object.id, object.scene, transform))
+            .ok();
+    }
+
+    pub fn set_lut(&self, lut: MipImage) {
+        *self.new_lut.lock() = Some(lut);
+    }
+
+    /// Emit a barrier in the event stream.
+    ///
+    /// A barrier signals the renderer to stop processing events and wait for next frame to
+    /// continue.
+    pub fn barrier(&self) {
+        self.inner.events.send(Event::Barrier).ok();
+    }
+}
+
+#[derive(Debug)]
+struct Inner {
+    events: Sender<Event>,
+    async_events: Sender<AsyncEvent>,
+    // Contains ref counts for all entities.
+    scenes: Mutex<Slab<SceneId, usize>>,
+    meshes: Mutex<Slab<MeshId, usize>>,
+    materials: Mutex<Slab<MaterialId, usize>>,
+    images: Mutex<Slab<ImageId, usize>>,
+    cameras: Mutex<Slab<CameraId, usize>>,
+    objects: Mutex<Slab<ObjectId, usize>>,
+    lights: Mutex<Slab<LightId, usize>>,
+}
+
+#[derive(Debug)]
+pub struct SceneHandle {
+    inner: Arc<Inner>,
+    id: SceneId,
+}
+
+impl SceneHandle {
+    pub(crate) fn id(&self) -> SceneId {
+        self.id
+    }
+}
+
+impl Clone for SceneHandle {
+    fn clone(&self) -> Self {
+        // Increment ref count
+        let mut scenes = self.inner.scenes.lock();
+        let ref_count = scenes.get_mut(self.id).unwrap();
+        debug_assert_ne!(*ref_count, usize::MAX);
+        *ref_count = ref_count.saturating_add(1);
+
+        Self {
+            inner: self.inner.clone(),
+            id: self.id,
+        }
+    }
+}
+
+impl Drop for SceneHandle {
+    fn drop(&mut self) {
+        let mut scenes = self.inner.scenes.lock();
+        let ref_count = scenes.get_mut(self.id).unwrap();
+        *ref_count -= 1;
+        if *ref_count != 0 {
+            return;
+        }
+
+        self.inner.events.send(Event::DestroyScene(self.id)).ok();
+        scenes.remove(self.id);
+    }
+}
+
+#[derive(Debug)]
+pub struct MeshHandle {
+    inner: Arc<Inner>,
+    id: MeshId,
+}
+
+impl MeshHandle {
+    pub(crate) fn id(&self) -> MeshId {
+        self.id
+    }
+}
+
+impl Clone for MeshHandle {
+    fn clone(&self) -> Self {
+        let mut meshes = self.inner.meshes.lock();
+        let ref_count = meshes.get_mut(self.id).unwrap();
+        debug_assert_ne!(*ref_count, usize::MAX);
+        *ref_count = ref_count.saturating_add(1);
+
+        Self {
+            inner: self.inner.clone(),
+            id: self.id,
+        }
+    }
+}
+
+impl Drop for MeshHandle {
+    fn drop(&mut self) {
+        let mut meshes = self.inner.meshes.lock();
+        let ref_count = meshes.get_mut(self.id).unwrap();
+        *ref_count -= 1;
+        if *ref_count != 0 {
+            return;
+        }
+
+        self.inner.events.send(Event::DestroyMesh(self.id)).ok();
+        meshes.remove(self.id);
+    }
+}
+
+#[derive(Debug)]
+pub struct ImageHandle {
+    inner: Arc<Inner>,
+    id: ImageId,
+}
+
+impl ImageHandle {
+    pub(crate) fn id(&self) -> ImageId {
+        self.id
+    }
+}
+
+impl Clone for ImageHandle {
+    fn clone(&self) -> Self {
+        let mut images = self.inner.images.lock();
+        let ref_count = images.get_mut(self.id).unwrap();
+        debug_assert_ne!(*ref_count, usize::MAX);
+        *ref_count = ref_count.saturating_add(1);
+
+        Self {
+            inner: self.inner.clone(),
+            id: self.id,
+        }
+    }
+}
+
+impl Drop for ImageHandle {
+    fn drop(&mut self) {
+        let mut images = self.inner.images.lock();
+        let ref_count = images.get_mut(self.id).unwrap();
+        *ref_count -= 1;
+        if *ref_count != 0 {
+            return;
+        }
+
+        self.inner.events.send(Event::DestroyImage(self.id)).ok();
+        images.remove(self.id);
+    }
+}
+
+#[derive(Debug)]
+pub struct MaterialHandle {
+    inner: Arc<Inner>,
+    id: MaterialId,
+    // Keep the original material, which contains handles to all images
+    // and prevents them from being dropped.
+    material: Vec<StandardMaterial>,
+}
+
+impl MaterialHandle {
+    pub(crate) fn id(&self) -> MaterialId {
+        self.id
+    }
+}
+
+impl Clone for MaterialHandle {
+    fn clone(&self) -> Self {
+        let mut materials = self.inner.materials.lock();
+        let ref_count = materials.get_mut(self.id).unwrap();
+        debug_assert_ne!(*ref_count, usize::MAX);
+        *ref_count = ref_count.saturating_add(1);
+
+        Self {
+            inner: self.inner.clone(),
+            id: self.id,
+            material: self.material.clone(),
+        }
+    }
+}
+
+impl Drop for MaterialHandle {
+    fn drop(&mut self) {
+        let mut materials = self.inner.materials.lock();
+        let ref_count = materials.get_mut(self.id).unwrap();
+        *ref_count -= 1;
+        if *ref_count != 0 {
+            return;
+        }
+
+        self.inner.events.send(Event::DestroyMaterial(self.id)).ok();
+        materials.remove(self.id);
+    }
+}
+
+#[derive(Debug)]
+pub struct ObjectHandle {
+    inner: Arc<Inner>,
+    id: ObjectId,
+    mesh: MeshHandle,
+    material: MaterialHandle,
+    scene: SceneId,
+}
+
+impl Clone for ObjectHandle {
+    fn clone(&self) -> Self {
+        let mut objects = self.inner.objects.lock();
+        let ref_count = objects.get_mut(self.id).unwrap();
+        debug_assert_ne!(*ref_count, usize::MAX);
+        *ref_count = ref_count.saturating_add(1);
+
+        Self {
+            inner: self.inner.clone(),
+            id: self.id,
+            mesh: self.mesh.clone(),
+            material: self.material.clone(),
+            scene: self.scene,
+        }
+    }
+}
+
+impl Drop for ObjectHandle {
+    fn drop(&mut self) {
+        let mut objects = self.inner.objects.lock();
+        let ref_count = objects.get_mut(self.id).unwrap();
+        *ref_count -= 1;
+        if *ref_count != 0 {
+            return;
+        }
+
+        self.inner.events.send(Event::DestroyObject(self.id)).ok();
+        objects.remove(self.id);
+    }
+}
+
+pub struct CameraHandle {
+    inner: Arc<Inner>,
+    id: CameraId,
+}
+
+impl Clone for CameraHandle {
+    fn clone(&self) -> Self {
+        let mut cameras = self.inner.cameras.lock();
+        let ref_count = cameras.get_mut(self.id).unwrap();
+        debug_assert_ne!(*ref_count, usize::MAX);
+        *ref_count = ref_count.saturating_add(1);
+
+        Self {
+            inner: self.inner.clone(),
+            id: self.id,
+        }
+    }
+}
+
+impl Drop for CameraHandle {
+    fn drop(&mut self) {
+        let mut cameras = self.inner.cameras.lock();
+        let ref_count = cameras.get_mut(self.id).unwrap();
+        *ref_count -= 1;
+        if *ref_count != 0 {
+            return;
+        }
+
+        self.inner.events.send(Event::DestroyCamera(self.id)).ok();
+        cameras.remove(self.id);
+    }
+}
+
+pub struct LightHandle {
+    inner: Arc<Inner>,
+    id: LightId,
+    scene: SceneId,
+}
+
+impl Clone for LightHandle {
+    fn clone(&self) -> Self {
+        let mut lights = self.inner.lights.lock();
+        let ref_count = lights.get_mut(self.id).unwrap();
+        debug_assert_ne!(*ref_count, usize::MAX);
+        *ref_count = ref_count.saturating_add(1);
+
+        Self {
+            inner: self.inner.clone(),
+            id: self.id,
+            scene: self.scene,
+        }
+    }
+}
+
+impl Drop for LightHandle {
+    fn drop(&mut self) {
+        let mut lights = self.inner.lights.lock();
+        let ref_count = lights.get_mut(self.id).unwrap();
+        *ref_count -= 1;
+        if *ref_count != 0 {
+            return;
+        }
+
+        self.inner
+            .events
+            .send(Event::DestroyLight(self.scene, self.id))
+            .ok();
+        lights.remove(self.id);
+    }
+}
+
+define_slab_key! {
+    pub(crate) struct SceneId: usize;
+}
+
+impl Index for SceneId {
+    fn index(&self) -> usize {
+        self.0
+    }
+}
+
+define_slab_key! {
+    pub(crate) struct MeshId: usize;
+}
+
+impl Index for MeshId {
+    fn index(&self) -> usize {
+        self.0
+    }
+}
+
+define_slab_key! {
+    pub(crate) struct ImageId: usize;
+}
+
+impl Index for ImageId {
+    fn index(&self) -> usize {
+        self.0
+    }
+}
+
+define_slab_key! {
+    pub(crate) struct MaterialId: usize;
+}
+
+impl Index for MaterialId {
+    fn index(&self) -> usize {
+        self.0
+    }
+}
+
+define_slab_key! {
+    pub(crate) struct ObjectId: usize;
+}
+
+impl Index for ObjectId {
+    fn index(&self) -> usize {
+        self.0
+    }
+}
+
+define_slab_key! {
+    pub(crate) struct CameraId: usize;
+}
+
+impl Index for CameraId {
+    fn index(&self) -> usize {
+        self.0
+    }
+}
+
+define_slab_key! {
+    pub(crate) struct LightId: usize;
+}
+
+impl Index for LightId {
+    fn index(&self) -> usize {
+        self.0
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct Object {
+    pub transform: Transform,
+    pub scene: SceneHandle,
+    pub mesh: MeshHandle,
+    pub material: MaterialHandle,
+}
+
+#[derive(Debug)]
+pub(crate) enum Event {
+    CreateScene(SceneId),
+    DestroyScene(SceneId),
+    CreateMesh(MeshId, Mesh),
+    DestroyMesh(MeshId),
+    CreateMaterial(MaterialId, MaterialInner),
+    DestroyMaterial(MaterialId),
+    CreateImage(ImageId, MipImage),
+    DestroyImage(ImageId),
+    CreateObject(ObjectId, Object),
+    DestroyObject(ObjectId),
+    CreateCamera(CameraId, Camera),
+    DestroyCamera(CameraId),
+    CreateLight(LightId, Light),
+    DestroyLight(SceneId, LightId),
+    UpdateBoneTransforms(ObjectId, Vec<Transform>),
+    UpdateTransform(ObjectId, SceneId, Transform),
+    Barrier,
+}
+
+#[derive(Clone, Debug)]
+pub(crate) enum MaterialInner {
+    Standard(StandardMaterial),
+    Terrain(TerrainMaterial),
+}
+
+#[derive(Debug)]
+pub(crate) enum AsyncEvent {
+    CreateMesh(MeshId, Mesh, event_listener::Event),
+    CreateImage(ImageId, MipImage, event_listener::Event),
+}

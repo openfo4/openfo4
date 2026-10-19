@@ -1,7 +1,7 @@
 use std::f32::consts::PI;
 
-use game_common::components::Transform;
 use glam::Vec3;
+use openfo4_common::components::Transform;
 use openfo4_core::Frozen;
 use openfo4_core::ecs::{CommandBuffer, Entity, World};
 use openfo4_physics::PhysicsPipeline;

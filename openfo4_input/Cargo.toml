@@ -1,0 +1,13 @@
+[package]
+name = "openfo4_input"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[lints]
+workspace = true
+
+[dependencies]
+openfo4_common = { version = "0.1.0", path = "../openfo4_common" }
+
+glam = { workspace = true }

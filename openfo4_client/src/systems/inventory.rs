@@ -5,15 +5,15 @@ use std::num::NonZeroU64;
 use std::sync::Arc;
 use std::time::Duration;
 
-use game_common::components::Transform;
-use game_tasks::{TaskPool, TaskQueue};
-use game_tracing::trace_span;
 use hashbrown::{HashMap, HashSet};
 use openfo4_asset::AssetLoader;
+use openfo4_common::components::Transform;
 use openfo4_core::WorldExt;
 use openfo4_core::ecs::{Entity, World};
 use openfo4_core::events::EventBus;
 use openfo4_core::record::RecordId;
+use openfo4_tasks::{TaskPool, TaskQueue};
+use openfo4_tracing::trace_span;
 use slab::Slab;
 
 use crate::components::PlacedItem;

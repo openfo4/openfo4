@@ -1,4 +1,4 @@
-use game_core_pipeline::entities::Entities;
+use openfo4_core_pipeline::entities::Entities;
 
 #[derive(Debug)]
 pub struct SharedState {

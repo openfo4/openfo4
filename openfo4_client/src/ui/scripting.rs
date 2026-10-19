@@ -1,4 +1,4 @@
-use game_egui::egui::{CollapsingHeader, Context, ScrollArea, Window};
+use openfo4_egui::egui::{CollapsingHeader, Context, ScrollArea, Window};
 use openfo4_script::compiler::resources::PropertyType;
 
 use crate::state::GameState;

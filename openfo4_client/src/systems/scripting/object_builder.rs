@@ -1,5 +1,5 @@
-use game_common::string::Lowercase;
 use hashbrown::HashMap;
+use openfo4_common::string::Lowercase;
 use openfo4_core::record::RecordId;
 use openfo4_esp::FormId;
 use openfo4_esp::vmad::{Property, Script, Value};
@@ -427,8 +427,8 @@ mod tests {
     use std::num::NonZeroU32;
 
     use futures_lite::future::block_on;
-    use game_common::string::Lowercase;
     use hashbrown::HashMap;
+    use openfo4_common::string::Lowercase;
     use openfo4_core::record::{ModuleId, RecordId};
     use openfo4_esp::FormId;
     use openfo4_esp::vmad::{Object, Property, Script, Value};

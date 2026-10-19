@@ -5,7 +5,7 @@ mod backend;
 use std::fmt::{self, Debug, Formatter};
 use std::ptr;
 
-use game_common::collections::vec_map::{Index, VecMap};
+use openfo4_common::collections::vec_map::{Index, VecMap};
 
 use crate::backend::{Backend, BackendEnum, FunctionDefinitionDesc, TextWithSrcLocs};
 

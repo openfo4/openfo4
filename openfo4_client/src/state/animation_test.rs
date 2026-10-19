@@ -1,12 +1,11 @@
 use std::collections::{HashMap, VecDeque};
 
-use game_common::components::{Axis, Transform};
-use game_tasks::TaskPool;
 use glam::Vec3;
 use openfo4_animation::builder::{Builder, Hint};
 use openfo4_animation::skeleton::{BoneMarker, Skeleton, SkeletonInstance};
 use openfo4_animation::{AnimationGraph, Value};
 use openfo4_asset::{AssetLoader, Handle};
+use openfo4_common::components::{Axis, Transform};
 use openfo4_core::WorldExt;
 use openfo4_core::ecs::{Entity, World};
 use openfo4_core::hierarchy::Children;
@@ -15,6 +14,7 @@ use openfo4_esp::records::Race;
 use openfo4_hkx::behavior::VariableType;
 use openfo4_hkx::{HkObject, HkxFile};
 use openfo4_physics::components::{Capsule, Collider, ColliderShape};
+use openfo4_tasks::TaskPool;
 
 use crate::assets::animation::AnimationSet;
 use crate::assets::data_file::DataFile;

@@ -9,8 +9,8 @@ default = ["cranelift"]
 cranelift = ["cranelift-codegen", "cranelift-frontend", "cranelift-native", "wasmtime-internal-jit-icache-coherence", "capstone"]
 
 [dependencies]
-game_common = { version = "0.1.0", path = "../game_common" }
-game_tracing = { version = "0.1.0", path = "../game_tracing" }
+openfo4_common = { version = "0.1.0", path = "../openfo4_common" }
+openfo4_tracing = { version = "0.1.0", path = "../openfo4_tracing" }
 
 slab = "0.4.11"
 hashbrown = { workspace = true }

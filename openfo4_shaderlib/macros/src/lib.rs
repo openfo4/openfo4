@@ -1,9 +1,9 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use game_render::shader::Shader;
 use naga::back::spv::{Options, WriterFlags};
 use naga::valid::{Capabilities, ValidationFlags, Validator};
+use openfo4_render::shader::Shader;
 use proc_macro::TokenStream;
 use proc_macro2::Span;
 use quote::quote;

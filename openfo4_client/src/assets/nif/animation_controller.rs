@@ -1,10 +1,10 @@
 use std::time::Duration;
 
-use game_common::collections::hierarchy::Key;
-use game_core_pipeline::material::StandardMaterial;
 use hashbrown::HashMap;
 use openfo4_asset::Handle;
+use openfo4_common::collections::hierarchy::Key;
 use openfo4_core::ecs::Entity;
+use openfo4_core_pipeline::material::StandardMaterial;
 
 use crate::assets::nif::animation::TransformInterpolator;
 use crate::assets::nif::{NifScene, animation::ControlledValue};

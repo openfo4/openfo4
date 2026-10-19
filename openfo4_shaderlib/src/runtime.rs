@@ -3,7 +3,7 @@ use std::process::Command;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, LazyLock, Mutex, OnceLock};
 
-use game_render::shader::Shader;
+use openfo4_render::shader::Shader;
 
 use crate::reload::{BoxError, ReloadableShaderSource};
 

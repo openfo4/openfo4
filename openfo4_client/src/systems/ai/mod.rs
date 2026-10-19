@@ -1,15 +1,15 @@
 use std::time::Instant;
 
-use game_ai::navmesh::{Agent, Mesh, NavMesh, Path};
-use game_common::components::Transform;
-use game_common::math::Ray;
-use game_tracing::trace_span;
 use glam::Vec3;
 use hashbrown::HashMap;
+use openfo4_ai::navmesh::{Agent, Mesh, NavMesh, Path};
+use openfo4_common::components::Transform;
+use openfo4_common::math::Ray;
 use openfo4_core::ecs::{Entity, World};
 use openfo4_core::events::{Event, EventBus, EventReader};
 use openfo4_core::record::RecordId;
 use openfo4_esp::FormId;
+use openfo4_tracing::trace_span;
 use slab::Slab;
 
 use crate::components::{Grounded, Player, WorldSpace};

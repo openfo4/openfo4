@@ -11,12 +11,12 @@ mod trampoline;
 use std::collections::VecDeque;
 use std::sync::Arc;
 
-use game_common::string::Lowercase;
-use game_tracing::trace_span;
 use hashbrown::{HashMap, HashSet};
 use indexmap::IndexMap;
+use openfo4_common::string::Lowercase;
 use openfo4_jit::{Compiler, CompilerConfig, FuncId, Signature};
 use openfo4_pex::{Class, Instruction, Module, Struct, Value};
+use openfo4_tracing::trace_span;
 use thiserror::Error;
 
 use crate::compiler::codegen::pex::layout::Layouts;

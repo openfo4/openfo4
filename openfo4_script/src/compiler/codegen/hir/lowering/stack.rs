@@ -4,9 +4,9 @@ use std::hash::Hash;
 use std::mem;
 use std::num::NonZeroUsize;
 
-use game_common::utils::vec_ext::VecExt;
 use hashbrown::{HashMap, HashSet};
 use indexmap::IndexMap;
+use openfo4_common::utils::vec_ext::VecExt;
 use openfo4_jit::{Block, FunctionBuilder, IntCompareOp, Type as JitType};
 
 use crate::compiler::codegen::hir::lowering::{

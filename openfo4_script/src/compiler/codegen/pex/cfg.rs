@@ -1,9 +1,9 @@
 use std::collections::VecDeque;
 use std::iter::FusedIterator;
 
-use game_common::collections::vec_map::{Index, VecMap};
-use game_common::utils::vec_ext::VecExt;
 use hashbrown::HashMap;
+use openfo4_common::collections::vec_map::{Index, VecMap};
+use openfo4_common::utils::vec_ext::VecExt;
 use openfo4_pex::Instruction;
 
 /// A CFG of a PEX function.

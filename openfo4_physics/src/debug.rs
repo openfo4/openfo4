@@ -1,6 +1,6 @@
-use game_common::components::Color;
-use game_gizmos::Gizmos;
 use glam::Vec3;
+use openfo4_common::components::Color;
+use openfo4_gizmos::Gizmos;
 use rapier3d::pipeline::{DebugColor, DebugRenderBackend, DebugRenderObject};
 
 #[derive(Copy, Clone, Debug)]

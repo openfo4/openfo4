@@ -12,7 +12,7 @@ use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::sync::Arc;
 use std::task::{Poll, Waker};
 
-use game_common::cell::UnsafeRefCell;
+use openfo4_common::cell::UnsafeRefCell;
 use openfo4_jit::func::{HostFunc, HostType, IntoHostFunc};
 use openfo4_jit::{Signature, Type};
 

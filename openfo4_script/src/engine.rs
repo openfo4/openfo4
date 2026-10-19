@@ -2,8 +2,8 @@ use std::fmt::Debug;
 use std::sync::Arc;
 
 use async_lock::Mutex;
-use game_common::string::Lowercase;
 use hashbrown::{HashMap, HashSet};
+use openfo4_common::string::Lowercase;
 use openfo4_jit::{BackendKind, CompilerConfig, Type};
 use openfo4_pex::{Class, Module};
 use parking_lot::RwLock;

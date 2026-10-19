@@ -9,9 +9,9 @@ default = []
 tracy = []
 
 [dependencies]
-game_common = { version = "0.1.0", path = "../game_common" }
+openfo4_common = { version = "0.1.0", path = "../openfo4_common" }
 openfo4_esp = { version = "0.1.0", path = "../openfo4_esp" }
-game_tracing = { version = "0.1.0", path = "../game_tracing" }
+openfo4_tracing = { version = "0.1.0", path = "../openfo4_tracing" }
 
 hecs = { workspace = true }
 glam = { workspace = true, features = ["bytemuck"] }

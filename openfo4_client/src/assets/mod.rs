@@ -8,8 +8,8 @@ pub mod texture;
 use std::fmt::{self, Debug, Display, Formatter};
 use std::sync::Arc;
 
-use game_core_pipeline::entities::Entities;
 use openfo4_asset::AssetLoader;
+use openfo4_core_pipeline::entities::Entities;
 use openfo4_hkx::HkxFile;
 use openfo4_nif::Nif;
 use openfo4_nif::bgsm::Bgsm;

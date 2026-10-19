@@ -1,9 +1,9 @@
 use std::time::Duration;
 
-use game_common::components::{Color, PointLight, Transform};
 use glam::{EulerRot, Quat, Vec3};
 use hashbrown::HashSet;
 use openfo4_asset::Handle;
+use openfo4_common::components::{Color, PointLight, Transform};
 use openfo4_core::Frozen;
 use openfo4_core::ecs::{Entity, World};
 use openfo4_core::events::EventBus;

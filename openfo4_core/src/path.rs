@@ -3,7 +3,7 @@ use std::fmt::{self, Debug, Display, Formatter};
 use std::ops::Deref;
 
 use bstr::{BStr, BString, ByteSlice};
-use game_common::utils::vec_ext::VecExt;
+use openfo4_common::utils::vec_ext::VecExt;
 
 /// A path to a data file.
 #[derive(Clone, PartialEq, Eq, Hash)]

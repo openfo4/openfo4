@@ -1,0 +1,34 @@
+[package]
+name = "openfo4_audio"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[features]
+default = ["xwma"]
+# Enable support for the xWMA audio format.
+xwma = []
+
+[lints]
+workspace = true
+
+[dependencies]
+openfo4_common = { version = "0.1.0", path = "../openfo4_common" }
+openfo4_tracing = { version = "0.1.0", path = "../openfo4_tracing" }
+
+tracing = { workspace = true }
+glam = { workspace = true }
+cpal = "0.15.3"
+symphonia = { version = "0.6.0", default-features = false, features = ["wav", "pcm"] }
+parking_lot = "0.12.3"
+thiserror = "1.0.61"
+rubato = "0.15.0"
+bytemuck = "1.19.0"
+
+[[test]]
+name = "latency"
+path = "tests/latency/latency.rs"
+
+[[test]]
+name = "basic"
+path = "tests/basic.rs"

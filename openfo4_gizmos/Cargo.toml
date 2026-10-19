@@ -1,0 +1,19 @@
+[package]
+name = "openfo4_gizmos"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+openfo4_common = { version = "0.1.0", path = "../openfo4_common" }
+openfo4_render = { version = "0.1.0", path = "../openfo4_render" }
+openfo4_core_pipeline = { version = "0.1.0", path = "../openfo4_core_pipeline" }
+openfo4_tracing = { version = "0.1.0", path = "../openfo4_tracing" }
+glam = { workspace = true }
+tracing = { workspace = true }
+bytemuck = "1.16.1"
+parking_lot = "0.12.3"
+openfo4_shaderlib = { version = "0.1.0", path = "../openfo4_shaderlib" }
+
+[lints]
+workspace = true

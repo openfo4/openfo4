@@ -2,11 +2,11 @@ use std::fmt::{self, Display, Formatter};
 use std::sync::Arc;
 
 use crossbeam::queue::SegQueue;
-use game_tasks::{TaskPool, TaskQueue};
-use game_tracing::trace_span;
 use hashbrown::{HashMap, HashSet};
 use openfo4_core::ecs::{Entity, World};
 use openfo4_core::record::RecordId;
+use openfo4_tasks::{TaskPool, TaskQueue};
+use openfo4_tracing::trace_span;
 use slab::Slab;
 
 use crate::systems::scripting::invocations::Value;

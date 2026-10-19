@@ -1,7 +1,7 @@
-use game_common::components::Transform;
-use game_tracing::trace_span;
 use glam::Vec3;
+use openfo4_common::components::Transform;
 use openfo4_core::ecs::Entity;
+use openfo4_tracing::trace_span;
 use rapier3d::math::{Pose, Vector};
 use rapier3d::parry::query::DefaultQueryDispatcher;
 use rapier3d::prelude::QueryFilter;

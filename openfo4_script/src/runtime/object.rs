@@ -3,8 +3,8 @@ use std::fmt::{self, Debug, Formatter};
 use std::sync::Arc;
 
 use bytemuck::AnyBitPattern;
-use game_common::string::Lowercase;
 use hashbrown::HashMap;
+use openfo4_common::string::Lowercase;
 use parking_lot::Mutex;
 
 use crate::compiler::resources::{Resources, Type, TypeId, TypeRepr};

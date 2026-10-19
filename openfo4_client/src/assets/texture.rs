@@ -1,10 +1,10 @@
-use game_core_pipeline::entities::ImageHandle;
-use game_render::backend::TextureFormat;
-use game_render::texture::Image;
-use game_render::texture::image::MipImage;
 use openfo4_asset::{Asset, AssetLoader};
 use openfo4_core::path::{DataPath, DataPathBuf};
+use openfo4_core_pipeline::entities::ImageHandle;
 use openfo4_dds::Format;
+use openfo4_render::backend::TextureFormat;
+use openfo4_render::texture::Image;
+use openfo4_render::texture::image::MipImage;
 
 use crate::assets::data_file::DataFile;
 use crate::assets::{Error, FileLoadContext};

@@ -1,5 +1,5 @@
-use game_common::components::Transform;
 use glam::{Quat, Vec3};
+use openfo4_common::components::Transform;
 use openfo4_nif::{Block, BlockRef, NiNode};
 
 use crate::assets::nif::{

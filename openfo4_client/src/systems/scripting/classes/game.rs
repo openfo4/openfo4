@@ -1,5 +1,5 @@
-use game_common::string::Lowercase;
 use glam::Vec3;
+use openfo4_common::string::Lowercase;
 use openfo4_core::ecs::{Entity, World};
 use openfo4_core::record::RecordId;
 use openfo4_core::transform::ConvertCoordinateSystem;

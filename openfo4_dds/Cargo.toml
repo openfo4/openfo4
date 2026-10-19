@@ -5,7 +5,7 @@ edition = "2024"
 publish = false
 
 [dependencies]
-game_common = { version = "0.1.0", path = "../game_common" }
+openfo4_common = { version = "0.1.0", path = "../openfo4_common" }
 
 bitflags = "2.9.0"
 bytes = "1.10.1"

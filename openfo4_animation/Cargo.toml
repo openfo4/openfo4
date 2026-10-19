@@ -7,8 +7,8 @@ publish = false
 [dependencies]
 openfo4_hkx = { version = "0.1.0", path = "../openfo4_hkx" }
 openfo4_core = { version = "0.1.0", path = "../openfo4_core" }
-game_common = { version = "0.1.0", path = "../game_common" }
-game_tracing = { version = "0.1.0", path = "../game_tracing" }
+openfo4_common = { version = "0.1.0", path = "../openfo4_common" }
+openfo4_tracing = { version = "0.1.0", path = "../openfo4_tracing" }
 
 petgraph = "0.8.1"
 hecs = { workspace = true }

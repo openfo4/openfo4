@@ -16,23 +16,23 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use esp::EspLoader;
-use game_common::components::{Color, Transform};
-use game_core_pipeline::material::StandardMaterial;
-use game_gizmos::Gizmos;
-use game_input::keyboard::KeyCode;
-use game_tasks::TaskPool;
-use game_tracing::trace_span;
-use game_window::events::WindowEvent;
 use glam::{IVec2, Vec3};
 use level::Level;
 use openfo4_asset::AssetLoader;
+use openfo4_common::components::{Color, Transform};
 use openfo4_core::Frozen;
 use openfo4_core::ecs::{CommandBuffer, Entity, World};
 use openfo4_core::events::EventBus;
 use openfo4_core::record::RecordId;
+use openfo4_core_pipeline::material::StandardMaterial;
+use openfo4_gizmos::Gizmos;
+use openfo4_input::keyboard::KeyCode;
 use openfo4_physics::PhysicsPipeline;
 use openfo4_physics::components::{CollisionLayer, RigidBody};
 use openfo4_physics::controller::CharacterController;
+use openfo4_tasks::TaskPool;
+use openfo4_tracing::trace_span;
+use openfo4_window::events::WindowEvent;
 use parking_lot::Mutex;
 
 use crate::assets::animation::AnimationSet;
@@ -333,7 +333,7 @@ impl GameState {
         match event {
             WindowEvent::KeyboardInput(event) => {
                 if event.key_code == Some(KeyCode::L) && event.state.is_pressed() {
-                    let s: game_render::mesh::Mesh = game_render::shape::Box {
+                    let s: openfo4_render::mesh::Mesh = openfo4_render::shape::Box {
                         min_x: -30.0,
                         max_x: 30.0,
                         min_y: -30.0,

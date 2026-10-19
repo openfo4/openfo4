@@ -1,12 +1,12 @@
-use game_common::components::Transform;
-use game_input::keyboard::KeyCode;
-use game_window::events::WindowEvent;
 use glam::{Quat, Vec3};
+use openfo4_common::components::Transform;
 use openfo4_core::Frozen;
 use openfo4_core::ecs::{CommandBuffer, Entity, World};
 use openfo4_core::events::EventBus;
 use openfo4_core::transform::ConvertCoordinateSystem;
+use openfo4_input::keyboard::KeyCode;
 use openfo4_physics::components::ColliderShape;
+use openfo4_window::events::WindowEvent;
 use slab::Slab;
 
 use crate::components::{Camera, MovementState, Player};

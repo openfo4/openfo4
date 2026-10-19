@@ -1,0 +1,22 @@
+[package]
+name = "openfo4_common"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[features]
+default = []
+
+[lints]
+workspace = true
+
+[dependencies]
+glam = { workspace = true }
+bytemuck = { version = "1.16.1", features = ["derive"] }
+
+thiserror = "1.0.38"
+num-traits = "0.2.19"
+parking_lot = "0.12.3"
+allocator-api2 = "0.2.21"
+hashbrown = { workspace = true }
+pin-project = "1.1.13"

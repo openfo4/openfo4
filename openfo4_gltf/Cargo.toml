@@ -1,0 +1,36 @@
+[package]
+name = "openfo4_gltf"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[lints]
+workspace = true
+
+[dependencies]
+base64 = "0.22.1"
+bytes = "1.6.0"
+openfo4_render = { version = "0.1.0", path = "../openfo4_render" }
+openfo4_common = { version = "0.1.0", path = "../openfo4_common" }
+openfo4_tracing = { version = "0.1.0", path = "../openfo4_tracing" }
+
+glam = { workspace = true }
+tracing = { workspace = true }
+
+gltf = "1.4.1"
+image = { version = "0.25.1", default-features = false, features = ["jpeg", "png"] }
+serde_json = "1.0.120"
+thiserror = "1.0.61"
+bevy_mikktspace = { version = "1.0.0", features = ["corrected-edge-sorting", "corrected-vertex-welding"] }
+
+[[test]]
+name = "gltf_box"
+path = "tests/gltf_box/gltf_box.rs"
+
+[[test]]
+name = "basic_material"
+path = "tests/basic_material/basic_material.rs"
+
+[[test]]
+name = "nested_nodes"
+path = "tests/nested_nodes/nested_nodes.rs"

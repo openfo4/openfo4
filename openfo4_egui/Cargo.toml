@@ -1,0 +1,18 @@
+[package]
+name = "openfo4_egui"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+openfo4_ui_render = { version = "0.1.0", path = "../openfo4_ui_render" }
+
+openfo4_window = { version = "0.1.0", path = "../openfo4_window" }
+openfo4_render = { version = "0.1.0", path = "../openfo4_render" }
+openfo4_input = { version = "0.1.0", path = "../openfo4_input" }
+
+egui = "0.33.3"
+glam = { workspace = true }
+
+[lints]
+workspace = true

@@ -1,8 +1,8 @@
-use game_common::components::Color;
-use game_core_pipeline::entities::MaterialHandle;
-use game_core_pipeline::material::{AlphaMode, StandardMaterial};
 use openfo4_asset::{Asset, AssetLoader, Handle};
+use openfo4_common::components::Color;
 use openfo4_core::path::DataPathBuf;
+use openfo4_core_pipeline::entities::MaterialHandle;
+use openfo4_core_pipeline::material::{AlphaMode, StandardMaterial};
 use openfo4_nif::bgsm::Bgsm;
 
 use crate::assets::data_file::DataFile;

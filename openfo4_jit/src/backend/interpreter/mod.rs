@@ -3,8 +3,8 @@ mod ops;
 use std::cmp::Ordering;
 use std::sync::Arc;
 
-use game_common::collections::aligned_box::AlignedBox;
-use game_common::collections::vec_map::VecMap;
+use openfo4_common::collections::aligned_box::AlignedBox;
+use openfo4_common::collections::vec_map::VecMap;
 use parking_lot::Mutex;
 use slab::Slab;
 

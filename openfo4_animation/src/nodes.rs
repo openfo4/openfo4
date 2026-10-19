@@ -16,8 +16,8 @@ pub mod twist;
 use std::collections::HashMap;
 use std::time::Duration;
 
-use game_common::components::Transform;
 use glam::Vec3;
+use openfo4_common::components::Transform;
 
 use crate::events::EventSet;
 use crate::ik::Constraint;

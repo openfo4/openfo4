@@ -1,13 +1,13 @@
 use std::f32::consts::PI;
 use std::time::Instant;
 
-use game_common::components::{Axis, Color, GlobalTransform, PointLight, Transform};
-use game_common::math::Ray;
-use game_gizmos::Gizmos;
 use glam::{Quat, Vec3};
 use openfo4_animation::skeleton::BoneMarker;
+use openfo4_common::components::{Axis, Color, GlobalTransform, PointLight, Transform};
+use openfo4_common::math::Ray;
 use openfo4_core::ecs::{CommandBuffer, Entity, World};
 use openfo4_core::hierarchy::Children;
+use openfo4_gizmos::Gizmos;
 use openfo4_physics::components::{Collider, ColliderShape};
 
 use crate::cell::CellId;

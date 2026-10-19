@@ -1,16 +1,16 @@
 use std::path::PathBuf;
 
-use game_common::collections::hierarchy::Hierarchy;
-use game_common::components::Transform;
-use game_core_pipeline::entities::{ImageHandle, MaterialHandle, MeshHandle};
-use game_core_pipeline::material::{AlphaMode, StandardMaterial};
-use game_gltf::types::{GltfMaterial, GltfMesh, TextureIndex};
-use game_gltf::{GltfData, GltfDecoder};
-use game_render::mesh::{Indices, Mesh};
 use hashbrown::HashMap;
 use openfo4_asset::{Asset, AssetLoader, Handle};
+use openfo4_common::collections::hierarchy::Hierarchy;
+use openfo4_common::components::Transform;
 use openfo4_core::ecs::{Entity, EntityBuilder, World};
 use openfo4_core::hierarchy::Children;
+use openfo4_core_pipeline::entities::{ImageHandle, MaterialHandle, MeshHandle};
+use openfo4_core_pipeline::material::{AlphaMode, StandardMaterial};
+use openfo4_gltf::types::{GltfMaterial, GltfMesh, TextureIndex};
+use openfo4_gltf::{GltfData, GltfDecoder};
+use openfo4_render::mesh::{Indices, Mesh};
 use tracing::instrument;
 
 use crate::assets::Error;

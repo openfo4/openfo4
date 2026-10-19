@@ -1,8 +1,8 @@
 use std::sync::Arc;
 
-use game_common::string::Lowercase;
 use hashbrown::hash_map::Entry;
 use hashbrown::{HashMap, HashSet};
+use openfo4_common::string::Lowercase;
 use openfo4_core::record::RecordId;
 use openfo4_esp::vmad::{Script, Value};
 use openfo4_esp::{FormId, RecordData, RecordKind};

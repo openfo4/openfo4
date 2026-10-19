@@ -5,10 +5,10 @@ edition = "2024"
 publish = false
 
 [dependencies]
-game_common = { version = "0.1.0", path = "../game_common" }
-game_tracing = { version = "0.1.0", path = "../game_tracing" }
+openfo4_common = { version = "0.1.0", path = "../openfo4_common" }
+openfo4_tracing = { version = "0.1.0", path = "../openfo4_tracing" }
 openfo4_core = { version = "0.1.0", path = "../openfo4_core" }
-game_gizmos = { version = "0.1.0", path = "../game_gizmos" }
+openfo4_gizmos = { version = "0.1.0", path = "../openfo4_gizmos" }
 
 parking_lot = "0.12.3"
 rapier3d = { version = "0.35.1", features = ["debug-render"] }

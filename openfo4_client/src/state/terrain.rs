@@ -1,16 +1,16 @@
 use std::sync::Arc;
 
-use game_common::components::Transform;
-use game_core_pipeline::entities::{Entities, MaterialHandle};
-use game_core_pipeline::material::StandardMaterial;
-use game_core_pipeline::terrain::{TerrainMaterial, TerrainMaterialLayer};
-use game_render::mesh::{Indices, Mesh};
-use game_tracing::trace_span;
 use glam::{UVec2, Vec2, Vec3};
 use hashbrown::HashMap;
 use openfo4_asset::Handle;
+use openfo4_common::components::Transform;
 use openfo4_core::ecs::{Entity, World};
 use openfo4_core::transform::ConvertCoordinateSystem;
+use openfo4_core_pipeline::entities::{Entities, MaterialHandle};
+use openfo4_core_pipeline::material::StandardMaterial;
+use openfo4_core_pipeline::terrain::{TerrainMaterial, TerrainMaterialLayer};
+use openfo4_render::mesh::{Indices, Mesh};
+use openfo4_tracing::trace_span;
 
 use crate::assets::texture::FileImageHandle;
 use crate::cell::{CELL_SIZE, CellId};

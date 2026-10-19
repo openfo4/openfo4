@@ -21,7 +21,7 @@ static LOGGER: OnceLock<Logger> = OnceLock::new();
 pub fn init() {
     let layer = tracing_subscriber::registry();
     #[cfg(feature = "tracy")]
-    let layer = layer.with(game_tracing::TracyLayer::new());
+    let layer = layer.with(openfo4_tracing::TracyLayer::new());
 
     let logger = LOGGER.get_or_init(Logger::new);
     let layer = layer.with(logger);

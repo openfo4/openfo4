@@ -1,9 +1,9 @@
-use game_common::components::Transform;
-use game_render::mesh::{Indices, Mesh};
 use glam::{Quat, U8Vec4, Vec2, Vec3};
 use openfo4_asset::HandleOrAsset;
+use openfo4_common::components::Transform;
 use openfo4_nif::mesh::BSTriShape;
 use openfo4_nif::{Block, BlockRef};
+use openfo4_render::mesh::{Indices, Mesh};
 
 use crate::assets::nif::{LoadNifFlags, Node, Skin, Visit, Visitor, is_marker, load_material};
 use crate::render::RenderObject;

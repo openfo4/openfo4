@@ -2,8 +2,8 @@ use std::alloc::Layout;
 use std::sync::Arc;
 
 use bytemuck::NoUninit;
-use game_common::string::Lowercase;
 use hashbrown::HashMap;
+use openfo4_common::string::Lowercase;
 use parking_lot::Mutex;
 use slab::Slab;
 

@@ -1,12 +1,12 @@
 use std::sync::Arc;
 
-use game_common::components::Transform;
-use game_tasks::{TaskPool, TaskQueue};
-use game_tracing::trace_span;
+use openfo4_common::components::Transform;
 use openfo4_core::WorldExt;
 use openfo4_core::ecs::{Entity, World};
 use openfo4_core::events::EventBus;
 use openfo4_core::record::RecordId;
+use openfo4_tasks::{TaskPool, TaskQueue};
+use openfo4_tracing::trace_span;
 
 use crate::components::{ActorMarker, NiTransform, WorldSpace};
 use crate::events::animation::StartNifAnimationSequence;

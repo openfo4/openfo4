@@ -1,8 +1,8 @@
 use std::collections::VecDeque;
 
-use game_common::components::Transform;
 use hashbrown::{HashMap, HashSet};
 use openfo4_animation::skeleton::SkeletonInstance;
+use openfo4_common::components::Transform;
 use openfo4_core::WorldExt;
 use openfo4_core::ecs::{Entity, World};
 use openfo4_core::hierarchy::Children;

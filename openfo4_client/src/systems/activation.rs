@@ -1,15 +1,15 @@
 use std::time::{Duration, Instant};
 
-use game_common::components::{GlobalTransform, Transform};
-use game_common::math::Ray;
-use game_input::keyboard::KeyCode;
-use game_window::events::WindowEvent;
 use glam::Vec3;
+use openfo4_common::components::{GlobalTransform, Transform};
+use openfo4_common::math::Ray;
 use openfo4_core::ecs::{Entity, World};
 use openfo4_core::events::EventBus;
 use openfo4_core::hierarchy::Children;
+use openfo4_input::keyboard::KeyCode;
 use openfo4_physics::components::{Collider, CollisionLayer};
 use openfo4_physics::{PhysicsPipeline, QueryFilter};
+use openfo4_window::events::WindowEvent;
 
 use crate::assets::nif::NIF_TO_METERS;
 use crate::components::{Camera, LookingAtTarget, Player, RootParent};

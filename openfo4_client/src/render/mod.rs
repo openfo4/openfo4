@@ -3,24 +3,24 @@ mod skinning;
 
 use std::sync::Arc;
 
-use game_common::components::AmbientLight as AmbientLightComp;
-use game_common::components::DirectionalLight as DirectionalLightComp;
-use game_common::components::PointLight as PointLightComp;
-use game_common::components::{GlobalTransform, Transform};
-use game_core_pipeline::camera::{Camera, Projection};
-use game_core_pipeline::entities::{
-    CameraHandle, Entities, LightHandle, MaterialHandle, MeshHandle, Object, ObjectHandle,
-    SceneHandle,
-};
-use game_core_pipeline::lights::{AmbientLight, DirectionalLight, Light, PointLight};
-use game_gizmos::Gizmos;
-use game_render::RenderTarget;
-use game_render::Renderer;
-use game_tracing::trace_span;
 use glam::UVec2;
 use hashbrown::HashMap;
 use hashbrown::HashSet;
+use openfo4_common::components::AmbientLight as AmbientLightComp;
+use openfo4_common::components::DirectionalLight as DirectionalLightComp;
+use openfo4_common::components::PointLight as PointLightComp;
+use openfo4_common::components::{GlobalTransform, Transform};
 use openfo4_core::ecs::{Entity, World};
+use openfo4_core_pipeline::camera::{Camera, Projection};
+use openfo4_core_pipeline::entities::{
+    CameraHandle, Entities, LightHandle, MaterialHandle, MeshHandle, Object, ObjectHandle,
+    SceneHandle,
+};
+use openfo4_core_pipeline::lights::{AmbientLight, DirectionalLight, Light, PointLight};
+use openfo4_gizmos::Gizmos;
+use openfo4_render::RenderTarget;
+use openfo4_render::Renderer;
+use openfo4_tracing::trace_span;
 
 use crate::components::{Camera as CameraComp, WorldSpace};
 use crate::shared::SharedState;

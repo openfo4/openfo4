@@ -1,11 +1,11 @@
 use std::io;
 use std::path::{Path, PathBuf};
 
-use game_tracing::trace_span;
 use hashbrown::HashMap;
 use openfo4_ba2::Archive;
 use openfo4_core::path::{DataPath, DataPathBuf};
 use openfo4_io::fs::{AsyncReadAt, File};
+use openfo4_tracing::trace_span;
 use thiserror::Error;
 
 #[derive(Debug, Error)]

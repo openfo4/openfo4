@@ -15,10 +15,8 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use futures_lite::future::block_on;
-use game_common::collections::bimap::BiMap;
-use game_tasks::TaskPool;
-use game_tracing::trace_span;
 use hashbrown::HashSet;
+use openfo4_common::collections::bimap::BiMap;
 use openfo4_core::ecs::{Entity, World};
 use openfo4_core::events::EventBus;
 use openfo4_core::record::RecordId;
@@ -29,6 +27,8 @@ use openfo4_script::compiler::resources::TypeId;
 use openfo4_script::engine::{Engine, Instance, Options};
 use openfo4_script::runtime::IntoFunc;
 use openfo4_script::runtime::object::ObjectHandle;
+use openfo4_tasks::TaskPool;
+use openfo4_tracing::trace_span;
 use parking_lot::Mutex;
 
 use crate::components::{BaseObject, PlacedReference};

@@ -12,7 +12,7 @@ use std::marker::PhantomData;
 use std::ops::Deref;
 use std::sync::Arc;
 
-use game_render::shader::Shader;
+use openfo4_render::shader::Shader;
 
 /// Includes a [`ShaderSource`] file.
 ///

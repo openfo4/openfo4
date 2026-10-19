@@ -1,10 +1,10 @@
 mod instruction;
 
-use game_common::string::Lowercase;
-use game_tracing::trace_span;
 use hashbrown::{HashMap, HashSet};
 use indexmap::IndexSet;
+use openfo4_common::string::Lowercase;
 use openfo4_pex::{Class, Function, Instruction, Module, Value};
+use openfo4_tracing::trace_span;
 use std::fmt::{self, Display, Formatter};
 use thiserror::Error;
 

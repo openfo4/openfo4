@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::time::Duration;
 
 use bitflags::bitflags;
-use game_common::components::Transform;
+use openfo4_common::components::Transform;
 
 #[derive(Clone, Debug)]
 pub struct AnimationClip {

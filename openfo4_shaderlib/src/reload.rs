@@ -2,11 +2,11 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, OnceLock, mpsc};
 
-use game_render::shader::{Error, Shader};
 use hashbrown::HashMap;
 use naga::back::spv::{Options, WriterFlags};
 use naga::valid::{Capabilities, ValidationFlags, Validator};
 use notify::{RecursiveMode, Watcher};
+use openfo4_render::shader::{Error, Shader};
 
 pub type BoxError = Box<dyn std::error::Error>;
 

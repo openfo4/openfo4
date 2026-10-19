@@ -1,5 +1,5 @@
-use game_common::components::Axis;
 use glam::Vec3;
+use openfo4_common::components::Axis;
 use rapier3d::geometry::InteractionTestMode;
 use rapier3d::prelude::{Group, InteractionGroups};
 

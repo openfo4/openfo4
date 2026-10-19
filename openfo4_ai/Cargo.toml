@@ -1,0 +1,16 @@
+[package]
+name = "openfo4_ai"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[lints]
+workspace = true
+
+[dependencies]
+openfo4_common = { version = "0.1.0", path = "../openfo4_common" }
+openfo4_tracing = { version = "0.1.0", path = "../openfo4_tracing" }
+
+glam = { workspace = true, features = [] }
+petgraph = "0.8.3"
+rstar = "0.12.2"

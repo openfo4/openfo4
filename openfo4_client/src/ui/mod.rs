@@ -1,5 +1,5 @@
-use game_egui::egui::Context;
-use game_render::Renderer;
+use openfo4_egui::egui::Context;
+use openfo4_render::Renderer;
 
 use crate::state::GameState;
 use crate::ui::console::ConsoleState;

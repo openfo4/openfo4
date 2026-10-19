@@ -5,15 +5,15 @@ use std::sync::Arc;
 use async_channel::{Receiver, Sender};
 use futures::StreamExt;
 use futures::stream::FuturesUnordered;
-use game_common::components::Transform;
-use game_tracing::trace_span;
 use hashbrown::{HashMap, HashSet};
+use openfo4_common::components::Transform;
 use openfo4_core::Frozen;
 use openfo4_core::ecs::{Entity, World};
 use openfo4_core::hierarchy::Children;
 use openfo4_core::record::RecordId;
 use openfo4_esp::records::Cell;
 use openfo4_esp::{RecordChildren, RecordData, RecordKind};
+use openfo4_tracing::trace_span;
 use parking_lot::Mutex;
 
 use crate::cell::CellId;

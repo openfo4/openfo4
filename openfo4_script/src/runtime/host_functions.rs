@@ -1,7 +1,7 @@
 use std::cell::RefCell;
 use std::panic::{AssertUnwindSafe, catch_unwind};
 
-use game_common::utils::vec_ext::VecExt;
+use openfo4_common::utils::vec_ext::VecExt;
 use openfo4_jit::func::HostType;
 use tracing::span::EnteredSpan;
 

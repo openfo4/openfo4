@@ -1,10 +1,10 @@
 use std::fmt::Write;
 
-use game_egui::egui::{
-    Color32, Context, CornerRadius, Frame, Key, LayerId, Painter, Pos2, Rect, RichText, Window,
-};
 use openfo4_core::ecs::{Entity, World};
 use openfo4_core::events::EventBus;
+use openfo4_egui::egui::{
+    Color32, Context, CornerRadius, Frame, Key, LayerId, Painter, Pos2, Rect, RichText, Window,
+};
 
 use crate::components::{ActorMarker, DeadActor, LookingAtTarget, PlacedItem, Player, RootParent};
 use crate::state::hardcoded::fallout4::ACTOR_VALUE_HEALTH;

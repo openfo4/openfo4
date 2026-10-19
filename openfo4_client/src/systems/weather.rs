@@ -1,24 +1,24 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use game_common::color::{LinearRgb, Rgb};
-use game_common::components::{AmbientLight, Color, DirectionalLight, Transform};
-use game_common::utils::vec_ext::VecExt;
-use game_core_pipeline::entities::Entities;
-use game_core_pipeline::sky::SkyMaterial;
-use game_render::mesh::{Indices, Mesh};
-use game_render::texture::image::MipImage;
-use game_tasks::TaskPool;
 use glam::{FloatExt, Quat, Vec2, Vec3, Vec4};
 use hashbrown::HashMap;
 use openfo4_asset::AssetLoader;
+use openfo4_common::color::{LinearRgb, Rgb};
+use openfo4_common::components::{AmbientLight, Color, DirectionalLight, Transform};
+use openfo4_common::utils::vec_ext::VecExt;
 use openfo4_core::ecs::{Entity, World};
 use openfo4_core::path::DataPathBuf;
 use openfo4_core::record::RecordId;
 use openfo4_core::transform::ConvertCoordinateSystem;
+use openfo4_core_pipeline::entities::Entities;
+use openfo4_core_pipeline::sky::SkyMaterial;
 use openfo4_esp::records::{Rgba, TimeOfDaySetExtended};
 use openfo4_esp::{FormId, RecordData, RecordKind};
 use openfo4_nif::{Block, Nif};
+use openfo4_render::mesh::{Indices, Mesh};
+use openfo4_render::texture::image::MipImage;
+use openfo4_tasks::TaskPool;
 
 use crate::assets::data_file::DataFile;
 use crate::assets::texture::{FileImage, FileImageKey};

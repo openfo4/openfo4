@@ -1,9 +1,9 @@
 use std::hash::Hash;
 use std::iter;
 
-use game_common::string::Lowercase;
 use hashbrown::HashMap;
 use indexmap::IndexMap;
+use openfo4_common::string::Lowercase;
 use openfo4_jit::Type as JitType;
 use openfo4_pex::{Class, Function, Instruction, Struct, Value};
 use slab::Slab;

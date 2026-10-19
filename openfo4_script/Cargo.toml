@@ -5,8 +5,8 @@ edition = "2024"
 publish = false
 
 [dependencies]
-game_common = { version = "0.1.0", path = "../game_common" }
-game_tracing = { version = "0.1.0", path = "../game_tracing" }
+openfo4_common = { version = "0.1.0", path = "../openfo4_common" }
+openfo4_tracing = { version = "0.1.0", path = "../openfo4_tracing" }
 openfo4_pex = { version = "0.1.0", path = "../openfo4_pex" }
 openfo4_jit = { version = "0.1.0", path = "../openfo4_jit" }
 

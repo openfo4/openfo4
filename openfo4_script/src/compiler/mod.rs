@@ -10,8 +10,8 @@ use openfo4_jit::func::HostFunc;
 
 use std::sync::Arc;
 
-use game_common::string::Lowercase;
 use hashbrown::HashMap;
+use openfo4_common::string::Lowercase;
 use openfo4_jit::{CompiledFunction, CompilerConfig, Signature};
 use openfo4_pex::Module;
 use thiserror::Error;

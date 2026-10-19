@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::Arc;
 use std::time::Duration;
 
-use game_tracing::trace_span;
+use openfo4_tracing::trace_span;
 use slab::Slab;
 
 use crate::events::EventSet;

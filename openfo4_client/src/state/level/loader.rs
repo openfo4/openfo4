@@ -1,9 +1,9 @@
 use std::sync::Arc;
 
 use event_listener::EventListener;
-use game_common::collections::slab::Slab;
-use game_common::components::Transform;
-use game_common::utils::AbortOnDrop;
+use openfo4_common::collections::slab::Slab;
+use openfo4_common::components::Transform;
+use openfo4_common::utils::AbortOnDrop;
 use openfo4_core::ecs::Entity;
 use openfo4_core::record::RecordId;
 

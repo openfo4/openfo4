@@ -1,7 +1,7 @@
 use std::time::{Duration, Instant};
 
 use async_io::Timer;
-use game_tracing::trace_span;
+use openfo4_tracing::trace_span;
 
 #[derive(Clone, Debug)]
 pub struct Interval {

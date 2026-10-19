@@ -1,9 +1,9 @@
-use game_common::components::Transform;
-use game_core_pipeline::entities::ObjectHandle;
-use game_tracing::trace_span;
 use hashbrown::HashMap;
 use openfo4_animation::skeleton::SkeletonInstance;
+use openfo4_common::components::Transform;
 use openfo4_core::ecs::{Entity, World};
+use openfo4_core_pipeline::entities::ObjectHandle;
+use openfo4_tracing::trace_span;
 
 use crate::shared::SharedState;
 use crate::systems::equipment::Equipment;

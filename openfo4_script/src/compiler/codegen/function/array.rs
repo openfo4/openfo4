@@ -1,4 +1,4 @@
-use game_common::string::Lowercase;
+use openfo4_common::string::Lowercase;
 use openfo4_pex::{ArrayFind, ArrayFindStruct, Unop};
 
 use crate::compiler::codegen::function::FunctionTranslator;

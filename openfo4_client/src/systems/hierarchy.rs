@@ -1,11 +1,11 @@
 use std::collections::VecDeque;
 
-use game_common::components::{GlobalTransform, Transform};
-use game_tracing::trace_span;
 use hashbrown::{HashMap, HashSet};
 use nohash_hasher::BuildNoHashHasher;
+use openfo4_common::components::{GlobalTransform, Transform};
 use openfo4_core::ecs::{CommandBuffer, Entity, World};
 use openfo4_core::hierarchy::Children;
+use openfo4_tracing::trace_span;
 
 #[derive(Clone, Debug, Default)]
 pub struct TransformHierarchyCache {
@@ -185,8 +185,8 @@ fn validate_transform_cache_hierarchy(world: &World, cache: &TransformHierarchyC
 
 #[cfg(test)]
 mod tests {
-    use game_common::components::{GlobalTransform, Transform};
     use glam::Vec3;
+    use openfo4_common::components::{GlobalTransform, Transform};
     use openfo4_core::ecs::World;
     use openfo4_core::hierarchy::Children;
 

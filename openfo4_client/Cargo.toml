@@ -5,19 +5,19 @@ edition = "2024"
 publish = false
 
 [dependencies]
-game_window = { version = "0.1.0", path = "../game_window" }
-game_render = { version = "0.1.0", path = "../game_render" }
-game_tasks = { version = "0.1.0", path = "../game_tasks" }
-game_common = { version = "0.1.0", path = "../game_common" }
-game_tracing = { version = "0.1.0", path = "../game_tracing" }
-game_input = { version = "0.1.0", path = "../game_input" }
-game_crash_handler = { version = "0.1.0", path = "../game_crash_handler", features = ["tracy"] }
-game_core_pipeline = { version = "0.1.0", path = "../game_core_pipeline" }
-game_gizmos = { version = "0.1.0", path = "../game_gizmos" }
-game_egui = { version = "0.1.0", path = "../game_egui" }
-game_ui_render = { version = "0.1.0", path = "../game_ui_render" }
-game_gltf = { version = "0.1.0", path = "../game_gltf" }
-game_ai = { version = "0.1.0", path = "../game_ai" }
+openfo4_window = { version = "0.1.0", path = "../openfo4_window" }
+openfo4_render = { version = "0.1.0", path = "../openfo4_render" }
+openfo4_tasks = { version = "0.1.0", path = "../openfo4_tasks" }
+openfo4_common = { version = "0.1.0", path = "../openfo4_common" }
+openfo4_tracing = { version = "0.1.0", path = "../openfo4_tracing" }
+openfo4_input = { version = "0.1.0", path = "../openfo4_input" }
+openfo4_crash_handler = { version = "0.1.0", path = "../openfo4_crash_handler", features = ["tracy"] }
+openfo4_core_pipeline = { version = "0.1.0", path = "../openfo4_core_pipeline" }
+openfo4_gizmos = { version = "0.1.0", path = "../openfo4_gizmos" }
+openfo4_egui = { version = "0.1.0", path = "../openfo4_egui" }
+openfo4_ui_render = { version = "0.1.0", path = "../openfo4_ui_render" }
+openfo4_gltf = { version = "0.1.0", path = "../openfo4_gltf" }
+openfo4_ai = { version = "0.1.0", path = "../openfo4_ai" }
 
 openfo4_nif = { version = "0.1.0", path = "../openfo4_nif" }
 openfo4_esp = { version = "0.1.0", path = "../openfo4_esp" }

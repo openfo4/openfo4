@@ -2,9 +2,9 @@ use std::num::NonZeroU32;
 use std::path::Path;
 
 use async_lock::RwLock;
-use game_common::collections::lru::LruCache;
-use game_common::string::Lowercase;
 use hashbrown::{HashMap, HashSet};
+use openfo4_common::collections::lru::LruCache;
+use openfo4_common::string::Lowercase;
 use openfo4_core::record::{ModuleId, RecordId};
 use openfo4_esp::{EspFile, FormId, Record, RecordChildren, RecordData, RecordKind};
 use openfo4_io::fs::File;

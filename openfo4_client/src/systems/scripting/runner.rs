@@ -7,10 +7,10 @@ use std::task::Poll;
 use crossbeam::queue::SegQueue;
 use futures::stream::FuturesUnordered;
 use futures_lite::StreamExt;
-use game_tasks::TaskPool;
-use game_tracing::trace_span;
 use hashbrown::HashSet;
 use openfo4_script::runtime::{Context, ObjectAddr, Val};
+use openfo4_tasks::TaskPool;
+use openfo4_tracing::trace_span;
 use slab::Slab;
 use tracing::instrument;
 

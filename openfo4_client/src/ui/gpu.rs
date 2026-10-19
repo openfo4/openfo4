@@ -1,9 +1,9 @@
-use game_egui::egui::{
+use openfo4_egui::egui::{
     Align2, Area, Color32, ColorImage, Context, Label, Painter, Pos2, Rect, RichText, Sense,
     TextureOptions, Ui, Vec2,
 };
-use game_render::Renderer;
-use game_render::statistics::{AllocationKind, MemoryBlock};
+use openfo4_render::Renderer;
+use openfo4_render::statistics::{AllocationKind, MemoryBlock};
 
 const BLOCK_HEIGHT: u32 = 32;
 const BLOCK_WIDTH: u32 = 512;

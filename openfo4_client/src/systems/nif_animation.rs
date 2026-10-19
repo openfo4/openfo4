@@ -1,9 +1,9 @@
 use std::time::Duration;
 
-use game_core_pipeline::entities::Entities;
-use game_tracing::trace_span;
 use openfo4_core::ecs::{CommandBuffer, World};
 use openfo4_core::events::EventBus;
+use openfo4_core_pipeline::entities::Entities;
+use openfo4_tracing::trace_span;
 
 use crate::assets::nif::animation::ControlledValue;
 use crate::assets::nif::animation_controller::{

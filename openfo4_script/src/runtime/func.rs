@@ -5,7 +5,7 @@ use std::pin::{Pin, pin};
 use std::sync::{Arc, Weak};
 use std::task::{self, Poll, Waker, ready};
 
-use game_common::cell::UnsafeRefCell;
+use openfo4_common::cell::UnsafeRefCell;
 use openfo4_jit::{CompiledFunction, Signature, Type};
 use pin_project::pin_project;
 use thiserror::Error;

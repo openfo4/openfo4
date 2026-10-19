@@ -1,5 +1,5 @@
-use game_common::components::Transform;
 use glam::{Mat3, Mat4, Quat, Vec3};
+use openfo4_common::components::Transform;
 
 const NIF_TO_METERS: f32 = 1.0 / 69.99125;
 const NIF_TO_OPENGL: Mat3 = Mat3::from_cols_array_2d(&[
@@ -75,8 +75,8 @@ impl ConvertCoordinateSystem for Transform {
 
 #[cfg(test)]
 mod tests {
-    use game_common::components::Transform;
     use glam::{Quat, Vec3};
+    use openfo4_common::components::Transform;
 
     use super::ConvertCoordinateSystem;
 

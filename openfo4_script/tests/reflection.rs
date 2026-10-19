@@ -1,5 +1,5 @@
 use futures_lite::future::block_on;
-use game_common::string::Lowercase;
+use openfo4_common::string::Lowercase;
 use openfo4_script::assembler::assemble;
 use openfo4_script::compiler::CompilerOptions;
 use openfo4_script::compiler::resources::PropertyType;

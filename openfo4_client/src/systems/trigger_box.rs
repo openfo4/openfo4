@@ -1,7 +1,7 @@
-use game_common::components::Transform;
-use game_tracing::trace_span;
+use openfo4_common::components::Transform;
 use openfo4_core::ecs::{Entity, World};
 use openfo4_core::events::EventBus;
+use openfo4_tracing::trace_span;
 
 use crate::components::{Root, TriggerBox};
 use crate::events::trigger::{TriggerEnter, TriggerLeave};

@@ -1,8 +1,8 @@
 use std::collections::VecDeque;
 
-use game_common::components::Transform;
 use glam::Vec3;
 use hashbrown::HashSet;
+use openfo4_common::components::Transform;
 use openfo4_hkx::{HkObject, HkxFile};
 use openfo4_nif::{BhkNPCollisionObject, Block, BlockRef, Nif};
 use openfo4_physics::components::{Collider, ColliderShape, CollisionLayer, TriMesh};

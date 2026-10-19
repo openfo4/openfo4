@@ -5,8 +5,7 @@ edition = "2024"
 publish = false
 
 [dependencies]
-game_common = { version = "0.1.0", path = "../game_common" }
-game_tasks = { version = "0.1.0", path = "../game_tasks" }
+openfo4_common = { version = "0.1.0", path = "../openfo4_common" }
 
 parking_lot = "0.12.4"
 event-listener = "5.4.0"

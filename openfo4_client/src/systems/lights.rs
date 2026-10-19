@@ -1,7 +1,7 @@
 use std::f32::consts::PI;
 use std::time::Duration;
 
-use game_common::components::PointLight;
+use openfo4_common::components::PointLight;
 use openfo4_core::ecs::World;
 
 #[derive(Clone, Debug)]

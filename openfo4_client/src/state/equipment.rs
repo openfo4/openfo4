@@ -1,7 +1,6 @@
 use std::collections::VecDeque;
 use std::time::Duration;
 
-use game_tracing::trace_span;
 use hashbrown::{HashMap, HashSet};
 use openfo4_animation::skeleton::SkeletonInstance;
 use openfo4_asset::{AssetLoader, Handle};
@@ -14,6 +13,7 @@ use openfo4_esp::records::object_modification::{
 };
 use openfo4_esp::records::{BipedObjectFlags, WeaponDataFlags};
 use openfo4_esp::{FormId, RecordData, RecordKind};
+use openfo4_tracing::trace_span;
 use thiserror::Error;
 
 use crate::assets::nif::{LoadNifFlags, NifKey, NifScene};

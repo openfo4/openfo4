@@ -1,8 +1,8 @@
-use game_ai::navmesh::{Agent, Path};
-use game_common::components::Transform;
-use game_common::math::Ray;
-use game_tracing::trace_span;
 use glam::Vec3;
+use openfo4_ai::navmesh::{Agent, Path};
+use openfo4_common::components::Transform;
+use openfo4_common::math::Ray;
+use openfo4_tracing::trace_span;
 
 use crate::components::MovementState;
 use crate::systems::FacingDirection;

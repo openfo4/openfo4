@@ -18,8 +18,8 @@ use cranelift_codegen::isa::{CallConv, OwnedTargetIsa};
 use cranelift_codegen::settings::Configurable;
 use cranelift_codegen::{CompiledCode, Context, settings};
 use cranelift_frontend::{FunctionBuilder, FunctionBuilderContext};
-use game_tracing::trace_span;
 use hashbrown::{HashMap, HashSet};
+use openfo4_tracing::trace_span;
 use slab::Slab;
 
 use crate::backend::cranelift::memory::{Allocation, MemoryAllocator};

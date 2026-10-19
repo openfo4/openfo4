@@ -1,7 +1,7 @@
 use std::time::Duration;
 
-use game_common::components::Transform;
 use glam::{Quat, Vec3};
+use openfo4_common::components::Transform;
 use openfo4_core::ecs::{CommandBuffer, Entity, World};
 use openfo4_core::events::EventBus;
 

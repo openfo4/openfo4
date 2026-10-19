@@ -7,8 +7,8 @@
 
 use bitflags::bitflags;
 use bytes::{Buf, Bytes};
-use game_common::utils::ExtractBits;
 use glam::UVec2;
+use openfo4_common::utils::ExtractBits;
 use thiserror::Error;
 
 const MAGIC: u32 = 0x20534444;

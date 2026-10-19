@@ -3,8 +3,8 @@
 mod lowering;
 mod text;
 
-use game_common::string::Lowercase;
-use game_common::utils::vec_ext::VecExt;
+use openfo4_common::string::Lowercase;
+use openfo4_common::utils::vec_ext::VecExt;
 
 use crate::compiler::codegen::pex::registry::{ClassId, StructId};
 use crate::compiler::codegen::trace::Span;

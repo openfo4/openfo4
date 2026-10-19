@@ -1,6 +1,6 @@
-use game_tracing::trace_span;
 use openfo4_core::ecs::{CommandBuffer, World};
 use openfo4_core::events::EventBus;
+use openfo4_tracing::trace_span;
 
 use crate::components::{ActorProperties, ActorProtection, DeadActor, Player};
 use crate::events::combat::{BleedoutStartEvent, ReachedZeroHealthEvent};

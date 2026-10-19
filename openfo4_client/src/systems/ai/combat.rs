@@ -1,9 +1,9 @@
 use std::f32::consts::FRAC_PI_2;
 use std::time::{Duration, Instant};
 
-use game_common::components::Transform;
-use game_common::math::Ray;
 use glam::{Quat, Vec3};
+use openfo4_common::components::Transform;
+use openfo4_common::math::Ray;
 use openfo4_core::ecs::Entity;
 use openfo4_core::transform::ConvertCoordinateSystem;
 

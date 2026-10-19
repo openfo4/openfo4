@@ -2,8 +2,8 @@ mod array;
 
 use std::fmt::Write;
 
-use game_common::string::Lowercase;
 use hashbrown::HashMap;
+use openfo4_common::string::Lowercase;
 use openfo4_jit::{Compiler, FuncId, Signature, Type as JitType};
 use openfo4_pex::{Instruction, Value};
 

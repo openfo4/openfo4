@@ -18,21 +18,21 @@ use std::process::ExitCode;
 use std::sync::Arc;
 
 use clap::Parser;
-use game_crash_handler::main;
-use game_egui::EguiContext;
-use game_gizmos::Gizmos;
-use game_render::RenderTarget;
-use game_render::Renderer;
-use game_tasks::TaskPool;
-use game_ui_render::UiRenderer;
-use game_window::events::WindowEvent;
-use game_window::windows::WindowBuilder;
-use game_window::{WindowManager, WindowManagerContext};
 use glam::IVec2;
 use glam::UVec2;
 use glam::Vec3;
 use openfo4_core::record::RecordId;
+use openfo4_crash_handler::main;
+use openfo4_egui::EguiContext;
 use openfo4_esp::FormId;
+use openfo4_gizmos::Gizmos;
+use openfo4_render::RenderTarget;
+use openfo4_render::Renderer;
+use openfo4_tasks::TaskPool;
+use openfo4_ui_render::UiRenderer;
+use openfo4_window::events::WindowEvent;
+use openfo4_window::windows::WindowBuilder;
+use openfo4_window::{WindowManager, WindowManagerContext};
 use render::RenderState;
 use render::physics_debug::{
     draw_cell_boundaries, draw_colliers, draw_skeletons, draw_translations,
@@ -104,7 +104,7 @@ fn main() -> ExitCode {
     let window = wm.windows_mut().spawn(WindowBuilder::new());
 
     let mut renderer = Renderer::new().unwrap();
-    let entities = game_core_pipeline::init(&mut renderer);
+    let entities = openfo4_core_pipeline::init(&mut renderer);
     let gizmos = Gizmos::new(&mut renderer);
 
     let shared = Arc::new(SharedState::new(entities.clone()));
@@ -243,7 +243,7 @@ struct App {
     ui_renderer: Arc<UiRenderer>,
 }
 
-impl game_window::App for App {
+impl openfo4_window::App for App {
     fn handle_event(&mut self, ctx: WindowManagerContext<'_>, event: WindowEvent) {
         match event.clone() {
             WindowEvent::WindowCreated(event) => {

@@ -6,8 +6,8 @@
 use core::f32;
 use std::f32::consts::PI;
 
-use game_common::components::Axis;
 use glam::{EulerRot, Quat, Vec3};
+use openfo4_common::components::Axis;
 
 const FABRIK_TOLERANCE: f32 = 0.01;
 const FABRIK_MAX_ITERATIONS: usize = 1000;
@@ -264,9 +264,9 @@ impl<'a, T> WindowsMut<'a, T> {
 
 #[cfg(test)]
 mod tests {
-    use game_common::assert_approx_eq;
-    use game_common::components::Axis;
     use glam::{Quat, Vec3};
+    use openfo4_common::assert_approx_eq;
+    use openfo4_common::components::Axis;
 
     use crate::ik::{Constraint, FORWARD, Pose, SphericalConstraint, WindowsMut};
 
