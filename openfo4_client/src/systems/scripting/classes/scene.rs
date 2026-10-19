@@ -32,12 +32,7 @@ fn force_start(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<(), Erro
 /// Function() native
 /// ```
 async fn start(mut caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Error> {
-    let scene = caller
-        .data()
-        .objects
-        .get_by_addr(self_ptr)
-        .and_then(|s| s.record())
-        .ok_or_else(|| todo!())?;
+    let scene = caller.data().record(self_ptr);
 
     caller
         .data_mut()
@@ -53,12 +48,7 @@ async fn start(mut caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Er
 /// Function() native
 /// ```
 async fn stop(mut caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Error> {
-    let scene = caller
-        .data()
-        .objects
-        .get_by_addr(self_ptr)
-        .and_then(|s| s.record())
-        .ok_or_else(|| todo!())?;
+    let scene = caller.data().record(self_ptr);
 
     caller
         .data_mut()
@@ -86,13 +76,9 @@ async fn get_owning_quest(
     mut caller: Caller<'_, State>,
     self_ptr: Object,
 ) -> Result<Object, Error> {
-    let data = caller.data_mut();
+    let scene = caller.data().record(self_ptr);
 
-    let scene = data
-        .objects
-        .get_by_addr(self_ptr)
-        .and_then(|s| s.record())
-        .ok_or_else(|| todo!())?;
+    let data = caller.data_mut();
 
     let quests = data.quests().await;
     let scene = quests.get_scene(scene).ok_or_else(|| todo!())?;

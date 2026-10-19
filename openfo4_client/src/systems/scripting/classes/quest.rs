@@ -79,12 +79,7 @@ fn get_alias(_caller: Caller<'_, State>, _quest: Object, _alias_id: Int) -> Resu
 /// int Function GetCurrentStageID() native
 /// ```
 async fn get_current_stage_id(mut caller: Caller<'_, State>, quest: Object) -> Result<Int, Error> {
-    let id = caller
-        .data()
-        .objects
-        .get_by_addr(quest)
-        .and_then(|s| s.record())
-        .ok_or_else(|| todo!())?;
+    let id = caller.data().record(quest);
 
     let quests = caller.data_mut().quests().await;
     let quest = quests.get(id).ok_or_else(|| todo!())?;
@@ -167,12 +162,7 @@ fn is_objective_failed(
 /// bool Function IsRunning() native
 /// ```
 async fn is_running(mut caller: Caller<'_, State>, quest: Object) -> Result<bool, Error> {
-    let id = caller
-        .data()
-        .objects
-        .get_by_addr(quest)
-        .and_then(|s| s.record())
-        .ok_or_else(|| todo!())?;
+    let id = caller.data().record(quest);
 
     let quests = caller.data_mut().quests().await;
     let quest = quests.get(id).ok_or_else(|| todo!())?;
@@ -189,12 +179,7 @@ async fn is_stage_done(
     quest: Object,
     stage: Int,
 ) -> Result<bool, Error> {
-    let id = caller
-        .data()
-        .objects
-        .get_by_addr(quest)
-        .and_then(|s| s.record())
-        .ok_or_else(|| todo!())?;
+    let id = caller.data().record(quest);
 
     let quests = caller.data_mut().quests().await;
     let quest = quests.get(id).ok_or_else(|| Error::msg("no quest"))?;
@@ -216,12 +201,7 @@ async fn is_stage_done(
 /// bool Function IsStarting() native
 /// ```
 async fn is_starting(mut caller: Caller<'_, State>, quest: Object) -> Result<bool, Error> {
-    let id = caller
-        .data()
-        .objects
-        .get_by_addr(quest)
-        .and_then(|s| s.record())
-        .ok_or_else(|| todo!())?;
+    let id = caller.data().record(quest);
 
     let quests = caller.data_mut().quests().await;
     let quest = quests.get(id).ok_or_else(|| todo!())?;
@@ -234,12 +214,7 @@ async fn is_starting(mut caller: Caller<'_, State>, quest: Object) -> Result<boo
 /// bool Function IsStopping() native
 /// ```
 async fn is_stopping(mut caller: Caller<'_, State>, quest: Object) -> Result<bool, Error> {
-    let id = caller
-        .data()
-        .objects
-        .get_by_addr(quest)
-        .and_then(|s| s.record())
-        .ok_or_else(|| todo!())?;
+    let id = caller.data().record(quest);
 
     let quests = caller.data_mut().quests().await;
     let quest = quests.get(id).ok_or_else(|| todo!())?;
@@ -252,12 +227,7 @@ async fn is_stopping(mut caller: Caller<'_, State>, quest: Object) -> Result<boo
 /// bool Function IsStopped() native
 /// ```
 async fn is_stopped(mut caller: Caller<'_, State>, quest: Object) -> Result<bool, Error> {
-    let id = caller
-        .data()
-        .objects
-        .get_by_addr(quest)
-        .and_then(|s| s.record())
-        .ok_or_else(|| todo!())?;
+    let id = caller.data().record(quest);
 
     let quests = caller.data_mut().quests().await;
     let quest = quests.get(id).ok_or_else(|| todo!())?;
@@ -305,12 +275,7 @@ async fn set_current_stage_id(
         return Ok(false);
     };
 
-    let id = caller
-        .data()
-        .objects
-        .get_by_addr(quest)
-        .and_then(|s| s.record())
-        .ok_or_else(|| todo!())?;
+    let id = caller.data().record(quest);
     let mut quests = caller.data_mut().quests().await;
     let quest = quests.get(id).ok_or_else(|| todo!())?;
     if !quest.stages.contains_key(&stage_id) {
@@ -370,12 +335,7 @@ fn set_objective_failed(
 /// bool Function Start() native
 /// ```
 async fn start(mut caller: Caller<'_, State>, quest: Object) -> Result<bool, Error> {
-    let id = caller
-        .data()
-        .objects
-        .get_by_addr(quest)
-        .and_then(|s| s.record())
-        .ok_or_else(|| todo!())?;
+    let id = caller.data().record(quest);
 
     let mut quests = caller.data_mut().quests().await;
     quests.start_quest(id);
@@ -389,12 +349,7 @@ async fn start(mut caller: Caller<'_, State>, quest: Object) -> Result<bool, Err
 /// Function Stop() native
 /// ```
 async fn stop(mut caller: Caller<'_, State>, quest: Object) -> Result<(), Error> {
-    let id = caller
-        .data()
-        .objects
-        .get_by_addr(quest)
-        .and_then(|s| s.record())
-        .ok_or_else(|| todo!())?;
+    let id = caller.data().record(quest);
 
     let mut quests = caller.data_mut().quests().await;
     quests.stop_quest(id);
