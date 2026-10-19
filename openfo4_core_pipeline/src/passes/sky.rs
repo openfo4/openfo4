@@ -28,13 +28,13 @@ use crate::passes::HDR_FORMAT;
 use crate::passes::sky::clouds::CloudsPass;
 use crate::sky::SkyMaterial;
 
-static VS_SHADER: ShaderSource = include_shader!("/game_core_pipeline/shaders/sky/sky_vs.slang");
-static FS_SHADER: ShaderSource = include_shader!("/game_core_pipeline/shaders/sky/sky_fs.slang");
+static VS_SHADER: ShaderSource = include_shader!("/openfo4_core_pipeline/shaders/sky/sky_vs.slang");
+static FS_SHADER: ShaderSource = include_shader!("/openfo4_core_pipeline/shaders/sky/sky_fs.slang");
 
 static SUN_VS_SHADER: ShaderSource =
-    include_shader!("/game_core_pipeline/shaders/sky/sun_vs.slang");
+    include_shader!("/openfo4_core_pipeline/shaders/sky/sun_vs.slang");
 static SUN_FS_SHADER: ShaderSource =
-    include_shader!("/game_core_pipeline/shaders/sky/sun_fs.slang");
+    include_shader!("/openfo4_core_pipeline/shaders/sky/sun_fs.slang");
 
 pub struct SkyPass {
     pipeline: Mutex<Pipeline>,

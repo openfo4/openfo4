@@ -15,9 +15,9 @@ use crate::passes::forward::ForwardParams;
 use crate::passes::forward::drawgen::{DrawcallGenParams, DrawcallGenPipeline};
 
 static VS_SHADER: ShaderSource =
-    include_shader!("/game_core_pipeline/shaders/opaque_vertex/visbuffer_vert.slang");
+    include_shader!("/openfo4_core_pipeline/shaders/opaque_vertex/visbuffer_vert.slang");
 static FS_SAHDER: ShaderSource =
-    include_shader!("/game_core_pipeline/shaders/opaque_vertex/visbuffer_frag.slang");
+    include_shader!("/openfo4_core_pipeline/shaders/opaque_vertex/visbuffer_frag.slang");
 
 pub struct OpaqueForwardPass {
     drawcall_gen: DrawcallGenPipeline,

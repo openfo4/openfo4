@@ -8,7 +8,7 @@ use openfo4_shaderlib::pipeline::{Pipeline, PipelineBinding, PipelineConfig, Sha
 use openfo4_shaderlib::{ShaderSource, include_shader};
 
 static SHADER: ShaderSource =
-    include_shader!("/game_core_pipeline/shaders/opaque_vertex/visbuffer_shading.slang");
+    include_shader!("/openfo4_core_pipeline/shaders/opaque_vertex/visbuffer_shading.slang");
 
 const TILE_SIZE: u32 = 16;
 

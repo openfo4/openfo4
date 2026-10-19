@@ -27,13 +27,13 @@ use crate::passes::update::{RawAmbientLight, RawSceneData};
 use crate::passes::{DEPTH_FORMAT, HDR_TEXTURE, OPAQUE_DEPTH, State};
 
 static DRAWGEN_SHADER: ShaderSource =
-    include_shader!("/game_core_pipeline/shaders/transparent/drawcall_gen.slang");
+    include_shader!("/openfo4_core_pipeline/shaders/transparent/drawcall_gen.slang");
 static COLOR_VERT_SHADER: ShaderSource =
-    include_shader!("/game_core_pipeline/shaders/transparent/transparent_vert.slang");
+    include_shader!("/openfo4_core_pipeline/shaders/transparent/transparent_vert.slang");
 static COLOR_FRAG_SHADER: ShaderSource =
-    include_shader!("/game_core_pipeline/shaders/transparent/transparent_frag.slang");
+    include_shader!("/openfo4_core_pipeline/shaders/transparent/transparent_frag.slang");
 static BLEND_SHADER: ShaderSource =
-    include_shader!("/game_core_pipeline/shaders/transparent/transparent_blend.slang");
+    include_shader!("/openfo4_core_pipeline/shaders/transparent/transparent_blend.slang");
 
 const WORKGROUP_SIZE: u32 = 64;
 

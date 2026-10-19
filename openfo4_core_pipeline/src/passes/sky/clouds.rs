@@ -22,8 +22,10 @@ use openfo4_shaderlib::{ShaderSource, include_shader};
 use crate::camera::Camera;
 use crate::passes::HDR_FORMAT;
 
-static VS_SHADER: ShaderSource = include_shader!("/game_core_pipeline/shaders/sky/clouds_vs.slang");
-static FS_SHADER: ShaderSource = include_shader!("/game_core_pipeline/shaders/sky/clouds_fs.slang");
+static VS_SHADER: ShaderSource =
+    include_shader!("/openfo4_core_pipeline/shaders/sky/clouds_vs.slang");
+static FS_SHADER: ShaderSource =
+    include_shader!("/openfo4_core_pipeline/shaders/sky/clouds_fs.slang");
 
 pub struct CloudsPass {
     pipeline: Pipeline,

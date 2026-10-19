@@ -13,7 +13,7 @@ use parking_lot::Mutex;
 use crate::passes::State;
 
 static SHADER: ShaderSource =
-    include_shader!("/game_core_pipeline/shaders/skinning/skinning.slang");
+    include_shader!("/openfo4_core_pipeline/shaders/skinning/skinning.slang");
 
 const WORKGROUP_SIZE: u32 = 64;
 

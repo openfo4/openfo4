@@ -26,8 +26,8 @@ use openfo4_shaderlib::{ShaderSource, include_shader};
 
 use crate::{Event, MeshId, TextureId};
 
-static VS_SHADER: ShaderSource = include_shader!("/game_ui_render/shaders/ui_vs.slang");
-static FS_SHADER: ShaderSource = include_shader!("/game_ui_render/shaders/ui_fs.slang");
+static VS_SHADER: ShaderSource = include_shader!("/openfo4_ui_render/shaders/ui_vs.slang");
+static FS_SHADER: ShaderSource = include_shader!("/openfo4_ui_render/shaders/ui_fs.slang");
 
 pub struct UiPass {
     state: Mutex<State>,

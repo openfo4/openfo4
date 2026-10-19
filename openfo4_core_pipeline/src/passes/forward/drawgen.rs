@@ -8,7 +8,7 @@ use openfo4_shaderlib::pipeline::{Pipeline, PipelineBinding, PipelineConfig, Sha
 use openfo4_shaderlib::{ShaderSource, include_shader};
 
 static SHADER: ShaderSource =
-    include_shader!("/game_core_pipeline/shaders/opaque_vertex/drawcall_gen.slang");
+    include_shader!("/openfo4_core_pipeline/shaders/opaque_vertex/drawcall_gen.slang");
 
 const WORKGROUP_SIZE: u32 = 64;
 

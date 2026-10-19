@@ -20,7 +20,8 @@ use parking_lot::{Mutex, RwLock};
 
 use super::DrawCommand;
 
-static SHADER: openfo4_shaderlib::ShaderSource = include_shader!("/game_gizmos/shaders/line.wgsl");
+static SHADER: openfo4_shaderlib::ShaderSource =
+    include_shader!("/openfo4_gizmos/shaders/line.wgsl");
 
 pub struct GizmoPass {
     camera: Arc<Mutex<Option<Camera>>>,

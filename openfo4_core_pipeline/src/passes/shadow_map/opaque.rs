@@ -14,9 +14,9 @@ use crate::passes::forward::drawgen::{DrawcallGenParams, DrawcallGenPipeline};
 use crate::passes::shadow_map::{SHADOW_MAP_FORMAT, ShadowMapParamsInner};
 
 static VS_SHADER: ShaderSource =
-    include_shader!("/game_core_pipeline/shaders/shadows/shadow_map_vs.slang");
+    include_shader!("/openfo4_core_pipeline/shaders/shadows/shadow_map_vs.slang");
 static FS_SHADER: ShaderSource =
-    include_shader!("/game_core_pipeline/shaders/shadows/shadow_map_fs.slang");
+    include_shader!("/openfo4_core_pipeline/shaders/shadows/shadow_map_fs.slang");
 
 pub struct OpaqueShadowMapPass {
     drawcall_gen: DrawcallGenPipeline,
