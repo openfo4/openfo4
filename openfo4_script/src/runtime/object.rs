@@ -2,12 +2,14 @@ use std::alloc::Layout;
 use std::fmt::{self, Debug, Formatter};
 use std::sync::Arc;
 
+use futures_lite::future::block_on;
 use hashbrown::HashMap;
 use openfo4_common::string::Lowercase;
 use parking_lot::Mutex;
 use thiserror::Error;
 
 use crate::compiler::resources::{Resources, Type, TypeId, TypeRepr};
+use crate::runtime::lock::ObjectLock;
 use crate::runtime::{TypeRef, Val};
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
@@ -200,6 +202,13 @@ impl Object {
             }
         }
 
+        if let Some(offset) = ty.info.lock {
+            let lock = ObjectLock::new();
+            unsafe {
+                ptr.add(offset).cast::<ObjectLock>().write(lock);
+            }
+        }
+
         Self {
             ptr,
             len,
@@ -227,7 +236,13 @@ impl Object {
         }
     }
 
-    fn get<'a, T>(&self, index: usize, class: &'a str, name: &'a str) -> Result<T, Error<'a>>
+    /// Get the value at the given location.
+    ///
+    /// # Safety
+    ///
+    /// No other threads may access the same location of this [`Object`] for the duration of this
+    /// function call, including guest code.
+    unsafe fn get<'a, T>(&self, index: usize, class: &'a str, name: &'a str) -> Result<T, Error<'a>>
     where
         T: ObjectValue,
     {
@@ -244,7 +259,13 @@ impl Object {
         }
     }
 
-    fn set<'a, T>(
+    /// Set the value at the given location.
+    ///
+    /// # Safety
+    ///
+    /// No other threads may access the same location of this [`Object`] for the duration of this
+    /// function call, including guest code.
+    unsafe fn set<'a, T>(
         &self,
         index: usize,
         class: &'a str,
@@ -319,6 +340,11 @@ impl Object {
         }
 
         None
+    }
+
+    fn lock(&self) -> Option<&ObjectLock> {
+        let offset = self.ty.info.lock?;
+        Some(unsafe { self.ptr.add(offset).cast::<ObjectLock>().as_ref_unchecked() })
     }
 }
 
@@ -626,12 +652,25 @@ impl ObjectHandle {
         }
     }
 
+    /// Gets and returns the value of the object at the given location.
+    ///
+    /// This function will block until the object can be locked.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - The given location does not exist within the object.
+    /// - The value at the location cannot be mapped to `T`.
     pub fn get<'a, T>(&self, class: &'a str, name: &'a str) -> Result<T, Error<'a>>
     where
         T: ObjectValue,
     {
         assert!(self.index < self.len());
-        self.object.get(self.index, class, name)
+
+        self.with_locked_blocking(|| {
+            // SAFETY: We have locked the entire object.
+            unsafe { self.object.get(self.index, class, name) }
+        })
     }
 
     pub fn set<'a, T>(&self, class: &'a str, name: &'a str, value: T) -> Result<(), Error<'a>>
@@ -639,7 +678,40 @@ impl ObjectHandle {
         T: ObjectValue,
     {
         assert!(self.index < self.len());
-        self.object.set(self.index, class, name, value)
+
+        self.with_locked_blocking(|| {
+            // SAFETY: We have locked the entire object.
+            unsafe { self.object.set(self.index, class, name, value) }
+        })
+    }
+
+    pub fn try_get<'a, T>(&self, class: &'a str, name: &'a str) -> Option<Result<T, Error<'a>>>
+    where
+        T: ObjectValue,
+    {
+        assert!(self.index < self.len());
+
+        self.try_with_locked(|| {
+            // SAFETY: We have locked the entire object.
+            unsafe { self.object.get(self.index, class, name) }
+        })
+    }
+
+    pub fn try_set<'a, T>(
+        &self,
+        class: &'a str,
+        name: &'a str,
+        value: T,
+    ) -> Option<Result<(), Error<'a>>>
+    where
+        T: ObjectValue,
+    {
+        assert!(self.index < self.len());
+
+        self.try_with_locked(|| {
+            // SAFETY: We have locked the entire object.
+            unsafe { self.object.set(self.index, class, name, value) }
+        })
     }
 
     pub(crate) fn type_id(&self) -> TypeId {
@@ -664,6 +736,65 @@ impl ObjectHandle {
     /// TODO: Remove soon
     pub fn elem_size(&self) -> usize {
         self.object.ty.repr.size_padded()
+    }
+
+    fn with_locked_blocking<T, F>(&self, f: F) -> T
+    where
+        F: FnOnce() -> T,
+    {
+        self.lock_blocking();
+
+        let res = f();
+
+        unsafe {
+            self.unlock();
+        }
+
+        res
+    }
+
+    fn try_with_locked<T, F>(&self, f: F) -> Option<T>
+    where
+        F: FnOnce() -> T,
+    {
+        if !self.try_lock() {
+            return None;
+        }
+
+        let res = f();
+
+        unsafe {
+            self.unlock();
+        }
+
+        Some(res)
+    }
+
+    fn lock_blocking(&self) {
+        if let Some(lock) = self.object.lock() {
+            loop {
+                match lock.lock() {
+                    Ok(()) => break,
+                    Err(listen) => block_on(listen),
+                }
+            }
+        }
+    }
+
+    fn try_lock(&self) -> bool {
+        if let Some(lock) = self.object.lock() {
+            lock.try_lock()
+        } else {
+            true
+        }
+    }
+
+    unsafe fn unlock(&self) {
+        if let Some(lock) = self.object.lock() {
+            unsafe {
+                lock.unlock();
+            }
+        }
     }
 }
 

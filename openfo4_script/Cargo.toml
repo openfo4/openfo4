@@ -19,8 +19,7 @@ hashbrown = { workspace = true }
 tracing = { workspace = true }
 pin-project = "1.1.13"
 async-lock = "3.4.0"
-
-[dev-dependencies]
+event-listener = "5.4.2"
 futures-lite = "2.6.1"
 
 [lints]

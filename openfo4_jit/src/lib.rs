@@ -450,6 +450,19 @@ impl<'a> FunctionBuilder<'a> {
         dst
     }
 
+    /// Creates a new pointer from the given base `pointer` and the given `offset`.
+    ///
+    /// The returned pointer will have the address `pointer+offset` and the provenance of `pointer`.
+    ///
+    /// Returns a value of type [`Pointer`].
+    ///
+    /// [`Pointer`]: Type::Pointer
+    #[track_caller]
+    pub fn ptroffset_imm(&mut self, pointer: Value, offset: usize) -> Value {
+        let offset = self.iconst(Type::Isize, offset);
+        self.ptroffset(pointer, offset)
+    }
+
     /// Creates a uninitialized value.
     #[track_caller]
     pub fn uninit(&mut self, ty: Type) -> Value {

@@ -1,4 +1,5 @@
 pub mod func;
+pub mod lock;
 pub mod object;
 mod stack;
 
@@ -12,6 +13,7 @@ use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::sync::Arc;
 use std::task::{Poll, Waker};
 
+use event_listener::EventListener;
 use openfo4_common::cell::UnsafeRefCell;
 use openfo4_jit::func::{HostFunc, HostType, IntoHostFunc};
 use openfo4_jit::{Signature, Type};
@@ -71,6 +73,7 @@ pub(crate) struct RawContext {
     panic: PanicMsg,
     waker: *const Waker,
     error: UnsafeRefCell<Option<Box<Error>>>,
+    lock: Option<EventListener>,
 }
 
 unsafe impl Send for RawContext {}

@@ -317,6 +317,7 @@ impl PrimitiveTypes {
                         },
                     )]),
                     allows_null: true,
+                    lock: None,
                 },
             },
         );
@@ -337,6 +338,7 @@ impl PrimitiveTypes {
                         },
                     )]),
                     allows_null: true,
+                    lock: None,
                 },
             },
         );
@@ -357,6 +359,7 @@ impl PrimitiveTypes {
                         },
                     )]),
                     allows_null: true,
+                    lock: None,
                 },
             },
         );
@@ -377,6 +380,7 @@ impl PrimitiveTypes {
                         },
                     )]),
                     allows_null: true,
+                    lock: None,
                 },
             },
         );
@@ -397,6 +401,7 @@ impl PrimitiveTypes {
                         },
                     )]),
                     allows_null: true,
+                    lock: None,
                 },
             },
         );
@@ -417,6 +422,7 @@ impl PrimitiveTypes {
                         },
                     )]),
                     allows_null: true,
+                    lock: None,
                 },
             },
         );
@@ -454,6 +460,7 @@ impl PrimitiveTypes {
                         },
                     )]),
                     allows_null: false,
+                    lock: None,
                 },
             },
         );
@@ -485,6 +492,7 @@ impl PrimitiveTypes {
                     classes: vec![array],
                     properties: HashMap::new(),
                     allows_null: false,
+                    lock: None,
                 },
             },
         );
@@ -522,6 +530,7 @@ impl PrimitiveTypes {
                         },
                     )]),
                     allows_null: false,
+                    lock: None,
                 },
             },
         );
@@ -546,6 +555,8 @@ pub struct TypeInfo {
     pub classes: Vec<TypeId>,
     pub properties: HashMap<(Lowercase<String>, Lowercase<String>), TypeProperty>,
     pub allows_null: bool,
+    /// The offset from the object start where the [`ObjectLock`] is located.
+    pub(crate) lock: Option<usize>,
 }
 
 impl TypeInfo {

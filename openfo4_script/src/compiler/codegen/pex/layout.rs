@@ -1,3 +1,5 @@
+use std::mem::offset_of;
+
 use hashbrown::HashMap;
 use openfo4_common::string::Lowercase;
 use openfo4_pex::Value;
@@ -10,6 +12,20 @@ use crate::compiler::resources::{
     TypeProperty, TypeRepr, Words,
 };
 use crate::runtime::ArrayObject;
+use crate::runtime::lock::ObjectLock;
+
+/// Fixed-size header at the beginning of each class object.
+#[repr(C)]
+pub(crate) struct ClassHeader {
+    pub meta: *const u8,
+    pub lock: ObjectLock,
+}
+
+/// Fixed-size header at the beginning of each struct object.
+#[repr(C)]
+pub(crate) struct StructHeader {
+    pub lock: ObjectLock,
+}
 
 #[derive(Clone, Debug, Default)]
 pub struct Layouts {
@@ -181,6 +197,7 @@ impl Layouts {
                     classes,
                     properties,
                     allows_null: true,
+                    lock: Some(offset_of!(ClassHeader, lock)),
                 },
             },
         );
@@ -198,6 +215,7 @@ impl Layouts {
                     classes: Vec::new(),
                     properties: HashMap::new(),
                     allows_null: true,
+                    lock: None,
                 },
             },
         );
@@ -217,9 +235,14 @@ impl Layouts {
             return;
         }
 
-        let mut offset = 0;
-        let mut align = 1;
-        let mut members = Vec::new();
+        let mut offset = size_of::<StructHeader>();
+        let mut align = align_of::<StructHeader>();
+        let mut members = vec![CompositeTypeMember {
+            ty: res.primitives.pointer,
+            offset: offset_of!(StructHeader, lock),
+            size: size_of::<StructHeader>(),
+            default_value: None,
+        }];
         let mut offsets = HashMap::new();
         let mut properties = HashMap::new();
 
@@ -271,6 +294,7 @@ impl Layouts {
                     classes: vec![id],
                     properties,
                     allows_null: true,
+                    lock: Some(offset_of!(StructHeader, lock)),
                 },
             },
         );
@@ -288,6 +312,7 @@ impl Layouts {
                     classes: Vec::new(),
                     properties: HashMap::new(),
                     allows_null: true,
+                    lock: None,
                 },
             },
         );
@@ -330,19 +355,26 @@ impl Layouts {
 
 fn build_class_header(res: &Resources) -> resources::Type {
     resources::Type {
-        repr: TypeRepr::Composite(
-            // First member is for RTTI.
-            CompositeType {
-                members: vec![CompositeTypeMember {
+        repr: TypeRepr::Composite(CompositeType {
+            members: vec![
+                // meta
+                CompositeTypeMember {
                     ty: res.primitives.pointer,
-                    offset: 0,
+                    offset: offset_of!(ClassHeader, meta),
                     default_value: None,
-                    size: size_of::<usize>(),
-                }],
-                align: align_of::<usize>(),
-                size: size_of::<usize>(),
-            },
-        ),
+                    size: size_of::<*const ()>(),
+                },
+                // lock
+                CompositeTypeMember {
+                    ty: res.primitives.pointer,
+                    offset: offset_of!(ClassHeader, lock),
+                    default_value: None,
+                    size: size_of::<ObjectLock>(),
+                },
+            ],
+            align: align_of::<ClassHeader>(),
+            size: size_of::<ClassHeader>(),
+        }),
         info: TypeInfo::default(),
     }
 }

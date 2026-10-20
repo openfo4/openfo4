@@ -6,6 +6,7 @@ use openfo4_jit::func::HostType;
 use tracing::span::EnteredSpan;
 
 use crate::compiler::resources::TypeId;
+use crate::runtime::lock::ObjectLock;
 use crate::runtime::{Error, ObjectAddr, RawContext};
 
 unsafe impl HostType for TypeId {}
@@ -110,6 +111,26 @@ pub fn emit_error(ctx: *mut RawContext, err: *const &'static str) {
         let ctx = &mut *ctx;
         let err = &*err;
         *ctx.error.borrow_mut() = Some(Box::new(Error::msg(err.to_owned())));
+    }
+}
+
+pub fn lock(ctx: *mut RawContext, lock: *const ObjectLock) -> bool {
+    let ctx = unsafe { &mut *ctx };
+    let lock = unsafe { &*lock };
+
+    match lock.lock() {
+        Ok(()) => true,
+        Err(listener) => {
+            ctx.lock = Some(listener);
+            false
+        }
+    }
+}
+
+pub fn unlock(_ctx: *mut RawContext, lock: *const ObjectLock) {
+    unsafe {
+        let lock = &*lock;
+        lock.unlock();
     }
 }
 

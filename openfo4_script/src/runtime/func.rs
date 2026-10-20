@@ -349,6 +349,7 @@ where
                 panic: PanicMsg::default(),
                 waker: core::ptr::null(),
                 error: UnsafeRefCell::new(None),
+                lock: None,
             };
 
             this.raw_ctx.write(ctx);

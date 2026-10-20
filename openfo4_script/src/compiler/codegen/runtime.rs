@@ -25,6 +25,10 @@ pub struct RuntimeFunctions {
     pub exit_span: FuncId,
     /// (ctx: *mut RawContext)
     pub emit_error: FuncId,
+    /// (ctx: *mut RawContext, lock: *const ObjectLock) -> bool
+    pub lock: FuncId,
+    /// (ctx: *mut RawContext, lock: *const ObjectLock)
+    pub unlock: FuncId,
 }
 
 impl RuntimeFunctions {
@@ -109,6 +113,22 @@ impl RuntimeFunctions {
             },
             host_functions::emit_error,
         );
+        let lock = declare_and_define(
+            compiler,
+            Signature {
+                params: vec![Type::Pointer, Type::Pointer],
+                returns: vec![Type::I8],
+            },
+            host_functions::lock,
+        );
+        let unlock = declare_and_define(
+            compiler,
+            Signature {
+                params: vec![Type::Pointer, Type::Pointer],
+                returns: vec![],
+            },
+            host_functions::unlock,
+        );
 
         Self {
             alloc_zeroed,
@@ -121,6 +141,8 @@ impl RuntimeFunctions {
             enter_span,
             exit_span,
             emit_error,
+            lock,
+            unlock,
         }
     }
 }

@@ -193,6 +193,11 @@ fn translate_function_body(
         self_ty: class,
     };
 
+    if let Some(self_ptr) = self_ptr {
+        let self_ptr = hir::Value::Variable(self_ptr);
+        translator.builder.lock(self_ptr, self_ty);
+    }
+
     // No need to load state value if only default state exists.
     if func.states.len() > 1 {
         let state_value = translator.load(&Value::Ident("::state".to_owned()));
@@ -259,7 +264,7 @@ fn translate_function_body(
                         &args,
                         ret_dst.clone(),
                     );
-                    translator.builder.return_(ret_dst.clone());
+                    translator.unlock_and_return(ret_dst.clone());
                 }
             }
 
@@ -310,7 +315,7 @@ fn translate_function_body(
                 &args,
                 ret_dst.clone(),
             );
-            translator.builder.return_(ret_dst.clone());
+            translator.unlock_and_return(ret_dst.clone());
         }
     }
 }
@@ -378,7 +383,7 @@ fn translate_state_body(
                 Type::Class(_) | Type::Struct(_) | Type::Array(_) | Type::Var => Literal::Null,
             };
 
-            translator.builder.return_(hir::Value::Const(value));
+            translator.unlock_and_return(hir::Value::Const(value));
         }
     }
 }
@@ -543,6 +548,37 @@ impl<'a> FunctionTranslator<'a> {
 
     fn ty_of_val(&self, value: &Value) -> TypeId {
         self.ty(&self.type_of_value(value))
+    }
+
+    /// Locks the given `object` while running the given closure.
+    fn locked<T, F>(&mut self, object: hir::Value<Null>, ty: TypeId, f: F) -> T
+    where
+        F: FnOnce(&mut Self) -> T,
+    {
+        self.builder.lock(object.clone(), ty);
+        let res = f(self);
+        self.builder.unlock(object, ty);
+        res
+    }
+
+    /// Unlocks the given `object` while running the given closure.
+    fn unlocked<T, F>(&mut self, object: hir::Value<Null>, ty: TypeId, f: F) -> T
+    where
+        F: FnOnce(&mut Self) -> T,
+    {
+        self.builder.unlock(object.clone(), ty);
+        let res = f(self);
+        self.builder.lock(object, ty);
+        res
+    }
+
+    fn unlock_and_return(&mut self, value: hir::Value<Literal>) {
+        if let Some(self_ptr) = self.self_ptr {
+            let self_ty = self.data.layouts.class(self.self_ty).ty;
+            self.builder.unlock(hir::Value::Variable(self_ptr), self_ty);
+        }
+
+        self.builder.return_(value);
     }
 }
 
@@ -1110,9 +1146,25 @@ impl LowerInstruction for Instruction {
                     args.push(arg);
                 }
 
-                translator
-                    .builder
-                    .call_indirect(callee, Some(object), &args, dst);
+                // Unlock our local object while we calling another object.
+                // If we are calling a method on our local object we can
+                // avoid unlocking (since we would immediately acquire the same
+                // lock again).
+                if let Some(self_ptr) = translator.self_ptr
+                    && object != hir::Value::Variable(self_ptr)
+                {
+                    let self_ty = translator.data.layouts.class(translator.self_ty).ty;
+
+                    translator.locked(hir::Value::Variable(self_ptr), self_ty, |translator| {
+                        translator
+                            .builder
+                            .call_indirect(callee, Some(object), &args, dst);
+                    });
+                } else {
+                    translator
+                        .builder
+                        .call_indirect(callee, Some(object), &args, dst);
+                }
             }
             Instruction::CallParent(op) => {
                 let func_name = Lowercase::new(op.function.as_str());
@@ -1147,7 +1199,16 @@ impl LowerInstruction for Instruction {
                 let class = translator.data.registry.class_by_name(&class_name).unwrap();
                 let callee = class.functions.get_static(&func_name).unwrap();
 
-                translator.builder.call(callee, None, &args, dst);
+                // Unlock the local class while calling the static function.
+                if let Some(self_ptr) = translator.self_ptr {
+                    let self_ty = translator.data.layouts.class(translator.self_ty).ty;
+
+                    translator.unlocked(hir::Value::Variable(self_ptr), self_ty, |translator| {
+                        translator.builder.call(callee, None, &args, dst);
+                    });
+                } else {
+                    translator.builder.call(callee, None, &args, dst);
+                }
             }
             Instruction::PropertyGet(op) => {
                 let Type::Class(class_id) = translator.type_of_value(&op.value) else {
@@ -1175,9 +1236,18 @@ impl LowerInstruction for Instruction {
                     );
                 } else if let Some(field) = &prop.field {
                     let object = translator.load(&op.value);
+                    let object_ty = translator.ty_of_val(&op.value);
                     let dst = translator.load(&op.return_assignment);
 
-                    translator.builder.class_load(object, dst, class.id, &field);
+                    if let Some(self_ptr) = translator.self_ptr
+                        && object != hir::Value::Variable(self_ptr)
+                    {
+                        translator.locked(object.clone(), object_ty, |translator| {
+                            translator.builder.class_load(object, dst, class.id, &field);
+                        });
+                    } else {
+                        translator.builder.class_load(object, dst, class.id, &field);
+                    }
                 } else {
                     unreachable!();
                 }
@@ -1208,16 +1278,27 @@ impl LowerInstruction for Instruction {
                     );
                 } else if let Some(field) = &prop.field {
                     let object = translator.load(&op.object);
+                    let object_ty = translator.ty_of_val(&op.object);
                     let value = translator.load(&op.value);
 
-                    translator
-                        .builder
-                        .class_store(object, value, class.id, &field);
+                    if let Some(self_ptr) = translator.self_ptr
+                        && object != hir::Value::Variable(self_ptr)
+                    {
+                        translator.locked(object.clone(), object_ty, |translator| {
+                            translator
+                                .builder
+                                .class_store(object, value, class.id, &field);
+                        });
+                    } else {
+                        translator
+                            .builder
+                            .class_store(object, value, class.id, &field);
+                    }
                 }
             }
             Instruction::Return(value) => {
                 let value = translator.load(value);
-                translator.builder.return_(value);
+                translator.unlock_and_return(value);
                 *current_block_sealed = true;
             }
             Instruction::Cast(op) => {
@@ -1246,9 +1327,12 @@ impl LowerInstruction for Instruction {
                 let field_name = Lowercase::new(&*op.member_name);
 
                 let object = translator.load(&op.struct_value);
+                let object_ty = translator.ty_of_val(&op.struct_value);
                 let dst = translator.load(&op.return_assignment);
 
-                translator.builder.struct_load(object, dst, id, field_name);
+                translator.locked(object.clone(), object_ty, |translator| {
+                    translator.builder.struct_load(object, dst, id, field_name);
+                });
             }
             Instruction::StructSet(op) => {
                 let Type::Struct(id) = translator.type_of_value(&op.struct_value) else {
@@ -1258,11 +1342,14 @@ impl LowerInstruction for Instruction {
                 let field_name = Lowercase::new(&*op.member_name);
 
                 let object = translator.load(&op.struct_value);
+                let object_ty = translator.ty_of_val(&op.struct_value);
                 let value = translator.load(&op.value);
 
-                translator
-                    .builder
-                    .struct_store(object, value, id, field_name);
+                translator.locked(object.clone(), object_ty, |translator| {
+                    translator
+                        .builder
+                        .struct_store(object, value, id, field_name);
+                });
             }
             Instruction::ArrayLength(op) => {
                 array::lower_array_len(translator, op);

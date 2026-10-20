@@ -427,6 +427,12 @@ where
         } => {
             writeln!(writer, "{} = object_to_string {}", dst, src)?;
         }
+        Instruction::Lock { object, ty: _ } => {
+            writeln!(writer, "lock {}", object)?;
+        }
+        Instruction::Unlock { object, ty: _ } => {
+            writeln!(writer, "unlock {}", object)?;
+        }
     }
 
     Ok(())

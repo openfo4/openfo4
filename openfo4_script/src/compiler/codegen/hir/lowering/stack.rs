@@ -64,7 +64,9 @@ pub fn compute_suspension_points(
     for (block_index, block) in func.blocks.iter().enumerate() {
         for (inst_index, instruction) in block.iter().enumerate() {
             match instruction {
-                Instruction::Call(_) | Instruction::CallIndirect(_) => {
+                Instruction::Call(_)
+                | Instruction::CallIndirect(_)
+                | Instruction::Lock { object: _, ty: _ } => {
                     let variables = func.variables().map(|v| v.0).collect();
 
                     let tag = next_tag;

@@ -206,6 +206,14 @@ enum Instruction {
         dst: Value<Literal>,
         conv_array: bool,
     },
+    Lock {
+        object: Value<Null>,
+        ty: TypeId,
+    },
+    Unlock {
+        object: Value<Null>,
+        ty: TypeId,
+    },
 }
 
 #[derive(Clone, Debug)]
@@ -282,7 +290,7 @@ struct ArrayFindStruct {
     struct_member: Lowercase<String>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum Value<T> {
     Const(T),
     Variable(Variable),
@@ -902,6 +910,22 @@ impl FunctionBuilder {
             dst,
             conv_array,
         });
+    }
+
+    /// Locks the given `object` exclusively.
+    ///
+    /// If the `object` is null it is not locked.
+    ///
+    /// The same `object` must be unlocked with [`unlock`] later.
+    ///
+    /// [`unlock`]: Self::unlock
+    pub fn lock(&mut self, object: Value<Null>, ty: TypeId) {
+        self.instructions.push(Instruction::Lock { object, ty });
+    }
+
+    /// Unlocks a previously locked `object`.
+    pub fn unlock(&mut self, object: Value<Null>, ty: TypeId) {
+        self.instructions.push(Instruction::Unlock { object, ty });
     }
 
     pub fn finalize(mut self) -> Function {

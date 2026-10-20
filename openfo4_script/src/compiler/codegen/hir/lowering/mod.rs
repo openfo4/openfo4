@@ -1,6 +1,7 @@
 mod array;
 mod call;
 mod cast;
+mod lock;
 mod malloc;
 mod stack;
 mod string;
@@ -805,6 +806,20 @@ pub fn lower_function(
                         let res = translator.builder.convert_float_to_sint(src, INT_TYPE);
                         translator.store(dst, res);
                     }
+                }
+                Instruction::Lock { object, ty } => {
+                    let point = stack_frame
+                        .call_points
+                        .get(&InstructionPosition {
+                            block: block_index,
+                            instruction: inst_index,
+                        })
+                        .unwrap();
+
+                    lock::lock(&mut translator, object, *ty, point);
+                }
+                Instruction::Unlock { object, ty } => {
+                    lock::unlock(&mut translator, object, *ty);
                 }
             }
         }
