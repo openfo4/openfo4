@@ -548,6 +548,23 @@ pub struct TypeInfo {
     pub allows_null: bool,
 }
 
+impl TypeInfo {
+    /// Returns `true` if `other` is a subtype of `self`.
+    ///
+    /// If `other` == `self` `true` is returned.
+    pub fn is_subtype(&self, other: &TypeInfo) -> bool {
+        // Another type is a subtype if it has the same "prefix" as the supertype.
+        if self.classes.len() > other.classes.len() {
+            return false;
+        }
+
+        self.classes
+            .iter()
+            .zip(&other.classes)
+            .all(|(lhs, rhs)| lhs == rhs)
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct TypeProperty {
     pub ty: PropertyType,

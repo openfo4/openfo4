@@ -74,10 +74,7 @@ fn store_global() {
         set.call(ctx, (object, 456)).now_or_never().unwrap();
 
         let object = engine.object_pool().get(object).unwrap();
-        assert_eq!(
-            unsafe { object.get_typed::<i32>("MyClass", "a").unwrap() },
-            456
-        );
+        assert_eq!(object.get::<i32>("MyClass", "a").unwrap(), 456);
     });
 }
 

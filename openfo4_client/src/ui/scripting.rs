@@ -1,5 +1,6 @@
 use openfo4_egui::egui::{CollapsingHeader, Context, ScrollArea, Window};
 use openfo4_script::compiler::resources::PropertyType;
+use openfo4_script::runtime::ObjectAddr;
 
 use crate::state::GameState;
 
@@ -33,34 +34,35 @@ pub fn draw_objects(ctx: &Context, game: &GameState, state: &mut State) {
                         let typeid = script.get().layout;
                         let info = engine.type_info(typeid);
 
-                        let object = engine.object_pool().get(&script.get().object).unwrap();
+                        let object = &script.get().object;
 
                         for ((class, prop), info) in &info.properties {
                             if class.as_inner() != script.name() {
                                 continue;
                             }
 
-                            let data = unsafe {
-                                match info.ty {
-                                    PropertyType::Inline(ty) if ty == engine.bool_type() => object
-                                        .get_typed::<i8>(class.as_inner(), prop.as_inner())
+                            let data = match info.ty {
+                                PropertyType::Inline(ty) if ty == engine.bool_type() => object
+                                    .get::<bool>(class.as_inner(), prop.as_inner())
+                                    .unwrap()
+                                    .to_string(),
+                                PropertyType::Inline(ty) if ty == engine.int_type() => object
+                                    .get::<i32>(class.as_inner(), prop.as_inner())
+                                    .unwrap()
+                                    .to_string(),
+                                PropertyType::Inline(ty) if ty == engine.float_type() => object
+                                    .get::<f32>(class.as_inner(), prop.as_inner())
+                                    .unwrap()
+                                    .to_string(),
+                                PropertyType::Pointer(_ty) => format!(
+                                    "{:p}",
+                                    object
+                                        .get::<ObjectAddr>(class.as_inner(), prop.as_inner())
                                         .unwrap()
-                                        .to_string(),
-                                    PropertyType::Inline(ty) if ty == engine.int_type() => object
-                                        .get_typed::<i32>(class.as_inner(), prop.as_inner())
-                                        .unwrap()
-                                        .to_string(),
-                                    PropertyType::Inline(ty) if ty == engine.float_type() => object
-                                        .get_typed::<f32>(class.as_inner(), prop.as_inner())
-                                        .unwrap()
-                                        .to_string(),
-                                    PropertyType::Pointer(_ty) => object
-                                        .get_typed::<usize>(class.as_inner(), prop.as_inner())
-                                        .unwrap()
-                                        .to_string(),
-                                    // TODO
-                                    _ => continue,
-                                }
+                                        .to_raw()
+                                ),
+                                // TODO
+                                _ => continue,
                             };
 
                             ui.label(format!("{}: {}", prop, data));

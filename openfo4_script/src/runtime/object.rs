@@ -2,13 +2,13 @@ use std::alloc::Layout;
 use std::fmt::{self, Debug, Formatter};
 use std::sync::Arc;
 
-use bytemuck::AnyBitPattern;
 use hashbrown::HashMap;
 use openfo4_common::string::Lowercase;
 use parking_lot::Mutex;
+use thiserror::Error;
 
 use crate::compiler::resources::{Resources, Type, TypeId, TypeRepr};
-use crate::runtime::Val;
+use crate::runtime::{TypeRef, Val};
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 #[repr(transparent)]
@@ -30,38 +30,32 @@ impl ObjectAddr {
     }
 }
 
-impl AsRef<ObjectAddr> for ObjectAddr {
-    fn as_ref(&self) -> &ObjectAddr {
-        self
-    }
-}
-
 unsafe impl Send for ObjectAddr {}
 unsafe impl Sync for ObjectAddr {}
 
+#[derive(Clone, Debug)]
+pub struct ObjectPool(Arc<ObjectPoolInner>);
+
 #[derive(Debug)]
-pub struct ObjectPool {
+struct ObjectPoolInner {
     resources: Arc<Resources>,
-    objects: Mutex<HashMap<ObjectAddr, Object>>,
-    dropped_refs: Arc<Mutex<Vec<ObjectAddr>>>,
+    objects: Mutex<HashMap<ObjectAddr, Arc<Object>>>,
 }
 
 impl ObjectPool {
     pub(crate) fn new(resources: Arc<Resources>) -> Self {
-        Self {
+        Self(Arc::new(ObjectPoolInner {
             resources,
             objects: Mutex::default(),
-            dropped_refs: Arc::default(),
-        }
+        }))
     }
 
     /// Allocates a new object with the given ty.
     pub fn alloc(&self, ty: TypeId, array_len: usize) -> ObjectHandle {
-        let typ = self.resources.types.get(ty).unwrap();
+        let typ = self.0.resources.types.get(ty).unwrap();
 
-        let size = typ.repr.size();
         let align = typ.repr.align();
-        let stride = (size + align - 1) & !(align - 1);
+        let stride = typ.repr.size_padded();
 
         let array_size = stride * array_len;
 
@@ -70,7 +64,7 @@ impl ObjectPool {
         // We must not allocate zero sized memory.
         // Any well-aligned pointer is valid for a zero sized allocation.
         let ptr = if alloc_layout.size() == 0 {
-            unsafe { core::ptr::null_mut::<u8>().add(alloc_layout.align()) }
+            alloc_layout.dangling_ptr().as_ptr()
         } else {
             unsafe { std::alloc::alloc_zeroed(alloc_layout) }
         };
@@ -79,53 +73,30 @@ impl ObjectPool {
             std::alloc::handle_alloc_error(alloc_layout);
         }
 
-        let mut objects = self.objects.lock();
+        let object = unsafe { Object::new(ptr, array_len, typ, ty, self.clone()) };
+        let object = Arc::new(object);
+        let addr = ObjectAddr(ptr);
 
-        let ref_count = Arc::new(ObjectRefInner {
-            addr: ObjectAddr(ptr),
-            drop: self.dropped_refs.clone(),
-        });
+        let mut objects = self.0.objects.lock();
 
-        for i in 0..array_len {
-            let elem_ptr = unsafe { ptr.add(stride * i) };
-            let addr = ObjectAddr::from_raw(elem_ptr);
+        objects.insert(addr, Arc::clone(&object));
 
-            let object =
-                unsafe { Object::new_at(ty, typ.clone(), elem_ptr, Some(ref_count.clone())) };
-
-            objects.insert(addr, object);
-        }
-
-        ObjectHandle(ref_count)
+        ObjectHandle { object, index: 0 }
     }
 
     pub fn insert(&self, ty: TypeId) -> ObjectBuilder {
-        let object_ref = self.alloc(ty, 1);
-        let typ = self.resources.types.get(ty).unwrap();
-
-        let object = unsafe {
-            Object::new_at(
-                ty,
-                typ,
-                object_ref.addr().0 as *mut u8,
-                Some(object_ref.0.clone()),
-            )
-        };
-
-        ObjectBuilder {
-            obj: object,
-            obj_ref: object_ref,
-        }
+        let handle = self.alloc(ty, 1);
+        ObjectBuilder(handle)
     }
 
     pub fn insert_string(&self, s: &str) -> ObjectHandle {
-        let bytes_ref = self.alloc(self.resources.primitives.byte, s.len());
+        let bytes_ref = self.alloc(self.0.resources.primitives.byte, s.len());
 
         unsafe {
             core::ptr::copy_nonoverlapping(s.as_ptr(), bytes_ref.addr().0, s.len());
         }
 
-        let mut string_object = self.insert(self.resources.primitives.string);
+        let mut string_object = self.insert(self.0.resources.primitives.string);
         let string = unsafe { string_object.as_mut::<ArrayObject>() };
         string.ptr = bytes_ref.addr().to_raw();
         string.len = s.len();
@@ -134,94 +105,44 @@ impl ObjectPool {
     }
 
     pub fn insert_array(&self, elem_ty: TypeId, array_len: usize) -> ObjectArrayBuilder {
-        let array_ref = self.alloc(elem_ty, array_len);
-        let elem_typ = self.resources.types.get(elem_ty).unwrap();
+        let elems = self.alloc(elem_ty, array_len);
 
-        let mut objects = Vec::new();
-
-        let size = elem_typ.repr.size();
-        let align = elem_typ.repr.align();
-        let stride = (size + align - 1) & !(align - 1);
-
-        for i in 0..array_len {
-            let elem_ptr = unsafe { array_ref.addr().0.add(stride * i) };
-
-            let object = unsafe {
-                Object::new_at(
-                    elem_ty,
-                    elem_typ.clone(),
-                    elem_ptr,
-                    Some(array_ref.0.clone()),
-                )
-            };
-            objects.push(object);
-        }
-
-        let mut array_object = self.insert(self.resources.primitives.array);
+        let mut array_object = self.insert(self.0.resources.primitives.array);
         let array = unsafe { array_object.as_mut::<ArrayObject>() };
-        array.ptr = array_ref.addr().to_raw();
+        array.ptr = elems.addr().to_raw();
         array.len = array_len;
 
         ObjectArrayBuilder {
-            objects,
-            object_ref: array_object.finalize(),
+            elems,
+            array: array_object.finalize(),
         }
     }
 
-    /// Clones an object.
-    ///
-    /// # Safety
-    ///
-    /// No thread must currently access the given object referenced by the [`ObjectHandle`].
-    pub unsafe fn clone_object(&self, object: &ObjectHandle) -> ObjectBuilder {
-        let ty_id = {
-            let objects = self.objects.lock();
-
-            let object = objects.get(&object.addr()).unwrap();
-            object.ty_id
-        };
-
-        let builder = self.insert(ty_id);
-
-        let mut objects = self.objects.lock();
-        let object = objects.get_mut(&object.addr()).unwrap();
-
-        unsafe {
-            let src = object.as_ptr().cast_const();
-            let dst = builder.obj.as_ptr();
-            let count = object.size();
-            debug_assert_eq!(object.size(), builder.obj.size());
-
-            core::ptr::copy_nonoverlapping(src, dst, count);
-        }
-
-        builder
-    }
-
-    // pub fn get(&self, addr: ObjectAddr) -> Option<&Object> {
-    //     self.objects.get(&addr)
-    // }
-
-    // pub fn get_mut(&mut self, addr: ObjectAddr) -> Option<&mut Object> {
-    //     self.objects.get_mut(&addr)
-    // }
-
-    pub fn get<T>(&self, object: T) -> Option<Object>
+    /// Returns an [`ObjectHandle`] to an existing object.
+    pub fn get<T>(&self, object: T) -> Option<ObjectHandle>
     where
-        T: AsRef<ObjectAddr>,
+        T: AsObject,
     {
-        let addr = *object.as_ref();
-        let objects = self.objects.lock();
-        if let Some(obj) = objects.get(&addr) {
-            return Some(obj.clone());
+        let addr = object.addr();
+
+        let objects = self.0.objects.lock();
+        if let Some(object) = objects.get(&addr) {
+            return Some(ObjectHandle {
+                object: Arc::clone(object),
+                index: 0,
+            });
         }
 
-        let obj = self.resources.constants.object(addr)?;
-        let ty = self.resources.types.get(obj.ty).unwrap();
-        Some(unsafe { Object::new_at(obj.ty, ty, obj.ptr.cast_mut(), None) })
+        drop(objects);
+
+        let object = self.0.resources.constants.object(addr)?;
+        let ty = self.0.resources.types.get(object.ty).unwrap();
+        let object = unsafe { Object::new_static(object.ptr, 1, ty, object.ty, self.clone()) };
+        let object = Arc::new(object);
+        Some(ObjectHandle { object, index: 0 })
     }
 
-    pub unsafe fn array<U>(&self, addr: ObjectAddr) -> &[U] {
+    unsafe fn array<U>(&self, addr: ObjectAddr) -> &[U] {
         unsafe {
             let object = &*addr.to_raw().cast::<ArrayObject>();
 
@@ -235,20 +156,6 @@ impl ObjectPool {
         }
     }
 
-    pub unsafe fn array_mut<U>(&mut self, addr: ObjectAddr) -> &mut [U] {
-        unsafe {
-            let object = &*addr.to_raw().cast::<ArrayObject>();
-
-            // Array with len 0 MAY have a zero pointer that we cannot use,
-            // even for a zero-sized slice.
-            if object.len == 0 {
-                &mut []
-            } else {
-                core::slice::from_raw_parts_mut(object.ptr.cast::<U>(), object.len)
-            }
-        }
-    }
-
     pub unsafe fn string(&self, addr: ObjectAddr) -> &str {
         unsafe {
             let data = self.array::<u8>(addr);
@@ -257,37 +164,28 @@ impl ObjectPool {
     }
 
     pub(crate) fn resources(&self) -> &Resources {
-        &self.resources
+        &self.0.resources
+    }
+
+    fn get_object(&self, addr: ObjectAddr) -> Option<(Arc<Object>, usize)> {
+        let objects = self.0.objects.lock();
+        let object = objects.get(&addr)?;
+        Some((Arc::clone(object), 0))
     }
 }
 
 #[derive(Debug)]
-struct ObjectRefInner {
-    addr: ObjectAddr,
-    drop: Arc<Mutex<Vec<ObjectAddr>>>,
-}
-
-impl Drop for ObjectRefInner {
-    fn drop(&mut self) {
-        self.drop.lock().push(self.addr);
-    }
-}
-
-#[derive(Clone, Debug)]
-pub struct Object {
-    memory: *mut u8,
+struct Object {
+    ptr: *mut u8,
+    len: usize,
     ty: Arc<Type>,
-    ty_id: TypeId,
-    ref_count: Option<Arc<ObjectRefInner>>,
+    id: TypeId,
+    pool: ObjectPool,
+    is_static: bool,
 }
 
 impl Object {
-    unsafe fn new_at(
-        ty_id: TypeId,
-        ty: Arc<Type>,
-        ptr: *mut u8,
-        ref_count: Option<Arc<ObjectRefInner>>,
-    ) -> Self {
+    unsafe fn new(ptr: *mut u8, len: usize, ty: Arc<Type>, id: TypeId, pool: ObjectPool) -> Self {
         if let TypeRepr::Composite(ty) = &ty.repr {
             for member in &ty.members {
                 let Some(value) = &member.default_value else {
@@ -303,73 +201,95 @@ impl Object {
         }
 
         Self {
-            memory: ptr,
+            ptr,
+            len,
             ty,
-            ty_id,
-            ref_count,
+            id,
+            pool,
+            is_static: false,
         }
     }
 
-    fn get_prop_offset_and_size(&self, class: &str, name: &str) -> Option<(usize, usize)> {
-        let index = self.get_property_var(class, name);
+    unsafe fn new_static(
+        ptr: *const u8,
+        len: usize,
+        ty: Arc<Type>,
+        id: TypeId,
+        pool: ObjectPool,
+    ) -> Self {
+        Self {
+            ptr: ptr.cast_mut(),
+            len,
+            ty,
+            id,
+            pool,
+            is_static: true,
+        }
+    }
+
+    fn get<'a, T>(&self, index: usize, class: &'a str, name: &'a str) -> Result<T, Error<'a>>
+    where
+        T: ObjectValue,
+    {
+        assert!(index < self.len);
+        let array_offset = self.ty.repr.size_padded() * index;
+
+        let Some((offset, _size, ty)) = self.get_prop_offset_and_size(class, name) else {
+            return Err(Error::NoProperty { class, name });
+        };
+
+        unsafe {
+            let ptr = self.ptr.add(array_offset).add(offset);
+            T::read(&self.pool, ty, ptr).map_err(|()| Error::Incompatible)
+        }
+    }
+
+    fn set<'a, T>(
+        &self,
+        index: usize,
+        class: &'a str,
+        name: &'a str,
+        value: T,
+    ) -> Result<(), Error<'a>>
+    where
+        T: ObjectValue,
+    {
+        assert!(index < self.len);
+        let array_offset = self.ty.repr.size_padded() * index;
+
+        if self.is_static {
+            return Err(Error::Static);
+        }
+
+        let Some((offset, _size, ty)) = self.get_prop_offset_and_size(class, name) else {
+            return Err(Error::NoProperty { class, name });
+        };
+
+        unsafe {
+            let ptr = self.ptr.add(array_offset).add(offset);
+            if !value.write(&self.pool, ty, ptr) {
+                return Err(Error::Incompatible);
+            }
+        }
+
+        Ok(())
+    }
+
+    fn get_prop_offset_and_size(&self, class: &str, name: &str) -> Option<(usize, usize, TypeId)> {
+        let index = self.get_property_var(class, name)?;
 
         let TypeRepr::Composite(ty) = &self.ty.repr else {
-            return Some((0, self.size()));
+            // Primitive type.
+            return Some((0, self.ty.repr.size(), self.id));
         };
 
         let field = &ty.members[index];
 
-        Some((field.offset, field.size))
-    }
-
-    pub unsafe fn get(&self, class: &str, name: &str) -> Option<&[u8]> {
-        let (offset, size) = self.get_prop_offset_and_size(class, name)?;
-
-        unsafe {
-            let ptr = self.as_ptr().add(offset);
-            Some(core::slice::from_raw_parts(ptr, size))
-        }
-    }
-
-    pub unsafe fn get_typed<T>(&self, class: &str, name: &str) -> Option<T>
-    where
-        T: AnyBitPattern,
-    {
-        let bytes = unsafe { self.get(class, name)? };
-        Some(*bytemuck::from_bytes(bytes))
-    }
-
-    /// # Safety
-    ///
-    /// The caller must guarantee that no memory accesses to the field of the `Object` are
-    /// currently active.
-    #[track_caller]
-    pub unsafe fn set<T>(&mut self, class: &str, name: &str, value: T)
-    where
-        T: IntoValue,
-    {
-        let (offset, size) = self.get_prop_offset_and_size(class, name).unwrap();
-
-        let bytes = value.as_bytes();
-
-        assert_eq!(
-            bytes.len(),
-            size,
-            "{:?}.{:?} requires {} bytes, but {} were provided",
-            class,
-            name,
-            size,
-            bytes.len(),
-        );
-
-        unsafe {
-            let dst = self.memory.add(offset);
-            core::ptr::copy_nonoverlapping(bytes.as_ptr(), dst, bytes.len());
-        }
+        Some((field.offset, field.size, field.ty))
     }
 
     #[track_caller]
-    fn get_property_var(&self, class: &str, name: &str) -> usize {
+    fn get_property_var(&self, class: &str, name: &str) -> Option<usize> {
         let class = Lowercase::new(class);
         let name = Lowercase::new(name);
 
@@ -381,7 +301,7 @@ impl Object {
             .iter()
             .find(|((cl, fl), _)| *cl == class && *fl == name)
         {
-            return prop.field;
+            return Some(prop.field);
         }
 
         // We may also access fields of parent classes.
@@ -395,141 +315,230 @@ impl Object {
             .iter()
             .find(|((_, fl), _)| *fl == name)
         {
-            return prop.field;
+            return Some(prop.field);
         }
 
-        panic!("no field {:?}.{:?}", class, name);
-    }
-
-    /// View the entire memory of this `Object`.
-    pub unsafe fn memory(&self) -> &[u8] {
-        let ptr = self.as_ptr();
-        let len = self.size();
-        unsafe { core::slice::from_raw_parts(ptr, len) }
-    }
-
-    pub fn as_ptr(&self) -> *mut u8 {
-        self.memory
-    }
-
-    pub fn size(&self) -> usize {
-        self.ty.repr.size()
-    }
-
-    pub fn type_id(&self) -> TypeId {
-        self.ty_id
+        None
     }
 }
 
+// All values of objects are POD values or pointers that
+// are threadsafe themselves.
 unsafe impl Send for Object {}
 unsafe impl Sync for Object {}
 
 #[derive(Debug)]
-pub struct ObjectBuilder {
-    obj: Object,
-    obj_ref: ObjectHandle,
-}
+pub struct ObjectBuilder(ObjectHandle);
 
 impl ObjectBuilder {
     #[track_caller]
     pub fn set<T>(&mut self, class: &str, name: &str, value: T)
     where
-        T: IntoValue,
+        T: ObjectValue,
     {
-        // SAFETY:
-        // We don't give access to the underlying `ObjectHandle` until the `ObjectBuilder` is dropped.
-        // This means the caller does not have access to the pointer to pass anywhere else yet.
-        unsafe {
-            self.obj.set(class, name, value);
-        }
+        self.0.set(class, name, value).unwrap();
     }
 
     pub unsafe fn finalize_copy(&self) -> ObjectHandle {
-        self.obj_ref.clone()
+        self.0.clone()
     }
 
     pub fn finalize(self) -> ObjectHandle {
-        self.obj_ref
+        self.0
     }
 
     /// Returns the address of the object being built.
     ///
     /// Useful for building recursive objects.
     pub fn addr(&self) -> ObjectAddr {
-        self.obj_ref.addr()
+        self.0.addr()
     }
 
     unsafe fn as_mut<T>(&mut self) -> &mut T {
-        unsafe { &mut *self.obj.as_ptr().cast() }
+        unsafe { self.0.object.ptr.cast::<T>().as_mut_unchecked() }
     }
 }
 
 #[derive(Debug)]
 pub struct ObjectArrayBuilder {
-    objects: Vec<Object>,
-    object_ref: ObjectHandle,
+    elems: ObjectHandle,
+    array: ObjectHandle,
 }
 
 impl ObjectArrayBuilder {
     #[track_caller]
     pub fn set_at<T>(&mut self, index: usize, class: &str, name: &str, value: T)
     where
-        T: IntoValue,
+        T: ObjectValue,
     {
-        let object = &mut self.objects[index];
-
-        unsafe {
-            object.set(class, name, value);
-        }
+        self.elems
+            .at(index)
+            .unwrap()
+            .set(class, name, value)
+            .unwrap();
     }
 
     pub fn finalize(self) -> ObjectHandle {
-        self.object_ref
+        self.array
     }
 }
 
-pub trait IntoValue {
-    fn as_bytes(&self) -> &[u8];
+pub trait ObjectValue: Sized {
+    #[doc(hidden)]
+    unsafe fn read(pool: &ObjectPool, ty: TypeId, ptr: *const u8) -> Result<Self, ()>;
+
+    #[doc(hidden)]
+    unsafe fn write(&self, pool: &ObjectPool, ty: TypeId, ptr: *mut u8) -> bool;
 }
 
-impl IntoValue for bool {
-    fn as_bytes(&self) -> &[u8] {
-        bytemuck::bytes_of(self)
+impl ObjectValue for bool {
+    unsafe fn read(pool: &ObjectPool, ty: TypeId, ptr: *const u8) -> Result<Self, ()> {
+        let ty = pool.resources().types.get(ty).unwrap();
+        match ty.repr {
+            TypeRepr::Int { bits } if bits == 8 => Ok(unsafe { ptr.cast::<bool>().read() }),
+            _ => Err(()),
+        }
+    }
+
+    unsafe fn write(&self, pool: &ObjectPool, ty: TypeId, ptr: *mut u8) -> bool {
+        if Val::Bool(*self).get_type_id(pool) != TypeRef::Concrete(ty) {
+            return false;
+        }
+
+        unsafe {
+            ptr.cast::<bool>().write(*self);
+        }
+
+        true
     }
 }
 
-impl IntoValue for i32 {
-    fn as_bytes(&self) -> &[u8] {
-        bytemuck::bytes_of(self)
+impl ObjectValue for i32 {
+    unsafe fn read(pool: &ObjectPool, ty: TypeId, ptr: *const u8) -> Result<Self, ()> {
+        let ty = pool.resources().types.get(ty).unwrap();
+        match ty.repr {
+            TypeRepr::Int { bits } if bits == 32 => Ok(unsafe { ptr.cast::<i32>().read() }),
+            _ => Err(()),
+        }
+    }
+
+    unsafe fn write(&self, pool: &ObjectPool, ty: TypeId, ptr: *mut u8) -> bool {
+        if Val::I32(*self).get_type_id(pool) != TypeRef::Concrete(ty) {
+            return false;
+        }
+
+        unsafe {
+            ptr.cast::<i32>().write(*self);
+        }
+
+        true
     }
 }
 
-impl IntoValue for f32 {
-    fn as_bytes(&self) -> &[u8] {
-        bytemuck::bytes_of(self)
+impl ObjectValue for f32 {
+    unsafe fn read(pool: &ObjectPool, ty: TypeId, ptr: *const u8) -> Result<Self, ()> {
+        let ty = pool.resources().types.get(ty).unwrap();
+        match ty.repr {
+            TypeRepr::Float { bits } if bits == 32 => Ok(unsafe { ptr.cast::<f32>().read() }),
+            _ => Err(()),
+        }
+    }
+
+    unsafe fn write(&self, pool: &ObjectPool, ty: TypeId, ptr: *mut u8) -> bool {
+        if Val::F32(*self).get_type_id(pool) != TypeRef::Concrete(ty) {
+            return false;
+        }
+
+        unsafe {
+            ptr.cast::<f32>().write(*self);
+        }
+
+        true
     }
 }
 
-impl IntoValue for usize {
-    fn as_bytes(&self) -> &[u8] {
-        bytemuck::bytes_of(self)
+impl ObjectValue for ObjectAddr {
+    unsafe fn read(pool: &ObjectPool, ty: TypeId, ptr: *const u8) -> Result<Self, ()> {
+        let ty = pool.resources().types.get(ty).unwrap();
+        // TODO: CHECK
+        // match ty.repr {
+        //     TypeRepr::Composite(_) => Ok(unsafe { ptr.cast::<ObjectAddr>().read() }),
+        //     _ => Err(()),
+        // }
+        Ok(unsafe { ptr.cast::<ObjectAddr>().read() })
+    }
+
+    unsafe fn write(&self, pool: &ObjectPool, ty: TypeId, ptr: *mut u8) -> bool {
+        let expect = pool.resources().types.get(ty).unwrap();
+        let is = Val::Object(*self).get_type_id(pool);
+        match is {
+            TypeRef::Invalid => return false,
+            TypeRef::Null if !expect.info.allows_null => return false,
+            TypeRef::Null => (),
+            TypeRef::Concrete(is) => {
+                // TODO: CHECK
+                // let is = pool.resources().types.get(is).unwrap();
+                // if !is.info.is_subtype(&expect.info) {
+                //     return false;
+                // }
+            }
+        }
+
+        unsafe {
+            ptr.cast::<ObjectAddr>().write(*self);
+        }
+
+        true
     }
 }
 
-impl IntoValue for ObjectAddr {
-    fn as_bytes(&self) -> &[u8] {
-        let addr = unsafe { core::mem::transmute::<&*mut u8, &usize>(&self.0) };
-        bytemuck::bytes_of(addr)
+impl ObjectValue for Option<ObjectHandle> {
+    unsafe fn read(pool: &ObjectPool, ty: TypeId, ptr: *const u8) -> Result<Self, ()> {
+        let addr = unsafe { ObjectAddr::read(pool, ty, ptr)? };
+        if addr.is_null() {
+            Ok(None)
+        } else {
+            let handle = pool
+                .get_object(addr)
+                .map(|(object, index)| ObjectHandle { object, index });
+            Ok(handle)
+        }
+    }
+
+    unsafe fn write(&self, pool: &ObjectPool, ty: TypeId, ptr: *mut u8) -> bool {
+        let addr = self
+            .as_ref()
+            .map_or(ObjectAddr::NULL, |handle| handle.addr());
+        unsafe { addr.write(pool, ty, ptr) }
     }
 }
 
-impl IntoValue for Val {
-    fn as_bytes(&self) -> &[u8] {
-        match self {
-            Self::Bool(v) => v.as_bytes(),
-            Self::I32(v) => v.as_bytes(),
-            Self::F32(v) => v.as_bytes(),
-            Self::Object(v) => v.as_bytes(),
+impl ObjectValue for Val {
+    unsafe fn read(pool: &ObjectPool, ty: TypeId, ptr: *const u8) -> Result<Self, ()> {
+        unsafe {
+            match ty {
+                ty if ty == pool.resources().primitives.bool => {
+                    bool::read(pool, ty, ptr).map(Self::Bool)
+                }
+                ty if ty == pool.resources().primitives.int => {
+                    i32::read(pool, ty, ptr).map(Self::I32)
+                }
+                ty if ty == pool.resources().primitives.float => {
+                    f32::read(pool, ty, ptr).map(Self::F32)
+                }
+                _ => ObjectAddr::read(pool, ty, ptr).map(Self::Object),
+            }
+        }
+    }
+
+    unsafe fn write(&self, pool: &ObjectPool, ty: TypeId, ptr: *mut u8) -> bool {
+        unsafe {
+            match self {
+                Self::Bool(v) => v.write(pool, ty, ptr),
+                Self::I32(v) => v.write(pool, ty, ptr),
+                Self::F32(v) => v.write(pool, ty, ptr),
+                Self::Object(v) => v.write(pool, ty, ptr),
+            }
         }
     }
 }
@@ -589,23 +598,78 @@ impl ObjectTag {
 ///
 /// While at least on `ObjectHandle` exists the underlying [`Object`] will not be deallocated.
 #[derive(Clone)]
-pub struct ObjectHandle(Arc<ObjectRefInner>);
+pub struct ObjectHandle {
+    object: Arc<Object>,
+    index: usize,
+}
 
 impl ObjectHandle {
     pub fn addr(&self) -> ObjectAddr {
-        self.0.addr
+        ObjectAddr(self.object.ptr)
+    }
+
+    /// Returns the number of values in the array.
+    ///
+    /// If the object is not an array `1` is returned.
+    pub fn len(&self) -> usize {
+        self.object.len
+    }
+
+    pub fn at(&self, index: usize) -> Option<Self> {
+        if index >= self.len() {
+            None
+        } else {
+            Some(Self {
+                object: Arc::clone(&self.object),
+                index,
+            })
+        }
+    }
+
+    pub fn get<'a, T>(&self, class: &'a str, name: &'a str) -> Result<T, Error<'a>>
+    where
+        T: ObjectValue,
+    {
+        assert!(self.index < self.len());
+        self.object.get(self.index, class, name)
+    }
+
+    pub fn set<'a, T>(&self, class: &'a str, name: &'a str, value: T) -> Result<(), Error<'a>>
+    where
+        T: ObjectValue,
+    {
+        assert!(self.index < self.len());
+        self.object.set(self.index, class, name, value)
+    }
+
+    pub(crate) fn type_id(&self) -> TypeId {
+        self.object.id
+    }
+
+    /// TODO: Remove soon
+    pub fn as_ptr(&self) -> *mut u8 {
+        self.object.ptr
+    }
+
+    /// TODO: Remove soon
+    pub unsafe fn memory(&self) -> &[u8] {
+        let size = self.object.ty.repr.size_padded();
+
+        unsafe {
+            let ptr = self.as_ptr().add(size * self.index);
+            core::slice::from_raw_parts(ptr, size)
+        }
+    }
+
+    /// TODO: Remove soon
+    pub fn elem_size(&self) -> usize {
+        self.object.ty.repr.size_padded()
     }
 }
 
 impl Debug for ObjectHandle {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(f, "ObjectHandle({:p})", self.addr().0)
-    }
-}
-
-impl AsRef<ObjectAddr> for ObjectHandle {
-    fn as_ref(&self) -> &ObjectAddr {
-        &self.0.addr
     }
 }
 
@@ -632,13 +696,9 @@ impl<'a> ObjectHandleRef<'a> {
     }
 
     pub fn to_owned(&self) -> ObjectHandle {
-        let object = self.pool.get(self.addr).unwrap();
-
-        let Some(ref_count) = object.ref_count else {
-            todo!("static references cannot be cloned (yet)");
-        };
-
-        ObjectHandle(ref_count)
+        // Cannot fail since the constructor guarantees to not discard the existing
+        // reference for our lifetime.
+        self.pool.get(self.addr).unwrap()
     }
 }
 
@@ -648,8 +708,34 @@ impl Debug for ObjectHandleRef<'_> {
     }
 }
 
-impl AsRef<ObjectAddr> for ObjectHandleRef<'_> {
-    fn as_ref(&self) -> &ObjectAddr {
-        &self.addr
+pub trait AsObject {
+    fn addr(&self) -> ObjectAddr;
+}
+
+impl AsObject for ObjectAddr {
+    fn addr(&self) -> ObjectAddr {
+        *self
     }
+}
+
+impl AsObject for ObjectHandle {
+    fn addr(&self) -> ObjectAddr {
+        self.addr()
+    }
+}
+
+impl AsObject for ObjectHandleRef<'_> {
+    fn addr(&self) -> ObjectAddr {
+        self.addr
+    }
+}
+
+#[derive(Clone, Debug, Error)]
+pub enum Error<'a> {
+    #[error("no property {class}.{name} exists")]
+    NoProperty { class: &'a str, name: &'a str },
+    #[error("object is static")]
+    Static,
+    #[error("types are incompatible")]
+    Incompatible,
 }

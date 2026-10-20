@@ -478,26 +478,23 @@ mod tests {
         len: usize,
         data: &[u8],
     ) {
-        let object = engine.object_pool().get(&object).unwrap();
-
         unsafe {
-            let ptr = object.get(class, name).unwrap();
-            let ptr = ObjectAddr::from_raw(ptr.as_ptr().cast::<*mut u8>().read());
-
-            let array = engine.object_pool().get(ptr).unwrap();
+            let array_ptr = object.get::<ObjectAddr>(class, name).unwrap();
+            let array = engine.object_pool().get(array_ptr).unwrap();
             let array = &*array.as_ptr().cast::<ArrayObject>();
 
             assert_eq!(array.len, len);
 
             let mut mem = Vec::new();
 
-            let mut next_ptr = array.ptr;
-            for _ in 0..array.len {
-                let addr = ObjectAddr::from_raw(next_ptr);
-                let elem = engine.object_pool().get(addr).unwrap();
-                mem.extend_from_slice(elem.memory());
+            let array_obj = engine
+                .object_pool()
+                .get(ObjectAddr::from_raw(array.ptr))
+                .unwrap();
 
-                next_ptr = next_ptr.add(elem.size());
+            for index in 0..array.len {
+                let elem = array_obj.at(index).unwrap();
+                mem.extend_from_slice(elem.memory());
             }
 
             assert_eq!(mem, data);
@@ -537,12 +534,9 @@ mod tests {
         };
 
         let object = build_direct(&engine, &script);
-        let object = engine.object_pool().get(&object).unwrap();
 
-        unsafe {
-            assert_eq!(object.get("test", "a").unwrap(), 1u32.to_ne_bytes());
-            assert_eq!(object.get("test", "b").unwrap(), 2u32.to_ne_bytes());
-        }
+        assert_eq!(object.get::<i32>("test", "a").unwrap(), 1);
+        assert_eq!(object.get::<i32>("test", "b").unwrap(), 2);
     }
 
     #[test]
@@ -662,21 +656,13 @@ mod tests {
         };
 
         let object = build_direct(&engine, &script);
-        let object = engine.object_pool().get(&object).unwrap();
 
-        unsafe {
-            assert_eq!(object.get("test", "a").unwrap(), 1u32.to_ne_bytes());
-            let struct_addr = object
-                .get("test", "b")
-                .unwrap()
-                .as_ptr()
-                .cast::<ObjectAddr>()
-                .read();
+        assert_eq!(object.get::<i32>("test", "a").unwrap(), 1);
+        let struct_addr = object.get::<ObjectAddr>("test", "b").unwrap();
 
-            let st = engine.object_pool().get(struct_addr).unwrap();
-            assert_eq!(st.get("test#MyStruct", "x").unwrap(), 2u32.to_ne_bytes());
-            assert_eq!(st.get("test#MyStruct", "y").unwrap(), 3u32.to_ne_bytes());
-        }
+        let st = engine.object_pool().get(struct_addr).unwrap();
+        assert_eq!(st.get::<i32>("test#MyStruct", "x").unwrap(), 2);
+        assert_eq!(st.get::<i32>("test#MyStruct", "y").unwrap(), 3);
     }
 
     #[test]
@@ -747,16 +733,10 @@ mod tests {
         };
 
         let object = build_direct(&engine, &script);
-        let object = engine.object_pool().get(&object).unwrap();
 
         unsafe {
-            assert_eq!(object.get_typed::<i32>("test", "a").unwrap(), 1);
-            let array_ptr = object
-                .get("test", "b")
-                .unwrap()
-                .as_ptr()
-                .cast::<ObjectAddr>()
-                .read();
+            assert_eq!(object.get::<i32>("test", "a").unwrap(), 1);
+            let array_ptr = object.get::<ObjectAddr>("test", "b").unwrap();
             let data_ptr = array_ptr
                 .to_raw()
                 .add(offset_of!(ArrayObject, ptr))
@@ -767,12 +747,12 @@ mod tests {
             let object1 = data_ptr.to_raw().cast::<ObjectAddr>().add(1).read();
 
             let object0 = engine.object_pool().get(object0).unwrap();
-            assert_eq!(object0.get_typed::<i32>("test#MyStruct", "x",).unwrap(), 2);
-            assert_eq!(object0.get_typed::<i32>("test#MyStruct", "y").unwrap(), 3);
+            assert_eq!(object0.get::<i32>("test#MyStruct", "x",).unwrap(), 2);
+            assert_eq!(object0.get::<i32>("test#MyStruct", "y").unwrap(), 3);
 
             let object1 = engine.object_pool().get(object1).unwrap();
-            assert_eq!(object1.get_typed::<i32>("test#MyStruct", "x",).unwrap(), 4);
-            assert_eq!(object1.get_typed::<i32>("test#MyStruct", "y").unwrap(), 5);
+            assert_eq!(object1.get::<i32>("test#MyStruct", "x",).unwrap(), 4);
+            assert_eq!(object1.get::<i32>("test#MyStruct", "y").unwrap(), 5);
         }
     }
 
@@ -807,9 +787,7 @@ mod tests {
         let object = build_direct(&engine, &script);
         let object = engine.object_pool().get(object).unwrap();
 
-        unsafe {
-            assert_eq!(object.get_typed::<i32>("A", "a").unwrap(), 1);
-        }
+        assert_eq!(object.get::<i32>("A", "a").unwrap(), 1);
     }
 
     #[test]
@@ -846,10 +824,8 @@ mod tests {
         let object = build_direct(&engine, &script);
         let object = engine.object_pool().get(object).unwrap();
 
-        unsafe {
-            assert_eq!(object.get_typed::<i32>("A", "a").unwrap(), 0);
-            assert_eq!(object.get_typed::<i32>("B", "a").unwrap(), 1);
-        }
+        assert_eq!(object.get::<i32>("A", "a").unwrap(), 0);
+        assert_eq!(object.get::<i32>("B", "a").unwrap(), 1);
     }
 
     #[test]
@@ -944,21 +920,8 @@ mod tests {
         assert!(warnings.is_empty());
 
         let object = engine.object_pool().get(builder.finalize()).unwrap();
-        unsafe {
-            assert_eq!(
-                object.get("C", "a").unwrap(),
-                a.to_raw().addr().to_ne_bytes()
-            );
-
-            assert_eq!(
-                object.get("C", "b").unwrap(),
-                b.to_raw().addr().to_ne_bytes()
-            );
-
-            assert_eq!(
-                object.get("C", "c").unwrap(),
-                c.to_raw().addr().to_ne_bytes()
-            );
-        }
+        assert_eq!(object.get::<ObjectAddr>("C", "a").unwrap(), a);
+        assert_eq!(object.get::<ObjectAddr>("C", "b").unwrap(), b);
+        assert_eq!(object.get::<ObjectAddr>("C", "c").unwrap(), c);
     }
 }

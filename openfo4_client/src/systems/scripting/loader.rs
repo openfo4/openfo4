@@ -104,35 +104,6 @@ where
         Some(res.object)
     }
 
-    /// Returns a deep clone of the [`ScriptObject`].
-    ///
-    /// Only the top level properties are cloned.
-    pub async fn clone_object(&self, object: &ScriptObject) -> ScriptObject {
-        let scripts = self.objects.get_by_id(object.id()).unwrap();
-        let data = scripts.data().clone();
-
-        let scripts = scripts
-            .iter()
-            .map(|script| ScriptInstance {
-                instance: script.get().instance.clone(),
-                layout: script.get().layout.clone(),
-                object: unsafe {
-                    self.engine
-                        .object_pool()
-                        .clone_object(&script.get().object)
-                        .finalize()
-                },
-            })
-            .collect();
-
-        let id = self.objects.insert(&self.engine, scripts, None, data);
-
-        ScriptObject(Arc::new(ScriptObjectInner {
-            base: object.0.base,
-            id,
-        }))
-    }
-
     async fn load_in(&self, root: RecordId, kind: RecordInstantiationKind) -> LoadResult {
         if let Some(scripts) = self.objects.get_by_record(root)
         // FIXME: We should still cache default instances here

@@ -38,21 +38,10 @@ fn default_class_values() {
     let object = builder.finalize();
     let object = engine.object_pool().get(object).unwrap();
 
-    unsafe {
-        assert_eq!(
-            object.get("MyClass", "a").unwrap(),
-            bytemuck::bytes_of(&-100_i32)
-        );
-        assert_eq!(
-            object.get("MyClass", "b").unwrap(),
-            bytemuck::bytes_of(&32.0_f32)
-        );
-        assert_eq!(object.get("MyClass", "c").unwrap(), [1]);
-        assert_eq!(
-            object.get("MyClass", "d").unwrap(),
-            bytemuck::bytes_of(&50_i32)
-        );
-    }
+    assert_eq!(object.get::<i32>("MyClass", "a").unwrap(), -100);
+    assert_eq!(object.get::<f32>("MyClass", "b").unwrap(), 32.0);
+    assert_eq!(object.get::<bool>("MyClass", "c").unwrap(), true);
+    assert_eq!(object.get::<i32>("MyClass", "d").unwrap(), 50);
 }
 
 #[test]

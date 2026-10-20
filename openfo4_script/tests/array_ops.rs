@@ -303,10 +303,8 @@ fn array_find_struct() {
         let object = caller.object_pool().get(array[index as usize]).unwrap();
 
         assert_eq!(index, 42);
-        unsafe {
-            assert_eq!(object.get_typed::<i32>("", "x").unwrap(), 42);
-            assert_eq!(object.get_typed::<f32>("", "y").unwrap(), 42.0);
-        }
+        assert_eq!(object.get::<i32>("", "x").unwrap(), 42);
+        assert_eq!(object.get::<f32>("", "y").unwrap(), 42.0);
     }
 
     let module = assemble(

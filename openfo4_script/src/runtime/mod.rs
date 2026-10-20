@@ -16,7 +16,7 @@ use openfo4_common::cell::UnsafeRefCell;
 use openfo4_jit::func::{HostFunc, HostType, IntoHostFunc};
 use openfo4_jit::{Signature, Type};
 
-pub use object::{ArrayObject, Object, ObjectAddr, ObjectPool};
+pub use object::{ArrayObject, ObjectAddr, ObjectPool};
 pub use stack::Stack;
 
 use crate::compiler::PscSignature;
