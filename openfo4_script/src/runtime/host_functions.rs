@@ -121,6 +121,8 @@ pub fn lock(ctx: *mut RawContext, lock: *const ObjectLock) -> bool {
     match lock.lock() {
         Ok(()) => true,
         Err(listener) => {
+            debug_assert!(ctx.lock.is_none());
+
             ctx.lock = Some(listener);
             false
         }

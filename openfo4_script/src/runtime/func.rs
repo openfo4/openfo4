@@ -5,6 +5,7 @@ use std::pin::{Pin, pin};
 use std::sync::{Arc, Weak};
 use std::task::{self, Poll, Waker, ready};
 
+use futures_lite::FutureExt;
 use openfo4_common::cell::UnsafeRefCell;
 use openfo4_jit::{CompiledFunction, Signature, Type};
 use pin_project::pin_project;
@@ -359,6 +360,7 @@ where
 
         raw_ctx.stack_ptr.len = 0;
         raw_ctx.waker = cx.waker();
+        raw_ctx.lock = None;
 
         let res = unsafe { this.func.call_in(raw_ctx, this.params, this.returns) };
 
@@ -368,7 +370,22 @@ where
         raw_ctx.panic.resume();
 
         match res {
-            RESULT_SUSPEND => Poll::Pending,
+            RESULT_SUSPEND => {
+                if let Some(lock) = &mut raw_ctx.lock {
+                    match lock.poll(cx) {
+                        Poll::Pending => {}
+                        // It is possible that the lock has become availabe since attempted
+                        // to acquire it.
+                        // In this case we need to immediately reregister out future.
+                        Poll::Ready(()) => {
+                            cx.waker().wake_by_ref();
+                            raw_ctx.lock = None;
+                        }
+                    }
+                }
+
+                Poll::Pending
+            }
             RESULT_OK => {
                 this.ctx.stack.free(size_of::<usize>());
                 debug_assert_eq!(this.ctx.stack.size(), 0);
