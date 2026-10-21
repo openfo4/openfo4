@@ -1,4 +1,5 @@
 pub mod faction;
+pub mod furniture;
 pub mod magic_effect;
 pub mod object_modification;
 pub mod package;
@@ -389,11 +390,32 @@ pub enum HeadPartAssetType {
 }
 
 #[derive(Clone, Debug, Record)]
+#[record(ordered)]
 pub struct Model {
     #[record("MODL")]
     pub model: Option<ZString>,
     #[record("MODT")]
-    pub model_texture: Option<ModelInfo>,
+    pub info: Option<ModelInfo>,
+    #[record("MODC")]
+    pub color_remapping_index: Option<()>,
+    #[record("MODS")]
+    pub material_swap: Option<FormId>,
+    #[record("MODF")]
+    pub flags: Option<()>,
+}
+
+#[derive(Clone, Debug, Record)]
+pub struct DestructionModel {
+    #[record("DMDL")]
+    pub model: Option<ZString>,
+    #[record("DMDT")]
+    pub info: Option<ModelInfo>,
+    #[record("DMDC")]
+    pub color_remapping_index: Option<()>,
+    #[record("DMDS")]
+    pub material_swap: Option<FormId>,
+    #[record("DMDF")]
+    pub flags: Option<()>,
 }
 
 #[derive(Clone, Debug)]
@@ -1991,67 +2013,6 @@ pub struct FLOR {
     pub snam: Option<FormId>,
     #[record("PFPC")]
     pub pfpc: u32,
-}
-
-#[derive(Clone, Debug, Record)]
-pub struct Furniture {
-    #[record("EDID")]
-    pub id: ZString,
-    #[record("VMAD")]
-    pub virtual_machine_adapter: Option<VirtualMachineAdapter>,
-    #[record("OBND")]
-    pub object_bounds: Bounds,
-    #[record("FULL")]
-    pub full_name: Option<LString>,
-    #[record("MODL")]
-    pub model: Model,
-    // TODO
-    #[record("DEST")]
-    pub dest: Option<()>,
-    #[record("KSIZ")]
-    _keyword_size: Option<u32>,
-    #[record("KWDA")]
-    pub keywords: Option<Array<FormId>>,
-    #[record("PNAM")]
-    pub pnam: u32,
-    #[record("FNAM")]
-    pub fnam: u16,
-    #[record("KNAM")]
-    pub knam: Option<FormId>,
-    #[record("MNAM")]
-    pub mnam: u32,
-    // Size of 1?
-    // #[record("WBDT")]
-    // pub wbdt: FURN_WBDT,
-    // TODO
-    #[record("XMRK")]
-    pub xmrk: Option<()>,
-    #[record("ENAM")]
-    pub enam: Vec<u32>,
-    #[record("NAM0")]
-    pub nam0: Vec<FURN_NAM0>,
-    #[record("FNMK")]
-    pub fnmk: Vec<FormId>,
-    #[record("FNPR")]
-    pub fnpr: Vec<FURN_FNPR>,
-}
-
-// #[derive(Copy, Clone, Debug, BinaryStruct)]
-// pub struct FURN_WBDT {
-//     pub workbench: u8,
-//     pub actor_value_skill: u8,
-// }
-
-#[derive(Copy, Clone, Debug, BinaryStruct)]
-pub struct FURN_NAM0 {
-    _unknown0: u16,
-    pub flags: u16,
-}
-
-#[derive(Copy, Clone, Debug, BinaryStruct)]
-pub struct FURN_FNPR {
-    pub flags_marker_type: u16,
-    pub flags_marker_entry_point: u16,
 }
 
 #[derive(Clone, Debug, Record)]
@@ -6528,3 +6489,59 @@ pub struct ObjectVisibilityManager {
     #[record("EDID")]
     pub id: Option<ZString>,
 }
+
+#[derive(Clone, Debug, Record)]
+#[record(ordered)]
+pub struct Destruction {
+    #[record("DEST")]
+    pub header: DestructionHeader,
+    #[record("DAMC")]
+    pub resistances: Vec<Resistance>,
+    #[record("DSTD")]
+    pub stages: SubRecordArray<DestructionStage>,
+}
+
+#[derive(Copy, Clone, Debug, BinaryStruct)]
+pub struct DestructionHeader {
+    pub health: u32,
+    _stage_count: u8,
+    pub flags: u8,
+    _pad0: u16,
+}
+
+#[derive(Clone, Debug, Record)]
+pub struct DestructionStage {
+    #[record("DSTD")]
+    pub data: DestructionStageData,
+    #[record("DSTA")]
+    pub sequence_name: Option<ZString>,
+    #[record("DMDL")]
+    pub model: DestructionModel,
+    #[record("DSTF")]
+    _end_marker: (),
+}
+
+#[derive(Clone, Debug, BinaryStruct)]
+pub struct DestructionStageData {
+    pub health_percentage: u8,
+    pub index: u8,
+    pub model_damage_stage: u8,
+    pub flags: DestructionStageFlags,
+    pub self_damage_per_second: u32,
+    pub explosion: FormId,
+    pub debris: FormId,
+    pub debris_count: u32,
+}
+
+bitflags! {
+    #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+    pub struct DestructionStageFlags: u8 {
+        const CAP_DAMAGE = 1 << 0;
+        const DISABLE = 1 << 1;
+        const DESTROY = 1 << 2;
+        const IGNORE_EXTERNAL_DAMAGE = 1 << 3;
+        const BECOMES_DYNAMIC = 1 << 4;
+    }
+}
+
+impl_decode_bitflags!(DestructionStageFlags: u8);

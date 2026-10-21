@@ -18,14 +18,15 @@ use std::mem::MaybeUninit;
 use bytes::Buf;
 use records::{
     AcousticSpace, Action, Activator, Ammo, Armor, Book, Cell, Class, Climate, Component,
-    Container, DMGT, Door, ENCH, FLOR, Furniture, GLOB, GRAS, GameSetting, Hazard, HeadPart, INGR,
-    IdleMarker, Ingestible, Key, Keyword, Land, LandTexture, LeveledActor, LeveledItem, Light,
+    Container, DMGT, Door, ENCH, FLOR, GLOB, GRAS, GameSetting, Hazard, HeadPart, INGR, IdleMarker,
+    Ingestible, Key, Keyword, Land, LandTexture, LeveledActor, LeveledItem, Light,
     LocationReferenceType, MSTT, MiscObject, Note, Npc, PlacedGrenade, PlacedHazard, PlacedNpc,
     PlacedObject, Projectile, Race, SOUN, SPEL, STAT, ShaderParticleGeometry, StaticCollection,
     TACT, TRNS, Tes4, TextureSet, VisualEffect, Weather, Worldspace,
 };
 
 use crate::records::faction::Faction;
+use crate::records::furniture::Furniture;
 use crate::records::magic_effect::MagicEffect;
 use crate::records::object_modification::ObjectModification;
 use crate::records::package::Package;
@@ -544,6 +545,8 @@ where
 
     async fn read_record_data(&mut self, header: RecordHeader) -> Result<RecordData, Error> {
         debug_assert_ne!(header.typ, Text::GRUP);
+
+        dbg!(header.form_id);
 
         let mut buf = vec![0; header.size as usize];
         self.cursor.read_exact(&mut buf).await?;
