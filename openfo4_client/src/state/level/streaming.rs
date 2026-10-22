@@ -19,7 +19,7 @@ use parking_lot::Mutex;
 use crate::cell::CellId;
 use crate::components::{NiTransform, Root, WorldSpace};
 use crate::config;
-use crate::state::level::loader::{EntityLoader, EntityRef};
+use crate::state::level::loader::{CustomRecordInfo, EntityLoader, EntityRef};
 use crate::state::level::partial::{LodLevel, PartialEntityFlags};
 use crate::state::level::{CellKey, CellState, INTERIOR_CELL, LoaderState, Streamer};
 
@@ -318,13 +318,13 @@ async fn load_cell(
             };
 
             loader
-                .load_custom(
-                    record.id,
-                    mode.flags(),
-                    || std::future::ready(record),
-                    || worldspace,
-                    || cell_id,
-                )
+                .load_custom(record.id, mode.flags(), || {
+                    std::future::ready(CustomRecordInfo {
+                        record,
+                        worldspace,
+                        cell: cell_id,
+                    })
+                })
                 .await
                 .unwrap()
         });

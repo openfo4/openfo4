@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use event_listener::EventListener;
+use glam::Vec3;
 use openfo4_common::collections::slab::Slab;
 use openfo4_common::components::Transform;
 use openfo4_common::utils::AbortOnDrop;
@@ -31,8 +32,7 @@ impl EntityLoader {
     pub async fn spawn(&self, base: RecordId, info: SpawnEntityInfo) -> Result<EntityRef, ()> {
         let record = self.state.esp_loader.lookup(None, base).await.unwrap();
 
-        // FIXME: What do we use here?
-        let cell = CellId::new(0, 0);
+        let cell = CellId::from(NiTransform::from(info.transform));
         let ctx = LoadContext::new(cell, &self.state);
 
         let mut entity = SpawnEntity::load_base(&ctx, &record, info.flags)
@@ -88,32 +88,35 @@ impl EntityLoader {
     #[tracing::instrument(name = "EntityLoader::load", skip_all)]
     pub async fn load(&self, id: RecordId, flags: PartialEntityFlags) -> Result<EntityRef, ()> {
         let worldspace = self.state.worldspace(id).unwrap();
-        // TODO: Need to extract this from state aswell.
-        let cell = CellId::new(0, 0);
 
-        self.load_custom(
-            id,
-            flags,
-            async move || self.state.esp_loader.lookup(None, id).await.unwrap(),
-            || worldspace,
-            || cell,
-        )
+        self.load_custom(id, flags, async move || {
+            let record = self.state.esp_loader.lookup(None, id).await.unwrap();
+            let position = record.local.data.position().unwrap();
+            let translation = Vec3::new(
+                position.position_x,
+                position.position_y,
+                position.position_z,
+            );
+            let cell = CellId::from(NiTransform::from_translation(translation));
+
+            CustomRecordInfo {
+                record,
+                worldspace,
+                cell,
+            }
+        })
         .await
     }
 
-    pub(super) async fn load_custom<R, RF, W, C>(
+    pub(super) async fn load_custom<F, Fut>(
         &self,
         id: RecordId,
         flags: PartialEntityFlags,
-        get_record: R,
-        get_worldspace: W,
-        get_cell: C,
+        get_record: F,
     ) -> Result<EntityRef, ()>
     where
-        R: FnOnce() -> RF,
-        RF: Future<Output = GlobalRecord>,
-        W: FnOnce() -> WorldSpace,
-        C: FnOnce() -> CellId,
+        F: FnOnce() -> Fut,
+        Fut: Future<Output = CustomRecordInfo>,
     {
         let mut do_load = true;
         let mut index = 0;
@@ -173,15 +176,13 @@ impl EntityLoader {
         }
 
         if do_load {
-            let record = get_record().await;
-            let worldspace = get_worldspace();
-            let cell = get_cell();
+            let info = get_record().await;
 
-            let ctx = LoadContext::new(cell, &self.state);
-            let mut entity = SpawnEntity::load(&ctx, &record, flags)
+            let ctx = LoadContext::new(info.cell, &self.state);
+            let mut entity = SpawnEntity::load(&ctx, &info.record, flags)
                 .await
-                .unwrap_or_else(|| SpawnEntity::null(record.local.data.position().unwrap()));
-            entity.worldspace = Some(worldspace);
+                .unwrap_or_else(|| SpawnEntity::null(info.record.local.data.position().unwrap()));
+            entity.worldspace = Some(info.worldspace);
             entity.form = Some(id);
             self.state.events.push(Event::Spawn {
                 id: eid,
@@ -290,4 +291,11 @@ fn discard_entity_ref(id: EntityId, flags: PartialEntityFlags, lstate: &LoaderSt
     }
 
     // TODO: "Downgrade" the entity by dropping some data.
+}
+
+#[derive(Clone, Debug)]
+pub(super) struct CustomRecordInfo {
+    pub record: GlobalRecord,
+    pub worldspace: WorldSpace,
+    pub cell: CellId,
 }
