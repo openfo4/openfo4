@@ -1,5 +1,6 @@
 pub mod faction;
 pub mod furniture;
+pub mod ingredient;
 pub mod magic_effect;
 pub mod object_modification;
 pub mod package;
@@ -1583,41 +1584,6 @@ bitflags! {
 
 impl_decode_bitflags!(DoorFlags: u8);
 
-#[derive(Clone, Debug, Record)]
-pub struct INGR {
-    #[record("EDID")]
-    pub edid: ZString,
-    #[record("VMAD")]
-    pub vmad: Option<VirtualMachineAdapter>,
-    #[record("OBND")]
-    pub obnd: Bounds,
-    #[record("FULL")]
-    pub full: LString,
-    #[record("KSIZ")]
-    pub ksiz: Option<u32>,
-    #[record("KWDA")]
-    pub kwda: Option<Array<FormId>>,
-    #[record("MODL")]
-    pub modl: (),
-    #[record("ICON")]
-    pub icon: Option<ZString>,
-    #[record("YNAM")]
-    pub ynam: Option<FormId>,
-    #[record("ZNAM")]
-    pub znam: Option<FormId>,
-    #[record("DATA")]
-    pub data: INGR_DATA,
-    #[record("ENIT")]
-    pub enit: INGR_ENIT,
-    #[record("EFID")]
-    pub efid: Vec<FormId>,
-    #[record("EFIT")]
-    pub efit: Vec<INGR_EFIT>,
-    // TODOO
-    #[record("CTDA")]
-    pub ctda: Vec<()>,
-}
-
 #[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
 pub struct Array<T>(pub Vec<T>);
 
@@ -1679,25 +1645,6 @@ impl<T> IntoIterator for Array<T> {
     fn into_iter(self) -> Self::IntoIter {
         self.0.into_iter()
     }
-}
-
-#[derive(Copy, Clone, Debug, BinaryStruct)]
-pub struct INGR_DATA {
-    pub value: u32,
-    pub weight: f32,
-}
-
-#[derive(Copy, Clone, Debug, BinaryStruct)]
-pub struct INGR_ENIT {
-    pub ingredient_value: u32,
-    pub flags: u32,
-}
-
-#[derive(Copy, Clone, Debug, BinaryStruct)]
-pub struct INGR_EFIT {
-    pub magnitude: f32,
-    pub area_of_effect: u32,
-    pub duration: u32,
 }
 
 /// A light-emitting entity.
@@ -6545,3 +6492,23 @@ bitflags! {
 }
 
 impl_decode_bitflags!(DestructionStageFlags: u8);
+
+#[derive(Clone, Debug, Record)]
+pub struct Effect {
+    /// Reference to a [`MagicEffect`].
+    ///
+    /// [`MagicEffect`]: magic_effect::MagicEffect
+    #[record("EFID")]
+    pub base_effect: FormId,
+    #[record("EFIT")]
+    pub modifier: Option<EffectModifier>,
+    #[record("CTDA")]
+    pub conditions: Conditions,
+}
+
+#[derive(Copy, Clone, Debug, BinaryStruct)]
+pub struct EffectModifier {
+    pub magnitude: f32,
+    pub area: u32,
+    pub duration: u32,
+}

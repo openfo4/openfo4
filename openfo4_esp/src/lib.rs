@@ -18,7 +18,7 @@ use std::mem::MaybeUninit;
 use bytes::Buf;
 use records::{
     AcousticSpace, Action, Activator, Ammo, Armor, Book, Cell, Class, Climate, Component,
-    Container, DMGT, Door, ENCH, FLOR, GLOB, GRAS, GameSetting, Hazard, HeadPart, INGR, IdleMarker,
+    Container, DMGT, Door, ENCH, FLOR, GLOB, GRAS, GameSetting, Hazard, HeadPart, IdleMarker,
     Ingestible, Key, Keyword, Land, LandTexture, LeveledActor, LeveledItem, Light,
     LocationReferenceType, MSTT, MiscObject, Note, Npc, PlacedGrenade, PlacedHazard, PlacedNpc,
     PlacedObject, Projectile, Race, SOUN, SPEL, STAT, ShaderParticleGeometry, StaticCollection,
@@ -27,6 +27,7 @@ use records::{
 
 use crate::records::faction::Faction;
 use crate::records::furniture::Furniture;
+use crate::records::ingredient::Ingredient;
 use crate::records::magic_effect::MagicEffect;
 use crate::records::object_modification::ObjectModification;
 use crate::records::package::Package;
@@ -598,7 +599,7 @@ where
             Book => Book,
             Container => Container,
             Door => Door,
-            Ingredient => INGR,
+            Ingredient => Ingredient,
             Light => Light,
             MiscObject => MiscObject,
             Static => STAT,
@@ -818,7 +819,7 @@ pub enum RecordData {
     Book(Book),
     Container(Container),
     Door(Door),
-    INGR(INGR),
+    Ingredient(Ingredient),
     Light(Light),
     MiscObject(MiscObject),
     STAT(STAT),
@@ -1008,7 +1009,7 @@ as_record_kind_impl! {
     Armor => RecordKind::Armor,
     Book => RecordKind::Book,
     Container => RecordKind::Container,
-    INGR => RecordKind::Ingredient,
+    Ingredient => RecordKind::Ingredient,
     Light => RecordKind::Light,
     MiscObject => RecordKind::MiscObject,
     STAT => RecordKind::Static,

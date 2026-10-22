@@ -648,7 +648,7 @@ async fn load_record(
         RecordData::Door(data) => data.virtual_machine_adapter.map(|v| v.scripts),
         RecordData::FLOR(data) => data.vmad.map(|v| v.scripts),
         RecordData::Furniture(data) => data.virtual_machine_adapter.map(|v| v.scripts),
-        RecordData::INGR(data) => data.vmad.map(|v| v.scripts),
+        RecordData::Ingredient(data) => data.virtual_machine_adapter.map(|v| v.scripts),
         RecordData::Key(data) => data.virtual_machine_adapter.map(|v| v.scripts),
         RecordData::Light(data) => data.virtual_machine_adapter.map(|v| v.scripts),
         RecordData::MagicEffect(data) => data.virtual_machine_adpater.map(|v| v.scripts),
