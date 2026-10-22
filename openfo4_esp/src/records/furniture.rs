@@ -19,7 +19,7 @@ pub struct Furniture {
     #[record("VMAD")]
     pub virtual_machine_adapter: Option<VirtualMachineAdapter>,
     #[record("OBND")]
-    pub object_bounds: Option<Bounds>,
+    pub object_bounds: Bounds,
     /// Reference to a [`Transform`] record.
     ///
     /// [`Transform`]: crate::TRNS

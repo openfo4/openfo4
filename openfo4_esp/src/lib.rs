@@ -546,8 +546,6 @@ where
     async fn read_record_data(&mut self, header: RecordHeader) -> Result<RecordData, Error> {
         debug_assert_ne!(header.typ, Text::GRUP);
 
-        dbg!(header.form_id);
-
         let mut buf = vec![0; header.size as usize];
         self.cursor.read_exact(&mut buf).await?;
 
