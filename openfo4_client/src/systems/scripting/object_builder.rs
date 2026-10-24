@@ -3,8 +3,8 @@ use openfo4_common::string::Lowercase;
 use openfo4_core::record::RecordId;
 use openfo4_esp::FormId;
 use openfo4_esp::vmad::{Property, Script, Value};
-use openfo4_script::compiler::resources::{TypeId, TypeInfo};
-use openfo4_script::engine::Engine;
+use openfo4_script::compiler::resources::TypeId;
+use openfo4_script::engine::{Engine, TypeRef};
 use openfo4_script::runtime::object::{ObjectArrayBuilder, ObjectBuilder, ObjectHandle};
 use openfo4_script::runtime::{ObjectAddr, Val};
 use thiserror::Error;
@@ -80,12 +80,12 @@ enum Members<'a> {
     Struct {
         properties: &'a [Property],
         class: Lowercase<String>,
-        info: TypeInfo,
+        ty: TypeRef<'a>,
     },
     Array {
         values: &'a [Value],
         next_index: usize,
-        elem_ty: TypeId,
+        elem_ty: TypeRef<'a>,
     },
 }
 
@@ -95,7 +95,7 @@ impl Members<'_> {
             Self::Struct {
                 properties,
                 class: _,
-                info: _,
+                ty: _,
             } => properties.is_empty(),
             Self::Array {
                 values,
@@ -155,7 +155,7 @@ where
             Members::Struct {
                 properties,
                 class,
-                info,
+                ty,
             } => {
                 let Some(prop) = properties.split_off_first() else {
                     return;
@@ -167,10 +167,10 @@ where
                 // superclasses.
                 // If a field exists on both a superclass and a subclass we must prefer
                 // the subclass.
-                let info = info.classes.iter().rev().find_map(|class| {
+                let info = ty.info().classes.iter().rev().find_map(|class| {
                     let class = self.engine.get_type_by_id(*class).unwrap();
                     let class = class.info().name.as_ref().unwrap().clone();
-                    info.properties.get(&(class, prop_name.clone()))
+                    ty.info().properties.get(&(class, prop_name.clone()))
                 });
 
                 // Setting an unknown field is generally not a good idea,
@@ -200,21 +200,22 @@ where
 
                 let location = Location::ArrayIndex(*len);
                 *len += 1;
-                (value, location, *elem_ty)
+                (value, location, elem_ty.id())
             }
         };
 
+        let ty = self.engine.get_type_by_id(ty).unwrap();
+
         let value = match value {
-            Value::Bool(val) if ty == self.types.bool => Val::Bool(*val),
-            Value::Int(val) if ty == self.types.int => Val::I32(*val),
-            Value::Float(val) if ty == self.types.float => Val::F32(*val),
-            Value::String(val) if ty == self.types.string => {
+            Value::Bool(val) if ty.id() == self.types.bool => Val::Bool(*val),
+            Value::Int(val) if ty.id() == self.types.int => Val::I32(*val),
+            Value::Float(val) if ty.id() == self.types.float => Val::F32(*val),
+            Value::String(val) if ty.id() == self.types.string => {
                 let object = self.engine.object_pool().insert_string(val);
                 Val::Object(object.addr())
             }
             Value::Object(object) => {
-                let info = self.engine.get_type_by_id(ty).unwrap();
-                let class = info.info().name.as_ref().unwrap();
+                let class = ty.info().name.as_ref().unwrap();
                 // TODO: Assert that info is a class, not a struct.
 
                 // Object references are already null by default.
@@ -271,27 +272,23 @@ where
                 Val::Object(addr)
             }
             Value::Struct(fields, _) => {
-                let info = self.engine.get_type_by_id(ty).unwrap();
-                dbg!(&info);
-                let name = info.info().name.clone().unwrap();
+                let name = ty.info().name.clone().unwrap();
                 // TODO: Assert that info is indeed a struct.
 
-                let builder = self.engine.object_pool().insert(ty);
+                let builder = self.engine.object_pool().insert(ty.id());
                 self.stack.push(Entry {
                     parent: Some(location),
                     builder: Builder::Object(builder),
                     members: Members::Struct {
                         properties: &fields,
                         class: name,
-                        info: info.info().clone(),
+                        ty,
                     },
                 });
 
                 return;
             }
-            Value::Array(fields, _) => {
-                let elem_ty = self.engine.get_type_by_id(ty).unwrap().elem_ty().unwrap();
-
+            Value::Array(fields, _) if let Some(elem_ty) = ty.elem_ty() => {
                 let builder = self
                     .engine
                     .object_pool()
@@ -303,15 +300,14 @@ where
                     members: Members::Array {
                         values: fields,
                         next_index: 0,
-                        elem_ty: elem_ty.id(),
+                        elem_ty,
                     },
                 });
 
                 return;
             }
             value => {
-                let info = self.engine.get_type_by_id(ty).unwrap();
-                let expected = info
+                let expected = ty
                     .info()
                     .name
                     .as_ref()
@@ -350,7 +346,6 @@ pub fn build_script_object(
     script_defined_in: RecordId,
 ) -> (ObjectHandle, Vec<BuildScriptObjectWarning>) {
     let ty = engine.get_type(&script.name).unwrap();
-    let info = ty.info();
 
     let entry = Entry {
         parent: None,
@@ -358,7 +353,7 @@ pub fn build_script_object(
         members: Members::Struct {
             properties: &script.properties,
             class: Lowercase::new(&*script.name),
-            info: info.clone(),
+            ty,
         },
     };
 
