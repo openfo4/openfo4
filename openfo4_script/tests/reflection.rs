@@ -2,7 +2,6 @@ use futures_lite::future::block_on;
 use openfo4_common::string::Lowercase;
 use openfo4_script::assembler::assemble;
 use openfo4_script::compiler::CompilerOptions;
-use openfo4_script::compiler::resources::PropertyType;
 use openfo4_script::engine::{Engine, Options};
 
 const COMPILER_OPTIONS: CompilerOptions = CompilerOptions {
@@ -31,37 +30,36 @@ fn class_reflection() {
 
     engine.register(&module);
     block_on(engine.compile("MyClass", &Options::default())).unwrap();
-    let id = engine.get_type("MyClass").unwrap();
+    let class = engine.get_type("MyClass").unwrap();
 
-    let info = engine.type_info(id);
-    dbg!(&info);
+    let info = class.info();
     assert_eq!(
         info.properties
             .get(&(Lowercase::new("MyClass"), Lowercase::new("a")))
             .unwrap()
             .ty,
-        PropertyType::Inline(engine.int_type())
+        engine.int_type()
     );
     assert_eq!(
         info.properties
             .get(&(Lowercase::new("MyClass"), Lowercase::new("b")))
             .unwrap()
             .ty,
-        PropertyType::Inline(engine.float_type())
+        engine.float_type()
     );
     assert_eq!(
         info.properties
             .get(&(Lowercase::new("MyClass"), Lowercase::new("c")))
             .unwrap()
             .ty,
-        PropertyType::Pointer(id)
+        engine.get_type("MyClass").unwrap().id()
     );
     assert_eq!(
         info.properties
             .get(&(Lowercase::new("MyClass"), Lowercase::new("d")))
             .unwrap()
             .ty,
-        PropertyType::ArrayPointer(id)
+        engine.get_type("MyClass[]").unwrap().id()
     );
 }
 
@@ -80,15 +78,14 @@ fn struct_reflection() {
 
     engine.register(&module);
     block_on(engine.compile("MyClass", &Options::default())).unwrap();
-    let class = engine.get_type("MyClass").unwrap();
-    let id = engine.get_type("MyClass#MyStruct").unwrap();
+    let struct_ = engine.get_type("MyClass#MyStruct").unwrap();
 
-    let info = engine.type_info(id);
+    let info = struct_.info();
     assert_eq!(
         info.properties
             .get(&(Lowercase::new("MyClass#MyStruct"), Lowercase::new("a")))
             .unwrap()
             .ty,
-        PropertyType::ArrayPointer(class)
+        engine.get_type("MyClass[]").unwrap().id()
     );
 }

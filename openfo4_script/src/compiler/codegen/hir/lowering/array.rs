@@ -88,7 +88,7 @@ pub fn array_create(
     let len = translator.load(len);
     let len_wide = translator.builder.uextend(len, ISIZE_TYPE);
     let ptr = call_malloc(translator, elem_ty, len_wide);
-    let arr = create_array_object(translator, ptr, len);
+    let arr = create_array_object(translator, ptr, len, elem_ty);
     translator.store(array, arr);
 }
 
@@ -380,9 +380,22 @@ fn emit_array_bounds_check(
     translator.assert_true(is_ok, ErrorKind::ArrayOutOfBounds);
 }
 
-fn create_array_object(translator: &mut Translator<'_>, ptr: JitValue, len: JitValue) -> JitValue {
+fn create_array_object(
+    translator: &mut Translator<'_>,
+    ptr: JitValue,
+    len: JitValue,
+    elem_ty: TypeId,
+) -> JitValue {
     let one = translator.builder.iconst(ISIZE_TYPE, 1);
-    let array = call_malloc(translator, translator.data.resources.primitives.array, one);
+    let array_ty = *translator
+        .data
+        .resources
+        .papyrus
+        .type_to_array_ptr
+        .lock()
+        .get(&elem_ty)
+        .unwrap();
+    let array = call_malloc(translator, array_ty, one);
 
     let len = translator.builder.uextend(len, ISIZE_TYPE);
 
@@ -438,6 +451,18 @@ pub fn array_cast<F>(
 
     let dst_base_ptr = call_malloc(translator, dst_ty, len);
 
+    dbg!(&dst_ty);
+    dbg!(&translator.data.resources.papyrus);
+
+    let array_ty = *translator
+        .data
+        .resources
+        .papyrus
+        .type_to_array_ptr
+        .lock()
+        .get(&dst_ty)
+        .unwrap();
+
     let src_ty = lowered_elem_ty(&translator.data.resources.types.get(src_ty).unwrap());
     let dst_ty = lowered_elem_ty(&translator.data.resources.types.get(dst_ty).unwrap());
 
@@ -484,7 +509,7 @@ pub fn array_cast<F>(
         translator.builder.switch_to_block(terminator_block);
 
         let one = translator.builder.iconst(ISIZE_TYPE, 1);
-        let dst_array = call_malloc(translator, translator.data.resources.primitives.array, one);
+        let dst_array = call_malloc(translator, array_ty, one);
 
         translator
             .builder

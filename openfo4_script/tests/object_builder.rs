@@ -30,9 +30,9 @@ fn default_class_values() {
 
     engine.register(&module);
     block_on(engine.compile("MyClass", &Options::default())).unwrap();
-    let layout = engine.get_type("MyClass").unwrap();
+    let class = engine.get_type("MyClass").unwrap();
 
-    let mut builder = engine.object_pool().insert(layout.clone());
+    let mut builder = engine.object_pool().insert(class.id());
     builder.set("MyClass", "d", 50);
 
     let object = builder.finalize();
@@ -80,9 +80,9 @@ fn field_without_property() {
     engine.register(&module);
 
     let instance = block_on(engine.compile("B", &Options::default())).unwrap();
-    let type_id = engine.get_type("B").unwrap();
+    let b = engine.get_type("B").unwrap();
 
-    let mut builder = engine.object_pool().insert(type_id);
+    let mut builder = engine.object_pool().insert(b.id());
     builder.set("A", "a", 1);
     builder.set("A", "c", builder.addr());
     builder.set("B", "e", true);

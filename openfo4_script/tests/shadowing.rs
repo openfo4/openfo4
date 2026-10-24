@@ -45,9 +45,9 @@ fn variable_shadowing() {
     let instance = block_on(engine.compile("SubSub", &Options::default())).unwrap();
     let func = instance.get_func("GetA").unwrap();
 
-    let type_id = engine.get_type("SubSub").unwrap();
+    let subsub = engine.get_type("SubSub").unwrap();
 
-    let mut builder = engine.object_pool().insert(type_id);
+    let mut builder = engine.object_pool().insert(subsub.id());
     builder.set("SubSub", "A", 600);
     builder.set("Sub", "A", 400);
     builder.set("Super", "A", 200);
@@ -84,9 +84,9 @@ fn load_property_from_parent_class() {
 
     let instance = block_on(engine.compile("B", &Options::default())).unwrap();
     let func = instance.get_func("F").unwrap();
-    let type_id = engine.get_type("B").unwrap();
+    let b = engine.get_type("B").unwrap();
 
-    let mut builder = engine.object_pool().insert(type_id);
+    let mut builder = engine.object_pool().insert(b.id());
     builder.set("A", "A", 1);
 
     let addr = builder.finalize().addr();

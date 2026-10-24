@@ -227,8 +227,9 @@ where
 
                 // We can also use any supertype of our type.
                 for id in &script.info.classes {
-                    let info = self.engine.type_info(*id);
-                    if let Some(name) = info.name {
+                    let info = self.engine.get_type_by_id(*id).unwrap();
+                    let info = info.info();
+                    if let Some(name) = info.name.clone() {
                         addrs.insert(name, addr);
                     }
                 }
@@ -243,8 +244,9 @@ where
                 let addr = script.builder.addr();
 
                 for id in &script.info.classes {
-                    let info = self.engine.type_info(*id);
-                    if let Some(name) = info.name {
+                    let info = self.engine.get_type_by_id(*id).unwrap();
+                    let info = info.info();
+                    if let Some(name) = info.name.clone() {
                         addrs.insert(name, addr);
                     }
                 }
@@ -341,7 +343,7 @@ where
                 let layout = self.engine.get_type(&name).unwrap();
                 final_instances.push(ScriptInstance {
                     instance: object.instance,
-                    layout: layout.clone(),
+                    layout: layout.id(),
                     object: object.builder.finalize(),
                 });
             }
@@ -396,7 +398,7 @@ where
                 let layout = self.engine.get_type(&name).unwrap();
                 final_instances.push(ScriptInstance {
                     instance: object.instance,
-                    layout: layout.clone(),
+                    layout: layout.id(),
                     object: object.builder.finalize(),
                 });
             }
@@ -831,16 +833,16 @@ async fn load_record(
     let instance = compiled_classes
         .get_or_compile(engine, base_class_name)
         .await;
-    let base_class_id = engine.get_type(base_class_name).unwrap();
-    let builder = engine.object_pool().insert(base_class_id.clone());
+    let base_class = engine.get_type(base_class_name).unwrap();
+    let builder = engine.object_pool().insert(base_class.id());
 
     for script in record_scripts.into_iter().flat_map(|v| v) {
         let instance = compiled_classes.get_or_compile(engine, &script.name).await;
         let layout = engine.get_type(&script.name).unwrap();
-        let builder = engine.object_pool().insert(layout.clone());
+        let builder = engine.object_pool().insert(layout.id());
 
-        let info = engine.type_info(layout);
-        if !info.classes.contains(&base_class_id) {
+        let info = layout.info().clone();
+        if !info.classes.contains(&base_class.id()) {
             tracing::debug!(
                 "attached script {} on record {} does not inherit from base class {}, skipping",
                 script.name,
@@ -871,7 +873,7 @@ async fn load_record(
                 instance: instance.clone(),
                 builder,
                 script: None,
-                info: engine.type_info(base_class_id),
+                info: base_class.info().clone(),
             },
         );
     }
@@ -887,7 +889,7 @@ async fn load_record(
             .get_or_compile(engine, base_class_name)
             .await;
         let layout = engine.get_type(base_class_name).unwrap();
-        let builder = engine.object_pool().insert(layout.clone());
+        let builder = engine.object_pool().insert(layout.id());
 
         scripts.insert(
             base_class_name.to_owned(),
@@ -895,14 +897,14 @@ async fn load_record(
                 instance: instance.clone(),
                 builder,
                 script: None,
-                info: engine.type_info(layout),
+                info: layout.info().clone(),
             },
         );
 
         for script in alias.scripts.into_iter() {
             let instance = compiled_classes.get_or_compile(engine, &script.name).await;
             let layout = engine.get_type(&script.name).unwrap();
-            let builder = engine.object_pool().insert(layout.clone());
+            let builder = engine.object_pool().insert(layout.id());
 
             scripts.insert(
                 script.name.clone(),
@@ -910,7 +912,7 @@ async fn load_record(
                     instance: instance.clone(),
                     builder,
                     script: Some(script),
-                    info: engine.type_info(layout),
+                    info: layout.info().clone(),
                 },
             );
         }
@@ -1202,10 +1204,10 @@ mod tests {
             compiled_classes: &CompilationCache,
         ) -> Option<LoadedRecord> {
             let instance = compiled_classes.get_or_compile(engine, "MyClass").await;
-            let builder = engine
-                .object_pool()
-                .insert(engine.get_type("MyClass").unwrap());
-            let info = engine.type_info(engine.get_type("MyClass").unwrap());
+            let ty = engine.get_type("MyClass").unwrap();
+
+            let builder = engine.object_pool().insert(ty.id());
+            let info = ty.info().clone();
 
             Some(LoadedRecord {
                 depends: self.deps.get(&record).unwrap().clone(),

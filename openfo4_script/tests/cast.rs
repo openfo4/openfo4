@@ -31,18 +31,18 @@ fn cast_array() {
 
     let instance = block_on(engine.compile("MyClass", &Options::default())).unwrap();
     let func = instance.get_func("MyFunction").unwrap();
-    let layout = engine.get_type("MyClass").unwrap();
+    let class_ty = engine.get_type("MyClass").unwrap();
 
     let mut stack = engine.create_stack();
     let mut ctx = Context::new(&engine, &mut stack, ());
 
     let addrs: Vec<_> = (0..3)
-        .map(|_| engine.object_pool().insert(layout).finalize().addr())
+        .map(|_| engine.object_pool().insert(class_ty.id()).finalize().addr())
         .collect();
 
     let mut input = engine
         .object_pool()
-        .insert_array(engine.ptr_type(), addrs.len());
+        .insert_array(class_ty.id(), addrs.len());
     for (index, addr) in addrs.iter().enumerate() {
         input.set_at(index, "", "", *addr);
     }
@@ -93,7 +93,7 @@ fn class_upcast() {
     let mut stack = engine.create_stack();
     let mut ctx = Context::new(&engine, &mut stack, ());
 
-    let addr = engine.object_pool().insert(type_id).finalize().addr();
+    let addr = engine.object_pool().insert(type_id.id()).finalize().addr();
 
     let func = func.typed::<ObjectAddr, ObjectAddr>().unwrap();
     assert_eq!(func.call(&mut ctx, addr).now_or_never().unwrap(), addr);
@@ -129,7 +129,7 @@ fn class_downcast() {
     let mut stack = engine.create_stack();
     let mut ctx = Context::new(&engine, &mut stack, ());
 
-    let addr = engine.object_pool().insert(type_id).finalize().addr();
+    let addr = engine.object_pool().insert(type_id.id()).finalize().addr();
 
     let func = func.typed::<ObjectAddr, ObjectAddr>().unwrap();
     assert_eq!(func.call(&mut ctx, addr).now_or_never().unwrap(), addr);
@@ -166,7 +166,7 @@ fn class_downcast_fail() {
     let mut stack = engine.create_stack();
     let mut ctx = Context::new(&engine, &mut stack, ());
 
-    let addr = engine.object_pool().insert(type_id).finalize().addr();
+    let addr = engine.object_pool().insert(type_id.id()).finalize().addr();
 
     let func = func.typed::<ObjectAddr, ObjectAddr>().unwrap();
     assert_eq!(
@@ -203,7 +203,7 @@ fn class_downcast_on_null() {
     let mut stack = engine.create_stack();
     let mut ctx = Context::new(&engine, &mut stack, ());
 
-    let addr = engine.object_pool().insert(type_id).finalize().addr();
+    let addr = engine.object_pool().insert(type_id.id()).finalize().addr();
 
     let func = func.typed::<ObjectAddr, ObjectAddr>().unwrap();
     assert_eq!(

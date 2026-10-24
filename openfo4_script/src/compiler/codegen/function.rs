@@ -858,7 +858,7 @@ pub fn type_to_id(data: &CodegenData, ty: &Type) -> TypeId {
         Type::Var => data.resources.primitives.var,
         Type::Class(id) => data.layouts.class(*id).ty,
         Type::Struct(id) => data.layouts.struct_(*id).ty,
-        Type::Array(_) => data.resources.primitives.array,
+        Type::Array(ty) => data.layouts.array(ty),
     }
 }
 

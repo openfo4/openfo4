@@ -8,8 +8,8 @@ use crate::compiler::codegen::pex::registry::{
     ClassDef, ClassId, Registry, StructDef, StructId, Type,
 };
 use crate::compiler::resources::{
-    self, CompositeType, CompositeTypeMember, PropertyType, Resources, TypeId, TypeInfo,
-    TypeProperty, TypeRepr, Words,
+    self, CompositeType, CompositeTypeMember, Resources, TypeId, TypeInfo, TypeProperty, TypeRepr,
+    Words, define_array_ty,
 };
 use crate::runtime::ArrayObject;
 use crate::runtime::lock::ObjectLock;
@@ -27,7 +27,7 @@ pub(crate) struct StructHeader {
     pub lock: ObjectLock,
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub struct Layouts {
     classes: HashMap<ClassId, ClassLayout>,
     class_ptr_types: HashMap<ClassId, TypeId>,
@@ -35,15 +35,58 @@ pub struct Layouts {
     structs: HashMap<StructId, ClassLayout>,
     struct_ptr_types: HashMap<StructId, TypeId>,
     struct_queue: Vec<StructId>,
+    array_types: HashMap<Type, TypeId>,
+    array_ptr_types: HashMap<Type, TypeId>,
 }
 
 impl Layouts {
+    pub fn new(res: &Resources) -> Self {
+        let mut array_types = HashMap::new();
+        let mut array_ptr_types = HashMap::new();
+
+        for (ty, id) in [
+            (Type::None, res.primitives.none),
+            (Type::Bool, res.primitives.bool),
+            (Type::Int, res.primitives.int),
+            (Type::Float, res.primitives.float),
+            (Type::String, res.primitives.string),
+            (Type::Var, res.primitives.var),
+        ] {
+            let array_ty = res.types.declare();
+            let array_ptr_ty = res.types.declare();
+            define_array_ty(res, id, array_ty, array_ptr_ty);
+            array_types.insert(ty.clone(), array_ty);
+            array_ptr_types.insert(ty, array_ptr_ty);
+
+            res.papyrus
+                .type_to_array_ptr
+                .lock()
+                .insert(id, array_ptr_ty);
+            res.papyrus.arrays_to_elem.lock().insert(array_ty, id);
+        }
+
+        Self {
+            classes: HashMap::new(),
+            class_ptr_types: HashMap::new(),
+            class_queue: Vec::new(),
+            structs: HashMap::new(),
+            struct_ptr_types: HashMap::new(),
+            struct_queue: Vec::new(),
+            array_types,
+            array_ptr_types,
+        }
+    }
+
     pub fn class(&self, id: ClassId) -> &ClassLayout {
         self.classes.get(&id).unwrap()
     }
 
     pub fn struct_(&self, id: StructId) -> &ClassLayout {
         self.structs.get(&id).unwrap()
+    }
+
+    pub fn array(&self, array: &Type) -> TypeId {
+        *self.array_types.get(array).unwrap()
     }
 
     pub fn compute_class(&mut self, res: &Resources, reg: &Registry, class: &ClassDef) {
@@ -77,17 +120,17 @@ impl Layouts {
                     continue;
                 }
 
-                self.compute_class_single(res, reg, class);
+                self.compute_class_single(res, class);
             }
 
             while let Some(id) = self.struct_queue.pop() {
                 let struct_ = reg.struct_(id).unwrap();
-                self.compute_struct_single(res, reg, struct_);
+                self.compute_struct_single(res, struct_);
             }
         }
     }
 
-    fn compute_class_single(&mut self, res: &Resources, reg: &Registry, class: &ClassDef) {
+    fn compute_class_single(&mut self, res: &Resources, class: &ClassDef) {
         if self.classes.contains_key(&class.id) {
             return;
         }
@@ -172,7 +215,7 @@ impl Layouts {
 
             let index = indices.get(&field).unwrap();
             let field = &fields[*index - base_index];
-            let ty = resolve_property_type(res, reg, &field.1.ty);
+            let (ty, _) = self.resolve_ty_and_default_value(res, &field.1.ty);
 
             properties.insert(
                 (class.name.clone(), name.clone()),
@@ -180,11 +223,8 @@ impl Layouts {
             );
         }
 
-        let id = *res
-            .string_to_type
-            .lock()
-            .entry(class.name.clone())
-            .or_insert_with(|| res.types.declare());
+        debug_assert!(!self.classes.contains_key(&class.id));
+        let id = res.types.declare();
 
         classes.push(id);
 
@@ -213,12 +253,39 @@ impl Layouts {
                 info: TypeInfo {
                     name: None,
                     classes: Vec::new(),
-                    properties: HashMap::new(),
+                    properties: HashMap::from([(
+                        (Lowercase::new(""), Lowercase::new("")),
+                        TypeProperty {
+                            ty: ptr_ty,
+                            field: 0,
+                        },
+                    )]),
                     allows_null: true,
                     lock: None,
                 },
             },
         );
+
+        let array_ty = *self
+            .array_types
+            .entry(Type::Class(class.id))
+            .or_insert_with(|| res.types.declare());
+        let array_ptr_ty = *self
+            .array_ptr_types
+            .entry(Type::Class(class.id))
+            .or_insert_with(|| res.types.declare());
+        define_array_ty(res, id, array_ty, array_ptr_ty);
+        // TODO: Only register the ptr_ty here when we move over to only using
+        // pointer types for HIR codegen.
+        res.papyrus
+            .type_to_array_ptr
+            .lock()
+            .insert(id, array_ptr_ty);
+        res.papyrus
+            .type_to_array_ptr
+            .lock()
+            .insert(ptr_ty, array_ptr_ty);
+        res.papyrus.arrays_to_elem.lock().insert(array_ty, ptr_ty);
 
         self.classes.insert(
             class.id,
@@ -230,7 +297,7 @@ impl Layouts {
         );
     }
 
-    fn compute_struct_single(&mut self, res: &Resources, reg: &Registry, st: &StructDef) {
+    fn compute_struct_single(&mut self, res: &Resources, st: &StructDef) {
         if self.structs.contains_key(&st.id) {
             return;
         }
@@ -238,7 +305,7 @@ impl Layouts {
         let mut offset = size_of::<StructHeader>();
         let mut align = align_of::<StructHeader>();
         let mut members = vec![CompositeTypeMember {
-            ty: res.primitives.pointer,
+            ty: res.primitives.opaqueptr,
             offset: offset_of!(StructHeader, lock),
             size: size_of::<StructHeader>(),
             default_value: None,
@@ -252,14 +319,14 @@ impl Layouts {
 
             offset = (offset + member_align - 1) & !(member_align - 1);
 
-            let (ty_id, default_value) = resolve_ty_and_default_value(res, &ty);
+            let (ty_id, default_value) = self.resolve_ty_and_default_value(res, &ty);
 
             let index = members.len();
             properties.insert(
                 (st.name.clone(), name.clone()),
                 TypeProperty {
                     field: index,
-                    ty: resolve_property_type(res, reg, &ty),
+                    ty: ty_id,
                 },
             );
 
@@ -275,11 +342,8 @@ impl Layouts {
             align = align.max(member_align);
         }
 
-        let id = *res
-            .string_to_type
-            .lock()
-            .entry(st.name.clone())
-            .or_insert_with(|| res.types.declare());
+        debug_assert!(!self.structs.contains_key(&st.id));
+        let id = res.types.declare();
 
         res.types.define(
             id,
@@ -310,12 +374,39 @@ impl Layouts {
                 info: TypeInfo {
                     name: None,
                     classes: Vec::new(),
-                    properties: HashMap::new(),
+                    properties: HashMap::from([(
+                        (Lowercase::new(""), Lowercase::new("")),
+                        TypeProperty {
+                            ty: ptr_ty,
+                            field: 0,
+                        },
+                    )]),
                     allows_null: true,
                     lock: None,
                 },
             },
         );
+
+        let array_ty = *self
+            .array_types
+            .entry(Type::Struct(st.id))
+            .or_insert_with(|| res.types.declare());
+        let array_ptr_ty = *self
+            .array_ptr_types
+            .entry(Type::Struct(st.id))
+            .or_insert_with(|| res.types.declare());
+        define_array_ty(res, id, array_ty, array_ptr_ty);
+        // TODO: Only register the ptr_ty here when we move over to only using
+        // pointer types for HIR codegen.
+        res.papyrus
+            .type_to_array_ptr
+            .lock()
+            .insert(id, array_ptr_ty);
+        res.papyrus
+            .type_to_array_ptr
+            .lock()
+            .insert(ptr_ty, array_ptr_ty);
+        res.papyrus.arrays_to_elem.lock().insert(array_ty, ptr_ty);
 
         self.structs.insert(
             st.id,
@@ -333,10 +424,7 @@ impl Layouts {
             Type::Bool => (res.primitives.bool, Words::bytes(&[0; 1])),
             Type::Int => (res.primitives.int, Words::bytes(&[0; size_of::<i32>()])),
             Type::Float => (res.primitives.float, Words::bytes(&[0; size_of::<f32>()])),
-            Type::String | Type::Struct(_) | Type::Var | Type::Array(_) => (
-                res.primitives.pointer,
-                Words::bytes(&[0; size_of::<usize>()]),
-            ),
+            Type::String | Type::Var => (res.primitives.opaqueptr, Words::nullptr()),
             Type::Class(id) => {
                 let ty = self.class_ptr_types.entry(*id).or_insert_with(|| {
                     let ty = res.types.declare();
@@ -344,10 +432,32 @@ impl Layouts {
                     ty
                 });
 
-                (
-                    res.primitives.pointer,
-                    Words::bytes(&[0; size_of::<*const ()>()]),
-                )
+                (*ty, Words::nullptr())
+            }
+            Type::Struct(id) => {
+                let ty = self.struct_ptr_types.entry(*id).or_insert_with(|| {
+                    let ty = res.types.declare();
+                    self.struct_queue.push(*id);
+                    ty
+                });
+
+                (*ty, Words::nullptr())
+            }
+            Type::Array(ty) => {
+                let ty = self
+                    .array_ptr_types
+                    .entry((**ty).clone())
+                    .or_insert_with(|| {
+                        match &**ty {
+                            Type::Class(id) => self.class_queue.push(*id),
+                            Type::Struct(id) => self.struct_queue.push(*id),
+                            _ => {}
+                        }
+
+                        res.types.declare()
+                    });
+
+                (*ty, Words::nullptr())
             }
         }
     }
@@ -359,14 +469,14 @@ fn build_class_header(res: &Resources) -> resources::Type {
             members: vec![
                 // meta
                 CompositeTypeMember {
-                    ty: res.primitives.pointer,
+                    ty: res.primitives.opaqueptr,
                     offset: offset_of!(ClassHeader, meta),
                     default_value: None,
                     size: size_of::<*const ()>(),
                 },
                 // lock
                 CompositeTypeMember {
-                    ty: res.primitives.pointer,
+                    ty: res.primitives.opaqueptr,
                     offset: offset_of!(ClassHeader, lock),
                     default_value: None,
                     size: size_of::<ObjectLock>(),
@@ -384,73 +494,4 @@ pub struct ClassLayout {
     pub ty: TypeId,
     pub ptr_ty: TypeId,
     pub offsets: HashMap<Lowercase<String>, usize>,
-}
-
-fn resolve_ty_and_default_value(res: &Resources, ty: &Type) -> (TypeId, Words) {
-    match ty {
-        Type::None => (res.primitives.none, Words::bytes(&[])),
-        Type::Bool => (res.primitives.bool, Words::bytes(&[0; 1])),
-        Type::Int => (res.primitives.int, Words::bytes(&[0; size_of::<i32>()])),
-        Type::Float => (res.primitives.float, Words::bytes(&[0; size_of::<f32>()])),
-        Type::String | Type::Struct(_) | Type::Class(_) | Type::Var | Type::Array(_) => (
-            res.primitives.pointer,
-            Words::bytes(&[0; size_of::<usize>()]),
-        ),
-    }
-}
-
-fn resolve_property_type(res: &Resources, reg: &Registry, ty: &Type) -> PropertyType {
-    match ty {
-        Type::None => PropertyType::Inline(res.primitives.none),
-        Type::Bool => PropertyType::Inline(res.primitives.bool),
-        Type::Int => PropertyType::Inline(res.primitives.int),
-        Type::Float => PropertyType::Inline(res.primitives.float),
-        Type::String => PropertyType::Pointer(res.primitives.string),
-        Type::Class(id) => {
-            let class = reg.class(*id).unwrap();
-            let id = *res
-                .string_to_type
-                .lock()
-                .entry(class.name.clone())
-                .or_insert_with(|| res.types.declare());
-            PropertyType::Pointer(id)
-        }
-        Type::Struct(id) => {
-            let st = reg.struct_(*id).unwrap();
-            let s = res.string_to_type.lock();
-            let id = s.get(&st.name).unwrap();
-            PropertyType::Pointer(*id)
-        }
-        Type::Array(ty) => {
-            // FIXME: For now we only support one level of nesting.
-            // The game currently never supports instantiating nested arrays,
-            // however we should still be able to implement that.
-            let id = match &**ty {
-                Type::None => res.primitives.none,
-                Type::Bool => res.primitives.bool,
-                Type::Int => res.primitives.int,
-                Type::Float => res.primitives.float,
-                Type::String => res.primitives.string,
-                Type::Class(id) => {
-                    let class = reg.class(*id).unwrap();
-                    let id = *res
-                        .string_to_type
-                        .lock()
-                        .entry(class.name.clone())
-                        .or_insert_with(|| res.types.declare());
-                    id
-                }
-                Type::Struct(id) => {
-                    let st = reg.struct_(*id).unwrap();
-                    let s = res.string_to_type.lock();
-                    *s.get(&st.name).unwrap()
-                }
-                Type::Var => todo!(),
-                Type::Array(_) => todo!(),
-            };
-
-            PropertyType::ArrayPointer(id)
-        }
-        Type::Var => todo!(),
-    }
 }

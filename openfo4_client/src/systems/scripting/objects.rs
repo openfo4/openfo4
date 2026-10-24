@@ -42,18 +42,22 @@ impl ScriptObjects {
 
         let mut class_names = HashMap::new();
         for (index, script) in scripts.iter().enumerate() {
-            let info = engine.type_info(script.layout);
+            let info = engine.get_type_by_id(script.layout).unwrap();
 
-            for class in &info.classes {
-                let info = engine.type_info(*class);
-                if let Some(name) = info.name {
+            for class in &info.info().classes {
+                let info = engine.get_type_by_id(*class).unwrap();
+                if let Some(name) = info.info().name.clone() {
                     class_names.insert(name.into_inner(), index);
                 }
             }
 
             addrs.insert(
                 script.object.addr(),
-                (id, index, info.name.unwrap_or_default().into_inner()),
+                (
+                    id,
+                    index,
+                    info.info().name.clone().unwrap_or_default().into_inner(),
+                ),
             );
         }
 

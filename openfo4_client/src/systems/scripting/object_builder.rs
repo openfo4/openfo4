@@ -3,7 +3,7 @@ use openfo4_common::string::Lowercase;
 use openfo4_core::record::RecordId;
 use openfo4_esp::FormId;
 use openfo4_esp::vmad::{Property, Script, Value};
-use openfo4_script::compiler::resources::{PropertyType, TypeId, TypeInfo};
+use openfo4_script::compiler::resources::{TypeId, TypeInfo};
 use openfo4_script::engine::Engine;
 use openfo4_script::runtime::object::{ObjectArrayBuilder, ObjectBuilder, ObjectHandle};
 use openfo4_script::runtime::{ObjectAddr, Val};
@@ -85,7 +85,7 @@ enum Members<'a> {
     Array {
         values: &'a [Value],
         next_index: usize,
-        info: PropertyType,
+        elem_ty: TypeId,
     },
 }
 
@@ -100,7 +100,7 @@ impl Members<'_> {
             Self::Array {
                 values,
                 next_index: _,
-                info: _,
+                elem_ty: _,
             } => values.is_empty(),
         }
     }
@@ -151,7 +151,7 @@ where
             return;
         }
 
-        let (value, location, info) = match &mut entry.members {
+        let (value, location, ty) = match &mut entry.members {
             Members::Struct {
                 properties,
                 class,
@@ -168,8 +168,8 @@ where
                 // If a field exists on both a superclass and a subclass we must prefer
                 // the subclass.
                 let info = info.classes.iter().rev().find_map(|class| {
-                    let class = self.engine.type_info(*class);
-                    let class = class.name.unwrap();
+                    let class = self.engine.get_type_by_id(*class).unwrap();
+                    let class = class.info().name.as_ref().unwrap().clone();
                     info.properties.get(&(class, prop_name.clone()))
                 });
 
@@ -192,7 +192,7 @@ where
             Members::Array {
                 values,
                 next_index: len,
-                info,
+                elem_ty,
             } => {
                 let Some(value) = values.split_off_first() else {
                     return;
@@ -200,25 +200,21 @@ where
 
                 let location = Location::ArrayIndex(*len);
                 *len += 1;
-                (value, location, *info)
+                (value, location, *elem_ty)
             }
         };
 
-        let value = match (info, value) {
-            (PropertyType::Inline(ty), Value::Bool(val)) if ty == self.types.bool => {
-                Val::Bool(*val)
-            }
-            (PropertyType::Inline(ty), Value::Int(val)) if ty == self.types.int => Val::I32(*val),
-            (PropertyType::Inline(ty), Value::Float(val)) if ty == self.types.float => {
-                Val::F32(*val)
-            }
-            (PropertyType::Inline(ty), Value::String(val)) if ty == self.types.string => {
+        let value = match value {
+            Value::Bool(val) if ty == self.types.bool => Val::Bool(*val),
+            Value::Int(val) if ty == self.types.int => Val::I32(*val),
+            Value::Float(val) if ty == self.types.float => Val::F32(*val),
+            Value::String(val) if ty == self.types.string => {
                 let object = self.engine.object_pool().insert_string(val);
                 Val::Object(object.addr())
             }
-            (PropertyType::Pointer(ty), Value::Object(object)) => {
-                let info = self.engine.type_info(ty);
-                let class = info.name.as_ref().unwrap();
+            Value::Object(object) => {
+                let info = self.engine.get_type_by_id(ty).unwrap();
+                let class = info.info().name.as_ref().unwrap();
                 // TODO: Assert that info is a class, not a struct.
 
                 // Object references are already null by default.
@@ -274,9 +270,10 @@ where
 
                 Val::Object(addr)
             }
-            (PropertyType::Pointer(ty), Value::Struct(fields, _)) => {
-                let info = self.engine.type_info(ty);
-                let name = info.name.clone().unwrap();
+            Value::Struct(fields, _) => {
+                let info = self.engine.get_type_by_id(ty).unwrap();
+                dbg!(&info);
+                let name = info.info().name.clone().unwrap();
                 // TODO: Assert that info is indeed a struct.
 
                 let builder = self.engine.object_pool().insert(ty);
@@ -286,30 +283,19 @@ where
                     members: Members::Struct {
                         properties: &fields,
                         class: name,
-                        info,
+                        info: info.info().clone(),
                     },
                 });
 
                 return;
             }
-            (PropertyType::ArrayPointer(ty), Value::Array(fields, _)) => {
-                let info = self.engine.type_info(ty);
+            Value::Array(fields, _) => {
+                let elem_ty = self.engine.get_type_by_id(ty).unwrap().elem_ty().unwrap();
 
-                // FIXME: This check for primitive is a "hack" around the fact
-                // that arrays are currently handled weirdly in the papyrus compiler:
-                // All primitive types are inlined directly in the array storage,
-                // while all other types are stored by pointer,
-                // but the compiler does currently not expose whether we expect
-                // an inline value or a pointer.
-                // In the future the compiler should expose whether we expect a pointer
-                // or an inline value here.
-                // This would also allow us to support nested arrays.
-                let (info, ty) = if is_primitive(ty, &info) {
-                    (PropertyType::Inline(ty), ty)
-                } else {
-                    (PropertyType::Pointer(ty), self.engine.ptr_type())
-                };
-                let builder = self.engine.object_pool().insert_array(ty, fields.len());
+                let builder = self
+                    .engine
+                    .object_pool()
+                    .insert_array(elem_ty.id(), fields.len());
 
                 self.stack.push(Entry {
                     parent: Some(location),
@@ -317,23 +303,21 @@ where
                     members: Members::Array {
                         values: fields,
                         next_index: 0,
-                        info,
+                        elem_ty: elem_ty.id(),
                     },
                 });
 
                 return;
             }
-            (ty, value) => {
-                let ty = match ty {
-                    PropertyType::Inline(ty) => ty,
-                    PropertyType::Pointer(ty) => ty,
-                    PropertyType::ArrayPointer(ty) => ty,
-                };
-                let info = self.engine.type_info(ty);
+            value => {
+                let info = self.engine.get_type_by_id(ty).unwrap();
                 let expected = info
+                    .info()
                     .name
-                    .map(|name| name.into_inner())
-                    .unwrap_or_else(|| "<unknown>".to_owned());
+                    .as_ref()
+                    .map(|name| name.as_inner().as_str())
+                    .unwrap_or_else(|| "<unknown>")
+                    .to_owned();
 
                 let found = match value {
                     Value::Bool(_) => "bool",
@@ -366,7 +350,7 @@ pub fn build_script_object(
     script_defined_in: RecordId,
 ) -> (ObjectHandle, Vec<BuildScriptObjectWarning>) {
     let ty = engine.get_type(&script.name).unwrap();
-    let info = engine.type_info(ty);
+    let info = ty.info();
 
     let entry = Entry {
         parent: None,
@@ -374,7 +358,7 @@ pub fn build_script_object(
         members: Members::Struct {
             properties: &script.properties,
             class: Lowercase::new(&*script.name),
-            info,
+            info: info.clone(),
         },
     };
 
@@ -391,7 +375,7 @@ pub fn build_script_object(
             bool: engine.bool_type(),
             int: engine.int_type(),
             float: engine.float_type(),
-            string: engine.get_type("string").unwrap(),
+            string: engine.get_type("string").unwrap().id(),
         },
     };
 
@@ -403,22 +387,6 @@ pub fn build_script_object(
     drop(inner);
 
     (unsafe { builder.finalize_copy() }, warnings)
-}
-
-fn is_primitive(ty: TypeId, info: &TypeInfo) -> bool {
-    // A primitive type is defined as a type with a single property
-    // with class name "" and property name "" and inline storage
-    // that points back to the primitive type.
-    if info.properties.len() != 1 {
-        return false;
-    }
-
-    let ((class, prop), info) = info.properties.iter().next().unwrap();
-    if class.as_inner() != "" || prop.as_inner() != "" {
-        return false;
-    }
-
-    info.ty == PropertyType::Inline(ty)
 }
 
 #[cfg(test)]
@@ -449,7 +417,7 @@ mod tests {
 
     fn build_direct(engine: &Engine, script: &Script) -> ObjectHandle {
         let type_id = engine.get_type(&script.name).unwrap();
-        let mut builder = engine.object_pool().insert(type_id);
+        let mut builder = engine.object_pool().insert(type_id.id());
 
         let scripts = ScriptObjects::default();
         let partial_addrs = HashMap::new();
@@ -466,6 +434,7 @@ mod tests {
             RecordId::DANGLING,
         );
 
+        dbg!(&warnings);
         assert!(warnings.is_empty());
         res
     }
@@ -885,9 +854,9 @@ mod tests {
         let type_b = engine.get_type("B").unwrap();
         let type_c = engine.get_type("C").unwrap();
 
-        let a = engine.object_pool().insert(type_a).finalize().addr();
-        let b = engine.object_pool().insert(type_b).finalize().addr();
-        let c = engine.object_pool().insert(type_c).finalize().addr();
+        let a = engine.object_pool().insert(type_a.id()).finalize().addr();
+        let b = engine.object_pool().insert(type_b.id()).finalize().addr();
+        let c = engine.object_pool().insert(type_c.id()).finalize().addr();
 
         let scripts = ScriptObjects::default();
         let partial_addrs = [(
@@ -905,7 +874,7 @@ mod tests {
 
         let aliases = HashMap::new();
 
-        let mut builder = engine.object_pool().insert(type_c);
+        let mut builder = engine.object_pool().insert(type_c.id());
 
         let (_, warnings) = build_script_object(
             |form| RecordId::new(ModuleId(NonZeroU32::MIN), form),

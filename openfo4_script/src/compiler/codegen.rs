@@ -155,10 +155,20 @@ impl CodegenPass {
         }
         self.classes_updated = false;
 
-        for (_, st) in self.data.registry.structs() {
+        for (id, st) in self.data.registry.structs() {
             self.data
                 .layouts
                 .compute_struct(&self.data.resources, &self.data.registry, st);
+
+            let ty = self.data.layouts.struct_(id);
+
+            // Structs can be constructed immediately.
+            self.data
+                .resources
+                .papyrus
+                .types
+                .lock()
+                .insert(st.name.clone(), ty.ptr_ty);
         }
 
         for (_, class) in self.data.registry.classes() {
@@ -299,6 +309,15 @@ impl CodegenPass {
                 _ => unreachable!(),
             }
             self.data.resources.types.define(type_id, ty);
+
+            // We may instantiate the class once we have built the vtable.
+            let ptr_ty = self.data.layouts.class(id).ptr_ty;
+            self.data
+                .resources
+                .papyrus
+                .types
+                .lock()
+                .insert(class.name.clone(), ptr_ty);
         }
     }
 
@@ -516,8 +535,11 @@ struct CodegenData {
 
 impl CodegenData {
     fn new(compiler: &mut Compiler) -> Self {
+        let resources = Arc::default();
+
         Self {
-            resources: Arc::default(),
+            layouts: Layouts::new(&resources),
+            resources,
             runtime_funcs: RuntimeFunctions::new(compiler),
             registry: Registry::default(),
             functions: HashMap::new(),
@@ -525,7 +547,6 @@ impl CodegenData {
             native_guest_funcs: HashMap::new(),
             function_addrs: HashMap::new(),
             class_headers: HashMap::new(),
-            layouts: Layouts::default(),
         }
     }
 }

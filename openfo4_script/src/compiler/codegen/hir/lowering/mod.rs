@@ -536,7 +536,7 @@ pub fn lower_function(
                     if *cast_array {
                         let src = src.clone().map(|v| v.to_null().unwrap());
                         let src_ty = match tag {
-                            ObjectTag::Class => translator.data.resources.primitives.pointer,
+                            ObjectTag::Class => translator.data.resources.primitives.opaqueptr,
                             ObjectTag::TypeId(id) => *id,
                         };
                         let dst_ty = translator.data.resources.primitives.var;
@@ -566,7 +566,7 @@ pub fn lower_function(
                         let dst = dst.clone().map(|v| v.to_null().unwrap());
                         let src_ty = translator.data.resources.primitives.var;
                         let dst_ty = match tag {
-                            ObjectTag::Class => translator.data.resources.primitives.pointer,
+                            ObjectTag::Class => translator.data.layouts.class(class.unwrap()).ty,
                             ObjectTag::TypeId(id) => *id,
                         };
 
@@ -616,7 +616,7 @@ pub fn lower_function(
                     if *conv_array {
                         let src = src.clone().map(|v| v.to_null().unwrap());
                         let dst = dst.clone().map(|v| v.to_null().unwrap());
-                        let src_ty = translator.data.resources.primitives.pointer;
+                        let src_ty = translator.data.resources.primitives.opaqueptr;
                         let dst_ty = translator.data.resources.primitives.string;
 
                         array::array_cast(

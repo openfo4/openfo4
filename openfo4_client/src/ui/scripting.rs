@@ -1,6 +1,4 @@
 use openfo4_egui::egui::{CollapsingHeader, Context, ScrollArea, Window};
-use openfo4_script::compiler::resources::PropertyType;
-use openfo4_script::runtime::ObjectAddr;
 
 use crate::state::GameState;
 
@@ -32,40 +30,34 @@ pub fn draw_objects(ctx: &Context, game: &GameState, state: &mut State) {
                         ui.heading(script.name());
 
                         let typeid = script.get().layout;
-                        let info = engine.type_info(typeid);
-
                         let object = &script.get().object;
 
-                        for ((class, prop), info) in &info.properties {
+                        let ty = engine.get_type_by_id(typeid).unwrap();
+
+                        for ((class, prop), info) in &ty.info().properties {
                             if class.as_inner() != script.name() {
                                 continue;
                             }
 
-                            let data = match info.ty {
-                                PropertyType::Inline(ty) if ty == engine.bool_type() => object
-                                    .get::<bool>(class.as_inner(), prop.as_inner())
-                                    .unwrap()
-                                    .to_string(),
-                                PropertyType::Inline(ty) if ty == engine.int_type() => object
-                                    .get::<i32>(class.as_inner(), prop.as_inner())
-                                    .unwrap()
-                                    .to_string(),
-                                PropertyType::Inline(ty) if ty == engine.float_type() => object
-                                    .get::<f32>(class.as_inner(), prop.as_inner())
-                                    .unwrap()
-                                    .to_string(),
-                                PropertyType::Pointer(_ty) => format!(
-                                    "{:p}",
-                                    object
-                                        .get::<ObjectAddr>(class.as_inner(), prop.as_inner())
-                                        .unwrap()
-                                        .to_raw()
-                                ),
+                            let ty = engine.get_type_by_id(info.ty).unwrap();
+
+                            let data = match ty.id() {
+                                id if id == engine.bool_type() => object
+                                    .try_get::<bool>(class.as_inner(), prop.as_inner())
+                                    .map(|v| v.map(|v| v.to_string())),
+                                id if id == engine.int_type() => object
+                                    .try_get::<i32>(class.as_inner(), prop.as_inner())
+                                    .map(|v| v.map(|v| v.to_string())),
+                                id if id == engine.float_type() => object
+                                    .try_get::<f32>(class.as_inner(), prop.as_inner())
+                                    .map(|v| v.map(|v| v.to_string())),
                                 // TODO
                                 _ => continue,
                             };
 
-                            ui.label(format!("{}: {}", prop, data));
+                            let data = data.map(|v| v.unwrap());
+
+                            ui.label(format!("{}: {}", prop, data.as_deref().unwrap_or("locked")));
                         }
                     }
                 });

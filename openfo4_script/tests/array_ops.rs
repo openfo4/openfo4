@@ -335,11 +335,11 @@ fn array_find_struct() {
     let instance = block_on(engine.compile("MyClass", &Options::default())).unwrap();
     let func = instance.get_func("MyFunction").unwrap();
 
-    let struct_layout = engine.get_type("MyClass#MyStruct").unwrap();
+    let struct_ty = engine.get_type("MyClass#MyStruct").unwrap();
 
-    let mut array = engine.object_pool().insert_array(engine.ptr_type(), 100);
+    let mut array = engine.object_pool().insert_array(struct_ty.id(), 100);
     for i in 0..100 {
-        let mut object = engine.object_pool().insert(struct_layout.clone());
+        let mut object = engine.object_pool().insert(struct_ty.id());
 
         if i < 10 {
             object.set::<i32>("", "x", 42);

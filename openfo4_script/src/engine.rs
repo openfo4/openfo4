@@ -8,7 +8,7 @@ use openfo4_jit::{BackendKind, CompilerConfig, Type};
 use openfo4_pex::{Class, Module};
 use parking_lot::RwLock;
 
-use crate::compiler::resources::{Resources, TypeId, TypeInfo};
+use crate::compiler::resources::{self, Resources, TypeId, TypeInfo, TypeRepr};
 use crate::compiler::{CompilationResult, CompilerOptions, Context, NativeFunction};
 use crate::runtime::func::Func;
 use crate::runtime::{HostState, IntoFunc, ObjectPool, Stack};
@@ -159,26 +159,44 @@ impl Engine {
         &self.shared.state.pool
     }
 
-    pub fn get_type(&self, name: &str) -> Option<TypeId> {
+    pub fn get_type(&self, mut name: &str) -> Option<TypeRef<'_>> {
+        let mut array_depth = 0;
+        while let Some(next) = name.strip_suffix("[]") {
+            name = next;
+            array_depth += 1;
+        }
+
+        if array_depth > 1 {
+            todo!("nested arays are not yet supported");
+        }
+
         let name = Lowercase::new(name);
 
-        // FIXME: This check is best-effort only;
-        // It is in theory possible for classes to contain an #.
-        // We should let the compiler expose which types are save
-        // to construct.
-        fn is_class(name: &Lowercase<str>) -> bool {
-            !matches!(name.as_inner(), "none" | "int" | "float" | "string" | "var")
-                // Structs
-                && !name.as_inner().contains('#')
+        let types = self.resources.papyrus.types.lock();
+        let mut id = *types.get(&name)?;
+        drop(types);
+
+        if array_depth > 0 {
+            id = *self.resources.papyrus.type_to_array_ptr.lock().get(&id)?;
         }
 
-        // Even if the class already has a TypeId, it is not
-        // safe to construct it before compiling the class first.
-        if self.instances.read().get(&name).is_none() && is_class(&name) {
-            return None;
+        self.get_type_by_id(id)
+    }
+
+    pub fn get_type_by_id(&self, id: TypeId) -> Option<TypeRef<'_>> {
+        let mut ty = self.resources.types.get(id)?;
+        let mut inner_ty = id;
+        while let TypeRepr::Pointer(inner) = ty.repr {
+            ty = self.resources.types.get(inner).unwrap();
+            inner_ty = inner;
         }
 
-        self.resources.string_to_type.lock().get(&name).copied()
+        Some(TypeRef {
+            engine: self,
+            id,
+            inner_ty,
+            ty,
+        })
     }
 
     pub fn none_type(&self) -> TypeId {
@@ -195,14 +213,6 @@ impl Engine {
 
     pub fn float_type(&self) -> TypeId {
         self.resources.primitives.float
-    }
-
-    pub fn ptr_type(&self) -> TypeId {
-        self.resources.primitives.pointer
-    }
-
-    pub fn type_info(&self, id: TypeId) -> TypeInfo {
-        self.resources.types.get(id).unwrap().info.clone()
     }
 
     /// Creates a new empty [`Stack`] for function suspension and resumption.
@@ -270,4 +280,41 @@ pub struct InstanceField {
     pub class: String,
     pub name: String,
     pub offset: usize,
+}
+
+#[derive(Clone, Debug)]
+pub struct TypeRef<'a> {
+    engine: &'a Engine,
+    id: TypeId,
+    /// If `id` is a pointer this is the type the pointer references.
+    inner_ty: TypeId,
+    ty: Arc<resources::Type>,
+    // elem_id: TypeId,
+    // elem_ty: Arc<resources::Type>,
+    // depth: usize,
+}
+
+impl TypeRef<'_> {
+    pub fn id(&self) -> TypeId {
+        self.id
+    }
+
+    pub fn info(&self) -> &TypeInfo {
+        &self.ty.info
+    }
+
+    /// Returns the type of the elements of an array type.
+    ///
+    /// If this type is not an array `None` is returned.
+    pub fn elem_ty(&self) -> Option<Self> {
+        let id = *self
+            .engine
+            .resources
+            .papyrus
+            .arrays_to_elem
+            .lock()
+            .get(&self.inner_ty)?;
+
+        self.engine.get_type_by_id(id)
+    }
 }

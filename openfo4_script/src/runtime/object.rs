@@ -86,7 +86,12 @@ impl ObjectPool {
         ObjectHandle { object, index: 0 }
     }
 
-    pub fn insert(&self, ty: TypeId) -> ObjectBuilder {
+    pub fn insert(&self, mut ty: TypeId) -> ObjectBuilder {
+        let typ = self.0.resources.types.get(ty).unwrap();
+        if let TypeRepr::Pointer(inner) = typ.repr {
+            ty = inner;
+        }
+
         let handle = self.alloc(ty, 1);
         ObjectBuilder(handle)
     }
@@ -109,7 +114,16 @@ impl ObjectPool {
     pub fn insert_array(&self, elem_ty: TypeId, array_len: usize) -> ObjectArrayBuilder {
         let elems = self.alloc(elem_ty, array_len);
 
-        let mut array_object = self.insert(self.0.resources.primitives.array);
+        let array_ty = *self
+            .0
+            .resources
+            .papyrus
+            .type_to_array_ptr
+            .lock()
+            .get(&elem_ty)
+            .unwrap();
+
+        let mut array_object = self.insert(array_ty);
         let array = unsafe { array_object.as_mut::<ArrayObject>() };
         array.ptr = elems.addr().to_raw();
         array.len = array_len;

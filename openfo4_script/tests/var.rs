@@ -105,12 +105,12 @@ fn class_var() {
 
     let instance = block_on(engine.compile("MyClass", &Options::default())).unwrap();
     let func = instance.get_func("MyFunction").unwrap();
-    let layout = engine.get_type("MyClass").unwrap();
+    let class = engine.get_type("MyClass").unwrap();
 
     let mut stack = engine.create_stack();
     let mut ctx = Context::new(&engine, &mut stack, ());
 
-    let input = engine.object_pool().alloc(layout, 1).addr();
+    let input = engine.object_pool().insert(class.id()).addr();
 
     let func = func.typed::<ObjectAddr, ObjectAddr>().unwrap();
     let output = func.call(&mut ctx, input).now_or_never().unwrap();
@@ -142,12 +142,12 @@ fn struct_var() {
 
     let instance = block_on(engine.compile("MyClass", &Options::default())).unwrap();
     let func = instance.get_func("MyFunction").unwrap();
-    let layout = engine.get_type("MyClass#MyStruct").unwrap();
+    let struct_ = engine.get_type("MyClass#MyStruct").unwrap();
 
     let mut stack = engine.create_stack();
     let mut ctx = Context::new(&engine, &mut stack, ());
 
-    let input = engine.object_pool().alloc(layout, 1).addr();
+    let input = engine.object_pool().insert(struct_.id()).addr();
 
     let func = func.typed::<ObjectAddr, ObjectAddr>().unwrap();
     let output = func.call(&mut ctx, input).now_or_never().unwrap();

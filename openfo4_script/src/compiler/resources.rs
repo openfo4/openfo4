@@ -16,7 +16,7 @@ pub struct Resources {
     pub types: Types,
     pub constants: ConstantPool,
     pub primitives: PrimitiveTypes,
-    pub string_to_type: Mutex<HashMap<Lowercase<String>, TypeId>>,
+    pub papyrus: PapyrusRes,
 }
 
 impl Resources {
@@ -32,7 +32,6 @@ impl Resources {
             (primitives.float, Some(Lowercase::from_static("float"))),
             (primitives.string, Some(Lowercase::from_static("string"))),
             (primitives.var, Some(Lowercase::from_static("var"))),
-            (primitives.pointer, None),
         ] {
             if let Some(name) = name {
                 string_to_type.insert(name.to_owned(), id);
@@ -43,7 +42,11 @@ impl Resources {
             types,
             primitives,
             constants: ConstantPool::default(),
-            string_to_type: Mutex::new(string_to_type),
+            papyrus: PapyrusRes {
+                types: Mutex::new(string_to_type),
+                type_to_array_ptr: Mutex::default(),
+                arrays_to_elem: Mutex::default(),
+            },
         }
     }
 }
@@ -197,6 +200,10 @@ impl Words {
         }
     }
 
+    pub fn nullptr() -> Self {
+        Self::ptr(core::ptr::null_mut())
+    }
+
     pub fn ptrs(ptrs: &[IPtr]) -> Self {
         Self {
             words: ptrs.to_vec(),
@@ -293,10 +300,10 @@ pub struct PrimitiveTypes {
     pub int: TypeId,
     pub float: TypeId,
     pub string: TypeId,
-    pub array: TypeId,
-    pub pointer: TypeId,
     pub byte: TypeId,
     pub var: TypeId,
+    /// An untyped pointer.
+    pub opaqueptr: TypeId,
 }
 
 impl PrimitiveTypes {
@@ -311,10 +318,7 @@ impl PrimitiveTypes {
                     classes: vec![none],
                     properties: HashMap::from([(
                         (Lowercase::new(""), Lowercase::new("")),
-                        TypeProperty {
-                            ty: PropertyType::Inline(none),
-                            field: 0,
-                        },
+                        TypeProperty { ty: none, field: 0 },
                     )]),
                     allows_null: true,
                     lock: None,
@@ -332,10 +336,7 @@ impl PrimitiveTypes {
                     classes: vec![bool],
                     properties: HashMap::from([(
                         (Lowercase::new(""), Lowercase::new("")),
-                        TypeProperty {
-                            ty: PropertyType::Inline(bool),
-                            field: 0,
-                        },
+                        TypeProperty { ty: bool, field: 0 },
                     )]),
                     allows_null: true,
                     lock: None,
@@ -353,10 +354,7 @@ impl PrimitiveTypes {
                     classes: vec![int],
                     properties: HashMap::from([(
                         (Lowercase::new(""), Lowercase::new("")),
-                        TypeProperty {
-                            ty: PropertyType::Inline(int),
-                            field: 0,
-                        },
+                        TypeProperty { ty: int, field: 0 },
                     )]),
                     allows_null: true,
                     lock: None,
@@ -375,7 +373,7 @@ impl PrimitiveTypes {
                     properties: HashMap::from([(
                         (Lowercase::new(""), Lowercase::new("")),
                         TypeProperty {
-                            ty: PropertyType::Inline(float),
+                            ty: float,
                             field: 0,
                         },
                     )]),
@@ -385,18 +383,18 @@ impl PrimitiveTypes {
             },
         );
 
-        let pointer = types.declare();
+        let opaqueptr = types.declare();
         types.define(
-            pointer,
+            opaqueptr,
             Type {
                 repr: TypeRepr::Int { bits: usize::BITS },
                 info: TypeInfo {
                     name: None,
-                    classes: vec![pointer],
+                    classes: vec![opaqueptr],
                     properties: HashMap::from([(
                         (Lowercase::new(""), Lowercase::new("")),
                         TypeProperty {
-                            ty: PropertyType::Inline(pointer),
+                            ty: opaqueptr,
                             field: 0,
                         },
                     )]),
@@ -416,10 +414,7 @@ impl PrimitiveTypes {
                     classes: vec![byte],
                     properties: HashMap::from([(
                         (Lowercase::new(""), Lowercase::new("")),
-                        TypeProperty {
-                            ty: PropertyType::Inline(byte),
-                            field: 0,
-                        },
+                        TypeProperty { ty: byte, field: 0 },
                     )]),
                     allows_null: true,
                     lock: None,
@@ -434,13 +429,13 @@ impl PrimitiveTypes {
                 repr: TypeRepr::Composite(CompositeType {
                     members: vec![
                         CompositeTypeMember {
-                            ty: pointer,
+                            ty: opaqueptr,
                             offset: 0,
                             default_value: None,
                             size: size_of::<usize>(),
                         },
                         CompositeTypeMember {
-                            ty: pointer,
+                            ty: opaqueptr,
                             offset: size_of::<usize>(),
                             default_value: None,
                             size: size_of::<usize>(),
@@ -455,7 +450,7 @@ impl PrimitiveTypes {
                     properties: HashMap::from([(
                         (Lowercase::new(""), Lowercase::new("")),
                         TypeProperty {
-                            ty: PropertyType::Inline(string),
+                            ty: string,
                             field: 0,
                         },
                     )]),
@@ -472,13 +467,13 @@ impl PrimitiveTypes {
                 repr: TypeRepr::Composite(CompositeType {
                     members: vec![
                         CompositeTypeMember {
-                            ty: pointer,
+                            ty: opaqueptr,
                             offset: 0,
                             default_value: None,
                             size: size_of::<usize>(),
                         },
                         CompositeTypeMember {
-                            ty: pointer,
+                            ty: opaqueptr,
                             offset: size_of::<usize>(),
                             default_value: None,
                             size: size_of::<usize>(),
@@ -504,13 +499,13 @@ impl PrimitiveTypes {
                 repr: TypeRepr::Composite(CompositeType {
                     members: vec![
                         CompositeTypeMember {
-                            ty: pointer,
+                            ty: opaqueptr,
                             offset: 0,
                             default_value: None,
                             size: size_of::<usize>(),
                         },
                         CompositeTypeMember {
-                            ty: pointer,
+                            ty: opaqueptr,
                             offset: size_of::<usize>(),
                             default_value: None,
                             size: size_of::<usize>(),
@@ -524,10 +519,7 @@ impl PrimitiveTypes {
                     classes: vec![var],
                     properties: HashMap::from([(
                         (Lowercase::new(""), Lowercase::new("")),
-                        TypeProperty {
-                            ty: PropertyType::Inline(var),
-                            field: 0,
-                        },
+                        TypeProperty { ty: var, field: 0 },
                     )]),
                     allows_null: false,
                     lock: None,
@@ -541,10 +533,9 @@ impl PrimitiveTypes {
             int,
             float,
             string,
-            array,
-            pointer,
             byte,
             var,
+            opaqueptr,
         }
     }
 }
@@ -578,14 +569,72 @@ impl TypeInfo {
 
 #[derive(Clone, Debug)]
 pub struct TypeProperty {
-    pub ty: PropertyType,
+    pub ty: TypeId,
     /// The field where the data is stored.
     pub field: usize,
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
-pub enum PropertyType {
-    Inline(TypeId),
-    Pointer(TypeId),
-    ArrayPointer(TypeId),
+#[derive(Debug)]
+pub(crate) struct PapyrusRes {
+    /// High-level string to type mapping.
+    ///
+    /// For non-primitive types the returned value will be the pointer type, not the inline type.
+    pub types: Mutex<HashMap<Lowercase<String>, TypeId>>,
+    /// Maps from a type to the array pointer type.
+    pub type_to_array_ptr: Mutex<HashMap<TypeId, TypeId>>,
+    /// Maps from array type (not array pointer) to element type.
+    pub arrays_to_elem: Mutex<HashMap<TypeId, TypeId>>,
+}
+
+pub fn define_array_ty(res: &Resources, ty: TypeId, array_ty: TypeId, array_ptr_ty: TypeId) {
+    res.types.define(
+        array_ty,
+        Type {
+            repr: TypeRepr::Composite(CompositeType {
+                members: vec![
+                    CompositeTypeMember {
+                        ty: ty,
+                        offset: 0,
+                        default_value: None,
+                        size: size_of::<usize>(),
+                    },
+                    CompositeTypeMember {
+                        ty: res.primitives.opaqueptr,
+                        offset: size_of::<usize>(),
+                        default_value: None,
+                        size: size_of::<usize>(),
+                    },
+                ],
+                size: 2 * size_of::<usize>(),
+                align: align_of::<usize>(),
+            }),
+            info: TypeInfo {
+                name: None,
+                classes: vec![array_ty],
+                properties: HashMap::new(),
+                allows_null: false,
+                lock: None,
+            },
+        },
+    );
+
+    res.types.define(
+        array_ptr_ty,
+        Type {
+            repr: TypeRepr::Pointer(array_ty),
+            info: TypeInfo {
+                name: None,
+                classes: vec![array_ptr_ty],
+                properties: HashMap::from([(
+                    (Lowercase::new(""), Lowercase::new("")),
+                    TypeProperty {
+                        ty: array_ptr_ty,
+                        field: 0,
+                    },
+                )]),
+                allows_null: true,
+                lock: None,
+            },
+        },
+    );
 }

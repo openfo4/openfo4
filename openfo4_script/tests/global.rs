@@ -39,9 +39,9 @@ where
 
     engine.register(&module);
     let instance = block_on(engine.compile("MyClass", &Options::default())).unwrap();
-    let id = engine.get_type("MyClass").unwrap();
+    let class = engine.get_type("MyClass").unwrap();
 
-    let object = engine.object_pool().insert(id);
+    let object = engine.object_pool().insert(class.id());
 
     let set_a = instance.get_func("SetA").unwrap();
     let set_a = set_a.typed::<(ObjectAddr, i32), ()>().unwrap();
