@@ -46,6 +46,7 @@ impl Resources {
                 types: Mutex::new(string_to_type),
                 type_to_array_ptr: Mutex::default(),
                 arrays_to_elem: Mutex::default(),
+                type_to_array: Mutex::default(),
             },
         }
     }
@@ -582,6 +583,7 @@ pub(crate) struct PapyrusRes {
     pub types: Mutex<HashMap<Lowercase<String>, TypeId>>,
     /// Maps from a type to the array pointer type.
     pub type_to_array_ptr: Mutex<HashMap<TypeId, TypeId>>,
+    pub type_to_array: Mutex<HashMap<TypeId, TypeId>>,
     /// Maps from array type (not array pointer) to element type.
     pub arrays_to_elem: Mutex<HashMap<TypeId, TypeId>>,
 }

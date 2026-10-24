@@ -118,7 +118,7 @@ impl ObjectPool {
             .0
             .resources
             .papyrus
-            .type_to_array_ptr
+            .type_to_array
             .lock()
             .get(&elem_ty)
             .unwrap();

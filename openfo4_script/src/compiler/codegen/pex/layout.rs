@@ -62,6 +62,7 @@ impl Layouts {
                 .type_to_array_ptr
                 .lock()
                 .insert(id, array_ptr_ty);
+            res.papyrus.type_to_array.lock().insert(id, array_ty);
             res.papyrus.arrays_to_elem.lock().insert(array_ty, id);
         }
 
@@ -281,10 +282,12 @@ impl Layouts {
             .type_to_array_ptr
             .lock()
             .insert(id, array_ptr_ty);
+        res.papyrus.type_to_array.lock().insert(id, array_ty);
         res.papyrus
             .type_to_array_ptr
             .lock()
             .insert(ptr_ty, array_ptr_ty);
+        res.papyrus.type_to_array.lock().insert(ptr_ty, array_ty);
         res.papyrus.arrays_to_elem.lock().insert(array_ty, ptr_ty);
 
         self.classes.insert(
@@ -402,10 +405,12 @@ impl Layouts {
             .type_to_array_ptr
             .lock()
             .insert(id, array_ptr_ty);
+        res.papyrus.type_to_array.lock().insert(id, array_ty);
         res.papyrus
             .type_to_array_ptr
             .lock()
             .insert(ptr_ty, array_ptr_ty);
+        res.papyrus.type_to_array.lock().insert(ptr_ty, array_ty);
         res.papyrus.arrays_to_elem.lock().insert(array_ty, ptr_ty);
 
         self.structs.insert(
