@@ -10,7 +10,7 @@ use thiserror::Error;
 
 use crate::compiler::resources::{Resources, Type, TypeId, TypeRepr};
 use crate::runtime::lock::ObjectLock;
-use crate::runtime::{TypeRef, Val};
+use crate::runtime::{TypeRef, Val, new_assignment_error};
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 #[repr(transparent)]
@@ -275,7 +275,7 @@ impl Object {
 
         unsafe {
             let ptr = self.ptr.add(array_offset).add(offset);
-            T::read(&self.pool, ty, ptr).map_err(|()| Error::Incompatible)
+            T::read(&self.pool, ty, ptr)
         }
     }
 
@@ -306,14 +306,13 @@ impl Object {
             return Err(Error::NoProperty { class, name });
         };
 
+        dbg!(&ty);
+        dbg!(self.pool.resources().types.get(ty));
+
         unsafe {
             let ptr = self.ptr.add(array_offset).add(offset);
-            if !value.write(&self.pool, ty, ptr) {
-                return Err(Error::Incompatible);
-            }
+            value.write(&self.pool, ty, ptr)
         }
-
-        Ok(())
     }
 
     fn get_prop_offset_and_size(&self, class: &str, name: &str) -> Option<(usize, usize, TypeId)> {
@@ -399,115 +398,158 @@ impl ObjectArrayBuilder {
 
 pub trait ObjectValue: Sized {
     #[doc(hidden)]
-    unsafe fn read(pool: &ObjectPool, ty: TypeId, ptr: *const u8) -> Result<Self, ()>;
+    unsafe fn read(pool: &ObjectPool, ty: TypeId, ptr: *const u8) -> Result<Self, Error<'static>>;
 
     #[doc(hidden)]
-    unsafe fn write(&self, pool: &ObjectPool, ty: TypeId, ptr: *mut u8) -> bool;
+    unsafe fn write(
+        &self,
+        pool: &ObjectPool,
+        ty: TypeId,
+        ptr: *mut u8,
+    ) -> Result<(), Error<'static>>;
 }
 
 impl ObjectValue for bool {
-    unsafe fn read(pool: &ObjectPool, ty: TypeId, ptr: *const u8) -> Result<Self, ()> {
+    unsafe fn read(pool: &ObjectPool, ty: TypeId, ptr: *const u8) -> Result<Self, Error<'static>> {
         let ty = pool.resources().types.get(ty).unwrap();
         match ty.repr {
             TypeRepr::Int { bits } if bits == 8 => Ok(unsafe { ptr.cast::<bool>().read() }),
-            _ => Err(()),
+            _ => Err(Error::Incompatible("invalid type repr".to_owned())),
         }
     }
 
-    unsafe fn write(&self, pool: &ObjectPool, ty: TypeId, ptr: *mut u8) -> bool {
-        if Val::Bool(*self).get_type_id(pool) != TypeRef::Concrete(ty) {
-            return false;
+    unsafe fn write(
+        &self,
+        pool: &ObjectPool,
+        ty: TypeId,
+        ptr: *mut u8,
+    ) -> Result<(), Error<'static>> {
+        let is = Val::Bool(*self).get_type_id(pool);
+        if is != TypeRef::Concrete(ty) {
+            return Err(Error::Incompatible(new_assignment_error(
+                pool.resources(),
+                is,
+                ty,
+            )));
         }
 
         unsafe {
             ptr.cast::<bool>().write(*self);
         }
 
-        true
+        Ok(())
     }
 }
 
 impl ObjectValue for i32 {
-    unsafe fn read(pool: &ObjectPool, ty: TypeId, ptr: *const u8) -> Result<Self, ()> {
+    unsafe fn read(pool: &ObjectPool, ty: TypeId, ptr: *const u8) -> Result<Self, Error<'static>> {
         let ty = pool.resources().types.get(ty).unwrap();
         match ty.repr {
             TypeRepr::Int { bits } if bits == 32 => Ok(unsafe { ptr.cast::<i32>().read() }),
-            _ => Err(()),
+            _ => Err(Error::Incompatible("invalid type repr".to_owned())),
         }
     }
 
-    unsafe fn write(&self, pool: &ObjectPool, ty: TypeId, ptr: *mut u8) -> bool {
-        if Val::I32(*self).get_type_id(pool) != TypeRef::Concrete(ty) {
-            return false;
+    unsafe fn write(
+        &self,
+        pool: &ObjectPool,
+        ty: TypeId,
+        ptr: *mut u8,
+    ) -> Result<(), Error<'static>> {
+        let is = Val::I32(*self).get_type_id(pool);
+        if is != TypeRef::Concrete(ty) {
+            return Err(Error::Incompatible(new_assignment_error(
+                pool.resources(),
+                is,
+                ty,
+            )));
         }
 
         unsafe {
             ptr.cast::<i32>().write(*self);
         }
 
-        true
+        Ok(())
     }
 }
 
 impl ObjectValue for f32 {
-    unsafe fn read(pool: &ObjectPool, ty: TypeId, ptr: *const u8) -> Result<Self, ()> {
+    unsafe fn read(pool: &ObjectPool, ty: TypeId, ptr: *const u8) -> Result<Self, Error<'static>> {
         let ty = pool.resources().types.get(ty).unwrap();
         match ty.repr {
             TypeRepr::Float { bits } if bits == 32 => Ok(unsafe { ptr.cast::<f32>().read() }),
-            _ => Err(()),
+            _ => Err(Error::Incompatible("invalid type repr".to_owned())),
         }
     }
 
-    unsafe fn write(&self, pool: &ObjectPool, ty: TypeId, ptr: *mut u8) -> bool {
-        if Val::F32(*self).get_type_id(pool) != TypeRef::Concrete(ty) {
-            return false;
+    unsafe fn write(
+        &self,
+        pool: &ObjectPool,
+        ty: TypeId,
+        ptr: *mut u8,
+    ) -> Result<(), Error<'static>> {
+        let is = Val::F32(*self).get_type_id(pool);
+        if is != TypeRef::Concrete(ty) {
+            return Err(Error::Incompatible(new_assignment_error(
+                pool.resources(),
+                is,
+                ty,
+            )));
         }
 
         unsafe {
             ptr.cast::<f32>().write(*self);
         }
 
-        true
+        Ok(())
     }
 }
 
 impl ObjectValue for ObjectAddr {
-    unsafe fn read(pool: &ObjectPool, ty: TypeId, ptr: *const u8) -> Result<Self, ()> {
+    unsafe fn read(pool: &ObjectPool, ty: TypeId, ptr: *const u8) -> Result<Self, Error<'static>> {
         let ty = pool.resources().types.get(ty).unwrap();
-        // TODO: CHECK
-        // match ty.repr {
-        //     TypeRepr::Composite(_) => Ok(unsafe { ptr.cast::<ObjectAddr>().read() }),
-        //     _ => Err(()),
-        // }
-        Ok(unsafe { ptr.cast::<ObjectAddr>().read() })
+        match ty.repr {
+            TypeRepr::Composite(_) => Ok(unsafe { ptr.cast::<ObjectAddr>().read() }),
+            _ => Err(Error::Incompatible("invalid type repr".to_owned())),
+        }
     }
 
-    unsafe fn write(&self, pool: &ObjectPool, ty: TypeId, ptr: *mut u8) -> bool {
+    unsafe fn write(
+        &self,
+        pool: &ObjectPool,
+        ty: TypeId,
+        ptr: *mut u8,
+    ) -> Result<(), Error<'static>> {
         let expect = pool.resources().types.get(ty).unwrap();
         let is = Val::Object(*self).get_type_id(pool);
-        match is {
-            TypeRef::Invalid => return false,
-            TypeRef::Null if !expect.info.allows_null => return false,
-            TypeRef::Null => (),
+        let is_valid = match is {
+            TypeRef::Invalid => false,
+            TypeRef::Null if !expect.info.allows_null => false,
+            TypeRef::Null => true,
             TypeRef::Concrete(is) => {
-                // TODO: CHECK
-                // let is = pool.resources().types.get(is).unwrap();
-                // if !is.info.is_subtype(&expect.info) {
-                //     return false;
-                // }
+                let is = pool.resources().types.get(is).unwrap();
+                is.info.is_coercible(ty)
             }
+        };
+
+        if !is_valid {
+            return Err(Error::Incompatible(new_assignment_error(
+                pool.resources(),
+                is,
+                ty,
+            )));
         }
 
         unsafe {
             ptr.cast::<ObjectAddr>().write(*self);
         }
 
-        true
+        Ok(())
     }
 }
 
 impl ObjectValue for Option<ObjectHandle> {
-    unsafe fn read(pool: &ObjectPool, ty: TypeId, ptr: *const u8) -> Result<Self, ()> {
+    unsafe fn read(pool: &ObjectPool, ty: TypeId, ptr: *const u8) -> Result<Self, Error<'static>> {
         let addr = unsafe { ObjectAddr::read(pool, ty, ptr)? };
         if addr.is_null() {
             Ok(None)
@@ -519,7 +561,12 @@ impl ObjectValue for Option<ObjectHandle> {
         }
     }
 
-    unsafe fn write(&self, pool: &ObjectPool, ty: TypeId, ptr: *mut u8) -> bool {
+    unsafe fn write(
+        &self,
+        pool: &ObjectPool,
+        ty: TypeId,
+        ptr: *mut u8,
+    ) -> Result<(), Error<'static>> {
         let addr = self
             .as_ref()
             .map_or(ObjectAddr::NULL, |handle| handle.addr());
@@ -528,7 +575,7 @@ impl ObjectValue for Option<ObjectHandle> {
 }
 
 impl ObjectValue for Val {
-    unsafe fn read(pool: &ObjectPool, ty: TypeId, ptr: *const u8) -> Result<Self, ()> {
+    unsafe fn read(pool: &ObjectPool, ty: TypeId, ptr: *const u8) -> Result<Self, Error<'static>> {
         unsafe {
             match ty {
                 ty if ty == pool.resources().primitives.bool => {
@@ -545,7 +592,12 @@ impl ObjectValue for Val {
         }
     }
 
-    unsafe fn write(&self, pool: &ObjectPool, ty: TypeId, ptr: *mut u8) -> bool {
+    unsafe fn write(
+        &self,
+        pool: &ObjectPool,
+        ty: TypeId,
+        ptr: *mut u8,
+    ) -> Result<(), Error<'static>> {
         unsafe {
             match self {
                 Self::Bool(v) => v.write(pool, ty, ptr),
@@ -855,6 +907,6 @@ pub enum Error<'a> {
     NoProperty { class: &'a str, name: &'a str },
     #[error("object is static")]
     Static,
-    #[error("types are incompatible")]
-    Incompatible,
+    #[error("types are incompatible: {0}")]
+    Incompatible(String),
 }

@@ -16,6 +16,7 @@ use crate::engine::EngineShared;
 use crate::runtime::{
     Context, Error, NativeTuple, NativeType, ObjectAddr, ObjectPool, PanicMsg, RESULT_ERROR,
     RESULT_OK, RESULT_SUSPEND, RawContext, RawStack, RawVal, TypeArray, TypeRef, Val,
+    new_assignment_error,
 };
 
 #[derive(Clone, Debug)]
@@ -268,7 +269,10 @@ where
 
                 let is_ty = res.types.get(is).unwrap();
                 if !is_ty.info.is_coercible(*expect) {
-                    panic!("type {:?} is not compatible with {:?}", is, expect);
+                    panic!(
+                        "{}",
+                        new_assignment_error(res, TypeRef::Concrete(is), *expect)
+                    )
                 }
             }
             TypeRef::Null => {

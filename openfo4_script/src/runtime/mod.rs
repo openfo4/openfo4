@@ -22,7 +22,7 @@ pub use object::{ArrayObject, ObjectAddr, ObjectPool};
 pub use stack::Stack;
 
 use crate::compiler::PscSignature;
-use crate::compiler::resources::TypeId;
+use crate::compiler::resources::{Resources, TypeId};
 use crate::engine::{Engine, EngineShared};
 use crate::runtime::host_functions::{enter_span, exit_span};
 use crate::runtime::object::ObjectHandleRef;
@@ -980,5 +980,46 @@ impl Span {
 impl Drop for Span {
     fn drop(&mut self) {
         exit_span(self.ctx, self.id);
+    }
+}
+
+fn new_assignment_error(res: &Resources, from: TypeRef, to: TypeId) -> String {
+    let to = res.types.get(to).unwrap();
+    let to_name = to
+        .info
+        .name
+        .as_ref()
+        .map(|v| v.as_inner().as_str())
+        .unwrap_or("<unnamed>");
+
+    match from {
+        TypeRef::Concrete(from) => {
+            let from = res.types.get(from).unwrap();
+
+            let from_name = from
+                .info
+                .name
+                .as_ref()
+                .map(|v| v.as_inner().as_str())
+                .unwrap_or("<unnamed>");
+
+            format!(
+                "coercion from {} (ID {}) to {} (ID {}) failed",
+                from_name,
+                from.info.id().as_bits(),
+                to_name,
+                to.info.id().as_bits(),
+            )
+        }
+        TypeRef::Null => {
+            debug_assert!(!to.info.allows_null);
+
+            format!(
+                "cannot assign null to {} (ID {}), type is not nullable",
+                to_name,
+                to.info.id().as_bits()
+            )
+        }
+        TypeRef::Invalid => "cannot assign dangling reference".to_owned(),
     }
 }
