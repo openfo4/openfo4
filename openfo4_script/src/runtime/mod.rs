@@ -599,7 +599,7 @@ where
                 }
 
                 let is_ty = res.types.get(is).unwrap();
-                if !is_ty.info.classes.contains(expect) {
+                if !is_ty.info.is_coercible(*expect) {
                     panic!("type {:?} is not compatible with {:?}", is, expect);
                 }
             }

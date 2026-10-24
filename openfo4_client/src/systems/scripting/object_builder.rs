@@ -171,15 +171,25 @@ where
                 // superclasses.
                 // If a field exists on both a superclass and a subclass we must prefer
                 // the subclass.
-                let info = ty.info().classes.iter().rev().find_map(|class| {
-                    let class = self.engine.get_type_by_id(*class).unwrap();
-                    let class = class.info().name.as_ref().unwrap().clone();
-                    ty.info().properties.get(&(class, prop_name.clone()))
-                });
+                let mut field = None;
+                let mut c = ty.clone();
+                loop {
+                    let class_name = c.info().name.as_ref().unwrap().clone();
+                    if let Some(f) = ty.info().properties.get(&(class_name, prop_name.clone())) {
+                        field = Some(f);
+                        break;
+                    }
+
+                    if let Some(superty) = ty.info().supertype() {
+                        c = self.engine.get_type_by_id(superty).unwrap();
+                    } else {
+                        break;
+                    }
+                }
 
                 // Setting an unknown field is generally not a good idea,
                 // but it is done in some official ESP files and we must also support this.
-                let Some(info) = info else {
+                let Some(info) = field else {
                     self.warnings.push(BuildScriptObjectWarning::UnknownField(
                         class.to_string(),
                         prop_name.to_string(),

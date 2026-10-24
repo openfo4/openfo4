@@ -42,12 +42,18 @@ impl ScriptObjects {
 
         let mut class_names = HashMap::new();
         for (index, script) in scripts.iter().enumerate() {
-            let info = engine.get_type_by_id(script.layout).unwrap();
+            let root_ty = engine.get_type_by_id(script.layout).unwrap();
 
-            for class in &info.info().classes {
-                let info = engine.get_type_by_id(*class).unwrap();
-                if let Some(name) = info.info().name.clone() {
+            let mut ty = root_ty.clone();
+            loop {
+                if let Some(name) = ty.info().name.clone() {
                     class_names.insert(name.into_inner(), index);
+                }
+
+                if let Some(superty) = ty.info().supertype() {
+                    ty = engine.get_type_by_id(superty).unwrap();
+                } else {
+                    break;
                 }
             }
 
@@ -56,7 +62,7 @@ impl ScriptObjects {
                 (
                     id,
                     index,
-                    info.info().name.clone().unwrap_or_default().into_inner(),
+                    root_ty.info().name.clone().unwrap_or_default().into_inner(),
                 ),
             );
         }

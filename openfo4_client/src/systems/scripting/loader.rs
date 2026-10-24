@@ -226,11 +226,16 @@ where
                 let addr = script.builder.addr();
 
                 // We can also use any supertype of our type.
-                for id in &script.info.classes {
-                    let info = self.engine.get_type_by_id(*id).unwrap();
-                    let info = info.info();
-                    if let Some(name) = info.name.clone() {
+                let mut ty = self.engine.get_type_by_id(script.info.id()).unwrap();
+                loop {
+                    if let Some(name) = ty.info().name.clone() {
                         addrs.insert(name, addr);
+                    }
+
+                    if let Some(superty) = ty.info().supertype() {
+                        ty = self.engine.get_type_by_id(superty).unwrap();
+                    } else {
+                        break;
                     }
                 }
             }
@@ -243,11 +248,17 @@ where
             for (_, script) in alias {
                 let addr = script.builder.addr();
 
-                for id in &script.info.classes {
-                    let info = self.engine.get_type_by_id(*id).unwrap();
-                    let info = info.info();
-                    if let Some(name) = info.name.clone() {
+                // We can also use any supertype of our type.
+                let mut ty = self.engine.get_type_by_id(script.info.id()).unwrap();
+                loop {
+                    if let Some(name) = ty.info().name.clone() {
                         addrs.insert(name, addr);
+                    }
+
+                    if let Some(superty) = ty.info().supertype() {
+                        ty = self.engine.get_type_by_id(superty).unwrap();
+                    } else {
+                        break;
                     }
                 }
             }
@@ -836,20 +847,29 @@ async fn load_record(
     let base_class = engine.get_type(base_class_name).unwrap();
     let builder = engine.object_pool().insert(base_class.id());
 
-    for script in record_scripts.into_iter().flat_map(|v| v) {
+    'outer: for script in record_scripts.into_iter().flat_map(|v| v) {
         let instance = compiled_classes.get_or_compile(engine, &script.name).await;
         let layout = engine.get_type(&script.name).unwrap();
         let builder = engine.object_pool().insert(layout.id());
 
         let info = layout.info().clone();
-        if !info.classes.contains(&base_class.id()) {
-            tracing::debug!(
-                "attached script {} on record {} does not inherit from base class {}, skipping",
-                script.name,
-                record.id,
-                base_class_name,
-            );
-            continue;
+        let mut ty = engine.get_type_by_id(info.id()).unwrap();
+        loop {
+            if ty.id() == base_class.id() {
+                break;
+            }
+
+            if let Some(superty) = ty.info().supertype() {
+                ty = engine.get_type_by_id(superty).unwrap();
+            } else {
+                tracing::debug!(
+                    "attached script {} on record {} does not inherit from base class {}, skipping",
+                    script.name,
+                    record.id,
+                    base_class_name,
+                );
+                continue 'outer;
+            }
         }
 
         scripts.insert(

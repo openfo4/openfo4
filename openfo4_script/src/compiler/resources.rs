@@ -315,14 +315,15 @@ impl PrimitiveTypes {
             Type {
                 repr: TypeRepr::Unit,
                 info: TypeInfo {
+                    id: none,
                     name: Some(Lowercase::new("none")),
-                    classes: vec![none],
                     properties: HashMap::from([(
                         (Lowercase::new(""), Lowercase::new("")),
                         TypeProperty { ty: none, field: 0 },
                     )]),
                     allows_null: true,
                     lock: None,
+                    supertypes: Box::new([]),
                 },
             },
         );
@@ -333,14 +334,15 @@ impl PrimitiveTypes {
             Type {
                 repr: TypeRepr::Int { bits: 8 },
                 info: TypeInfo {
+                    id: bool,
                     name: Some(Lowercase::new("bool")),
-                    classes: vec![bool],
                     properties: HashMap::from([(
                         (Lowercase::new(""), Lowercase::new("")),
                         TypeProperty { ty: bool, field: 0 },
                     )]),
                     allows_null: true,
                     lock: None,
+                    supertypes: Box::new([]),
                 },
             },
         );
@@ -351,14 +353,15 @@ impl PrimitiveTypes {
             Type {
                 repr: TypeRepr::Int { bits: 32 },
                 info: TypeInfo {
+                    id: int,
                     name: Some(Lowercase::new("int")),
-                    classes: vec![int],
                     properties: HashMap::from([(
                         (Lowercase::new(""), Lowercase::new("")),
                         TypeProperty { ty: int, field: 0 },
                     )]),
                     allows_null: true,
                     lock: None,
+                    supertypes: Box::new([]),
                 },
             },
         );
@@ -369,8 +372,8 @@ impl PrimitiveTypes {
             Type {
                 repr: TypeRepr::Float { bits: 32 },
                 info: TypeInfo {
+                    id: float,
                     name: Some(Lowercase::new("float")),
-                    classes: vec![float],
                     properties: HashMap::from([(
                         (Lowercase::new(""), Lowercase::new("")),
                         TypeProperty {
@@ -380,6 +383,7 @@ impl PrimitiveTypes {
                     )]),
                     allows_null: true,
                     lock: None,
+                    supertypes: Box::new([]),
                 },
             },
         );
@@ -390,8 +394,8 @@ impl PrimitiveTypes {
             Type {
                 repr: TypeRepr::Int { bits: usize::BITS },
                 info: TypeInfo {
+                    id: opaqueptr,
                     name: None,
-                    classes: vec![opaqueptr],
                     properties: HashMap::from([(
                         (Lowercase::new(""), Lowercase::new("")),
                         TypeProperty {
@@ -401,6 +405,7 @@ impl PrimitiveTypes {
                     )]),
                     allows_null: true,
                     lock: None,
+                    supertypes: Box::new([]),
                 },
             },
         );
@@ -411,14 +416,15 @@ impl PrimitiveTypes {
             Type {
                 repr: TypeRepr::Int { bits: 8 },
                 info: TypeInfo {
+                    id: byte,
                     name: None,
-                    classes: vec![byte],
                     properties: HashMap::from([(
                         (Lowercase::new(""), Lowercase::new("")),
                         TypeProperty { ty: byte, field: 0 },
                     )]),
                     allows_null: true,
                     lock: None,
+                    supertypes: Box::new([]),
                 },
             },
         );
@@ -446,8 +452,8 @@ impl PrimitiveTypes {
                     align: align_of::<usize>(),
                 }),
                 info: TypeInfo {
+                    id: string,
                     name: Some(Lowercase::new("string")),
-                    classes: vec![string],
                     properties: HashMap::from([(
                         (Lowercase::new(""), Lowercase::new("")),
                         TypeProperty {
@@ -457,6 +463,7 @@ impl PrimitiveTypes {
                     )]),
                     allows_null: false,
                     lock: None,
+                    supertypes: Box::new([]),
                 },
             },
         );
@@ -484,11 +491,12 @@ impl PrimitiveTypes {
                     align: align_of::<usize>(),
                 }),
                 info: TypeInfo {
+                    id: array,
                     name: None,
-                    classes: vec![array],
                     properties: HashMap::new(),
                     allows_null: false,
                     lock: None,
+                    supertypes: Box::new([]),
                 },
             },
         );
@@ -516,14 +524,15 @@ impl PrimitiveTypes {
                     align: align_of::<usize>(),
                 }),
                 info: TypeInfo {
+                    id: var,
                     name: Some(Lowercase::new("var")),
-                    classes: vec![var],
                     properties: HashMap::from([(
                         (Lowercase::new(""), Lowercase::new("")),
                         TypeProperty { ty: var, field: 0 },
                     )]),
                     allows_null: false,
                     lock: None,
+                    supertypes: Box::new([]),
                 },
             },
         );
@@ -543,28 +552,35 @@ impl PrimitiveTypes {
 
 #[derive(Clone, Debug, Default)]
 pub struct TypeInfo {
+    pub(crate) id: TypeId,
     pub name: Option<Lowercase<String>>,
-    pub classes: Vec<TypeId>,
     pub properties: HashMap<(Lowercase<String>, Lowercase<String>), TypeProperty>,
     pub allows_null: bool,
     /// The offset from the object start where the [`ObjectLock`] is located.
     pub(crate) lock: Option<usize>,
+    /// Sorted list of supertypes of this type.
+    ///
+    /// Index 0 contains the most generic supertype, while the last index contains the immediate
+    /// supertype of this type.
+    pub(crate) supertypes: Box<[TypeId]>,
 }
 
 impl TypeInfo {
-    /// Returns `true` if `other` is a subtype of `self`.
-    ///
-    /// If `other` == `self` `true` is returned.
-    pub fn is_subtype(&self, other: &TypeInfo) -> bool {
-        // Another type is a subtype if it has the same "prefix" as the supertype.
-        if self.classes.len() > other.classes.len() {
-            return false;
-        }
+    /// Returns the unique ID of this type.
+    pub fn id(&self) -> TypeId {
+        self.id
+    }
 
-        self.classes
-            .iter()
-            .zip(&other.classes)
-            .all(|(lhs, rhs)| lhs == rhs)
+    /// Returns the supertype of this type.
+    pub fn supertype(&self) -> Option<TypeId> {
+        self.supertypes.last().copied()
+    }
+
+    /// Returns whether `self` can be implicitly coerced into the given `target` type.
+    ///
+    /// This is possible if `self` is `target` or `self` is a subtype of `target`.
+    pub fn is_coercible(&self, target: TypeId) -> bool {
+        self.id == target || self.supertypes.contains(&target)
     }
 }
 
@@ -611,11 +627,12 @@ pub fn define_array_ty(res: &Resources, ty: TypeId, array_ty: TypeId, array_ptr_
                 align: align_of::<usize>(),
             }),
             info: TypeInfo {
+                id: array_ty,
                 name: None,
-                classes: vec![array_ty],
                 properties: HashMap::new(),
                 allows_null: false,
                 lock: None,
+                supertypes: Box::new([]),
             },
         },
     );
@@ -625,8 +642,8 @@ pub fn define_array_ty(res: &Resources, ty: TypeId, array_ty: TypeId, array_ptr_
         Type {
             repr: TypeRepr::Pointer(array_ty),
             info: TypeInfo {
+                id: array_ptr_ty,
                 name: None,
-                classes: vec![array_ptr_ty],
                 properties: HashMap::from([(
                     (Lowercase::new(""), Lowercase::new("")),
                     TypeProperty {
@@ -636,6 +653,7 @@ pub fn define_array_ty(res: &Resources, ty: TypeId, array_ty: TypeId, array_ptr_
                 )]),
                 allows_null: true,
                 lock: None,
+                supertypes: Box::new([]),
             },
         },
     );

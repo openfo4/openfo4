@@ -148,7 +148,7 @@ impl Layouts {
         };
 
         let mut properties = ty.info.properties.clone();
-        let mut classes = ty.info.classes.clone();
+        let mut supertypes = ty.info.supertypes.clone();
         let TypeRepr::Composite(mut ty) = ty.repr else {
             unreachable!()
         };
@@ -227,18 +227,28 @@ impl Layouts {
         debug_assert!(!self.classes.contains_key(&class.id));
         let id = res.types.declare();
 
-        classes.push(id);
+        let parent = class
+            .parent
+            .map(|parent| self.classes.get(&parent).unwrap());
+        let compute_supertypes_from_parent = |parent: TypeId| {
+            let mut types = res.types.get(parent).unwrap().info.supertypes.to_vec();
+            types.push(parent);
+            types.into_boxed_slice()
+        };
 
         res.types.define(
             id,
             resources::Type {
                 repr: TypeRepr::Composite(ty),
                 info: TypeInfo {
+                    id,
                     name: Some(class.name.clone()),
-                    classes,
                     properties,
                     allows_null: true,
                     lock: Some(offset_of!(ClassHeader, lock)),
+                    supertypes: parent
+                        .map(|parent| compute_supertypes_from_parent(parent.ty))
+                        .unwrap_or_default(),
                 },
             },
         );
@@ -252,8 +262,8 @@ impl Layouts {
             resources::Type {
                 repr: TypeRepr::Pointer(id),
                 info: TypeInfo {
+                    id: ptr_ty,
                     name: None,
-                    classes: Vec::new(),
                     properties: HashMap::from([(
                         (Lowercase::new(""), Lowercase::new("")),
                         TypeProperty {
@@ -263,6 +273,9 @@ impl Layouts {
                     )]),
                     allows_null: true,
                     lock: None,
+                    supertypes: parent
+                        .map(|parent| compute_supertypes_from_parent(parent.ptr_ty))
+                        .unwrap_or_default(),
                 },
             },
         );
@@ -357,11 +370,12 @@ impl Layouts {
                     align,
                 }),
                 info: TypeInfo {
+                    id,
                     name: Some(st.name.clone()),
-                    classes: vec![id],
                     properties,
                     allows_null: true,
                     lock: Some(offset_of!(StructHeader, lock)),
+                    supertypes: Box::new([]),
                 },
             },
         );
@@ -375,8 +389,8 @@ impl Layouts {
             resources::Type {
                 repr: TypeRepr::Pointer(id),
                 info: TypeInfo {
+                    id: ptr_ty,
                     name: None,
-                    classes: Vec::new(),
                     properties: HashMap::from([(
                         (Lowercase::new(""), Lowercase::new("")),
                         TypeProperty {
@@ -386,6 +400,7 @@ impl Layouts {
                     )]),
                     allows_null: true,
                     lock: None,
+                    supertypes: Box::new([]),
                 },
             },
         );
