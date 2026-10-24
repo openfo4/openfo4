@@ -32,11 +32,8 @@ fn default_class_values() {
     block_on(engine.compile("MyClass", &Options::default())).unwrap();
     let class = engine.get_type("MyClass").unwrap();
 
-    let mut builder = engine.object_pool().insert(class.id());
-    builder.set("MyClass", "d", 50);
-
-    let object = builder.finalize();
-    let object = engine.object_pool().get(object).unwrap();
+    let object = engine.object_pool().insert(class.id());
+    object.set("MyClass", "d", 50).unwrap();
 
     assert_eq!(object.get::<i32>("MyClass", "a").unwrap(), -100);
     assert_eq!(object.get::<f32>("MyClass", "b").unwrap(), 32.0);
@@ -82,12 +79,12 @@ fn field_without_property() {
     let instance = block_on(engine.compile("B", &Options::default())).unwrap();
     let b = engine.get_type("B").unwrap();
 
-    let mut builder = engine.object_pool().insert(b.id());
-    builder.set("A", "a", 1);
-    builder.set("A", "c", builder.addr());
-    builder.set("B", "e", true);
+    let builder = engine.object_pool().insert(b.id());
+    builder.set("A", "a", 1).unwrap();
+    builder.set("A", "c", builder.addr()).unwrap();
+    builder.set("B", "e", true).unwrap();
 
-    let addr = builder.finalize().addr();
+    let addr = builder.addr();
 
     let mut stack = engine.create_stack();
     let mut ctx = Context::new(&engine, &mut stack, ());

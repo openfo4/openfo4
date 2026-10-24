@@ -339,17 +339,15 @@ fn array_find_struct() {
 
     let mut array = engine.object_pool().insert_array(struct_ty.id(), 100);
     for i in 0..100 {
-        let mut object = engine.object_pool().insert(struct_ty.id());
+        let object = engine.object_pool().insert(struct_ty.id());
 
         if i < 10 {
-            object.set::<i32>("", "x", 42);
-            object.set::<f32>("", "y", 42.0);
+            object.set::<i32>("", "x", 42).unwrap();
+            object.set::<f32>("", "y", 42.0).unwrap();
         } else {
-            object.set::<i32>("", "x", i as i32);
-            object.set::<f32>("", "y", i as f32);
+            object.set::<i32>("", "x", i as i32).unwrap();
+            object.set::<f32>("", "y", i as f32).unwrap();
         }
-
-        let object = object.finalize();
 
         array.set_at::<ObjectAddr>(i, "", "", object.addr());
     }

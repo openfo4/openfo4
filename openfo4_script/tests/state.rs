@@ -40,7 +40,7 @@ fn state() {
     let func = instance.get_func("MyFunction").unwrap();
     let class = engine.get_type("MyClass").unwrap();
 
-    let addr = engine.object_pool().insert(class.id()).finalize().addr();
+    let addr = engine.object_pool().insert(class.id()).addr();
 
     let mut stack = engine.create_stack();
     let mut ctx = Context::new(&engine, &mut stack, ());
@@ -109,7 +109,7 @@ fn state_override_order() {
     let func = instance.get_func("MyFunction").unwrap();
     let b = engine.get_type("B").unwrap();
 
-    let addr = engine.object_pool().insert(b.id()).finalize().addr();
+    let addr = engine.object_pool().insert(b.id()).addr();
 
     let mut stack = engine.create_stack();
     let mut ctx = Context::new(&engine, &mut stack, ());

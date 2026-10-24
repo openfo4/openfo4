@@ -3,7 +3,7 @@ use openfo4_script::assembler::assemble;
 use openfo4_script::compiler::CompilerOptions;
 use openfo4_script::engine::{Engine, Options};
 use openfo4_script::runtime::func::TypedFunc;
-use openfo4_script::runtime::object::ObjectBuilder;
+use openfo4_script::runtime::object::ObjectHandle;
 use openfo4_script::runtime::{Context, ObjectAddr};
 
 const COMPILER_OPTIONS: CompilerOptions = CompilerOptions {
@@ -15,7 +15,7 @@ fn run_test<F>(f: F)
 where
     F: FnOnce(
         &Engine,
-        ObjectBuilder,
+        ObjectHandle,
         TypedFunc<'_, (ObjectAddr, i32), ()>,
         TypedFunc<'_, ObjectAddr, i32>,
         &mut Context<'_, ()>,
@@ -57,9 +57,9 @@ where
 
 #[test]
 fn load_global() {
-    run_test(|_engine, mut object, _set, get, ctx| {
-        object.set("MyClass", "a", 123);
-        let object = object.finalize().addr();
+    run_test(|_engine, object, _set, get, ctx| {
+        object.set("MyClass", "a", 123).unwrap();
+        let object = object.addr();
 
         let res = get.call(ctx, object).now_or_never().unwrap();
         assert_eq!(res, 123);
@@ -69,7 +69,7 @@ fn load_global() {
 #[test]
 fn store_global() {
     run_test(|engine, object, set, _get, ctx| {
-        let object = object.finalize().addr();
+        let object = object.addr();
 
         set.call(ctx, (object, 456)).now_or_never().unwrap();
 
@@ -81,7 +81,7 @@ fn store_global() {
 #[test]
 fn store_and_load_global() {
     run_test(|_engine, object, set, get, ctx| {
-        let object = object.finalize().addr();
+        let object = object.addr();
 
         set.call(ctx, (object, 789)).now_or_never().unwrap();
 

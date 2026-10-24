@@ -38,7 +38,7 @@ fn call_with_incorrect_object_type() {
     let mut stack = engine.create_stack();
     let mut ctx = Context::new(&engine, &mut stack, ());
 
-    let b = engine.object_pool().insert(b.id()).finalize().addr();
+    let b = engine.object_pool().insert(b.id()).addr();
 
     let func = func.typed::<ObjectAddr, ()>().unwrap();
     func.call(&mut ctx, b).now_or_never().unwrap();

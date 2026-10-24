@@ -9,7 +9,7 @@ use openfo4_esp::{FormId, RecordData, RecordKind};
 use openfo4_script::compiler::resources::TypeInfo;
 use openfo4_script::engine::{Engine, Instance};
 use openfo4_script::runtime::ObjectAddr;
-use openfo4_script::runtime::object::ObjectBuilder;
+use openfo4_script::runtime::object::ObjectHandle;
 use parking_lot::Mutex;
 
 use crate::state::esp::EspLoader;
@@ -344,7 +344,7 @@ where
                 final_instances.push(ScriptInstance {
                     instance: object.instance,
                     layout: layout.id(),
-                    object: object.builder.finalize(),
+                    object: object.builder,
                 });
             }
 
@@ -399,7 +399,7 @@ where
                 final_instances.push(ScriptInstance {
                     instance: object.instance,
                     layout: layout.id(),
-                    object: object.builder.finalize(),
+                    object: object.builder,
                 });
             }
 
@@ -1032,7 +1032,7 @@ fn register_static_events(object: &PartialObject, registration: &RegistrationSet
 #[derive(Debug)]
 struct PartialObject {
     instance: Instance,
-    builder: ObjectBuilder,
+    builder: ObjectHandle,
     script: Option<Script>,
     info: TypeInfo,
 }

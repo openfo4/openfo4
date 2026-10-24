@@ -5,7 +5,7 @@ use openfo4_esp::FormId;
 use openfo4_esp::vmad::{Property, Script, Value};
 use openfo4_script::compiler::resources::TypeId;
 use openfo4_script::engine::{Engine, TypeRef};
-use openfo4_script::runtime::object::{ObjectArrayBuilder, ObjectBuilder, ObjectHandle};
+use openfo4_script::runtime::object::{ObjectArrayBuilder, ObjectHandle};
 use openfo4_script::runtime::{ObjectAddr, Val};
 use thiserror::Error;
 
@@ -46,8 +46,8 @@ enum Location {
 }
 
 enum Builder<'a> {
-    ObjectRef(&'a mut ObjectBuilder),
-    Object(ObjectBuilder),
+    ObjectRef(&'a ObjectHandle),
+    Object(ObjectHandle),
     Array(ObjectArrayBuilder),
 }
 
@@ -55,10 +55,14 @@ impl<'a> Builder<'a> {
     fn set(&mut self, location: Location, value: Val) {
         match (location, self) {
             (Location::Property { class, prop }, Self::ObjectRef(builder)) => {
-                builder.set(class.as_inner(), prop.as_inner(), value);
+                builder
+                    .set(class.as_inner(), prop.as_inner(), value)
+                    .unwrap();
             }
             (Location::Property { class, prop }, Self::Object(builder)) => {
-                builder.set(class.as_inner(), prop.as_inner(), value);
+                builder
+                    .set(class.as_inner(), prop.as_inner(), value)
+                    .unwrap();
             }
             (Location::ArrayIndex(index), Self::Array(builder)) => {
                 builder.set_at(index, "", "", value);
@@ -69,8 +73,8 @@ impl<'a> Builder<'a> {
 
     fn finalize(self) -> ObjectHandle {
         match self {
-            Self::ObjectRef(builder) => unsafe { builder.finalize_copy() },
-            Self::Object(builder) => builder.finalize(),
+            Self::ObjectRef(handle) => handle.clone(),
+            Self::Object(handle) => handle,
             Self::Array(builder) => builder.finalize(),
         }
     }
@@ -342,7 +346,7 @@ pub fn build_script_object(
     scripts: &ScriptObjects,
     partial_addrs: &HashMap<RecordId, HashMap<Lowercase<String>, ObjectAddr>>,
     aliases: &HashMap<AliasKey, HashMap<Lowercase<String>, ObjectAddr>>,
-    builder: &mut ObjectBuilder,
+    builder: &ObjectHandle,
     script_defined_in: RecordId,
 ) -> (ObjectHandle, Vec<BuildScriptObjectWarning>) {
     let ty = engine.get_type(&script.name).unwrap();
@@ -381,7 +385,7 @@ pub fn build_script_object(
     let warnings = core::mem::take(&mut inner.warnings);
     drop(inner);
 
-    (unsafe { builder.finalize_copy() }, warnings)
+    (builder.clone(), warnings)
 }
 
 #[cfg(test)]
@@ -849,9 +853,9 @@ mod tests {
         let type_b = engine.get_type("B").unwrap();
         let type_c = engine.get_type("C").unwrap();
 
-        let a = engine.object_pool().insert(type_a.id()).finalize().addr();
-        let b = engine.object_pool().insert(type_b.id()).finalize().addr();
-        let c = engine.object_pool().insert(type_c.id()).finalize().addr();
+        let a = engine.object_pool().insert(type_a.id()).addr();
+        let b = engine.object_pool().insert(type_b.id()).addr();
+        let c = engine.object_pool().insert(type_c.id()).addr();
 
         let scripts = ScriptObjects::default();
         let partial_addrs = [(
@@ -869,7 +873,7 @@ mod tests {
 
         let aliases = HashMap::new();
 
-        let mut builder = engine.object_pool().insert(type_c.id());
+        let mut object = engine.object_pool().insert(type_c.id());
 
         let (_, warnings) = build_script_object(
             |form| RecordId::new(ModuleId(NonZeroU32::MIN), form),
@@ -878,12 +882,11 @@ mod tests {
             &scripts,
             &partial_addrs,
             &aliases,
-            &mut builder,
+            &mut object,
             RecordId::DANGLING,
         );
         assert!(warnings.is_empty());
 
-        let object = engine.object_pool().get(builder.finalize()).unwrap();
         assert_eq!(object.get::<ObjectAddr>("C", "a").unwrap(), a);
         assert_eq!(object.get::<ObjectAddr>("C", "b").unwrap(), b);
         assert_eq!(object.get::<ObjectAddr>("C", "c").unwrap(), c);

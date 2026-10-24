@@ -53,7 +53,7 @@ impl ObjectPool {
     }
 
     /// Allocates a new object with the given ty.
-    pub fn alloc(&self, ty: TypeId, array_len: usize) -> ObjectHandle {
+    pub(crate) fn alloc(&self, ty: TypeId, array_len: usize) -> ObjectHandle {
         let typ = self.0.resources.types.get(ty).unwrap();
 
         let align = typ.repr.align();
@@ -86,29 +86,29 @@ impl ObjectPool {
         ObjectHandle { object, index: 0 }
     }
 
-    pub fn insert(&self, mut ty: TypeId) -> ObjectBuilder {
+    /// Creates a new object of the given type.
+    pub fn insert(&self, mut ty: TypeId) -> ObjectHandle {
         let typ = self.0.resources.types.get(ty).unwrap();
         if let TypeRepr::Pointer(inner) = typ.repr {
             ty = inner;
         }
 
-        let handle = self.alloc(ty, 1);
-        ObjectBuilder(handle)
+        self.alloc(ty, 1)
     }
 
     pub fn insert_string(&self, s: &str) -> ObjectHandle {
-        let bytes_ref = self.alloc(self.0.resources.primitives.byte, s.len());
+        let bytes = self.alloc(self.0.resources.primitives.byte, s.len());
 
         unsafe {
-            core::ptr::copy_nonoverlapping(s.as_ptr(), bytes_ref.addr().0, s.len());
+            core::ptr::copy_nonoverlapping(s.as_ptr(), bytes.addr().0, s.len());
         }
 
-        let mut string_object = self.insert(self.0.resources.primitives.string);
-        let string = unsafe { string_object.as_mut::<ArrayObject>() };
-        string.ptr = bytes_ref.addr().to_raw();
-        string.len = s.len();
+        let string = self.alloc(self.0.resources.primitives.string, 1);
+        let array = unsafe { string.object.ptr.cast::<ArrayObject>().as_mut_unchecked() };
+        array.ptr = bytes.object.ptr;
+        array.len = s.len();
 
-        string_object.finalize()
+        string
     }
 
     pub fn insert_array(&self, elem_ty: TypeId, array_len: usize) -> ObjectArrayBuilder {
@@ -123,14 +123,20 @@ impl ObjectPool {
             .get(&elem_ty)
             .unwrap();
 
-        let mut array_object = self.insert(array_ty);
-        let array = unsafe { array_object.as_mut::<ArrayObject>() };
-        array.ptr = elems.addr().to_raw();
+        let array_obj = self.alloc(array_ty, 1);
+        let array = unsafe {
+            array_obj
+                .object
+                .ptr
+                .cast::<ArrayObject>()
+                .as_mut_unchecked()
+        };
+        array.ptr = elems.object.ptr;
         array.len = array_len;
 
         ObjectArrayBuilder {
             elems,
-            array: array_object.finalize(),
+            array: array_obj,
         }
     }
 
@@ -366,38 +372,6 @@ impl Object {
 // are threadsafe themselves.
 unsafe impl Send for Object {}
 unsafe impl Sync for Object {}
-
-#[derive(Debug)]
-pub struct ObjectBuilder(ObjectHandle);
-
-impl ObjectBuilder {
-    #[track_caller]
-    pub fn set<T>(&mut self, class: &str, name: &str, value: T)
-    where
-        T: ObjectValue,
-    {
-        self.0.set(class, name, value).unwrap();
-    }
-
-    pub unsafe fn finalize_copy(&self) -> ObjectHandle {
-        self.0.clone()
-    }
-
-    pub fn finalize(self) -> ObjectHandle {
-        self.0
-    }
-
-    /// Returns the address of the object being built.
-    ///
-    /// Useful for building recursive objects.
-    pub fn addr(&self) -> ObjectAddr {
-        self.0.addr()
-    }
-
-    unsafe fn as_mut<T>(&mut self) -> &mut T {
-        unsafe { self.0.object.ptr.cast::<T>().as_mut_unchecked() }
-    }
-}
 
 #[derive(Debug)]
 pub struct ObjectArrayBuilder {

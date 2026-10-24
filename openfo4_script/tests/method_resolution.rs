@@ -39,7 +39,7 @@ fn method_resolution_external() {
     let instance = block_on(engine.compile("B", &Options::default())).unwrap();
     let b = engine.get_type("B").unwrap();
 
-    let addr = engine.object_pool().insert(b.id()).finalize().addr();
+    let addr = engine.object_pool().insert(b.id()).addr();
 
     let mut stack = engine.create_stack();
     let mut ctx = Context::new(&engine, &mut stack, ());
@@ -102,7 +102,7 @@ fn method_resolution_internal() {
     let instance = block_on(engine.compile("B", &Options::default())).unwrap();
     let b = engine.get_type("B").unwrap();
 
-    let addr = engine.object_pool().insert(b.id()).finalize().addr();
+    let addr = engine.object_pool().insert(b.id()).addr();
 
     let mut stack = engine.create_stack();
     let mut ctx = Context::new(&engine, &mut stack, ());
@@ -151,7 +151,7 @@ fn method_resolution_call_parent() {
     let instance = block_on(engine.compile("C", &Options::default())).unwrap();
     let c = engine.get_type("C").unwrap();
 
-    let addr = engine.object_pool().insert(c.id()).finalize().addr();
+    let addr = engine.object_pool().insert(c.id()).addr();
 
     let mut stack = engine.create_stack();
     let mut ctx = Context::new(&engine, &mut stack, ());
@@ -205,7 +205,7 @@ fn class_without_methods() {
     let instance = block_on(engine.compile("B", &Options::default())).unwrap();
     let b = engine.get_type("B").unwrap();
 
-    let addr = engine.object_pool().insert(b.id()).finalize().addr();
+    let addr = engine.object_pool().insert(b.id()).addr();
 
     let mut stack = engine.create_stack();
     let mut ctx = Context::new(&engine, &mut stack, ());
@@ -237,7 +237,7 @@ fn class_without_methods_twice() {
     let instance = block_on(engine.compile("C", &Options::default())).unwrap();
     let c = engine.get_type("C").unwrap();
 
-    let addr = engine.object_pool().insert(c.id()).finalize().addr();
+    let addr = engine.object_pool().insert(c.id()).addr();
 
     let mut stack = engine.create_stack();
     let mut ctx = Context::new(&engine, &mut stack, ());

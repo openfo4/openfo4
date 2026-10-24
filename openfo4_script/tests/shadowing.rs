@@ -47,12 +47,12 @@ fn variable_shadowing() {
 
     let subsub = engine.get_type("SubSub").unwrap();
 
-    let mut builder = engine.object_pool().insert(subsub.id());
-    builder.set("SubSub", "A", 600);
-    builder.set("Sub", "A", 400);
-    builder.set("Super", "A", 200);
+    let builder = engine.object_pool().insert(subsub.id());
+    builder.set("SubSub", "A", 600).unwrap();
+    builder.set("Sub", "A", 400).unwrap();
+    builder.set("Super", "A", 200).unwrap();
 
-    let addr = builder.finalize().addr();
+    let addr = builder.addr();
 
     let mut stack = engine.create_stack();
     let mut ctx = Context::new(&engine, &mut stack, ());
@@ -86,10 +86,10 @@ fn load_property_from_parent_class() {
     let func = instance.get_func("F").unwrap();
     let b = engine.get_type("B").unwrap();
 
-    let mut builder = engine.object_pool().insert(b.id());
-    builder.set("A", "A", 1);
+    let builder = engine.object_pool().insert(b.id());
+    builder.set("A", "A", 1).unwrap();
 
-    let addr = builder.finalize().addr();
+    let addr = builder.addr();
 
     let mut stack = engine.create_stack();
     let mut ctx = Context::new(&engine, &mut stack, ());

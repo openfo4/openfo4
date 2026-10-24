@@ -215,9 +215,9 @@ fn suspend_in_callstack() {
     let b = engine.get_type("B").unwrap();
     let c = engine.get_type("C").unwrap();
 
-    let a = engine.object_pool().insert(a.id()).finalize();
-    let b = engine.object_pool().insert(b.id()).finalize();
-    let c = engine.object_pool().insert(c.id()).finalize();
+    let a = engine.object_pool().insert(a.id());
+    let b = engine.object_pool().insert(b.id());
+    let c = engine.object_pool().insert(c.id());
 
     let func = func
         .typed::<(ObjectAddr, ObjectAddr, ObjectAddr), i32>()

@@ -259,7 +259,7 @@ fn core_actor_values(
         aggression,
         confidence,
         suspicious,
-    ] = std::array::from_fn(|_| engine.object_pool().insert(actor_value.id()).finalize());
+    ] = std::array::from_fn(|_| engine.object_pool().insert(actor_value.id()));
 
     State {
         core_objects: CoreObjects {
