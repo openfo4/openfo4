@@ -1,6 +1,6 @@
 use std::sync::OnceLock;
 
-use game_render::shader::Shader;
+use openfo4_render::shader::Shader;
 
 #[derive(Debug)]
 pub(crate) struct ShaderSource {

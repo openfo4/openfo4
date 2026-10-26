@@ -23,7 +23,7 @@ use openfo4_render::shader::Shader;
 /// # Examples
 ///
 /// ```ignore
-/// # use game_shaderlib::{include_shader, ShaderSource};
+/// # use openfo4_shaderlib::{include_shader, ShaderSource};
 /// #
 /// static SHADER: ShaderSource = include_shader!("shaders/triangle.slang");
 /// ```
