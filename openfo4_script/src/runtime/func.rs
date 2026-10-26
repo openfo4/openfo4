@@ -15,7 +15,7 @@ use crate::compiler::{CompilationResult, PscSignature};
 use crate::engine::EngineShared;
 use crate::runtime::{
     Context, Error, NativeTuple, NativeType, ObjectAddr, ObjectPool, PanicMsg, RESULT_ERROR,
-    RESULT_OK, RESULT_SUSPEND, RawContext, RawStack, RawVal, TypeArray, TypeRef, Val,
+    RESULT_OK, RESULT_SUSPEND, RawContext, RawStack, RawVal, TypeArray, TypeOfVal, Val,
     new_assignment_error,
 };
 
@@ -262,7 +262,7 @@ where
 
     for (index, (is, expect)) in params.type_ids(pool).zip(&signature.params).enumerate() {
         match is {
-            TypeRef::Concrete(is) => {
+            TypeOfVal::Concrete(is) => {
                 if is == *expect {
                     continue;
                 }
@@ -271,11 +271,11 @@ where
                 if !is_ty.info.is_coercible(*expect) {
                     panic!(
                         "{}",
-                        new_assignment_error(res, TypeRef::Concrete(is), *expect)
+                        new_assignment_error(res, TypeOfVal::Concrete(is), *expect)
                     )
                 }
             }
-            TypeRef::Null => {
+            TypeOfVal::Null => {
                 let expect = res.types.get(*expect).unwrap();
 
                 // For non-static functions the first argument is the callee object,
@@ -286,7 +286,7 @@ where
                     panic!("type {:?} is null, but the type is non-nullable", expect);
                 }
             }
-            TypeRef::Invalid => {
+            TypeOfVal::Invalid => {
                 panic!("passing invalid value");
             }
         }

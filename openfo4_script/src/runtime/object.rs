@@ -10,7 +10,7 @@ use thiserror::Error;
 
 use crate::compiler::resources::{Resources, Type, TypeId, TypeRepr};
 use crate::runtime::lock::ObjectLock;
-use crate::runtime::{TypeRef, Val, new_assignment_error};
+use crate::runtime::{TypeOfVal, Val, new_assignment_error};
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 #[repr(transparent)]
@@ -204,6 +204,7 @@ struct Object {
     id: TypeId,
     pool: ObjectPool,
     is_static: bool,
+    ptr_ty: Option<TypeId>,
 }
 
 impl Object {
@@ -236,6 +237,7 @@ impl Object {
             id,
             pool,
             is_static: false,
+            ptr_ty: None,
         }
     }
 
@@ -253,6 +255,7 @@ impl Object {
             id,
             pool,
             is_static: true,
+            ptr_ty: None,
         }
     }
 
@@ -305,9 +308,6 @@ impl Object {
         let Some((offset, _size, ty)) = self.get_prop_offset_and_size(class, name) else {
             return Err(Error::NoProperty { class, name });
         };
-
-        dbg!(&ty);
-        dbg!(self.pool.resources().types.get(ty));
 
         unsafe {
             let ptr = self.ptr.add(array_offset).add(offset);
@@ -425,7 +425,7 @@ impl ObjectValue for bool {
         ptr: *mut u8,
     ) -> Result<(), Error<'static>> {
         let is = Val::Bool(*self).get_type_id(pool);
-        if is != TypeRef::Concrete(ty) {
+        if is != TypeOfVal::Concrete(ty) {
             return Err(Error::Incompatible(new_assignment_error(
                 pool.resources(),
                 is,
@@ -457,7 +457,7 @@ impl ObjectValue for i32 {
         ptr: *mut u8,
     ) -> Result<(), Error<'static>> {
         let is = Val::I32(*self).get_type_id(pool);
-        if is != TypeRef::Concrete(ty) {
+        if is != TypeOfVal::Concrete(ty) {
             return Err(Error::Incompatible(new_assignment_error(
                 pool.resources(),
                 is,
@@ -489,7 +489,7 @@ impl ObjectValue for f32 {
         ptr: *mut u8,
     ) -> Result<(), Error<'static>> {
         let is = Val::F32(*self).get_type_id(pool);
-        if is != TypeRef::Concrete(ty) {
+        if is != TypeOfVal::Concrete(ty) {
             return Err(Error::Incompatible(new_assignment_error(
                 pool.resources(),
                 is,
@@ -523,10 +523,10 @@ impl ObjectValue for ObjectAddr {
         let expect = pool.resources().types.get(ty).unwrap();
         let is = Val::Object(*self).get_type_id(pool);
         let is_valid = match is {
-            TypeRef::Invalid => false,
-            TypeRef::Null if !expect.info.allows_null => false,
-            TypeRef::Null => true,
-            TypeRef::Concrete(is) => {
+            TypeOfVal::Invalid => false,
+            TypeOfVal::Null if !expect.info.allows_null => false,
+            TypeOfVal::Null => true,
+            TypeOfVal::Concrete(is) => {
                 let is = pool.resources().types.get(is).unwrap();
                 is.info.is_coercible(ty)
             }
@@ -622,6 +622,9 @@ impl ArrayObject {
         unsafe { core::mem::transmute::<&Self, &[u8; size_of::<Self>()]>(self) }
     }
 }
+
+unsafe impl Send for ArrayObject {}
+unsafe impl Sync for ArrayObject {}
 
 #[derive(Copy, Clone)]
 #[repr(C)]

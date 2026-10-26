@@ -164,21 +164,32 @@ impl Val {
         }
     }
 
-    fn get_type_id(self, pool: &ObjectPool) -> TypeRef {
+    fn get_type_id(self, pool: &ObjectPool) -> TypeOfVal {
         let res = pool.resources();
         match self {
-            Self::Bool(_) => TypeRef::Concrete(res.primitives.bool),
-            Self::I32(_) => TypeRef::Concrete(res.primitives.int),
-            Self::F32(_) => TypeRef::Concrete(res.primitives.float),
+            Self::Bool(_) => TypeOfVal::Concrete(res.primitives.bool),
+            Self::I32(_) => TypeOfVal::Concrete(res.primitives.int),
+            Self::F32(_) => TypeOfVal::Concrete(res.primitives.float),
             Self::Object(addr) => {
                 if addr == ObjectAddr::NULL {
-                    return TypeRef::Null;
+                    return TypeOfVal::Null;
                 }
 
-                match pool.get(addr) {
-                    Some(object) => TypeRef::Concrete(object.type_id()),
-                    None => TypeRef::Invalid,
-                }
+                let Some(object) = pool.get(addr) else {
+                    return TypeOfVal::Invalid;
+                };
+
+                let ty = object.type_id();
+                let Some(ptr_ty) = res.types.ptr_of(ty) else {
+                    let ty = res.types.get(ty).unwrap();
+                    panic!(
+                        "cannot convert {} (ID {}) to pointer",
+                        ty.info.name_or_placeholder(),
+                        ty.info.id.as_bits(),
+                    );
+                };
+
+                TypeOfVal::Concrete(ptr_ty)
             }
         }
     }
@@ -593,7 +604,7 @@ where
 
     for (is, expect) in values.type_ids(pool).zip(&signature.returns) {
         match is {
-            TypeRef::Concrete(is) => {
+            TypeOfVal::Concrete(is) => {
                 if is == *expect {
                     continue;
                 }
@@ -603,13 +614,13 @@ where
                     panic!("type {:?} is not compatible with {:?}", is, expect);
                 }
             }
-            TypeRef::Null => {
+            TypeOfVal::Null => {
                 let expect = res.types.get(*expect).unwrap();
                 if !expect.info.allows_null {
                     panic!("type {:?} is null, but the type is non-nullable", expect);
                 }
             }
-            TypeRef::Invalid => {
+            TypeOfVal::Invalid => {
                 panic!("returning invalid value");
             }
         }
@@ -696,7 +707,7 @@ pub unsafe trait NativeType: Copy + HostType {
 
     #[doc(hidden)]
     #[expect(private_interfaces)]
-    fn get_type_id(&self, pool: &ObjectPool) -> TypeRef;
+    fn get_type_id(&self, pool: &ObjectPool) -> TypeOfVal;
 }
 
 unsafe impl NativeType for bool {
@@ -712,7 +723,7 @@ unsafe impl NativeType for bool {
 
     #[doc(hidden)]
     #[expect(private_interfaces)]
-    fn get_type_id(&self, pool: &ObjectPool) -> TypeRef {
+    fn get_type_id(&self, pool: &ObjectPool) -> TypeOfVal {
         Val::Bool(*self).get_type_id(pool)
     }
 }
@@ -730,7 +741,7 @@ unsafe impl NativeType for i32 {
 
     #[doc(hidden)]
     #[expect(private_interfaces)]
-    fn get_type_id(&self, pool: &ObjectPool) -> TypeRef {
+    fn get_type_id(&self, pool: &ObjectPool) -> TypeOfVal {
         Val::I32(*self).get_type_id(pool)
     }
 }
@@ -748,7 +759,7 @@ unsafe impl NativeType for f32 {
 
     #[doc(hidden)]
     #[expect(private_interfaces)]
-    fn get_type_id(&self, pool: &ObjectPool) -> TypeRef {
+    fn get_type_id(&self, pool: &ObjectPool) -> TypeOfVal {
         Val::F32(*self).get_type_id(pool)
     }
 }
@@ -766,7 +777,7 @@ unsafe impl NativeType for ObjectAddr {
 
     #[doc(hidden)]
     #[expect(private_interfaces)]
-    fn get_type_id(&self, pool: &ObjectPool) -> TypeRef {
+    fn get_type_id(&self, pool: &ObjectPool) -> TypeOfVal {
         Val::Object(*self).get_type_id(pool)
     }
 }
@@ -793,7 +804,7 @@ unsafe impl NativeTuple for () {
 }
 
 impl TypeArray for () {
-    fn type_ids(&self, _pool: &ObjectPool) -> impl Iterator<Item = TypeRef> {
+    fn type_ids(&self, _pool: &ObjectPool) -> impl Iterator<Item = TypeOfVal> {
         std::iter::empty()
     }
 }
@@ -820,7 +831,7 @@ impl<T> TypeArray for T
 where
     T: NativeType,
 {
-    fn type_ids(&self, pool: &ObjectPool) -> impl Iterator<Item = TypeRef> {
+    fn type_ids(&self, pool: &ObjectPool) -> impl Iterator<Item = TypeOfVal> {
         std::iter::once(self.get_type_id(pool))
     }
 }
@@ -866,7 +877,7 @@ macro_rules! impl_native_tuple {
                 $t: NativeType,
             )*
         {
-            fn type_ids(&self, pool: &ObjectPool) -> impl Iterator<Item = TypeRef> {
+            fn type_ids(&self, pool: &ObjectPool) -> impl Iterator<Item = TypeOfVal> {
                 let ( $($t,)* ) = self;
                 [
                     $(
@@ -890,8 +901,9 @@ impl_native_tuple!(T0, T1, T2, T3, T4, T5, T6, T7);
 impl_native_tuple!(T0, T1, T2, T3, T4, T5, T6, T7, T8);
 impl_native_tuple!(T0, T1, T2, T3, T4, T5, T6, T7, T8, T9);
 
+/// The type of a value.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
-enum TypeRef {
+enum TypeOfVal {
     Concrete(TypeId),
     Null,
     /// Invalid type reference.
@@ -899,11 +911,11 @@ enum TypeRef {
 }
 
 trait TypeArray {
-    fn type_ids(&self, pool: &ObjectPool) -> impl Iterator<Item = TypeRef>;
+    fn type_ids(&self, pool: &ObjectPool) -> impl Iterator<Item = TypeOfVal>;
 }
 
 impl TypeArray for [Val] {
-    fn type_ids(&self, pool: &ObjectPool) -> impl Iterator<Item = TypeRef> {
+    fn type_ids(&self, pool: &ObjectPool) -> impl Iterator<Item = TypeOfVal> {
         self.iter().map(|v| v.get_type_id(pool))
     }
 }
@@ -983,7 +995,7 @@ impl Drop for Span {
     }
 }
 
-fn new_assignment_error(res: &Resources, from: TypeRef, to: TypeId) -> String {
+fn new_assignment_error(res: &Resources, from: TypeOfVal, to: TypeId) -> String {
     let to = res.types.get(to).unwrap();
     let to_name = to
         .info
@@ -993,7 +1005,7 @@ fn new_assignment_error(res: &Resources, from: TypeRef, to: TypeId) -> String {
         .unwrap_or("<unnamed>");
 
     match from {
-        TypeRef::Concrete(from) => {
+        TypeOfVal::Concrete(from) => {
             let from = res.types.get(from).unwrap();
 
             let from_name = from
@@ -1011,7 +1023,7 @@ fn new_assignment_error(res: &Resources, from: TypeRef, to: TypeId) -> String {
                 to.info.id().as_bits(),
             )
         }
-        TypeRef::Null => {
+        TypeOfVal::Null => {
             debug_assert!(!to.info.allows_null);
 
             format!(
@@ -1020,6 +1032,6 @@ fn new_assignment_error(res: &Resources, from: TypeRef, to: TypeId) -> String {
                 to.info.id().as_bits()
             )
         }
-        TypeRef::Invalid => "cannot assign dangling reference".to_owned(),
+        TypeOfVal::Invalid => "cannot assign dangling reference".to_owned(),
     }
 }

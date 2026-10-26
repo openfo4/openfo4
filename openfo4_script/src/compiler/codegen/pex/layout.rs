@@ -27,6 +27,11 @@ pub(crate) struct StructHeader {
     pub lock: ObjectLock,
 }
 
+static DEFAULT_STRING: ArrayObject = ArrayObject {
+    ptr: core::ptr::null_mut(),
+    len: 0,
+};
+
 #[derive(Clone, Debug)]
 pub struct Layouts {
     classes: HashMap<ClassId, ClassLayout>,
@@ -44,17 +49,17 @@ impl Layouts {
         let mut array_types = HashMap::new();
         let mut array_ptr_types = HashMap::new();
 
-        for (ty, id) in [
-            (Type::None, res.primitives.none),
-            (Type::Bool, res.primitives.bool),
-            (Type::Int, res.primitives.int),
-            (Type::Float, res.primitives.float),
-            (Type::String, res.primitives.string),
-            (Type::Var, res.primitives.var),
+        for (ty, id, name) in [
+            (Type::None, res.primitives.none, "none"),
+            (Type::Bool, res.primitives.bool, "bool"),
+            (Type::Int, res.primitives.int, "int"),
+            (Type::Float, res.primitives.float, "float"),
+            (Type::String, res.primitives.string, "string"),
+            (Type::Var, res.primitives.var, "var"),
         ] {
             let array_ty = res.types.declare();
             let array_ptr_ty = res.types.declare();
-            define_array_ty(res, id, array_ty, array_ptr_ty);
+            define_array_ty(res, id, array_ty, array_ptr_ty, name);
             array_types.insert(ty.clone(), array_ty);
             array_ptr_types.insert(ty, array_ptr_ty);
 
@@ -64,6 +69,7 @@ impl Layouts {
                 .insert(id, array_ptr_ty);
             res.papyrus.type_to_array.lock().insert(id, array_ty);
             res.papyrus.arrays_to_elem.lock().insert(array_ty, id);
+            res.types.set_ptr_type(array_ty, array_ptr_ty);
         }
 
         Self {
@@ -88,6 +94,10 @@ impl Layouts {
 
     pub fn array(&self, array: &Type) -> TypeId {
         *self.array_types.get(array).unwrap()
+    }
+
+    pub fn array_ptr(&self, array: &Type) -> TypeId {
+        *self.array_ptr_types.get(array).unwrap()
     }
 
     pub fn compute_class(&mut self, res: &Resources, reg: &Registry, class: &ClassDef) {
@@ -263,7 +273,7 @@ impl Layouts {
                 repr: TypeRepr::Pointer(id),
                 info: TypeInfo {
                     id: ptr_ty,
-                    name: None,
+                    name: Some(Lowercase::new(&*format!("*{}", class.name))),
                     properties: HashMap::from([(
                         (Lowercase::new(""), Lowercase::new("")),
                         TypeProperty {
@@ -279,6 +289,7 @@ impl Layouts {
                 },
             },
         );
+        res.types.set_ptr_type(id, ptr_ty);
 
         let array_ty = *self
             .array_types
@@ -288,7 +299,7 @@ impl Layouts {
             .array_ptr_types
             .entry(Type::Class(class.id))
             .or_insert_with(|| res.types.declare());
-        define_array_ty(res, id, array_ty, array_ptr_ty);
+        define_array_ty(res, id, array_ty, array_ptr_ty, class.name.as_inner());
         // TODO: Only register the ptr_ty here when we move over to only using
         // pointer types for HIR codegen.
         res.papyrus
@@ -302,6 +313,7 @@ impl Layouts {
             .insert(ptr_ty, array_ptr_ty);
         res.papyrus.type_to_array.lock().insert(ptr_ty, array_ty);
         res.papyrus.arrays_to_elem.lock().insert(array_ty, ptr_ty);
+        res.types.set_ptr_type(array_ty, array_ptr_ty);
 
         self.classes.insert(
             class.id,
@@ -390,7 +402,7 @@ impl Layouts {
                 repr: TypeRepr::Pointer(id),
                 info: TypeInfo {
                     id: ptr_ty,
-                    name: None,
+                    name: Some(Lowercase::new(&*format!("*{}", st.name))),
                     properties: HashMap::from([(
                         (Lowercase::new(""), Lowercase::new("")),
                         TypeProperty {
@@ -404,6 +416,7 @@ impl Layouts {
                 },
             },
         );
+        res.types.set_ptr_type(id, ptr_ty);
 
         let array_ty = *self
             .array_types
@@ -413,7 +426,7 @@ impl Layouts {
             .array_ptr_types
             .entry(Type::Struct(st.id))
             .or_insert_with(|| res.types.declare());
-        define_array_ty(res, id, array_ty, array_ptr_ty);
+        define_array_ty(res, id, array_ty, array_ptr_ty, st.name.as_inner());
         // TODO: Only register the ptr_ty here when we move over to only using
         // pointer types for HIR codegen.
         res.papyrus
@@ -427,6 +440,7 @@ impl Layouts {
             .insert(ptr_ty, array_ptr_ty);
         res.papyrus.type_to_array.lock().insert(ptr_ty, array_ty);
         res.papyrus.arrays_to_elem.lock().insert(array_ty, ptr_ty);
+        res.types.set_ptr_type(array_ty, array_ptr_ty);
 
         self.structs.insert(
             st.id,
@@ -444,7 +458,11 @@ impl Layouts {
             Type::Bool => (res.primitives.bool, Words::bytes(&[0; 1])),
             Type::Int => (res.primitives.int, Words::bytes(&[0; size_of::<i32>()])),
             Type::Float => (res.primitives.float, Words::bytes(&[0; size_of::<f32>()])),
-            Type::String | Type::Var => (res.primitives.opaqueptr, Words::nullptr()),
+            Type::String => (
+                res.primitives.string_ptr,
+                Words::ptr((&raw const DEFAULT_STRING).cast_mut().cast()),
+            ),
+            Type::Var => (res.primitives.var_ptr, Words::nullptr()),
             Type::Class(id) => {
                 let ty = self.class_ptr_types.entry(*id).or_insert_with(|| {
                     let ty = res.types.declare();

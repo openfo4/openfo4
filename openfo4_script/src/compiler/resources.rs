@@ -72,6 +72,7 @@ impl TypeId {
 #[derive(Debug, Default)]
 pub struct Types {
     types: Mutex<Slab<Option<Arc<Type>>>>,
+    ptr_types: Mutex<HashMap<TypeId, TypeId>>,
 }
 
 impl Types {
@@ -90,6 +91,15 @@ impl Types {
             .get(id.0)
             .and_then(|v| v.as_ref())
             .cloned()
+    }
+
+    /// Returns the pointer type of the given type.
+    pub fn ptr_of(&self, ty: TypeId) -> Option<TypeId> {
+        self.ptr_types.lock().get(&ty).copied()
+    }
+
+    pub fn set_ptr_type(&self, ty: TypeId, ptr_ty: TypeId) {
+        self.ptr_types.lock().insert(ty, ptr_ty);
     }
 }
 
@@ -305,6 +315,8 @@ pub struct PrimitiveTypes {
     pub var: TypeId,
     /// An untyped pointer.
     pub opaqueptr: TypeId,
+    pub string_ptr: TypeId,
+    pub var_ptr: TypeId,
 }
 
 impl PrimitiveTypes {
@@ -395,7 +407,7 @@ impl PrimitiveTypes {
                 repr: TypeRepr::Int { bits: usize::BITS },
                 info: TypeInfo {
                     id: opaqueptr,
-                    name: None,
+                    name: Some(Lowercase::new("opaqueptr")),
                     properties: HashMap::from([(
                         (Lowercase::new(""), Lowercase::new("")),
                         TypeProperty {
@@ -537,6 +549,53 @@ impl PrimitiveTypes {
             },
         );
 
+        let string_ptr = types.declare();
+        types.define(
+            string_ptr,
+            Type {
+                repr: TypeRepr::Pointer(string),
+                info: TypeInfo {
+                    id: string_ptr,
+                    name: Some(Lowercase::new("*string")),
+                    properties: HashMap::from([(
+                        (Lowercase::new(""), Lowercase::new("")),
+                        TypeProperty {
+                            ty: string_ptr,
+                            field: 0,
+                        },
+                    )]),
+                    allows_null: false,
+                    lock: None,
+                    supertypes: Box::new([]),
+                },
+            },
+        );
+
+        let var_ptr = types.declare();
+        types.define(
+            var_ptr,
+            Type {
+                repr: TypeRepr::Pointer(var),
+                info: TypeInfo {
+                    id: var_ptr,
+                    name: Some(Lowercase::new("*var")),
+                    properties: HashMap::from([(
+                        (Lowercase::new(""), Lowercase::new("")),
+                        TypeProperty {
+                            ty: var_ptr,
+                            field: 0,
+                        },
+                    )]),
+                    allows_null: true,
+                    lock: None,
+                    supertypes: Box::new([]),
+                },
+            },
+        );
+
+        types.set_ptr_type(string, string_ptr);
+        types.set_ptr_type(var, var_ptr);
+
         Self {
             none,
             bool,
@@ -546,6 +605,8 @@ impl PrimitiveTypes {
             byte,
             var,
             opaqueptr,
+            string_ptr,
+            var_ptr,
         }
     }
 }
@@ -582,6 +643,14 @@ impl TypeInfo {
     pub fn is_coercible(&self, target: TypeId) -> bool {
         self.id == target || self.supertypes.contains(&target)
     }
+
+    fn name(&self) -> Option<&str> {
+        self.name.as_ref().map(|s| s.as_str().as_inner())
+    }
+
+    pub(crate) fn name_or_placeholder(&self) -> &str {
+        self.name().unwrap_or("<unnamed>")
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -604,7 +673,13 @@ pub(crate) struct PapyrusRes {
     pub arrays_to_elem: Mutex<HashMap<TypeId, TypeId>>,
 }
 
-pub fn define_array_ty(res: &Resources, ty: TypeId, array_ty: TypeId, array_ptr_ty: TypeId) {
+pub fn define_array_ty(
+    res: &Resources,
+    ty: TypeId,
+    array_ty: TypeId,
+    array_ptr_ty: TypeId,
+    name: &str,
+) {
     res.types.define(
         array_ty,
         Type {
@@ -628,7 +703,7 @@ pub fn define_array_ty(res: &Resources, ty: TypeId, array_ty: TypeId, array_ptr_
             }),
             info: TypeInfo {
                 id: array_ty,
-                name: None,
+                name: Some(Lowercase::new(&*format!("{}[]", name))),
                 properties: HashMap::new(),
                 allows_null: false,
                 lock: None,
@@ -643,7 +718,7 @@ pub fn define_array_ty(res: &Resources, ty: TypeId, array_ty: TypeId, array_ptr_
             repr: TypeRepr::Pointer(array_ty),
             info: TypeInfo {
                 id: array_ptr_ty,
-                name: None,
+                name: Some(Lowercase::new(&*format!("*{}[]", name))),
                 properties: HashMap::from([(
                     (Lowercase::new(""), Lowercase::new("")),
                     TypeProperty {

@@ -85,17 +85,17 @@ pub fn translate_function_psc_signature(data: &CodegenData, func: &FunctionDef) 
     sig.is_static = func.is_static;
 
     if !func.is_static {
-        let ty = type_to_id(data, &Type::Class(func.class));
+        let ty = type_to_id_ptr(data, &Type::Class(func.class));
         sig.params.push(ty);
     }
 
     for ty in &func.params {
-        let ty = type_to_id(data, ty);
+        let ty = type_to_id_ptr(data, ty);
         sig.params.push(ty);
     }
 
     if func.returns != Type::None {
-        let ty = type_to_id(data, &func.returns);
+        let ty = type_to_id_ptr(data, &func.returns);
         sig.returns.push(ty);
     }
 
@@ -859,6 +859,20 @@ pub fn type_to_id(data: &CodegenData, ty: &Type) -> TypeId {
         Type::Class(id) => data.layouts.class(*id).ty,
         Type::Struct(id) => data.layouts.struct_(*id).ty,
         Type::Array(ty) => data.layouts.array(ty),
+    }
+}
+
+pub fn type_to_id_ptr(data: &CodegenData, ty: &Type) -> TypeId {
+    match ty {
+        Type::None => data.resources.primitives.none,
+        Type::Bool => data.resources.primitives.bool,
+        Type::Int => data.resources.primitives.int,
+        Type::Float => data.resources.primitives.float,
+        Type::String => data.resources.primitives.string_ptr,
+        Type::Var => data.resources.primitives.var_ptr,
+        Type::Class(id) => data.layouts.class(*id).ptr_ty,
+        Type::Struct(id) => data.layouts.struct_(*id).ptr_ty,
+        Type::Array(ty) => data.layouts.array_ptr(ty),
     }
 }
 
