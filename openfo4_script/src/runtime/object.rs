@@ -204,7 +204,6 @@ struct Object {
     id: TypeId,
     pool: ObjectPool,
     is_static: bool,
-    ptr_ty: Option<TypeId>,
 }
 
 impl Object {
@@ -237,7 +236,6 @@ impl Object {
             id,
             pool,
             is_static: false,
-            ptr_ty: None,
         }
     }
 
@@ -255,7 +253,6 @@ impl Object {
             id,
             pool,
             is_static: true,
-            ptr_ty: None,
         }
     }
 
@@ -509,7 +506,7 @@ impl ObjectValue for ObjectAddr {
     unsafe fn read(pool: &ObjectPool, ty: TypeId, ptr: *const u8) -> Result<Self, Error<'static>> {
         let ty = pool.resources().types.get(ty).unwrap();
         match ty.repr {
-            TypeRepr::Composite(_) => Ok(unsafe { ptr.cast::<ObjectAddr>().read() }),
+            TypeRepr::Pointer(_) => Ok(unsafe { ptr.cast::<ObjectAddr>().read() }),
             _ => Err(Error::Incompatible("invalid type repr".to_owned())),
         }
     }
