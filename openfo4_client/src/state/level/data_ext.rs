@@ -41,7 +41,7 @@ impl RecordDataExt for RecordData {
                 _ => None,
             },
             Self::StaticCollection(data) => data.model.model.as_ref(),
-            Self::MSTT(data) => data.model.model.as_ref(),
+            Self::MovableStatic(data) => data.model.model.as_ref(),
             Self::Door(data) => data.model.model.as_ref(),
             Self::Container(data) => data.model.model.as_ref(),
             Self::Activator(data) => data.model.model.as_ref(),
@@ -72,7 +72,7 @@ impl RecordDataExt for RecordData {
         match self {
             Self::STAT(data) => Some(data.object_bounds),
             Self::StaticCollection(data) => Some(data.object_bounds),
-            Self::MSTT(data) => Some(data.obnd),
+            Self::MovableStatic(data) => Some(data.object_bounds),
             Self::Door(data) => Some(data.object_bounds),
             Self::Container(data) => Some(data.object_bounds),
             Self::Activator(data) => Some(data.object_bounds),
@@ -104,7 +104,7 @@ impl RecordDataExt for RecordData {
         match self {
             Self::STAT(_) => &[],
             Self::StaticCollection(_) => &[],
-            Self::MSTT(_) => &[],
+            Self::MovableStatic(_) => &[],
             Self::Door(_) => &[],
             Self::Container(data) => get_or_default(&data.keywords),
             Self::Npc(data) => get_or_default(&data.keywords),
@@ -126,7 +126,7 @@ impl RecordDataExt for RecordData {
     fn virtual_machine_adapter(&self) -> Option<&VirtualMachineAdapter> {
         match self {
             Self::STAT(data) => data.virtual_machine_adapter.as_ref(),
-            Self::MSTT(data) => data.virtual_machine_adapter.as_ref(),
+            Self::MovableStatic(data) => data.virtual_machine_adapter.as_ref(),
             Self::Door(data) => data.virtual_machine_adapter.as_ref(),
             Self::Container(data) => data.virtual_machine_adapter.as_ref(),
             Self::Npc(data) => data.virtual_machine_adapter.as_ref(),

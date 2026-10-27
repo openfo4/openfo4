@@ -1878,23 +1878,32 @@ pub struct StaticCollectionPartPlacement {
 }
 
 #[derive(Clone, Debug, Record)]
-pub struct MSTT {
+pub struct MovableStatic {
     #[record("EDID")]
-    pub edid: ZString,
+    pub id: ZString,
     #[record("VMAD")]
     pub virtual_machine_adapter: Option<VirtualMachineAdapter>,
     #[record("OBND")]
-    pub obnd: Bounds,
-    // TODO
+    pub object_bounds: Bounds,
+    /// Reference to a [`Transform`].
+    #[record("PTRN")]
+    pub preview_transform: Option<FormId>,
+    #[record("FULL")]
+    pub name: Option<LString>,
     #[record("MODL")]
     pub model: Model,
-    // TODO
     #[record("DEST")]
-    pub dest: Option<()>,
+    pub destruction: Option<SubField<Destruction>>,
+    #[record("KSIZ")]
+    _keyword_count: Option<u32>,
+    #[record("KWDA")]
+    pub keywords: Option<Array<FormId>>,
+    #[record("PRPS")]
+    pub properties: Option<Array<Property>>,
     #[record("DATA")]
     pub data: u8,
     #[record("SNAM")]
-    pub snam: Option<FormId>,
+    pub looping_sound: Option<FormId>,
 }
 
 #[derive(Clone, Debug, Record)]
