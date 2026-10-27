@@ -15,7 +15,7 @@ workspace = true
 glam = { workspace = true }
 tracing = { workspace = true }
 hashbrown = { workspace = true }
-parking_lot = "0.12.5"
+parking_lot = { workspace = true }
 
 tracing-subscriber = { version = "0.3.18", default-features = false }
 

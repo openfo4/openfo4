@@ -17,7 +17,7 @@ hecs = { workspace = true }
 glam = { workspace = true, features = ["bytemuck"] }
 hashbrown = { workspace = true }
 bstr = "1.12.1"
-parking_lot = "0.12.5"
+parking_lot = { workspace = true }
 thiserror = "2.0.17"
 nohash-hasher = "0.2.0"
 

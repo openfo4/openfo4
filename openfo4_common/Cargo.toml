@@ -16,7 +16,7 @@ bytemuck = { version = "1.16.1", features = ["derive"] }
 
 thiserror = "1.0.38"
 num-traits = "0.2.19"
-parking_lot = "0.12.3"
+parking_lot = { workspace = true }
 allocator-api2 = "0.2.21"
 hashbrown = { workspace = true }
 pin-project = "1.1.13"

@@ -15,7 +15,7 @@ glam = { workspace = true, features = ["bytemuck"] }
 tracing = { workspace = true }
 hashbrown = { workspace = true }
 crossbeam = "0.8.4"
-parking_lot = "0.12.3"
+parking_lot = { workspace = true }
 bitflags = "2.9.0"
 event-listener = "5.4.2"
 

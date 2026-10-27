@@ -10,7 +10,7 @@ use std::ops::{Deref, DerefMut};
 use hashbrown::HashSet;
 use hecs::{ComponentError, NoSuchEntity, TypeIdMap};
 use parking_lot::RwLock;
-use parking_lot::lock_api::RawRwLock;
+use parking_lot::lock_api::{GuardNoSend, RawRwLock};
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct Entity(hecs::Entity);
@@ -307,7 +307,7 @@ impl<'a> ComponentLifecycleIter<'a> {
 
         // SAFETY: We don't unlock anything here (which could break the
         // `RwLock` invariants).
-        if unsafe { !map.raw().try_lock_shared() } {
+        if unsafe { map.raw().try_lock_shared().is_none() } {
             panic!(
                 "cannot access lifecycle events for component while a mutable reference to that component exists"
             );
@@ -360,7 +360,7 @@ impl<'a> Drop for ComponentLifecycleIter<'a> {
             // At this current point we have dropped all data depending
             // on the locked data.
             unsafe {
-                lock.raw().unlock_shared();
+                lock.raw().unlock_shared(GuardNoSend::new());
             }
         }
     }

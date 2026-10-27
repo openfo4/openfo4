@@ -10,7 +10,7 @@ openfo4_tracing = { version = "0.1.0", path = "../openfo4_tracing" }
 openfo4_core = { version = "0.1.0", path = "../openfo4_core" }
 openfo4_gizmos = { version = "0.1.0", path = "../openfo4_gizmos" }
 
-parking_lot = "0.12.3"
+parking_lot = { workspace = true }
 rapier3d = { version = "0.35.1", features = ["debug-render"] }
 glam = { workspace = true }
 tracing = { workspace = true }

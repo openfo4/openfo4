@@ -7,7 +7,7 @@ publish = false
 [dependencies]
 openfo4_common = { version = "0.1.0", path = "../openfo4_common" }
 
-parking_lot = "0.12.4"
+parking_lot = { workspace = true }
 event-listener = "5.4.0"
 hashbrown = { workspace = true }
 dashmap = "6.1.0"
