@@ -180,7 +180,7 @@ where
                         break;
                     }
 
-                    if let Some(superty) = ty.info().supertype() {
+                    if let Some(superty) = c.info().supertype() {
                         c = self.engine.get_type_by_id(superty).unwrap();
                     } else {
                         break;
