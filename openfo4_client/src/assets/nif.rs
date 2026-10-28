@@ -615,6 +615,8 @@ async fn load_material(
                 controllers_to_load.push(controller);
             }
 
+            let has_grayscale_palette = !property.grayscale_texture.is_empty();
+
             let mut textures = Vec::new();
             let mut material = StandardMaterial {
                 alpha_mode: alpha_mode.unwrap_or(AlphaMode::Opaque),
@@ -622,19 +624,35 @@ async fn load_material(
                     property.base_color.r * property.base_color_scale,
                     property.base_color.g * property.base_color_scale,
                     property.base_color.b * property.base_color_scale,
-                    property.base_color.a * property.base_color_scale,
+                    // Alpha is unaffected by base color scale.
+                    property.base_color.a,
                 ]),
                 ..Default::default()
             };
 
             if !property.source_texture.is_empty() {
                 let path = DataPathBuf::new(&*property.source_texture);
+                let key = FileImageKey::new(path);
+                // The base color texture is SRGB by default, however if we
+                // have a grayscale palette texture the base color texture
+                // is no longer really color, but just a lookup table and needs
+                // to be UNORM.
+                let key = key.with_force_srgb(!has_grayscale_palette);
 
-                let handle = loader
-                    .load::<FileImageHandle, _>(&FileImageKey::new(path))
-                    .await?;
+                let handle = loader.load::<FileImageHandle, _>(&key).await?;
 
                 material.base_color_texture = Some(handle.0.clone());
+                textures.push(handle);
+            }
+
+            if !property.grayscale_texture.is_empty() {
+                let path = DataPathBuf::new(&*property.grayscale_texture);
+
+                let handle = loader
+                    .load::<FileImageHandle, _>(&FileImageKey::new(path).with_force_srgb(true))
+                    .await?;
+
+                material.grayscale_palette = Some(handle.0.clone());
                 textures.push(handle);
             }
 
