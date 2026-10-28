@@ -104,6 +104,10 @@ pub struct DeadActor;
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Hash)]
 pub struct Disabled;
 
+/// Marker for [`Root`] objects that are in the active area.
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Hash)]
+pub struct ActiveMarker;
+
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct LookingAtTarget(pub Entity);
 

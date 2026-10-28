@@ -17,7 +17,7 @@ use openfo4_tracing::trace_span;
 use parking_lot::Mutex;
 
 use crate::cell::CellId;
-use crate::components::{NiTransform, Root, WorldSpace};
+use crate::components::{ActiveMarker, NiTransform, Root, WorldSpace};
 use crate::config;
 use crate::state::level::loader::{CustomRecordInfo, EntityLoader, EntityRef};
 use crate::state::level::partial::{LodLevel, PartialEntityFlags};
@@ -169,7 +169,9 @@ impl StreamingManager {
         }
 
         while let Some(entity) = unfreeze.pop() {
-            world.insert_one(entity, Frozen::default()).unwrap();
+            world
+                .insert(entity, (Frozen::default(), ActiveMarker))
+                .unwrap();
 
             if let Ok(children) = world.get::<&Children>(entity) {
                 unfreeze.extend(&children.0);
@@ -186,6 +188,7 @@ impl StreamingManager {
                     },
                 )
                 .unwrap();
+            world.remove_one::<ActiveMarker>(entity).ok();
 
             if let Ok(children) = world.get::<&Children>(entity) {
                 freeze.extend(&children.0);
