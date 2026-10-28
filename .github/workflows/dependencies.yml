@@ -13,40 +13,12 @@ on:
     - 'deny.toml'
 
 jobs:
-#  check-advisories:
-#    runs-on: ubuntu-latest
-#    steps:
-#    - uses: actions/checkout@v4
-#    - run: rustup update stable --no-self-update && rustup default stable
-#    - run: cargo install cargo-deny
-#    - run: cargo deny check advisories
-
-  check-bans:
+  cargo-deny:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
       with:
         submodules: recursive
-    - run: rustup update stable --no-self-update && rustup default stable
-    - run: cargo install cargo-deny
-    - run: cargo deny check bans
-
-  check-licenses:
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@v4
+    - uses: https://github.com/EmbarkStudios/cargo-deny-action@v2
       with:
-        submodules: recursive
-    - run: rustup update stable --no-self-update && rustup default stable
-    - run: cargo install cargo-deny
-    - run: cargo deny check licenses
-
-  check-sources:
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@v4
-      with:
-        submodules: recursive
-    - run: rustup update stable --no-self-update && rustup default stable
-    - run: cargo install cargo-deny
-    - run: cargo deny check sources
+        command: check bans licenses sources
