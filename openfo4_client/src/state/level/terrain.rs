@@ -180,7 +180,13 @@ async fn load_terrain_layer(
         let id = esp_loader
             .resolve_form(texture.land_texture, land_id)
             .unwrap();
-        load_terrain_material_from_form(esp_loader, loader, id).await
+        match load_terrain_material_from_form(esp_loader, loader, id).await {
+            Ok(material) => material,
+            Err(err) => {
+                tracing::error!("failed to load terrain layer for {land_id}: {}", err);
+                load_default_terrain_material(loader).await
+            }
+        }
     } else {
         load_default_terrain_material(loader).await
     };
@@ -232,11 +238,11 @@ async fn load_terrain_material_from_form(
     esp_loader: &EspLoader,
     loader: &AssetLoader,
     id: RecordId,
-) -> TerrainLayerMaterial {
+) -> Result<TerrainLayerMaterial, String> {
     let land_texture_record = esp_loader
         .lookup(Some(RecordKind::LandTexture), id)
         .await
-        .unwrap();
+        .map_err(|err| format!("invalid LandTexture record: {err}"))?;
 
     let land_texture = match land_texture_record.local.data {
         RecordData::LandTexture(data) => data,
@@ -250,7 +256,12 @@ async fn load_terrain_material_from_form(
     let texture_set = esp_loader
         .lookup(Some(RecordKind::TextureSet), texture_set)
         .await
-        .unwrap();
+        .map_err(|err| {
+            format!(
+                "invalid TextureSet {texture_set} in LandTexture {}: {err}",
+                land_texture_record.id
+            )
+        })?;
 
     let texture_set = match texture_set.local.data {
         RecordData::TextureSet(set) => set,
@@ -347,13 +358,13 @@ async fn load_terrain_material_from_form(
     let smoothness = bgsm.as_ref().map(|v| v.smoothness).unwrap_or(1.0);
     let specular_strength = bgsm.as_ref().map(|v| v.specular_strength).unwrap_or(1.0);
 
-    TerrainLayerMaterial {
+    Ok(TerrainLayerMaterial {
         smoothness,
         specular_strength,
         diffuse_texture,
         normal_texture,
         smooth_spec_texture,
-    }
+    })
 }
 
 async fn load_default_terrain_material(loader: &AssetLoader) -> TerrainLayerMaterial {
