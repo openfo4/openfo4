@@ -23,6 +23,7 @@ pub struct MovementSpeed {
     pub speed: f32,
 }
 
+/// The movement direction in object space that an actor wants to move.
 #[derive(Copy, Clone, Debug)]
 pub struct MovementDirection(Vec3);
 

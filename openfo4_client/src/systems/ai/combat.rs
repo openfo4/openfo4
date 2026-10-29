@@ -310,7 +310,7 @@ impl CombatBehavior {
             return;
         };
 
-        facing_dir.0 = transform.looking_at(target, Vec3::Y).rotation * Quat::IDENTITY.to_opengl();
+        facing_dir.0 = transform.looking_at(target, Vec3::Y).rotation;
 
         target.y = transform.translation.y;
         transform.rotation =
