@@ -49,6 +49,9 @@ bitflags! {
         const COLLIDERS = 1 << 1;
         /// [`AnimationController`]s.
         const ANIMATIONS = 1 << 2;
+
+        /// All graphical flags.
+        const GRAPHICS = Self::RENDER_OBJECTS.bits() | Self::ANIMATIONS.bits();
     }
 }
 
@@ -192,16 +195,20 @@ pub struct Node {
 }
 
 impl Node {
-    pub fn build(&self) -> EntityBuilder {
+    pub fn build(&self, flags: LoadNifFlags) -> EntityBuilder {
         let mut builder = EntityBuilder::new();
 
         builder.add(self.transform);
 
-        if let Some(renderable) = &self.renderable {
+        if let Some(renderable) = &self.renderable
+            && flags.contains(LoadNifFlags::RENDER_OBJECTS)
+        {
             builder.add(renderable.clone());
         }
 
-        if let Some(collider) = &self.collider {
+        if let Some(collider) = &self.collider
+            && flags.contains(LoadNifFlags::COLLIDERS)
+        {
             builder.add(collider.clone());
         }
 

@@ -8,7 +8,7 @@ use openfo4_core::ecs::{Entity, World};
 use openfo4_core::hierarchy::Children;
 use slab::Slab;
 
-use crate::assets::nif::NifScene;
+use crate::assets::nif::{LoadNifFlags, NifScene};
 use crate::components::RootParent;
 use crate::state::animation_test::SkinInstance;
 
@@ -180,7 +180,7 @@ pub fn equip_item(
 
                 while let Some((parent, key)) = queue.pop_front() {
                     let node = scene.nodes.get(key).unwrap();
-                    let entity = world.spawn(node.build().build());
+                    let entity = world.spawn(node.build(LoadNifFlags::GRAPHICS).build());
 
                     for attachment in &node.attachments {
                         attachments.insert(
