@@ -1,7 +1,9 @@
+use std::collections::HashMap;
 use std::time::Duration;
 
 use glam::{EulerRot, Quat, Vec3};
 use hashbrown::HashSet;
+use openfo4_animation::skeleton::{BoneMarker, SkeletonInstance};
 use openfo4_asset::Handle;
 use openfo4_common::components::{Color, PointLight, Transform};
 use openfo4_core::Frozen;
@@ -32,6 +34,7 @@ use crate::state::level::terrain::load_land;
 use crate::state::npc::{Actor, ActorInstanceProps, ObjectKeywords};
 use crate::state::terrain::{TerrainManager, TerrainRegion};
 use crate::systems::door::{Door, DoorState, PortalDoor};
+use crate::systems::equipment::{Equipment, equip_item};
 use crate::systems::inventory::{Inventory, ItemStack};
 use crate::systems::lights::{LightFlicker, LightFlickerMode};
 use crate::systems::linked_refs::LinkedRefs;
@@ -110,9 +113,42 @@ impl SpawnEntity {
 
         // FIXME: Modify this such that both scene and actor are valid.
         if let Some(scene) = scene {
-            scene.instantiate(transform.into(), world, entity, LoadNifFlags::all())
+            // Some scenes contain skinned meshes.
+            // To make sure we skin these correctly we need to attach a skeleton
+            // to the entity and "equip" the scene in the same way we do with actors.
+
+            let mut flags = LoadNifFlags::all();
+            if scene.skeleton.is_some() {
+                flags.remove(LoadNifFlags::RENDER_OBJECTS);
+            }
+
+            let mut bones = HashMap::new();
+            scene.instantiate_with_feedback(
+                |node, entity| {
+                    if let Some(bone) = node.bone {
+                        bones.insert(bone, entity);
+                    }
+                },
+                transform.into(),
+                world,
+                entity,
+                flags,
+            );
+
+            if let Some(skeleton) = &scene.skeleton {
+                for entity in bones.values() {
+                    world.insert_one(*entity, BoneMarker).unwrap();
+                }
+
+                let skeleton = SkeletonInstance::new(skeleton.clone(), bones);
+
+                let mut equipment = Equipment::default();
+                equip_item(entity, &scene, &skeleton, world, &mut equipment, None);
+
+                world.insert(entity, (skeleton, equipment)).unwrap();
+            }
         } else if let Some(actor) = actor {
-            actor.instantiate(world, events, entity)
+            actor.instantiate(world, events, entity);
         }
 
         world

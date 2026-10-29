@@ -5,10 +5,9 @@ mod mesh;
 mod node;
 mod physics;
 
-use std::collections::VecDeque;
-
 use bitflags::bitflags;
 use hashbrown::HashMap;
+use openfo4_animation::skeleton::{Bone, Skeleton};
 use openfo4_asset::{Asset, AssetLoader, Handle, HandleOrAsset};
 use openfo4_common::collections::hierarchy::{Hierarchy, Key};
 use openfo4_common::components::{Color, Transform};
@@ -64,6 +63,11 @@ pub struct NifScene {
     pub nodes: Hierarchy<Node>,
     /// The name of the parent [`AttachmentPoint`] where this scene attaches.
     pub attaches: Option<String>,
+    /// The skeleton if the NIF is skinned.
+    ///
+    /// The bone order is arbitrary and the bones have the same name as the corresponding nodes in
+    /// the nif file.
+    pub skeleton: Option<Skeleton>,
     controller: AnimationController,
     /// List of materials that are referenced by the scene.
     ///
@@ -83,16 +87,6 @@ pub struct NifScene {
 // instead.
 pub trait Instantiate {
     type Node;
-
-    fn instantiate(
-        &self,
-        transform: Transform,
-        world: &mut World,
-        root: Entity,
-        flags: LoadNifFlags,
-    ) {
-        self.instantiate_with_feedback(|_, _| {}, transform, world, root, flags)
-    }
 
     fn instantiate_with_feedback<'a, F>(
         &'a self,
@@ -193,6 +187,8 @@ pub struct Node {
     pub attachments: Vec<AttachmentPoint>,
     /// The name of the parent where this node attaches.
     pub attaches: String,
+    /// The ID of the bone if this NIF contains a [`Skeleton`].
+    pub bone: Option<usize>,
 }
 
 impl Node {
@@ -273,6 +269,7 @@ impl Asset for NifScene {
                 controller: AnimationController::default(),
                 _materials: Vec::new(),
                 _textures: Vec::new(),
+                skeleton: None,
             });
         }
 
@@ -286,6 +283,7 @@ impl Asset for NifScene {
                 controller: AnimationController::default(),
                 _materials: Vec::new(),
                 _textures: Vec::new(),
+                skeleton: None,
             });
         };
 
@@ -309,28 +307,22 @@ impl Asset for NifScene {
             _ => (),
         }
 
+        // If any node is skinned we need to produce a skeleton to bind the skin to.
+        let is_skinned = nif.iter().any(|block| match block {
+            Block::BSTriShape(node) => node.skin.is_some(),
+            Block::BSSubIndexTriShape(node) => node.shape.skin.is_some(),
+            Block::BSMeshLODTriShape(node) => node.shape.skin.is_some(),
+            _ => false,
+        });
+
         let mut nodes = Hierarchy::new();
         let mut block_to_node = HashMap::new();
 
-        let mut visitor = Visitor {
-            key,
-            nif: &nif,
-            parents: HashMap::new(),
-            materials: HashMap::new(),
-            connect_points_parents,
-            controllers_to_load: Vec::new(),
-            loader,
-            ctx,
-            state: LoadState::default(),
-            material_handles: Vec::new(),
-            texture_handles: Vec::new(),
-            queue: VecDeque::new(),
-            id: BlockRef(0),
-        };
+        let mut visitor = Visitor::new(key, &nif, loader, ctx, LoadState::default(), root);
+        visitor.connect_points_parents = connect_points_parents;
+        visitor.queue.push((None, root));
 
-        visitor.queue.extend(nif.root().map(|id| (None, id)));
-
-        while let Some((parent, id)) = visitor.queue.pop_front() {
+        while let Some((parent, id)) = visitor.queue.pop() {
             if let Some(parent) = parent {
                 visitor.parents.insert(id, parent);
             }
@@ -368,12 +360,15 @@ impl Asset for NifScene {
             .await;
         };
 
+        let skeleton = is_skinned.then(|| create_skeleton(&mut nodes));
+
         Ok(Self {
             nodes,
             attaches,
             controller,
             _materials: visitor.material_handles,
             _textures: visitor.texture_handles,
+            skeleton,
         })
     }
 }
@@ -904,22 +899,89 @@ struct Visitor<'a> {
     material_handles: Vec<Handle<BgsmMaterial>>,
     controllers_to_load: Vec<BlockRef>,
     connect_points_parents: Option<&'a BSConnectPointParents>,
-    queue: VecDeque<(Option<BlockRef>, BlockRef)>,
+    queue: Vec<(Option<BlockRef>, BlockRef)>,
     id: BlockRef,
 }
 
-impl Visitor<'_> {
+impl<'a> Visitor<'a> {
+    fn new(
+        key: NifKey,
+        nif: &'a Nif,
+        loader: &'a AssetLoader,
+        ctx: &'a NifLoaderContext,
+        state: LoadState<'a>,
+        root: BlockRef,
+    ) -> Self {
+        let mut parents = HashMap::new();
+        let mut queue = vec![(None, root)];
+
+        while let Some((parent, id)) = queue.pop() {
+            if let Some(parent) = parent {
+                parents.insert(id, parent);
+            }
+
+            if let Some(Block::NiNode(node)) = nif.get(id) {
+                for child in &node.children {
+                    queue.push((Some(id), *child));
+                }
+            }
+        }
+
+        debug_assert!(queue.is_empty());
+
+        Self {
+            key,
+            nif,
+            parents,
+            materials: HashMap::new(),
+            loader,
+            ctx,
+            texture_handles: Vec::new(),
+            material_handles: Vec::new(),
+            controllers_to_load: Vec::new(),
+            connect_points_parents: None,
+            id: root,
+            state,
+            queue: Vec::new(),
+        }
+    }
+
     fn enqueue(&mut self, block: BlockRef) {
-        self.queue.push_back((Some(self.id), block));
+        self.queue.push((Some(self.id), block));
     }
 
     fn parent(&self, block: BlockRef) -> Option<BlockRef> {
         self.parents.get(&block).copied()
     }
+
+    /// Returns the global transform relative to the root block.
+    ///
+    /// If any block without a [`Transform`] value is encountered on the path `None` is returned.
+    fn global_transform(&self, mut block: BlockRef) -> Option<Transform> {
+        let mut transform = self.nif.get(block).and_then(|block| block.transform())?;
+
+        while let Some(parent) = self.parents.get(&block).copied() {
+            // It looks like the transform of the root block is not applied.
+            if Some(parent) == self.nif.root() {
+                break;
+            }
+
+            let node = self.nif.get(parent)?;
+            let parent_transform = node.transform()?;
+            transform = parent_transform * transform;
+            block = parent;
+        }
+
+        Some(transform)
+    }
 }
 
 trait Visit {
     async fn visit(&self, visitor: &mut Visitor<'_>, id: BlockRef) -> Option<Node>;
+
+    fn transform(&self) -> Option<Transform> {
+        None
+    }
 }
 
 fn is_marker(name: &str) -> bool {
@@ -938,4 +1000,52 @@ impl Visit for Block {
             _ => None,
         }
     }
+
+    fn transform(&self) -> Option<Transform> {
+        match self {
+            Self::NiNode(node) => node.transform(),
+            Self::BSLeafAnimNode(node) => node.node.transform(),
+            Self::BSTriShape(node) => node.transform(),
+            Self::BSSubIndexTriShape(node) => node.shape.transform(),
+            Self::BSMeshLODTriShape(node) => node.shape.transform(),
+            _ => None,
+        }
+    }
+}
+
+fn create_skeleton(nodes: &mut Hierarchy<Node>) -> Skeleton {
+    let mut queue = Vec::<(Key, Option<Key>)>::new();
+
+    for key in nodes.root_keys() {
+        queue.push((key, None));
+    }
+
+    let mut bones = Vec::new();
+    let mut node_to_bone_index = HashMap::new();
+
+    while let Some((key, parent)) = queue.pop() {
+        let index = bones.len();
+
+        let node = nodes.get_mut(key).unwrap();
+        node.bone = Some(index);
+
+        node_to_bone_index.insert(key, index);
+        bones.push(Bone {
+            index,
+            name: node.name.clone(),
+            children: Vec::new(),
+            transform: node.transform,
+        });
+
+        if let Some(parent) = parent {
+            let parent = node_to_bone_index[&parent];
+            bones[parent].children.push(index);
+        }
+
+        for (child, _) in nodes.children(key).into_iter().flatten() {
+            queue.push((child, Some(key)));
+        }
+    }
+
+    Skeleton { bones }
 }

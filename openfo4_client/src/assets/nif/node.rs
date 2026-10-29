@@ -80,4 +80,12 @@ impl Visit for NiNode {
             ..Default::default()
         })
     }
+
+    fn transform(&self) -> Option<Transform> {
+        Some(Transform {
+            translation: self.translation,
+            rotation: Quat::from_mat3(&self.rotation).normalize().conjugate(),
+            scale: Vec3::splat(self.scale),
+        })
+    }
 }

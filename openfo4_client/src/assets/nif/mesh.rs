@@ -115,14 +115,12 @@ impl Visit for BSTriShape {
                     let mut bone_transforms = Vec::new();
 
                     for bone in &skin.bones {
+                        let transform = visitor.global_transform(*bone).unwrap_or_default();
+
                         match visitor.nif.get(*bone) {
                             Some(Block::NiNode(node)) => {
                                 bones.push(node.name.clone());
-                                bone_transforms.push(Transform {
-                                    translation: node.translation,
-                                    rotation: Quat::from_mat3(&node.rotation).conjugate(),
-                                    scale: Vec3::splat(node.scale),
-                                });
+                                bone_transforms.push(transform);
                             }
                             _ => todo!(),
                         }
@@ -188,6 +186,14 @@ impl Visit for BSTriShape {
             skin,
             attaches,
             ..Default::default()
+        })
+    }
+
+    fn transform(&self) -> Option<Transform> {
+        Some(Transform {
+            translation: self.translation,
+            rotation: Quat::from_mat3(&self.rotation).normalize().conjugate(),
+            scale: Vec3::splat(self.scale),
         })
     }
 }
