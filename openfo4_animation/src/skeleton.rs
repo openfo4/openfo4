@@ -168,10 +168,14 @@ impl BoneTransformHierarchy {
     }
 
     pub(crate) fn set_local(&mut self, bone: usize, transform: Transform) {
+        self.set_local_untracked(bone, transform);
+        self.updated.push(bone);
+    }
+
+    pub fn set_local_untracked(&mut self, bone: usize, transform: Transform) {
         let key = *self.bones.get(&bone).unwrap();
         *self.hierarchy.get_mut(key).unwrap() = transform;
         self.update_global(key, transform);
-        self.updated.push(bone);
     }
 
     fn update_global(&mut self, root: Key, local_root: Transform) {

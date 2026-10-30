@@ -3851,7 +3851,7 @@ pub struct PlacedObject {
     #[record("XMBP")]
     pub multibound_primitive: Option<()>,
     #[record("XRGD")]
-    pub ragdoll_data: Option<()>,
+    pub ragdoll_data: Option<Array<RagdollBone>>,
     #[record("XRGB")]
     pub ragdoll_biped_rotation: Option<()>,
     #[record("XLIG")]
@@ -3962,6 +3962,14 @@ pub struct PlacedObject {
     pub distant_lod_data: Option<()>,
     #[record("DATA")]
     pub position: PositionRotation,
+}
+
+#[derive(Copy, Clone, Debug, BinaryStruct)]
+pub struct RagdollBone {
+    pub bone_id: u8,
+    _pad0: [u8; 3],
+    pub translation: Vec3,
+    pub rotation: Vec3,
 }
 
 #[derive(Clone, Debug, Record)]

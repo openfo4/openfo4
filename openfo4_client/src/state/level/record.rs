@@ -69,6 +69,10 @@ pub struct SpawnEntity {
     pub object_props: Option<ObjectProperties>,
     pub disabled: bool,
     pub base: Option<RecordId>,
+    /// The initial local transforms of the skeleton bones.
+    ///
+    /// If a bone is not included here the default transform from the skeleton should be used.
+    pub initial_ragdoll_bone_transforms: Option<HashMap<usize, Transform>>,
 }
 
 impl SpawnEntity {
@@ -105,6 +109,7 @@ impl SpawnEntity {
             object_props,
             disabled,
             base,
+            initial_ragdoll_bone_transforms,
         } = self;
 
         debug_assert!(base.is_some() || form.is_some());
@@ -140,7 +145,18 @@ impl SpawnEntity {
                     world.insert_one(*entity, BoneMarker).unwrap();
                 }
 
-                let skeleton = SkeletonInstance::new(skeleton.clone(), bones);
+                let mut skeleton = SkeletonInstance::new(skeleton.clone(), bones);
+
+                if let Some(transforms) = initial_ragdoll_bone_transforms {
+                    for (bone, entity) in &skeleton.bones {
+                        let Some(transform) = transforms.get(bone).copied() else {
+                            continue;
+                        };
+
+                        skeleton.transforms.set_local_untracked(*bone, transform);
+                        world.insert_one(*entity, transform).unwrap();
+                    }
+                }
 
                 let mut equipment = Equipment::default();
                 equip_item(entity, &scene, &skeleton, world, &mut equipment, None);
@@ -296,6 +312,7 @@ impl SpawnEntity {
             object_props: None,
             disabled: false,
             base: None,
+            initial_ragdoll_bone_transforms: None,
         }
     }
 
@@ -319,6 +336,7 @@ impl SpawnEntity {
         let mut door = None;
         let mut trigger_box = None;
         let mut lock_data = None;
+        let mut initial_ragdoll_bone_transforms = None;
 
         match &record.local.data {
             RecordData::PlacedObject(object) => {
@@ -387,6 +405,30 @@ impl SpawnEntity {
 
                     lock_data = Some(ObjectLockData { level, key });
                 }
+
+                initial_ragdoll_bone_transforms = object.ragdoll_data.as_ref().map(|bones| {
+                    bones
+                        .iter()
+                        .enumerate()
+                        .map(|(index, bone)| {
+                            (
+                                // Bone transforms attached to non-actors have no HKX skeleton
+                                // attached and therefore the `bone_id` values of the ESP records
+                                // are all `0` and must be ignored.
+                                // The bone transform values are given in the same order as the
+                                // NIF skeleton, which is contained in the same file as the skin.
+                                // The root node of NIF skeleton is not included in the ESP record,
+                                // which is why we start with bone `1` here.
+                                index + 1,
+                                Transform::from_esp_translation_rotation_scale(
+                                    bone.translation,
+                                    bone.rotation,
+                                    1.0,
+                                ),
+                            )
+                        })
+                        .collect()
+                });
             }
             RecordData::PlacedNpc(npc) => {
                 position = npc.position;
@@ -404,21 +446,19 @@ impl SpawnEntity {
             _ => return None,
         }
 
-        let transform = Transform {
-            translation: Vec3::new(
+        let transform = Transform::from_esp_translation_rotation_scale(
+            Vec3::new(
                 position.position_x,
                 position.position_y,
                 position.position_z,
             ),
-            // Rotation is negative for some reason?
-            rotation: Quat::from_euler(
-                EulerRot::XYZ,
-                -position.rotation_x,
-                -position.rotation_y,
-                -position.rotation_z,
+            Vec3::new(
+                position.rotation_x,
+                position.rotation_y,
+                position.rotation_z,
             ),
-            scale: Vec3::splat(scale),
-        };
+            scale,
+        );
 
         let base_object = ctx.esp_loader.resolve_form(base_object, record.id).unwrap();
         let base = match ctx.esp_loader.lookup(None, base_object).await {
@@ -612,6 +652,7 @@ impl SpawnEntity {
             object_props: Some(ObjectProperties { lock: lock_data }),
             form: Some(record.id),
             base: Some(base.id),
+            initial_ragdoll_bone_transforms,
             ..Default::default()
         })
     }
@@ -803,5 +844,20 @@ async fn load_item(ctx: &LoadContext<'_>, record: &GlobalRecord) -> Option<ItemS
         )
     } else {
         None
+    }
+}
+
+trait TransformFrom {
+    fn from_esp_translation_rotation_scale(translation: Vec3, rotation: Vec3, scale: f32) -> Self;
+}
+
+impl TransformFrom for Transform {
+    fn from_esp_translation_rotation_scale(translation: Vec3, rotation: Vec3, scale: f32) -> Self {
+        Self {
+            translation,
+            // Rotation is negative for some reason?
+            rotation: Quat::from_euler(EulerRot::XYZ, -rotation.x, -rotation.y, -rotation.z),
+            scale: Vec3::splat(scale),
+        }
     }
 }
