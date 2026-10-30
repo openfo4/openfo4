@@ -1,4 +1,5 @@
 use glam::{Quat, Vec3};
+use openfo4_animation::skeleton::Bone;
 use openfo4_common::components::Transform;
 use openfo4_nif::{Block, BlockRef, NiNode};
 
@@ -72,11 +73,30 @@ impl Visit for NiNode {
             }
         }
 
+        let bone = visitor.build_skeleton.then(|| {
+            let index = visitor.bones.len();
+            visitor.bones.push(Bone {
+                index,
+                name: self.name.clone(),
+                children: Vec::new(),
+                transform,
+            });
+
+            if let Some(parent) = visitor.parent_node(id)
+                && let Some(parent) = parent.bone
+            {
+                visitor.bones[parent].children.push(index);
+            }
+
+            index
+        });
+
         Some(Node {
             name: self.name.clone(),
             transform,
             attaches,
             attachments,
+            bone,
             ..Default::default()
         })
     }
