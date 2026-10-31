@@ -167,6 +167,7 @@ pub fn load_hardcoded_forms() -> HashMap<RecordId, Record> {
                         rotation_y: 0.0,
                         rotation_z: 0.0,
                     },
+                    ragdoll_data: None,
                 }),
             },
         ),

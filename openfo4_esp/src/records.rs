@@ -3767,7 +3767,8 @@ pub struct PlacedNpc {
     pub base_npc: FormId,
     #[record("XEZN")]
     pub encounter_zone: Option<FormId>,
-    // ragdoll
+    #[record("XRGD")]
+    pub ragdoll_data: Option<Array<RagdollBone>>,
     #[record("XLCM")]
     pub level_modifier: Option<LevelModifier>,
     #[record("XCNT")]
