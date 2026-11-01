@@ -21,6 +21,7 @@ use clap::Parser;
 use glam::IVec2;
 use glam::UVec2;
 use glam::Vec3;
+use openfo4_config::ConfigSection;
 use openfo4_core::record::RecordId;
 use openfo4_crash_handler::main;
 use openfo4_egui::EguiContext;

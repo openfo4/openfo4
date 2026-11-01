@@ -36,6 +36,7 @@ openfo4_ba2 = { version = "0.1.0", path = "../openfo4_ba2" }
 openfo4_io = { version = "0.1.0", path = "../openfo4_io" }
 openfo4_script = { version = "0.1.0", path = "../openfo4_script" }
 openfo4_pex = { version = "0.1.0", path = "../openfo4_pex" }
+openfo4_config = { version = "0.1.0", path = "../openfo4_config" }
 
 glam = { workspace = true, features = ["bytemuck"] }
 hecs = { workspace = true }
@@ -61,7 +62,6 @@ bytemuck = "1.24.0"
 event-listener = "5.4.1"
 rstar = "0.13.0"
 
-toml_edit = { version = "0.25.11+spec-1.1.0", features = ["serde"] }
 serde = { version = "1.0.228", features = ["derive"] }
 
 [lints]

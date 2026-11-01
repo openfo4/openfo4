@@ -1,0 +1,13 @@
+[package]
+name = "openfo4_config"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+openfo4_config_macros = { version = "0.1.0", path = "../openfo4_config_macros" }
+toml_edit = { version = "0.25.17", features = ["serde"] }
+serde = { version = "1.0.229", features = ["derive"] }
+thiserror = { workspace = true }
+
+[lints]
+workspace = true

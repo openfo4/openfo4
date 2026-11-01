@@ -26,7 +26,7 @@ members = [
     "openfo4_physics", "openfo4_asset", "openfo4_pex", "openfo4_ba2", "openfo4_io",
     "openfo4_script", "openfo4_jit", "openfo4_ui_render", "openfo4_egui",
     "openfo4_shaderlib",
-    "openfo4_shaderlib/macros",
+    "openfo4_shaderlib/macros", "openfo4_config", "openfo4_config_macros",
 ]
 
 resolver = "2"
