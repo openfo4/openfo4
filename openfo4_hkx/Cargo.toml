@@ -11,6 +11,6 @@ bytes = "1.10.1"
 bitflags = "2.9.0"
 indexmap = "2.8.0"
 glam = { workspace = true, features = ["bytemuck"] }
-thiserror = "2.0.12"
+thiserror = { workspace = true }
 half = "2.6.0"
 bytemuck = "1.23.0"

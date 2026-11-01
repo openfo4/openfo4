@@ -38,6 +38,7 @@ hecs = "0.11.0"
 hashbrown = "0.16.1"
 tracing = "0.1.44"
 parking_lot = "0.13.0"
+thiserror = "2.0.21"
 
 # Use zlib-rs since it performs better.
 flate2 = { version = "1.1.9", default-features = false, features = ["zlib-rs"] }

@@ -8,7 +8,7 @@ publish = false
 openfo4_io = { version = "0.1.0", path = "../openfo4_io" }
 openfo4_core = { version = "0.1.0", path = "../openfo4_core" }
 
-thiserror = "2.0.12"
+thiserror = { workspace = true }
 hashbrown = { workspace = true }
 flate2 = { workspace = true }
 bitflags = "2.9.1"

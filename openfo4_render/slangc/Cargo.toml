@@ -5,9 +5,9 @@ edition = "2024"
 publish = false
 
 [dependencies]
-thiserror = "2.0.12"
+thiserror = { workspace = true }
 rand = "0.9.1"
-tracing = "0.1.41"
+tracing = { workspace = true }
 
 [[test]]
 name = "compile"

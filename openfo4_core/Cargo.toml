@@ -18,7 +18,7 @@ glam = { workspace = true, features = ["bytemuck"] }
 hashbrown = { workspace = true }
 bstr = "1.12.1"
 parking_lot = { workspace = true }
-thiserror = "2.0.17"
+thiserror = { workspace = true }
 nohash-hasher = "0.2.0"
 
 # Logger

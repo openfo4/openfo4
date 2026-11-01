@@ -17,4 +17,4 @@ tracing = { workspace = true }
 winit = "0.29.4"
 raw-window-handle = "0.6.0"
 parking_lot = { workspace = true }
-thiserror = "2.0.21"
+thiserror = { workspace = true }

@@ -21,7 +21,7 @@ glam = { workspace = true }
 cpal = "0.15.3"
 symphonia = { version = "0.6.0", default-features = false, features = ["wav", "pcm"] }
 parking_lot = { workspace = true }
-thiserror = "1.0.61"
+thiserror = { workspace = true }
 rubato = "0.15.0"
 bytemuck = "1.19.0"
 

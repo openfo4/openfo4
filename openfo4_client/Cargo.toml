@@ -41,7 +41,7 @@ glam = { workspace = true, features = ["bytemuck"] }
 hecs = { workspace = true }
 tracing = { workspace = true }
 bytes = "1.10.1"
-thiserror = "2.0.12"
+thiserror = { workspace = true }
 crossbeam = "0.8.4"
 async-channel = "2.3.1"
 parking_lot = { workspace = true }

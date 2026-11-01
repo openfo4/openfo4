@@ -14,7 +14,7 @@ workspace = true
 glam = { workspace = true }
 bytemuck = { version = "1.16.1", features = ["derive"] }
 
-thiserror = "1.0.38"
+thiserror = { workspace = true }
 num-traits = "0.2.19"
 parking_lot = { workspace = true }
 allocator-api2 = "0.2.21"
