@@ -19,14 +19,6 @@ futures-util = { version = "0.3.31", default-features = false, features = ["allo
 [target.'cfg(loom)'.dependencies]
 loom = "0.7.2"
 
-[dev-dependencies]
-criterion = "0.5.1"
-
 [[test]]
 name = "loom"
 path = "tests/park/loom.rs"
-
-[[bench]]
-name = "spawn"
-path = "benches/spawn.rs"
-harness = false
