@@ -6,6 +6,7 @@ use serde::Deserialize;
 pub struct Config {
     pub scripting: Scripting,
     pub streaming: Streaming,
+    pub graphics: Graphics,
 }
 
 #[derive(Copy, Clone, Debug, Default, Deserialize, ConfigSection)]
@@ -38,6 +39,29 @@ impl Default for Streaming {
         Self {
             active: 2,
             visible: 3,
+        }
+    }
+}
+
+#[derive(Copy, Clone, Debug, Deserialize, ConfigSection)]
+pub struct Graphics {
+    /// Enable Vulkan validation layers.
+    ///
+    /// This reduces runtime performance sigificantly and typically requires Vulkan SDK
+    /// or Vulkan devel packages to be installed.
+    pub validation: bool,
+    /// Enable GPU assisted validation.
+    ///
+    /// This reduces runtime performance sigificantly and typically requires Vulkan SDK
+    /// or Vulkan devel packages to be installed.
+    pub gpuav: bool,
+}
+
+impl Default for Graphics {
+    fn default() -> Self {
+        Self {
+            validation: false,
+            gpuav: false,
         }
     }
 }

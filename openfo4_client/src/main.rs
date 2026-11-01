@@ -29,6 +29,7 @@ use openfo4_esp::FormId;
 use openfo4_gizmos::Gizmos;
 use openfo4_render::RenderTarget;
 use openfo4_render::Renderer;
+use openfo4_render::RendererConfig;
 use openfo4_tasks::TaskPool;
 use openfo4_ui_render::UiRenderer;
 use openfo4_window::events::WindowEvent;
@@ -109,7 +110,11 @@ fn main() -> ExitCode {
 
     let window = wm.windows_mut().spawn(WindowBuilder::new());
 
-    let mut renderer = Renderer::new().unwrap();
+    let mut renderer = Renderer::new(RendererConfig {
+        validation: config.graphics.validation,
+        gpuav: config.graphics.gpuav,
+    })
+    .unwrap();
     let entities = openfo4_core_pipeline::init(&mut renderer);
     let gizmos = Gizmos::new(&mut renderer);
 

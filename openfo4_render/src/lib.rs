@@ -11,7 +11,6 @@ pub mod surface;
 pub mod texture;
 
 pub mod backend;
-mod debug;
 mod fps_limiter;
 mod pipelined_rendering;
 
@@ -49,6 +48,15 @@ pub enum Error {
     // NoDevice(RequestDeviceError),
 }
 
+/// Configuration for [`Renderer`] creation.
+#[derive(Clone, Debug, Default)]
+pub struct RendererConfig {
+    /// Enable Vulkan validation layers.
+    pub validation: bool,
+    /// Enable GPU assisted validation.
+    pub gpuav: bool,
+}
+
 pub struct Renderer {
     render_thread: RenderThreadHandle,
     parker: Option<Arc<Parker>>,
@@ -57,13 +65,13 @@ pub struct Renderer {
 }
 
 impl Renderer {
-    pub fn new() -> Result<Self, Error> {
-        let mut config = Config::default();
-        config.validation = debug::debug_enabled();
-        config.gpuav = debug::gpuav_enabled();
-        config.performance_counters = true;
+    pub fn new(config: RendererConfig) -> Result<Self, Error> {
+        let mut vk_conf = Config::default();
+        vk_conf.validation = config.validation;
+        vk_conf.gpuav = config.gpuav;
+        vk_conf.performance_counters = true;
 
-        let instance = Instance::new(config).unwrap();
+        let instance = Instance::new(vk_conf).unwrap();
 
         let preferred_adapter_id = std::env::var("RENDER_ADAPTER_ID")
             .map(|v| v.parse::<usize>().ok())
