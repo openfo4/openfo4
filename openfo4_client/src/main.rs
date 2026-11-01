@@ -100,7 +100,12 @@ fn main() -> ExitCode {
     let num_threads = std::thread::available_parallelism().unwrap_or(NonZeroUsize::MIN);
     let pool = Arc::new(TaskPool::new(num_threads.get()));
 
-    let mut wm = WindowManager::new();
+    let Ok(mut wm) = WindowManager::new().inspect_err(|err| {
+        tracing::error!("failed to create window manager: {}", err);
+    }) else {
+        return ExitCode::FAILURE;
+    };
+
     let window = wm.windows_mut().spawn(WindowBuilder::new());
 
     let mut renderer = Renderer::new().unwrap();

@@ -5,6 +5,7 @@ pub mod windows;
 mod backend;
 
 pub use backend::Backend;
+use thiserror::Error;
 
 use std::collections::{HashMap, VecDeque};
 use std::sync::{mpsc, Arc};
@@ -31,6 +32,10 @@ use winit::window::{WindowBuilder, WindowId};
 
 const ENV_WINDOWING_BACKEND: &str = "WINDOW_BACKEND";
 
+#[derive(Debug, Error)]
+#[error(transparent)]
+pub struct Error(winit::error::EventLoopError);
+
 /// The entrypoint for interacting with the OS windowing system.
 #[derive(Debug)]
 pub struct WindowManager {
@@ -47,7 +52,7 @@ impl WindowManager {
     ///
     /// [`Windows::spawn`]: Windows::spawn
     /// [`WindowManager::run`]: WindowManager::run
-    pub fn new() -> Self {
+    pub fn new() -> Result<Self, Error> {
         let backend = match std::env::var(ENV_WINDOWING_BACKEND) {
             Ok(s) => match s.parse::<Backend>() {
                 Ok(backend) => backend,
@@ -72,12 +77,12 @@ impl WindowManager {
             builder.with_x11();
         }
 
-        let event_loop = builder.build().unwrap();
+        let event_loop = builder.build().map_err(Error)?;
         let (update_tx, update_rx) = mpsc::channel();
         let windows = Windows::new(update_tx.clone());
         let cursor = Arc::new(Cursor::new(update_tx));
 
-        Self {
+        Ok(Self {
             state: WindowManagerState {
                 event_loop,
                 update_rx,
@@ -85,7 +90,7 @@ impl WindowManager {
             },
             windows,
             cursor,
-        }
+        })
     }
 
     /// Returns a reference to the active [`Windows`].
@@ -113,13 +118,6 @@ impl WindowManager {
     {
         let _span = trace_span!("WindowManager::run").entered();
         main_loop(self.state, self.windows, app);
-    }
-}
-
-impl Default for WindowManager {
-    #[inline]
-    fn default() -> Self {
-        Self::new()
     }
 }
 
