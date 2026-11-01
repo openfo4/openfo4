@@ -36,21 +36,6 @@ macro_rules! impl_decode_bitflags {
 
 pub(crate) use impl_decode_bitflags;
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
-pub struct Empty;
-
-impl Read for Empty {
-    type Error = Error;
-
-    fn read(map: &mut FieldMap, key: Text<4>) -> Result<Self, Self::Error> {
-        Ok(Empty)
-    }
-
-    fn read_next(map: &mut FieldMap, key: Text<4>) -> Result<Self, Self::Error> {
-        Ok(Empty)
-    }
-}
-
 #[derive(Copy, Clone, Debug, BinaryStruct)]
 pub struct Rgba<T> {
     pub r: T,

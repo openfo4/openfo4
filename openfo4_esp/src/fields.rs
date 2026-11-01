@@ -11,13 +11,6 @@ pub(crate) struct FieldMap {
 }
 
 impl FieldMap {
-    /// `end` is exclusive.
-    pub(crate) fn split_off(&mut self, end: Text<4>) -> Self {
-        let index = self.fields.iter().position(|f| f.key == end).unwrap_or(0);
-        let fields = self.fields.drain(0..index).collect();
-        FieldMap { fields }
-    }
-
     pub(crate) fn next_key(&self) -> Option<Text<4>> {
         self.fields.front().map(|f| f.key)
     }
@@ -51,10 +44,6 @@ impl FieldMap {
         let field = self.fields.pop_front().unwrap();
 
         field.to_field().map(Some)
-    }
-
-    fn count(&self, key: Text<4>) -> usize {
-        self.fields.iter().filter(|field| field.key == key).count()
     }
 }
 

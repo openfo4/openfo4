@@ -1502,15 +1502,6 @@ impl RecordHeader {
     /// Fixed size of the header.
     const SIZE: usize = 24;
 
-    /// Returns the size of the record including the size of the header.
-    fn size_with_header(&self) -> u32 {
-        if self.typ == Text::GRUP {
-            self.size
-        } else {
-            self.size.saturating_add(Self::SIZE as u32)
-        }
-    }
-
     fn into_group(self) -> GroupHeader {
         debug_assert_eq!(self.typ, Text::GRUP);
 
@@ -1706,11 +1697,7 @@ impl GenericField {
         T: Decode,
     {
         let value = T::decode(&mut &self.value[..])?;
-        Ok(Field {
-            key: self.key,
-            size: self.size,
-            value,
-        })
+        Ok(Field { value })
     }
 }
 
@@ -1725,8 +1712,6 @@ impl Debug for GenericField {
 
 #[derive(Copy, Clone, Debug)]
 struct Field<T> {
-    key: Text<4>,
-    size: u32,
     value: T,
 }
 
@@ -1741,14 +1726,10 @@ where
     where
         B: Buf,
     {
-        let key = Text::<4>::decode(&mut buf)?;
-        let size = u16::decode(&mut buf)?;
+        let _key = Text::<4>::decode(&mut buf)?;
+        let _size = u16::decode(&mut buf)?;
         let value = T::decode(&mut buf)?;
-        Ok(Self {
-            key,
-            size: size.into(),
-            value,
-        })
+        Ok(Self { value })
     }
 }
 
