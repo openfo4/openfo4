@@ -4,6 +4,11 @@ version = "0.1.0"
 edition = "2024"
 publish = false
 
+[features]
+default = ["tracy"]
+# Enable tracy profiler client.
+tracy = ["openfo4_crash_handler/tracy", "openfo4_core/tracy"]
+
 [dependencies]
 openfo4_window = { version = "0.1.0", path = "../openfo4_window" }
 openfo4_render = { version = "0.1.0", path = "../openfo4_render" }
@@ -11,7 +16,7 @@ openfo4_tasks = { version = "0.1.0", path = "../openfo4_tasks" }
 openfo4_common = { version = "0.1.0", path = "../openfo4_common" }
 openfo4_tracing = { version = "0.1.0", path = "../openfo4_tracing" }
 openfo4_input = { version = "0.1.0", path = "../openfo4_input" }
-openfo4_crash_handler = { version = "0.1.0", path = "../openfo4_crash_handler", features = ["tracy"] }
+openfo4_crash_handler = { version = "0.1.0", path = "../openfo4_crash_handler" }
 openfo4_core_pipeline = { version = "0.1.0", path = "../openfo4_core_pipeline" }
 openfo4_gizmos = { version = "0.1.0", path = "../openfo4_gizmos" }
 openfo4_egui = { version = "0.1.0", path = "../openfo4_egui" }
@@ -23,7 +28,7 @@ openfo4_nif = { version = "0.1.0", path = "../openfo4_nif" }
 openfo4_esp = { version = "0.1.0", path = "../openfo4_esp" }
 openfo4_dds = { version = "0.1.0", path = "../openfo4_dds" }
 openfo4_hkx = { version = "0.1.0", path = "../openfo4_hkx" }
-openfo4_core = { version = "0.1.0", path = "../openfo4_core", features = ["tracy"] }
+openfo4_core = { version = "0.1.0", path = "../openfo4_core" }
 openfo4_physics = { version = "0.1.0", path = "../openfo4_physics" }
 openfo4_animation = { version = "0.1.0", path = "../openfo4_animation" }
 openfo4_asset = { version = "0.1.0", path = "../openfo4_asset" }
