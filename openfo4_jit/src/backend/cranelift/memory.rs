@@ -1,12 +1,10 @@
 use std::alloc::Layout;
 use std::ffi::c_void;
-use std::os::fd::OwnedFd;
 use std::sync::Arc;
 
 use hashbrown::HashMap;
+use openfo4_io::memfd::{Memfd, ProtFlags};
 use parking_lot::Mutex;
-use rustix::fs::{MemfdFlags, ftruncate, memfd_create};
-use rustix::mm::{MapFlags, ProtFlags, mmap, munmap};
 use slab::Slab;
 
 #[derive(Clone, Debug)]
@@ -173,7 +171,7 @@ unsafe impl Sync for AllocationMemory {}
 
 #[derive(Debug)]
 struct Page {
-    _fd: OwnedFd,
+    fd: Memfd,
     rw_map: *mut c_void,
     rx_map: *mut c_void,
     size: usize,
@@ -183,37 +181,16 @@ impl Page {
     pub fn new(size: usize) -> Self {
         debug_assert!(size.is_power_of_two());
 
-        let fd = memfd_create("", MemfdFlags::CLOEXEC).unwrap();
-        ftruncate(&fd, size.try_into().unwrap()).unwrap();
+        let fd = Memfd::new(size).unwrap();
 
-        let rw_map = unsafe {
-            mmap(
-                core::ptr::null_mut(),
-                size,
-                ProtFlags::READ | ProtFlags::WRITE,
-                MapFlags::SHARED,
-                &fd,
-                0,
-            )
-            .unwrap()
-        };
-        let rx_map = unsafe {
-            mmap(
-                core::ptr::null_mut(),
-                size,
-                ProtFlags::READ | ProtFlags::EXEC,
-                MapFlags::SHARED,
-                &fd,
-                0,
-            )
-            .unwrap()
-        };
+        let rw_map = unsafe { fd.map(size, ProtFlags::READ | ProtFlags::WRITE).unwrap() };
+        let rx_map = unsafe { fd.map(size, ProtFlags::READ | ProtFlags::EXEC).unwrap() };
 
         Self {
             rw_map,
             rx_map,
             size,
-            _fd: fd,
+            fd,
         }
     }
 }
@@ -221,8 +198,8 @@ impl Page {
 impl Drop for Page {
     fn drop(&mut self) {
         unsafe {
-            munmap(self.rw_map, self.size).unwrap();
-            munmap(self.rx_map, self.size).unwrap();
+            self.fd.unmap(self.rw_map, self.size).ok();
+            self.fd.unmap(self.rx_map, self.size).ok();
         }
     }
 }

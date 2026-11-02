@@ -11,12 +11,11 @@ cranelift = ["cranelift-codegen", "cranelift-frontend", "cranelift-native", "was
 [dependencies]
 openfo4_common = { version = "0.1.0", path = "../openfo4_common" }
 openfo4_tracing = { version = "0.1.0", path = "../openfo4_tracing" }
+openfo4_io = { version = "0.1.0", path = "../openfo4_io" }
 
 slab = "0.4.11"
 hashbrown = { workspace = true }
 parking_lot = { workspace = true }
-
-rustix = { version = "1.1.3", features = ["fs", "mm"] }
 
 # Cranelift backend
 cranelift-codegen = { version = "0.135.2", optional = true }
