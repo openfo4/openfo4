@@ -430,7 +430,7 @@ pub struct SkeletonMapperDataSimpleMapping {
     _pad0: u32,
     _pad1: u64,
     // Offset: 16
-    pub a_from_b_transform: QTransform,
+    pub a_from_b_transform: QsTransform,
 }
 
 #[derive(Clone, Debug, HkStruct)]
@@ -445,9 +445,9 @@ pub struct SkeletonMapperDataChainMapping {
     pub end_bone_b: u16,
     _pad0: u64,
     // Offset: 16
-    pub start_a_from_b_transform: QTransform,
+    pub start_a_from_b_transform: QsTransform,
     // Offset: 64
-    pub end_a_from_b_transform: QTransform,
+    pub end_a_from_b_transform: QsTransform,
 }
 
 #[derive(Clone, Debug, HkStruct)]
