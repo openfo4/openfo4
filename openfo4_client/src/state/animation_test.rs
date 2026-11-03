@@ -2,27 +2,24 @@ use std::collections::{HashMap, VecDeque};
 
 use glam::Vec3;
 use openfo4_animation::builder::{Builder, Hint};
-use openfo4_animation::skeleton::{BoneMarker, Skeleton, SkeletonInstance};
+use openfo4_animation::skeleton::SkeletonInstance;
 use openfo4_animation::{AnimationGraph, Value};
-use openfo4_asset::{AssetLoader, Handle};
+use openfo4_asset::AssetLoader;
 use openfo4_common::components::{Axis, Transform};
-use openfo4_core::WorldExt;
 use openfo4_core::ecs::{Entity, World};
 use openfo4_core::hierarchy::Children;
 use openfo4_core::path::{DataPath, DataPathBuf};
 use openfo4_esp::records::Race;
 use openfo4_hkx::behavior::VariableType;
 use openfo4_hkx::{HkObject, HkxFile};
-use openfo4_physics::components::{Capsule, Collider, ColliderShape};
+use openfo4_physics::components::{Capsule, ColliderShape};
 use openfo4_tasks::TaskPool;
 
 use crate::assets::animation::AnimationSet;
 use crate::assets::data_file::DataFile;
-use crate::assets::nif::{Instantiate, LoadNifFlags, NIF_TO_METERS, NifScene};
-use crate::state::animation::{self, SkeletonConfig, load_anim};
+use crate::assets::nif::NIF_TO_METERS;
+use crate::state::animation::{ActorSkeleton, SkeletonConfig, load_anim};
 use crate::state::npc::BodyPartBone;
-
-const NODE_CHARACTER_BUMPER: &str = "CharacterBumper";
 
 #[derive(Clone, Debug)]
 pub struct SkinInstance {
@@ -82,7 +79,7 @@ pub async fn load_character(
             .as_bytes(),
     );
 
-    let (nif_skeleton, skeleton) = animation::load(
+    let skeleton = ActorSkeleton::load(
         loader,
         SkeletonConfig {
             nif_skeleton: &nif_skeleton,
@@ -200,7 +197,6 @@ pub async fn load_character(
 
     Ok(ActorCharacter {
         behavior_filename,
-        scene: nif_skeleton,
         skeleton,
         controller_offset,
         controller_shape,
@@ -213,71 +209,21 @@ pub async fn load_character(
 #[derive(Clone, Debug)]
 pub struct ActorCharacter {
     pub behavior_filename: DataPathBuf,
-    pub scene: Handle<NifScene>,
-    pub skeleton: Skeleton,
     pub controller_offset: Transform,
     pub controller_shape: ColliderShape,
     pub props: HashMap<String, Value>,
     pub root_path: DataPathBuf,
     pub body_parts: Vec<BodyPartBoneProps>,
+    pub skeleton: ActorSkeleton,
 }
 
 impl ActorCharacter {
     pub fn instantiate(&self, root: Entity, world: &mut World) -> SpawnedActor {
-        // Because the scene may have nodes with extra components we
-        // will first spawn the scene and then "overlay" the HKX skeleton.
-        let mut scene_nodes = HashMap::new();
-        let mut character_bumper = None;
-        self.scene.instantiate_with_feedback(
-            |node, entity| {
-                scene_nodes.insert(node.name.to_lowercase(), entity);
-
-                // The "CharacterBumper" node is present on some actor skeletons and contains
-                // a `bnkNPCollisionObject` node with a collider that only collides with other
-                // actors and pushes them away.
-                if node.name.eq_ignore_ascii_case(NODE_CHARACTER_BUMPER) {
-                    character_bumper = Some(entity);
-                }
-            },
-            Transform::default(),
-            world,
-            root,
-            LoadNifFlags::all(),
-        );
+        let skeleton = self.skeleton.instantiate(root, world);
 
         let body_parts = self.build_body_parts(root);
 
-        let mut ready_bones = Vec::new();
-        for bone in &self.skeleton.bones {
-            if scene_nodes.contains_key(&bone.name.to_lowercase()) {
-                ready_bones.push(bone);
-            }
-        }
-
-        let mut bones = HashMap::new();
-
-        while let Some(bone) = ready_bones.pop() {
-            let entity = *scene_nodes.get(&bone.name.to_lowercase()).unwrap();
-            bones.insert(bone.index, entity);
-
-            // Both transforms SHOULD be the same, however if they do
-            // not we will choose the one from the hkx skeleton.
-            world.insert(entity, (BoneMarker, bone.transform)).unwrap();
-
-            for index in &bone.children {
-                let child_bone = &self.skeleton.bones[*index];
-                if scene_nodes.contains_key(&child_bone.name.to_lowercase()) {
-                    continue;
-                }
-
-                let child_entity = world.reserve_entity();
-                world.add_children(entity, child_entity);
-                scene_nodes.insert(child_bone.name.to_lowercase(), child_entity);
-                ready_bones.push(child_bone);
-            }
-        }
-
-        for (bone_index, bone_entity) in &bones {
+        for (bone_index, bone_entity) in &skeleton.bones {
             // A bone tagged body part must include all recursive
             // children since colliders may be children.
             // We skip children entities that are other bones.
@@ -292,7 +238,7 @@ impl ActorCharacter {
                     };
 
                     for children in &children.0 {
-                        if bones.values().any(|e| e == children) {
+                        if skeleton.bones.values().any(|e| e == children) {
                             continue;
                         }
 
@@ -303,21 +249,7 @@ impl ActorCharacter {
         }
 
         // FIXME: We will always just hide the bumper collider for now.
-        // In the future we should allow dynamically enabling/disabling it.
-        if let Some(entity) = character_bumper {
-            let mut queue = vec![entity];
-            while let Some(entity) = queue.pop() {
-                world.remove_one::<Collider>(entity).ok();
-
-                if let Ok(children) = world.get::<&Children>(entity) {
-                    queue.extend(&children.0);
-                }
-            }
-        }
-
-        SpawnedActor {
-            skeleton: SkeletonInstance::new(self.skeleton.clone(), bones),
-        }
+        SpawnedActor { skeleton }
     }
 
     /// Returns the body parts for each bone.
@@ -327,6 +259,7 @@ impl ActorCharacter {
             let mut bones = Vec::new();
 
             let Some(root_bone) = self
+                .skeleton
                 .skeleton
                 .bones
                 .iter()
@@ -342,7 +275,7 @@ impl ActorCharacter {
                 bones.push(bone.index);
 
                 for children in &bone.children {
-                    let b = &self.skeleton.bones[*children];
+                    let b = &self.skeleton.skeleton.bones[*children];
 
                     if !self
                         .body_parts
