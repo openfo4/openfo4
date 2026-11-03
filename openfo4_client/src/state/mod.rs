@@ -1,4 +1,5 @@
 pub mod actions;
+pub mod actor;
 pub mod anim_starter;
 pub mod animation;
 pub mod animation_test;

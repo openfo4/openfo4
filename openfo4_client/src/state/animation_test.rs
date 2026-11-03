@@ -18,7 +18,8 @@ use openfo4_tasks::TaskPool;
 use crate::assets::animation::AnimationSet;
 use crate::assets::data_file::DataFile;
 use crate::assets::nif::NIF_TO_METERS;
-use crate::state::animation::{ActorSkeleton, SkeletonConfig, load_anim};
+use crate::state::actor::skeleton::{ActorSkeleton, SkeletonConfig};
+use crate::state::animation::load_anim;
 use crate::state::npc::BodyPartBone;
 
 #[derive(Clone, Debug)]
