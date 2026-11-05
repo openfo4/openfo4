@@ -106,10 +106,13 @@ pub fn stub() {
     })
 }
 
-pub fn emit_error(ctx: *mut RawContext, err: *const &'static str) {
+pub fn emit_error(ctx: *mut RawContext, err: *const u8, len: usize) {
     unsafe {
         let ctx = &mut *ctx;
-        let err = &*err;
+
+        let err = core::slice::from_raw_parts(err, len);
+        let err = core::str::from_utf8_unchecked(err);
+
         *ctx.error.borrow_mut() = Some(Box::new(Error::msg(err.to_owned())));
     }
 }

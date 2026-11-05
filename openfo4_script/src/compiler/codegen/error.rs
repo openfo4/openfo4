@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 #[derive(Clone, Debug)]
 pub enum ErrorKind {
     CallMethodOnNull { callee: String },
@@ -10,20 +12,19 @@ pub enum ErrorKind {
     ArrayOutOfBounds,
 }
 
-impl ErrorKind {
-    pub fn to_str_leak(&self) -> &'static str {
+impl Display for ErrorKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::CallMethodOnNull { callee } => {
-                let msg = format!("cannot call method `{callee}` on null object");
-                String::leak(msg)
+                write!(f, "cannot call method `{callee}` on null object")
             }
-            Self::NullArray => "cannot access null array",
-            Self::ArrayAddWithNegativeCount => "array add with negative count",
-            Self::NullVar => "cannot access null var",
-            Self::WrongVarType => "wrong var type",
-            Self::NullStruct => "cannot access null struct",
-            Self::NullClass => "cannot access null object",
-            Self::ArrayOutOfBounds => "array access is out of bounds",
+            Self::NullArray => write!(f, "cannot access null array"),
+            Self::ArrayAddWithNegativeCount => write!(f, "array add with negative count"),
+            Self::NullVar => write!(f, "cannot access null var"),
+            Self::WrongVarType => write!(f, "wrong var type"),
+            Self::NullStruct => write!(f, "cannot access null struct"),
+            Self::NullClass => write!(f, "cannot access null object"),
+            Self::ArrayOutOfBounds => write!(f, "array access is out of bounds"),
         }
     }
 }

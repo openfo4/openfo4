@@ -237,6 +237,7 @@ impl Words {
 /// Pool for constant memory allocation.
 #[derive(Debug, Default)]
 pub struct ConstantPool {
+    allocs: Mutex<HashMap<*mut u8, Layout>>,
     objects: Mutex<HashMap<ObjectAddr, ConstantObject>>,
 }
 
@@ -253,6 +254,9 @@ impl ConstantPool {
 
         let ptr = unsafe { std::alloc::alloc(layout) };
         assert!(!ptr.is_null());
+
+        let mut allocs = self.allocs.lock();
+        allocs.insert(ptr, layout);
 
         unsafe {
             core::ptr::copy_nonoverlapping(buf.as_ptr(), ptr, buf.len());
@@ -273,6 +277,9 @@ impl ConstantPool {
         let ptr = unsafe { std::alloc::alloc(layout) };
         assert!(!ptr.is_null());
 
+        let mut allocs = self.allocs.lock();
+        allocs.insert(ptr, layout);
+
         unsafe {
             words.write(ptr);
         }
@@ -291,6 +298,16 @@ impl ConstantPool {
 
     pub fn object(&self, addr: ObjectAddr) -> Option<ConstantObject> {
         self.objects.lock().get(&addr).copied()
+    }
+}
+
+impl Drop for ConstantPool {
+    fn drop(&mut self) {
+        for (ptr, layout) in self.allocs.get_mut().drain() {
+            unsafe {
+                std::alloc::dealloc(ptr, layout);
+            }
+        }
     }
 }
 

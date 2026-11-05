@@ -90,7 +90,7 @@ pub fn lower_function(
         builder.create_block(&[JitType::I32])
     };
 
-    let abort_block = builder.create_block(&[PTR_TYPE]);
+    let abort_block = builder.create_block(&[PTR_TYPE, ISIZE_TYPE]);
 
     // The entry block needs to be special cased.
     let blocks: Vec<_> = (0..function.blocks.len().saturating_sub(1))
@@ -956,23 +956,31 @@ impl<'a> Translator<'a> {
     }
 
     pub fn assert_true(&mut self, condition: JitValue, error: ErrorKind) {
-        let ptr: *mut &'static str = Box::leak(Box::new(error.to_str_leak()));
+        let msg = error.to_string();
+        let ptr = self.data.resources.constants.alloc(msg.as_bytes(), 1);
+        let len = msg.len();
+
         let ptr = self.builder.ptrconst(ptr);
+        let len = self.builder.iconst(JitType::Isize, len);
 
         let block = self.builder.create_block(&[]);
         self.builder
-            .brif(condition, block, &[], self.abort_block, &[ptr]);
+            .brif(condition, block, &[], self.abort_block, &[ptr, len]);
         self.current_block = block;
         self.builder.switch_to_block(block);
     }
 
     pub fn assert_false(&mut self, condition: JitValue, error: ErrorKind) {
-        let ptr: *mut &'static str = Box::leak(Box::new(error.to_str_leak()));
+        let msg = error.to_string();
+        let ptr = self.data.resources.constants.alloc(msg.as_bytes(), 1);
+        let len = msg.len();
+
         let ptr = self.builder.ptrconst(ptr);
+        let len = self.builder.iconst(JitType::Isize, len);
 
         let block = self.builder.create_block(&[]);
         self.builder
-            .brif(condition, self.abort_block, &[ptr], block, &[]);
+            .brif(condition, self.abort_block, &[ptr, len], block, &[]);
         self.current_block = block;
         self.builder.switch_to_block(block);
     }
@@ -1158,8 +1166,9 @@ fn generate_abort_block(
 
     let result = builder.iconst(RESULT_TYPE, RESULT_ERROR);
     let errptr = builder.block_params(block)[0];
+    let len = builder.block_params(block)[1];
 
-    builder.call(data.runtime_funcs.emit_error, &[ctx_ptr, errptr]);
+    builder.call(data.runtime_funcs.emit_error, &[ctx_ptr, errptr, len]);
 
     if let Some(ty) = function.returns {
         let ty = data.resources.types.get(ty).unwrap();
