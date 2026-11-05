@@ -6,14 +6,9 @@ use crossbeam::channel::Receiver;
 use glam::{Mat3, Mat4, UVec2, Vec3, Vec4};
 use openfo4_common::collections::vec_map::VecMap;
 use openfo4_common::components::Transform;
-use openfo4_render::api::{
-    BindingResource, BufferInitDescriptor, CommandQueue, DescriptorSet, DescriptorSetDescriptor,
-    DescriptorSetEntry, DescriptorSetLayout, TextureRegion, TextureViewDescriptor,
-};
-use openfo4_render::backend::allocator::UsageFlags;
+use openfo4_render::api::{CommandQueue, TextureRegion, TextureViewDescriptor};
 use openfo4_render::backend::{
-    BufferUsage, FilterMode, ImageDataLayout, TextureDescriptor, TextureFormat, TextureUsage,
-    max_mips_2d,
+    FilterMode, ImageDataLayout, TextureDescriptor, TextureFormat, TextureUsage, max_mips_2d,
 };
 use openfo4_render::buffer::GpuBuffer;
 use openfo4_render::buffer::slab::{SlabBuffer, SlabIndex};
@@ -32,8 +27,8 @@ use crate::passes::{DirectionalLightState, MaterialState, TerrainMaterialState};
 use crate::terrain::TerrainMaterial;
 
 use super::{
-    DefaultTextures, MaterialFlags, ObjectState, RawMaterialData, RawObjectData, SceneData, State,
-    TextureSlab, TextureSlabIndex,
+    DefaultTextures, MaterialFlags, ObjectState, RawMaterialData, SceneData, State, TextureSlab,
+    TextureSlabIndex,
 };
 
 const ASYNC_BUDGET: Duration = Duration::from_millis(1);
@@ -567,35 +562,6 @@ fn create_terrain_material(
         textures,
         layer_index: index,
     }
-}
-
-fn create_object(
-    queue: &mut CommandQueue<'_>,
-    layout: &DescriptorSetLayout,
-    transform: Transform,
-    material: SlabIndex,
-    meshlet_offset: u32,
-) -> DescriptorSet {
-    let _span = trace_span!("create_object_transform").entered();
-
-    let transform_buffer = queue.create_buffer_init(&BufferInitDescriptor {
-        contents: bytemuck::bytes_of(&RawObjectData {
-            transform: TransformUniform::from(transform),
-            meshlet_offset,
-            material,
-            _pad0: [0; 2],
-        }),
-        usage: BufferUsage::UNIFORM,
-        flags: UsageFlags::empty(),
-    });
-
-    queue.create_descriptor_set(&DescriptorSetDescriptor {
-        layout,
-        entries: &[DescriptorSetEntry {
-            binding: 0,
-            resource: BindingResource::Buffer(transform_buffer.slice(..)),
-        }],
-    })
 }
 
 #[derive(Copy, Clone, Debug, Zeroable, Pod)]
