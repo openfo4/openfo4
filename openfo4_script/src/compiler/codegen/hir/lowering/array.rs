@@ -391,7 +391,7 @@ fn create_array_object(
         .data
         .resources
         .papyrus
-        .type_to_array_ptr
+        .type_to_array
         .lock()
         .get(&elem_ty)
         .unwrap();
@@ -458,7 +458,7 @@ pub fn array_cast<F>(
         .data
         .resources
         .papyrus
-        .type_to_array_ptr
+        .type_to_array
         .lock()
         .get(&dst_ty)
         .unwrap();
