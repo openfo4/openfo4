@@ -24,3 +24,5 @@ pub struct UnknownFunctionError {
     class: String,
     func: String,
 }
+
+const fn assert_is_sync_send<T: Sync + Send>() {}

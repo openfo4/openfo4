@@ -311,6 +311,9 @@ impl Drop for ConstantPool {
     }
 }
 
+unsafe impl Send for ConstantPool {}
+unsafe impl Sync for ConstantPool {}
+
 #[derive(Copy, Clone, Debug)]
 pub struct ConstantObject {
     pub ptr: *const u8,

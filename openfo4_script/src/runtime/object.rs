@@ -8,9 +8,14 @@ use openfo4_common::string::Lowercase;
 use parking_lot::Mutex;
 use thiserror::Error;
 
+use crate::assert_is_sync_send;
 use crate::compiler::resources::{Resources, Type, TypeId, TypeRepr};
 use crate::runtime::lock::ObjectLock;
 use crate::runtime::{TypeOfVal, Val, new_assignment_error};
+
+const _: () = assert_is_sync_send::<ObjectHandle>();
+const _: () = assert_is_sync_send::<ObjectPool>();
+const _: () = assert_is_sync_send::<ObjectAddr>();
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 #[repr(transparent)]
