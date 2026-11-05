@@ -2,7 +2,6 @@ pub mod api;
 pub mod buffer;
 pub mod graph;
 pub mod mesh;
-pub mod mipmap;
 pub mod pipeline_cache;
 pub mod shader;
 pub mod shape;
