@@ -66,7 +66,7 @@ pub(crate) fn init(
 ) {
     let state = Arc::new(Mutex::new(State::new(queue, sky)));
 
-    let update_pass = UpdatePass::new(queue, state.clone(), events, async_events);
+    let update_pass = UpdatePass::new(state.clone(), events, async_events);
     graph.add_node(UPDATE_PASS, update_pass);
 
     let skinning_pass = SkinningPass::new(state.clone());

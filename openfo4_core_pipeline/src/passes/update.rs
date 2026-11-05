@@ -12,13 +12,13 @@ use openfo4_render::api::{
 };
 use openfo4_render::backend::allocator::UsageFlags;
 use openfo4_render::backend::{
-    BufferUsage, ImageDataLayout, TextureDescriptor, TextureFormat, TextureUsage, max_mips_2d,
+    BufferUsage, FilterMode, ImageDataLayout, TextureDescriptor, TextureFormat, TextureUsage,
+    max_mips_2d,
 };
 use openfo4_render::buffer::GpuBuffer;
 use openfo4_render::buffer::slab::{SlabBuffer, SlabIndex};
 use openfo4_render::buffer::suballocated::SubAllocatedGrowableBuffer;
 use openfo4_render::graph::{Node, RenderContext};
-use openfo4_render::mipmap::MipMapGenerator;
 use openfo4_render::texture::Image;
 use openfo4_render::texture::image::MipImage;
 use openfo4_tracing::trace_span;
@@ -43,12 +43,10 @@ pub(super) struct UpdatePass {
     state: Arc<Mutex<State>>,
     events: Receiver<Event>,
     async_events: Receiver<AsyncEvent>,
-    mipgen: MipMapGenerator,
 }
 
 impl UpdatePass {
     pub(super) fn new(
-        queue: &CommandQueue<'_>,
         state: Arc<Mutex<State>>,
         events: Receiver<Event>,
         async_events: Receiver<AsyncEvent>,
@@ -56,7 +54,6 @@ impl UpdatePass {
         Self {
             state,
             events,
-            mipgen: MipMapGenerator::new(queue),
             async_events,
         }
     }
@@ -88,8 +85,7 @@ impl Node for UpdatePass {
                     }
                 }
                 Event::CreateImage(id, image) => {
-                    let texture =
-                        create_image(ctx.queue, &mut state.textures, &self.mipgen, &image, true);
+                    let texture = create_image(ctx.queue, &mut state.textures, &image, true);
                     state.images.insert(id, texture);
                 }
                 Event::DestroyImage(id) => {
@@ -119,7 +115,6 @@ impl Node for UpdatePass {
                                 &state.images,
                                 &mut state.terrain_layers,
                                 &mut state.textures,
-                                &self.mipgen,
                                 material,
                             );
 
@@ -307,8 +302,7 @@ impl UpdatePass {
                     event.notify(1);
                 }
                 AsyncEvent::CreateImage(id, image, event) => {
-                    let texture =
-                        create_image(queue, &mut state.textures, &self.mipgen, &image, true);
+                    let texture = create_image(queue, &mut state.textures, &image, true);
                     state.images.insert(id, texture);
 
                     assert_eq!(event.total_listeners(), 1);
@@ -326,7 +320,6 @@ impl UpdatePass {
 fn create_image(
     queue: &CommandQueue<'_>,
     textures: &mut TextureSlab,
-    mipgen: &MipMapGenerator,
     image: &MipImage,
     generate_mips: bool,
 ) -> TextureSlabIndex {
@@ -347,13 +340,13 @@ fn create_image(
     // - The format can be used to create mipmaps.
     let generate_mipmaps = generate_mips
         && image.mip_levels() == 1
-        && supported_usages.contains(TextureUsage::RENDER_ATTACHMENT);
+        && supported_usages.contains(TextureUsage::BLIT_SRC | TextureUsage::BLIT_DST);
 
     let mut mip_levels = image.mip_levels();
     let mut usage = TextureUsage::TRANSFER_DST | TextureUsage::TEXTURE_BINDING;
     if generate_mipmaps {
         mip_levels = max_mips_2d(UVec2::new(image.root().width(), image.root().height()));
-        usage |= TextureUsage::RENDER_ATTACHMENT;
+        usage |= TextureUsage::BLIT_SRC | TextureUsage::BLIT_DST;
     }
 
     let texture = queue.create_texture(&TextureDescriptor {
@@ -377,7 +370,11 @@ fn create_image(
     }
 
     if generate_mipmaps {
-        mipgen.generate_mipmaps(queue, &texture);
+        for mip_level in 0..texture.mip_levels() - 1 {
+            let src = texture.as_entire_area(mip_level);
+            let dst = &texture.as_entire_area(mip_level + 1);
+            queue.blit(&src, &dst, FilterMode::Linear);
+        }
     }
 
     let view = texture.create_view(&TextureViewDescriptor::default());
@@ -513,7 +510,6 @@ fn create_terrain_material(
     images: &VecMap<ImageId, TextureSlabIndex>,
     terrain_material: &mut SubAllocatedGrowableBuffer<RawTerrainLayer>,
     textures: &mut TextureSlab,
-    mipgen: &MipMapGenerator,
     material: TerrainMaterial,
 ) -> TerrainMaterialState {
     let _span = trace_span!("create_terrain_material").entered();
@@ -528,7 +524,7 @@ fn create_terrain_material(
             bytemuck::must_cast_slice(&layer.alpha).to_vec(),
         );
 
-        let alpha = create_image(queue, textures, mipgen, &MipImage::new(vec![image]), false);
+        let alpha = create_image(queue, textures, &MipImage::new(vec![image]), false);
 
         layers.push(RawTerrainLayer {
             material: material.index,
