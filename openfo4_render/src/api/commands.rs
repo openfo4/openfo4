@@ -1,13 +1,15 @@
 use std::num::NonZeroUsize;
 
 use bumpalo::Bump;
+use glam::UVec2;
 use hashbrown::{HashMap, HashSet};
 use openfo4_common::utils::exclusive::Exclusive;
 use parking_lot::Mutex;
 
 use crate::api::BufferDescriptor;
 use crate::backend::{
-    AccessFlags, ImageDataLayout, LoadOp, ShaderStages, StoreOp, TextureDescriptor, vulkan,
+    AccessFlags, FilterMode, ImageDataLayout, LoadOp, ShaderStages, StoreOp, TextureDescriptor,
+    vulkan,
 };
 
 use super::resources::{DescriptorSetId, DescriptorSetResource, PipelineId};
@@ -133,6 +135,7 @@ pub enum Command {
     DestroyTexture(TextureId),
     DestroyDescriptorSet(DescriptorSetId),
     ClearTexture(ClearTexture),
+    Blit(BlitCmd),
 }
 
 impl Command {
@@ -228,6 +231,34 @@ impl Command {
                     },
                     access: AccessFlags::TRANSFER_WRITE,
                 });
+            }
+            Self::Blit(cmd) => {
+                if cmd.src.texture == cmd.dst.texture && cmd.src.mip_level == cmd.dst.mip_level {
+                    accesses.push(Resource {
+                        id: ResourceId::Texture {
+                            id: cmd.src.texture,
+                            mip_level: cmd.src.mip_level,
+                        },
+                        access: AccessFlags::BLIT_READ | AccessFlags::BLIT_WRITE,
+                    });
+                } else {
+                    accesses.extend([
+                        Resource {
+                            id: ResourceId::Texture {
+                                id: cmd.src.texture,
+                                mip_level: cmd.src.mip_level,
+                            },
+                            access: AccessFlags::BLIT_READ,
+                        },
+                        Resource {
+                            id: ResourceId::Texture {
+                                id: cmd.dst.texture,
+                                mip_level: cmd.dst.mip_level,
+                            },
+                            access: AccessFlags::BLIT_WRITE,
+                        },
+                    ]);
+                }
             }
             Self::RenderPass(cmd) => {
                 let mut buffers = HashMap::<BufferId, AccessFlags, _, &Bump>::with_capacity_in(
@@ -590,4 +621,19 @@ pub struct PassBindingInfo {
     pub num_buffers: usize,
     /// The total number of mip levels of all textures combined bound by descriptors.
     pub num_texture_mips: usize,
+}
+
+#[derive(Copy, Clone, Debug)]
+pub struct BlitCmd {
+    pub src: RawTextureArea,
+    pub dst: RawTextureArea,
+    pub filter: FilterMode,
+}
+
+#[derive(Copy, Clone, Debug)]
+pub struct RawTextureArea {
+    pub texture: TextureId,
+    pub mip_level: u32,
+    pub min: UVec2,
+    pub max: UVec2,
 }

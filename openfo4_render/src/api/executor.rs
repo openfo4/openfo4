@@ -14,7 +14,9 @@ use crate::api::executor::allocator::Allocation;
 use crate::api::{BufferDescriptor, RawTextureView};
 use crate::backend::allocator::{MemoryManager, UsageFlags};
 use crate::backend::descriptors::AllocatedDescriptorSet;
-use crate::backend::vulkan::{self, Buffer, CommandEncoder, Device, Texture, TextureView};
+use crate::backend::vulkan::{
+    self, Buffer, CommandEncoder, Device, Texture, TextureArea, TextureView,
+};
 use crate::backend::{
     AccessFlags, BufferBarrier, BufferUsage, BufferView, CopyBuffer, DrawIndexedIndirectCommand,
     DrawIndirectCommand, MemoryTypeFlags, PipelineBarriers, RenderPassColorAttachment,
@@ -274,6 +276,31 @@ impl Executor {
                         // it still must be kept alive for this frame since it
                         // is used in a barrier.
                         tmp.textures.insert(cmd.texture.id);
+                    }
+                    Command::Blit(cmd) => {
+                        let src = self.textures.get(cmd.src.texture).unwrap();
+                        let dst = self.textures.get(cmd.dst.texture).unwrap();
+
+                        unsafe {
+                            encoder.blit(
+                                TextureArea {
+                                    texture: src.texture(),
+                                    mip_level: cmd.src.mip_level,
+                                    min: cmd.src.min,
+                                    max: cmd.src.max,
+                                },
+                                TextureArea {
+                                    texture: dst.texture(),
+                                    mip_level: cmd.dst.mip_level,
+                                    min: cmd.dst.min,
+                                    max: cmd.dst.max,
+                                },
+                                cmd.filter,
+                            );
+                        }
+
+                        tmp.textures.insert(cmd.src.texture);
+                        tmp.textures.insert(cmd.dst.texture);
                     }
                     Command::RenderPass(cmd) => {
                         run_render_pass(self, resources, &mut tmp, cmd, encoder, &mut query_pool);

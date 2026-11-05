@@ -602,6 +602,9 @@ bitflags! {
         const TEXTURE_BINDING = 1 << 3;
         /// The texture can be bound as a readable/writable storage texture.
         const STORAGE = 1 << 4;
+
+        const BLIT_SRC = 1 << 5;
+        const BLIT_DST = 1 << 6;
     }
 }
 
@@ -782,6 +785,11 @@ bitflags! {
         /// If the resource was invalidated due to a write to an aliasing resource, this flag
         /// **must** be set.
         const DISCARD = 1 << 19;
+
+        /// Resource can be used as a source for a blit operations.
+        const BLIT_READ = 1 << 20;
+        /// Resource can be used as a destination for blit operations.
+        const BLIT_WRITE = 1 << 21;
     }
 }
 
@@ -824,7 +832,10 @@ impl AccessFlags {
             | AccessFlags::MESH_SHADER_READ
             | AccessFlags::MESH_SHADER_WRITE;
         let compute_flags = AccessFlags::COMPUTE_SHADER_READ | AccessFlags::COMPUTE_SHADER_WRITE;
-        let transfer_flags = AccessFlags::TRANSFER_READ | AccessFlags::TRANSFER_WRITE;
+        let transfer_flags = AccessFlags::TRANSFER_READ
+            | AccessFlags::TRANSFER_WRITE
+            | AccessFlags::BLIT_READ
+            | AccessFlags::BLIT_WRITE;
 
         let mut flags = *self;
 
@@ -861,6 +872,7 @@ impl AccessFlags {
     pub(crate) fn is_writable(&self) -> bool {
         self.intersects(
             Self::TRANSFER_WRITE
+                | Self::BLIT_WRITE
                 | Self::COLOR_ATTACHMENT_WRITE
                 | Self::DEPTH_ATTACHMENT_WRITE
                 | Self::VERTEX_SHADER_WRITE

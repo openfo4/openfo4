@@ -34,16 +34,18 @@ use resources::{
 };
 use scheduler::{Node, Resource, ResourceMap, Scheduler};
 
-use crate::api::commands::{ClearTexture, CreateBuffer, CreateTexture, PassBindingInfo};
+use crate::api::commands::{
+    BlitCmd, ClearTexture, CreateBuffer, CreateTexture, PassBindingInfo, RawTextureArea,
+};
 use crate::api::executor::Executor;
 use crate::backend::allocator::{MemoryManager, UsageFlags};
 use crate::backend::vulkan::{self, CommandEncoder, Device};
 use crate::backend::{
     self, AccessFlags, AdapterMemoryProperties, AdapterProperties, BufferUsage, ClearValue,
     ColorTargetState, DepthStencilState, DescriptorType, DrawIndexedIndirectCommand,
-    DrawIndirectCommand, Face, Features, FrontFace, ImageDataLayout, IndexFormat, LoadOp,
-    PrimitiveTopology, PushConstantRange, SamplerDescriptor, ShaderStage, ShaderStages, StoreOp,
-    TextureDescriptor, TextureFormat, TextureUsage,
+    DrawIndirectCommand, Face, Features, FilterMode, FrontFace, ImageDataLayout, IndexFormat,
+    LoadOp, PrimitiveTopology, PushConstantRange, SamplerDescriptor, ShaderStage, ShaderStages,
+    StoreOp, TextureDescriptor, TextureFormat, TextureUsage,
 };
 use crate::shader::{
     self, BindingInfo, Shader, ShaderAccess, ShaderInstanceBinding, SpecConstantId,
@@ -764,6 +766,59 @@ impl<'a> CommandQueue<'a> {
                 src_mip_level: src.mip_level,
                 dst: dst.texture.id,
                 dst_mip_level: dst.mip_level,
+            }),
+        );
+    }
+
+    /// Copy a region of a `src` texture into a region of a `dst` texture while performing format
+    /// conversion and filtering.
+    ///
+    /// # Panics
+    ///
+    /// - Panics if the given `src` texture does not have the [`BLIT_SRC`] usage set.
+    /// - Panics if the given `dst` texture does not have the [`BLIT_DST`] usage set.
+    ///
+    /// [`BLIT_SRC`]: TextureUsage::BLIT_SRC
+    /// [`BLIT_DST`]: TextureUsage::BLIT_DST
+    pub fn blit(&self, src: &TextureArea<'_>, dst: &TextureArea<'_>, filter: FilterMode) {
+        assert!(
+            src.texture.usage.contains(TextureUsage::BLIT_SRC),
+            "Texture cannot be used as blit source: BLIT_SRC not set"
+        );
+        assert!(
+            dst.texture.usage.contains(TextureUsage::BLIT_DST),
+            "Texture cannot be used as blit destination: BLIT_DST not set"
+        );
+
+        assert!(src.mip_level < src.texture.mip_levels);
+        assert!(src.min.cmplt(src.texture.size_at_mip(src.mip_level)).all());
+        assert!(src.max.cmple(src.texture.size_at_mip(src.mip_level)).all());
+
+        assert!(dst.mip_level < dst.texture.mip_levels);
+        assert!(dst.min.cmplt(dst.texture.size_at_mip(dst.mip_level)).all());
+        assert!(dst.max.cmple(dst.texture.size_at_mip(dst.mip_level)).all());
+
+        if src.texture.id == dst.texture.id && src.mip_level == dst.mip_level {
+            todo!("blitting within the same texture is not yet supported");
+        }
+
+        self.executor
+            .resources
+            .with_texture_rc(src.texture.id, |ref_count| {
+                ref_count.increment_internal();
+            });
+        self.executor
+            .resources
+            .with_texture_rc(dst.texture.id, |ref_count| {
+                ref_count.increment_internal();
+            });
+
+        self.executor.cmds.lock().push(
+            &self.executor.resources,
+            Command::Blit(BlitCmd {
+                src: src.into(),
+                dst: dst.into(),
+                filter,
             }),
         );
     }
@@ -2051,6 +2106,20 @@ impl Texture {
             mip_levels,
         }
     }
+
+    pub fn as_entire_area(&self, mip_level: u32) -> TextureArea<'_> {
+        debug_assert!(mip_level < self.mip_levels);
+        TextureArea {
+            texture: self,
+            min: UVec2::ZERO,
+            max: self.size_at_mip(mip_level),
+            mip_level,
+        }
+    }
+
+    fn size_at_mip(&self, mip_level: u32) -> UVec2 {
+        self.size >> mip_level
+    }
 }
 
 impl Clone for Texture {
@@ -2565,4 +2634,23 @@ struct DrawMeshTasks {
 #[derive(Clone, Debug)]
 pub struct ComputePassDescriptor {
     pub name: &'static str,
+}
+
+#[derive(Copy, Clone, Debug)]
+pub struct TextureArea<'a> {
+    texture: &'a Texture,
+    min: UVec2,
+    max: UVec2,
+    mip_level: u32,
+}
+
+impl From<&TextureArea<'_>> for RawTextureArea {
+    fn from(value: &TextureArea<'_>) -> Self {
+        Self {
+            texture: value.texture.id,
+            mip_level: value.mip_level,
+            min: value.min,
+            max: value.max,
+        }
+    }
 }

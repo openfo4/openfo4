@@ -575,6 +575,13 @@ impl Adapter {
             if features.contains(vk::FormatFeatureFlags::STORAGE_IMAGE) {
                 usages |= TextureUsage::STORAGE;
             }
+            if features.contains(vk::FormatFeatureFlags::BLIT_SRC) {
+                usages |= TextureUsage::BLIT_SRC;
+            }
+            if features.contains(vk::FormatFeatureFlags::BLIT_DST) {
+                usages |= TextureUsage::BLIT_DST;
+            }
+
             if features.contains(vk::FormatFeatureFlags::COLOR_ATTACHMENT)
                 || features.contains(vk::FormatFeatureFlags::DEPTH_STENCIL_ATTACHMENT)
             {
@@ -3101,10 +3108,10 @@ impl From<ShaderStages> for vk::ShaderStageFlags {
 impl From<TextureUsage> for vk::ImageUsageFlags {
     fn from(value: TextureUsage) -> Self {
         let mut flags = vk::ImageUsageFlags::empty();
-        if value.contains(TextureUsage::TRANSFER_SRC) {
+        if value.intersects(TextureUsage::TRANSFER_SRC | TextureUsage::BLIT_SRC) {
             flags |= vk::ImageUsageFlags::TRANSFER_SRC;
         }
-        if value.contains(TextureUsage::TRANSFER_DST) {
+        if value.intersects(TextureUsage::TRANSFER_DST | TextureUsage::BLIT_DST) {
             flags |= vk::ImageUsageFlags::TRANSFER_DST;
         }
         if value.contains(TextureUsage::TEXTURE_BINDING) {
@@ -3869,6 +3876,62 @@ impl<'a> CommandEncoder<'a> {
         unsafe {
             self.device
                 .cmd_write_timestamp2(self.buffer, stage, pool.pool, index);
+        }
+    }
+
+    /// Performs a blit operation.
+    ///
+    /// # Safety
+    ///
+    /// - The `src` [`Texture`] must currently be in [`BLIT_READ`] access state.
+    /// - The `dst` [`Texture`] must currently be in [`BLIT_WRITE`] access state.
+    /// - The area bounds of `src` and `dst` must be within the limits of the [`Texture`].
+    /// - The mip level of `src` and `dst` must be less than the number of mips in the [`Texture`].
+    ///
+    /// [`BLIT_READ`]: AccessFlags::BLIT_READ
+    /// [`BLIT_WRITE`]: AccessFlags::BLIT_WRITE
+    pub unsafe fn blit(&mut self, src: TextureArea<'_>, dst: TextureArea<'_>, filter: FilterMode) {
+        debug_assert!(src.mip_level < src.texture.mip_levels);
+        debug_assert!(dst.mip_level < dst.texture.mip_levels);
+
+        debug_assert!(src.min.cmplt(src.texture.size).all());
+        debug_assert!(src.max.cmple(src.texture.size).all());
+        debug_assert!(dst.min.cmplt(dst.texture.size).all());
+        debug_assert!(dst.max.cmple(dst.texture.size).all());
+
+        let aspect_mask = if src.texture.format.is_depth() {
+            vk::ImageAspectFlags::DEPTH
+        } else {
+            vk::ImageAspectFlags::COLOR
+        };
+
+        let region = vk::ImageBlit2::default()
+            .src_subresource(vk::ImageSubresourceLayers {
+                aspect_mask,
+                mip_level: src.mip_level,
+                base_array_layer: 0,
+                layer_count: 1,
+            })
+            .src_offsets([src.min(), src.max()])
+            .dst_subresource(vk::ImageSubresourceLayers {
+                aspect_mask,
+                mip_level: dst.mip_level,
+                base_array_layer: 0,
+                layer_count: 1,
+            })
+            .dst_offsets([dst.min(), dst.max()]);
+        let regions = [region];
+
+        let info = vk::BlitImageInfo2::default()
+            .src_image(src.texture.image)
+            .src_image_layout(vk::ImageLayout::TRANSFER_SRC_OPTIMAL)
+            .dst_image(dst.texture.image)
+            .dst_image_layout(vk::ImageLayout::TRANSFER_DST_OPTIMAL)
+            .regions(&regions)
+            .filter(filter.into());
+
+        unsafe {
+            self.device.cmd_blit_image2(self.buffer, &info);
         }
     }
 
@@ -5814,9 +5877,12 @@ fn convert_access_flags(mut flags: AccessFlags) -> vk::AccessFlags2 {
         }
     };
 
-    map_flags(AccessFlags::TRANSFER_READ, vk::AccessFlags2::TRANSFER_READ);
     map_flags(
-        AccessFlags::TRANSFER_WRITE,
+        AccessFlags::TRANSFER_READ | AccessFlags::BLIT_READ,
+        vk::AccessFlags2::TRANSFER_READ,
+    );
+    map_flags(
+        AccessFlags::TRANSFER_WRITE | AccessFlags::BLIT_WRITE,
         vk::AccessFlags2::TRANSFER_WRITE,
     );
     map_flags(
@@ -5882,9 +5948,9 @@ fn access_flags_to_image_layout(flags: AccessFlags) -> vk::ImageLayout {
 
     if flags.is_empty() {
         vk::ImageLayout::UNDEFINED
-    } else if matches_any(AccessFlags::TRANSFER_READ) {
+    } else if matches_any(AccessFlags::TRANSFER_READ | AccessFlags::BLIT_READ) {
         vk::ImageLayout::TRANSFER_SRC_OPTIMAL
-    } else if matches_any(AccessFlags::TRANSFER_WRITE) {
+    } else if matches_any(AccessFlags::TRANSFER_WRITE | AccessFlags::BLIT_WRITE) {
         vk::ImageLayout::TRANSFER_DST_OPTIMAL
     } else if matches_any(AccessFlags::DEPTH_ATTACHMENT_READ) {
         vk::ImageLayout::DEPTH_READ_ONLY_OPTIMAL
@@ -5989,7 +6055,12 @@ fn access_flags_to_stage_mask(
         output |= vk::PipelineStageFlags2::COLOR_ATTACHMENT_OUTPUT;
     }
 
-    if flags.intersects(AccessFlags::TRANSFER_READ | AccessFlags::TRANSFER_WRITE) {
+    if flags.intersects(
+        AccessFlags::TRANSFER_READ
+            | AccessFlags::TRANSFER_WRITE
+            | AccessFlags::BLIT_READ
+            | AccessFlags::BLIT_WRITE,
+    ) {
         output |= vk::PipelineStageFlags2::TRANSFER;
     }
 
@@ -6245,6 +6316,32 @@ mod tests {
             assert_eq!(b.addr() % 4, 0);
 
             vk_dealloc(null_mut(), b);
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct TextureArea<'a> {
+    pub texture: &'a Texture,
+    pub min: UVec2,
+    pub max: UVec2,
+    pub mip_level: u32,
+}
+
+impl TextureArea<'_> {
+    fn min(&self) -> vk::Offset3D {
+        vk::Offset3D {
+            x: self.min.x.cast_signed(),
+            y: self.min.y.cast_signed(),
+            z: 0,
+        }
+    }
+
+    fn max(&self) -> vk::Offset3D {
+        vk::Offset3D {
+            x: self.max.x.cast_signed(),
+            y: self.max.y.cast_signed(),
+            z: 1,
         }
     }
 }
