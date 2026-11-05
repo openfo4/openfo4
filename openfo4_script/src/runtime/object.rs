@@ -75,7 +75,7 @@ impl ObjectPool {
             std::alloc::handle_alloc_error(alloc_layout);
         }
 
-        let object = unsafe { Object::new(ptr, array_len, typ, ty, self.clone()) };
+        let object = unsafe { Object::new(ptr, array_len, typ, ty) };
         let object = Arc::new(object);
         let addr = ObjectAddr(ptr);
 
@@ -83,7 +83,11 @@ impl ObjectPool {
 
         objects.insert(addr, Arc::clone(&object));
 
-        ObjectHandle { object, index: 0 }
+        ObjectHandle {
+            object,
+            index: 0,
+            pool: self.clone(),
+        }
     }
 
     /// Creates a new object of the given type.
@@ -152,6 +156,7 @@ impl ObjectPool {
             return Some(ObjectHandle {
                 object: Arc::clone(object),
                 index: 0,
+                pool: self.clone(),
             });
         }
 
@@ -159,9 +164,13 @@ impl ObjectPool {
 
         let object = self.0.resources.constants.object(addr)?;
         let ty = self.0.resources.types.get(object.ty).unwrap();
-        let object = unsafe { Object::new_static(object.ptr, 1, ty, object.ty, self.clone()) };
+        let object = unsafe { Object::new_static(object.ptr, 1, ty, object.ty) };
         let object = Arc::new(object);
-        Some(ObjectHandle { object, index: 0 })
+        Some(ObjectHandle {
+            object,
+            index: 0,
+            pool: self.clone(),
+        })
     }
 
     unsafe fn array<U>(&self, addr: ObjectAddr) -> &[U] {
@@ -202,12 +211,11 @@ struct Object {
     len: usize,
     ty: Arc<Type>,
     id: TypeId,
-    pool: ObjectPool,
     is_static: bool,
 }
 
 impl Object {
-    unsafe fn new(ptr: *mut u8, len: usize, ty: Arc<Type>, id: TypeId, pool: ObjectPool) -> Self {
+    unsafe fn new(ptr: *mut u8, len: usize, ty: Arc<Type>, id: TypeId) -> Self {
         if let TypeRepr::Composite(ty) = &ty.repr {
             for member in &ty.members {
                 let Some(value) = &member.default_value else {
@@ -234,24 +242,16 @@ impl Object {
             len,
             ty,
             id,
-            pool,
             is_static: false,
         }
     }
 
-    unsafe fn new_static(
-        ptr: *const u8,
-        len: usize,
-        ty: Arc<Type>,
-        id: TypeId,
-        pool: ObjectPool,
-    ) -> Self {
+    unsafe fn new_static(ptr: *const u8, len: usize, ty: Arc<Type>, id: TypeId) -> Self {
         Self {
             ptr: ptr.cast_mut(),
             len,
             ty,
             id,
-            pool,
             is_static: true,
         }
     }
@@ -262,7 +262,13 @@ impl Object {
     ///
     /// No other threads may access the same location of this [`Object`] for the duration of this
     /// function call, including guest code.
-    unsafe fn get<'a, T>(&self, index: usize, class: &'a str, name: &'a str) -> Result<T, Error<'a>>
+    unsafe fn get<'a, T>(
+        &self,
+        pool: &ObjectPool,
+        index: usize,
+        class: &'a str,
+        name: &'a str,
+    ) -> Result<T, Error<'a>>
     where
         T: ObjectValue,
     {
@@ -275,7 +281,7 @@ impl Object {
 
         unsafe {
             let ptr = self.ptr.add(array_offset).add(offset);
-            T::read(&self.pool, ty, ptr)
+            T::read(pool, ty, ptr)
         }
     }
 
@@ -287,6 +293,7 @@ impl Object {
     /// function call, including guest code.
     unsafe fn set<'a, T>(
         &self,
+        pool: &ObjectPool,
         index: usize,
         class: &'a str,
         name: &'a str,
@@ -308,7 +315,7 @@ impl Object {
 
         unsafe {
             let ptr = self.ptr.add(array_offset).add(offset);
-            value.write(&self.pool, ty, ptr)
+            value.write(pool, ty, ptr)
         }
     }
 
@@ -368,6 +375,39 @@ impl Object {
 // are threadsafe themselves.
 unsafe impl Send for Object {}
 unsafe impl Sync for Object {}
+
+impl Drop for Object {
+    fn drop(&mut self) {
+        // Static allocations are not managed by us.
+        if self.is_static {
+            return;
+        }
+
+        if let Some(offset) = self.ty.info.lock {
+            let stride = self.ty.repr.size_padded();
+
+            for index in 0..self.len {
+                unsafe {
+                    self.ptr
+                        .byte_add(index * stride)
+                        .byte_add(offset)
+                        .cast::<ObjectLock>()
+                        .drop_in_place();
+                }
+            }
+        }
+
+        let size = self.ty.repr.size_padded() * self.len;
+        let align = self.ty.repr.align();
+        let layout = unsafe { Layout::from_size_align_unchecked(size, align) };
+
+        if size != 0 {
+            unsafe {
+                std::alloc::dealloc(self.ptr, layout);
+            }
+        }
+    }
+}
 
 #[derive(Debug)]
 pub struct ObjectArrayBuilder {
@@ -551,9 +591,11 @@ impl ObjectValue for Option<ObjectHandle> {
         if addr.is_null() {
             Ok(None)
         } else {
-            let handle = pool
-                .get_object(addr)
-                .map(|(object, index)| ObjectHandle { object, index });
+            let handle = pool.get_object(addr).map(|(object, index)| ObjectHandle {
+                object,
+                index,
+                pool: pool.clone(),
+            });
             Ok(handle)
         }
     }
@@ -666,6 +708,7 @@ impl ObjectTag {
 #[derive(Clone)]
 pub struct ObjectHandle {
     object: Arc<Object>,
+    pool: ObjectPool,
     index: usize,
 }
 
@@ -687,6 +730,7 @@ impl ObjectHandle {
         } else {
             Some(Self {
                 object: Arc::clone(&self.object),
+                pool: self.pool.clone(),
                 index,
             })
         }
@@ -709,7 +753,7 @@ impl ObjectHandle {
 
         self.with_locked_blocking(|| {
             // SAFETY: We have locked the entire object.
-            unsafe { self.object.get(self.index, class, name) }
+            unsafe { self.object.get(&self.pool, self.index, class, name) }
         })
     }
 
@@ -721,7 +765,7 @@ impl ObjectHandle {
 
         self.with_locked_blocking(|| {
             // SAFETY: We have locked the entire object.
-            unsafe { self.object.set(self.index, class, name, value) }
+            unsafe { self.object.set(&self.pool, self.index, class, name, value) }
         })
     }
 
@@ -733,7 +777,7 @@ impl ObjectHandle {
 
         self.try_with_locked(|| {
             // SAFETY: We have locked the entire object.
-            unsafe { self.object.get(self.index, class, name) }
+            unsafe { self.object.get(&self.pool, self.index, class, name) }
         })
     }
 
@@ -750,7 +794,7 @@ impl ObjectHandle {
 
         self.try_with_locked(|| {
             // SAFETY: We have locked the entire object.
-            unsafe { self.object.set(self.index, class, name, value) }
+            unsafe { self.object.set(&self.pool, self.index, class, name, value) }
         })
     }
 
