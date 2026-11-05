@@ -1,7 +1,7 @@
 use std::cell::UnsafeCell;
 use std::ops::{Deref, DerefMut};
 
-#[cfg(debug_assertions)]
+#[cfg(all(debug_assertions, not(miri)))]
 use parking_lot::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 
 /// A cell for unchecked interior mutability.
@@ -17,7 +17,7 @@ pub struct UnsafeRefCell<T>
 where
     T: ?Sized,
 {
-    #[cfg(debug_assertions)]
+    #[cfg(all(debug_assertions, not(miri)))]
     state: RwLock<()>,
     cell: UnsafeCell<T>,
 }
@@ -26,7 +26,7 @@ impl<T> UnsafeRefCell<T> {
     #[inline]
     pub const fn new(value: T) -> Self {
         Self {
-            #[cfg(debug_assertions)]
+            #[cfg(all(debug_assertions, not(miri)))]
             state: RwLock::new(()),
             cell: UnsafeCell::new(value),
         }
@@ -50,7 +50,7 @@ where
     #[inline]
     #[track_caller]
     pub unsafe fn borrow(&self) -> Ref<'_, T> {
-        #[cfg(debug_assertions)]
+        #[cfg(all(debug_assertions, not(miri)))]
         let Some(guard) = self.state.try_read() else {
             panic!("UnsafeRefCell is already borrowed");
         };
@@ -60,7 +60,7 @@ where
         let value = unsafe { &*self.cell.get() };
         Ref {
             value,
-            #[cfg(debug_assertions)]
+            #[cfg(all(debug_assertions, not(miri)))]
             _guard: guard,
         }
     }
@@ -73,7 +73,7 @@ where
     #[inline]
     #[track_caller]
     pub unsafe fn borrow_mut(&self) -> RefMut<'_, T> {
-        #[cfg(debug_assertions)]
+        #[cfg(all(debug_assertions, not(miri)))]
         let Some(guard) = self.state.try_write() else {
             panic!("UnsafeRefCell is already borrowed");
         };
@@ -83,7 +83,7 @@ where
         let value = unsafe { &mut *self.cell.get() };
         RefMut {
             value,
-            #[cfg(debug_assertions)]
+            #[cfg(all(debug_assertions, not(miri)))]
             _guard: guard,
         }
     }
@@ -104,7 +104,7 @@ where
     T: ?Sized,
 {
     value: &'a T,
-    #[cfg(debug_assertions)]
+    #[cfg(all(debug_assertions, not(miri)))]
     _guard: RwLockReadGuard<'a, ()>,
 }
 
@@ -127,7 +127,7 @@ where
     T: ?Sized,
 {
     value: &'a mut T,
-    #[cfg(debug_assertions)]
+    #[cfg(all(debug_assertions, not(miri)))]
     _guard: RwLockWriteGuard<'a, ()>,
 }
 
