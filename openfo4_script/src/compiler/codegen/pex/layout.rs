@@ -72,6 +72,23 @@ impl Layouts {
             res.types.set_ptr_type(array_ty, array_ptr_ty);
         }
 
+        for (id, name) in [
+            (res.primitives.string_ptr, "*string"),
+            (res.primitives.var_ptr, "*var"),
+        ] {
+            let array_ty = res.types.declare();
+            let array_ptr_ty = res.types.declare();
+            define_array_ty(res, id, array_ty, array_ptr_ty, name);
+
+            res.papyrus
+                .type_to_array_ptr
+                .lock()
+                .insert(id, array_ptr_ty);
+            res.papyrus.type_to_array.lock().insert(id, array_ty);
+            res.papyrus.arrays_to_elem.lock().insert(array_ty, id);
+            res.types.set_ptr_type(array_ty, array_ptr_ty);
+        }
+
         Self {
             classes: HashMap::new(),
             class_ptr_types: HashMap::new(),

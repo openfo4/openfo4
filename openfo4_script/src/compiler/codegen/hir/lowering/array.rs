@@ -1,5 +1,6 @@
 use std::mem::offset_of;
 use std::ptr;
+use std::sync::Arc;
 
 use openfo4_jit::{IntCompareOp, Type as JitType, Value as JitValue};
 
@@ -9,7 +10,7 @@ use crate::compiler::codegen::hir::lowering::{
     BOOL_TYPE, FLOAT_TYPE, INT_TYPE, ISIZE_TYPE, PTR_TYPE, Translator,
 };
 use crate::compiler::codegen::hir::{ArrayAdd, ArrayInsert, ArrayRemove, Literal, Null, Value};
-use crate::compiler::resources::{Type, TypeId, TypeRepr};
+use crate::compiler::resources::{Type, TypeId, TypeRepr, Types};
 use crate::runtime::ArrayObject;
 
 pub fn array_length(translator: &mut Translator<'_>, array: &Value<Null>, dst: &Value<i32>) {
@@ -419,6 +420,9 @@ pub fn array_cast<F>(
 ) where
     F: FnOnce(&mut Translator<'_>, JitValue) -> JitValue,
 {
+    let src_ty = get_elem_inline_ty(&translator.data.resources.types, src_ty);
+    let dst_ty = get_elem_inline_ty(&translator.data.resources.types, dst_ty);
+
     let array = translator.load(src);
 
     let array_is_null_block = translator.builder.create_block(&[]);
@@ -450,9 +454,6 @@ pub fn array_cast<F>(
         .load(ISIZE_TYPE, array, offset_of!(ArrayObject, len));
 
     let dst_base_ptr = call_malloc(translator, dst_ty, len);
-
-    dbg!(&dst_ty);
-    dbg!(&translator.data.resources.papyrus);
 
     let array_ty = *translator
         .data
@@ -526,6 +527,15 @@ pub fn array_cast<F>(
     translator.current_block = final_block;
 }
 
+fn get_elem_inline_ty(types: &Types, id: TypeId) -> TypeId {
+    let ty = types.get(id).unwrap();
+    if matches!(ty.repr, TypeRepr::Composite(_)) {
+        types.ptr_of(ty.info.id).unwrap()
+    } else {
+        id
+    }
+}
+
 fn lowered_elem_ty(ty: &Type) -> JitType {
     match ty.repr {
         TypeRepr::Unit => PTR_TYPE,
@@ -533,7 +543,7 @@ fn lowered_elem_ty(ty: &Type) -> JitType {
         TypeRepr::Int { bits } if bits == 32 => INT_TYPE,
         TypeRepr::Int { bits } if bits == usize::BITS => PTR_TYPE,
         TypeRepr::Float { bits } if bits == 32 => FLOAT_TYPE,
-        TypeRepr::Composite(_) => PTR_TYPE,
+        TypeRepr::Pointer(_) => PTR_TYPE,
         _ => unreachable!(),
     }
 }
