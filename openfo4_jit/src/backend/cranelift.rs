@@ -201,7 +201,14 @@ impl Backend for CraneliftModule {
 
             self.ctx.clear();
 
-            let signature = convert_signature(&func_def.signature);
+            let mut signature = convert_signature(&func_def.signature);
+            // Host-to-Guest shims must use the extern "C" ABI.
+            if matches!(
+                func_def.definition.as_ref(),
+                Some(FunctionDefinition::GuestTrampoline(_))
+            ) {
+                signature.call_conv = self.isa.default_call_conv();
+            }
 
             let mut func = Function::with_name_signature(
                 UserFuncName::User(UserExternalName::new(0, id.0.try_into().unwrap())),
@@ -234,15 +241,14 @@ impl Backend for CraneliftModule {
                 }
                 FunctionDefinition::GuestTrampoline(callee) => {
                     let f = &self.functions[callee.0];
-                    let mut signature = convert_signature(&f.signature);
-                    signature.call_conv = self.isa.default_call_conv();
+                    let calle_sig = convert_signature(&f.signature);
 
                     trampoline::call_guest_trampoline(
                         &mut builder,
                         ptr_type,
                         f,
                         *callee,
-                        &signature,
+                        &calle_sig,
                         &mut refs_to_funcs,
                     );
                 }
