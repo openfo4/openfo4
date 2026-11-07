@@ -12,7 +12,7 @@ const COMPILER_OPTIONS: CompilerOptions = CompilerOptions {
 
 #[test]
 fn cast_array() {
-    let mut engine = Engine::new(COMPILER_OPTIONS);
+    let engine = Engine::new(COMPILER_OPTIONS);
 
     let module = assemble(
         r#"
@@ -27,7 +27,7 @@ fn cast_array() {
         "#,
     );
 
-    engine.register(&module);
+    block_on(engine.register(&module));
 
     let instance = block_on(engine.compile("MyClass", &Options::default())).unwrap();
     let func = instance.get_func("MyFunction").unwrap();
@@ -65,7 +65,7 @@ fn cast_array() {
 
 #[test]
 fn class_upcast() {
-    let mut engine = Engine::new(COMPILER_OPTIONS);
+    let engine = Engine::new(COMPILER_OPTIONS);
 
     let module = assemble(
         r#"
@@ -84,7 +84,7 @@ fn class_upcast() {
         "#,
     );
 
-    engine.register(&module);
+    block_on(engine.register(&module));
 
     let instance = block_on(engine.compile("C", &Options::default())).unwrap();
     let func = instance.get_func("F").unwrap();
@@ -101,7 +101,7 @@ fn class_upcast() {
 
 #[test]
 fn class_downcast() {
-    let mut engine = Engine::new(COMPILER_OPTIONS);
+    let engine = Engine::new(COMPILER_OPTIONS);
 
     let module = assemble(
         r#"
@@ -120,7 +120,7 @@ fn class_downcast() {
         "#,
     );
 
-    engine.register(&module);
+    block_on(engine.register(&module));
 
     let instance = block_on(engine.compile("C", &Options::default())).unwrap();
     let func = instance.get_func("F").unwrap();
@@ -137,7 +137,7 @@ fn class_downcast() {
 
 #[test]
 fn class_downcast_fail() {
-    let mut engine = Engine::new(COMPILER_OPTIONS);
+    let engine = Engine::new(COMPILER_OPTIONS);
 
     let module = assemble(
         r#"
@@ -156,7 +156,7 @@ fn class_downcast_fail() {
         "#,
     );
 
-    engine.register(&module);
+    block_on(engine.register(&module));
 
     block_on(engine.compile("A", &Options::default())).unwrap();
     let instance = block_on(engine.compile("C", &Options::default())).unwrap();
@@ -177,7 +177,7 @@ fn class_downcast_fail() {
 
 #[test]
 fn class_downcast_on_null() {
-    let mut engine = Engine::new(COMPILER_OPTIONS);
+    let engine = Engine::new(COMPILER_OPTIONS);
 
     let module = assemble(
         r#"
@@ -193,7 +193,7 @@ fn class_downcast_on_null() {
         "#,
     );
 
-    engine.register(&module);
+    block_on(engine.register(&module));
 
     block_on(engine.compile("A", &Options::default())).unwrap();
     let instance = block_on(engine.compile("B", &Options::default())).unwrap();
@@ -326,7 +326,7 @@ where
         "#,
     ));
 
-    engine.register(&module);
+    block_on(engine.register(&module));
 
     let instance = block_on(engine.compile("MyClass", &Options::default())).unwrap();
     let func = instance.get_func("MyFunc").unwrap();

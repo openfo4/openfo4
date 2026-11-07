@@ -13,7 +13,7 @@ const COMPILER_OPTIONS: CompilerOptions = CompilerOptions {
 #[test]
 #[should_panic]
 fn call_with_incorrect_object_type() {
-    let mut engine = Engine::new(COMPILER_OPTIONS);
+    let engine = Engine::new(COMPILER_OPTIONS);
 
     let module = assemble(
         r#"
@@ -27,7 +27,7 @@ fn call_with_incorrect_object_type() {
         "#,
     );
 
-    engine.register(&module);
+    block_on(engine.register(&module));
 
     block_on(engine.compile("B", &Options::default())).unwrap();
     let b = engine.get_type("B").unwrap();
@@ -47,7 +47,7 @@ fn call_with_incorrect_object_type() {
 #[test]
 #[should_panic]
 fn call_null_object() {
-    let mut engine = Engine::new(COMPILER_OPTIONS);
+    let engine = Engine::new(COMPILER_OPTIONS);
 
     let module = assemble(
         r#"
@@ -56,7 +56,7 @@ fn call_null_object() {
         "#,
     );
 
-    engine.register(&module);
+    block_on(engine.register(&module));
 
     let instance = block_on(engine.compile("A", &Options::default())).unwrap();
 
@@ -102,7 +102,7 @@ fn return_wrong_type_from_native_func() {
         "#,
     );
 
-    engine.register(&module);
+    block_on(engine.register(&module));
     engine.register_native_function("test", "F", f).unwrap();
 
     block_on(engine.compile("A", &Options::default())).unwrap();
@@ -125,7 +125,7 @@ fn return_wrong_type_from_native_func() {
 #[test]
 #[should_panic]
 fn call_with_incorrect_parameter_count() {
-    let mut engine = Engine::new(COMPILER_OPTIONS);
+    let engine = Engine::new(COMPILER_OPTIONS);
 
     let module = assemble(
         r#"
@@ -137,7 +137,7 @@ fn call_with_incorrect_parameter_count() {
         "#,
     );
 
-    engine.register(&module);
+    block_on(engine.register(&module));
 
     let a = block_on(engine.compile("A", &Options::default())).unwrap();
     let func = a.get_func("F").unwrap();
@@ -172,7 +172,7 @@ fn return_null_non_nullable_object() {
         "#,
     );
 
-    engine.register(&module);
+    block_on(engine.register(&module));
     engine.register_native_function("A", "F", f).unwrap();
 
     let instance = block_on(engine.compile("A", &Options::default())).unwrap();

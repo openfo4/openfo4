@@ -11,7 +11,7 @@ const COMPILER_OPTIONS: CompilerOptions = CompilerOptions {
 
 #[test]
 fn default_class_values() {
-    let mut engine = Engine::new(COMPILER_OPTIONS);
+    let engine = Engine::new(COMPILER_OPTIONS);
 
     let module = assemble(
         r#"
@@ -28,7 +28,7 @@ fn default_class_values() {
         "#,
     );
 
-    engine.register(&module);
+    block_on(engine.register(&module));
     block_on(engine.compile("MyClass", &Options::default())).unwrap();
     let class = engine.get_type("MyClass").unwrap();
 
@@ -43,7 +43,7 @@ fn default_class_values() {
 
 #[test]
 fn field_without_property() {
-    let mut engine = Engine::new(COMPILER_OPTIONS);
+    let engine = Engine::new(COMPILER_OPTIONS);
 
     let module = assemble(
         r#"
@@ -74,7 +74,7 @@ fn field_without_property() {
         "#,
     );
 
-    engine.register(&module);
+    block_on(engine.register(&module));
 
     let instance = block_on(engine.compile("B", &Options::default())).unwrap();
     let b = engine.get_type("B").unwrap();

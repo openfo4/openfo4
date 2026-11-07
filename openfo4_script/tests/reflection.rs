@@ -11,7 +11,7 @@ const COMPILER_OPTIONS: CompilerOptions = CompilerOptions {
 
 #[test]
 fn class_reflection() {
-    let mut engine = Engine::new(COMPILER_OPTIONS);
+    let engine = Engine::new(COMPILER_OPTIONS);
 
     let module = assemble(
         r#"
@@ -28,7 +28,7 @@ fn class_reflection() {
         "#,
     );
 
-    engine.register(&module);
+    block_on(engine.register(&module));
     block_on(engine.compile("MyClass", &Options::default())).unwrap();
     let class = engine.get_type("MyClass").unwrap();
 
@@ -65,7 +65,7 @@ fn class_reflection() {
 
 #[test]
 fn struct_reflection() {
-    let mut engine = Engine::new(COMPILER_OPTIONS);
+    let engine = Engine::new(COMPILER_OPTIONS);
 
     let module = assemble(
         r#"
@@ -76,7 +76,7 @@ fn struct_reflection() {
         "#,
     );
 
-    engine.register(&module);
+    block_on(engine.register(&module));
     block_on(engine.compile("MyClass", &Options::default())).unwrap();
     let struct_ = engine.get_type("MyClass#MyStruct").unwrap();
 

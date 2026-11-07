@@ -11,7 +11,7 @@ const COMPILER_OPTIONS: CompilerOptions = CompilerOptions {
 
 #[test]
 fn call_method_on_null() {
-    let mut engine = Engine::new(COMPILER_OPTIONS);
+    let engine = Engine::new(COMPILER_OPTIONS);
 
     let module = assemble(
         r#"
@@ -30,7 +30,7 @@ fn call_method_on_null() {
         "#,
     );
 
-    engine.register(&module);
+    block_on(engine.register(&module));
 
     let instance = block_on(engine.compile("MyClass", &Options::default())).unwrap();
     let func = instance.get_func("MyFunction").unwrap();
@@ -44,7 +44,7 @@ fn call_method_on_null() {
 
 #[test]
 fn array_get_on_null() {
-    let mut engine = Engine::new(COMPILER_OPTIONS);
+    let engine = Engine::new(COMPILER_OPTIONS);
 
     let module = assemble(
         r#"
@@ -60,7 +60,7 @@ fn array_get_on_null() {
         "#,
     );
 
-    engine.register(&module);
+    block_on(engine.register(&module));
 
     let instance = block_on(engine.compile("MyClass", &Options::default())).unwrap();
     let func = instance.get_func("MyFunction").unwrap();
@@ -74,7 +74,7 @@ fn array_get_on_null() {
 
 #[test]
 fn array_get_out_of_bounds() {
-    let mut engine = Engine::new(COMPILER_OPTIONS);
+    let engine = Engine::new(COMPILER_OPTIONS);
 
     let module = assemble(
         r#"
@@ -92,7 +92,7 @@ fn array_get_out_of_bounds() {
         "#,
     );
 
-    engine.register(&module);
+    block_on(engine.register(&module));
 
     let instance = block_on(engine.compile("MyClass", &Options::default())).unwrap();
     let func = instance.get_func("MyFunction").unwrap();

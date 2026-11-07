@@ -11,7 +11,7 @@ const COMPILER_OPTIONS: CompilerOptions = CompilerOptions {
 
 #[test]
 fn method_resolution_external() {
-    let mut engine = Engine::new(COMPILER_OPTIONS);
+    let engine = Engine::new(COMPILER_OPTIONS);
 
     let module = assemble(
         r#"
@@ -34,7 +34,7 @@ fn method_resolution_external() {
         "#,
     );
 
-    engine.register(&module);
+    block_on(engine.register(&module));
 
     let instance = block_on(engine.compile("B", &Options::default())).unwrap();
     let b = engine.get_type("B").unwrap();
@@ -59,7 +59,7 @@ fn method_resolution_external() {
 
 #[test]
 fn method_resolution_internal() {
-    let mut engine = Engine::new(COMPILER_OPTIONS);
+    let engine = Engine::new(COMPILER_OPTIONS);
 
     let module = assemble(
         r#"
@@ -97,7 +97,7 @@ fn method_resolution_internal() {
         "#,
     );
 
-    engine.register(&module);
+    block_on(engine.register(&module));
 
     let instance = block_on(engine.compile("B", &Options::default())).unwrap();
     let b = engine.get_type("B").unwrap();
@@ -122,7 +122,7 @@ fn method_resolution_internal() {
 
 #[test]
 fn method_resolution_call_parent() {
-    let mut engine = Engine::new(COMPILER_OPTIONS);
+    let engine = Engine::new(COMPILER_OPTIONS);
 
     let module = assemble(
         r#"
@@ -146,7 +146,7 @@ fn method_resolution_call_parent() {
         return res
         "#,
     );
-    engine.register(&module);
+    block_on(engine.register(&module));
 
     let instance = block_on(engine.compile("C", &Options::default())).unwrap();
     let c = engine.get_type("C").unwrap();
@@ -163,7 +163,7 @@ fn method_resolution_call_parent() {
 
 #[test]
 fn skip_static_only_vtable() {
-    let mut engine = Engine::new(COMPILER_OPTIONS);
+    let engine = Engine::new(COMPILER_OPTIONS);
 
     let module = assemble(
         r#"
@@ -182,13 +182,13 @@ fn skip_static_only_vtable() {
         "#,
     );
 
-    engine.register(&module);
+    block_on(engine.register(&module));
     block_on(engine.compile("B", &Options::default())).unwrap();
 }
 
 #[test]
 fn class_without_methods() {
-    let mut engine = Engine::new(COMPILER_OPTIONS);
+    let engine = Engine::new(COMPILER_OPTIONS);
 
     let module = assemble(
         r#"
@@ -201,7 +201,7 @@ fn class_without_methods() {
         "#,
     );
 
-    engine.register(&module);
+    block_on(engine.register(&module));
     let instance = block_on(engine.compile("B", &Options::default())).unwrap();
     let b = engine.get_type("B").unwrap();
 
@@ -217,7 +217,7 @@ fn class_without_methods() {
 
 #[test]
 fn class_without_methods_twice() {
-    let mut engine = Engine::new(COMPILER_OPTIONS);
+    let engine = Engine::new(COMPILER_OPTIONS);
 
     let module = assemble(
         r#"
@@ -233,7 +233,7 @@ fn class_without_methods_twice() {
         "#,
     );
 
-    engine.register(&module);
+    block_on(engine.register(&module));
     let instance = block_on(engine.compile("C", &Options::default())).unwrap();
     let c = engine.get_type("C").unwrap();
 

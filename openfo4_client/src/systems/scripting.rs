@@ -87,7 +87,7 @@ impl ExecutorBuilder {
                 let buf = file_loader.read(path).await.unwrap();
 
                 let module = Module::decode(&buf[..]).unwrap();
-                engine.register(&module);
+                engine.register(&module).await;
             }
         }
 

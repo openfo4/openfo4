@@ -34,7 +34,7 @@ fn string_constant() {
         "#,
     );
 
-    engine.register(&module);
+    block_on(engine.register(&module));
     engine
         .register_native_function("test", "assert_valid_result", assert_valid_result)
         .unwrap();
@@ -74,7 +74,7 @@ fn string_concat() {
         "#,
     );
 
-    engine.register(&module);
+    block_on(engine.register(&module));
     engine
         .register_native_function("test", "assert_valid_result", assert_valid_result)
         .unwrap();
@@ -96,7 +96,7 @@ fn string_concat() {
 
 #[test]
 fn string_cmpeq() {
-    let mut engine = Engine::new(COMPILER_OPTIONS);
+    let engine = Engine::new(COMPILER_OPTIONS);
 
     let module = assemble(
         r#"
@@ -111,7 +111,7 @@ fn string_cmpeq() {
         "#,
     );
 
-    engine.register(&module);
+    block_on(engine.register(&module));
 
     let instance = block_on(engine.compile("MyClass", &Options::default())).unwrap();
     let func = instance.get_func("IsHello").unwrap();

@@ -11,7 +11,7 @@ const COMPILER_OPTIONS: CompilerOptions = CompilerOptions {
 
 #[test]
 fn state() {
-    let mut engine = Engine::new(COMPILER_OPTIONS);
+    let engine = Engine::new(COMPILER_OPTIONS);
 
     let module = assemble(
         r#"
@@ -34,7 +34,7 @@ fn state() {
         "#,
     );
 
-    engine.register(&module);
+    block_on(engine.register(&module));
 
     let instance = block_on(engine.compile("MyClass", &Options::default())).unwrap();
     let func = instance.get_func("MyFunction").unwrap();
@@ -68,7 +68,7 @@ fn state() {
 
 #[test]
 fn state_override_order() {
-    let mut engine = Engine::new(COMPILER_OPTIONS);
+    let engine = Engine::new(COMPILER_OPTIONS);
 
     let module = assemble(
         r#"
@@ -104,7 +104,7 @@ fn state_override_order() {
         "#,
     );
 
-    engine.register(&module);
+    block_on(engine.register(&module));
     let instance = block_on(engine.compile("B", &Options::default())).unwrap();
     let func = instance.get_func("MyFunction").unwrap();
     let b = engine.get_type("B").unwrap();
@@ -148,7 +148,7 @@ fn state_override_order() {
 
 #[test]
 fn access_undeclared_state_builtin() {
-    let mut engine = Engine::new(COMPILER_OPTIONS);
+    let engine = Engine::new(COMPILER_OPTIONS);
 
     let module = assemble(
         r#"
@@ -158,6 +158,6 @@ fn access_undeclared_state_builtin() {
         return __state
         "#,
     );
-    engine.register(&module);
+    block_on(engine.register(&module));
     block_on(engine.compile("A", &Options::default())).unwrap();
 }

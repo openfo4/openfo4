@@ -37,7 +37,7 @@ fn int_var() {
         "#,
     );
 
-    engine.register(&module);
+    block_on(engine.register(&module));
     engine
         .register_native_function("test", "assert_valid_result", assert_valid_result)
         .unwrap();
@@ -54,7 +54,7 @@ fn int_var() {
 
 #[test]
 fn string_var() {
-    let mut engine = Engine::new(COMPILER_OPTIONS);
+    let engine = Engine::new(COMPILER_OPTIONS);
 
     let module = assemble(
         r#"
@@ -69,7 +69,7 @@ fn string_var() {
         "#,
     );
 
-    engine.register(&module);
+    block_on(engine.register(&module));
 
     let instance = block_on(engine.compile("MyClass", &Options::default())).unwrap();
     let func = instance.get_func("MyFunction").unwrap();
@@ -86,7 +86,7 @@ fn string_var() {
 
 #[test]
 fn class_var() {
-    let mut engine = Engine::new(COMPILER_OPTIONS);
+    let engine = Engine::new(COMPILER_OPTIONS);
 
     let module = assemble(
         r#"
@@ -101,7 +101,7 @@ fn class_var() {
         "#,
     );
 
-    engine.register(&module);
+    block_on(engine.register(&module));
 
     let instance = block_on(engine.compile("MyClass", &Options::default())).unwrap();
     let func = instance.get_func("MyFunction").unwrap();
@@ -119,7 +119,7 @@ fn class_var() {
 
 #[test]
 fn struct_var() {
-    let mut engine = Engine::new(COMPILER_OPTIONS);
+    let engine = Engine::new(COMPILER_OPTIONS);
 
     let module = assemble(
         r#"
@@ -138,7 +138,7 @@ fn struct_var() {
         "#,
     );
 
-    engine.register(&module);
+    block_on(engine.register(&module));
 
     let instance = block_on(engine.compile("MyClass", &Options::default())).unwrap();
     let func = instance.get_func("MyFunction").unwrap();

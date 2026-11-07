@@ -27,7 +27,7 @@ pub struct Engine {
     resources: Arc<Resources>,
     pub(crate) shared: Arc<EngineShared>,
     instances: RwLock<HashMap<Lowercase<String>, Arc<InstanceShared>>>,
-    classes: HashMap<Lowercase<String>, Class>,
+    classes: parking_lot::Mutex<HashMap<Lowercase<String>, Class>>,
     registered_native_funcs: HashSet<(Lowercase<String>, Lowercase<String>)>,
 }
 
@@ -47,18 +47,23 @@ impl Engine {
                 state: HostState { pool },
             }),
             instances: RwLock::new(HashMap::new()),
-            classes: HashMap::new(),
+            classes: parking_lot::Mutex::new(HashMap::new()),
             registered_native_funcs: HashSet::new(),
         }
     }
 
     /// Registers the given [`Module`] for the compiler of this `Engine`.
-    pub fn register(&mut self, module: &Module) {
-        self.ctx.get_mut().register_module(module).unwrap();
+    ///
+    /// This function may block until parallel compilations are done.
+    pub async fn register(&self, module: &Module) {
+        // Lock ctx, then classes.
+        let mut ctx = self.ctx.lock().await;
+        let mut classes = self.classes.lock();
+
+        ctx.register_module(module).unwrap();
 
         for class in &module.classes {
-            self.classes
-                .insert(Lowercase::new(class.name.as_str()), class.clone());
+            classes.insert(Lowercase::new(class.name.as_str()), class.clone());
         }
     }
 
@@ -127,11 +132,13 @@ impl Engine {
             });
         }
 
+        // Lock ctx, then classes.
         let mut ctx = self.ctx.lock().await;
+        let classes = self.classes.lock();
 
         ctx.compute_type_layouts()?;
 
-        let class = self.classes.get(&class_name).unwrap();
+        let class = classes.get(&class_name).unwrap();
 
         let mut funcs = HashMap::new();
 

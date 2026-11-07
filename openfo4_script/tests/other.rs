@@ -11,7 +11,7 @@ const COMPILER_OPTIONS: CompilerOptions = CompilerOptions {
 
 #[test]
 fn pass_null_param() {
-    let mut engine = Engine::new(COMPILER_OPTIONS);
+    let engine = Engine::new(COMPILER_OPTIONS);
 
     let module = assemble(
         r#"
@@ -20,7 +20,7 @@ fn pass_null_param() {
         function F(a: A) static:
         "#,
     );
-    engine.register(&module);
+    block_on(engine.register(&module));
 
     let instance = block_on(engine.compile("A", &Options::default())).unwrap();
     let func = instance.get_func("F").unwrap();
@@ -55,7 +55,7 @@ fn host_function_returns_null() {
         "#,
     );
 
-    engine.register(&module);
+    block_on(engine.register(&module));
     engine.register_native_function("A", "F", f).unwrap();
 
     let instance = block_on(engine.compile("A", &Options::default())).unwrap();

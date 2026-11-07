@@ -11,7 +11,7 @@ const COMPILER_OPTIONS: CompilerOptions = CompilerOptions {
 
 #[test]
 fn variable_shadowing() {
-    let mut engine = Engine::new(COMPILER_OPTIONS);
+    let engine = Engine::new(COMPILER_OPTIONS);
 
     let module = assemble(
         r#"
@@ -40,7 +40,7 @@ fn variable_shadowing() {
         "#,
     );
 
-    engine.register(&module);
+    block_on(engine.register(&module));
 
     let instance = block_on(engine.compile("SubSub", &Options::default())).unwrap();
     let func = instance.get_func("GetA").unwrap();
@@ -63,7 +63,7 @@ fn variable_shadowing() {
 
 #[test]
 fn load_property_from_parent_class() {
-    let mut engine = Engine::new(COMPILER_OPTIONS);
+    let engine = Engine::new(COMPILER_OPTIONS);
     let module = assemble(
         r#"
         class A:
@@ -80,7 +80,7 @@ fn load_property_from_parent_class() {
         "#,
     );
 
-    engine.register(&module);
+    block_on(engine.register(&module));
 
     let instance = block_on(engine.compile("B", &Options::default())).unwrap();
     let func = instance.get_func("F").unwrap();

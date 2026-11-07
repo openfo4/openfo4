@@ -141,7 +141,7 @@ where
         "#,
     );
 
-    engine.register(&module);
+    block_on(engine.register(&module));
     engine.register_native_function("test", "F", f).unwrap();
 
     let instance = block_on(engine.compile("MyClass", &Options::default())).unwrap();
@@ -203,7 +203,7 @@ fn suspend_in_callstack() {
         "#,
     );
 
-    engine.register(&module);
+    block_on(engine.register(&module));
     engine.register_native_function("test", "F", f).unwrap();
 
     block_on(engine.compile("A", &Options::default())).unwrap();

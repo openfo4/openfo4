@@ -21,7 +21,7 @@ where
         &mut Context<'_, ()>,
     ),
 {
-    let mut engine = Engine::new(COMPILER_OPTIONS);
+    let engine = Engine::new(COMPILER_OPTIONS);
 
     let module = assemble(
         r#"
@@ -37,7 +37,7 @@ where
         "#,
     );
 
-    engine.register(&module);
+    block_on(engine.register(&module));
     let instance = block_on(engine.compile("MyClass", &Options::default())).unwrap();
     let class = engine.get_type("MyClass").unwrap();
 

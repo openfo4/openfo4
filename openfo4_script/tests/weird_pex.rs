@@ -68,7 +68,7 @@ fn pex_out_of_bounds_jump() {
 fn compile_test(module: &str, class: &str) {
     let module = assemble(module);
 
-    let mut engine = Engine::new(COMPILER_OPTIONS);
-    engine.register(&module);
+    let engine = Engine::new(COMPILER_OPTIONS);
+    block_on(engine.register(&module));
     block_on(engine.compile(class, &Options::default())).unwrap();
 }

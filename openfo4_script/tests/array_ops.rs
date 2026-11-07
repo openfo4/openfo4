@@ -37,7 +37,7 @@ fn array_create() {
         "#,
     );
 
-    engine.register(&module);
+    block_on(engine.register(&module));
     engine
         .register_native_function("test", "test_valid_array", test_valid_array)
         .unwrap();
@@ -76,7 +76,7 @@ fn array_get() {
         "#,
     );
 
-    engine.register(&module);
+    block_on(engine.register(&module));
     engine
         .register_native_function("test", "assert_valid_result", assert_valid_result)
         .unwrap();
@@ -123,7 +123,7 @@ fn array_add() {
         "#,
     );
 
-    engine.register(&module);
+    block_on(engine.register(&module));
     engine
         .register_native_function("test", "assert_valid_result", assert_valid_result)
         .unwrap();
@@ -170,7 +170,7 @@ fn array_insert() {
         "#,
     );
 
-    engine.register(&module);
+    block_on(engine.register(&module));
     engine
         .register_native_function("test", "assert_valid_result", assert_valid_result)
         .unwrap();
@@ -218,7 +218,7 @@ fn array_clear() {
         "#,
     );
 
-    engine.register(&module);
+    block_on(engine.register(&module));
     engine
         .register_native_function("test", "assert_valid_result", assert_valid_result)
         .unwrap();
@@ -269,7 +269,7 @@ fn array_find_int() {
         "#,
     );
 
-    engine.register(&module);
+    block_on(engine.register(&module));
     engine
         .register_native_function("test", "assert_valid_result", assert_valid_result)
         .unwrap();
@@ -327,7 +327,7 @@ fn array_find_struct() {
         "#,
     );
 
-    engine.register(&module);
+    block_on(engine.register(&module));
     engine
         .register_native_function("test", "assert_valid_result", assert_valid_result)
         .unwrap();
@@ -365,7 +365,7 @@ fn array_find_struct() {
 
 #[test]
 fn array_len_on_null() {
-    let mut engine = Engine::new(COMPILER_OPTIONS);
+    let engine = Engine::new(COMPILER_OPTIONS);
 
     let module = assemble(
         r#"
@@ -379,7 +379,7 @@ fn array_len_on_null() {
         "#,
     );
 
-    engine.register(&module);
+    block_on(engine.register(&module));
 
     let instance = block_on(engine.compile("MyClass", &Options::default())).unwrap();
     let func = instance.get_func("MyFunction").unwrap();
@@ -535,7 +535,7 @@ where
     let mut engine = Engine::new(COMPILER_OPTIONS);
 
     let module = assemble(module);
-    engine.register(&module);
+    block_on(engine.register(&module));
 
     let instance = block_on(engine.compile(class, &Options::default())).unwrap();
     let func = instance.get_func(func).unwrap();
