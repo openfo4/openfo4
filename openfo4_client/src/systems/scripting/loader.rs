@@ -74,6 +74,29 @@ impl<T> ScriptLoader<T>
 where
     T: RecordLoader,
 {
+    /// Returns the underlying scripting [`Engine`].
+    pub fn engine(&self) -> &Engine {
+        &self.engine
+    }
+
+    /// Instantiate a new default object of the given `class` without setting any of the fields.
+    pub async fn instantiate_default(&self, class: &str) -> ScriptObject {
+        let instance = self.cache.get_or_compile(&self.engine, class).await;
+        let id = self.engine.get_type(class).unwrap().id();
+
+        let object = self.engine.object_pool().insert(id);
+        let instance = ScriptInstance {
+            instance,
+            layout: id,
+            object,
+        };
+
+        let id = self
+            .objects
+            .insert(&self.engine, vec![instance], None, ObjectData::None);
+        ScriptObject(Arc::new(ScriptObjectInner { base: None, id }))
+    }
+
     /// Loads the script object attached to a record.
     ///
     /// Returns `None` if no script is attached to the record.
@@ -1253,9 +1276,9 @@ mod tests {
     }
 
     fn build_loader<T>(t: T) -> ScriptLoader<T> {
-        let mut engine = Engine::new(CompilerOptions::default());
+        let engine = Engine::new(CompilerOptions::default());
 
-        engine.register(&Module {
+        block_on(engine.register(&Module {
             classes: vec![Class {
                 name: "MyClass".to_owned(),
                 parent: "".to_owned(),
@@ -1268,7 +1291,7 @@ mod tests {
                 properties: Vec::new(),
                 variables: Vec::new(),
             }],
-        });
+        }));
 
         let engine = Arc::new(engine);
         let objects = Arc::new(ScriptObjects::default());

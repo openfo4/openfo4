@@ -480,7 +480,7 @@ mod tests {
 
     #[test]
     fn build_script_object_basic() {
-        let mut engine = Engine::new(COMPILER_OPTIONS);
+        let engine = Engine::new(COMPILER_OPTIONS);
 
         let module = assemble(
             r#"
@@ -492,7 +492,7 @@ mod tests {
             "#,
         );
 
-        engine.register(&module);
+        block_on(engine.register(&module));
         block_on(engine.compile("test", &Options::default())).unwrap();
 
         let script = Script {
@@ -518,7 +518,7 @@ mod tests {
 
     #[test]
     fn build_script_object_array() {
-        let mut engine = Engine::new(COMPILER_OPTIONS);
+        let engine = Engine::new(COMPILER_OPTIONS);
 
         let module = assemble(
             r#"
@@ -532,7 +532,7 @@ mod tests {
             "#,
         );
 
-        engine.register(&module);
+        block_on(engine.register(&module));
         block_on(engine.compile("test", &Options::default())).unwrap();
 
         let script = Script {
@@ -585,7 +585,7 @@ mod tests {
 
     #[test]
     fn build_script_object_struct() {
-        let mut engine = Engine::new(COMPILER_OPTIONS);
+        let engine = Engine::new(COMPILER_OPTIONS);
 
         let module = assemble(
             r#"
@@ -602,7 +602,7 @@ mod tests {
             "#,
         );
 
-        engine.register(&module);
+        block_on(engine.register(&module));
         block_on(engine.compile("test", &Options::default())).unwrap();
 
         let script = Script {
@@ -644,7 +644,7 @@ mod tests {
 
     #[test]
     fn build_script_object_array_of_structs() {
-        let mut engine = Engine::new(COMPILER_OPTIONS);
+        let engine = Engine::new(COMPILER_OPTIONS);
 
         let module = assemble(
             r#"
@@ -661,7 +661,7 @@ mod tests {
             "#,
         );
 
-        engine.register(&module);
+        block_on(engine.register(&module));
         block_on(engine.compile("test", &Options::default())).unwrap();
 
         let script = Script {
@@ -735,7 +735,7 @@ mod tests {
 
     #[test]
     fn build_script_object_parent_class_property() {
-        let mut engine = Engine::new(COMPILER_OPTIONS);
+        let engine = Engine::new(COMPILER_OPTIONS);
 
         let module = assemble(
             r#"
@@ -749,7 +749,7 @@ mod tests {
             "#,
         );
 
-        engine.register(&module);
+        block_on(engine.register(&module));
         block_on(engine.compile("B", &Options::default())).unwrap();
 
         let script = Script {
@@ -769,7 +769,7 @@ mod tests {
 
     #[test]
     fn build_script_object_prefer_subclass_property() {
-        let mut engine = Engine::new(COMPILER_OPTIONS);
+        let engine = Engine::new(COMPILER_OPTIONS);
 
         let module = assemble(
             r#"
@@ -786,7 +786,7 @@ mod tests {
             "#,
         );
 
-        engine.register(&module);
+        block_on(engine.register(&module));
         block_on(engine.compile("B", &Options::default())).unwrap();
 
         let script = Script {
@@ -807,7 +807,7 @@ mod tests {
 
     #[test]
     fn build_script_object_reflect_script_name() {
-        let mut engine = Engine::new(COMPILER_OPTIONS);
+        let engine = Engine::new(COMPILER_OPTIONS);
 
         let module = assemble(
             r#"
@@ -825,7 +825,7 @@ mod tests {
             "#,
         );
 
-        engine.register(&module);
+        block_on(engine.register(&module));
         block_on(engine.compile("A", &Options::default())).unwrap();
         block_on(engine.compile("B", &Options::default())).unwrap();
         block_on(engine.compile("C", &Options::default())).unwrap();
