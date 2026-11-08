@@ -1,4 +1,4 @@
-use std::io::{self, Cursor, Read, Write};
+use std::io::{self, Cursor, Read, Seek, SeekFrom, Write};
 use std::process::{Command, Stdio};
 
 use openfo4_tracing::trace_span;
@@ -187,4 +187,129 @@ fn ffmpeg_xwm_to_wav(mut source: impl Read) -> Result<Vec<u8>, ConvError> {
     res1.map_err(ConvError::Io)?;
 
     Ok(output)
+}
+
+/// Reader for the FUZE audio format.
+pub struct FuzReader<'s> {
+    xwm: Box<XwmReader<'s>>,
+}
+
+impl FuzReader<'_> {
+    fn try_new<'s>(
+        mut mss: MediaSourceStream<'s>,
+        opts: FormatOptions,
+    ) -> Result<FuzReader<'s>, Error> {
+        // Header:
+        // - 4b Magic ("FUZE")
+        // - 4b Version
+        // - 4b Lip data bytes
+        let mut buf = [0; 12];
+        mss.read_exact(&mut buf)?;
+
+        if buf[0..4] != *b"FUZE" {
+            return Err(Error::IoError(io::Error::other("bad magic for fuz file")));
+        }
+
+        let offset = 12
+            + u64::from(u32::from_le_bytes(
+                <[u8; 4]>::try_from(&buf[8..12]).unwrap(),
+            ));
+        mss.seek(SeekFrom::Start(offset))?;
+
+        let xwm = Box::new(XwmReader::try_new(mss, opts)?);
+        Ok(FuzReader { xwm })
+    }
+}
+
+impl FormatReader for FuzReader<'_> {
+    fn format_info(&self) -> &FormatInfo {
+        self.xwm.format_info()
+    }
+
+    fn media_info(&self) -> &MediaInfo {
+        self.xwm.media_info()
+    }
+
+    fn metadata(&mut self) -> Metadata<'_> {
+        self.xwm.metadata()
+    }
+
+    fn seek(&mut self, mode: SeekMode, to: SeekTo) -> Result<SeekedTo, Error> {
+        self.xwm.seek(mode, to)
+    }
+
+    fn tracks(&self) -> &[Track] {
+        self.xwm.tracks()
+    }
+
+    fn next_packet(&mut self) -> Result<Option<Packet>, Error> {
+        self.xwm.next_packet()
+    }
+
+    fn into_inner<'s>(self: Box<Self>) -> MediaSourceStream<'s>
+    where
+        Self: 's,
+    {
+        self.xwm.into_inner()
+    }
+
+    fn attachments(&self) -> &[Attachment] {
+        self.xwm.attachments()
+    }
+
+    fn chapters(&self) -> Option<&ChapterGroup> {
+        self.xwm.chapters()
+    }
+
+    fn first_track(&self, track_type: TrackType) -> Option<&Track> {
+        self.xwm.first_track(track_type)
+    }
+
+    fn first_track_known_codec(&self, track_type: TrackType) -> Option<&Track> {
+        self.xwm.first_track_known_codec(track_type)
+    }
+
+    fn default_track(&self, track_type: TrackType) -> Option<&Track> {
+        self.xwm.default_track(track_type)
+    }
+}
+
+impl ProbeableFormat<'_> for FuzReader<'_> {
+    fn try_probe_new(
+        mss: MediaSourceStream<'_>,
+        opts: FormatOptions,
+    ) -> Result<Box<dyn FormatReader + '_>, Error>
+    where
+        Self: Sized,
+    {
+        Ok(Box::new(Self::try_new(mss, opts)?))
+    }
+
+    fn probe_data() -> &'static [ProbeFormatData] {
+        const DATA: ProbeFormatData = ProbeFormatData {
+            spec: ProbeDataMatchSpec {
+                extensions: &["fuz"],
+                mime_types: &[],
+                markers: &[b"FUZE"],
+            },
+            info: FormatInfo {
+                format: FormatId::new(FourCc::new(*b"FUZE")),
+                short_name: "fuz",
+                long_name: "fuz",
+            },
+        };
+
+        &[DATA]
+    }
+}
+
+impl<'s> Scoreable for FuzReader<'s> {
+    fn score(mut src: ScopedStream<&mut MediaSourceStream<'_>>) -> Result<Score, Error> {
+        let magic = src.read_quad_bytes()?;
+        if magic != *b"FUZE" {
+            Ok(Score::Unsupported)
+        } else {
+            Ok(Score::Supported(255))
+        }
+    }
 }
