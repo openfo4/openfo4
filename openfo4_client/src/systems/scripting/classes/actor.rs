@@ -1,3 +1,4 @@
+use openfo4_esp::records::magic_effect::MagicffectTargetType::Self_;
 use openfo4_script::engine::Engine;
 use openfo4_script::runtime::{Caller, Error};
 
@@ -2375,12 +2376,27 @@ fn will_intimidate_succeed(_caller: Caller<'_, State>, _self_ptr: Object) -> Res
 /// ```text
 /// bool Function(Keyword akKeyword) native
 /// ```
-fn worn_has_keyword(
-    _caller: Caller<'_, State>,
-    _self_ptr: Object,
-    _ak_keyword: Object,
-) -> Result<bool, Error> {
-    todo!()
+async fn worn_has_keyword(caller: Caller<'_, State>, self_ptr: Object, keyword: Object) -> bool {
+    if keyword.is_null() {
+        return false;
+    }
+
+    let entity = caller.data().entity(self_ptr).unwrap();
+    let keyword = caller.data().record(keyword);
+
+    let world = caller.data().world().await;
+
+    let Ok(inventory) = world.get::<&Inventory>(entity) else {
+        return false;
+    };
+
+    for (_, item) in inventory.items() {
+        if item.equipped && item.combined_keywords.contains(&keyword) {
+            return true;
+        }
+    }
+
+    false
 }
 
 /// `WouldBeStealing`
