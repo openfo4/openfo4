@@ -22,7 +22,6 @@ impl<T> ProfiledAllocator<T> {
                 ptr.cast(),
                 size,
                 CALLSTACK_DEPTH,
-                1,
             );
         }
     }
@@ -33,7 +32,7 @@ impl<T> ProfiledAllocator<T> {
         }
 
         unsafe {
-            tracy_client::sys::___tracy_emit_memory_free_callstack(ptr.cast(), CALLSTACK_DEPTH, 1);
+            tracy_client::sys::___tracy_emit_memory_free_callstack(ptr.cast(), CALLSTACK_DEPTH);
         }
     }
 }
