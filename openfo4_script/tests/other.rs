@@ -2,7 +2,7 @@ use futures_lite::future::block_on;
 use openfo4_script::assembler::assemble;
 use openfo4_script::compiler::CompilerOptions;
 use openfo4_script::engine::{Engine, Options};
-use openfo4_script::runtime::{Caller, Context, ObjectAddr};
+use openfo4_script::runtime::{Caller, Context, ObjectAddr, Val};
 
 const COMPILER_OPTIONS: CompilerOptions = CompilerOptions {
     validation: true,
@@ -68,5 +68,40 @@ fn host_function_returns_null() {
     assert_eq!(
         func.call(&mut ctx, ()).now_or_never().unwrap(),
         ObjectAddr::NULL
+    );
+}
+
+#[test]
+fn call_dynamic() {
+    let engine = Engine::new(COMPILER_OPTIONS);
+
+    let module = assemble(
+        r#"
+        class A:
+
+        function F() -> bool static:
+        return true
+
+        function G() -> int static:
+        return 42
+        "#,
+    );
+
+    block_on(engine.register(&module));
+    let instance = block_on(engine.compile("A", &Options::default())).unwrap();
+
+    let mut stack = engine.create_stack();
+    let mut ctx = Context::new(&engine, &mut stack, ());
+
+    let f = instance.get_func("F").unwrap();
+    assert_eq!(
+        f.call(&mut ctx, &[]).now_or_never().unwrap(),
+        vec![Val::Bool(true)]
+    );
+
+    let g = instance.get_func("G").unwrap();
+    assert_eq!(
+        g.call(&mut ctx, &[]).now_or_never().unwrap(),
+        vec![Val::I32(42)]
     );
 }

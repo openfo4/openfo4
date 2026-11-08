@@ -133,7 +133,7 @@ pub union RawVal {
 }
 
 /// A value can be used in Papyrus functions.
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq)]
 pub enum Val {
     /// A boolean type.
     ///
@@ -161,6 +161,18 @@ impl Val {
             Self::I32(i32) => RawVal { i32 },
             Self::F32(f32) => RawVal { f32 },
             Self::Object(object) => RawVal { object },
+        }
+    }
+
+    unsafe fn from_raw(pool: &ObjectPool, val: &RawVal, id: TypeId) -> Self {
+        if id == pool.resources().primitives.bool {
+            Self::Bool(unsafe { val.bool })
+        } else if id == pool.resources().primitives.int {
+            Self::I32(unsafe { val.i32 })
+        } else if id == pool.resources().primitives.float {
+            Self::F32(unsafe { val.f32 })
+        } else {
+            Self::Object(unsafe { val.object })
         }
     }
 

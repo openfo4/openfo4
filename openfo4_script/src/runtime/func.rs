@@ -14,9 +14,8 @@ use thiserror::Error;
 use crate::compiler::{CompilationResult, PscSignature};
 use crate::engine::EngineShared;
 use crate::runtime::{
-    Context, Error, NativeTuple, NativeType, ObjectAddr, ObjectPool, PanicMsg, RESULT_ERROR,
-    RESULT_OK, RESULT_SUSPEND, RawContext, RawStack, RawVal, TypeArray, TypeOfVal, Val,
-    new_assignment_error,
+    Context, Error, NativeTuple, ObjectPool, PanicMsg, RESULT_ERROR, RESULT_OK, RESULT_SUSPEND,
+    RawContext, RawStack, RawVal, TypeArray, TypeOfVal, Val, new_assignment_error,
 };
 
 #[derive(Clone, Debug)]
@@ -80,7 +79,7 @@ impl Func {
         validate_parameter_types(&ctx.engine.state.pool, params, &self.psc_sig);
 
         let mut r_params = vec![MaybeUninit::<RawVal>::uninit(); params.len()];
-        let mut r_returns = vec![MaybeUninit::<RawVal>::uninit(); self.signature.returns.len()];
+        let mut r_returns = vec![MaybeUninit::<RawVal>::uninit(); self.psc_sig.returns.len()];
 
         // We don't need logic to drop written `MaybeUninit<RawVal>` values.
         const {
@@ -464,19 +463,15 @@ where
         let mut this = self.project();
         ready!(this.inner.as_mut().poll(cx))?;
 
-        let mut returns = Vec::with_capacity(this.inner.func.signature.returns.len());
-        for (index, ty) in this.inner.func.signature.returns.iter().enumerate() {
-            let raw = unsafe { this.r_returns[index].assume_init_ref() };
+        let signature = &this.inner.func.psc_sig;
 
-            unsafe {
-                returns.push(match ty {
-                    Type::I8 => Val::Bool(<bool as NativeType>::from_raw(raw)),
-                    Type::I32 => Val::I32(<i32 as NativeType>::from_raw(raw)),
-                    Type::F32 => Val::F32(<f32 as NativeType>::from_raw(raw)),
-                    Type::Pointer => Val::Object(<ObjectAddr as NativeType>::from_raw(raw)),
-                    _ => unreachable!(),
-                });
-            }
+        debug_assert_eq!(signature.returns.len(), this.r_returns.len());
+
+        let mut returns = Vec::with_capacity(this.inner.func.signature.returns.len());
+        for (index, ty) in signature.returns.iter().enumerate() {
+            let raw = unsafe { this.r_returns[index].assume_init_ref() };
+            let val = unsafe { Val::from_raw(&this.inner.ctx.engine.state.pool, raw, *ty) };
+            returns.push(val);
         }
 
         Poll::Ready(Ok(returns))
