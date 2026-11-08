@@ -243,7 +243,7 @@ impl Behavior for RandomMovement {
 
                     dbg!("post", &target);
 
-                    let mut mt = MoveTo::new(target, movement::Face::Forward);
+                    let mut mt = MoveTo::new(target, 225.0);
                     mt.start(ctx);
                     self.target = Some(mt);
                 }

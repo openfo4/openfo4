@@ -1,323 +1,224 @@
-use openfo4_animation::driver::AnimationDriver;
-use openfo4_core::ecs::{Entity, World};
+mod compiler;
+
+use std::borrow::Cow;
+use std::sync::Arc;
+use std::task::{Poll, Waker};
+
+use async_lock::Mutex;
+use futures::FutureExt;
+use hashbrown::HashMap;
+use openfo4_core::ecs::World;
+use openfo4_core::events::EventBus;
 use openfo4_core::record::RecordId;
-use openfo4_esp::FormId;
-use openfo4_esp::conditions::{
-    Combinator, Comparator, ComparisonValue, Condition, ConditionFunction, FunctionReceiver,
-};
+use openfo4_esp::conditions::Condition;
+use openfo4_pex::{Class, Module, Property, State, Value, Variable, VariableDefinition};
+use tracing::instrument;
 
-use crate::components::{ActorProperties, ActorProtection, MovementState};
 use crate::state::esp::EspLoader;
-use crate::state::npc::ObjectKeywords;
-use crate::systems::actor_value::{ActorValue, ActorValueProperties};
-use crate::systems::global::GlobalProperties;
-use crate::systems::inventory::{Inventory, ItemData};
-use crate::systems::movement::{MovementDirection, MovementSpeed};
+use crate::systems::conditions::compiler::build_func;
+use crate::systems::quests::QuestManager;
+use crate::systems::scripting::invocations::EventInvocation;
+use crate::systems::scripting::loader::{ScriptLoader, ScriptObject, ScriptObjectId};
+use crate::systems::scripting::{Executor, invocations};
 
-pub fn evaluate(
-    world: &World,
-    esp_loader: &EspLoader,
-    globals: &GlobalProperties,
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+struct ConditionId {
     record: RecordId,
-    conditions: &[Condition],
-    subject: Entity,
-    target: Entity,
-) -> bool {
-    dbg!(record);
+    index: usize,
+}
 
-    let mut result = true;
-    let mut result_or = false;
-    let mut last_op_is_or = false;
+/// Compiler for conditions that are attached on ESP records.
+#[derive(Debug)]
+pub struct ConditionCompiler {
+    esp_loader: Arc<EspLoader>,
+    loader: Arc<ScriptLoader>,
+    conditions: Mutex<HashMap<ConditionId, CompiledCondition>>,
+}
 
-    for condition in conditions {
-        let entity = match condition.receiver {
-            FunctionReceiver::Subject => subject,
-            FunctionReceiver::Target => target,
-        };
-
-        let eval = FuncEvaluator {
-            world,
-            entity,
+impl ConditionCompiler {
+    pub fn new(esp_loader: Arc<EspLoader>, loader: Arc<ScriptLoader>) -> Self {
+        Self {
             esp_loader,
-            record,
+            loader,
+            conditions: Mutex::new(HashMap::new()),
+        }
+    }
+
+    /// Compile the given set of conditions.
+    ///
+    /// The [`RecordId`] is the record from which the [`Condition`]s have been loaded from.
+    /// The `index` value is an arbitrary value that can be used to distinguish multiple condition
+    /// sets on a single record.
+    #[instrument(name = "ConditionCompiler::compile", skip_all)]
+    pub async fn compile(
+        &self,
+        record: RecordId,
+        index: usize,
+        conditions: &[Condition],
+    ) -> CompiledCondition {
+        let id = ConditionId { record, index };
+
+        // Most condition expressions found on records are completely
+        // empty. We should avoid creating a runtime function for them.
+        if conditions.is_empty() {
+            return CompiledCondition {
+                inner: Inner::Empty,
+            };
+        }
+
+        let mut conditions_set = self.conditions.lock().await;
+
+        if let Some(object) = conditions_set.get(&id) {
+            return object.clone();
+        }
+
+        let res = build_func(conditions);
+
+        let name = format!("Condition_{}", record);
+        let mut class = Class {
+            name: name.clone(),
+            parent: "".to_owned(),
+            default_state: "".to_owned(),
+            properties: Vec::new(),
+            states: vec![State {
+                name: "".to_owned(),
+                functions: vec![res.func],
+            }],
+            structs: Vec::new(),
+            variables: Vec::new(),
         };
 
-        let lhs = match &condition.function {
-            // Constant
-            ConditionFunction::IsWindowsPc => Value::Bool(true),
-            ConditionFunction::IsPS3 => Value::Bool(false),
+        let mut global_values = Vec::new();
+        for (index, global) in res.globals.into_iter().enumerate() {
+            class.variables.push(Variable {
+                definition: VariableDefinition {
+                    name: global.ident.clone(),
+                    ty: global.ty.to_owned(),
+                },
+                is_const: true,
+                value: Value::Null,
+            });
 
-            // Actor Movement State
-            ConditionFunction::IsMoving => eval.movement_state(|state| state.is_moving),
-            ConditionFunction::IsRunning => todo!(),
-            ConditionFunction::IsTurning => todo!(),
-            ConditionFunction::IsRotating => todo!(),
-            ConditionFunction::IsSprinting => eval.movement_state(|state| state.is_sprinting),
-            ConditionFunction::IsSneaking => eval.movement_state(|state| state.is_sneaking),
-            ConditionFunction::GetMovementDirection => {
-                // 1 = Forward
-                // 2 = Right
-                // 3 = Backward
-                // 4 = Left
-                match world.get::<&MovementDirection>(entity) {
-                    Ok(dir) => {
-                        let dir = dir.get();
-                        if dir.x.abs() > dir.z.abs() {
-                            if dir.x.is_sign_positive() {
-                                Value::I32(2)
-                            } else {
-                                Value::I32(4)
-                            }
-                        } else {
-                            if dir.z.is_sign_negative() {
-                                Value::I32(1)
-                            } else {
-                                Value::I32(3)
-                            }
-                        }
-                    }
-                    Err(_) => Value::I32(0),
-                }
-            }
-            ConditionFunction::GetMovementSpeed => match world.get::<&MovementSpeed>(entity) {
-                Ok(speed) => Value::F32(speed.speed),
-                Err(_) => Value::F32(0.0),
-            },
-            // Actor Furniture State
-            ConditionFunction::GetSitting => {
-                // TODO
-                Value::Bool(false)
-            }
-            ConditionFunction::GetSleeping => {
-                // TODO
-                Value::Bool(false)
-            }
-            // Actor Attach State
-            ConditionFunction::IsAttacking => {
-                // TODO
-                Value::Bool(false)
-            }
-            ConditionFunction::IsMeleeAttacking => {
-                // TODO
-                Value::Bool(false)
-            }
-            ConditionFunction::GetActorStance => {
-                // TODO
-                Value::I32(0)
-            }
-            // Actor Inventory
-            ConditionFunction::IsWeaponMagicOut => eval.inventory_bool(|inv| {
-                inv.items().any(|(_, item)| match &item.data {
-                    ItemData::Weapon(data) => data.drawn && item.equipped,
-                    _ => false,
-                })
-            }),
-            ConditionFunction::IsWeaponOut => eval.inventory_bool(|inv| {
-                inv.items().any(|(_, item)| match &item.data {
-                    ItemData::Weapon(data) => data.drawn && item.equipped,
-                    _ => false,
-                })
-            }),
-            ConditionFunction::IsShieldOut => {
-                todo!()
-            }
-            ConditionFunction::IsTorchOut => {
-                todo!()
-            }
-            ConditionFunction::WornHasKeyword(keyword) => {
-                let keyword = esp_loader.resolve_form(*keyword, record).unwrap();
-                eval.inventory_bool(|inv| {
-                    inv.items()
-                        .any(|(_, item)| item.combined_keywords.contains(&keyword))
-                })
-            }
-            // Actor Properties
-            ConditionFunction::IsActor => eval.actor_property(|_| true),
-            ConditionFunction::IsProtected => {
-                eval.actor_property(|props| props.protection == ActorProtection::Protected)
-            }
-            ConditionFunction::IsEssential => {
-                eval.actor_property(|props| props.protection == ActorProtection::Essential)
-            }
-            ConditionFunction::IsChild => eval.actor_property(|props| props.is_child),
-            ConditionFunction::IsGuard => todo!(),
-            ConditionFunction::GetIsGhost => todo!(),
-            ConditionFunction::GetValue { actor_value } => {
-                eval.actor_value(*actor_value, |value| value.damaged())
-            }
-            ConditionFunction::GetValuePercent(actor_value) => {
-                eval.actor_value(*actor_value, |value| value.damaged() / value.value * 100.0)
-            }
-            // Weather
-            ConditionFunction::IsSnowing => todo!(),
-            ConditionFunction::IsPleasant => todo!(),
-            ConditionFunction::IsRaining => todo!(),
-            ConditionFunction::IsTimespanSunrise => todo!(),
-            ConditionFunction::IsTimespanMorning => todo!(),
-            ConditionFunction::IsTimespanAfternoon => todo!(),
-            ConditionFunction::IsTimespanEvening => todo!(),
-            ConditionFunction::IsTimespanSunset => todo!(),
-            ConditionFunction::IsTimespanNight => todo!(),
-            ConditionFunction::IsTimespanMidnight => todo!(),
-            ConditionFunction::IsTimespanAnyDay => todo!(),
-            ConditionFunction::IsTimespanAnyNight => todo!(),
-            // Object Properties
-            ConditionFunction::HasKeyword { keyword } => {
-                let keyword = esp_loader.resolve_form(*keyword, record).unwrap();
-                match world.get::<&ObjectKeywords>(entity) {
-                    Ok(keywords) => Value::Bool(keywords.contains(keyword)),
-                    Err(_) => Value::Bool(false),
-                }
-            }
-            // Animation
-            ConditionFunction::GetGraphVariableInt(name) => {
-                let name = name.as_str().unwrap();
-                match world.get::<&AnimationDriver>(entity) {
-                    Ok(driver) => driver
-                        .get_variable(name)
-                        .and_then(|var| var.to_i32())
-                        .map(Value::I32)
-                        .unwrap_or(Value::I32(0)),
-                    Err(_) => Value::I32(0),
-                }
-            }
-            ConditionFunction::GetGraphVariableFloat { name } => {
-                let name = name.as_str().unwrap();
-                match world.get::<&AnimationDriver>(entity) {
-                    Ok(driver) => driver
-                        .get_variable(name)
-                        .and_then(|var| var.to_f32())
-                        .map(Value::F32)
-                        .unwrap_or(Value::F32(0.0)),
-                    Err(_) => Value::F32(0.0),
-                }
-            }
+            let id = self.esp_loader.resolve_form(global.id, record).unwrap();
 
-            x => todo!("{:?}", x),
+            // FIXME: Ideally we would remove the specific conditions that depend
+            // on the value that failed to load and replace them with a `false`.
+            let Some(res) = self.loader.load(id).await else {
+                tracing::warn!("record {id} failed to load for condition used in {record}");
+                continue;
+            };
+
+            let scripts = self.loader.objects().get_by_id(res.object.id()).unwrap();
+            let script = scripts.get(global.ty).unwrap();
+
+            let prop = format!("p{index}");
+            class.properties.push(Property {
+                name: prop.clone(),
+                getter: None,
+                setter: None,
+                ty: global.ty.to_owned(),
+                variable: Some(global.ident),
+            });
+
+            global_values.push((prop, script.get().object.clone()));
+        }
+
+        let module = Module {
+            classes: vec![class],
         };
 
-        let lhs = match lhs {
-            // A boolean value is represented as exactly 1.0.
-            Value::Bool(v) => f32::from(v),
-            Value::I32(v) => v as f32,
-            Value::F32(v) => v,
+        let engine = self.loader.engine();
+        engine.register(&module).await;
+        let object = self.loader.instantiate_default(&name).await;
+
+        let scripts = self.loader.objects().get_by_id(object.id()).unwrap();
+        let script = scripts.get(&name).unwrap();
+
+        for (prop, value) in global_values {
+            script.get().object.set(&name, &prop, value.addr()).unwrap();
+        }
+
+        let object = CompiledCondition {
+            inner: Inner::Object(object),
         };
 
-        let rhs = match condition.value {
-            ComparisonValue::Const(rhs) => rhs,
-            ComparisonValue::Global(global) => {
-                let global = esp_loader.resolve_form(global, record).unwrap();
-                *globals.variables.lock().get(&global).unwrap()
-            }
+        conditions_set.insert(ConditionId { record, index }, object.clone());
+
+        object
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct CompiledCondition {
+    inner: Inner,
+}
+
+#[derive(Clone, Debug)]
+enum Inner {
+    Empty,
+    Object(ScriptObject),
+}
+
+impl CompiledCondition {
+    /// Evaluate the condition.
+    pub fn eval(
+        &self,
+        executor: &mut Executor,
+        world: &mut World,
+        events: &mut EventBus,
+        quests: &mut QuestManager,
+        subject: ScriptObjectId,
+        target: Option<ScriptObjectId>,
+    ) -> bool {
+        let receiver = match &self.inner {
+            Inner::Empty => return true,
+            Inner::Object(obj) => obj,
         };
 
-        let is_ok = match condition.comparator {
-            Comparator::Equal => lhs == rhs,
-            Comparator::NotEqual => lhs != rhs,
-            Comparator::LessThan => lhs < rhs,
-            Comparator::LessThanOrEqual => lhs <= rhs,
-            Comparator::GreaterThan => lhs > rhs,
-            Comparator::GreaterThanOrEqual => lhs >= rhs,
+        let Some(subject) = executor
+            .objects()
+            .get_by_id(subject)
+            .and_then(|s| s.get("ObjectReference"))
+        else {
+            return false;
         };
 
-        dbg!(record, result, result_or, is_ok, lhs, rhs, condition);
+        let subject_obj = invocations::Value::Object(subject.get().object.clone());
+        let mut target_obj = invocations::Value::Null;
 
-        // OR has a higher operator precedence than AND.
-        // i.e. A AND B OR C is evaulated as A AND (B OR C).
-        result_or |= is_ok;
-        if condition.combinator == Combinator::And {
-            // Collapse the last chain of OR expressions into the top
-            // level AND expression.
-            result &= result_or;
-            result_or = false;
-
-            // Since AND operators always have the lowest precedence
-            // it is not possible for a value to become true again.
-            if !result {
+        if let Some(target) = target {
+            let Some(target) = executor
+                .objects()
+                .get_by_id(target)
+                .and_then(|s| s.get("ObjectReference"))
+            else {
                 return false;
+            };
+
+            target_obj = invocations::Value::Object(target.get().object.clone());
+        }
+
+        let mut invocation = executor.invoke(EventInvocation {
+            receiver: receiver.clone(),
+            args: vec![subject_obj, target_obj],
+            name: Cow::Borrowed("eval"),
+        });
+
+        let waker = Waker::noop();
+        let mut cx = std::task::Context::from_waker(waker);
+        let returns = loop {
+            match invocation.poll_unpin(&mut cx) {
+                Poll::Ready(returns) => break returns,
+                Poll::Pending => {
+                    executor.update(world, events, quests);
+                }
             }
-        }
+        };
 
-        last_op_is_or = condition.combinator == Combinator::Or;
-    }
-
-    // Collapse the last OR expression if the conditions end with an OR,
-    // i.e. A OR B OR <EOF>.
-    if last_op_is_or {
-        result &= result_or;
-    }
-
-    result
-}
-
-struct FuncEvaluator<'a> {
-    world: &'a World,
-    esp_loader: &'a EspLoader,
-    entity: Entity,
-    record: RecordId,
-}
-
-impl FuncEvaluator<'_> {
-    fn movement_state<F, R>(&self, f: F) -> Value
-    where
-        F: FnOnce(&MovementState) -> R,
-        R: Into<Value>,
-    {
-        self.world
-            .get::<&MovementState>(self.entity)
-            .map(|v| f(&v).into())
-            .unwrap_or(Value::Bool(false))
-    }
-
-    fn actor_property<F, R>(&self, f: F) -> Value
-    where
-        F: FnOnce(&ActorProperties) -> R,
-        R: Into<Value>,
-    {
-        self.world
-            .get::<&ActorProperties>(self.entity)
-            .map(|v| f(&v).into())
-            .unwrap_or(Value::Bool(false))
-    }
-
-    fn actor_value<F>(&self, actor_value: FormId, f: F) -> Value
-    where
-        F: FnOnce(&ActorValue) -> f32,
-    {
-        let actor_value = self
-            .esp_loader
-            .resolve_form(actor_value, self.record)
-            .unwrap();
-
-        match self.world.get::<&ActorValueProperties>(self.entity) {
-            Ok(values) => match values.get(actor_value) {
-                Some(value) => Value::F32(f(&value)),
-                None => Value::F32(0.0),
-            },
-            Err(_) => Value::F32(0.0),
-        }
-    }
-
-    fn inventory_bool<F>(&self, f: F) -> Value
-    where
-        F: FnOnce(&Inventory) -> bool,
-    {
-        match self.world.get::<&Inventory>(self.entity) {
-            Ok(inventory) => Value::Bool(f(&inventory)),
-            Err(_) => Value::Bool(false),
-        }
-    }
-}
-
-#[derive(Copy, Clone, Debug, PartialEq)]
-enum Value {
-    Bool(bool),
-    I32(i32),
-    F32(f32),
-}
-
-impl From<bool> for Value {
-    fn from(value: bool) -> Self {
-        Self::Bool(value)
+        returns
+            .as_ref()
+            .and_then(|vals| vals.first())
+            .and_then(|val| val.as_bool())
+            .unwrap_or(false)
     }
 }

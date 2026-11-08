@@ -1,10 +1,11 @@
 use std::collections::VecDeque;
 use std::pin::Pin;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::task::Poll;
+use std::task::{Poll, Waker};
 
 use crossbeam::queue::SegQueue;
+use event_listener::{Event, EventListener, IntoNotification};
+use futures::FutureExt;
 use futures::stream::FuturesUnordered;
 use futures_lite::StreamExt;
 use hashbrown::HashSet;
@@ -26,7 +27,7 @@ pub struct RunnerHandle {
     pub events: EventQueueProducer,
     pub cell: Arc<SharedBorrowCell<BorrowedState>>,
     tick: Arc<event_listener::Event>,
-    queue: Arc<SegQueue<(EventInvocation, Arc<AtomicBool>)>>,
+    queue: Arc<SegQueue<(EventInvocation, Event<Option<Vec<Value>>>)>>,
 }
 
 impl RunnerHandle {
@@ -34,10 +35,18 @@ impl RunnerHandle {
         self.tick.notify(1);
     }
 
+    /// Schedule a new script invocation for execution.
     pub fn push_invocation(&mut self, event: EventInvocation) -> Invocation {
-        let is_done = Arc::new(AtomicBool::new(false));
-        self.queue.push((event, is_done.clone()));
-        Invocation { is_done }
+        let waker = Event::with_tag();
+        let listen = waker.listen();
+
+        self.queue.push((event, waker));
+        self.tick();
+
+        Invocation {
+            is_done: false,
+            event: listen,
+        }
     }
 }
 
@@ -51,7 +60,7 @@ pub struct Runner {
     queue: VecDeque<ScheduledTask>,
     state: State,
     tick: Arc<event_listener::Event>,
-    invocation_queue: Arc<SegQueue<(EventInvocation, Arc<AtomicBool>)>>,
+    invocation_queue: Arc<SegQueue<(EventInvocation, Event<Option<Vec<Value>>>)>>,
     invocations: Slab<InvocationState>,
     entities: Arc<ScriptEntities>,
 }
@@ -95,11 +104,14 @@ impl Runner {
 
             let mut cx = std::task::Context::from_waker(std::task::Waker::noop());
             while let Poll::Ready(Some(invocation)) = self.tasks.poll_next(&mut cx) {
+                let (invocation, returns) = invocation;
                 if let Some(invocation) = invocation {
                     let state = self.invocations.get_mut(invocation.0).unwrap();
                     state.num_running -= 1;
                     if state.num_running == 0 {
-                        state.is_done.store(true, Ordering::Release);
+                        debug_assert_eq!(state.waker.total_listeners(), 1);
+                        state.waker.notify(1.tag(returns));
+
                         self.invocations.remove(invocation.0);
                     }
                 }
@@ -129,7 +141,7 @@ impl Runner {
     fn pump_events(&mut self) {
         let _span = trace_span!("Runner::pump_events").entered();
 
-        while let Some((event, is_done)) = self.invocation_queue.pop() {
+        while let Some((event, waker)) = self.invocation_queue.pop() {
             let scripts = self.objects.get_by_id(event.receiver.id()).unwrap();
 
             let entry = self.invocations.vacant_entry();
@@ -148,10 +160,7 @@ impl Runner {
             }
 
             if num_running != 0 {
-                entry.insert(InvocationState {
-                    num_running,
-                    is_done,
-                });
+                entry.insert(InvocationState { num_running, waker });
             }
         }
 
@@ -270,11 +279,27 @@ impl Runner {
 
                 let func = instance.get_func(&task.func).unwrap();
 
-                if let Err(err) = func.call(&mut ctx, &params).await {
-                    tracing::error!("script returned with error: {:?}", err);
-                }
+                let returns = match func.call(&mut ctx, &params).await {
+                    Err(err) => {
+                        tracing::error!("script returned with error: {:?}", err);
+                        None
+                    }
+                    Ok(ret) => {
+                        let ret = ret
+                            .iter()
+                            .map(|val| match val {
+                                Val::Bool(v) => Value::Bool(*v),
+                                Val::I32(v) => Value::Int(*v),
+                                _ => {
+                                    todo!("non bool/int returns are not yet supported");
+                                }
+                            })
+                            .collect();
+                        Some(ret)
+                    }
+                };
 
-                task.invocation_id
+                (task.invocation_id, returns)
             });
 
             self.tasks.push(future);
@@ -292,13 +317,16 @@ struct ScheduledTask {
     args: Vec<Value>,
 }
 
-type Task = Pin<Box<dyn Future<Output = Option<InvocationId>> + Send + Sync + 'static>>;
+type Task = Pin<
+    Box<dyn Future<Output = (Option<InvocationId>, Option<Vec<Value>>)> + Send + Sync + 'static>,
+>;
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 struct InvocationState {
     /// The number of script functions that are still being executed.
     num_running: usize,
-    is_done: Arc<AtomicBool>,
+    /// Signal to call when the invocation has finished execution.
+    waker: Event<Option<Vec<Value>>>,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
@@ -306,11 +334,32 @@ pub struct InvocationId(usize);
 
 #[derive(Debug)]
 pub struct Invocation {
-    is_done: Arc<AtomicBool>,
+    event: EventListener<Option<Vec<Value>>>,
+    is_done: bool,
 }
 
 impl Invocation {
-    pub fn is_done(&self) -> bool {
-        self.is_done.load(Ordering::Acquire)
+    pub fn is_done(&mut self) -> bool {
+        if self.is_done {
+            return true;
+        }
+
+        let waker = Waker::noop();
+        let mut cx = std::task::Context::from_waker(waker);
+        self.poll_unpin(&mut cx).is_ready()
+    }
+}
+
+impl Future for Invocation {
+    type Output = Option<Vec<Value>>;
+
+    fn poll(mut self: Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> Poll<Self::Output> {
+        if self.is_done {
+            Poll::Ready(None)
+        } else {
+            let res = self.event.poll_unpin(cx);
+            self.is_done = res.is_ready();
+            res
+        }
     }
 }

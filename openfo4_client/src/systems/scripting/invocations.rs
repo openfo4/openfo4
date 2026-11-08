@@ -22,6 +22,15 @@ pub enum Value {
     Null,
 }
 
+impl Value {
+    pub fn as_bool(&self) -> Option<bool> {
+        match self {
+            Self::Bool(v) => Some(*v),
+            _ => None,
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct QuestInit {
     pub quest: ScriptObject,

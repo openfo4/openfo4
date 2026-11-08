@@ -4,19 +4,22 @@ use glam::Vec3;
 use openfo4_common::components::Transform;
 use openfo4_core::Frozen;
 use openfo4_core::ecs::{CommandBuffer, Entity, World};
+use openfo4_core::events::EventBus;
 use openfo4_physics::PhysicsPipeline;
 use openfo4_physics::controller::CharacterController;
 
 use crate::assets::nif::NIF_TO_METERS;
 use crate::components::{Grounded, MovementState, Player};
 use crate::state::UPS;
-use crate::state::actions::{Action, Actions};
-use crate::state::anim_starter::AnimationEventQueue;
+use crate::state::actions::Action;
+use crate::state::anim_starter::AnimationSystem;
 use crate::state::hardcoded::KEYWORD_FEMALE;
 use crate::state::npc::ObjectKeywords;
 use crate::systems::FacingDirection;
 use crate::systems::animation_sync::AnimationParameters;
 use crate::systems::controller::ControllerShape;
+use crate::systems::quests::QuestManager;
+use crate::systems::scripting::Executor;
 
 #[derive(Copy, Clone, Debug, Default)]
 pub struct MovementSpeed {
@@ -45,8 +48,17 @@ struct AnimMoveState {
     is_moving: bool,
 }
 
-pub fn apply_movement(world: &mut World, pipeline: &mut PhysicsPipeline, actions: &Actions) {
+pub fn apply_movement(
+    world: &mut World,
+    pipeline: &mut PhysicsPipeline,
+    executor: &mut Executor,
+    events: &mut EventBus,
+    quests: &mut QuestManager,
+    anim: &mut AnimationSystem,
+) {
     let mut buffer = CommandBuffer::new();
+
+    let mut anim_events = Vec::new();
 
     for (
         entity,
@@ -59,7 +71,6 @@ pub fn apply_movement(world: &mut World, pipeline: &mut PhysicsPipeline, actions
         actor_keywords,
         player,
         frozen,
-        mut queue,
         move_state,
         anim_move_state,
     ) in world.query_mut::<(
@@ -73,7 +84,6 @@ pub fn apply_movement(world: &mut World, pipeline: &mut PhysicsPipeline, actions
         &ObjectKeywords,
         Option<&Player>,
         Option<&Frozen>,
-        &mut AnimationEventQueue,
         &MovementState,
         Option<&AnimMoveState>,
     )>() {
@@ -161,13 +171,13 @@ pub fn apply_movement(world: &mut World, pipeline: &mut PhysicsPipeline, actions
 
         let start_moving =
             direction != Vec3::ZERO && anim_move_state.as_ref().is_none_or(|s| !s.is_moving);
-        if start_moving && let Some(action) = actions.0.get(&Action::MoveStart) {
-            queue.0.push_back(*action);
+        if start_moving {
+            anim_events.push((entity, Action::MoveStart));
         }
 
         let stop_moving = direction == Vec3::ZERO && anim_move_state.is_some_and(|s| s.is_moving);
-        if stop_moving && let Some(action) = actions.0.get(&Action::MoveStop) {
-            queue.0.push_back(*action);
+        if stop_moving {
+            anim_events.push((entity, Action::MoveStop));
         }
 
         buffer.insert_one(
@@ -176,6 +186,10 @@ pub fn apply_movement(world: &mut World, pipeline: &mut PhysicsPipeline, actions
                 is_moving: move_state.is_moving && direction != Vec3::ZERO,
             },
         );
+    }
+
+    for (entity, action) in anim_events {
+        anim.send_action(world, entity, action, executor, events, quests);
     }
 
     buffer.run_on(world);

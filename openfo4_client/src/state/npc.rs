@@ -16,7 +16,6 @@ use openfo4_physics::components::{Collider, CollisionLayer, RigidBody};
 use openfo4_physics::controller::CharacterController;
 
 use crate::components::{ActorProperties, ActorProtection, DeadActor, MovementState};
-use crate::state::anim_starter::AnimationEventQueue;
 use crate::state::animation_test::{ActorCharacter, BodyPartBoneProps, load_character};
 use crate::state::equipment::load_item;
 use crate::state::esp::EspLoader;
@@ -236,9 +235,6 @@ impl Actor {
         world.insert_one(root, MovementSpeed::default()).unwrap();
         world.insert_one(root, self.speed).unwrap();
         world.insert_one(root, CharacterController::new()).unwrap();
-        world
-            .insert_one(root, AnimationEventQueue::default())
-            .unwrap();
         world.insert_one(root, MovementState::default()).unwrap();
     }
 }

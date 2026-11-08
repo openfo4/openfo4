@@ -177,7 +177,7 @@ impl QuestManager {
                         quest.state = QuestState::Starting(QuestStarting::AliasInit(invocations));
                     }
                     QuestState::Starting(QuestStarting::AliasInit(invocations)) => {
-                        invocations.retain(|invoc| !invoc.is_done());
+                        invocations.retain_mut(|invoc| !invoc.is_done());
                         if !invocations.is_empty() {
                             break;
                         }
@@ -305,7 +305,7 @@ impl QuestManager {
                             QuestState::Stopping(QuestStopping::AliasShutdown(invocations));
                     }
                     QuestState::Stopping(QuestStopping::AliasShutdown(invocations)) => {
-                        invocations.retain(|invoc| !invoc.is_done());
+                        invocations.retain_mut(|invoc| !invoc.is_done());
                         if !invocations.is_empty() {
                             break;
                         }

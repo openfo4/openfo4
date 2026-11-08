@@ -14,16 +14,16 @@ const TARGET_REACHED_THRESHOLD: f32 = 0.05;
 #[derive(Clone, Debug)]
 pub struct MoveTo {
     target: Vec3,
-    face: Face,
     state: PathState,
+    speed: f32,
 }
 
 impl MoveTo {
-    pub fn new(target: Vec3, face: Face) -> Self {
+    pub fn new(target: Vec3, speed: f32) -> Self {
         Self {
             target,
-            face,
             state: PathState::None,
+            speed,
         }
     }
 }
@@ -106,7 +106,7 @@ impl Behavior for MoveTo {
                         ctx.entity,
                         (
                             MovementDirection::new_normalized(dir),
-                            MovementSpeed { speed: 225.0 / 4.0 },
+                            MovementSpeed { speed: self.speed },
                             MovementState {
                                 is_moving: true,
                                 is_sneaking: false,
@@ -129,12 +129,6 @@ impl Behavior for MoveTo {
             self.state = PathState::None;
         }
     }
-}
-
-#[derive(Copy, Clone, Debug, PartialEq)]
-pub enum Face {
-    Forward,
-    At(Vec3),
 }
 
 #[derive(Clone, Debug)]

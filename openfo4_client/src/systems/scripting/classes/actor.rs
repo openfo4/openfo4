@@ -1,7 +1,7 @@
 use openfo4_script::engine::Engine;
 use openfo4_script::runtime::{Caller, Error};
 
-use crate::components::{ActorProperties, ActorProtection, Player};
+use crate::components::{ActorProperties, ActorProtection, MovementState, Player};
 use crate::state::hardcoded::fallout4::GOLD;
 use crate::systems::inventory::{Inventory, ItemData, WeaponItemData};
 use crate::systems::scripting::EngineExt;
@@ -1318,8 +1318,17 @@ fn is_seat_occupied(
 /// ```text
 /// bool Function() native
 /// ```
-fn is_sneaking(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<bool, Error> {
-    todo!()
+async fn is_sneaking(caller: Caller<'_, State>, self_ptr: Object) -> bool {
+    let Some(entity) = caller.data().entity(self_ptr) else {
+        return false;
+    };
+
+    let world = caller.data().world().await;
+    let Ok(state) = world.get::<&MovementState>(entity) else {
+        return false;
+    };
+
+    state.is_sneaking
 }
 
 /// `IsSprinting`

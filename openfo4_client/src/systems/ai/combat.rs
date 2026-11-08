@@ -8,7 +8,7 @@ use openfo4_core::ecs::Entity;
 use openfo4_core::transform::ConvertCoordinateSystem;
 
 use crate::assets::nif::NIF_TO_METERS;
-use crate::systems::ai::movement::{Face, MoveTo};
+use crate::systems::ai::movement::MoveTo;
 use crate::systems::ai::{Behavior, Context, Status};
 use crate::systems::inventory::{EquipItemEvent, Inventory, InventoryKey, ItemData};
 use crate::systems::{
@@ -384,7 +384,7 @@ impl CombatBehavior {
             target = target - toi * Vec3::Y;
         }
 
-        let mut moveto = MoveTo::new(target, Face::Forward);
+        let mut moveto = MoveTo::new(target, 225.0);
         moveto.start(ctx);
         self.movement.movement = Some(moveto);
         self.movement.last_action = Instant::now();

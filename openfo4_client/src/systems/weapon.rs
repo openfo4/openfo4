@@ -13,26 +13,35 @@ use openfo4_physics::{PhysicsPipeline, QueryFilter};
 use crate::components::{Camera, Player};
 use crate::events::combat::{BodyPartCrippleEvent, ReachedZeroHealthEvent};
 use crate::render::physics_debug::{DespawnAt, HitscanRaycast};
-use crate::state::actions::{Action, Actions};
-use crate::state::anim_starter::AnimationEventQueue;
+use crate::state::actions::Action;
+use crate::state::anim_starter::AnimationSystem;
 use crate::state::hardcoded::fallout4::{ACTOR_VALUE_HEALTH, apply_weapon_damage};
 use crate::state::npc::{ActorBodyParts, BodyPartBone};
 use crate::systems::actor_value::ActorValueProperties;
 use crate::systems::global::GlobalProperties;
 use crate::systems::inventory::{Inventory, ItemData};
+use crate::systems::quests::QuestManager;
+use crate::systems::scripting::Executor;
 use crate::systems::{
     FacingDirection, GunFireEvent, GunFireRequest, GunReloadEvent, GunReloadRequest,
     ProjectileHitEvent, WeaponDrawRequest, WeaponDrawnEvent, WeaponSheathEvent,
 };
 
-pub fn handle_weapon_fire_requests(world: &mut World, actions: &Actions, events: &EventBus) {
+pub fn handle_weapon_fire_requests(
+    world: &mut World,
+    events: &mut EventBus,
+    anim: &AnimationSystem,
+    executor: &mut Executor,
+    quests: &mut QuestManager,
+) {
+    let mut anim_events = Vec::new();
+
     for event in events.read::<GunFireRequest>() {
         let Ok(entity) = world.entity(event.actor) else {
             continue;
         };
 
         let inventory = entity.get::<&Inventory>().unwrap();
-        let mut animation_events = entity.get::<&mut AnimationEventQueue>().unwrap();
 
         for (_, item) in inventory.items() {
             let ItemData::Weapon(weapon) = &item.data else {
@@ -44,24 +53,33 @@ pub fn handle_weapon_fire_requests(world: &mut World, actions: &Actions, events:
             }
 
             if weapon.current_ammo > 0 {
-                if let Some(action) = actions.0.get(&Action::FireSingle) {
-                    animation_events.0.push_back(*action);
-                }
+                anim_events.push(event.actor);
             }
 
             break;
         }
     }
+
+    for entity in anim_events {
+        anim.send_action(world, entity, Action::FireSingle, executor, events, quests);
+    }
 }
 
-pub fn handle_weapon_reload_requests(world: &mut World, actions: &Actions, events: &EventBus) {
+pub fn handle_weapon_reload_requests(
+    world: &mut World,
+    events: &mut EventBus,
+    anim: &AnimationSystem,
+    executor: &mut Executor,
+    quests: &mut QuestManager,
+) {
+    let mut anim_events = Vec::new();
+
     for event in events.read::<GunReloadRequest>() {
         let Ok(entity) = world.entity(event.actor) else {
             continue;
         };
 
         let inventory = entity.get::<&Inventory>().unwrap();
-        let mut animation_events = entity.get::<&mut AnimationEventQueue>().unwrap();
         let is_player = entity.get::<&Player>().is_some();
 
         let mut ammo = None;
@@ -90,10 +108,12 @@ pub fn handle_weapon_reload_requests(world: &mut World, actions: &Actions, event
         }
 
         if can_reload {
-            if let Some(action) = actions.0.get(&Action::Reload) {
-                animation_events.0.push_back(*action);
-            }
+            anim_events.push(event.actor);
         }
+    }
+
+    for entity in anim_events {
+        anim.send_action(world, entity, Action::Reload, executor, events, quests);
     }
 }
 

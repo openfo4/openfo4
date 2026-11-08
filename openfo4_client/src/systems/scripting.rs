@@ -229,6 +229,30 @@ impl Executor {
     pub fn engine(&self) -> &Engine {
         &self.loader().engine
     }
+
+    pub async fn get_or_load(&self, world: &World, entity: Entity) -> ScriptObjectId {
+        if let Some(id) = self.entities.get(entity) {
+            return id;
+        }
+
+        if let Ok(refr) = world.get::<&PlacedReference>(entity) {
+            if let Some(object) = self.objects().get_by_record(refr.0) {
+                return object.id();
+            }
+
+            let res = self.loader().load(refr.0).await.unwrap();
+            self.entities().set(entity, res.object.id()).unwrap();
+            return res.object.id();
+        }
+
+        if let Ok(base) = world.get::<&BaseObject>(entity) {
+            let obj = self.loader().load_instance(base.record).await.unwrap();
+            self.entities().set(entity, obj.id()).unwrap();
+            return obj.id();
+        }
+
+        unreachable!("entity has no `BaseObject`")
+    }
 }
 
 fn core_actor_values(

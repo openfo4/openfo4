@@ -55,7 +55,7 @@ fn has_keyword(caller: Caller<'_, State>, self_ptr: Object, keyword: Object) -> 
     let keyword = caller
         .data()
         .objects
-        .get_by_addr(self_ptr)
+        .get_by_addr(keyword)
         .and_then(|s| s.record())
         .unwrap();
 

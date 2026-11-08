@@ -12,11 +12,11 @@ use slab::Slab;
 use crate::components::{Camera, MovementState, Player};
 use crate::state::actions::Action;
 use crate::state::anim_starter::AnimationSystem;
-use crate::state::esp::EspLoader;
 use crate::state::npc::ActorMovementSpeeds;
 use crate::systems::camera::{CameraMode, CameraOffset, PlayerControlled};
-use crate::systems::global::GlobalProperties;
 use crate::systems::movement::{MovementDirection, MovementSpeed};
+use crate::systems::quests::QuestManager;
+use crate::systems::scripting::Executor;
 use crate::systems::{FacingDirection, GunFireEvent, PlayerControlState};
 
 pub fn handle_inputs(
@@ -24,13 +24,24 @@ pub fn handle_inputs(
     event: &WindowEvent,
     events: &mut EventBus,
     animation: &AnimationSystem,
-    esp_loader: &EspLoader,
-    globals: &GlobalProperties,
+    executor: &mut Executor,
+    quests: &mut QuestManager,
 ) {
     for camera in world.query_mut::<&Camera>() {
         if matches!(camera.mode, CameraMode::Free) {
             return;
         }
+    }
+
+    let mut actions = Vec::new();
+
+    enum DeferredAction {
+        StartSneak,
+        StopSneak,
+        StartSprint,
+        StopSprint,
+        Jump,
+        Land,
     }
 
     for (entity, mut transform, mut offset, _, mut state) in world
@@ -72,7 +83,13 @@ pub fn handle_inputs(
                         continue;
                     }
 
-                    animation.send_action(world, entity, Action::Sneak, esp_loader, globals);
+                    let action = if state.sneaking {
+                        DeferredAction::StopSneak
+                    } else {
+                        DeferredAction::StartSneak
+                    };
+
+                    actions.push((entity, action));
 
                     state.sneaking ^= true;
                 }
@@ -80,19 +97,16 @@ pub fn handle_inputs(
                     // Stop sneaking when we start sprinting.
                     // When we stop sprinting this is already false.
                     if state.sneaking {
-                        animation.send_action(world, entity, Action::Sneak, esp_loader, globals);
-                        state.sneaking = false;
+                        actions.push((entity, DeferredAction::StopSneak));
                     }
 
                     let action = if state.sprinting {
-                        Action::SprintStop
+                        DeferredAction::StopSprint
                     } else {
-                        Action::SprintStart
+                        DeferredAction::StartSprint
                     };
 
-                    animation.send_action(world, entity, action, esp_loader, globals);
-
-                    state.sprinting ^= true;
+                    actions.push((entity, action));
                 }
                 Some(KeyCode::Space) => {
                     if !event.state.is_pressed() {
@@ -100,14 +114,12 @@ pub fn handle_inputs(
                     }
 
                     let action = if state.jumping {
-                        state.jumping = false;
-                        Action::Land
+                        DeferredAction::Land
                     } else {
-                        state.jumping = true;
-                        Action::Jump
+                        DeferredAction::Jump
                     };
 
-                    animation.send_action(world, entity, action, esp_loader, globals);
+                    actions.push((entity, action));
                 }
                 Some(KeyCode::Key1) if event.state.is_pressed() => {
                     state.walking ^= true;
@@ -118,6 +130,31 @@ pub fn handle_inputs(
                 _ => continue,
             },
             _ => (),
+        }
+    }
+
+    for (entity, action) in actions {
+        let anim_action = match action {
+            DeferredAction::StartSneak | DeferredAction::StopSneak => Action::Sneak,
+            DeferredAction::StartSprint => Action::SprintStart,
+            DeferredAction::StopSprint => Action::SprintStop,
+            DeferredAction::Jump => Action::Jump,
+            DeferredAction::Land => Action::Land,
+        };
+
+        animation.send_action(world, entity, anim_action, executor, events, quests);
+
+        let Ok(mut state) = world.get::<&mut PlayerControlState>(entity) else {
+            continue;
+        };
+
+        match action {
+            DeferredAction::StartSneak => state.sneaking = true,
+            DeferredAction::StopSneak => state.sneaking = false,
+            DeferredAction::StartSprint => state.sprinting = true,
+            DeferredAction::StopSprint => state.sprinting = false,
+            DeferredAction::Jump => state.jumping = true,
+            DeferredAction::Land => state.jumping = false,
         }
     }
 }

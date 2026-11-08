@@ -1,17 +1,16 @@
-use std::collections::VecDeque;
-
 use hashbrown::HashMap;
 use openfo4_animation::driver::AnimationDriver;
 use openfo4_core::ecs::{Entity, World};
+use openfo4_core::events::EventBus;
 use openfo4_core::path::DataPathBuf;
 use openfo4_core::record::RecordId;
-use openfo4_esp::conditions::Condition;
 use openfo4_esp::{RecordData, RecordKind};
 
 use crate::state::actions::{Action, Actions};
 use crate::state::esp::EspLoader;
-use crate::systems::conditions;
-use crate::systems::global::GlobalProperties;
+use crate::systems::conditions::{CompiledCondition, ConditionCompiler};
+use crate::systems::quests::QuestManager;
+use crate::systems::scripting::Executor;
 
 #[derive(Clone, Debug)]
 struct Reaction {
@@ -20,7 +19,8 @@ struct Reaction {
     behavior_graph: DataPathBuf,
     /// The event that is sent to the animation graph when this reaction is triggered.
     event: Option<String>,
-    conditions: Vec<Condition>,
+    /// Skip when this condition evauluates to `false`.
+    condition: CompiledCondition,
 }
 
 #[derive(Clone, Debug)]
@@ -30,7 +30,7 @@ pub struct AnimationSystem {
 }
 
 impl AnimationSystem {
-    pub async fn new(esp: &EspLoader) -> Self {
+    pub async fn new(esp: &EspLoader, compiler: &ConditionCompiler) -> Self {
         let actions = Actions::load(esp).await;
         let animations = esp.lookup_all(Some(RecordKind::Animation)).await.unwrap();
 
@@ -58,83 +58,35 @@ impl AnimationSystem {
 
             let parent = esp.resolve_form(anim.relations.parent, record.id).unwrap();
 
+            let conditions = compiler
+                .compile(record.id, 0, &anim.conditions.conditions)
+                .await;
+
             reactions.entry(parent).or_default().push(Reaction {
                 id: record.id,
                 behavior_graph: DataPathBuf::new(behavior_graph),
                 event,
-                conditions: anim.conditions.conditions,
+                condition: conditions,
             });
         }
 
         Self { reactions, actions }
     }
 
-    pub fn update(
-        &mut self,
-        world: &mut World,
-        esp_loader: &EspLoader,
-        globals: &GlobalProperties,
-    ) {
-        let mut events_to_send = Vec::new();
-
-        for (entity, active_graphs, mut events) in world
-            .query::<(Entity, &ActiveBehaviorGraphs, &mut AnimationEventQueue)>()
-            .iter()
-        {
-            while let Some(id) = events.0.pop_front() {
-                let Some(reactions) = self.reactions.get(&id) else {
-                    continue;
-                };
-
-                for reaction in reactions {
-                    if !active_graphs.0.contains(&reaction.behavior_graph) {
-                        continue;
-                    }
-
-                    if !conditions::evaluate(
-                        world,
-                        esp_loader,
-                        globals,
-                        reaction.id,
-                        &reaction.conditions,
-                        entity,
-                        entity,
-                    ) {
-                        continue;
-                    }
-
-                    if let Some(event) = &reaction.event {
-                        events_to_send.push((entity, event));
-                    }
-
-                    events.0.push_back(reaction.id);
-                }
-            }
-        }
-
-        for (entity, event) in events_to_send {
-            if let Ok(mut driver) = world.get::<&mut AnimationDriver>(entity) {
-                driver.send_event(event);
-            }
-        }
-    }
-
+    /// Sends an animation action to an entity to start an animation.
+    ///
+    /// Note that due to the condition system it is not safe to defer this action event unless no
+    /// simulation state has changed.
     pub fn send_action(
         &self,
-        world: &World,
+        world: &mut World,
         entity: Entity,
         action: Action,
-        esp_loader: &EspLoader,
-        globals: &GlobalProperties,
+        executor: &mut Executor,
+        event_bus: &mut EventBus,
+        quests: &mut QuestManager,
     ) {
         let Some(action) = self.actions.0.get(&action) else {
-            return;
-        };
-
-        let Ok(active_graphs) = world.get::<&ActiveBehaviorGraphs>(entity) else {
-            return;
-        };
-        let Ok(mut driver) = world.get::<&mut AnimationDriver>(entity) else {
             return;
         };
 
@@ -145,23 +97,28 @@ impl AnimationSystem {
             };
 
             for reaction in reactions {
+                let Ok(active_graphs) = world.get::<&ActiveBehaviorGraphs>(entity) else {
+                    return;
+                };
                 if !active_graphs.0.contains(&reaction.behavior_graph) {
                     continue;
                 }
+                drop(active_graphs);
 
-                if !conditions::evaluate(
-                    world,
-                    esp_loader,
-                    globals,
-                    reaction.id,
-                    &reaction.conditions,
-                    entity,
-                    entity,
-                ) {
+                let subject = futures_lite::future::block_on(executor.get_or_load(world, entity));
+                let res = reaction
+                    .condition
+                    .eval(executor, world, event_bus, quests, subject, None);
+
+                tracing::trace!("condition for {} evaluated to {}", reaction.id, res);
+                if !res {
                     continue;
                 }
 
                 if let Some(event) = &reaction.event {
+                    let Ok(mut driver) = world.get::<&mut AnimationDriver>(entity) else {
+                        return;
+                    };
                     driver.send_event(event);
                 }
 
@@ -173,6 +130,3 @@ impl AnimationSystem {
 
 #[derive(Clone, Debug)]
 pub struct ActiveBehaviorGraphs(pub Vec<DataPathBuf>);
-
-#[derive(Clone, Debug, Default)]
-pub struct AnimationEventQueue(pub VecDeque<RecordId>);

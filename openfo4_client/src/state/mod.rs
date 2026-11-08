@@ -47,7 +47,7 @@ use crate::render::RenderObject;
 use crate::render::physics_debug::despawn_expired;
 use crate::shared::SharedState;
 use crate::state::actions::{Action, Actions};
-use crate::state::anim_starter::{AnimationEventQueue, AnimationSystem};
+use crate::state::anim_starter::AnimationSystem;
 use crate::state::animation::update_actor_animation_graphs;
 use crate::state::hardcoded::ACTOR_PLAYER;
 use crate::state::level::Streamer;
@@ -57,6 +57,7 @@ use crate::systems::activation::update_player_looking_at_target;
 use crate::systems::ai::AiSystem;
 use crate::systems::animation_sync::{bounce_animation_events, update_animation_parameters};
 use crate::systems::camera::CameraMode;
+use crate::systems::conditions::ConditionCompiler;
 use crate::systems::controller::{
     InputControllerMask, apply_player_movements, update_facing_direction,
 };
@@ -105,6 +106,7 @@ pub struct GameState {
     real_time_elapsed: Duration,
     transform_hierarchy_cache: TransformHierarchyCache,
     door: DoorSystem,
+    conditions: ConditionCompiler,
 }
 
 impl GameState {
@@ -118,8 +120,6 @@ impl GameState {
         let asset_loader = init_asset_loader(&file_loader, &shared.entities);
 
         let actions = Actions::load(&loader).await;
-
-        let animation = AnimationSystem::new(&loader).await;
 
         let global_variables = globals::load_global_variables(&loader).await;
         let form_lists = globals::load_form_lists(&loader).await;
@@ -165,6 +165,9 @@ impl GameState {
         let quests = QuestManager::new(pool.clone(), &loader, &mut executor, &level.loader());
         let door = DoorSystem::new(pool.clone(), level.loader().clone());
 
+        let conditions = ConditionCompiler::new(loader.clone(), executor.loader().clone());
+        let animation = AnimationSystem::new(&loader, &conditions).await;
+
         Self {
             weather: WeatherSystem::new(loader.clone(), pool.clone(), &asset_loader, &shared),
             inventory: InventorySystem::new(pool.clone(), asset_loader.clone(), loader.clone()),
@@ -188,6 +191,7 @@ impl GameState {
             real_time_elapsed: Duration::ZERO,
             transform_hierarchy_cache: TransformHierarchyCache::default(),
             door,
+            conditions,
         }
     }
 
@@ -228,14 +232,18 @@ impl GameState {
         apply_player_movements(&mut self.world);
         update_trigger_box_contacts(&mut self.world, &mut self.event_bus);
 
-        apply_movement(&mut self.world, &mut self.physics, &self.actions);
+        apply_movement(
+            &mut self.world,
+            &mut self.physics,
+            &mut self.executor,
+            &mut self.event_bus,
+            &mut self.quests,
+            &mut self.animation,
+        );
 
         // systems::ni_transform::compute_transform_from_ni_transform(&mut self.world);
         // systems::ni_transform::compute_cell_ids_from_ni_transform(&mut self.world);
         // systems::hierarchy::compute_global_transform(&mut self.world);
-
-        self.animation
-            .update(&mut self.world, &self.esp_loader, &self.globals);
 
         self.executor
             .update(&mut self.world, &mut self.event_bus, &mut self.quests);
@@ -267,8 +275,20 @@ impl GameState {
         );
         bounce_animation_events(&mut self.event_bus);
 
-        handle_weapon_fire_requests(&mut self.world, &self.actions, &self.event_bus);
-        handle_weapon_reload_requests(&mut self.world, &self.actions, &self.event_bus);
+        handle_weapon_fire_requests(
+            &mut self.world,
+            &mut self.event_bus,
+            &self.animation,
+            &mut self.executor,
+            &mut self.quests,
+        );
+        handle_weapon_reload_requests(
+            &mut self.world,
+            &mut self.event_bus,
+            &self.animation,
+            &mut self.executor,
+            &mut self.quests,
+        );
         handle_weapon_fire_events(&mut self.world, &self.physics, &mut self.event_bus);
         handle_weapon_reload_events(&mut self.world, &mut self.event_bus);
         handle_weapon_hit_damage(&mut self.world, &mut self.event_bus, &self.globals);
@@ -311,8 +331,8 @@ impl GameState {
             &event,
             &mut self.event_bus,
             &self.animation,
-            &self.esp_loader,
-            &self.globals,
+            &mut self.executor,
+            &mut self.quests,
         );
         systems::activation::handle_activation_inputs(
             &mut self.world,
@@ -396,11 +416,12 @@ impl GameState {
 
                 if event.key_code == Some(KeyCode::Z) {
                     self.animation.send_action(
-                        &self.world,
+                        &mut self.world,
                         player,
                         Action::FireAuto,
-                        &self.esp_loader,
-                        &self.globals,
+                        &mut self.executor,
+                        &mut self.event_bus,
+                        &mut self.quests,
                     );
                 }
 
@@ -414,47 +435,52 @@ impl GameState {
 
                 if event.key_code == Some(KeyCode::O) {
                     self.animation.send_action(
-                        &self.world,
+                        &mut self.world,
                         player,
                         Action::Draw,
-                        &self.esp_loader,
-                        &self.globals,
+                        &mut self.executor,
+                        &mut self.event_bus,
+                        &mut self.quests,
                     );
                 }
                 if event.key_code == Some(KeyCode::P) {
                     self.animation.send_action(
-                        &self.world,
+                        &mut self.world,
                         player,
                         Action::Sheath,
-                        &self.esp_loader,
-                        &self.globals,
+                        &mut self.executor,
+                        &mut self.event_bus,
+                        &mut self.quests,
                     );
                 }
                 if event.key_code == Some(KeyCode::L) {
                     self.animation.send_action(
-                        &self.world,
+                        &mut self.world,
                         player,
                         Action::PerkCannibal,
-                        &self.esp_loader,
-                        &self.globals,
+                        &mut self.executor,
+                        &mut self.event_bus,
+                        &mut self.quests,
                     );
                 }
                 if event.key_code == Some(KeyCode::G) {
                     self.animation.send_action(
-                        &self.world,
+                        &mut self.world,
                         player,
                         Action::BleedoutStart,
-                        &self.esp_loader,
-                        &self.globals,
+                        &mut self.executor,
+                        &mut self.event_bus,
+                        &mut self.quests,
                     );
                 }
                 if event.key_code == Some(KeyCode::H) {
                     self.animation.send_action(
-                        &self.world,
+                        &mut self.world,
                         player,
                         Action::BleedoutStop,
-                        &self.esp_loader,
-                        &self.globals,
+                        &mut self.executor,
+                        &mut self.event_bus,
+                        &mut self.quests,
                     );
                 }
                 if event.key_code == Some(KeyCode::E) {
@@ -535,7 +561,6 @@ impl GameState {
                     (
                         Player,
                         PlayerControlState::default(),
-                        AnimationEventQueue::default(),
                         Streamer,
                         ActorMarker,
                         InputControllerMask::default(),
