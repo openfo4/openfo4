@@ -1,4 +1,3 @@
-use openfo4_esp::records::magic_effect::MagicffectTargetType::Self_;
 use openfo4_script::engine::Engine;
 use openfo4_script::runtime::{Caller, Error};
 

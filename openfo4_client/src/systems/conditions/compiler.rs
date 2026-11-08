@@ -4,8 +4,11 @@ use openfo4_esp::conditions::{
     Combinator, Comparator, ComparisonValue, Condition, ConditionFunction,
 };
 use openfo4_pex::{
-    Binop, CallMethod, ConditionalBranch, Function, Instruction, Unop, Value, VariableDefinition,
+    Binop, CallMethod, CallStatic, ConditionalBranch, Function, Instruction, Unop, Value,
+    VariableDefinition,
 };
+
+use crate::systems::weather::WeatherClassification;
 
 #[derive(Clone, Debug)]
 pub struct Global {
@@ -147,9 +150,13 @@ fn lower_condition(translator: &mut Translator, condition: &Condition) -> Value 
             translator.call_object_func("GetValue", &[actor_value], Type::Float)
         }
         ConditionFunction::GetValuePercent(actor_value) => {
-            let actor_value = translator.create_global(*actor_value, "Actorvalue");
+            let actor_value = translator.create_global(*actor_value, "ActorValue");
             translator.call_object_func("GetValuePercentage", &[actor_value], Type::Float)
         }
+        ConditionFunction::GetOpenState => {
+            translator.call_object_func("GetOpenState", &[], Type::Int)
+        }
+        ConditionFunction::IsPowered => translator.call_object_func("IsPowered", &[], Type::Bool),
         // Animation
         ConditionFunction::GetGraphVariableInt(name) => {
             let name = Value::String(name.as_str().unwrap().to_string());
@@ -174,6 +181,15 @@ fn lower_condition(translator: &mut Translator, condition: &Condition) -> Value 
         ConditionFunction::IsGuard => translator.call_actor_func("IsGuard", &[], Type::Bool),
         ConditionFunction::GetIsGhost => translator.call_actor_func("IsGhost", &[], Type::Bool),
         ConditionFunction::GetDead => translator.call_actor_func("IsDead", &[], Type::Bool),
+        ConditionFunction::GetIsAlerted => translator.call_actor_func("IsAlerted", &[], Type::Bool),
+        ConditionFunction::GetLevel => translator.call_actor_func("GetLevel", &[], Type::Int),
+        ConditionFunction::IsTalking => translator.call_actor_func("IsTalking", &[], Type::Bool),
+        ConditionFunction::IsTrespassing => {
+            translator.call_actor_func("IsTrespassing", &[], Type::Bool)
+        }
+        ConditionFunction::IsBleedingOut => {
+            translator.call_actor_func("IsBleedingOut", &[], Type::Bool)
+        }
         // Actor Movement State
         // ConditionFunction::IsMoving => todo!(),
         // ConditionFunction::IsTurning => todo!(),
@@ -183,8 +199,20 @@ fn lower_condition(translator: &mut Translator, condition: &Condition) -> Value 
         ConditionFunction::IsSprinting => {
             translator.call_actor_func("IsSprinting", &[], Type::Bool)
         }
-        ConditionFunction::IsTalking => translator.call_actor_func("IsTalking", &[], Type::Bool),
         ConditionFunction::CanFlyHere => translator.call_actor_func("CanFlyHere", &[], Type::Bool),
+        ConditionFunction::GetIsFlying => translator.call_actor_func("IsFlying", &[], Type::Bool),
+        ConditionFunction::GetFlyingState => {
+            translator.call_actor_func("GetFlyingState", &[], Type::Int)
+        }
+        ConditionFunction::IsAllowedToFly => {
+            translator.call_actor_func("IsAllowedToFly", &[], Type::Bool)
+        }
+        ConditionFunction::IsBeingRidden => {
+            translator.call_actor_func("IsBeingRidden", &[], Type::Bool)
+        }
+        ConditionFunction::IsPlayersLastRiddenMount => {
+            translator.call_actor_func("IsPlayersLastRiddenHorse", &[], Type::Bool)
+        }
         // ConditionFunction::GetMovementDirection => todo!(),
         // ConditionFunction::GetMovementSpeed => todo!(),
         // Actor Inventory
@@ -197,11 +225,58 @@ fn lower_condition(translator: &mut Translator, condition: &Condition) -> Value 
             let keyword = translator.create_global(*keyword, "Keyword");
             translator.call_actor_func("WornHasKeyword", &[keyword], Type::Bool)
         }
+        ConditionFunction::IsOverEncumbered => {
+            translator.call_actor_func("IsOverEncumbered", &[], Type::Bool)
+        }
         // Combat
         // TODO
         ConditionFunction::IsAttacking => (Value::Bool(false), Type::Bool),
         ConditionFunction::IsMeleeAttacking => (Value::Bool(false), Type::Bool),
         ConditionFunction::GetActorStance => (Value::Int(0), Type::Int),
+        // Furniture
+        ConditionFunction::GetSitting => (Value::Bool(false), Type::Bool),
+        ConditionFunction::GetSleeping => (Value::Bool(false), Type::Bool),
+        // Weather
+        ConditionFunction::IsPleasant
+        | ConditionFunction::IsCloudy
+        | ConditionFunction::IsRaining
+        | ConditionFunction::IsSnowing => {
+            let weather =
+                translator.call_static_func("Weather", "GetCurrentWeather", &[], "Weather");
+            let lhs = translator.call(weather, "GetClassification", &[], Type::Int.to_str());
+            let rhs = match condition.function {
+                ConditionFunction::IsPleasant => WeatherClassification::Pleasant,
+                ConditionFunction::IsCloudy => WeatherClassification::Cloudy,
+                ConditionFunction::IsRaining => WeatherClassification::Raiy,
+                ConditionFunction::IsSnowing => WeatherClassification::Snowy,
+                _ => unreachable!(),
+            };
+
+            let value = translator.icmp_eq(lhs, Value::Int(rhs.to_i32()));
+            (value, Type::Bool)
+        }
+        // Quest
+        ConditionFunction::GetQuestRunning { quest } => {
+            let quest = translator.create_global(*quest, "Quest");
+            let value = translator.call(quest, "IsRunning", &[], Type::Bool.to_str());
+            (value, Type::Bool)
+        }
+        ConditionFunction::GetStage { quest } => {
+            let quest = translator.create_global(*quest, "Quest");
+            let value = translator.call(quest, "GetCurrentStageID", &[], Type::Int.to_str());
+            (value, Type::Int)
+        }
+        ConditionFunction::GetStageDone { quest, stage } => {
+            let quest = translator.create_global(*quest, "Quest");
+            let stage = Value::Int(stage.cast_signed());
+            let value = translator.call(quest, "IsStageDone", &[stage], Type::Bool.to_str());
+            (value, Type::Bool)
+        }
+        ConditionFunction::GetQuestCompleted { quest } => {
+            let quest = translator.create_global(*quest, "Quest");
+            let value = translator.call(quest, "IsCompleted", &[], Type::Bool.to_str());
+            (value, Type::Bool)
+        }
         x => {
             tracing::warn!("condition not yet implemented {x:?}, will default to false");
             return Value::Bool(false);
@@ -358,6 +433,58 @@ impl Translator {
             }));
 
         (Value::Ident(dst), ty)
+    }
+
+    fn call(
+        &mut self,
+        object: Value,
+        func: &'static str,
+        args: &[Value],
+        ty: &'static str,
+    ) -> Value {
+        let dst = Value::Ident(self.alloc_value(ty));
+
+        self.func
+            .instructions
+            .push(Instruction::CallMethod(CallMethod {
+                function_name: func.to_owned(),
+                object,
+                return_assignment: dst.clone(),
+                args: args.to_vec(),
+            }));
+
+        dst
+    }
+
+    fn call_static_func(
+        &mut self,
+        class: &'static str,
+        func: &'static str,
+        args: &[Value],
+        ty: &'static str,
+    ) -> Value {
+        let dst = Value::Ident(self.alloc_value(ty));
+
+        self.func
+            .instructions
+            .push(Instruction::CallStatic(CallStatic {
+                class: class.to_owned(),
+                function: func.to_owned(),
+                args: args.to_vec(),
+                return_assignment: dst.clone(),
+            }));
+
+        dst
+    }
+
+    fn icmp_eq(&mut self, lhs: Value, rhs: Value) -> Value {
+        let dst = Value::Ident(self.alloc_value(Type::Bool.to_str()));
+        self.func.instructions.push(Instruction::CmpEq(Binop {
+            lhs,
+            rhs,
+            dst: dst.clone(),
+        }));
+        dst
     }
 
     fn alloc_value(&mut self, ty: &str) -> String {

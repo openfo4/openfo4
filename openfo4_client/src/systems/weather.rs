@@ -813,3 +813,18 @@ fn compute_sun_position(time: &GameTime) -> Vec3 {
 
     dir
 }
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub enum WeatherClassification {
+    None = -1,
+    Pleasant = 0,
+    Cloudy = 1,
+    Raiy = 2,
+    Snowy = 3,
+}
+
+impl WeatherClassification {
+    pub const fn to_i32(self) -> i32 {
+        self as i32
+    }
+}
