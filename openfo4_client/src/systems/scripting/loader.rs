@@ -11,6 +11,7 @@ use openfo4_script::engine::{Engine, Instance};
 use openfo4_script::runtime::ObjectAddr;
 use openfo4_script::runtime::object::ObjectHandle;
 use parking_lot::Mutex;
+use thiserror::Error;
 
 use crate::state::esp::EspLoader;
 use crate::systems::scripting::object_builder::build_script_object;
@@ -18,6 +19,12 @@ use crate::systems::scripting::object_data::{ObjectData, load_record_object_data
 use crate::systems::scripting::objects::ScriptObjects;
 use crate::systems::scripting::registration::{Event, EventKind, EventSender, RegistrationSet};
 use crate::systems::scripting::{COMPILER_OPTIONS, ScriptInstance};
+
+#[derive(Clone, Debug, Error)]
+pub enum Error {
+    #[error("could not resolve record {0}")]
+    RecordNotFound(RecordId),
+}
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct ScriptObjectId(pub(super) usize);
@@ -79,6 +86,10 @@ where
         &self.engine
     }
 
+    pub fn objects(&self) -> &ScriptObjects {
+        &self.objects
+    }
+
     /// Instantiate a new default object of the given `class` without setting any of the fields.
     pub async fn instantiate_default(&self, class: &str) -> ScriptObject {
         let instance = self.cache.get_or_compile(&self.engine, class).await;
@@ -106,7 +117,8 @@ where
 
         let res = self
             .load_in(record, RecordInstantiationKind::BaseObject)
-            .await;
+            .await
+            .ok()?;
 
         tracing::trace!("script for {:?} is {:?}", record, res.object.id());
 
@@ -120,27 +132,32 @@ where
 
         let res = self
             .load_in(record, RecordInstantiationKind::Instance)
-            .await;
+            .await
+            .ok()?;
 
         tracing::trace!("script for {:?} is {:?}", record, res.object.id());
 
         Some(res.object)
     }
 
-    async fn load_in(&self, root: RecordId, kind: RecordInstantiationKind) -> LoadResult {
+    async fn load_in(
+        &self,
+        root: RecordId,
+        kind: RecordInstantiationKind,
+    ) -> Result<LoadResult, Error> {
         if let Some(scripts) = self.objects.get_by_record(root)
         // FIXME: We should still cache default instances here
         // and clone the object for each call.
         && kind.is_base_object()
         {
-            return LoadResult {
+            return Ok(LoadResult {
                 object: ScriptObject(Arc::new(ScriptObjectInner {
                     base: Some(root),
                     id: scripts.id(),
                 })),
                 // FIXME: What should we do here?
                 aliases: HashMap::new(),
-            };
+            });
         }
 
         let mut root_id = None;
@@ -215,6 +232,15 @@ where
                     event.loaded.notify(event.loaded.total_listeners());
                     event.built.notify(event.built.total_listeners());
                     event.ready.notify(event.ready.total_listeners());
+                }
+
+                // Note that the root record always is the first record that we attempt
+                // to load. If it fails to load we do not have to notify the other threads
+                // because we did not load any record yet.
+                if record == root {
+                    debug_assert!(records.is_empty());
+                    debug_assert!(listeners.is_empty());
+                    return Err(Error::RecordNotFound(root));
                 }
 
                 continue;
@@ -529,13 +555,13 @@ where
             }
         };
 
-        LoadResult {
+        Ok(LoadResult {
             object: ScriptObject(Arc::new(ScriptObjectInner {
                 base: Some(root),
                 id: root_id,
             })),
             aliases: compiled_aliases,
-        }
+        })
     }
 }
 
@@ -1252,8 +1278,9 @@ mod tests {
             let builder = engine.object_pool().insert(ty.id());
             let info = ty.info().clone();
 
+            let depends = self.deps.get(&record)?.clone();
             Some(LoadedRecord {
-                depends: self.deps.get(&record).unwrap().clone(),
+                depends,
                 scripts: [(
                     "MyClass".to_owned(),
                     PartialObject {
@@ -1351,5 +1378,14 @@ mod tests {
 
         let loadera = loader.clone();
         block_on(loadera.load_instance(make_rid(1)));
+    }
+
+    #[test]
+    fn script_loader_root_load_fail() {
+        let loader = Arc::new(build_loader(Loader {
+            deps: HashMap::new(),
+        }));
+
+        assert!(block_on(loader.load(make_rid(1))).is_none());
     }
 }
