@@ -1336,8 +1336,17 @@ async fn is_sneaking(caller: Caller<'_, State>, self_ptr: Object) -> bool {
 /// ```text
 /// bool Function() native
 /// ```
-fn is_sprinting(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<bool, Error> {
-    todo!()
+async fn is_sprinting(caller: Caller<'_, State>, self_ptr: Object) -> bool {
+    let Some(entity) = caller.data().entity(self_ptr) else {
+        return false;
+    };
+
+    let world = caller.data().world().await;
+    let Ok(state) = world.get::<&MovementState>(entity) else {
+        return false;
+    };
+
+    state.is_sprinting
 }
 
 /// `IsTalking`
