@@ -184,6 +184,23 @@ where
             Entry::Vacant(VacantEntry { map: self, key })
         }
     }
+
+    /// Retains only the elements specified by the predicate.
+    ///
+    /// In other words, remove all pairs (k, v) for which f(&k, &mut v) returns false.
+    /// The elements are visited in unsorted (and unspecified) order.
+    pub fn retain<F>(&mut self, mut f: F)
+    where
+        F: FnMut(&K, &mut V) -> bool,
+    {
+        for slot in &mut self.inner {
+            if let Some((key, value)) = slot
+                && !f(key, value)
+            {
+                *slot = None
+            }
+        }
+    }
 }
 
 impl<K, V> Default for VecMap<K, V> {
@@ -601,5 +618,24 @@ mod tests {
 
         map.insert(42, 22);
         assert_eq!(*map.get(42).unwrap(), 22);
+    }
+
+    #[test]
+    fn vec_map_retain() {
+        let mut map = VecMap::<usize, ()>::new();
+
+        map.insert(2, ());
+        map.insert(4, ());
+        map.insert(5, ());
+        map.insert(7, ());
+        map.insert(8, ());
+
+        map.retain(|key, _| *key % 2 == 0);
+
+        assert!(map.contains_key(2));
+        assert!(map.contains_key(4));
+        assert!(map.contains_key(8));
+        assert!(!map.contains_key(5));
+        assert!(!map.contains_key(7));
     }
 }
