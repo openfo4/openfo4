@@ -243,7 +243,7 @@ fn lower_condition(translator: &mut Translator, condition: &Condition) -> Value 
         | ConditionFunction::IsSnowing => {
             let weather =
                 translator.call_static_func("Weather", "GetCurrentWeather", &[], "Weather");
-            let lhs = translator.call(weather, "GetClassification", &[], Type::Int.to_str());
+            let lhs = translator.call(weather, "GetClassification", &[], Type::Int);
             let rhs = match condition.function {
                 ConditionFunction::IsPleasant => WeatherClassification::Pleasant,
                 ConditionFunction::IsCloudy => WeatherClassification::Cloudy,
@@ -258,23 +258,88 @@ fn lower_condition(translator: &mut Translator, condition: &Condition) -> Value 
         // Quest
         ConditionFunction::GetQuestRunning { quest } => {
             let quest = translator.create_global(*quest, "Quest");
-            let value = translator.call(quest, "IsRunning", &[], Type::Bool.to_str());
+            let value = translator.call(quest, "IsRunning", &[], Type::Bool);
             (value, Type::Bool)
         }
         ConditionFunction::GetStage { quest } => {
             let quest = translator.create_global(*quest, "Quest");
-            let value = translator.call(quest, "GetCurrentStageID", &[], Type::Int.to_str());
+            let value = translator.call(quest, "GetCurrentStageID", &[], Type::Int);
             (value, Type::Int)
         }
         ConditionFunction::GetStageDone { quest, stage } => {
             let quest = translator.create_global(*quest, "Quest");
             let stage = Value::Int(stage.cast_signed());
-            let value = translator.call(quest, "IsStageDone", &[stage], Type::Bool.to_str());
+            let value = translator.call(quest, "IsStageDone", &[stage], Type::Bool);
             (value, Type::Bool)
         }
         ConditionFunction::GetQuestCompleted { quest } => {
             let quest = translator.create_global(*quest, "Quest");
-            let value = translator.call(quest, "IsCompleted", &[], Type::Bool.to_str());
+            let value = translator.call(quest, "IsCompleted", &[], Type::Bool);
+            (value, Type::Bool)
+        }
+        // Faction
+        ConditionFunction::CanPayCrimeGold { faction } => {
+            let faction = translator.create_global(*faction, "Faction");
+            let value = translator.call(faction, "CanPayCrimeGold", &[], Type::Bool);
+            (value, Type::Bool)
+        }
+        ConditionFunction::GetCrimeGold { faction } => {
+            let faction = translator.create_global(*faction, "Faction");
+            let value = translator.call(faction, "GetCrimeGold", &[], Type::Int);
+            (value, Type::Int)
+        }
+        ConditionFunction::GetCrimeGoldNonViolent { faction } => {
+            let faction = translator.create_global(*faction, "Faction");
+            let value = translator.call(faction, "GetCrimeGoldNonViolent", &[], Type::Int);
+            (value, Type::Int)
+        }
+        ConditionFunction::GetCrimeGoldViolent { faction } => {
+            let faction = translator.create_global(*faction, "Faction");
+            let value = translator.call(faction, "GetCrimeGoldViolent", &[], Type::Int);
+            (value, Type::Int)
+        }
+        ConditionFunction::GetInfamy { faction } => {
+            let faction = translator.create_global(*faction, "Faction");
+            let value = translator.call(faction, "GetInfamy", &[], Type::Int);
+            (value, Type::Int)
+        }
+        ConditionFunction::GetInfamyNonViolent { faction } => {
+            let faction = translator.create_global(*faction, "Faction");
+            let value = translator.call(faction, "GetInfamyNonViolent", &[], Type::Int);
+            (value, Type::Int)
+        }
+        ConditionFunction::GetInfamyViolent { faction } => {
+            let faction = translator.create_global(*faction, "Faction");
+            let value = translator.call(faction, "GetInfamyViolent", &[], Type::Int);
+            (value, Type::Int)
+        }
+        ConditionFunction::GetFactionCombatReaction {
+            faction,
+            other_faction,
+        } => {
+            let faction = translator.create_global(*faction, "Faction");
+            let other = translator.create_global(*other_faction, "Faction");
+            let value = translator.call(faction, "GetFactionReaction", &[other], Type::Int);
+            (value, Type::Int)
+        }
+        ConditionFunction::GetStolenItemValue { faction } => {
+            let faction = translator.create_global(*faction, "Faction");
+            let value = translator.call(faction, "GetStolenItemValueCrime", &[], Type::Int);
+            (value, Type::Int)
+        }
+        ConditionFunction::GetStolenItemValueNoCrime { faction } => {
+            let faction = translator.create_global(*faction, "Faction");
+            let value = translator.call(faction, "GetStolenItemValueNoCrime", &[], Type::Int);
+            (value, Type::Int)
+        }
+        ConditionFunction::GetPcEnemyOfFaction { faction } => {
+            let faction = translator.create_global(*faction, "Faction");
+            let value = translator.call(faction, "IsPlayerEnemy", &[], Type::Bool);
+            (value, Type::Bool)
+        }
+        ConditionFunction::GetPcExpelled { faction } => {
+            let faction = translator.create_global(*faction, "Faction");
+            let value = translator.call(faction, "IsPlayerExpelled", &[], Type::Bool);
             (value, Type::Bool)
         }
         x => {
@@ -392,6 +457,22 @@ impl Type {
     }
 }
 
+trait TypeName {
+    fn name(&self) -> &str;
+}
+
+impl<'a> TypeName for &'a str {
+    fn name(&self) -> &str {
+        self
+    }
+}
+
+impl TypeName for Type {
+    fn name(&self) -> &str {
+        self.to_str()
+    }
+}
+
 struct Translator {
     func: Function,
     next: usize,
@@ -435,14 +516,11 @@ impl Translator {
         (Value::Ident(dst), ty)
     }
 
-    fn call(
-        &mut self,
-        object: Value,
-        func: &'static str,
-        args: &[Value],
-        ty: &'static str,
-    ) -> Value {
-        let dst = Value::Ident(self.alloc_value(ty));
+    fn call<T>(&mut self, object: Value, func: &'static str, args: &[Value], ty: T) -> Value
+    where
+        T: TypeName,
+    {
+        let dst = Value::Ident(self.alloc_value(ty.name()));
 
         self.func
             .instructions
@@ -456,14 +534,17 @@ impl Translator {
         dst
     }
 
-    fn call_static_func(
+    fn call_static_func<T>(
         &mut self,
         class: &'static str,
         func: &'static str,
         args: &[Value],
-        ty: &'static str,
-    ) -> Value {
-        let dst = Value::Ident(self.alloc_value(ty));
+        ty: T,
+    ) -> Value
+    where
+        T: TypeName,
+    {
+        let dst = Value::Ident(self.alloc_value(ty.name()));
 
         self.func
             .instructions

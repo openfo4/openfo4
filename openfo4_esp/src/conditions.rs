@@ -530,7 +530,7 @@ pub enum ConditionFunction {
     #[tag(375)]
     GetCrimeGoldViolent { faction: FormId },
     #[tag(376)]
-    GetCrimeGoldNonViolent { form: FormId },
+    GetCrimeGoldNonViolent { faction: FormId },
     #[tag(378)]
     IsOwnedBy { actor: FormId },
     #[tag(380)]
