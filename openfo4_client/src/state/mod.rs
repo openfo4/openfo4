@@ -245,8 +245,12 @@ impl GameState {
         // systems::ni_transform::compute_cell_ids_from_ni_transform(&mut self.world);
         // systems::hierarchy::compute_global_transform(&mut self.world);
 
-        self.executor
-            .update(&mut self.world, &mut self.event_bus, &mut self.quests);
+        self.executor.update(
+            &mut self.world,
+            &mut self.event_bus,
+            &mut self.quests,
+            Duration::from_millis(1),
+        );
         self.quests
             .update(&mut self.world, &mut self.event_bus, &mut self.executor);
 

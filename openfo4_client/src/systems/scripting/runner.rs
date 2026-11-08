@@ -28,6 +28,8 @@ pub struct RunnerHandle {
     pub cell: Arc<SharedBorrowCell<BorrowedState>>,
     tick: Arc<event_listener::Event>,
     queue: Arc<SegQueue<(EventInvocation, Event<Option<Vec<Value>>>)>>,
+    done: async_channel::Receiver<()>,
+    progress: async_channel::Receiver<()>,
 }
 
 impl RunnerHandle {
@@ -48,6 +50,18 @@ impl RunnerHandle {
             event: listen,
         }
     }
+
+    /// Waits until there is no more work to be done by the [`Runner`].
+    pub async fn done(&mut self) {
+        self.done.recv().await.ok();
+    }
+
+    /// Waits until the [`Runner`] has made progress.
+    ///
+    /// This function returns when at least one task has been driven.
+    pub async fn progress(&mut self) {
+        self.progress.recv().await.ok();
+    }
 }
 
 pub struct Runner {
@@ -63,33 +77,51 @@ pub struct Runner {
     invocation_queue: Arc<SegQueue<(EventInvocation, Event<Option<Vec<Value>>>)>>,
     invocations: Slab<InvocationState>,
     entities: Arc<ScriptEntities>,
+    done: async_channel::Sender<()>,
+    progress: async_channel::Sender<()>,
 }
 
 impl Runner {
-    pub fn new(state: State, pool: Arc<TaskPool>, entities: Arc<ScriptEntities>) -> Self {
-        Self {
-            events: EventQueue::default(),
-            objects: state.objects.clone(),
-            registration: state.registration.clone(),
-            pool,
-            loader: state.loader.clone(),
-            queue: VecDeque::new(),
-            tasks: FuturesUnordered::new(),
-            state,
-            tick: Arc::default(),
-            invocation_queue: Arc::default(),
-            invocations: Slab::new(),
-            entities,
-        }
-    }
+    pub fn new(
+        state: State,
+        pool: Arc<TaskPool>,
+        entities: Arc<ScriptEntities>,
+    ) -> (Self, RunnerHandle) {
+        let events = EventQueue::default();
+        let tick: Arc<Event> = Arc::default();
+        let queue: Arc<SegQueue<(EventInvocation, Event<Option<Vec<Value>>>)>> = Arc::default();
 
-    pub fn handle(&self) -> RunnerHandle {
-        RunnerHandle {
-            events: self.events.producer(),
-            cell: self.state.borrowed.clone(),
-            tick: self.tick.clone(),
-            queue: self.invocation_queue.clone(),
-        }
+        let (done_tx, done_rx) = async_channel::bounded(1);
+        let (progress_tx, progress_rx) = async_channel::bounded(1);
+
+        let handle = RunnerHandle {
+            events: events.producer(),
+            cell: state.borrowed.clone(),
+            tick: tick.clone(),
+            queue: queue.clone(),
+            done: done_rx,
+            progress: progress_rx,
+        };
+
+        (
+            Self {
+                events,
+                objects: state.objects.clone(),
+                registration: state.registration.clone(),
+                pool,
+                loader: state.loader.clone(),
+                queue: VecDeque::new(),
+                tasks: FuturesUnordered::new(),
+                state,
+                tick,
+                invocation_queue: queue,
+                invocations: Slab::new(),
+                entities,
+                done: done_tx,
+                progress: progress_tx,
+            },
+            handle,
+        )
     }
 
     #[instrument(name = "Runner::run", skip_all)]
@@ -115,6 +147,8 @@ impl Runner {
                         self.invocations.remove(invocation.0);
                     }
                 }
+
+                self.progress.try_send(()).ok();
             }
 
             if let Some(state) = self.state.borrowed.try_borrow() {
@@ -135,6 +169,9 @@ impl Runner {
                     event.notify(event.total_listeners());
                 }
             }
+
+            self.progress.try_send(()).ok();
+            self.done.try_send(()).ok();
         }
     }
 

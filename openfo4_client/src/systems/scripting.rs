@@ -14,6 +14,8 @@ mod state;
 use std::sync::Arc;
 use std::time::Duration;
 
+use async_io::Timer;
+use futures::{FutureExt, select};
 use futures_lite::future::block_on;
 use hashbrown::HashSet;
 use openfo4_common::collections::bimap::BiMap;
@@ -135,8 +137,7 @@ impl ExecutorBuilder {
             self.entities.clone(),
         );
 
-        let mut runner = Runner::new(state, self.pool.clone(), self.entities.clone());
-        let handle = runner.handle();
+        let (mut runner, handle) = Runner::new(state, self.pool.clone(), self.entities.clone());
         self.pool.spawn(async move { runner.run().await });
 
         Executor {
@@ -172,7 +173,13 @@ impl Executor {
         self.handle.push_invocation(invocation.into())
     }
 
-    pub fn update(&mut self, world: &mut World, events: &mut EventBus, quests: &mut QuestManager) {
+    pub fn update(
+        &mut self,
+        world: &mut World,
+        events: &mut EventBus,
+        quests: &mut QuestManager,
+        budget: Duration,
+    ) {
         let _span = trace_span!("Executor::update").entered();
 
         self.handle.tick();
@@ -183,7 +190,20 @@ impl Executor {
             events,
         });
 
-        std::thread::sleep(Duration::from_millis(1));
+        block_on(async {
+            let timer = Timer::after(budget);
+
+            select! {
+                _ = self.handle.done().fuse() => {}
+                _ = timer.fuse() => {
+                    // Once our budget runs out we will wait until at least one
+                    // task has made progress.
+                    // This prevents complete starvation that can happen when our
+                    // budget is low.
+                    self.handle.progress().await;
+                }
+            }
+        });
 
         let taken = self.handle.cell.take();
         debug_assert!(taken.is_some());

@@ -3,6 +3,7 @@ mod compiler;
 use std::borrow::Cow;
 use std::sync::Arc;
 use std::task::{Poll, Waker};
+use std::time::Duration;
 
 use async_lock::Mutex;
 use futures::FutureExt;
@@ -210,7 +211,8 @@ impl CompiledCondition {
             match invocation.poll_unpin(&mut cx) {
                 Poll::Ready(returns) => break returns,
                 Poll::Pending => {
-                    executor.update(world, events, quests);
+                    // We only want to drive the task containing our condition.
+                    executor.update(world, events, quests, Duration::ZERO);
                 }
             }
         };
