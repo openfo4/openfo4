@@ -8,7 +8,7 @@ use std::time::Duration;
 use async_lock::Mutex;
 use futures::FutureExt;
 use hashbrown::HashMap;
-use openfo4_core::ecs::World;
+use openfo4_core::ecs::{Entity, World};
 use openfo4_core::events::EventBus;
 use openfo4_core::record::RecordId;
 use openfo4_esp::conditions::Condition;
@@ -136,7 +136,7 @@ impl ConditionCompiler {
         let script = scripts.get(&name).unwrap();
 
         for (prop, value) in global_values {
-            script.get().object.set(&name, &prop, value.addr()).unwrap();
+            script.get().object.set_self(&prop, value.addr()).unwrap();
         }
 
         let object = CompiledCondition {

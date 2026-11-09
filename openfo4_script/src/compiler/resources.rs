@@ -349,10 +349,7 @@ impl PrimitiveTypes {
                 info: TypeInfo {
                     id: none,
                     name: Some(Lowercase::new("none")),
-                    properties: HashMap::from([(
-                        (Lowercase::new(""), Lowercase::new("")),
-                        TypeProperty { ty: none, field: 0 },
-                    )]),
+                    properties: TypeProperties::default(),
                     allows_null: true,
                     lock: None,
                     supertypes: Box::new([]),
@@ -368,10 +365,7 @@ impl PrimitiveTypes {
                 info: TypeInfo {
                     id: bool,
                     name: Some(Lowercase::new("bool")),
-                    properties: HashMap::from([(
-                        (Lowercase::new(""), Lowercase::new("")),
-                        TypeProperty { ty: bool, field: 0 },
-                    )]),
+                    properties: TypeProperties::default(),
                     allows_null: true,
                     lock: None,
                     supertypes: Box::new([]),
@@ -387,10 +381,7 @@ impl PrimitiveTypes {
                 info: TypeInfo {
                     id: int,
                     name: Some(Lowercase::new("int")),
-                    properties: HashMap::from([(
-                        (Lowercase::new(""), Lowercase::new("")),
-                        TypeProperty { ty: int, field: 0 },
-                    )]),
+                    properties: TypeProperties::default(),
                     allows_null: true,
                     lock: None,
                     supertypes: Box::new([]),
@@ -406,13 +397,7 @@ impl PrimitiveTypes {
                 info: TypeInfo {
                     id: float,
                     name: Some(Lowercase::new("float")),
-                    properties: HashMap::from([(
-                        (Lowercase::new(""), Lowercase::new("")),
-                        TypeProperty {
-                            ty: float,
-                            field: 0,
-                        },
-                    )]),
+                    properties: TypeProperties::default(),
                     allows_null: true,
                     lock: None,
                     supertypes: Box::new([]),
@@ -428,13 +413,7 @@ impl PrimitiveTypes {
                 info: TypeInfo {
                     id: opaqueptr,
                     name: Some(Lowercase::new("opaqueptr")),
-                    properties: HashMap::from([(
-                        (Lowercase::new(""), Lowercase::new("")),
-                        TypeProperty {
-                            ty: opaqueptr,
-                            field: 0,
-                        },
-                    )]),
+                    properties: TypeProperties::default(),
                     allows_null: true,
                     lock: None,
                     supertypes: Box::new([]),
@@ -450,10 +429,7 @@ impl PrimitiveTypes {
                 info: TypeInfo {
                     id: byte,
                     name: None,
-                    properties: HashMap::from([(
-                        (Lowercase::new(""), Lowercase::new("")),
-                        TypeProperty { ty: byte, field: 0 },
-                    )]),
+                    properties: TypeProperties::default(),
                     allows_null: true,
                     lock: None,
                     supertypes: Box::new([]),
@@ -486,13 +462,7 @@ impl PrimitiveTypes {
                 info: TypeInfo {
                     id: string,
                     name: Some(Lowercase::new("string")),
-                    properties: HashMap::from([(
-                        (Lowercase::new(""), Lowercase::new("")),
-                        TypeProperty {
-                            ty: string,
-                            field: 0,
-                        },
-                    )]),
+                    properties: TypeProperties::default(),
                     allows_null: false,
                     lock: None,
                     supertypes: Box::new([]),
@@ -525,7 +495,7 @@ impl PrimitiveTypes {
                 info: TypeInfo {
                     id: array,
                     name: None,
-                    properties: HashMap::new(),
+                    properties: TypeProperties::default(),
                     allows_null: false,
                     lock: None,
                     supertypes: Box::new([]),
@@ -558,10 +528,7 @@ impl PrimitiveTypes {
                 info: TypeInfo {
                     id: var,
                     name: Some(Lowercase::new("var")),
-                    properties: HashMap::from([(
-                        (Lowercase::new(""), Lowercase::new("")),
-                        TypeProperty { ty: var, field: 0 },
-                    )]),
+                    properties: TypeProperties::default(),
                     allows_null: false,
                     lock: None,
                     supertypes: Box::new([]),
@@ -577,13 +544,7 @@ impl PrimitiveTypes {
                 info: TypeInfo {
                     id: string_ptr,
                     name: Some(Lowercase::new("*string")),
-                    properties: HashMap::from([(
-                        (Lowercase::new(""), Lowercase::new("")),
-                        TypeProperty {
-                            ty: string_ptr,
-                            field: 0,
-                        },
-                    )]),
+                    properties: TypeProperties::default(),
                     allows_null: false,
                     lock: None,
                     supertypes: Box::new([]),
@@ -599,13 +560,7 @@ impl PrimitiveTypes {
                 info: TypeInfo {
                     id: var_ptr,
                     name: Some(Lowercase::new("*var")),
-                    properties: HashMap::from([(
-                        (Lowercase::new(""), Lowercase::new("")),
-                        TypeProperty {
-                            ty: var_ptr,
-                            field: 0,
-                        },
-                    )]),
+                    properties: TypeProperties::default(),
                     allows_null: true,
                     lock: None,
                     supertypes: Box::new([]),
@@ -634,8 +589,8 @@ impl PrimitiveTypes {
 #[derive(Clone, Debug, Default)]
 pub struct TypeInfo {
     pub(crate) id: TypeId,
-    pub name: Option<Lowercase<String>>,
-    pub properties: HashMap<(Lowercase<String>, Lowercase<String>), TypeProperty>,
+    pub(crate) name: Option<Lowercase<String>>,
+    pub properties: TypeProperties,
     pub allows_null: bool,
     /// The offset from the object start where the [`ObjectLock`] is located.
     pub(crate) lock: Option<usize>,
@@ -664,16 +619,68 @@ impl TypeInfo {
         self.id == target || self.supertypes.contains(&target)
     }
 
-    fn name(&self) -> Option<&str> {
+    /// Returns a debug name for this type.
+    ///
+    /// The value has no semantic meaning and is only meant for debugging.
+    pub fn name(&self) -> Option<&str> {
         self.name.as_ref().map(|s| s.as_str().as_inner())
     }
 
     pub(crate) fn name_or_placeholder(&self) -> &str {
         self.name().unwrap_or("<unnamed>")
     }
+
+    /// Returns the first property with the given `name`.
+    ///
+    /// This will search the supertype recursively if the type itself does not have the matching
+    /// property. For any two types in the hierarchy that both have the matching `name` it is
+    /// guaranteed that the subtype property is returned.
+    pub fn find_property(&self, name: &Lowercase<str>) -> Option<&TypeProperty> {
+        let mut id = self.id;
+
+        loop {
+            if let Some(field) = self.properties.get(id, name) {
+                return Some(field);
+            }
+
+            id = self.supertype()?;
+        }
+    }
+
+    /// To be removed later.
+    pub fn papyrus_name(&self) -> Option<Lowercase<String>> {
+        let mut name = self.name.as_ref()?.as_str();
+        name = name.strip_prefix("*").unwrap_or(&name);
+        Some(name.to_owned())
+    }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
+pub struct TypeProperties {
+    properties: HashMap<TypeId, HashMap<Lowercase<String>, TypeProperty>>,
+}
+
+impl TypeProperties {
+    pub fn get(&self, ty: TypeId, name: &Lowercase<str>) -> Option<&TypeProperty> {
+        self.properties.get(&ty)?.get(name)
+    }
+
+    /// Returns an [`Iterator`] over all properties of this type.
+    ///
+    /// The order the properties are returned are unspecified.
+    pub fn iter(&self) -> impl Iterator<Item = (TypeId, &Lowercase<str>, &TypeProperty)> {
+        self.properties
+            .iter()
+            .map(|(ty, fields)| fields.iter().map(|(name, prop)| (*ty, name.as_str(), prop)))
+            .flatten()
+    }
+
+    pub(crate) fn insert(&mut self, ty: TypeId, name: Lowercase<String>, prop: TypeProperty) {
+        self.properties.entry(ty).or_default().insert(name, prop);
+    }
+}
+
+#[derive(Copy, Clone, Debug)]
 pub struct TypeProperty {
     pub ty: TypeId,
     /// The field where the data is stored.
@@ -724,7 +731,7 @@ pub fn define_array_ty(
             info: TypeInfo {
                 id: array_ty,
                 name: Some(Lowercase::new(&*format!("{}[]", name))),
-                properties: HashMap::new(),
+                properties: TypeProperties::default(),
                 allows_null: false,
                 lock: None,
                 supertypes: Box::new([]),
@@ -739,13 +746,7 @@ pub fn define_array_ty(
             info: TypeInfo {
                 id: array_ptr_ty,
                 name: Some(Lowercase::new(&*format!("*{}[]", name))),
-                properties: HashMap::from([(
-                    (Lowercase::new(""), Lowercase::new("")),
-                    TypeProperty {
-                        ty: array_ptr_ty,
-                        field: 0,
-                    },
-                )]),
+                properties: TypeProperties::default(),
                 allows_null: true,
                 lock: None,
                 supertypes: Box::new([]),

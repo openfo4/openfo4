@@ -191,10 +191,11 @@ impl Engine {
     }
 
     pub fn get_type_by_id(&self, id: TypeId) -> Option<TypeRef<'_>> {
-        let mut ty = self.resources.types.get(id)?;
+        let ty = self.resources.types.get(id)?;
         let mut inner_ty = id;
-        while let TypeRepr::Pointer(inner) = ty.repr {
-            ty = self.resources.types.get(inner).unwrap();
+        let mut next = ty.clone();
+        while let TypeRepr::Pointer(inner) = next.repr {
+            next = self.resources.types.get(inner).unwrap();
             inner_ty = inner;
         }
 

@@ -35,28 +35,28 @@ fn class_reflection() {
     let info = class.info();
     assert_eq!(
         info.properties
-            .get(&(Lowercase::new("MyClass"), Lowercase::new("a")))
+            .get(info.id(), &Lowercase::new("a"))
             .unwrap()
             .ty,
         engine.int_type()
     );
     assert_eq!(
         info.properties
-            .get(&(Lowercase::new("MyClass"), Lowercase::new("b")))
+            .get(info.id(), &Lowercase::new("b"))
             .unwrap()
             .ty,
         engine.float_type()
     );
     assert_eq!(
         info.properties
-            .get(&(Lowercase::new("MyClass"), Lowercase::new("c")))
+            .get(info.id(), &Lowercase::new("c"))
             .unwrap()
             .ty,
         engine.get_type("MyClass").unwrap().id()
     );
     assert_eq!(
         info.properties
-            .get(&(Lowercase::new("MyClass"), Lowercase::new("d")))
+            .get(info.id(), &Lowercase::new("d"))
             .unwrap()
             .ty,
         engine.get_type("MyClass[]").unwrap().id()
@@ -83,7 +83,7 @@ fn struct_reflection() {
     let info = struct_.info();
     assert_eq!(
         info.properties
-            .get(&(Lowercase::new("MyClass#MyStruct"), Lowercase::new("a")))
+            .get(info.id(), &Lowercase::new("a"))
             .unwrap()
             .ty,
         engine.get_type("MyClass[]").unwrap().id()

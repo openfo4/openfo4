@@ -58,7 +58,7 @@ where
 #[test]
 fn load_global() {
     run_test(|_engine, object, _set, get, ctx| {
-        object.set("MyClass", "a", 123).unwrap();
+        object.set_self("a", 123).unwrap();
         let object = object.addr();
 
         let res = get.call(ctx, object).now_or_never().unwrap();
@@ -74,7 +74,7 @@ fn store_global() {
         set.call(ctx, (object, 456)).now_or_never().unwrap();
 
         let object = engine.object_pool().get(object).unwrap();
-        assert_eq!(object.get::<i32>("MyClass", "a").unwrap(), 456);
+        assert_eq!(object.get_self::<i32>("a").unwrap(), 456);
     });
 }
 

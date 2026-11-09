@@ -33,12 +33,12 @@ fn default_class_values() {
     let class = engine.get_type("MyClass").unwrap();
 
     let object = engine.object_pool().insert(class.id());
-    object.set("MyClass", "d", 50).unwrap();
+    object.set_self("d", 50).unwrap();
 
-    assert_eq!(object.get::<i32>("MyClass", "a").unwrap(), -100);
-    assert_eq!(object.get::<f32>("MyClass", "b").unwrap(), 32.0);
-    assert_eq!(object.get::<bool>("MyClass", "c").unwrap(), true);
-    assert_eq!(object.get::<i32>("MyClass", "d").unwrap(), 50);
+    assert_eq!(object.get_self::<i32>("a").unwrap(), -100);
+    assert_eq!(object.get_self::<f32>("b").unwrap(), 32.0);
+    assert_eq!(object.get_self::<bool>("c").unwrap(), true);
+    assert_eq!(object.get_self::<i32>("d").unwrap(), 50);
 }
 
 #[test]
@@ -77,12 +77,13 @@ fn field_without_property() {
     block_on(engine.register(&module));
 
     let instance = block_on(engine.compile("B", &Options::default())).unwrap();
+    let a = engine.get_type("A").unwrap();
     let b = engine.get_type("B").unwrap();
 
     let builder = engine.object_pool().insert(b.id());
-    builder.set("A", "a", 1).unwrap();
-    builder.set("A", "c", builder.addr()).unwrap();
-    builder.set("B", "e", true).unwrap();
+    builder.set(a.id(), "a", 1).unwrap();
+    builder.set(a.id(), "c", builder.addr()).unwrap();
+    builder.set(b.id(), "e", true).unwrap();
 
     let addr = builder.addr();
 

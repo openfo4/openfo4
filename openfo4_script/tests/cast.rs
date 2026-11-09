@@ -44,7 +44,7 @@ fn cast_array() {
         .object_pool()
         .insert_array(class_ty.id(), addrs.len());
     for (index, addr) in addrs.iter().enumerate() {
-        input.set_at(index, "", "", *addr);
+        input.set_at(index, *addr);
     }
 
     let input = input.finalize().addr();

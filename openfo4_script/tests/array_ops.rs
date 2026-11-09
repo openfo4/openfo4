@@ -83,7 +83,7 @@ fn array_get() {
 
     let mut builder = engine.object_pool().insert_array(engine.int_type(), 10);
     for i in 0..10 {
-        builder.set_at::<i32>(i, "", "", (i * i) as i32);
+        builder.set_at::<i32>(i, (i * i) as i32);
     }
 
     let array_ptr = builder.finalize();
@@ -130,7 +130,7 @@ fn array_add() {
 
     let mut builder = engine.object_pool().insert_array(engine.int_type(), 10);
     for i in 0..10 {
-        builder.set_at::<i32>(i, "", "", i as i32);
+        builder.set_at::<i32>(i, i as i32);
     }
 
     let array_ptr = builder.finalize();
@@ -177,7 +177,7 @@ fn array_insert() {
 
     let mut builder = engine.object_pool().insert_array(engine.int_type(), 10);
     for i in 0..10 {
-        builder.set_at::<i32>(i, "", "", i as i32);
+        builder.set_at::<i32>(i, i as i32);
     }
 
     let array_ptr = builder.finalize();
@@ -225,7 +225,7 @@ fn array_clear() {
 
     let mut builder = engine.object_pool().insert_array(engine.int_type(), 5);
     for i in 0..5 {
-        builder.set_at::<i32>(i, "", "", i as i32);
+        builder.set_at::<i32>(i, i as i32);
     }
 
     let array_ptr = builder.finalize();
@@ -277,7 +277,7 @@ fn array_find_int() {
     let mut builder = engine.object_pool().insert_array(engine.int_type(), 100);
     for i in 0..100 {
         let value = if i < 10 { 42 } else { i as i32 };
-        builder.set_at::<i32>(i, "", "", value);
+        builder.set_at::<i32>(i, value);
     }
 
     let array_ptr = builder.finalize();
@@ -303,8 +303,8 @@ fn array_find_struct() {
         let object = caller.object_pool().get(array[index as usize]).unwrap();
 
         assert_eq!(index, 42);
-        assert_eq!(object.get::<i32>("", "x").unwrap(), 42);
-        assert_eq!(object.get::<f32>("", "y").unwrap(), 42.0);
+        assert_eq!(object.get_self::<i32>("x").unwrap(), 42);
+        assert_eq!(object.get_self::<f32>("y").unwrap(), 42.0);
     }
 
     let module = assemble(
@@ -342,14 +342,14 @@ fn array_find_struct() {
         let object = engine.object_pool().insert(struct_ty.id());
 
         if i < 10 {
-            object.set::<i32>("", "x", 42).unwrap();
-            object.set::<f32>("", "y", 42.0).unwrap();
+            object.set_self::<i32>("x", 42).unwrap();
+            object.set_self::<f32>("y", 42.0).unwrap();
         } else {
-            object.set::<i32>("", "x", i as i32).unwrap();
-            object.set::<f32>("", "y", i as f32).unwrap();
+            object.set_self::<i32>("x", i as i32).unwrap();
+            object.set_self::<f32>("y", i as f32).unwrap();
         }
 
-        array.set_at::<ObjectAddr>(i, "", "", object.addr());
+        array.set_at::<ObjectAddr>(i, object.addr());
     }
 
     let array_ptr = array.finalize();

@@ -8,8 +8,8 @@ use crate::compiler::codegen::pex::registry::{
     ClassDef, ClassId, Registry, StructDef, StructId, Type,
 };
 use crate::compiler::resources::{
-    self, CompositeType, CompositeTypeMember, Resources, TypeId, TypeInfo, TypeProperty, TypeRepr,
-    Words, define_array_ty,
+    self, CompositeType, CompositeTypeMember, Resources, TypeId, TypeInfo, TypeProperties,
+    TypeProperty, TypeRepr, Types, Words, define_array_ty,
 };
 use crate::runtime::ArrayObject;
 use crate::runtime::lock::ObjectLock;
@@ -174,8 +174,7 @@ impl Layouts {
             None => (build_class_header(res), HashMap::new()),
         };
 
-        let mut properties = ty.info.properties.clone();
-        let mut supertypes = ty.info.supertypes.clone();
+        let mut properties = Vec::new();
         let TypeRepr::Composite(mut ty) = ty.repr else {
             unreachable!()
         };
@@ -244,11 +243,7 @@ impl Layouts {
             let index = indices.get(&field).unwrap();
             let field = &fields[*index - base_index];
             let (ty, _) = self.resolve_ty_and_default_value(res, &field.1.ty);
-
-            properties.insert(
-                (class.name.clone(), name.clone()),
-                TypeProperty { field: *index, ty },
-            );
+            properties.push((name.as_str(), TypeProperty { field: *index, ty }));
         }
 
         debug_assert!(!self.classes.contains_key(&class.id));
@@ -270,7 +265,12 @@ impl Layouts {
                 info: TypeInfo {
                     id,
                     name: Some(class.name.clone()),
-                    properties,
+                    properties: merge_properties_with_parent(
+                        &res.types,
+                        parent.map(|p| p.ty),
+                        &properties,
+                        id,
+                    ),
                     allows_null: true,
                     lock: Some(offset_of!(ClassHeader, lock)),
                     supertypes: parent
@@ -291,13 +291,12 @@ impl Layouts {
                 info: TypeInfo {
                     id: ptr_ty,
                     name: Some(Lowercase::new(&*format!("*{}", class.name))),
-                    properties: HashMap::from([(
-                        (Lowercase::new(""), Lowercase::new("")),
-                        TypeProperty {
-                            ty: ptr_ty,
-                            field: 0,
-                        },
-                    )]),
+                    properties: merge_properties_with_parent(
+                        &res.types,
+                        parent.map(|p| p.ptr_ty),
+                        &properties,
+                        ptr_ty,
+                    ),
                     allows_null: true,
                     lock: None,
                     supertypes: parent
@@ -356,7 +355,16 @@ impl Layouts {
             default_value: None,
         }];
         let mut offsets = HashMap::new();
-        let mut properties = HashMap::new();
+
+        let mut properties = TypeProperties::default();
+        let mut ptr_properties = TypeProperties::default();
+
+        debug_assert!(!self.structs.contains_key(&st.id));
+        let id = res.types.declare();
+        let ptr_ty = *self
+            .struct_ptr_types
+            .entry(st.id)
+            .or_insert_with(|| res.types.declare());
 
         for (name, ty) in &st.fields {
             let member_size = ty.to_jit().size();
@@ -365,13 +373,22 @@ impl Layouts {
             offset = (offset + member_align - 1) & !(member_align - 1);
 
             let (ty_id, default_value) = self.resolve_ty_and_default_value(res, &ty);
-
             let index = members.len();
+
             properties.insert(
-                (st.name.clone(), name.clone()),
+                id,
+                name.clone(),
                 TypeProperty {
-                    field: index,
                     ty: ty_id,
+                    field: index,
+                },
+            );
+            ptr_properties.insert(
+                ptr_ty,
+                name.clone(),
+                TypeProperty {
+                    ty: ty_id,
+                    field: index,
                 },
             );
 
@@ -386,9 +403,6 @@ impl Layouts {
             offset += member_size;
             align = align.max(member_align);
         }
-
-        debug_assert!(!self.structs.contains_key(&st.id));
-        let id = res.types.declare();
 
         res.types.define(
             id,
@@ -409,10 +423,6 @@ impl Layouts {
             },
         );
 
-        let ptr_ty = *self
-            .struct_ptr_types
-            .entry(st.id)
-            .or_insert_with(|| res.types.declare());
         res.types.define(
             ptr_ty,
             resources::Type {
@@ -420,13 +430,7 @@ impl Layouts {
                 info: TypeInfo {
                     id: ptr_ty,
                     name: Some(Lowercase::new(&*format!("*{}", st.name))),
-                    properties: HashMap::from([(
-                        (Lowercase::new(""), Lowercase::new("")),
-                        TypeProperty {
-                            ty: ptr_ty,
-                            field: 0,
-                        },
-                    )]),
+                    properties: ptr_properties,
                     allows_null: true,
                     lock: None,
                     supertypes: Box::new([]),
@@ -549,4 +553,22 @@ pub struct ClassLayout {
     pub ty: TypeId,
     pub ptr_ty: TypeId,
     pub offsets: HashMap<Lowercase<String>, usize>,
+}
+
+fn merge_properties_with_parent(
+    types: &Types,
+    parent: Option<TypeId>,
+    new: &[(&Lowercase<str>, TypeProperty)],
+    new_id: TypeId,
+) -> TypeProperties {
+    let mut props = TypeProperties::default();
+    if let Some(parent) = parent {
+        let parent = types.get(parent).unwrap();
+        props = parent.info.properties.clone();
+    }
+
+    for (name, prop) in new {
+        props.insert(new_id, (*name).to_owned(), *prop);
+    }
+    props
 }

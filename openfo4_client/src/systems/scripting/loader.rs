@@ -2,11 +2,10 @@ use std::sync::Arc;
 
 use hashbrown::hash_map::Entry;
 use hashbrown::{HashMap, HashSet};
-use openfo4_common::string::Lowercase;
 use openfo4_core::record::RecordId;
 use openfo4_esp::vmad::{Script, Value};
 use openfo4_esp::{FormId, RecordData, RecordKind};
-use openfo4_script::compiler::resources::TypeInfo;
+use openfo4_script::compiler::resources::{TypeId, TypeInfo};
 use openfo4_script::engine::{Engine, Instance};
 use openfo4_script::runtime::ObjectAddr;
 use openfo4_script::runtime::object::ObjectHandle;
@@ -277,9 +276,7 @@ where
                 // We can also use any supertype of our type.
                 let mut ty = self.engine.get_type_by_id(script.info.id()).unwrap();
                 loop {
-                    if let Some(name) = ty.info().name.clone() {
-                        addrs.insert(name, addr);
-                    }
+                    addrs.insert(ty.id(), addr);
 
                     if let Some(superty) = ty.info().supertype() {
                         ty = self.engine.get_type_by_id(superty).unwrap();
@@ -300,9 +297,7 @@ where
                 // We can also use any supertype of our type.
                 let mut ty = self.engine.get_type_by_id(script.info.id()).unwrap();
                 loop {
-                    if let Some(name) = ty.info().name.clone() {
-                        addrs.insert(name, addr);
-                    }
+                    addrs.insert(ty.id(), addr);
 
                     if let Some(superty) = ty.info().supertype() {
                         ty = self.engine.get_type_by_id(superty).unwrap();
@@ -599,7 +594,7 @@ impl RecordInstantiationKind {
 
 #[derive(Debug, Default)]
 struct LoadEvent {
-    addrs: Option<HashMap<Lowercase<String>, ObjectAddr>>,
+    addrs: Option<HashMap<TypeId, ObjectAddr>>,
     /// Event triggered when the object has received an [`ObjectAddr`].
     loaded: event_listener::Event,
     /// Event triggered when the object has fully completed building.
@@ -911,7 +906,7 @@ async fn load_record(
             if let Some(superty) = ty.info().supertype() {
                 ty = engine.get_type_by_id(superty).unwrap();
             } else {
-                tracing::debug!(
+                tracing::warn!(
                     "attached script {} on record {} does not inherit from base class {}, skipping",
                     script.name,
                     record.id,

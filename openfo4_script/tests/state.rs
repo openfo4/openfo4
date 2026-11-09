@@ -50,17 +50,17 @@ fn state() {
 
     let object = engine.object_pool().get(addr).unwrap();
     let b = engine.object_pool().insert_string("b");
-    object.set("MyClass", "::state", b.addr()).unwrap();
+    object.set_self("::state", b.addr()).unwrap();
 
     assert_eq!(func.call(&mut ctx, addr).now_or_never().unwrap(), 2);
 
     let a = engine.object_pool().insert_string("a");
-    object.set("MyClass", "::state", a.addr()).unwrap();
+    object.set_self("::state", a.addr()).unwrap();
 
     assert_eq!(func.call(&mut ctx, addr).now_or_never().unwrap(), 1);
 
     let a = engine.object_pool().insert_string("c");
-    object.set("MyClass", "::state", a.addr()).unwrap();
+    object.set_self("::state", a.addr()).unwrap();
 
     // Fallthrough, default value
     assert_eq!(func.call(&mut ctx, addr).now_or_never().unwrap(), 3);
@@ -125,21 +125,21 @@ fn state_override_order() {
     let z = engine.object_pool().insert_string("Z").addr();
 
     let obj = engine.object_pool().get(addr).unwrap();
-    obj.set("B", "::state", x).unwrap();
+    obj.set_self("::state", x).unwrap();
 
     // C is the subclass of {A, B} with state "X".
     // Calls C.MyFunction().
     assert_eq!(func.call(&mut ctx, addr).now_or_never().unwrap(), 4);
 
     let obj = engine.object_pool().get(addr).unwrap();
-    obj.set("B", "::state", y).unwrap();
+    obj.set_self("::state", y).unwrap();
 
     // C has no state "Y", so B is the subclass of A with state "Y".
     // Calls B.MyFunction().
     assert_eq!(func.call(&mut ctx, addr).now_or_never().unwrap(), 3);
 
     let obj = engine.object_pool().get(addr).unwrap();
-    obj.set("B", "::state", z).unwrap();
+    obj.set_self("::state", z).unwrap();
 
     // C is the subclass of {A, B} with state "Z".
     // Calls C.MyFunction().

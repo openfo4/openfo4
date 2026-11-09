@@ -39,7 +39,7 @@ struct Entry<'a> {
 #[derive(Clone, Debug)]
 enum Location {
     Property {
-        class: Lowercase<String>,
+        class: TypeId,
         prop: Lowercase<String>,
     },
     ArrayIndex(usize),
@@ -55,17 +55,13 @@ impl<'a> Builder<'a> {
     fn set(&mut self, location: Location, value: Val) {
         match (location, self) {
             (Location::Property { class, prop }, Self::ObjectRef(builder)) => {
-                builder
-                    .set(class.as_inner(), prop.as_inner(), value)
-                    .unwrap();
+                builder.set(class, prop.as_inner(), value).unwrap();
             }
             (Location::Property { class, prop }, Self::Object(builder)) => {
-                builder
-                    .set(class.as_inner(), prop.as_inner(), value)
-                    .unwrap();
+                builder.set(class, prop.as_inner(), value).unwrap();
             }
             (Location::ArrayIndex(index), Self::Array(builder)) => {
-                builder.set_at(index, "", "", value);
+                builder.set_at(index, value);
             }
             _ => unreachable!(),
         }
@@ -83,7 +79,7 @@ impl<'a> Builder<'a> {
 enum Members<'a> {
     Struct {
         properties: &'a [Property],
-        class: Lowercase<String>,
+        class: TypeId,
         ty: TypeRef<'a>,
     },
     Array {
@@ -117,8 +113,8 @@ where
     engine: &'a Engine,
     resolve_form: F,
     scripts: &'a ScriptObjects,
-    addrs: &'a HashMap<RecordId, HashMap<Lowercase<String>, ObjectAddr>>,
-    aliases: &'a HashMap<AliasKey, HashMap<Lowercase<String>, ObjectAddr>>,
+    addrs: &'a HashMap<RecordId, HashMap<TypeId, ObjectAddr>>,
+    aliases: &'a HashMap<AliasKey, HashMap<TypeId, ObjectAddr>>,
     script_defined_in: RecordId,
     stack: Vec<Entry<'a>>,
     warnings: Vec<BuildScriptObjectWarning>,
@@ -171,27 +167,13 @@ where
                 // superclasses.
                 // If a field exists on both a superclass and a subclass we must prefer
                 // the subclass.
-                let mut field = None;
-                let mut c = ty.clone();
-                loop {
-                    let class_name = c.info().name.as_ref().unwrap().clone();
-                    if let Some(f) = ty.info().properties.get(&(class_name, prop_name.clone())) {
-                        field = Some(f);
-                        break;
-                    }
-
-                    if let Some(superty) = c.info().supertype() {
-                        c = self.engine.get_type_by_id(superty).unwrap();
-                    } else {
-                        break;
-                    }
-                }
+                let field = ty.info().find_property(&prop_name);
 
                 // Setting an unknown field is generally not a good idea,
                 // but it is done in some official ESP files and we must also support this.
                 let Some(info) = field else {
                     self.warnings.push(BuildScriptObjectWarning::UnknownField(
-                        class.to_string(),
+                        ty.info().name().unwrap_or_default().to_owned(),
                         prop_name.to_string(),
                     ));
                     return;
@@ -229,7 +211,7 @@ where
                 Val::Object(object.addr())
             }
             Value::Object(object) => {
-                let class = ty.info().name.as_ref().unwrap();
+                let class = ty.id();
                 // TODO: Assert that info is a class, not a struct.
 
                 // Object references are already null by default.
@@ -260,15 +242,15 @@ where
                             return;
                         };
 
-                        scripts.get(class).copied()
+                        scripts.get(&class).copied()
                     }
                     None => {
                         if let Some(scripts) = self.scripts.get_by_record(id) {
                             scripts
-                                .get(class.as_inner())
+                                .get_by_type(class)
                                 .map(|obj| obj.get().object.addr())
                         } else if let Some(scripts) = self.addrs.get(&id) {
-                            scripts.get(class).copied()
+                            scripts.get(&class).copied()
                         } else {
                             self.warnings
                                 .push(BuildScriptObjectWarning::UnknownObject(id));
@@ -286,7 +268,6 @@ where
                 Val::Object(addr)
             }
             Value::Struct(fields, _) => {
-                let name = ty.info().name.clone().unwrap();
                 // TODO: Assert that info is indeed a struct.
 
                 let builder = self.engine.object_pool().insert(ty.id());
@@ -295,7 +276,7 @@ where
                     builder: Builder::Object(builder),
                     members: Members::Struct {
                         properties: &fields,
-                        class: name,
+                        class: ty.id(),
                         ty,
                     },
                 });
@@ -321,13 +302,7 @@ where
                 return;
             }
             value => {
-                let expected = ty
-                    .info()
-                    .name
-                    .as_ref()
-                    .map(|name| name.as_inner().as_str())
-                    .unwrap_or_else(|| "<unknown>")
-                    .to_owned();
+                let expected = ty.info().name().unwrap_or_else(|| "<unknown>").to_owned();
 
                 let found = match value {
                     Value::Bool(_) => "bool",
@@ -354,8 +329,8 @@ pub fn build_script_object(
     engine: &Engine,
     script: &Script,
     scripts: &ScriptObjects,
-    partial_addrs: &HashMap<RecordId, HashMap<Lowercase<String>, ObjectAddr>>,
-    aliases: &HashMap<AliasKey, HashMap<Lowercase<String>, ObjectAddr>>,
+    partial_addrs: &HashMap<RecordId, HashMap<TypeId, ObjectAddr>>,
+    aliases: &HashMap<AliasKey, HashMap<TypeId, ObjectAddr>>,
     builder: &ObjectHandle,
     script_defined_in: RecordId,
 ) -> (ObjectHandle, Vec<BuildScriptObjectWarning>) {
@@ -366,7 +341,7 @@ pub fn build_script_object(
         builder: Builder::ObjectRef(builder),
         members: Members::Struct {
             properties: &script.properties,
-            class: Lowercase::new(&*script.name),
+            class: ty.id(),
             ty,
         },
     };
@@ -405,12 +380,12 @@ mod tests {
 
     use futures_lite::future::block_on;
     use hashbrown::HashMap;
-    use openfo4_common::string::Lowercase;
     use openfo4_core::record::{ModuleId, RecordId};
     use openfo4_esp::FormId;
     use openfo4_esp::vmad::{Object, Property, Script, Value};
     use openfo4_script::assembler::assemble;
     use openfo4_script::compiler::CompilerOptions;
+    use openfo4_script::compiler::resources::TypeId;
     use openfo4_script::engine::{Engine, Options};
     use openfo4_script::runtime::object::ObjectHandle;
     use openfo4_script::runtime::{ArrayObject, ObjectAddr};
@@ -450,7 +425,7 @@ mod tests {
     fn assert_array_contents_eq(
         engine: &Engine,
         object: &ObjectHandle,
-        class: &str,
+        class: TypeId,
         name: &str,
         len: usize,
         data: &[u8],
@@ -512,8 +487,8 @@ mod tests {
 
         let object = build_direct(&engine, &script);
 
-        assert_eq!(object.get::<i32>("test", "a").unwrap(), 1);
-        assert_eq!(object.get::<i32>("test", "b").unwrap(), 2);
+        assert_eq!(object.get_self::<i32>("a").unwrap(), 1);
+        assert_eq!(object.get_self::<i32>("b").unwrap(), 2);
     }
 
     #[test]
@@ -567,7 +542,7 @@ mod tests {
         assert_array_contents_eq(
             &engine,
             &object,
-            "test",
+            object.type_id(),
             "a",
             3,
             bytemuck::cast_slice(&[0_i32, 1_i32, 2_i32]),
@@ -575,12 +550,12 @@ mod tests {
         assert_array_contents_eq(
             &engine,
             &object,
-            "test",
+            object.type_id(),
             "b",
             4,
             bytemuck::cast_slice(&[0.0_f32, 1.0_f32, 2.0_f32, 3.0_f32]),
         );
-        assert_array_contents_eq(&engine, &object, "test", "c", 0, &[]);
+        assert_array_contents_eq(&engine, &object, object.type_id(), "c", 0, &[]);
     }
 
     #[test]
@@ -634,12 +609,12 @@ mod tests {
 
         let object = build_direct(&engine, &script);
 
-        assert_eq!(object.get::<i32>("test", "a").unwrap(), 1);
-        let struct_addr = object.get::<ObjectAddr>("test", "b").unwrap();
+        assert_eq!(object.get_self::<i32>("a").unwrap(), 1);
+        let struct_addr = object.get_self::<ObjectAddr>("b").unwrap();
 
         let st = engine.object_pool().get(struct_addr).unwrap();
-        assert_eq!(st.get::<i32>("test#MyStruct", "x").unwrap(), 2);
-        assert_eq!(st.get::<i32>("test#MyStruct", "y").unwrap(), 3);
+        assert_eq!(st.get_self::<i32>("x").unwrap(), 2);
+        assert_eq!(st.get_self::<i32>("y").unwrap(), 3);
     }
 
     #[test]
@@ -712,8 +687,8 @@ mod tests {
         let object = build_direct(&engine, &script);
 
         unsafe {
-            assert_eq!(object.get::<i32>("test", "a").unwrap(), 1);
-            let array_ptr = object.get::<ObjectAddr>("test", "b").unwrap();
+            assert_eq!(object.get_self::<i32>("a").unwrap(), 1);
+            let array_ptr = object.get_self::<ObjectAddr>("b").unwrap();
             let data_ptr = array_ptr
                 .to_raw()
                 .add(offset_of!(ArrayObject, ptr))
@@ -724,12 +699,12 @@ mod tests {
             let object1 = data_ptr.to_raw().cast::<ObjectAddr>().add(1).read();
 
             let object0 = engine.object_pool().get(object0).unwrap();
-            assert_eq!(object0.get::<i32>("test#MyStruct", "x",).unwrap(), 2);
-            assert_eq!(object0.get::<i32>("test#MyStruct", "y").unwrap(), 3);
+            assert_eq!(object0.get_self::<i32>("x",).unwrap(), 2);
+            assert_eq!(object0.get_self::<i32>("y").unwrap(), 3);
 
             let object1 = engine.object_pool().get(object1).unwrap();
-            assert_eq!(object1.get::<i32>("test#MyStruct", "x",).unwrap(), 4);
-            assert_eq!(object1.get::<i32>("test#MyStruct", "y").unwrap(), 5);
+            assert_eq!(object1.get_self::<i32>("x",).unwrap(), 4);
+            assert_eq!(object1.get_self::<i32>("y").unwrap(), 5);
         }
     }
 
@@ -764,7 +739,9 @@ mod tests {
         let object = build_direct(&engine, &script);
         let object = engine.object_pool().get(object).unwrap();
 
-        assert_eq!(object.get::<i32>("A", "a").unwrap(), 1);
+        let a = engine.get_type("A").unwrap();
+
+        assert_eq!(object.get::<i32>(a.id(), "a").unwrap(), 1);
     }
 
     #[test]
@@ -801,8 +778,11 @@ mod tests {
         let object = build_direct(&engine, &script);
         let object = engine.object_pool().get(object).unwrap();
 
-        assert_eq!(object.get::<i32>("A", "a").unwrap(), 0);
-        assert_eq!(object.get::<i32>("B", "a").unwrap(), 1);
+        let a = engine.get_type("A").unwrap();
+        let b = engine.get_type("B").unwrap();
+
+        assert_eq!(object.get::<i32>(a.id(), "a").unwrap(), 0);
+        assert_eq!(object.get::<i32>(b.id(), "a").unwrap(), 1);
     }
 
     #[test]
@@ -869,13 +849,9 @@ mod tests {
         let scripts = ScriptObjects::default();
         let partial_addrs = [(
             RecordId::new(ModuleId(NonZeroU32::MIN), FormId(0x01)),
-            [
-                (Lowercase::new("A"), a),
-                (Lowercase::new("B"), b),
-                (Lowercase::new("C"), c),
-            ]
-            .into_iter()
-            .collect(),
+            [(type_a.id(), a), (type_b.id(), b), (type_c.id(), c)]
+                .into_iter()
+                .collect(),
         )]
         .into_iter()
         .collect();
@@ -896,8 +872,8 @@ mod tests {
         );
         assert!(warnings.is_empty());
 
-        assert_eq!(object.get::<ObjectAddr>("C", "a").unwrap(), a);
-        assert_eq!(object.get::<ObjectAddr>("C", "b").unwrap(), b);
-        assert_eq!(object.get::<ObjectAddr>("C", "c").unwrap(), c);
+        assert_eq!(object.get_self::<ObjectAddr>("a").unwrap(), a);
+        assert_eq!(object.get_self::<ObjectAddr>("b").unwrap(), b);
+        assert_eq!(object.get_self::<ObjectAddr>("c").unwrap(), c);
     }
 }

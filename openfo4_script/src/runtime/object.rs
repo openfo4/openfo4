@@ -271,7 +271,7 @@ impl Object {
         &self,
         pool: &ObjectPool,
         index: usize,
-        class: &'a str,
+        class: TypeId,
         name: &'a str,
     ) -> Result<T, Error<'a>>
     where
@@ -280,7 +280,9 @@ impl Object {
         assert!(index < self.len);
         let array_offset = self.ty.repr.size_padded() * index;
 
-        let Some((offset, _size, ty)) = self.get_prop_offset_and_size(class, name) else {
+        let Some((offset, _size, ty)) =
+            self.get_prop_offset_and_size(pool.resources(), class, name)
+        else {
             return Err(Error::NoProperty { class, name });
         };
 
@@ -300,7 +302,7 @@ impl Object {
         &self,
         pool: &ObjectPool,
         index: usize,
-        class: &'a str,
+        class: TypeId,
         name: &'a str,
         value: T,
     ) -> Result<(), Error<'a>>
@@ -314,7 +316,9 @@ impl Object {
             return Err(Error::Static);
         }
 
-        let Some((offset, _size, ty)) = self.get_prop_offset_and_size(class, name) else {
+        let Some((offset, _size, ty)) =
+            self.get_prop_offset_and_size(pool.resources(), class, name)
+        else {
             return Err(Error::NoProperty { class, name });
         };
 
@@ -324,8 +328,44 @@ impl Object {
         }
     }
 
-    fn get_prop_offset_and_size(&self, class: &str, name: &str) -> Option<(usize, usize, TypeId)> {
-        let index = self.get_property_var(class, name)?;
+    unsafe fn get_root<'a, T>(&self, pool: &ObjectPool, index: usize) -> Result<T, Error<'a>>
+    where
+        T: ObjectValue,
+    {
+        assert!(index < self.len);
+        let array_offset = self.ty.repr.size_padded() * index;
+
+        unsafe {
+            let ptr = self.ptr.add(array_offset);
+            T::read(pool, self.id, ptr)
+        }
+    }
+
+    unsafe fn set_root<'a, T>(
+        &self,
+        pool: &ObjectPool,
+        index: usize,
+        value: T,
+    ) -> Result<(), Error<'a>>
+    where
+        T: ObjectValue,
+    {
+        assert!(index < self.len);
+        let array_offset = self.ty.repr.size_padded() * index;
+
+        unsafe {
+            let ptr = self.ptr.add(array_offset);
+            value.write(pool, self.id, ptr)
+        }
+    }
+
+    fn get_prop_offset_and_size(
+        &self,
+        res: &Resources,
+        class: TypeId,
+        name: &str,
+    ) -> Option<(usize, usize, TypeId)> {
+        let index = self.get_property_var(res, class, name)?;
 
         let TypeRepr::Composite(ty) = &self.ty.repr else {
             // Primitive type.
@@ -338,33 +378,32 @@ impl Object {
     }
 
     #[track_caller]
-    fn get_property_var(&self, class: &str, name: &str) -> Option<usize> {
-        let class = Lowercase::new(class);
+    fn get_property_var(&self, res: &Resources, class: TypeId, name: &str) -> Option<usize> {
         let name = Lowercase::new(name);
 
-        // Always prefer properties that match the requested class.
-        if let Some((_, prop)) = self
-            .ty
-            .info
-            .properties
-            .iter()
-            .find(|((cl, fl), _)| *cl == class && *fl == name)
-        {
-            return Some(prop.field);
-        }
+        let class = res.types.get(class).unwrap();
+        let deref_ty = match class.repr {
+            TypeRepr::Pointer(ty) => Some(res.types.get(ty).unwrap()),
+            _ => None,
+        };
 
-        // We may also access fields of parent classes.
-        // FIXME: Ideally we would recursively walk up the class
-        // hierarchy instead of selecting any other matching property,
-        // this requires us to have access to the class names from here.
-        if let Some((_, prop)) = self
-            .ty
-            .info
-            .properties
-            .iter()
-            .find(|((_, fl), _)| *fl == name)
-        {
-            return Some(prop.field);
+        // If we don't find a field on the inline type itself and the type is a pointer
+        // we will also search the dereferenced type for fields.
+        for class in [Some(class), deref_ty] {
+            let Some(mut class) = class else {
+                continue;
+            };
+
+            loop {
+                if let Some(prop) = self.ty.info.properties.get(class.info.id, &name) {
+                    return Some(prop.field);
+                }
+
+                let Some(superty) = class.info.supertype() else {
+                    break;
+                };
+                class = res.types.get(superty).unwrap();
+            }
         }
 
         None
@@ -422,15 +461,11 @@ pub struct ObjectArrayBuilder {
 
 impl ObjectArrayBuilder {
     #[track_caller]
-    pub fn set_at<T>(&mut self, index: usize, class: &str, name: &str, value: T)
+    pub fn set_at<T>(&mut self, index: usize, value: T)
     where
         T: ObjectValue,
     {
-        self.elems
-            .at(index)
-            .unwrap()
-            .set(class, name, value)
-            .unwrap();
+        self.elems.at(index).unwrap().set_root(value).unwrap();
     }
 
     pub fn finalize(self) -> ObjectHandle {
@@ -618,6 +653,26 @@ impl ObjectValue for Option<ObjectHandle> {
     }
 }
 
+impl ObjectValue for ObjectHandle {
+    unsafe fn read(pool: &ObjectPool, ty: TypeId, ptr: *const u8) -> Result<Self, Error<'static>> {
+        let res = unsafe { Option::<ObjectHandle>::read(pool, ty, ptr) }?;
+        match res {
+            Some(val) => Ok(val),
+            None => Err(Error::Null),
+        }
+    }
+
+    unsafe fn write(
+        &self,
+        pool: &ObjectPool,
+        ty: TypeId,
+        ptr: *mut u8,
+    ) -> Result<(), Error<'static>> {
+        let addr = self.addr();
+        unsafe { addr.write(pool, ty, ptr) }
+    }
+}
+
 impl ObjectValue for Val {
     unsafe fn read(pool: &ObjectPool, ty: TypeId, ptr: *const u8) -> Result<Self, Error<'static>> {
         unsafe {
@@ -750,7 +805,7 @@ impl ObjectHandle {
     /// Returns an error if:
     /// - The given location does not exist within the object.
     /// - The value at the location cannot be mapped to `T`.
-    pub fn get<'a, T>(&self, class: &'a str, name: &'a str) -> Result<T, Error<'a>>
+    pub fn get<'a, T>(&self, class: TypeId, name: &'a str) -> Result<T, Error<'a>>
     where
         T: ObjectValue,
     {
@@ -762,7 +817,31 @@ impl ObjectHandle {
         })
     }
 
-    pub fn set<'a, T>(&self, class: &'a str, name: &'a str, value: T) -> Result<(), Error<'a>>
+    /// Alias for `self.get(self.type_id(), name)`.
+    pub fn get_self<'a, T>(&self, name: &'a str) -> Result<T, Error<'a>>
+    where
+        T: ObjectValue,
+    {
+        self.get(self.type_id(), name)
+    }
+
+    pub fn get_root<'a, T>(&self) -> Result<T, Error<'a>>
+    where
+        T: ObjectValue,
+    {
+        assert!(self.index < self.len());
+
+        self.with_locked_blocking(|| unsafe { self.object.get_root(&self.pool, self.index) })
+    }
+
+    pub fn set_root<'a, T>(&self, value: T) -> Result<(), Error<'a>>
+    where
+        T: ObjectValue,
+    {
+        self.with_locked_blocking(|| unsafe { self.object.set_root(&self.pool, self.index, value) })
+    }
+
+    pub fn set<'a, T>(&self, class: TypeId, name: &'a str, value: T) -> Result<(), Error<'a>>
     where
         T: ObjectValue,
     {
@@ -774,7 +853,15 @@ impl ObjectHandle {
         })
     }
 
-    pub fn try_get<'a, T>(&self, class: &'a str, name: &'a str) -> Option<Result<T, Error<'a>>>
+    /// Alias for `self.set(self.type_id(), name)`.
+    pub fn set_self<'a, T>(&self, name: &'a str, value: T) -> Result<(), Error<'a>>
+    where
+        T: ObjectValue,
+    {
+        self.set(self.type_id(), name, value)
+    }
+
+    pub fn try_get<'a, T>(&self, class: TypeId, name: &'a str) -> Option<Result<T, Error<'a>>>
     where
         T: ObjectValue,
     {
@@ -788,7 +875,7 @@ impl ObjectHandle {
 
     pub fn try_set<'a, T>(
         &self,
-        class: &'a str,
+        class: TypeId,
         name: &'a str,
         value: T,
     ) -> Option<Result<(), Error<'a>>>
@@ -803,7 +890,7 @@ impl ObjectHandle {
         })
     }
 
-    pub(crate) fn type_id(&self) -> TypeId {
+    pub fn type_id(&self) -> TypeId {
         self.object.id
     }
 
@@ -952,10 +1039,12 @@ impl AsObject for ObjectHandleRef<'_> {
 
 #[derive(Clone, Debug, Error)]
 pub enum Error<'a> {
-    #[error("no property {class}.{name} exists")]
-    NoProperty { class: &'a str, name: &'a str },
+    #[error("no property {class:?}.{name} exists")]
+    NoProperty { class: TypeId, name: &'a str },
     #[error("object is static")]
     Static,
     #[error("types are incompatible: {0}")]
     Incompatible(String),
+    #[error("object handle is null")]
+    Null,
 }

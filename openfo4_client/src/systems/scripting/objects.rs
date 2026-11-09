@@ -3,6 +3,7 @@ use std::sync::Arc;
 
 use hashbrown::HashMap;
 use openfo4_core::record::RecordId;
+use openfo4_script::compiler::resources::TypeId;
 use openfo4_script::engine::Engine;
 use openfo4_script::runtime::ObjectAddr;
 use parking_lot::Mutex;
@@ -41,12 +42,15 @@ impl ScriptObjects {
         }
 
         let mut class_names = HashMap::new();
+        let mut type_ids = HashMap::new();
         for (index, script) in scripts.iter().enumerate() {
             let root_ty = engine.get_type_by_id(script.layout).unwrap();
 
             let mut ty = root_ty.clone();
             loop {
-                if let Some(name) = ty.info().name.clone() {
+                type_ids.insert(ty.id(), index);
+
+                if let Some(name) = ty.info().papyrus_name() {
                     class_names.insert(name.into_inner(), index);
                 }
 
@@ -62,7 +66,11 @@ impl ScriptObjects {
                 (
                     id,
                     index,
-                    root_ty.info().name.clone().unwrap_or_default().into_inner(),
+                    root_ty
+                        .info()
+                        .papyrus_name()
+                        .unwrap_or_default()
+                        .into_inner(),
                 ),
             );
         }
@@ -72,6 +80,7 @@ impl ScriptObjects {
             class_names,
             record,
             data,
+            type_ids,
         }));
 
         id
@@ -166,6 +175,25 @@ impl<'a> ScriptsRef<'a> {
         })
     }
 
+    pub fn get_by_type(&self, id: TypeId) -> Option<ScriptRef<'_>> {
+        let index = *self.info.type_ids.get(&id)?;
+        let (name, _) = self
+            .info
+            .class_names
+            .iter()
+            .find(|(_, i)| **i == index)
+            .unwrap();
+
+        Some(ScriptRef {
+            info: Arc::clone(&self.info),
+            index: index,
+            record: self.info.record,
+            id: self.id,
+            name: name.clone(),
+            _owner: PhantomData,
+        })
+    }
+
     pub fn len(&self) -> usize {
         self.info.class_names.len()
     }
@@ -233,6 +261,7 @@ struct ObjectInfo {
     /// Note that it is possible for multiple scripts with the same class hierarchy
     /// to exist, but in that case which one we return is not defined.
     class_names: HashMap<String, usize>,
+    type_ids: HashMap<TypeId, usize>,
     record: Option<RecordId>,
     data: ObjectData,
 }
