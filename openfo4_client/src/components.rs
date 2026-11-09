@@ -140,6 +140,7 @@ pub struct ActorProperties {
     pub is_dead: bool,
     /// Whether the actor is classified as a child.
     pub is_child: bool,
+    pub voice_type: Option<RecordId>,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]

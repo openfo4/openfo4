@@ -135,6 +135,7 @@ impl GameState {
             mods: Default::default(),
             playtime: PlayTime::default(),
             settings: GameSettings::load(&loader).await.unwrap(),
+            voice_types: globals::load_voice_types(&loader).await,
         });
 
         let executor = ExecutorBuilder::new(

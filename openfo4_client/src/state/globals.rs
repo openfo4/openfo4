@@ -1,4 +1,5 @@
 use hashbrown::HashMap;
+use openfo4_common::string::Lowercase;
 use openfo4_core::record::RecordId;
 use openfo4_esp::records::faction::FactionCombatReaction;
 use openfo4_esp::{RecordData, RecordKind};
@@ -88,4 +89,23 @@ pub async fn load_factions(esp_loader: &EspLoader) -> HashMap<RecordId, Faction>
     }
 
     factions
+}
+
+pub async fn load_voice_types(esp_loader: &EspLoader) -> HashMap<RecordId, Lowercase<String>> {
+    let mut types = HashMap::new();
+
+    for record in esp_loader
+        .lookup_all(Some(RecordKind::VoiceType))
+        .await
+        .unwrap()
+    {
+        let RecordData::VoiceType(data) = record.local.data else {
+            continue;
+        };
+
+        let name = data.id.as_ref().unwrap().as_str().unwrap();
+        types.insert(record.id, Lowercase::new(name));
+    }
+
+    types
 }

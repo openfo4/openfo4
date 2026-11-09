@@ -139,6 +139,7 @@ pub struct Actor {
     items: Vec<(RecordId, u64)>,
     speed: ActorMovementSpeeds,
     is_child: bool,
+    voice_type: Option<RecordId>,
 }
 
 impl Actor {
@@ -220,6 +221,7 @@ impl Actor {
                         factions: self.factions,
                         is_dead: self.dead,
                         is_child: self.is_child,
+                        voice_type: self.voice_type,
                     },
                 ),
             )
@@ -434,6 +436,7 @@ pub async fn spawn_actor(
         items: props.items,
         speed,
         is_child: data.data.flags.contains(RaceDataFlags::CHILD),
+        voice_type: props.voice_type,
     })
 }
 
@@ -456,6 +459,7 @@ async fn resolve_actor_props(
     let mut race = None;
     let mut skin = None;
     let mut female = false;
+    let mut voice_type = None;
 
     // Stats
     let mut properties = ActorValueProperties::default();
@@ -488,6 +492,10 @@ async fn resolve_actor_props(
                     }
 
                     female = data.base_stats.flags.contains(NpcBaseFlags::FEMALE);
+
+                    voice_type = data
+                        .voice_type
+                        .map(|id| esp_loader.resolve_form(id, record.id).unwrap());
                 }
 
                 if flags.contains(NpcTemplateFlags::STATS) {
@@ -672,6 +680,7 @@ async fn resolve_actor_props(
         level,
         factions,
         items,
+        voice_type,
     }
 }
 
@@ -689,6 +698,7 @@ struct ActorProps {
     level: ActorLevel,
     factions: Vec<FactionMembership>,
     items: Vec<(RecordId, u64)>,
+    voice_type: Option<RecordId>,
 }
 
 #[derive(Copy, Clone, Debug)]

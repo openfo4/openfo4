@@ -3,6 +3,7 @@ use std::time::Duration;
 
 use hashbrown::{HashMap, HashSet};
 use indexmap::IndexSet;
+use openfo4_common::string::Lowercase;
 use openfo4_core::record::RecordId;
 use openfo4_esp::records::TypedValue;
 use openfo4_esp::{RecordData, RecordKind};
@@ -21,6 +22,7 @@ pub struct GlobalProperties {
     pub mods: RecordModifications,
     pub playtime: PlayTime,
     pub settings: GameSettings,
+    pub voice_types: HashMap<RecordId, Lowercase<String>>,
 }
 
 /// Set of game rules.
