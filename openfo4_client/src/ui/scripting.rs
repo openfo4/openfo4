@@ -34,22 +34,22 @@ pub fn draw_objects(ctx: &Context, game: &GameState, state: &mut State) {
 
                         let ty = engine.get_type_by_id(typeid).unwrap();
 
-                        for ((class, prop), info) in &ty.info().properties {
-                            if class.as_inner() != script.name() {
-                                continue;
-                            }
+                        for (class, name, prop) in ty.info().properties.iter() {
+                            // if class.as_inner() != script.name() {
+                            //     continue;
+                            // }
 
-                            let ty = engine.get_type_by_id(info.ty).unwrap();
+                            let ty = engine.get_type_by_id(prop.ty).unwrap();
 
                             let data = match ty.id() {
                                 id if id == engine.bool_type() => object
-                                    .try_get::<bool>(class.as_inner(), prop.as_inner())
+                                    .try_get::<bool>(class, name.as_inner())
                                     .map(|v| v.map(|v| v.to_string())),
                                 id if id == engine.int_type() => object
-                                    .try_get::<i32>(class.as_inner(), prop.as_inner())
+                                    .try_get::<i32>(class, name.as_inner())
                                     .map(|v| v.map(|v| v.to_string())),
                                 id if id == engine.float_type() => object
-                                    .try_get::<f32>(class.as_inner(), prop.as_inner())
+                                    .try_get::<f32>(class, name.as_inner())
                                     .map(|v| v.map(|v| v.to_string())),
                                 // TODO
                                 _ => continue,
@@ -57,7 +57,7 @@ pub fn draw_objects(ctx: &Context, game: &GameState, state: &mut State) {
 
                             let data = data.map(|v| v.unwrap());
 
-                            ui.label(format!("{}: {}", prop, data.as_deref().unwrap_or("locked")));
+                            ui.label(format!("{}: {}", name, data.as_deref().unwrap_or("locked")));
                         }
                     }
                 });
