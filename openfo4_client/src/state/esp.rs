@@ -134,6 +134,7 @@ impl EspLoaderBuilder {
                 file: entry.file,
                 id,
                 dependencies: deps.into_boxed_slice(),
+                filename: Lowercase::new(&*entry.name),
             });
             plugins[id.0.get() as usize] = index as u32;
 
@@ -312,6 +313,14 @@ impl EspLoader {
         let parent = self.files[index].file.parent(id.form)?;
         self.resolve_form(parent, id)
     }
+
+    /// Returns the filename of a [`ModuleId`].
+    pub fn file(&self, id: ModuleId) -> Option<&Lowercase<str>> {
+        let index = *self.plugins.get(id.0.get() as usize)?;
+        let plugin = &self.files[index as usize];
+
+        Some(&plugin.filename)
+    }
 }
 
 #[derive(Debug)]
@@ -319,6 +328,7 @@ struct PluginFile {
     file: EspFile<File>,
     id: ModuleId,
     dependencies: Box<[ModuleId]>,
+    filename: Lowercase<String>,
 }
 
 #[derive(Clone, Debug)]
