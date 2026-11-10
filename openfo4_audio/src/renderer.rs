@@ -5,11 +5,11 @@ use event_listener::Event;
 use openfo4_common::collections::vec_map::VecMap;
 use openfo4_tracing::trace_span;
 
+use crate::manager::TrackId;
 use crate::mixer::Mixer;
 use crate::sound::Frame;
 use crate::source::{AudioSource, Error};
 use crate::spatial::{self, Emitter, Listener};
-use crate::track::TrackId;
 
 pub struct Renderer {
     mixer: Mixer,
@@ -101,8 +101,8 @@ impl Renderer {
             }
 
             // Skip all channels over stereo.
-            for i in 2..num_channels {
-                dst[i as usize] = 0.0;
+            for dst in dst.iter_mut().take(num_channels).skip(2) {
+                *dst = 0.0;
             }
         }
     }

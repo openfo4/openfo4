@@ -20,9 +20,9 @@ use symphonia::core::units::Timestamp;
 use thiserror::Error;
 
 use crate::buffer::{Buf, BufMut, Sequential, SequentialView, SequentialViewMut};
+use crate::effects::Volume;
 use crate::resampler::{self, Resampler};
 use crate::sound::Frame;
-use crate::sound_data::SoundData;
 
 pub use symphonia::core::io::MediaSource;
 
@@ -530,4 +530,11 @@ impl MediaSourceError {
     {
         Self(msg.to_string().into())
     }
+}
+
+#[derive(Clone, Debug)]
+pub struct SoundData {
+    pub frames: Vec<Frame>,
+    pub sample_rate: u32,
+    pub volume: Volume,
 }
