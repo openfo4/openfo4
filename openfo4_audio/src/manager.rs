@@ -7,14 +7,14 @@ use futures_lite::FutureExt;
 use glam::{Quat, Vec3};
 use openfo4_common::collections::slab::Slab;
 
-use crate::backend::Backend;
+use crate::backend::{Backend, DefaultBackend};
 use crate::effects::Volume;
 use crate::renderer::{self, Command, Renderer};
 use crate::source::AudioSource;
 use crate::spatial;
 
 #[derive(Debug)]
-pub struct AudioManager<B>
+pub struct AudioManager<B = DefaultBackend>
 where
     B: Backend,
 {
