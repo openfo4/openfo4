@@ -2,14 +2,12 @@ use glam::{Quat, Vec3};
 use openfo4_common::collections::arena::Key;
 
 use crate::sound::Frame;
-use crate::track::TrackId;
 
 const EAR_DISTANCE: f32 = 0.1;
 const MIN_VOLUME: f32 = 0.3;
 
 #[derive(Copy, Clone, Debug)]
 pub struct Listener {
-    pub track: TrackId,
     pub translation: Vec3,
     pub rotation: Quat,
 }

@@ -9,7 +9,7 @@ use crate::sound::Frame;
 pub enum TrackId {
     #[default]
     Main,
-    Track(Key),
+    Track(usize),
 }
 
 #[derive(Clone, Debug)]

@@ -4,10 +4,10 @@ mod stub;
 pub use cpal::CpalBackend;
 pub use stub::StubBackend;
 
-use crate::channel::Receiver;
+use crate::renderer::Renderer;
 
 pub trait Backend {
-    fn create_output_stream(&mut self, rx: Receiver);
+    fn create_output_stream(&mut self, renderer: Renderer);
 }
 
 #[derive(Debug)]
@@ -35,10 +35,10 @@ impl Default for DefaultBackend {
 }
 
 impl Backend for DefaultBackend {
-    fn create_output_stream(&mut self, rx: Receiver) {
+    fn create_output_stream(&mut self, renderer: Renderer) {
         match self {
-            Self::Cpal(backend) => backend.create_output_stream(rx),
-            Self::Stub(backend) => backend.create_output_stream(rx),
+            Self::Cpal(backend) => backend.create_output_stream(renderer),
+            Self::Stub(backend) => backend.create_output_stream(renderer),
         }
     }
 }
