@@ -1,6 +1,7 @@
 use std::cmp;
 use std::fmt::{self, Debug, Formatter};
 use std::fs::File;
+use std::io::Cursor;
 use std::path::Path;
 use std::sync::LazyLock;
 
@@ -10,6 +11,7 @@ use symphonia::core::audio::sample::Sample;
 use symphonia::core::audio::{Audio, AudioBuffer, GenericAudioBufferRef};
 use symphonia::core::codecs::audio::{AudioDecoder, AudioDecoderOptions};
 use symphonia::core::codecs::registry::CodecRegistry;
+use symphonia::core::errors::Error as SymError;
 use symphonia::core::formats::probe::{Hint, Probe};
 use symphonia::core::formats::{FormatOptions, FormatReader, SeekMode, SeekTo, TrackType};
 use symphonia::core::io::MediaSourceStream;
@@ -21,6 +23,8 @@ use crate::buffer::{Buf, BufMut, Sequential, SequentialView, SequentialViewMut};
 use crate::resampler::{self, Resampler};
 use crate::sound::Frame;
 use crate::sound_data::SoundData;
+
+pub use symphonia::core::io::MediaSource;
 
 static PROBE: LazyLock<Probe> = LazyLock::new(|| {
     let mut probe = Probe::default();
@@ -53,8 +57,14 @@ impl AudioSource {
         P: AsRef<Path>,
     {
         let file = File::open(path).unwrap();
+        Self::from_reader(file)
+    }
 
-        let mss = MediaSourceStream::new(Box::new(file), Default::default());
+    pub fn from_reader<R>(reader: R) -> Self
+    where
+        R: MediaSource + 'static,
+    {
+        let mss = MediaSourceStream::new(Box::new(reader), Default::default());
 
         let format_reader = PROBE
             .probe(
@@ -83,6 +93,11 @@ impl AudioSource {
                 format_reader,
             }),
         }
+    }
+
+    pub fn from_bytes(bytes: Vec<u8>) -> Self {
+        let cursor = Cursor::new(bytes);
+        Self::from_reader(cursor)
     }
 
     pub fn from_data(data: SoundData) -> Self {
@@ -140,7 +155,12 @@ impl AudioSource {
         loop {
             match self.prepare_next_frame() {
                 Ok(()) => (),
-                Err(Error::Eof) => {
+                Err(err) => {
+                    if matches!(err, Error::Eof) && looping {
+                        tracing::debug!("error reading from audio source: {}", err);
+                        return Err(err);
+                    }
+
                     // Read the next frame from the source start.
                     if looping {
                         self.source.reset()?;
@@ -154,9 +174,8 @@ impl AudioSource {
                         return Ok(frames_written);
                     }
 
-                    return Err(Error::Eof);
+                    return Err(err);
                 }
-                Err(err) => return Err(err),
             }
 
             let count = self.buffer.move_frames_into(buf);
@@ -415,21 +434,37 @@ impl Source {
     /// Returns an [`Error::Eof`] when the last packet has been decoded and this `Source` will
     /// never yield another packet.
     fn decode_packet(&mut self, dst: &mut FrameBuffer) -> Result<(), Error> {
-        match self {
-            Source::Empty => Err(Error::Eof),
-            Source::Io(source) => match source.format_reader.next_packet() {
-                Ok(Some(packet)) => {
-                    let buffer = source.decoder.decode(&packet).map_err(Error::Decode)?;
+        loop {
+            match self {
+                Source::Empty => return Err(Error::Eof),
+                Source::Io(source) => match source.format_reader.next_packet() {
+                    Ok(Some(packet)) => {
+                        if let Err(err) = source.decoder.decode(&packet) {
+                            match err {
+                                SymError::IoError(err) => {
+                                    tracing::debug!("discarding invalid packet: {err}");
+                                    continue;
+                                }
+                                SymError::DecodeError(err) => {
+                                    tracing::debug!("discarding invalid packet: {err}");
+                                    continue;
+                                }
+                                err => return Err(Error::Decode(err)),
+                            }
+                        }
 
-                    dst.reserve(buffer.frames());
-                    copy_frames_from_buffer_ref(&buffer, &mut dst.spare_capacity_mut());
-                    dst.increase_len(buffer.frames());
+                        let buffer = source.decoder.decode(&packet).map_err(Error::Decode)?;
 
-                    Ok(())
-                }
-                Ok(None) => Err(Error::Eof),
-                Err(err) => Err(Error::Decode(err)),
-            },
+                        dst.reserve(buffer.frames());
+                        copy_frames_from_buffer_ref(&buffer, &mut dst.spare_capacity_mut());
+                        dst.increase_len(buffer.frames());
+
+                        return Ok(());
+                    }
+                    Ok(None) => return Err(Error::Eof),
+                    Err(err) => return Err(Error::Decode(err)),
+                },
+            }
         }
     }
 
