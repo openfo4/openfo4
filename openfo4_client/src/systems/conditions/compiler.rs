@@ -1,7 +1,7 @@
 use hashbrown::HashMap;
 use openfo4_esp::FormId;
 use openfo4_esp::conditions::{
-    Combinator, Comparator, ComparisonValue, Condition, ConditionFunction,
+    Combinator, Comparator, ComparisonValue, Condition, ConditionFunction, FunctionReceiver,
 };
 use openfo4_pex::{
     Binop, CallMethod, CallStatic, ConditionalBranch, Function, Instruction, Unop, Value,
@@ -44,6 +44,7 @@ pub fn build_func(conditions: &[Condition]) -> CondFunc {
         },
         next: 0,
         globals: HashMap::new(),
+        skip_ins: Vec::new(),
     };
 
     let mut forward_jumps = Vec::new();
@@ -67,7 +68,22 @@ pub fn build_func(conditions: &[Condition]) -> CondFunc {
                     offset: 0,
                 }));
 
+            let next_ins = translator.func.instructions.len();
+            for index in translator.skip_ins.drain(..) {
+                let offset = (next_ins - index) as i32;
+                let Instruction::BranchIfFalse(ins) = &mut translator.func.instructions[index]
+                else {
+                    unreachable!();
+                };
+
+                ins.offset = offset;
+            }
+
             continue;
+        }
+
+        for index in translator.skip_ins.drain(..) {
+            return_fixups.push(index);
         }
 
         let index = translator.func.instructions.len();
@@ -120,6 +136,16 @@ pub fn build_func(conditions: &[Condition]) -> CondFunc {
 }
 
 fn lower_condition(translator: &mut Translator, condition: &Condition) -> Value {
+    let entity = match condition.receiver {
+        FunctionReceiver::Subject => Value::Ident("entity".to_owned()),
+        FunctionReceiver::Target => {
+            todo!()
+        }
+        FunctionReceiver::Reference(id) => translator.create_global(id, "ObjectReference"),
+        // The remaining receivers seem to be unused?
+        _ => todo!(),
+    };
+
     let (lhs, ty) = match &condition.function {
         // Constant
         ConditionFunction::IsWindowsPc => (Value::Bool(true), Type::Bool),
@@ -129,104 +155,176 @@ fn lower_condition(translator: &mut Translator, condition: &Condition) -> Value 
         // ConditionFunction::GetAngle { axis } => todo!(),
         // ConditionFunction::GetStartingPos { axis } => todo!(),
         // ConditionFunction::GetStartingAngle { axis } => todo!(),
-        ConditionFunction::GetScale => translator.call_object_func("GetScale", &[], Type::Float),
+        ConditionFunction::GetScale => {
+            let value = translator.call(entity, "GetScale", &[], Type::Float);
+            (value, Type::Float)
+        }
         // Object Reference
-        ConditionFunction::GetLocked => translator.call_object_func("IsLocked", &[], Type::Bool),
+        ConditionFunction::GetLocked => {
+            let value = translator.call(entity, "IsLocked", &[], Type::Bool);
+            (value, Type::Bool)
+        }
         ConditionFunction::GetLockLevel => {
-            translator.call_object_func("GetLockLevel", &[], Type::Int)
+            let value = translator.call(entity, "GetLockLevel", &[], Type::Int);
+            (value, Type::Int)
         }
         ConditionFunction::GetDisabled => {
-            translator.call_object_func("IsDisabled", &[], Type::Float)
+            let value = translator.call(entity, "IsDisabled", &[], Type::Bool);
+            (value, Type::Bool)
         }
         ConditionFunction::HasLoaded3D => {
-            translator.call_object_func("Is3DLoaded", &[], Type::Bool)
+            let value = translator.call(entity, "Is3DLoaded", &[], Type::Bool);
+            (value, Type::Bool)
         }
         ConditionFunction::HasKeyword { keyword } => {
             let keyword = translator.create_global(*keyword, "Keyword");
-            translator.call_object_func("HasKeyword", &[keyword], Type::Bool)
+            let value = translator.call(entity, "HasKeyword", &[keyword], Type::Bool);
+            (value, Type::Bool)
         }
         ConditionFunction::GetValue { actor_value } => {
             let actor_value = translator.create_global(*actor_value, "ActorValue");
-            translator.call_object_func("GetValue", &[actor_value], Type::Float)
+            let value = translator.call(entity, "GetValue", &[actor_value], Type::Float);
+            (value, Type::Float)
         }
         ConditionFunction::GetValuePercent(actor_value) => {
             let actor_value = translator.create_global(*actor_value, "ActorValue");
-            translator.call_object_func("GetValuePercentage", &[actor_value], Type::Float)
+            let value = translator.call(entity, "GetValuePercentage", &[actor_value], Type::Float);
+            (value, Type::Float)
         }
         ConditionFunction::GetOpenState => {
-            translator.call_object_func("GetOpenState", &[], Type::Int)
+            let value = translator.call(entity, "GetOpenState", &[], Type::Int);
+            (value, Type::Int)
         }
-        ConditionFunction::IsPowered => translator.call_object_func("IsPowered", &[], Type::Bool),
+        ConditionFunction::IsPowered => {
+            let value = translator.call(entity, "IsPowered", &[], Type::Bool);
+            (value, Type::Bool)
+        }
         // Animation
         ConditionFunction::GetGraphVariableInt(name) => {
             let name = Value::String(name.as_str().unwrap().to_string());
-            translator.call_object_func("GetAnimationVariableInt", &[name], Type::Int)
+            let value = translator.call(entity, "GetAnimationVariableInt", &[name], Type::Int);
+            (value, Type::Int)
         }
         ConditionFunction::GetGraphVariableFloat { name } => {
             let name = Value::String(name.as_str().unwrap().to_string());
-            translator.call_object_func("GetAnimationVariableFloat", &[name], Type::Float)
+            let value = translator.call(entity, "GetAnimationVariableFloat", &[name], Type::Float);
+            (value, Type::Int)
         }
         // Actor Properties
-        // ConditionFunction::IsActor => {
-        //     translator.is_actor();
-        //     todo!();
-        // }
+        ConditionFunction::IsActor => {
+            translator.cast_or_skip(entity, "Actor");
+            (Value::Bool(true), Type::Bool)
+        }
         ConditionFunction::IsProtected => {
-            translator.call_actor_func("IsProtected", &[], Type::Bool)
+            let value = translator.cast_and_call(entity, "Actor", "IsProtected", &[], Type::Bool);
+            (value, Type::Bool)
         }
         ConditionFunction::IsEssential => {
-            translator.call_actor_func("IsEssential", &[], Type::Bool)
+            let value = translator.cast_and_call(entity, "Actor", "IsEssential", &[], Type::Bool);
+            (value, Type::Bool)
         }
-        ConditionFunction::IsChild => translator.call_actor_func("IsChild", &[], Type::Bool),
-        ConditionFunction::IsGuard => translator.call_actor_func("IsGuard", &[], Type::Bool),
-        ConditionFunction::GetIsGhost => translator.call_actor_func("IsGhost", &[], Type::Bool),
-        ConditionFunction::GetDead => translator.call_actor_func("IsDead", &[], Type::Bool),
-        ConditionFunction::GetIsAlerted => translator.call_actor_func("IsAlerted", &[], Type::Bool),
-        ConditionFunction::GetLevel => translator.call_actor_func("GetLevel", &[], Type::Int),
-        ConditionFunction::IsTalking => translator.call_actor_func("IsTalking", &[], Type::Bool),
+        ConditionFunction::IsChild => {
+            let value = translator.cast_and_call(entity, "Actor", "IsChild", &[], Type::Bool);
+            (value, Type::Bool)
+        }
+        ConditionFunction::IsGuard => {
+            let value = translator.cast_and_call(entity, "Actor", "IsGuard", &[], Type::Bool);
+            (value, Type::Bool)
+        }
+        ConditionFunction::GetIsGhost => {
+            let value = translator.cast_and_call(entity, "Actor", "IsGhost", &[], Type::Bool);
+            (value, Type::Bool)
+        }
+        ConditionFunction::GetDead => {
+            let value = translator.cast_and_call(entity, "Actor", "IsDead", &[], Type::Bool);
+            (value, Type::Bool)
+        }
+        ConditionFunction::GetIsAlerted => {
+            let value = translator.cast_and_call(entity, "Actor", "IsAlerted", &[], Type::Bool);
+            (value, Type::Bool)
+        }
+        ConditionFunction::GetLevel => {
+            let value = translator.cast_and_call(entity, "Actor", "GetLevel", &[], Type::Int);
+            (value, Type::Int)
+        }
+        ConditionFunction::IsTalking => {
+            let value = translator.cast_and_call(entity, "Actor", "IsTalking", &[], Type::Bool);
+            (value, Type::Bool)
+        }
         ConditionFunction::IsTrespassing => {
-            translator.call_actor_func("IsTrespassing", &[], Type::Bool)
+            let value = translator.cast_and_call(entity, "Actor", "IsTrespassing", &[], Type::Bool);
+            (value, Type::Bool)
         }
         ConditionFunction::IsBleedingOut => {
-            translator.call_actor_func("IsBleedingOut", &[], Type::Bool)
+            let value = translator.cast_and_call(entity, "Actor", "IsBleedingOut", &[], Type::Bool);
+            (value, Type::Bool)
         }
         // Actor Movement State
         // ConditionFunction::IsMoving => todo!(),
         // ConditionFunction::IsTurning => todo!(),
         // ConditionFunction::IsRotating => todo!(),
-        ConditionFunction::IsRunning => translator.call_actor_func("IsRunning", &[], Type::Bool),
-        ConditionFunction::IsSneaking => translator.call_actor_func("IsSneaking", &[], Type::Bool),
-        ConditionFunction::IsSprinting => {
-            translator.call_actor_func("IsSprinting", &[], Type::Bool)
+        ConditionFunction::IsRunning => {
+            let value = translator.cast_and_call(entity, "Actor", "IsRunning", &[], Type::Bool);
+            (value, Type::Bool)
         }
-        ConditionFunction::CanFlyHere => translator.call_actor_func("CanFlyHere", &[], Type::Bool),
-        ConditionFunction::GetIsFlying => translator.call_actor_func("IsFlying", &[], Type::Bool),
+        ConditionFunction::IsSneaking => {
+            let value = translator.cast_and_call(entity, "Actor", "IsSneaking", &[], Type::Bool);
+            (value, Type::Bool)
+        }
+        ConditionFunction::IsSprinting => {
+            let value = translator.cast_and_call(entity, "Actor", "IsSprinting", &[], Type::Bool);
+            (value, Type::Bool)
+        }
+        ConditionFunction::CanFlyHere => {
+            let value = translator.cast_and_call(entity, "Actor", "CanFlyHere", &[], Type::Bool);
+            (value, Type::Bool)
+        }
+        ConditionFunction::GetIsFlying => {
+            let value = translator.cast_and_call(entity, "Actor", "IsFlying", &[], Type::Bool);
+            (value, Type::Bool)
+        }
         ConditionFunction::GetFlyingState => {
-            translator.call_actor_func("GetFlyingState", &[], Type::Int)
+            let value = translator.cast_and_call(entity, "Actor", "GetFlyingState", &[], Type::Int);
+            (value, Type::Int)
         }
         ConditionFunction::IsAllowedToFly => {
-            translator.call_actor_func("IsAllowedToFly", &[], Type::Bool)
+            let value =
+                translator.cast_and_call(entity, "Actor", "IsAllowedToFly", &[], Type::Bool);
+            (value, Type::Bool)
         }
         ConditionFunction::IsBeingRidden => {
-            translator.call_actor_func("IsBeingRidden", &[], Type::Bool)
+            let value = translator.cast_and_call(entity, "Actor", "IsBeingRidden", &[], Type::Bool);
+            (value, Type::Bool)
         }
         ConditionFunction::IsPlayersLastRiddenMount => {
-            translator.call_actor_func("IsPlayersLastRiddenHorse", &[], Type::Bool)
+            let value = translator.cast_and_call(
+                entity,
+                "Actor",
+                "IsPlayersLastRiddenHorse",
+                &[],
+                Type::Bool,
+            );
+            (value, Type::Bool)
         }
         // ConditionFunction::GetMovementDirection => todo!(),
         // ConditionFunction::GetMovementSpeed => todo!(),
         // Actor Inventory
         ConditionFunction::IsWeaponMagicOut | ConditionFunction::IsWeaponOut => {
-            translator.call_actor_func("IsWeaponDrawn", &[], Type::Bool)
+            let value = translator.cast_and_call(entity, "Actor", "IsWeaponDrawn", &[], Type::Bool);
+            (value, Type::Bool)
         }
         ConditionFunction::IsShieldOut => todo!(),
         ConditionFunction::IsTorchOut => todo!(),
         ConditionFunction::WornHasKeyword(keyword) => {
             let keyword = translator.create_global(*keyword, "Keyword");
-            translator.call_actor_func("WornHasKeyword", &[keyword], Type::Bool)
+            let value =
+                translator.cast_and_call(entity, "Actor", "WornHasKeyword", &[keyword], Type::Bool);
+            (value, Type::Bool)
         }
         ConditionFunction::IsOverEncumbered => {
-            translator.call_actor_func("IsOverEncumbered", &[], Type::Bool)
+            let value =
+                translator.cast_and_call(entity, "Actor", "IsOverEncumbered", &[], Type::Bool);
+            (value, Type::Bool)
         }
         // Combat
         // TODO
@@ -477,43 +575,44 @@ struct Translator {
     func: Function,
     next: usize,
     globals: HashMap<FormId, Global>,
+    skip_ins: Vec<usize>,
 }
 
 impl Translator {
-    fn call_object_func(&mut self, func: &'static str, args: &[Value], ty: Type) -> (Value, Type) {
-        let dst = self.alloc_value(ty.to_str());
-
+    /// Skips over the current condition if the given value is false.
+    fn skip_if_false(&mut self, value: Value) {
+        let index = self.func.instructions.len();
         self.func
             .instructions
-            .push(Instruction::CallMethod(CallMethod {
-                function_name: func.to_owned(),
-                object: Value::Ident("entity".to_owned()),
-                return_assignment: Value::Ident(dst.clone()),
-                args: args.to_vec(),
+            .push(Instruction::BranchIfFalse(ConditionalBranch {
+                condition: value,
+                offset: 0,
             }));
-
-        (Value::Ident(dst), ty)
+        self.skip_ins.push(index);
     }
 
-    fn call_actor_func(&mut self, func: &'static str, args: &[Value], ty: Type) -> (Value, Type) {
-        let actor = self.alloc_value("Actor");
-        let dst = self.alloc_value(ty.to_str());
-
+    /// Casts the given `value` to the `target` or skips the condition if the cast did not suceed.
+    fn cast_or_skip(&mut self, src: Value, target: &'static str) -> Value {
+        let dst = Value::Ident(self.alloc_value(target));
         self.func.instructions.push(Instruction::Cast(Unop {
-            src: Value::Ident("entity".to_owned()),
-            dst: Value::Ident(actor.clone()),
+            src: src,
+            dst: dst.clone(),
         }));
+        self.skip_if_false(dst.clone());
 
-        self.func
-            .instructions
-            .push(Instruction::CallMethod(CallMethod {
-                function_name: func.to_owned(),
-                object: Value::Ident(actor),
-                return_assignment: Value::Ident(dst.clone()),
-                args: args.to_vec(),
-            }));
+        dst
+    }
 
-        (Value::Ident(dst), ty)
+    fn cast_and_call(
+        &mut self,
+        object: Value,
+        class: &'static str,
+        func: &'static str,
+        args: &[Value],
+        ty: Type,
+    ) -> Value {
+        let object = self.cast_or_skip(object, class);
+        self.call(object, func, args, ty)
     }
 
     fn call<T>(&mut self, object: Value, func: &'static str, args: &[Value], ty: T) -> Value
@@ -603,22 +702,36 @@ impl Translator {
 #[cfg(test)]
 mod tests {
     use openfo4_esp::conditions::{
-        Combinator, Comparator, ComparisonValue, Condition, ConditionDataObject, ConditionFunction,
-        FunctionReceiver,
+        Combinator, Comparator, ComparisonValue, Condition, ConditionFunction, FunctionReceiver,
     };
-    use openfo4_pex::{Binop, ConditionalBranch, Instruction, Value};
+    use openfo4_pex::{Binop, ConditionalBranch, Function, Instruction, Value};
+    use openfo4_script::assembler::assemble;
 
     use crate::systems::conditions::compiler::build_func;
 
     fn make_condition(function: ConditionFunction, combinator: Combinator) -> Condition {
         Condition {
-            object: ConditionDataObject::Subject,
             receiver: FunctionReceiver::Subject,
             function,
             comparator: Comparator::Equal,
             value: ComparisonValue::Const(1.0),
             combinator,
         }
+    }
+
+    fn assemble_func(s: &str) -> Function {
+        let module = assemble(s);
+        module
+            .classes
+            .first()
+            .unwrap()
+            .states
+            .first()
+            .unwrap()
+            .functions
+            .first()
+            .unwrap()
+            .clone()
     }
 
     #[test]
@@ -664,5 +777,67 @@ mod tests {
                 Instruction::Return(Value::Bool(false)),
             ]
         );
+    }
+
+    #[test]
+    fn build_func_skip_into_and() {
+        let conditions = [
+            make_condition(ConditionFunction::IsTalking, Combinator::And),
+            make_condition(ConditionFunction::IsWindowsPc, Combinator::And),
+        ];
+
+        let res = build_func(&conditions);
+        let expect = assemble_func(
+            r#"
+            class X:
+
+            function eval(entity: ObjectReference, target: ObjectReference) -> bool:
+            local v0: Actor
+            local v1: bool
+            local v2: bool
+            local v3: bool
+            v0 = cast entity
+            branch_if_false v0 7
+            v1 = call_method IsTalking v0
+            v2 = cmpeq v1 true
+            branch_if_false v2 4
+            v3 = cmpeq true true // IsWindowsPc
+            branch_if_false v3 2
+            return true
+            return false
+            "#,
+        );
+        assert_eq!(res.func.instructions, expect.instructions);
+    }
+
+    #[test]
+    fn build_func_skip_into_or() {
+        let conditions = [
+            make_condition(ConditionFunction::IsTalking, Combinator::Or),
+            make_condition(ConditionFunction::IsWindowsPc, Combinator::Or),
+        ];
+
+        let res = build_func(&conditions);
+        let expect = assemble_func(
+            r#"
+            class X:
+
+            function eval(entity: ObjectReference, target: ObjectReference) -> bool:
+            local v0: Actor
+            local v1: bool
+            local v2: bool
+            local v3: bool
+            v0 = cast entity
+            branch_if_false v0 4
+            v1 = call_method IsTalking v0
+            v2 = cmpeq v1 true
+            branch_if_true v2 3
+            v3 = cmpeq true true // IsWindowsPc
+            branch_if_false v3 2
+            return true
+            return false
+            "#,
+        );
+        assert_eq!(res.func.instructions, expect.instructions);
     }
 }

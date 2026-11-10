@@ -37,10 +37,20 @@ impl Read for Conditions {
                 Combinator::And
             };
 
-            let receiver = if data.comparator & 2 != 0 {
-                FunctionReceiver::Target
-            } else {
-                FunctionReceiver::Subject
+            let receiver = match data.object {
+                ConditionDataObject::Subject => FunctionReceiver::Subject,
+                ConditionDataObject::Target => FunctionReceiver::Target,
+                ConditionDataObject::Reference => {
+                    FunctionReceiver::Reference(FormId(data.object_value))
+                }
+                ConditionDataObject::CombatTarget => FunctionReceiver::CombatTarget,
+                ConditionDataObject::LinkedReference => FunctionReceiver::LinkedReference,
+                ConditionDataObject::QuestAlias => FunctionReceiver::QuestAlias,
+                ConditionDataObject::PackageData => FunctionReceiver::PackageData,
+                ConditionDataObject::EventData => FunctionReceiver::EventData,
+                ConditionDataObject::CommandTarget => FunctionReceiver::CommandTarget,
+                ConditionDataObject::EventCameraRef => FunctionReceiver::EventCameraRef,
+                ConditionDataObject::MyKiller => FunctionReceiver::MyKiller,
             };
 
             let value = if data.comparator & 4 != 0 {
@@ -50,7 +60,6 @@ impl Read for Conditions {
             };
 
             conditions.push(Condition {
-                object: data.object,
                 receiver,
                 function,
                 comparator,
@@ -69,7 +78,6 @@ impl Read for Conditions {
 
 #[derive(Clone, Debug)]
 pub struct Condition {
-    pub object: ConditionDataObject,
     /// Defines which entity to run the function on.
     pub receiver: FunctionReceiver,
     pub function: ConditionFunction,
@@ -89,13 +97,13 @@ struct RawConditionData {
     parameter1: u32,
     /// The object on which the function should be run on.
     object: ConditionDataObject,
-    _unknown: u32,
+    object_value: u32,
     parameter2: u32,
 }
 
 #[derive(Copy, Clone, Debug, BinaryStruct)]
 #[primitive(u32)]
-pub enum ConditionDataObject {
+enum ConditionDataObject {
     Subject = 0,
     Target = 1,
     Reference = 2,
@@ -140,6 +148,17 @@ pub enum FunctionReceiver {
     Subject,
     /// Run the function on the target entity.
     Target,
+    /// Run the function on a specific placed reference record.
+    Reference(FormId),
+    CombatTarget,
+    LinkedReference,
+    QuestAlias,
+    PackageData,
+    EventData,
+    CommandTarget,
+    EventCameraRef,
+    /// Run the function entity that is marked as this actors killer.
+    MyKiller,
 }
 
 // See https://github.com/TES5Edit/TES5Edit/blob/dev-4.1.6/Core/wbDefinitionsFO4.pas#L274
