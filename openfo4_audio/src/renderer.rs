@@ -58,15 +58,17 @@ impl Renderer {
             let scratch = &mut self.scratch[..num_frames];
             let scratch = match sound.source.read(scratch, sound.looping) {
                 Ok(frames_written) => &mut scratch[..frames_written],
-                Err(Error::Eof) if !sound.looping => {
-                    sound.is_playing = false;
-
-                    debug_assert_eq!(sound.on_done.total_listeners(), 1);
-                    sound.on_done.notify(1);
-                    continue;
-                }
                 Err(err) => {
-                    tracing::error!("error while reading from audio source: {}", err);
+                    if !sound.looping {
+                        sound.is_playing = false;
+                        debug_assert_eq!(sound.on_done.total_listeners(), 1);
+                        sound.on_done.notify(1);
+                    }
+
+                    if matches!(err, Error::Eof) {
+                        tracing::error!("error while reading from audio source: {}", err);
+                    }
+
                     continue;
                 }
             };
