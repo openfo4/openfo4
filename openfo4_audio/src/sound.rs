@@ -66,7 +66,7 @@ impl MulAssign<Volume> for Frame {
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
-pub struct SoundId(pub(crate) Key);
+pub struct SoundId(pub(crate) usize);
 
 #[derive(Debug)]
 pub(crate) struct PlayingSound {

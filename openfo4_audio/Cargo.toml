@@ -24,11 +24,6 @@ parking_lot = { workspace = true }
 thiserror = { workspace = true }
 rubato = "0.15.0"
 bytemuck = "1.19.0"
-
-[[test]]
-name = "latency"
-path = "tests/latency/latency.rs"
-
-[[test]]
-name = "basic"
-path = "tests/basic.rs"
+crossbeam-queue = "0.3.14"
+event-listener = "5.4.2"
+futures-lite = "2.6.1"

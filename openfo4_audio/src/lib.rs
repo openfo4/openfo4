@@ -9,6 +9,8 @@ pub mod track;
 
 mod buffer;
 mod manager;
+mod mixer;
+mod renderer;
 mod resampler;
 
 #[cfg(feature = "xwma")]

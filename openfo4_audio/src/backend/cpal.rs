@@ -7,8 +7,7 @@ use cpal::{
 };
 use thiserror::Error;
 
-use crate::channel::Receiver;
-use crate::sound::Frame;
+use crate::renderer::Renderer;
 
 use super::Backend;
 
@@ -57,7 +56,7 @@ impl Debug for CpalBackend {
 }
 
 impl Backend for CpalBackend {
-    fn create_output_stream(&mut self, mut rx: Receiver) {
+    fn create_output_stream(&mut self, mut renderer: Renderer) {
         let channels = self.config.channels as usize;
 
         let stream = self
@@ -65,7 +64,8 @@ impl Backend for CpalBackend {
             .build_output_stream(
                 &self.config,
                 move |data: &mut [f32], _: &cpal::OutputCallbackInfo| {
-                    write_data(data, channels, &mut rx)
+                    renderer.process_commands();
+                    renderer.render(data, channels);
                 },
                 |err| {
                     panic!("output stream error: {}", err);
@@ -107,30 +107,6 @@ fn select_output_device(host: &Host) -> Result<Device, Error> {
         None => {
             let mut devices = host.output_devices()?;
             devices.next().ok_or(Error::NoDevice)
-        }
-    }
-}
-
-fn write_data(output: &mut [f32], channels: usize, rx: &mut Receiver) {
-    for f in output.chunks_exact_mut(channels) {
-        let frame = match rx.recv() {
-            Some(frame) => frame,
-            None => {
-                //tracing::error!("no data");
-                Frame::EQUILIBRIUM
-            }
-        };
-
-        match channels {
-            1 => {
-                f[0] = (frame.left) + (frame.right) / 2.0;
-            }
-            2 => {
-                f[0] = frame.left;
-                f[1] = frame.right;
-            }
-            // We only support mono/stereo for now.
-            _ => panic!("invalid channel config: {}", channels),
         }
     }
 }
