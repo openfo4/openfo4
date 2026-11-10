@@ -148,12 +148,12 @@ impl Sound {
                 match stopped.poll(&mut cx) {
                     Poll::Ready(()) => {
                         self.stopped = None;
-                        true
+                        false
                     }
-                    Poll::Pending => false,
+                    Poll::Pending => true,
                 }
             }
-            None => true,
+            None => false,
         }
     }
 
