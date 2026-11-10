@@ -32,6 +32,7 @@ static PROBE: LazyLock<Probe> = LazyLock::new(|| {
 
     #[cfg(feature = "xwma")]
     probe.register_format::<crate::wma::XwmReader<'_>>();
+    probe.register_format::<crate::wma::FuzReader<'_>>();
 
     probe
 });
