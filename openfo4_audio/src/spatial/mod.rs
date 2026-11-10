@@ -1,5 +1,4 @@
 use glam::{Quat, Vec3};
-use openfo4_common::collections::arena::Key;
 
 use crate::sound::Frame;
 
@@ -25,12 +24,6 @@ impl Listener {
 pub struct Emitter {
     pub translation: Vec3,
 }
-
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
-pub struct EmitterId(pub(crate) Key);
-
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
-pub struct ListenerId(pub(crate) Key);
 
 pub(crate) fn process(listener: &Listener, emitter: &Emitter, frame: Frame) -> Frame {
     let mut output = frame.to_mono();

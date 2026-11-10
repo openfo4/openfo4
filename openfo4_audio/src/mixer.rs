@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
+use crate::manager::TrackId;
 use crate::sound::Frame;
-use crate::track::TrackId;
 
 #[derive(Debug, Default)]
 pub struct Mixer {

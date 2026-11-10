@@ -8,10 +8,10 @@ use glam::{Quat, Vec3};
 use openfo4_common::collections::slab::Slab;
 
 use crate::backend::Backend;
+use crate::effects::Volume;
 use crate::renderer::{self, Command, Renderer};
 use crate::source::AudioSource;
 use crate::spatial;
-use crate::track::{Track, TrackId};
 
 #[derive(Debug)]
 pub struct AudioManager<B>
@@ -234,4 +234,18 @@ pub struct PlaybackSettings {
     pub track: TrackId,
     /// The spatial emitter from which the sound originates from.
     pub emitter: Option<Emitter>,
+}
+
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Hash)]
+pub enum TrackId {
+    #[default]
+    Main,
+    Track(usize),
+}
+
+#[derive(Clone, Debug)]
+pub struct Track {
+    pub target: TrackId,
+    /// Modify the volume of all incoming sounds.
+    pub volume: Volume,
 }
