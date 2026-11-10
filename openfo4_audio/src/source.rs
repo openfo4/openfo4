@@ -50,18 +50,19 @@ pub struct AudioSource {
     resampler: Option<Resampler>,
     decode_buffer: FrameBuffer,
     source: Source,
+    track_id: u32,
 }
 
 impl AudioSource {
-    pub fn from_file<P>(path: P) -> Self
+    pub fn from_file<P>(path: P) -> Result<Self, MediaSourceError>
     where
         P: AsRef<Path>,
     {
-        let file = File::open(path).unwrap();
+        let file = File::open(path).map_err(MediaSourceError::new)?;
         Self::from_reader(file)
     }
 
-    pub fn from_reader<R>(reader: R) -> Self
+    pub fn from_reader<R>(reader: R) -> Result<Self, MediaSourceError>
     where
         R: MediaSource + 'static,
     {
@@ -74,17 +75,24 @@ impl AudioSource {
                 FormatOptions::default(),
                 MetadataOptions::default(),
             )
-            .unwrap();
+            .map_err(MediaSourceError::new)?;
 
-        let track = format_reader.default_track(TrackType::Audio).unwrap();
-        let codec_params = track.codec_params.as_ref().unwrap().audio().unwrap();
+        let track = format_reader
+            .default_track(TrackType::Audio)
+            .ok_or_else(|| MediaSourceError::msg("source has no default audio track"))?;
+        let codec_params = track
+            .codec_params
+            .as_ref()
+            .and_then(|params| params.audio())
+            .ok_or_else(|| MediaSourceError::msg("unable to determine audio codec parameters"))?;
         let sample_rate = codec_params.sample_rate.unwrap();
 
         let decoder = CODECS
             .make_audio_decoder(codec_params, &AudioDecoderOptions::default())
-            .unwrap();
+            .map_err(MediaSourceError::new)?;
 
-        Self {
+        Ok(Self {
+            track_id: track.id,
             sample_rate,
             buffer: FrameBuffer::new(),
             resampler: None,
@@ -93,10 +101,10 @@ impl AudioSource {
                 decoder,
                 format_reader,
             }),
-        }
+        })
     }
 
-    pub fn from_bytes(bytes: Vec<u8>) -> Self {
+    pub fn from_bytes(bytes: Vec<u8>) -> Result<Self, MediaSourceError> {
         let cursor = Cursor::new(bytes);
         Self::from_reader(cursor)
     }
@@ -125,6 +133,7 @@ impl AudioSource {
             sample_rate: data.sample_rate,
             buffer: FrameBuffer::new(),
             resampler: None,
+            track_id: 0,
         }
     }
 
@@ -164,7 +173,7 @@ impl AudioSource {
 
                     // Read the next frame from the source start.
                     if looping {
-                        self.source.reset()?;
+                        self.source.reset(self.track_id)?;
                         continue;
                     }
 
@@ -469,7 +478,7 @@ impl Source {
         }
     }
 
-    fn reset(&mut self) -> Result<(), Error> {
+    fn reset(&mut self, track_id: u32) -> Result<(), Error> {
         match self {
             Self::Empty => {}
             Self::Io(source) => {
@@ -479,7 +488,7 @@ impl Source {
                         SeekMode::Accurate,
                         SeekTo::Timestamp {
                             ts: Timestamp::ZERO,
-                            track_id: 0,
+                            track_id,
                         },
                     )
                     .map_err(Error::Decode)?;
@@ -500,5 +509,25 @@ struct IoSource {
 impl Debug for IoSource {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         f.debug_struct("IoSource").finish_non_exhaustive()
+    }
+}
+
+#[derive(Debug, Error)]
+#[error(transparent)]
+pub struct MediaSourceError(Box<dyn std::error::Error>);
+
+impl MediaSourceError {
+    pub fn new<E>(err: E) -> Self
+    where
+        E: std::error::Error + 'static,
+    {
+        Self(Box::new(err))
+    }
+
+    pub fn msg<T>(msg: T) -> Self
+    where
+        T: ToString,
+    {
+        Self(msg.to_string().into())
     }
 }
