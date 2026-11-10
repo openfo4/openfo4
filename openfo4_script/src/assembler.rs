@@ -541,6 +541,10 @@ fn tokenize(mut input: &str) -> Vec<Token<'_>> {
     let mut tokens = Vec::new();
 
     loop {
+        if input.starts_with("//") {
+            input = &input[input.find("\n").unwrap()..];
+        }
+
         // Newlines have semantics, unlike other whitespace chars.
         if !input.starts_with("\n") {
             input = input.trim_start();
