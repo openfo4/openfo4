@@ -136,13 +136,18 @@ pub fn build_func(conditions: &[Condition]) -> CondFunc {
 }
 
 fn lower_condition(translator: &mut Translator, condition: &Condition) -> Value {
+    let subject = Value::Ident("entity".to_owned());
+
     let entity = match condition.receiver {
-        FunctionReceiver::Subject => Value::Ident("entity".to_owned()),
-        FunctionReceiver::Target => {
-            todo!()
-        }
+        FunctionReceiver::Subject => subject,
+        FunctionReceiver::Target => Value::Ident("target".to_owned()),
         FunctionReceiver::Reference(id) => translator.create_global(id, "ObjectReference"),
-        // The remaining receivers seem to be unused?
+        FunctionReceiver::CombatTarget => {
+            translator.cast_and_call(subject, "Actor", "GetCombatTarget", &[], "Actor")
+        }
+        FunctionReceiver::MyKiller => {
+            translator.cast_and_call(subject, "Actor", "GetKiller", &[], "Actor")
+        }
         _ => todo!(),
     };
 
@@ -208,7 +213,7 @@ fn lower_condition(translator: &mut Translator, condition: &Condition) -> Value 
         ConditionFunction::GetGraphVariableFloat { name } => {
             let name = Value::String(name.as_str().unwrap().to_string());
             let value = translator.call(entity, "GetAnimationVariableFloat", &[name], Type::Float);
-            (value, Type::Int)
+            (value, Type::Float)
         }
         // Actor Properties
         ConditionFunction::IsActor => {
@@ -603,14 +608,17 @@ impl Translator {
         dst
     }
 
-    fn cast_and_call(
+    fn cast_and_call<T>(
         &mut self,
         object: Value,
         class: &'static str,
         func: &'static str,
         args: &[Value],
-        ty: Type,
-    ) -> Value {
+        ty: T,
+    ) -> Value
+    where
+        T: TypeName,
+    {
         let object = self.cast_or_skip(object, class);
         self.call(object, func, args, ty)
     }
