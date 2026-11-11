@@ -1,4 +1,5 @@
 pub mod animation;
+pub mod audio;
 pub mod data_file;
 pub mod gltf;
 pub mod material;
@@ -15,6 +16,7 @@ use openfo4_nif::Nif;
 use openfo4_nif::bgsm::Bgsm;
 
 use crate::assets::animation::FileAnimationClip;
+use crate::assets::audio::FileAudioSource;
 use crate::assets::data_file::{DataFile, DataFileContext};
 use crate::assets::gltf::GltfScene;
 use crate::assets::material::{BgsmMaterial, BgsmStandardMaterial};
@@ -78,6 +80,9 @@ pub fn init_asset_loader(file_loader: &Arc<FileLoader>, entities: &Entities) -> 
         loader: file_loader.clone(),
     });
     loader.register::<FileAnimationClip>(());
+    loader.register::<FileAudioSource>(DataFileContext {
+        loader: file_loader.clone(),
+    });
 
     loader
 }

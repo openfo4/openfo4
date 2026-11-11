@@ -20,6 +20,8 @@ use esp::EspLoader;
 use glam::{IVec2, Vec3};
 use level::Level;
 use openfo4_asset::AssetLoader;
+use openfo4_audio::AudioManager;
+use openfo4_audio::backend::DefaultBackend;
 use openfo4_common::components::{Color, Transform};
 use openfo4_core::Frozen;
 use openfo4_core::ecs::{CommandBuffer, Entity, World};
@@ -39,7 +41,9 @@ use parking_lot::Mutex;
 use crate::assets::animation::AnimationSet;
 use crate::assets::init_asset_loader;
 use crate::cell::CellId;
-use crate::components::{ActorMarker, Camera, NiTransform, Player, Root, WorldSpace};
+use crate::components::{
+    ActorMarker, BaseObject, Camera, NiTransform, PlacedReference, Player, Root, WorldSpace,
+};
 use crate::config::Config;
 use crate::interval::Interval;
 use crate::loader::FileLoader;
@@ -49,7 +53,7 @@ use crate::shared::SharedState;
 use crate::state::actions::{Action, Actions};
 use crate::state::anim_starter::AnimationSystem;
 use crate::state::animation::update_actor_animation_graphs;
-use crate::state::hardcoded::ACTOR_PLAYER;
+use crate::state::hardcoded::{ACTOR_PLAYER, PLACED_ACTOR_PLAYER_REF};
 use crate::state::level::Streamer;
 use crate::state::npc::{ActorInstanceProps, ObjectKeywords, spawn_actor};
 use crate::systems::accel::AccelerationStructure;
@@ -106,7 +110,7 @@ pub struct GameState {
     real_time_elapsed: Duration,
     transform_hierarchy_cache: TransformHierarchyCache,
     door: DoorSystem,
-    conditions: ConditionCompiler,
+    audio: AudioManager,
 }
 
 impl GameState {
@@ -163,11 +167,24 @@ impl GameState {
 
         world.spawn_one(AccelerationStructure::default());
 
-        let quests = QuestManager::new(pool.clone(), &loader, &mut executor, &level.loader());
+        let conditions = Arc::new(ConditionCompiler::new(
+            loader.clone(),
+            executor.loader().clone(),
+        ));
+
+        let quests = QuestManager::new(
+            pool.clone(),
+            &loader,
+            &mut executor,
+            &level.loader(),
+            conditions.clone(),
+            asset_loader.clone(),
+        );
         let door = DoorSystem::new(pool.clone(), level.loader().clone());
 
-        let conditions = ConditionCompiler::new(loader.clone(), executor.loader().clone());
         let animation = AnimationSystem::new(&loader, &conditions).await;
+
+        let audio = AudioManager::new(DefaultBackend::new());
 
         Self {
             weather: WeatherSystem::new(loader.clone(), pool.clone(), &asset_loader, &shared),
@@ -192,7 +209,7 @@ impl GameState {
             real_time_elapsed: Duration::ZERO,
             transform_hierarchy_cache: TransformHierarchyCache::default(),
             door,
-            conditions,
+            audio,
         }
     }
 
@@ -252,8 +269,13 @@ impl GameState {
             &mut self.quests,
             Duration::from_millis(1),
         );
-        self.quests
-            .update(&mut self.world, &mut self.event_bus, &mut self.executor);
+        self.quests.update(
+            &mut self.world,
+            &mut self.event_bus,
+            &mut self.executor,
+            &mut self.audio,
+            &self.globals,
+        );
 
         systems::nif_animation::update_nif_animations(
             &mut self.world,
@@ -547,13 +569,17 @@ impl GameState {
                     Root,
                     transform,
                     worldspace,
+                    BaseObject { record: id },
                 ),
             )
             .unwrap();
 
         if id == ACTOR_PLAYER {
-            if let Some(script) = self.executor.loader().load_instance(id).await {
-                self.executor.entities().set(root, script.id()).unwrap();
+            if let Some(script) = self.executor.loader().load(PLACED_ACTOR_PLAYER_REF).await {
+                self.executor
+                    .entities()
+                    .set(root, script.object.id())
+                    .unwrap();
                 self.world.insert_one(root, script).unwrap();
             } else {
                 tracing::warn!("cloud not load script for player");
@@ -569,6 +595,7 @@ impl GameState {
                         Streamer,
                         ActorMarker,
                         InputControllerMask::default(),
+                        PlacedReference(PLACED_ACTOR_PLAYER_REF),
                     ),
                 )
                 .unwrap();

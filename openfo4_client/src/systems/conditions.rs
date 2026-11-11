@@ -223,4 +223,19 @@ impl CompiledCondition {
             .and_then(|val| val.as_bool())
             .unwrap_or(false)
     }
+
+    pub fn eval_entity(
+        &self,
+        executor: &mut Executor,
+        world: &mut World,
+        events: &mut EventBus,
+        quests: &mut QuestManager,
+        subject: Entity,
+        target: Option<Entity>,
+    ) -> bool {
+        let subject = futures_lite::future::block_on(executor.get_or_load(world, subject));
+        let target = target
+            .map(|target| futures_lite::future::block_on(executor.get_or_load(world, target)));
+        self.eval(executor, world, events, quests, subject, target)
+    }
 }

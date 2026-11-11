@@ -82,7 +82,7 @@ async fn get_owning_quest(
 
     let quests = data.quests().await;
     let scene = quests.get_scene(scene).ok_or_else(|| todo!())?;
-    let quest = scene.quest;
+    let quest = scene.info.quest;
 
     drop(quests);
 

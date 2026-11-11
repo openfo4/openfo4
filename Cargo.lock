@@ -1547,9 +1547,9 @@ dependencies = [
 
 [[package]]
 name = "indexmap"
-version = "2.14.0"
+version = "2.14.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d466e9454f08e4a911e14806c24e16fba1b4c121d1ea474396f396069cf949d9"
+checksum = "cc4e190f5d26ca7051642629da2c52fc03bde85a03197c99408dcd291734c855"
 dependencies = [
  "equivalent",
  "hashbrown 0.17.0",
@@ -2176,6 +2176,9 @@ version = "0.1.0"
 dependencies = [
  "bytemuck",
  "cpal",
+ "crossbeam-queue",
+ "event-listener",
+ "futures-lite",
  "glam 0.33.3",
  "openfo4_common",
  "openfo4_tracing",
@@ -2221,6 +2224,7 @@ dependencies = [
  "openfo4_ai",
  "openfo4_animation",
  "openfo4_asset",
+ "openfo4_audio",
  "openfo4_ba2",
  "openfo4_common",
  "openfo4_config",
@@ -3483,9 +3487,9 @@ dependencies = [
 
 [[package]]
 name = "symphonia-core"
-version = "0.6.0"
+version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "95ec293b5f288383b72a7bffcade6b2860b642cf66f28b3bd5967349a49938b1"
+checksum = "01c412864d599d4750d0c3d684d7e093ec05e5309681ef5252cc1096a437f6e0"
 dependencies = [
  "bitflags 2.13.2",
  "bytemuck",
