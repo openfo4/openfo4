@@ -23,6 +23,7 @@ openfo4_egui = { version = "0.1.0", path = "../openfo4_egui" }
 openfo4_ui_render = { version = "0.1.0", path = "../openfo4_ui_render" }
 openfo4_gltf = { version = "0.1.0", path = "../openfo4_gltf" }
 openfo4_ai = { version = "0.1.0", path = "../openfo4_ai" }
+openfo4_audio = { version = "0.1.0", path = "../openfo4_audio" }
 
 openfo4_nif = { version = "0.1.0", path = "../openfo4_nif" }
 openfo4_esp = { version = "0.1.0", path = "../openfo4_esp" }

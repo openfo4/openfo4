@@ -1,17 +1,18 @@
+mod dialogue;
+mod scene;
+
 use std::collections::VecDeque;
 use std::sync::{Arc, Once};
 
 use crossbeam::queue::SegQueue;
 use hashbrown::{HashMap, HashSet};
 use indexmap::IndexMap;
-use openfo4_common::collections::vec_map::VecMap;
+use openfo4_asset::AssetLoader;
+use openfo4_audio::AudioManager;
 use openfo4_core::ecs::World;
 use openfo4_core::events::EventBus;
 use openfo4_core::record::RecordId;
-use openfo4_esp::records::{
-    QuestAliasFlags, QuestDataFlags, QuestReferenceAlias, QuestStageFlags, SceneActionData,
-    SceneActionFlags,
-};
+use openfo4_esp::records::{QuestAliasFlags, QuestDataFlags, QuestReferenceAlias, QuestStageFlags};
 use openfo4_esp::{FormId, RecordChildren, RecordData, RecordKind};
 use openfo4_tasks::{Task, TaskPool};
 use openfo4_tracing::trace_span;
@@ -21,6 +22,9 @@ use crate::state::esp::EspLoader;
 use crate::state::hardcoded::HARDCODED_MODULE_ID;
 use crate::state::level::loader::{EntityLoader, EntityRef};
 use crate::state::level::partial::PartialEntityFlags;
+use crate::systems::conditions::ConditionCompiler;
+use crate::systems::global::GlobalProperties;
+use crate::systems::quests::scene::{SceneInfo, SceneState};
 use crate::systems::scripting::invocations::{
     AliasInit, AliasShutdown, Init, QuestFragmentSetStage, QuestInit, QuestSetStage, QuestShutdown,
 };
@@ -38,6 +42,8 @@ pub struct QuestManager {
     events: Arc<SegQueue<Event>>,
     quests: HashMap<RecordId, Quest>,
     scenes_to_quest: HashMap<RecordId, RecordId>,
+    condition_compiler: Arc<ConditionCompiler>,
+    loader: AssetLoader,
 }
 
 impl QuestManager {
@@ -46,6 +52,8 @@ impl QuestManager {
         esp_loader: &Arc<EspLoader>,
         executor: &mut Executor,
         loader: &Arc<EntityLoader>,
+        condition_compiler: Arc<ConditionCompiler>,
+        asset_loader: AssetLoader,
     ) -> Self {
         Self {
             pool,
@@ -55,20 +63,37 @@ impl QuestManager {
             entity_loader: loader.clone(),
             events: Arc::default(),
             scenes_to_quest: HashMap::new(),
+            condition_compiler,
+            loader: asset_loader,
         }
     }
 
-    pub fn update(&mut self, world: &mut World, events: &mut EventBus, executor: &mut Executor) {
+    pub fn update(
+        &mut self,
+        world: &mut World,
+        events: &mut EventBus,
+        executor: &mut Executor,
+        audio: &mut AudioManager,
+        globals: &GlobalProperties,
+    ) {
         let _span = trace_span!("QuestManager::update").entered();
 
         ONCE.call_once(|| {
             let events = self.events.clone();
             let esp_loader = self.esp_loader.clone();
             let script_loader = self.script_loader.clone();
+            let condition_compiler = self.condition_compiler.clone();
 
             self.pool.spawn(async move {
                 let id = RecordId::new(HARDCODED_MODULE_ID, FormId(0x1069a9));
-                load_quest(&esp_loader, &script_loader, &events, id).await;
+                load_quest(
+                    &esp_loader,
+                    &script_loader,
+                    &condition_compiler,
+                    &events,
+                    id,
+                )
+                .await;
             });
         });
 
@@ -274,6 +299,12 @@ impl QuestManager {
                                 tracing::debug!("starting scene {:?} of quest {:?}", scene, id);
 
                                 if let Some(scene) = quest.scenes.get_mut(&scene) {
+                                    if let Some(stage) = scene.info.set_stage_begin
+                                        && !scene.is_playing
+                                    {
+                                        quest.actions.push_back(QuestAction::SetStage(stage));
+                                    }
+
                                     scene.is_playing = true;
                                 }
                             }
@@ -316,47 +347,55 @@ impl QuestManager {
             }
         }
 
-        // Advance playing scenes
-        for quest in self.quests.values_mut() {
-            if !matches!(quest.state, QuestState::Running) {
-                continue;
-            }
+        self.advance_scenes(world, events, executor);
+        dialogue::play_actor_dialogue(
+            world,
+            &self.loader,
+            audio,
+            &self.esp_loader,
+            &self.pool,
+            globals,
+        );
+    }
 
-            for (scene_id, scene) in &mut quest.scenes {
+    fn advance_scenes(
+        &mut self,
+        world: &mut World,
+        events: &mut EventBus,
+        executor: &mut Executor,
+    ) {
+        let _span = trace_span!("QuestManager::advance_scenes").entered();
+
+        let mut scenes = Vec::new();
+
+        for (quest_id, quest) in &self.quests {
+            for (scene_id, scene) in &quest.scenes {
                 if !scene.is_playing {
                     continue;
                 }
 
-                if let Some(phase_id) = scene.active_phase
-                    && let Some(phase) = scene.phases.get_mut(phase_id)
-                {
-                    if !phase.playing.is_empty() {
-                        continue;
-                    }
-
-                    tracing::debug!("phase {} of scene {:?} has finished", phase_id, scene_id);
-                }
-
-                let next_phase = match scene.active_phase {
-                    Some(v) => v + 1,
-                    None => 0,
-                };
-                scene.active_phase = None;
-
-                if let Some(phase) = scene.phases.get_mut(next_phase) {
-                    tracing::debug!("starting phase {} of scene {:?}", next_phase, scene_id);
-                    scene.active_phase = Some(next_phase);
-
-                    for action in &phase.actions {
-                        match action {
-                            Action::FaceTarget { actor, target } => {}
-                            Action::PlayDialogue { actor, dialogue } => {}
-                        }
-                    }
-                } else {
-                    scene.is_playing = false;
-                }
+                scenes.push((*quest_id, *scene_id, scene.clone(), quest.aliases.clone()))
             }
+        }
+
+        for (quest_id, scene_id, mut scene, aliases) in scenes {
+            let is_done = scene.advance(world, events, executor, self, &aliases);
+            if is_done {
+                tracing::debug!("scene {scene_id} of quest {quest_id} is done");
+                scene.is_playing = false;
+            }
+
+            if let Some(stage) = scene.info.set_stage_end
+                && is_done
+            {
+                self.set_quest_stage(quest_id, stage);
+            }
+
+            self.quests
+                .get_mut(&quest_id)
+                .unwrap()
+                .scenes
+                .insert(scene_id, scene);
         }
     }
 
@@ -464,6 +503,7 @@ pub struct QuestStage {
 async fn load_quest(
     esp_loader: &EspLoader,
     script_loader: &ScriptLoader,
+    compiler: &ConditionCompiler,
     events: &SegQueue<Event>,
     id: RecordId,
 ) {
@@ -528,7 +568,7 @@ async fn load_quest(
         actions.push_back(QuestAction::Start);
     }
 
-    let scenes = load_scenes(esp_loader, script_loader, id).await;
+    let scenes = load_scenes(esp_loader, script_loader, compiler, id).await;
 
     events.push(Event::Discover(
         quest.id,
@@ -643,6 +683,7 @@ async fn load_reference_alias(
 async fn load_scenes(
     esp_loader: &EspLoader,
     script_loader: &ScriptLoader,
+    compiler: &ConditionCompiler,
     quest: RecordId,
 ) -> HashMap<RecordId, SceneState> {
     let records = esp_loader
@@ -652,70 +693,15 @@ async fn load_scenes(
 
     let mut scenes = HashMap::new();
     for record in records {
-        let RecordData::Scene(data) = record.local.data else {
+        let RecordData::Scene(data) = &record.local.data else {
             continue;
         };
 
-        let mut phases = VecMap::new();
-        for (index, phase) in data.phases.iter().enumerate() {
-            phases.insert(index as u32, Phase::default());
-        }
-
-        for action in &*data.actions {
-            let Some(phase) = phases.get_mut(action.start_phase) else {
-                continue;
-            };
-
-            let face_target = action
-                .flags
-                .is_some_and(|flags| flags.contains(SceneActionFlags::FACE_TARGET));
-
-            match &action.data {
-                SceneActionData::Dialogue(data) => {
-                    // FIXME: What does facetracking multiple targets mean?
-                    if let Some(targets) = &data.player_headtracking
-                        && let Some(target) = targets.first()
-                        && face_target
-                    {
-                        phase.actions.push(Action::FaceTarget {
-                            actor: action.actor as u32,
-                            target: *target,
-                        });
-                    }
-
-                    let topic_id = esp_loader.resolve_form(data.topic, record.id).unwrap();
-                    let infos = esp_loader
-                        .children(RecordChildren::DialogueInfos, topic_id)
-                        .await
-                        .unwrap();
-
-                    let mut options = Vec::new();
-                    for info in infos {
-                        let RecordData::DialogueInfo(data) = info.local.data else {
-                            continue;
-                        };
-
-                        options.push(Dialogue {});
-                    }
-
-                    phase.actions.push(Action::PlayDialogue {
-                        actor: action.actor as u32,
-                        dialogue: PlayDialogueAction { options },
-                    });
-                }
-                _ => {}
-            }
-        }
-
-        scenes.insert(
-            record.id,
-            SceneState {
-                quest,
-                phases,
-                active_phase: None,
-                is_playing: false,
-            },
-        );
+        let info = SceneInfo::load(esp_loader, compiler, data, record.id)
+            .await
+            .unwrap();
+        let state = SceneState::new(info);
+        scenes.insert(record.id, state);
     }
 
     scenes
@@ -731,38 +717,3 @@ struct AliasState {
     entity: Option<EntityRef>,
     script: Option<ScriptObject>,
 }
-
-#[derive(Clone, Debug)]
-pub struct SceneState {
-    pub quest: RecordId,
-    phases: VecMap<u32, Phase>,
-    is_playing: bool,
-    active_phase: Option<u32>,
-}
-
-#[derive(Clone, Debug, Default)]
-struct Phase {
-    actions: Vec<Action>,
-    playing: Vec<PlayingAction>,
-}
-
-#[derive(Clone, Debug)]
-enum Action {
-    /// Make the `actor` face the given `target`.
-    FaceTarget { actor: u32, target: u32 },
-    PlayDialogue {
-        actor: u32,
-        dialogue: PlayDialogueAction,
-    },
-}
-
-#[derive(Clone, Debug)]
-struct PlayDialogueAction {
-    options: Vec<Dialogue>,
-}
-
-#[derive(Clone, Debug)]
-struct Dialogue {}
-
-#[derive(Clone, Debug)]
-enum PlayingAction {}
