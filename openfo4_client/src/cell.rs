@@ -38,6 +38,11 @@ impl CellId {
         let y_max = self.0.y.max(other.0.y);
         i32::max(x_max - x_min, y_max - y_min) as u32
     }
+
+    /// Returns the center point of this cell.
+    pub fn center(self) -> Vec2 {
+        self.min() + (CELL_SIZE / 2).as_vec2()
+    }
 }
 
 impl From<NiTransform> for CellId {
