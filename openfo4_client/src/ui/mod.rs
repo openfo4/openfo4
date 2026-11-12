@@ -9,6 +9,7 @@ use crate::ui::inventory::InventoryState;
 
 pub mod console;
 pub mod debug;
+mod dialogue;
 mod gpu;
 pub mod hud;
 pub mod inventory;
@@ -27,7 +28,7 @@ pub fn draw_ui(ctx: &Context, state: &mut UiState, game: &mut GameState, rendere
     debug::draw_debug_ui(ctx, &mut state.debug);
     hud::draw_hud(ctx, &mut state.hud, &game.world, &mut game.event_bus);
     inventory::draw_inventory(ctx, &mut state.inventory, &game.world, &mut game.event_bus);
-    console::draw_console(ctx, &mut state.console, &game.world, &mut game.event_bus);
+    console::draw_console(ctx, &mut state.console, game);
 
     if state.debug.scripting_objects_open {
         scripting::draw_objects(ctx, game, &mut state.scripting);
@@ -36,4 +37,6 @@ pub fn draw_ui(ctx: &Context, state: &mut UiState, game: &mut GameState, rendere
     if state.debug.draw_gpu_memory_visualizer {
         gpu::draw_gpu_memory_visualizer(ctx, renderer);
     }
+
+    dialogue::draw(ctx, game);
 }

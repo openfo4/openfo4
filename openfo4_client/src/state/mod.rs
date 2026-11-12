@@ -100,7 +100,7 @@ pub struct GameState {
     actions: Actions,
     physics_debug: bool,
     interval: Interval,
-    esp_loader: Arc<EspLoader>,
+    pub esp_loader: Arc<EspLoader>,
     weather: WeatherSystem,
     inventory: InventorySystem,
     pub executor: Executor,
