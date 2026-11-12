@@ -17,6 +17,7 @@ use slab::Slab;
 
 use crate::state::esp::EspLoader;
 use crate::state::level::loader::EntityLoader;
+use crate::state::level::partial::PartialEntityFlags;
 use crate::systems::global::GlobalProperties;
 use crate::systems::quests::QuestManager;
 use crate::systems::scripting::classes::{Int, Object};
@@ -103,12 +104,6 @@ impl State {
         BorrowMut::map(s, |state| unsafe { &mut *state.quests })
     }
 
-    /// Returns the game world entity associated with a script object, if any exists.
-    pub fn entity(&self, addr: ObjectAddr) -> Option<Entity> {
-        let id = self.objects.get_by_addr(addr)?.id();
-        self.entities.resolve(id)
-    }
-
     /// Loads the [`RecordId`] for the given `object`.
     ///
     /// # Panics
@@ -156,6 +151,32 @@ impl State {
         scripts
             .get(class)
             .ok_or_else(|| Error::msg(format!("{} has no object of type {}", id, class)))
+    }
+
+    /// Return the entity of the given object.
+    pub async fn entity(&self, addr: ObjectAddr) -> Result<Entity, Error> {
+        let object = self.objects.get_by_addr(addr).unwrap();
+        if let Some(entity) = self.entities.resolve(object.id()) {
+            return Ok(entity);
+        }
+
+        // For runtime entities the spawner of the entity MUST place the entity
+        // into the `ScriptObject` that we queried previously before using the
+        // script object.
+        // This section is only reachable for records that were loaded as a dependency
+        // as another entity inside the `ScriptLoader`. Only placed references can
+        // be marked as dependencies, so the `ScriptLoader` cannot load a runtime entity.
+        let Some(record) = object.record() else {
+            unreachable!("attempted to lazy load runtime entity {addr:?}");
+        };
+
+        let entity = self
+            .entity_loader
+            .load(record, PartialEntityFlags::NONE)
+            .await
+            .unwrap();
+
+        Ok(entity.entity())
     }
 
     pub async fn get_or_create_entity(&self, entity: Entity) -> Result<ScriptsRef<'_>, Error> {

@@ -257,6 +257,7 @@ impl Executor {
 
         if let Ok(refr) = world.get::<&PlacedReference>(entity) {
             if let Some(object) = self.objects().get_by_record(refr.0) {
+                debug_assert_eq!(object.record(), Some(refr.0));
                 return object.id();
             }
 
