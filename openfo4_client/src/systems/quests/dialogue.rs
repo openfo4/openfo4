@@ -1,6 +1,6 @@
 use std::collections::VecDeque;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, OnceLock};
 
 use openfo4_asset::{AssetLoader, Handle};
 use openfo4_audio::AudioManager;
@@ -137,4 +137,27 @@ pub fn play_actor_dialogue(
 struct LoadingDialogue {
     descriptor: DialogueDescriptor,
     task: Task<Result<Handle<FileAudioSource>, Error>>,
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct PlayerDialogueQueue(VecDeque<PlayerDialogue>);
+
+impl PlayerDialogueQueue {
+    pub fn push(&mut self, val: PlayerDialogue) {
+        self.0.push_back(val);
+    }
+
+    pub fn front(&mut self) -> Option<&mut PlayerDialogue> {
+        self.0.front_mut()
+    }
+
+    pub fn pop_front(&mut self) {
+        self.0.pop_front();
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct PlayerDialogue {
+    pub options: Vec<String>,
+    pub selector: Arc<OnceLock<usize>>,
 }
