@@ -286,7 +286,7 @@ async fn add_item(
     count: i32,
     silent: bool,
 ) -> Result<(), Error> {
-    let entity = caller.data().entity(self_ptr).ok_or_else(|| todo!())?;
+    let entity = caller.data().entity(self_ptr).await.unwrap();
 
     let item = caller
         .data()
@@ -323,7 +323,7 @@ async fn add_keyword(
     self_ptr: Object,
     keyword: Object,
 ) -> Result<(), Error> {
-    let entity = caller.data().entity(self_ptr).ok_or_else(|| todo!())?;
+    let entity = caller.data().entity(self_ptr).await.unwrap();
     let keyword = caller
         .data()
         .objects
@@ -647,7 +647,7 @@ async fn damage_value(
     actor_value: Object,
     damage: f32,
 ) -> Result<(), Error> {
-    let entity = caller.data().entity(self_ptr).ok_or_else(|| todo!())?;
+    let entity = caller.data().entity(self_ptr).await.unwrap();
     let actor_value = caller
         .data()
         .objects
@@ -677,7 +677,7 @@ async fn damage_value(
 /// Function Delete() native
 /// ```
 async fn delete(mut caller: Caller<'_, State>, self_ptr: Object) {
-    let entity = caller.data().entity(self_ptr).unwrap();
+    let entity = caller.data().entity(self_ptr).await.unwrap();
     caller.data_mut().deletion.insert(entity);
 }
 
@@ -691,7 +691,7 @@ async fn disable(
     self_ptr: Object,
     fade_out: bool,
 ) -> Result<(), Error> {
-    let entity = caller.data().entity(self_ptr).unwrap();
+    let entity = caller.data().entity(self_ptr).await.unwrap();
     caller
         .data_mut()
         .run_effect_and_wait(DisableEntitiesEffect {
@@ -720,7 +720,7 @@ async fn disable_link_chain(
 
     let mut entities = Vec::new();
     while let Some(object) = objects.next().await {
-        let entity = caller.data().entity(object).unwrap();
+        let entity = caller.data().entity(object).await.unwrap();
         entities.push(entity);
     }
 
@@ -745,7 +745,7 @@ async fn disable_no_wait(
     self_ptr: Object,
     fade_out: bool,
 ) -> Result<(), Error> {
-    let entity = caller.data().entity(self_ptr).unwrap();
+    let entity = caller.data().entity(self_ptr).await.unwrap();
     caller
         .data_mut()
         .run_effect_and_wait(DisableEntitiesEffect {
@@ -803,7 +803,7 @@ async fn enable(
     self_ptr: Object,
     fade_in: bool,
 ) -> Result<(), Error> {
-    let entity = caller.data().entity(self_ptr).unwrap();
+    let entity = caller.data().entity(self_ptr).await.unwrap();
     caller
         .data_mut()
         .run_effect_and_wait(EnableEntitiesEffect {
@@ -845,7 +845,7 @@ async fn enable_link_chain(
 
     let mut entities = Vec::new();
     while let Some(object) = objects.next().await {
-        let entity = caller.data().entity(object).unwrap();
+        let entity = caller.data().entity(object).await.unwrap();
         entities.push(entity);
     }
 
@@ -871,7 +871,7 @@ async fn enable_no_wait(
     self_ptr: Object,
     fade_in: bool,
 ) -> Result<(), Error> {
-    let entity = caller.data().entity(self_ptr).unwrap();
+    let entity = caller.data().entity(self_ptr).await.unwrap();
     caller
         .data_mut()
         .run_effect_and_wait(EnableEntitiesEffect {
@@ -1003,7 +1003,7 @@ async fn get_animation_variable_bool(
 ) -> Result<bool, Error> {
     let name = caller.string(variable_name);
 
-    let entity = caller.data().entity(self_ptr).ok_or_else(|| todo!())?;
+    let entity = caller.data().entity(self_ptr).await.unwrap();
     let world = caller.data().world().await;
     let Ok(driver) = world.get::<&AnimationDriver>(entity) else {
         return Ok(false);
@@ -1028,7 +1028,7 @@ async fn get_animation_variable_int(
 ) -> Result<i32, Error> {
     let name = caller.string(variable_name);
 
-    let entity = caller.data().entity(self_ptr).ok_or_else(|| todo!())?;
+    let entity = caller.data().entity(self_ptr).await.unwrap();
     let world = caller.data().world().await;
     let Ok(driver) = world.get::<&AnimationDriver>(entity) else {
         return Ok(0);
@@ -1053,7 +1053,7 @@ async fn get_animation_variable_float(
 ) -> Result<f32, Error> {
     let name = caller.string(variable_name);
 
-    let entity = caller.data().entity(self_ptr).ok_or_else(|| todo!())?;
+    let entity = caller.data().entity(self_ptr).await.unwrap();
     let world = caller.data().world().await;
     let Ok(driver) = world.get::<&AnimationDriver>(entity) else {
         return Ok(0.0);
@@ -1128,8 +1128,8 @@ async fn get_distance(
     self_ptr: Object,
     other: Object,
 ) -> Result<f32, Error> {
-    let this = caller.data().entity(self_ptr).ok_or_else(|| todo!())?;
-    let other = caller.data().entity(other).ok_or_else(|| todo!())?;
+    let this = caller.data().entity(self_ptr).await.unwrap();
+    let other = caller.data().entity(other).await.unwrap();
 
     let world = caller.data().world().await;
 
@@ -1212,7 +1212,7 @@ async fn get_item_count(
     self_ptr: Object,
     item: Object,
 ) -> Result<i32, Error> {
-    let entity = caller.data().entity(self_ptr).ok_or_else(|| todo!())?;
+    let entity = caller.data().entity(self_ptr).await.unwrap();
 
     let world = caller.data().world().await;
     let Ok(inventory) = world.get::<&Inventory>(entity) else {
@@ -1275,7 +1275,7 @@ fn get_item_health_percent(_caller: Caller<'_, State>, _self_ptr: Object) -> Res
 /// Key Function() native
 /// ```
 async fn get_key(mut caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Error> {
-    let entity = caller.data().entity(self_ptr).ok_or_else(|| todo!())?;
+    let entity = caller.data().entity(self_ptr).await.unwrap();
 
     let key = {
         let world = caller.data().world().await;
@@ -1356,7 +1356,7 @@ fn get_linked_ref_children(
 /// int Function() native
 /// ```
 async fn get_lock_level(caller: Caller<'_, State>, self_ptr: Object) -> Result<i32, Error> {
-    let entity = caller.data().entity(self_ptr).ok_or_else(|| todo!())?;
+    let entity = caller.data().entity(self_ptr).await.unwrap();
 
     let world = caller.data().world().await;
     let Ok(props) = world.get::<&ObjectProperties>(entity) else {
@@ -1629,7 +1629,7 @@ async fn get_trigger_object_count(
     caller: Caller<'_, State>,
     self_ptr: Object,
 ) -> Result<i32, Error> {
-    let entity = caller.data().entity(self_ptr).ok_or_else(|| todo!())?;
+    let entity = caller.data().entity(self_ptr).await.unwrap();
 
     let world = caller.data().world().await;
     let tbox = world.get::<&TriggerBox>(entity).map_err(|_| todo!())?;
@@ -1648,7 +1648,7 @@ async fn get_value(
     self_ptr: Object,
     actor_value: Object,
 ) -> Result<f32, Error> {
-    let entity = caller.data().entity(self_ptr).ok_or_else(|| todo!())?;
+    let entity = caller.data().entity(self_ptr).await.unwrap();
     let actor_value = caller
         .data()
         .objects
@@ -1681,7 +1681,7 @@ async fn get_value_percentage(
     self_ptr: Object,
     actor_value: Object,
 ) -> Result<f32, Error> {
-    let entity = caller.data().entity(self_ptr).ok_or_else(|| todo!())?;
+    let entity = caller.data().entity(self_ptr).await.unwrap();
     let actor_value = caller
         .data()
         .objects
@@ -1786,7 +1786,7 @@ async fn has_keyword(
     self_ptr: Object,
     keyword: Object,
 ) -> Result<bool, Error> {
-    let entity = caller.data().entity(self_ptr).ok_or_else(|| todo!())?;
+    let entity = caller.data().entity(self_ptr).await.unwrap();
     let keyword = caller
         .data()
         .objects
@@ -1809,7 +1809,7 @@ async fn has_keyword_in_form_list(
     self_ptr: Object,
     keyword_list: Object,
 ) -> Result<bool, Error> {
-    let entity = caller.data().entity(self_ptr).ok_or_else(|| todo!())?;
+    let entity = caller.data().entity(self_ptr).await.unwrap();
     let form_list = caller
         .data()
         .objects
@@ -1958,8 +1958,8 @@ fn is_created(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Error
 /// ```text
 /// bool Function IsDeleted() native
 /// ```
-fn is_deleted(caller: Caller<'_, State>, self_ptr: Object) -> bool {
-    let entity = caller.data().entity(self_ptr).unwrap();
+async fn is_deleted(caller: Caller<'_, State>, self_ptr: Object) -> bool {
+    let entity = caller.data().entity(self_ptr).await.unwrap();
     caller.data().deletion.contains(&entity)
 }
 
@@ -1978,7 +1978,7 @@ fn is_destroyed(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<bool, E
 /// bool Function() native
 /// ```
 async fn is_disabled(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Error> {
-    let entity = caller.data().entity(self_ptr).unwrap();
+    let entity = caller.data().entity(self_ptr).await.unwrap();
     let world = caller.data().world().await;
     let entity = world.entity(entity).unwrap();
     Ok(entity.has::<Disabled>())
@@ -2206,7 +2206,7 @@ async fn mod_value(
     actor_value: Object,
     amount: f32,
 ) -> Result<(), Error> {
-    let entity = caller.data().entity(self_ptr).ok_or_else(|| todo!())?;
+    let entity = caller.data().entity(self_ptr).await.unwrap();
     let actor_value = caller
         .data()
         .objects
@@ -2365,7 +2365,7 @@ async fn place_at_me(
     let transform;
     let worldspace;
     {
-        let entity = state.entity(self_ptr).unwrap();
+        let entity = state.entity(self_ptr).await.unwrap();
         let world = state.world().await;
 
         transform = *world.get::<&Transform>(entity).unwrap();
@@ -2686,7 +2686,7 @@ async fn remove_keyword(
     self_ptr: Object,
     keyword: Object,
 ) -> Result<(), Error> {
-    let entity = caller.data().entity(self_ptr).ok_or_else(|| todo!())?;
+    let entity = caller.data().entity(self_ptr).await.unwrap();
     let keyword = caller
         .data()
         .objects
@@ -2787,7 +2787,7 @@ async fn reset_keyword(
     self_ptr: Object,
     keyword: Object,
 ) -> Result<(), Error> {
-    let entity = caller.data().entity(self_ptr).ok_or_else(|| todo!())?;
+    let entity = caller.data().entity(self_ptr).await.unwrap();
     let keyword = caller
         .data()
         .objects
@@ -2813,7 +2813,7 @@ async fn restore_value(
     actor_value: Object,
     amount: f32,
 ) -> Result<(), Error> {
-    let entity = caller.data().entity(self_ptr).ok_or_else(|| todo!())?;
+    let entity = caller.data().entity(self_ptr).await.unwrap();
     let actor_value = caller
         .data()
         .objects
@@ -2985,7 +2985,7 @@ async fn set_animation_variable_bool(
 ) -> Result<(), Error> {
     let variable_name = caller.string(variable_name);
 
-    let entity = caller.data().entity(self_ptr).ok_or_else(|| todo!())?;
+    let entity = caller.data().entity(self_ptr).await.unwrap();
     let world = caller.data().world().await;
     let Ok(mut driver) = world.get::<&mut AnimationDriver>(entity) else {
         return Ok(());
@@ -3011,7 +3011,7 @@ async fn set_animation_variable_int(
 ) -> Result<(), Error> {
     let variable_name = caller.string(variable_name);
 
-    let entity = caller.data().entity(self_ptr).ok_or_else(|| todo!())?;
+    let entity = caller.data().entity(self_ptr).await.unwrap();
     let world = caller.data().world().await;
     let Ok(mut driver) = world.get::<&mut AnimationDriver>(entity) else {
         return Ok(());
@@ -3037,7 +3037,7 @@ async fn set_animation_variable_float(
 ) -> Result<(), Error> {
     let variable_name = caller.string(variable_name);
 
-    let entity = caller.data().entity(self_ptr).ok_or_else(|| todo!())?;
+    let entity = caller.data().entity(self_ptr).await.unwrap();
     let world = caller.data().world().await;
     let Ok(mut driver) = world.get::<&mut AnimationDriver>(entity) else {
         return Ok(());
@@ -3153,16 +3153,16 @@ async fn set_linked_ref(
         })
         .ok_or_else(|| todo!())?;
 
-    let linked_ref_entity = caller.data().entity(linked_ref);
+    let linked_ref_entity = caller.data().entity(linked_ref).await.unwrap();
 
-    let entity = caller.data().entity(self_ptr).ok_or_else(|| todo!())?;
+    let entity = caller.data().entity(self_ptr).await.unwrap();
     let world = caller.data().world().await;
     let mut linked_refs = world.get::<&mut LinkedRefs>(entity).unwrap();
 
     if linked_ref.is_null() {
         linked_refs.remove(keyword);
     } else {
-        let linked_ref = linked_ref_entity.ok_or_else(|| todo!())?;
+        let linked_ref = linked_ref_entity;
         linked_refs.set(keyword, linked_ref);
     }
 
@@ -3328,7 +3328,7 @@ async fn set_value(
     actor_value: Object,
     new_value: f32,
 ) -> Result<(), Error> {
-    let entity = caller.data().entity(self_ptr).ok_or_else(|| todo!())?;
+    let entity = caller.data().entity(self_ptr).await.unwrap();
     let actor_value = caller
         .data()
         .objects
@@ -3507,14 +3507,14 @@ fn scrap(
 }
 
 async fn get_transform(caller: Caller<'_, State>, object: Object) -> Option<Transform> {
-    let entity = caller.data().entity(object)?;
+    let entity = caller.data().entity(object).await.unwrap();
     let world = caller.data().world().await;
     let transform = world.get::<&Transform>(entity).ok()?;
     Some(transform.to_nif())
 }
 
 async fn get_bounds(caller: Caller<'_, State>, object: Object) -> Option<ObjectBounds> {
-    let entity = caller.data().entity(object)?;
+    let entity = caller.data().entity(object).await.unwrap();
     let world = caller.data().world().await;
     let bounds = world.get::<&ObjectBounds>(entity).ok()?;
     Some(*bounds)
@@ -3532,7 +3532,7 @@ impl<'a> LinkedRefChainIter<'a> {
     async fn new(caller: &'a Caller<'_, State>, self_ptr: Object, keyword: Object) -> Option<Self> {
         let state = caller.data();
 
-        let entity = state.entity(self_ptr)?;
+        let entity = state.entity(self_ptr).await.unwrap();
 
         let keyword = if keyword.is_null() {
             None
