@@ -1,4 +1,4 @@
-mod dialogue;
+pub mod dialogue;
 mod scene;
 
 use std::collections::VecDeque;

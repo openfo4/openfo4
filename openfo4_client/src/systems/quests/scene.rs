@@ -1,14 +1,19 @@
+use std::sync::{Arc, OnceLock};
+
 use hashbrown::HashMap;
 use openfo4_common::collections::vec_map::VecMap;
-use openfo4_core::ecs::World;
+use openfo4_core::ecs::{Entity, World};
 use openfo4_core::events::EventBus;
 use openfo4_core::record::RecordId;
 use openfo4_esp::records::{Scene, SceneActionData};
 use openfo4_esp::{RecordChildren, RecordData};
 
+use crate::components::Player;
 use crate::state::esp::{self, EspLoader};
 use crate::systems::conditions::{CompiledCondition, ConditionCompiler};
-use crate::systems::quests::dialogue::{DialogueDescriptor, DialogueQueue, DialogueSound};
+use crate::systems::quests::dialogue::{
+    DialogueDescriptor, DialogueQueue, DialogueSound, PlayerDialogue, PlayerDialogueQueue,
+};
 use crate::systems::quests::{AliasState, QuestManager, StageId};
 use crate::systems::scripting::Executor;
 
@@ -38,45 +43,39 @@ impl SceneInfo {
             let data = match &action.data {
                 SceneActionData::Dialogue(data) => {
                     let topic = esp.resolve_form(data.topic, id).unwrap();
-                    let infos = esp.children(RecordChildren::DialogueInfos, topic).await?;
+                    let options = load_dialogue(esp, compiler, topic).await?;
 
+                    Action::PlayDialogue {
+                        actor: action.actor.cast_unsigned(),
+                        options,
+                    }
+                }
+                SceneActionData::PlayerDialogue(data) => {
                     let mut options = Vec::new();
-
-                    for info in infos {
-                        let info_id = info.id;
-                        let RecordData::DialogueInfo(info) = info.local.data else {
+                    for (dialogue, resp) in [
+                        (data.player_positive_response, data.npc_positive_response),
+                        (data.player_negative_response, data.npc_negative_response),
+                        (data.player_neutral_response, data.npc_neutral_response),
+                        (data.player_question_response, data.npc_question_response),
+                    ] {
+                        let Some(dialogue) = dialogue else {
                             continue;
                         };
 
-                        let num_conditions = info.conditions.conditions.len();
-                        let condition = compiler
-                            .compile(info_id, 0, &info.conditions.conditions)
-                            .await;
+                        let dialogue = esp.resolve_form(dialogue, id).unwrap();
+                        let dialogue = load_dialogue(esp, compiler, dialogue).await?;
 
-                        let mut dialogue = Vec::new();
-                        for (index, _resp) in info.responses.iter().enumerate() {
-                            dialogue.push(Dialogue {
-                                id: info_id,
-                                respnum: index + 1,
-                            });
+                        let mut response = Vec::new();
+                        if let Some(resp) = resp {
+                            let resp = esp.resolve_form(resp, id).unwrap();
+                            let resp = load_dialogue(esp, compiler, resp).await?;
+                            response = resp;
                         }
 
-                        options.push((
-                            DialogueOption {
-                                dialogue,
-                                condition,
-                            },
-                            num_conditions,
-                        ));
+                        options.push(PlayerDialogueOption { dialogue, response });
                     }
 
-                    // Dialogue options are chosen based on the number of conditions,
-                    // options with more conditions are attempted first.
-                    options.sort_by_key(|(_, num_conditions)| *num_conditions);
-                    options.reverse();
-                    let options = options.into_iter().map(|(v, _)| v).collect();
-
-                    Action::PlayDialogue {
+                    Action::PlayerDialogue {
                         actor: action.actor.cast_unsigned(),
                         options,
                     }
@@ -125,6 +124,52 @@ impl SceneInfo {
     }
 }
 
+async fn load_dialogue(
+    esp: &EspLoader,
+    compiler: &ConditionCompiler,
+    id: RecordId,
+) -> Result<Vec<DialogueOption>, esp::Error> {
+    let infos = esp.children(RecordChildren::DialogueInfos, id).await?;
+
+    let mut options = Vec::new();
+
+    for info in infos {
+        let info_id = info.id;
+        let RecordData::DialogueInfo(info) = info.local.data else {
+            continue;
+        };
+
+        let num_conditions = info.conditions.conditions.len();
+        let condition = compiler
+            .compile(info_id, 0, &info.conditions.conditions)
+            .await;
+
+        let mut dialogue = Vec::new();
+        for (index, _resp) in info.responses.iter().enumerate() {
+            dialogue.push(Dialogue {
+                id: info_id,
+                respnum: index + 1,
+            });
+        }
+
+        options.push((
+            DialogueOption {
+                dialogue,
+                condition,
+            },
+            num_conditions,
+        ));
+    }
+
+    // Dialogue options are chosen based on the number of conditions,
+    // options with more conditions are attempted first.
+    options.sort_by_key(|(_, num_conditions)| *num_conditions);
+    options.reverse();
+    let options = options.into_iter().map(|(v, _)| v).collect();
+
+    Ok(options)
+}
+
 #[derive(Clone, Debug, Default)]
 pub struct Phase {
     /// List of actions that are started when entering this `Phase`.
@@ -140,6 +185,19 @@ enum Action {
         /// Choose the first dialogue that matches the conditions.
         options: Vec<DialogueOption>,
     },
+    PlayerDialogue {
+        /// The actor that the player will speak with, and the actor that will respond.
+        actor: u32,
+        options: Vec<PlayerDialogueOption>,
+    },
+}
+
+#[derive(Clone, Debug)]
+struct PlayerDialogueOption {
+    /// The line that the player speaks.
+    dialogue: Vec<DialogueOption>,
+    /// The line that the other actor responds with.
+    response: Vec<DialogueOption>,
 }
 
 #[derive(Clone, Debug)]
@@ -181,6 +239,11 @@ impl SceneState {
         quests: &mut QuestManager,
         aliases: &HashMap<u32, AliasState>,
     ) -> bool {
+        for (index, state) in &mut self.active_actions {
+            let action = self.info.actions.get(index).unwrap();
+            state.update(action, world, events, executor, quests);
+        }
+
         self.active_actions.retain(|_, action| !action.is_done());
 
         if let Some(phase) = self.active_phase {
@@ -216,41 +279,57 @@ impl SceneState {
                         continue;
                     };
 
-                    let Some(opt) = options.iter().find(|opt| {
-                        opt.condition.eval_entity(
-                            executor,
-                            world,
-                            events,
-                            quests,
-                            actor.entity(),
-                            None,
-                        )
-                    }) else {
+                    let Some(action) = PlayingDialogue::new(
+                        actor.entity(),
+                        options,
+                        world,
+                        events,
+                        executor,
+                        quests,
+                    ) else {
                         continue;
                     };
 
-                    if world.get::<&DialogueQueue>(actor.entity()).is_err() {
+                    self.active_actions
+                        .insert(*action_id, PlayingAction::Dialogue(action));
+                }
+                Action::PlayerDialogue { actor, options } => {
+                    let Some(actor) = aliases.get(actor).and_then(|alias| alias.entity.as_ref())
+                    else {
+                        continue;
+                    };
+
+                    let Some((player, _)) = world.query::<(Entity, &Player)>().iter().next() else {
+                        continue;
+                    };
+
+                    if world.get::<&PlayerDialogueQueue>(player).is_err() {
                         world
-                            .insert_one(actor.entity(), DialogueQueue::default())
+                            .insert_one(player, PlayerDialogueQueue::default())
                             .unwrap();
                     }
 
-                    let mut queue = world.get::<&mut DialogueQueue>(actor.entity()).unwrap();
+                    let mut queue = world.get::<&mut PlayerDialogueQueue>(player).unwrap();
 
-                    let sounds = opt
-                        .dialogue
-                        .iter()
-                        .map(|dialogue| {
-                            queue.push(DialogueDescriptor {
-                                record: dialogue.id,
-                                respnum: dialogue.respnum,
-                            })
-                        })
-                        .collect();
+                    let mut opts = Vec::new();
+                    for (index, _option) in options.iter().enumerate() {
+                        opts.push(index.to_string());
+                    }
+
+                    let selector = Arc::new(OnceLock::new());
+                    queue.push(PlayerDialogue {
+                        options: opts,
+                        selector: selector.clone(),
+                    });
 
                     self.active_actions.insert(
                         *action_id,
-                        PlayingAction::Dialogue(PlayingDialogue { sounds }),
+                        PlayingAction::PlayerDialogue(PlayingPlayerDialogue {
+                            player,
+                            responder: actor.entity(),
+                            state: PlayingPlayerDialogueState::Waiting(selector),
+                            done: false,
+                        }),
                     );
                 }
             }
@@ -263,12 +342,77 @@ impl SceneState {
 #[derive(Clone, Debug)]
 enum PlayingAction {
     Dialogue(PlayingDialogue),
+    PlayerDialogue(PlayingPlayerDialogue),
 }
 
 impl PlayingAction {
+    fn update(
+        &mut self,
+        action: &Action,
+        world: &mut World,
+        events: &mut EventBus,
+        executor: &mut Executor,
+        quests: &mut QuestManager,
+    ) {
+        match (self, action) {
+            (Self::Dialogue(_), _) => {}
+            (Self::PlayerDialogue(action), Action::PlayerDialogue { actor: _, options }) => {
+                match &mut action.state {
+                    PlayingPlayerDialogueState::Waiting(selector) => {
+                        let Some(index) = selector.get() else {
+                            return;
+                        };
+
+                        let Some(dialogue) = PlayingDialogue::new(
+                            action.player,
+                            &options[*index].dialogue,
+                            world,
+                            events,
+                            executor,
+                            quests,
+                        ) else {
+                            action.done = true;
+                            return;
+                        };
+
+                        action.state = PlayingPlayerDialogueState::PlayDialogue(dialogue, *index);
+                    }
+                    PlayingPlayerDialogueState::PlayDialogue(state, index) => {
+                        if state.sounds.iter().any(|sound| !sound.is_done()) {
+                            return;
+                        };
+
+                        let Some(dialogue) = PlayingDialogue::new(
+                            action.responder,
+                            &options[*index].response,
+                            world,
+                            events,
+                            executor,
+                            quests,
+                        ) else {
+                            action.done = true;
+                            return;
+                        };
+
+                        action.state = PlayingPlayerDialogueState::PlayResponse(dialogue);
+                    }
+                    PlayingPlayerDialogueState::PlayResponse(state) => {
+                        if state.sounds.iter().any(|sound| !sound.is_done()) {
+                            return;
+                        };
+
+                        action.done = true;
+                    }
+                }
+            }
+            _ => unreachable!(),
+        }
+    }
+
     fn is_done(&self) -> bool {
         match self {
             Self::Dialogue(action) => action.sounds.iter().all(|sound| sound.is_done()),
+            Self::PlayerDialogue(action) => action.done,
         }
     }
 }
@@ -276,4 +420,56 @@ impl PlayingAction {
 #[derive(Clone, Debug)]
 struct PlayingDialogue {
     sounds: Vec<DialogueSound>,
+}
+
+impl PlayingDialogue {
+    fn new(
+        actor: Entity,
+        options: &[DialogueOption],
+        world: &mut World,
+        events: &mut EventBus,
+        executor: &mut Executor,
+        quests: &mut QuestManager,
+    ) -> Option<Self> {
+        let opt = options.iter().find(|opt| {
+            opt.condition
+                .eval_entity(executor, world, events, quests, actor, None)
+        })?;
+
+        if world.get::<&DialogueQueue>(actor).is_err() {
+            world.insert_one(actor, DialogueQueue::default()).unwrap();
+        }
+
+        let mut queue = world.get::<&mut DialogueQueue>(actor).unwrap();
+
+        let sounds = opt
+            .dialogue
+            .iter()
+            .map(|dialogue| {
+                queue.push(DialogueDescriptor {
+                    record: dialogue.id,
+                    respnum: dialogue.respnum,
+                })
+            })
+            .collect();
+
+        Some(Self { sounds })
+    }
+}
+
+#[derive(Clone, Debug)]
+struct PlayingPlayerDialogue {
+    /// The player entity.
+    player: Entity,
+    /// The actor that will respond to the player.
+    responder: Entity,
+    state: PlayingPlayerDialogueState,
+    done: bool,
+}
+
+#[derive(Clone, Debug)]
+enum PlayingPlayerDialogueState {
+    Waiting(Arc<OnceLock<usize>>),
+    PlayDialogue(PlayingDialogue, usize),
+    PlayResponse(PlayingDialogue),
 }
