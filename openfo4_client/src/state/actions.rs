@@ -366,7 +366,7 @@ impl FromStr for Action {
             "ActionWeaponHotkey" => Ok(Self::WeaponHotkey),
             "ActionFireEmpty" => Ok(Self::FireEmpty),
             "ActionTrick" => Ok(Self::Trick),
-            x => todo!("{:?}", x),
+            _ => Err(UnknownActionName),
         }
     }
 }
