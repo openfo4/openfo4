@@ -876,4 +876,37 @@ mod tests {
         assert_eq!(object.get_self::<ObjectAddr>("b").unwrap(), b);
         assert_eq!(object.get_self::<ObjectAddr>("c").unwrap(), c);
     }
+
+    #[test]
+    fn build_script_object_string() {
+        let engine = Engine::new(COMPILER_OPTIONS);
+
+        let module = assemble(
+            r#"
+            class A:
+
+            global s: string = "s"
+            property s: string -> s
+            "#,
+        );
+
+        block_on(engine.register(&module));
+        block_on(engine.compile("A", &Options::default())).unwrap();
+
+        let script = Script {
+            name: "A".to_owned(),
+            flags: 0,
+            properties: vec![Property {
+                name: "s".to_owned(),
+                value: Value::String("Hello World".to_owned()),
+            }],
+        };
+
+        let object = build_direct(&engine, &script);
+
+        let type_a = engine.get_type("A").unwrap();
+
+        let s = object.get::<ObjectHandle>(type_a.id(), "s").unwrap();
+        assert_eq!(s.string().unwrap(), "Hello World");
+    }
 }

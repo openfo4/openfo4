@@ -909,6 +909,25 @@ impl ObjectHandle {
         }
     }
 
+    /// Views the string of this object.
+    ///
+    /// Return `None` if the object is not a string.
+    pub fn string(&self) -> Option<&str> {
+        if self.object.id != self.pool.resources().primitives.string {
+            return None;
+        }
+
+        // We have checked that the object is indeed a string, which guarantees
+        // that the bytes are valid UTF8.
+        let string = unsafe { self.object.ptr.cast::<ArrayObject>().read() };
+        let string = unsafe { core::slice::from_raw_parts(string.ptr, string.len) };
+        let string = unsafe { core::str::from_utf8_unchecked(string) };
+
+        // Note that strings are immutable, we can return a reference
+        // to the string without any form of locking.
+        Some(string)
+    }
+
     /// TODO: Remove soon
     pub fn elem_size(&self) -> usize {
         self.object.ty.repr.size_padded()
