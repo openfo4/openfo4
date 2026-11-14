@@ -9,7 +9,7 @@ use hashbrown::{HashMap, HashSet};
 use indexmap::IndexMap;
 use openfo4_asset::AssetLoader;
 use openfo4_audio::AudioManager;
-use openfo4_core::ecs::World;
+use openfo4_core::ecs::{Entity, World};
 use openfo4_core::events::EventBus;
 use openfo4_core::record::RecordId;
 use openfo4_esp::records::{QuestAliasFlags, QuestDataFlags, QuestReferenceAlias, QuestStageFlags};
@@ -24,7 +24,7 @@ use crate::state::level::loader::{EntityLoader, EntityRef};
 use crate::state::level::partial::PartialEntityFlags;
 use crate::systems::conditions::ConditionCompiler;
 use crate::systems::global::GlobalProperties;
-use crate::systems::quests::scene::{SceneInfo, SceneState};
+use crate::systems::quests::scene::{DialogueTopicAction, SceneInfo, SceneState};
 use crate::systems::scripting::invocations::{
     AliasInit, AliasShutdown, Init, QuestFragmentSetStage, QuestInit, QuestSetStage, QuestShutdown,
 };
@@ -44,6 +44,7 @@ pub struct QuestManager {
     scenes_to_quest: HashMap<RecordId, RecordId>,
     condition_compiler: Arc<ConditionCompiler>,
     loader: AssetLoader,
+    topics: DialogueTopics,
 }
 
 impl QuestManager {
@@ -65,6 +66,7 @@ impl QuestManager {
             scenes_to_quest: HashMap::new(),
             condition_compiler,
             loader: asset_loader,
+            topics: DialogueTopics::default(),
         }
     }
 
@@ -196,6 +198,14 @@ impl QuestManager {
                                     object: script.clone(),
                                 });
                                 invocations.push(id);
+                            }
+
+                            if let Some(entity) = &alias.entity {
+                                self.topics
+                                    .hello
+                                    .entry(entity.entity())
+                                    .or_default()
+                                    .push(*id);
                             }
                         }
 
@@ -348,14 +358,8 @@ impl QuestManager {
         }
 
         self.advance_scenes(world, events, executor);
-        dialogue::play_actor_dialogue(
-            world,
-            &self.loader,
-            audio,
-            &self.esp_loader,
-            &self.pool,
-            globals,
-        );
+        dialogue::play_actor_dialogue(world, audio, globals, self);
+        dialogue::initiate_player_npc_interactions(world, events, self, executor);
     }
 
     fn advance_scenes(
@@ -379,7 +383,7 @@ impl QuestManager {
         }
 
         for (quest_id, scene_id, mut scene, aliases) in scenes {
-            let is_done = scene.advance(world, events, executor, self, &aliases);
+            let is_done = scene.advance(world, events, executor, self, &aliases, quest_id);
             if is_done {
                 tracing::debug!("scene {scene_id} of quest {quest_id} is done");
                 scene.is_playing = false;
@@ -417,6 +421,15 @@ impl QuestManager {
         quest.actions.push_back(QuestAction::Start);
     }
 
+    pub fn start_scene(&mut self, scene: RecordId) {
+        let Some(quest) = self.scenes_to_quest.get(&scene) else {
+            return;
+        };
+
+        let quest = self.quests.get_mut(quest).unwrap();
+        quest.actions.push_back(QuestAction::StartScene(scene));
+    }
+
     pub fn stop_quest(&mut self, quest: RecordId) {
         let Some(quest) = self.quests.get_mut(&quest) else {
             return;
@@ -443,6 +456,8 @@ pub struct Quest {
     aliases: HashMap<u32, AliasState>,
     actions: VecDeque<QuestAction>,
     scenes: HashMap<RecordId, SceneState>,
+    /// The topics when the player initiates dialogue with an actor.
+    hello_topics: Vec<DialogueTopicAction>,
 }
 
 #[derive(Debug)]
@@ -570,6 +585,29 @@ async fn load_quest(
 
     let scenes = load_scenes(esp_loader, script_loader, compiler, id).await;
 
+    let mut hello_topics = Vec::new();
+
+    for topic in esp_loader
+        .children(RecordChildren::DialogueTopics, id)
+        .await
+        .unwrap()
+    {
+        let RecordData::DialogueTopic(data) = &topic.local.data else {
+            continue;
+        };
+
+        match data.subtype_name {
+            Some(v) if v.as_bytes() == b"HELO" => {
+                let topic = DialogueTopicAction::load(esp_loader, compiler, topic.id)
+                    .await
+                    .unwrap();
+
+                hello_topics.push(topic);
+            }
+            _ => continue,
+        }
+    }
+
     events.push(Event::Discover(
         quest.id,
         Quest {
@@ -580,6 +618,7 @@ async fn load_quest(
             aliases: HashMap::new(),
             actions,
             scenes,
+            hello_topics,
         },
     ));
 }
@@ -716,4 +755,9 @@ enum AliasLoadError {
 struct AliasState {
     entity: Option<EntityRef>,
     script: Option<ScriptObject>,
+}
+
+#[derive(Clone, Debug, Default)]
+struct DialogueTopics {
+    hello: HashMap<Entity, Vec<RecordId>>,
 }

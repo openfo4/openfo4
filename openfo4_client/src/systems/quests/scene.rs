@@ -12,7 +12,8 @@ use crate::components::Player;
 use crate::state::esp::{self, EspLoader};
 use crate::systems::conditions::{CompiledCondition, ConditionCompiler};
 use crate::systems::quests::dialogue::{
-    DialogueDescriptor, DialogueQueue, DialogueSound, PlayerDialogue, PlayerDialogueQueue,
+    DialogueDescriptor, DialogueQueue, DialogueSound, DialogueTriggers, PlayerDialogue,
+    PlayerDialogueQueue,
 };
 use crate::systems::quests::{AliasState, QuestManager, StageId};
 use crate::systems::scripting::Executor;
@@ -43,11 +44,11 @@ impl SceneInfo {
             let data = match &action.data {
                 SceneActionData::Dialogue(data) => {
                     let topic = esp.resolve_form(data.topic, id).unwrap();
-                    let options = load_dialogue(esp, compiler, topic).await?;
+                    let topic = DialogueTopicAction::load(esp, compiler, topic).await?;
 
                     Action::PlayDialogue {
                         actor: action.actor.cast_unsigned(),
-                        options,
+                        topic,
                     }
                 }
                 SceneActionData::PlayerDialogue(data) => {
@@ -63,13 +64,13 @@ impl SceneInfo {
                         };
 
                         let dialogue = esp.resolve_form(dialogue, id).unwrap();
-                        let dialogue = load_dialogue(esp, compiler, dialogue).await?;
+                        let dialogue = DialogueTopicAction::load(esp, compiler, dialogue).await?;
 
-                        let mut response = Vec::new();
+                        let mut response = None;
                         if let Some(resp) = resp {
                             let resp = esp.resolve_form(resp, id).unwrap();
-                            let resp = load_dialogue(esp, compiler, resp).await?;
-                            response = resp;
+                            let resp = DialogueTopicAction::load(esp, compiler, resp).await?;
+                            response = Some(resp);
                         }
 
                         options.push(PlayerDialogueOption { dialogue, response });
@@ -124,52 +125,6 @@ impl SceneInfo {
     }
 }
 
-async fn load_dialogue(
-    esp: &EspLoader,
-    compiler: &ConditionCompiler,
-    id: RecordId,
-) -> Result<Vec<DialogueOption>, esp::Error> {
-    let infos = esp.children(RecordChildren::DialogueInfos, id).await?;
-
-    let mut options = Vec::new();
-
-    for info in infos {
-        let info_id = info.id;
-        let RecordData::DialogueInfo(info) = info.local.data else {
-            continue;
-        };
-
-        let num_conditions = info.conditions.conditions.len();
-        let condition = compiler
-            .compile(info_id, 0, &info.conditions.conditions)
-            .await;
-
-        let mut dialogue = Vec::new();
-        for (index, _resp) in info.responses.iter().enumerate() {
-            dialogue.push(Dialogue {
-                id: info_id,
-                respnum: index + 1,
-            });
-        }
-
-        options.push((
-            DialogueOption {
-                dialogue,
-                condition,
-            },
-            num_conditions,
-        ));
-    }
-
-    // Dialogue options are chosen based on the number of conditions,
-    // options with more conditions are attempted first.
-    options.sort_by_key(|(_, num_conditions)| *num_conditions);
-    options.reverse();
-    let options = options.into_iter().map(|(v, _)| v).collect();
-
-    Ok(options)
-}
-
 #[derive(Clone, Debug, Default)]
 pub struct Phase {
     /// List of actions that are started when entering this `Phase`.
@@ -182,8 +137,7 @@ pub struct Phase {
 enum Action {
     PlayDialogue {
         actor: u32,
-        /// Choose the first dialogue that matches the conditions.
-        options: Vec<DialogueOption>,
+        topic: DialogueTopicAction,
     },
     PlayerDialogue {
         /// The actor that the player will speak with, and the actor that will respond.
@@ -195,9 +149,9 @@ enum Action {
 #[derive(Clone, Debug)]
 struct PlayerDialogueOption {
     /// The line that the player speaks.
-    dialogue: Vec<DialogueOption>,
+    dialogue: DialogueTopicAction,
     /// The line that the other actor responds with.
-    response: Vec<DialogueOption>,
+    response: Option<DialogueTopicAction>,
 }
 
 #[derive(Clone, Debug)]
@@ -205,6 +159,12 @@ struct DialogueOption {
     /// Only play the dialogue when this condition is `true`.
     condition: CompiledCondition,
     dialogue: Vec<Dialogue>,
+    /// The quest stage to set when this dialogue starts.
+    set_stage_start: Option<StageId>,
+    /// The quest stage to set when this dialogue finishes.
+    set_stage_end: Option<StageId>,
+    /// The scene to start when this dialogue finishes.
+    start_scene_end: Option<RecordId>,
 }
 
 #[derive(Clone, Debug)]
@@ -238,10 +198,11 @@ impl SceneState {
         executor: &mut Executor,
         quests: &mut QuestManager,
         aliases: &HashMap<u32, AliasState>,
+        quest: RecordId,
     ) -> bool {
         for (index, state) in &mut self.active_actions {
             let action = self.info.actions.get(index).unwrap();
-            state.update(action, world, events, executor, quests);
+            state.update(action, world, events, executor, quests, quest);
         }
 
         self.active_actions.retain(|_, action| !action.is_done());
@@ -273,7 +234,7 @@ impl SceneState {
             let action = self.info.actions.get(*action_id).unwrap();
 
             match action {
-                Action::PlayDialogue { actor, options } => {
+                Action::PlayDialogue { actor, topic } => {
                     let Some(actor) = aliases.get(actor).and_then(|alias| alias.entity.as_ref())
                     else {
                         continue;
@@ -281,11 +242,12 @@ impl SceneState {
 
                     let Some(action) = PlayingDialogue::new(
                         actor.entity(),
-                        options,
+                        topic,
                         world,
                         events,
                         executor,
                         quests,
+                        quest,
                     ) else {
                         continue;
                     };
@@ -353,6 +315,7 @@ impl PlayingAction {
         events: &mut EventBus,
         executor: &mut Executor,
         quests: &mut QuestManager,
+        quest: RecordId,
     ) {
         match (self, action) {
             (Self::Dialogue(_), _) => {}
@@ -370,6 +333,7 @@ impl PlayingAction {
                             events,
                             executor,
                             quests,
+                            quest,
                         ) else {
                             action.done = true;
                             return;
@@ -382,13 +346,19 @@ impl PlayingAction {
                             return;
                         };
 
+                        let Some(resp) = &options[*index].response else {
+                            action.done = true;
+                            return;
+                        };
+
                         let Some(dialogue) = PlayingDialogue::new(
                             action.responder,
-                            &options[*index].response,
+                            resp,
                             world,
                             events,
                             executor,
                             quests,
+                            quest,
                         ) else {
                             action.done = true;
                             return;
@@ -418,20 +388,21 @@ impl PlayingAction {
 }
 
 #[derive(Clone, Debug)]
-struct PlayingDialogue {
+pub struct PlayingDialogue {
     sounds: Vec<DialogueSound>,
 }
 
 impl PlayingDialogue {
-    fn new(
+    pub fn new(
         actor: Entity,
-        options: &[DialogueOption],
+        topic: &DialogueTopicAction,
         world: &mut World,
         events: &mut EventBus,
         executor: &mut Executor,
         quests: &mut QuestManager,
+        quest: RecordId,
     ) -> Option<Self> {
-        let opt = options.iter().find(|opt| {
+        let opt = topic.options.iter().find(|opt| {
             opt.condition
                 .eval_entity(executor, world, events, quests, actor, None)
         })?;
@@ -449,6 +420,14 @@ impl PlayingDialogue {
                 queue.push(DialogueDescriptor {
                     record: dialogue.id,
                     respnum: dialogue.respnum,
+                    on_start: DialogueTriggers {
+                        set_quest_stage: opt.set_stage_start.map(|id| (quest, id)),
+                        start_scene: None,
+                    },
+                    on_end: DialogueTriggers {
+                        set_quest_stage: opt.set_stage_end.map(|id| (quest, id)),
+                        start_scene: opt.start_scene_end,
+                    },
                 })
             })
             .collect();
@@ -472,4 +451,71 @@ enum PlayingPlayerDialogueState {
     Waiting(Arc<OnceLock<usize>>),
     PlayDialogue(PlayingDialogue, usize),
     PlayResponse(PlayingDialogue),
+}
+
+#[derive(Clone, Debug)]
+pub struct DialogueTopicAction {
+    /// Choose the first dialogue that matches the conditions.
+    options: Vec<DialogueOption>,
+}
+
+impl DialogueTopicAction {
+    pub async fn load(
+        esp: &EspLoader,
+        compiler: &ConditionCompiler,
+        id: RecordId,
+    ) -> Result<Self, esp::Error> {
+        let infos = esp.children(RecordChildren::DialogueInfos, id).await?;
+
+        let mut options = Vec::new();
+
+        for info in infos {
+            let info_id = info.id;
+            let RecordData::DialogueInfo(info) = info.local.data else {
+                continue;
+            };
+
+            let num_conditions = info.conditions.conditions.len();
+            let condition = compiler
+                .compile(info_id, 0, &info.conditions.conditions)
+                .await;
+
+            let mut dialogue = Vec::new();
+            for (index, _resp) in info.responses.iter().enumerate() {
+                dialogue.push(Dialogue {
+                    id: info_id,
+                    respnum: index + 1,
+                });
+            }
+
+            let set_stage_start = info
+                .set_parent_quest_stage
+                .and_then(|s| StageId::try_from(s.on_start).ok());
+            let set_stage_end = info
+                .set_parent_quest_stage
+                .and_then(|s| StageId::try_from(s.on_completion).ok());
+            let start_scene_end = info
+                .start_scene
+                .map(|scene| esp.resolve_form(scene, id).unwrap());
+
+            options.push((
+                DialogueOption {
+                    dialogue,
+                    condition,
+                    set_stage_start,
+                    set_stage_end,
+                    start_scene_end,
+                },
+                num_conditions,
+            ));
+        }
+
+        // Dialogue options are chosen based on the number of conditions,
+        // options with more conditions are attempted first.
+        options.sort_by_key(|(_, num_conditions)| *num_conditions);
+        options.reverse();
+        let options = options.into_iter().map(|(v, _)| v).collect();
+
+        Ok(Self { options })
+    }
 }

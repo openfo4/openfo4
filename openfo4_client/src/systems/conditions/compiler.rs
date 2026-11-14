@@ -160,6 +160,19 @@ fn lower_condition(translator: &mut Translator, condition: &Condition) -> Value 
         // ConditionFunction::GetAngle { axis } => todo!(),
         // ConditionFunction::GetStartingPos { axis } => todo!(),
         // ConditionFunction::GetStartingAngle { axis } => todo!(),
+        ConditionFunction::GetIsId { base_object } => {
+            let value = translator.call(entity, "GetBaseObject", &[], "Form");
+            let base = translator.create_global(*base_object, "Form");
+
+            let dst = Value::Ident(translator.alloc_value(Type::Bool.to_str()));
+            translator.func.instructions.push(Instruction::CmpEq(Binop {
+                lhs: value,
+                rhs: base,
+                dst: dst.clone(),
+            }));
+
+            (dst, Type::Bool)
+        }
         ConditionFunction::GetScale => {
             let value = translator.call(entity, "GetScale", &[], Type::Float);
             (value, Type::Float)

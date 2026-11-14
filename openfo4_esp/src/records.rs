@@ -5124,8 +5124,8 @@ impl_decode_bitflags!(ScenePhaseFlags: u16);
 
 #[derive(Copy, Clone, Debug, BinaryStruct)]
 pub struct SceneSetStage {
-    pub on_start: u16,
-    pub on_completion: u16,
+    pub on_start: i16,
+    pub on_completion: i16,
 }
 
 #[derive(Clone, Debug, Record)]
@@ -5516,6 +5516,9 @@ pub struct DialogueInfo {
     pub prompt: Option<LString>,
     #[record("ANAM")]
     pub speaker: Option<FormId>,
+    /// The [`Scene`] that should start after this dialogue has been spoken.
+    ///
+    /// Reference to a [`Scene`] record.
     #[record("TSCE")]
     pub start_scene: Option<FormId>,
     #[record("INTV")]
@@ -5524,6 +5527,7 @@ pub struct DialogueInfo {
     pub forced_alias: Option<i32>,
     #[record("ONAM")]
     pub audio_output_override: Option<FormId>,
+    /// Override the default greet distance.
     #[record("GREE")]
     pub greet_distance: Option<u32>,
     #[record("TIQS")]
