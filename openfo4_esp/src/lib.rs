@@ -1746,6 +1746,10 @@ impl Text<4> {
 
     const DATA: Self = Self([b'D', b'A', b'T', b'A']);
     const EDID: Self = Self([b'E', b'D', b'I', b'D']);
+
+    pub fn as_bytes(&self) -> &[u8; 4] {
+        &self.0
+    }
 }
 
 impl<const N: usize> Decode for Text<N> {
