@@ -637,13 +637,16 @@ impl TypeInfo {
     /// guaranteed that the subtype property is returned.
     pub fn find_property(&self, name: &Lowercase<str>) -> Option<&TypeProperty> {
         let mut id = self.id;
+        let mut supertypes = &*self.supertypes;
 
         loop {
             if let Some(field) = self.properties.get(id, name) {
                 return Some(field);
             }
 
-            id = self.supertype()?;
+            let (ty, rem) = supertypes.split_last()?;
+            supertypes = rem;
+            id = *ty;
         }
     }
 
@@ -753,4 +756,56 @@ pub fn define_array_ty(
             },
         },
     );
+}
+
+#[cfg(test)]
+mod tests {
+    use openfo4_common::string::Lowercase;
+
+    use crate::compiler::resources::{TypeId, TypeInfo, TypeProperties, TypeProperty};
+
+    #[test]
+    fn type_info_find_property() {
+        let mut properties = TypeProperties::default();
+
+        for (id, name, field) in [
+            // Only in self type.
+            (TypeId(0), "a", 0),
+            // In self type and immediate supertype.
+            (TypeId(1), "b", 1),
+            (TypeId(0), "b", 2),
+            // In self type and recursive supertype.
+            (TypeId(2), "c", 3),
+            (TypeId(0), "c", 4),
+            // In immediate supertype and recursive supertype.
+            (TypeId(2), "d", 5),
+            (TypeId(1), "d", 6),
+            // Only in recursive supertype.
+            (TypeId(2), "e", 7),
+        ] {
+            properties.insert(
+                id,
+                Lowercase::new(name),
+                TypeProperty {
+                    ty: TypeId(0),
+                    field,
+                },
+            );
+        }
+
+        let info = TypeInfo {
+            id: TypeId(0),
+            name: None,
+            properties,
+            allows_null: false,
+            lock: None,
+            supertypes: Box::new([TypeId(2), TypeId(1)]),
+        };
+
+        assert_eq!(info.find_property(&Lowercase::new("a")).unwrap().field, 0);
+        assert_eq!(info.find_property(&Lowercase::new("b")).unwrap().field, 2);
+        assert_eq!(info.find_property(&Lowercase::new("c")).unwrap().field, 4);
+        assert_eq!(info.find_property(&Lowercase::new("d")).unwrap().field, 6);
+        assert_eq!(info.find_property(&Lowercase::new("e")).unwrap().field, 7);
+    }
 }
