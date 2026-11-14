@@ -30,8 +30,11 @@ impl Resources {
             (primitives.bool, Some(Lowercase::from_static("bool"))),
             (primitives.int, Some(Lowercase::from_static("int"))),
             (primitives.float, Some(Lowercase::from_static("float"))),
-            (primitives.string, Some(Lowercase::from_static("string"))),
-            (primitives.var, Some(Lowercase::from_static("var"))),
+            (
+                primitives.string_ptr,
+                Some(Lowercase::from_static("string")),
+            ),
+            (primitives.var_ptr, Some(Lowercase::from_static("var"))),
         ] {
             if let Some(name) = name {
                 string_to_type.insert(name.to_owned(), id);
