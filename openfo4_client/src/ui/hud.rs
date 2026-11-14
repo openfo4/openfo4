@@ -39,6 +39,7 @@ pub fn draw_hud(ctx: &Context, state: &mut HudState, world: &World, events: &mut
     draw_health(&painter, viewport, world);
     draw_quickloot_menu(ctx, viewport, world, events, &mut state.quickloot);
     draw_pickup_menu(ctx, world, events);
+    draw_actor_interaction(ctx, world);
 }
 
 fn draw_crosshair(painter: &Painter, viewport: Rect, world: &World) {
@@ -386,4 +387,32 @@ fn draw_pickup_menu(ctx: &Context, world: &World, events: &mut EventBus) {
                 });
             }
         });
+}
+
+fn draw_actor_interaction(ctx: &Context, world: &World) {
+    let Some((_, target)) = world
+        .query::<(Entity, &LookingAtTarget, &Player)>()
+        .iter()
+        .map(|(p, v, _)| (p, *v))
+        .next()
+    else {
+        return;
+    };
+
+    let Ok(root_parent) = world.get::<&RootParent>(target.0) else {
+        return;
+    };
+    let target = root_parent.0;
+
+    let Ok(target_entity) = world.entity(target) else {
+        return;
+    };
+
+    if !target_entity.has::<ActorMarker>() || target_entity.has::<DeadActor>() {
+        return;
+    }
+
+    Window::new("Talk").show(ctx, |ui| {
+        ui.label("Talk");
+    });
 }
