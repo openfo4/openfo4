@@ -184,3 +184,9 @@ fn return_null_non_nullable_object() {
 
     func.call(&mut ctx, ()).now_or_never().unwrap();
 }
+
+#[test]
+fn compile_undefined_type() {
+    let engine = Engine::new(COMPILER_OPTIONS);
+    block_on(engine.compile("MyClass", &Options::default())).unwrap_err();
+}

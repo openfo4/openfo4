@@ -286,11 +286,9 @@ fn core_actor_values(
     entity_loader: Arc<EntityLoader>,
     entities: Arc<ScriptEntities>,
 ) -> State {
-    block_on(engine.compile("Actor", &COMPILER_OPTIONS)).unwrap();
-    block_on(engine.compile("ActorValue", &COMPILER_OPTIONS)).unwrap();
-
-    engine.get_type("Actor").unwrap();
-    let actor_value = engine.get_type("ActorValue").unwrap();
+    if let Err(err) = block_on(engine.compile("ActorValue", &COMPILER_OPTIONS)) {
+        tracing::warn!("failed to compile ActorValue script: {}", err);
+    }
 
     let [
         health,
@@ -304,7 +302,12 @@ fn core_actor_values(
         aggression,
         confidence,
         suspicious,
-    ] = std::array::from_fn(|_| engine.object_pool().insert(actor_value.id()));
+    ] = match engine.get_type("ActorValue") {
+        Some(actor_value) => {
+            std::array::from_fn(|_| Some(engine.object_pool().insert(actor_value.id())))
+        }
+        _ => std::array::from_fn(|_| None),
+    };
 
     State {
         core_objects: CoreObjects {

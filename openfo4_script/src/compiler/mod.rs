@@ -28,6 +28,8 @@ pub enum Error {
     Validation(validation::Error),
     #[error(transparent)]
     Codegen(codegen::Error),
+    #[error("undefined type: {0}")]
+    UndefinedType(String),
 }
 
 pub struct Context {
