@@ -8,6 +8,7 @@ pub mod equipment;
 pub mod esp;
 pub mod globals;
 pub mod hardcoded;
+pub mod inputs;
 pub mod level;
 pub mod npc;
 pub mod terrain;
@@ -22,20 +23,15 @@ use level::Level;
 use openfo4_asset::AssetLoader;
 use openfo4_audio::AudioManager;
 use openfo4_audio::backend::DefaultBackend;
-use openfo4_common::components::{Color, Transform};
+use openfo4_common::components::Transform;
 use openfo4_core::Frozen;
-use openfo4_core::ecs::{CommandBuffer, Entity, World};
+use openfo4_core::ecs::{Entity, World};
 use openfo4_core::events::EventBus;
 use openfo4_core::record::RecordId;
-use openfo4_core_pipeline::material::StandardMaterial;
 use openfo4_gizmos::Gizmos;
-use openfo4_input::keyboard::KeyCode;
 use openfo4_physics::PhysicsPipeline;
-use openfo4_physics::components::{CollisionLayer, RigidBody};
-use openfo4_physics::controller::CharacterController;
 use openfo4_tasks::TaskPool;
 use openfo4_tracing::trace_span;
-use openfo4_window::events::WindowEvent;
 use parking_lot::Mutex;
 
 use crate::assets::animation::AnimationSet;
@@ -47,13 +43,12 @@ use crate::components::{
 use crate::config::Config;
 use crate::interval::Interval;
 use crate::loader::FileLoader;
-use crate::render::RenderObject;
 use crate::render::physics_debug::despawn_expired;
 use crate::shared::SharedState;
-use crate::state::actions::{Action, Actions};
 use crate::state::anim_starter::AnimationSystem;
 use crate::state::animation::update_actor_animation_graphs;
 use crate::state::hardcoded::{ACTOR_PLAYER, PLACED_ACTOR_PLAYER_REF};
+use crate::state::inputs::ActorInputEvent;
 use crate::state::level::Streamer;
 use crate::state::npc::{ActorInstanceProps, ObjectKeywords, spawn_actor};
 use crate::systems::accel::AccelerationStructure;
@@ -79,9 +74,7 @@ use crate::systems::weapon::{
     handle_weapon_hit_damage, handle_weapon_reload_events, handle_weapon_reload_requests,
 };
 use crate::systems::weather::WeatherSystem;
-use crate::systems::{
-    self, GunFireRequest, GunReloadRequest, PlayerControlState, WeaponDrawRequest, combat,
-};
+use crate::systems::{self, PlayerControlState, combat};
 use crate::time::Time;
 
 pub const UPS: u32 = 60;
@@ -97,7 +90,6 @@ pub struct GameState {
     asset_loader: AssetLoader,
     pub event_bus: EventBus,
     animation: AnimationSystem,
-    actions: Actions,
     physics_debug: bool,
     interval: Interval,
     pub esp_loader: Arc<EspLoader>,
@@ -122,8 +114,6 @@ impl GameState {
         config: Config,
     ) -> Self {
         let asset_loader = init_asset_loader(&file_loader, &shared.entities);
-
-        let actions = Actions::load(&loader).await;
 
         let global_variables = globals::load_global_variables(&loader).await;
         let form_lists = globals::load_form_lists(&loader).await;
@@ -198,7 +188,6 @@ impl GameState {
             asset_loader,
             event_bus: EventBus::new(),
             animation,
-            actions,
             physics_debug: false,
             interval: Interval::new(Duration::from_secs(1) / UPS),
             esp_loader: loader,
@@ -351,191 +340,33 @@ impl GameState {
         &self.world
     }
 
-    pub fn send_event(&mut self, event: WindowEvent) {
-        systems::camera::handle_free_camera(&mut self.world, &event);
+    pub fn get_player(&self) -> Option<Entity> {
+        for (entity, _) in self.world.query::<(Entity, &Player)>().iter() {
+            return Some(entity);
+        }
+
+        None
+    }
+
+    /// Register an input from the given `actor`.
+    pub fn send_actor_input(&mut self, actor: Entity, event: ActorInputEvent) {
         systems::controller::handle_inputs(
             &mut self.world,
-            &event,
             &mut self.event_bus,
             &self.animation,
             &mut self.executor,
             &mut self.quests,
+            actor,
+            event,
         );
-        systems::activation::handle_activation_inputs(
-            &mut self.world,
-            &event,
-            &mut self.event_bus,
-            &self.physics,
-        );
+        systems::camera::handle_free_camera(&mut self.world, event);
 
-        let Some(player) = self
-            .world
-            .query::<(Entity, &Player)>()
-            .iter()
-            .map(|(entity, _)| entity)
-            .next()
-        else {
-            return;
-        };
-
-        match event {
-            WindowEvent::KeyboardInput(event) => {
-                if event.key_code == Some(KeyCode::L) && event.state.is_pressed() {
-                    let s: openfo4_render::mesh::Mesh = openfo4_render::shape::Box {
-                        min_x: -30.0,
-                        max_x: 30.0,
-                        min_y: -30.0,
-                        max_y: 30.0,
-                        min_z: -30.0,
-                        max_z: 30.0,
-                    }
-                    .into();
-                    let mesh = openfo4_physics::components::ColliderShape::TriMesh(
-                        openfo4_physics::components::TriMesh::new_convex(
-                            s.positions().to_vec(),
-                            s.indicies().unwrap().clone().into_u32(),
-                        ),
-                    );
-
-                    let mut transform = Transform::default();
-                    for (t, _) in self.world.query::<(&Transform, &Camera)>().iter() {
-                        transform = *t;
-                        break;
-                    }
-
-                    let m = self.shared.entities.create_mesh(s);
-                    let material = self.shared.entities.create_material(StandardMaterial {
-                        base_color: Color::BLACK,
-                        ..Default::default()
-                    });
-                    let obj = RenderObject { mesh: m, material };
-
-                    self.world.spawn((
-                        transform,
-                        openfo4_physics::components::Collider {
-                            friction: 1.0,
-                            restitution: 0.0,
-                            shape: mesh,
-                            layer: CollisionLayer::STATIC,
-                        },
-                        RigidBody {
-                            kind: openfo4_physics::components::RigidBodyKind::Dynamic,
-                            linvel: Vec3::ZERO,
-                            angvel: Vec3::ZERO,
-                        },
-                        obj,
-                    ));
-                }
-
-                if !event.state.is_pressed() {
-                    return;
-                }
-
-                if event.key_code == Some(KeyCode::F8) {
-                    self.physics_debug ^= true;
-                }
-
-                if event.key_code == Some(KeyCode::T) {
-                    for (actor, _) in self.world.query_mut::<(Entity, &Player)>() {
-                        self.event_bus.send(GunFireRequest { actor });
-                    }
-                }
-
-                if event.key_code == Some(KeyCode::Z) {
-                    self.animation.send_action(
-                        &mut self.world,
-                        player,
-                        Action::FireAuto,
-                        &mut self.executor,
-                        &mut self.event_bus,
-                        &mut self.quests,
-                    );
-                }
-
-                if event.key_code == Some(KeyCode::R) {
-                    self.event_bus.send(GunReloadRequest { actor: player });
-                }
-
-                if event.key_code == Some(KeyCode::Q) {
-                    self.event_bus.send(WeaponDrawRequest { actor: player });
-                }
-
-                if event.key_code == Some(KeyCode::O) {
-                    self.animation.send_action(
-                        &mut self.world,
-                        player,
-                        Action::Draw,
-                        &mut self.executor,
-                        &mut self.event_bus,
-                        &mut self.quests,
-                    );
-                }
-                if event.key_code == Some(KeyCode::P) {
-                    self.animation.send_action(
-                        &mut self.world,
-                        player,
-                        Action::Sheath,
-                        &mut self.executor,
-                        &mut self.event_bus,
-                        &mut self.quests,
-                    );
-                }
-                if event.key_code == Some(KeyCode::L) {
-                    self.animation.send_action(
-                        &mut self.world,
-                        player,
-                        Action::PerkCannibal,
-                        &mut self.executor,
-                        &mut self.event_bus,
-                        &mut self.quests,
-                    );
-                }
-                if event.key_code == Some(KeyCode::G) {
-                    self.animation.send_action(
-                        &mut self.world,
-                        player,
-                        Action::BleedoutStart,
-                        &mut self.executor,
-                        &mut self.event_bus,
-                        &mut self.quests,
-                    );
-                }
-                if event.key_code == Some(KeyCode::H) {
-                    self.animation.send_action(
-                        &mut self.world,
-                        player,
-                        Action::BleedoutStop,
-                        &mut self.executor,
-                        &mut self.event_bus,
-                        &mut self.quests,
-                    );
-                }
-                if event.key_code == Some(KeyCode::E) {
-                    self.anim_event = Some("dump");
-                }
-
-                if event.key_code == Some(KeyCode::B) {
-                    let mut buffer = CommandBuffer::new();
-
-                    for (e, _, _, controller) in self.world.query_mut::<(
-                        Entity,
-                        &mut RigidBody,
-                        &Player,
-                        Option<&CharacterController>,
-                    )>() {
-                        if controller.is_none() {
-                            buffer.insert_one(e, CharacterController::new());
-                        } else {
-                            buffer.remove_one::<CharacterController>(e);
-                        }
-
-                        break;
-                    }
-
-                    buffer.run_on(&mut self.world);
-                }
-            }
-            _ => (),
+        if matches!(event, ActorInputEvent::Activate) {
+            systems::activation::handle_activation_inputs(
+                &mut self.world,
+                &mut self.event_bus,
+                &self.physics,
+            );
         }
     }
 
