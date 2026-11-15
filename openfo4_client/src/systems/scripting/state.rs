@@ -248,19 +248,19 @@ unsafe impl Sync for State {}
 /// Set of engine-builtin objects that are always loaded.
 #[derive(Clone, Debug)]
 pub struct CoreObjects {
-    pub health: ObjectHandle,
+    pub health: Option<ObjectHandle>,
     // SPECIAL
-    pub strength: ObjectHandle,
-    pub perception: ObjectHandle,
-    pub endurance: ObjectHandle,
-    pub charisma: ObjectHandle,
-    pub intelligence: ObjectHandle,
-    pub agility: ObjectHandle,
-    pub luck: ObjectHandle,
+    pub strength: Option<ObjectHandle>,
+    pub perception: Option<ObjectHandle>,
+    pub endurance: Option<ObjectHandle>,
+    pub charisma: Option<ObjectHandle>,
+    pub intelligence: Option<ObjectHandle>,
+    pub agility: Option<ObjectHandle>,
+    pub luck: Option<ObjectHandle>,
     // AI
-    pub aggression: ObjectHandle,
-    pub confidence: ObjectHandle,
-    pub suspicious: ObjectHandle,
+    pub aggression: Option<ObjectHandle>,
+    pub confidence: Option<ObjectHandle>,
+    pub suspicious: Option<ObjectHandle>,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]

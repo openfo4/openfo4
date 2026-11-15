@@ -138,7 +138,9 @@ impl Engine {
 
         ctx.compute_type_layouts()?;
 
-        let class = classes.get(&class_name).unwrap();
+        let class = classes
+            .get(&class_name)
+            .ok_or_else(|| compiler::Error::UndefinedType(class.to_owned()))?;
 
         let mut funcs = HashMap::new();
 

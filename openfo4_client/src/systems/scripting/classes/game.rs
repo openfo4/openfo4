@@ -475,7 +475,13 @@ fn show_all_map_markers(_caller: Caller<'_, State>) -> Result<(), Error> {
 /// ActorValue Function() native global
 /// ```
 fn get_aggression_av(caller: Caller<'_, State>) -> Object {
-    caller.data().core_objects.aggression.addr()
+    caller
+        .data()
+        .core_objects
+        .aggression
+        .as_ref()
+        .map(|v| v.addr())
+        .unwrap_or(Object::NULL)
 }
 
 /// `GetAgilityAV`
@@ -484,7 +490,13 @@ fn get_aggression_av(caller: Caller<'_, State>) -> Object {
 /// ActorValue Function() native global
 /// ```
 fn get_agility_av(caller: Caller<'_, State>) -> Object {
-    caller.data().core_objects.agility.addr()
+    caller
+        .data()
+        .core_objects
+        .agility
+        .as_ref()
+        .map(|v| v.addr())
+        .unwrap_or(Object::NULL)
 }
 
 /// `GetCharismaAV`
@@ -493,7 +505,13 @@ fn get_agility_av(caller: Caller<'_, State>) -> Object {
 /// ActorValue Function() native global
 /// ```
 fn get_charisma_av(caller: Caller<'_, State>) -> Object {
-    caller.data().core_objects.charisma.addr()
+    caller
+        .data()
+        .core_objects
+        .charisma
+        .as_ref()
+        .map(|v| v.addr())
+        .unwrap_or(Object::NULL)
 }
 
 /// `GetConfidenceAV`
@@ -502,7 +520,13 @@ fn get_charisma_av(caller: Caller<'_, State>) -> Object {
 /// ActorValue Function() native global
 /// ```
 fn get_confidence_av(caller: Caller<'_, State>) -> Object {
-    caller.data().core_objects.confidence.addr()
+    caller
+        .data()
+        .core_objects
+        .confidence
+        .as_ref()
+        .map(|v| v.addr())
+        .unwrap_or(Object::NULL)
 }
 
 /// `GetDifficulty`
@@ -520,7 +544,13 @@ fn get_difficulty(caller: Caller<'_, State>) -> i32 {
 /// ActorValue Function() native global
 /// ```
 fn get_endurance_av(caller: Caller<'_, State>) -> Object {
-    caller.data().core_objects.endurance.addr()
+    caller
+        .data()
+        .core_objects
+        .endurance
+        .as_ref()
+        .map(|v| v.addr())
+        .unwrap_or(Object::NULL)
 }
 
 /// `GetForm`
@@ -600,7 +630,13 @@ fn get_game_setting_string(
 /// ActorValue Function() native global
 /// ```
 fn get_health_av(caller: Caller<'_, State>) -> Object {
-    caller.data().core_objects.health.addr()
+    caller
+        .data()
+        .core_objects
+        .health
+        .as_ref()
+        .map(|v| v.addr())
+        .unwrap_or(Object::NULL)
 }
 
 /// `GetIntelligenceAV`
@@ -609,7 +645,13 @@ fn get_health_av(caller: Caller<'_, State>) -> Object {
 /// ActorValue Function() native global
 /// ```
 fn get_intelligence_av(caller: Caller<'_, State>) -> Object {
-    caller.data().core_objects.intelligence.addr()
+    caller
+        .data()
+        .core_objects
+        .intelligence
+        .as_ref()
+        .map(|v| v.addr())
+        .unwrap_or(Object::NULL)
 }
 
 /// `GetLuckAV`
@@ -618,7 +660,13 @@ fn get_intelligence_av(caller: Caller<'_, State>) -> Object {
 /// ActorValue Function() native global
 /// ```
 fn get_luck_av(caller: Caller<'_, State>) -> Object {
-    caller.data().core_objects.luck.addr()
+    caller
+        .data()
+        .core_objects
+        .luck
+        .as_ref()
+        .map(|v| v.addr())
+        .unwrap_or(Object::NULL)
 }
 
 /// `GetPerceptionAV`
@@ -627,7 +675,13 @@ fn get_luck_av(caller: Caller<'_, State>) -> Object {
 /// ActorValue Function() native global
 /// ```
 fn get_perception_av(caller: Caller<'_, State>) -> Object {
-    caller.data().core_objects.perception.addr()
+    caller
+        .data()
+        .core_objects
+        .perception
+        .as_ref()
+        .map(|v| v.addr())
+        .unwrap_or(Object::NULL)
 }
 
 /// `GetPlayer`
@@ -705,7 +759,13 @@ fn get_real_hours_passed(caller: Caller<'_, State>) -> f32 {
 /// ActorValue Function() native global
 /// ```
 fn get_suspicious_av(caller: Caller<'_, State>) -> Object {
-    caller.data().core_objects.suspicious.addr()
+    caller
+        .data()
+        .core_objects
+        .suspicious
+        .as_ref()
+        .map(|v| v.addr())
+        .unwrap_or(Object::NULL)
 }
 
 /// `GetStrengthAV`
@@ -714,7 +774,13 @@ fn get_suspicious_av(caller: Caller<'_, State>) -> Object {
 /// ActorValue Function() native global
 /// ```
 fn get_strength_av(caller: Caller<'_, State>) -> Object {
-    caller.data().core_objects.strength.addr()
+    caller
+        .data()
+        .core_objects
+        .strength
+        .as_ref()
+        .map(|v| v.addr())
+        .unwrap_or(Object::NULL)
 }
 
 /// `IncrementSkill`
