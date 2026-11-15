@@ -11,7 +11,7 @@ use openfo4_script::engine::Engine;
 use openfo4_script::runtime::{Caller, Error};
 
 use crate::components::{
-    Disabled, ObjectBounds, ObjectLockLevel, ObjectProperties, TriggerBox, WorldSpace,
+    BaseObject, Disabled, ObjectBounds, ObjectLockLevel, ObjectProperties, TriggerBox, WorldSpace,
 };
 use crate::state::level::loader::SpawnEntityInfo;
 use crate::state::level::partial::PartialEntityFlags;
@@ -1071,8 +1071,17 @@ async fn get_animation_variable_float(
 /// ```text
 /// Form Function() native
 /// ```
-fn get_base_object(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<Object, Error> {
-    todo!()
+async fn get_base_object(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Error> {
+    let entity = caller.data().entity(self_ptr).await?;
+
+    let base;
+    {
+        let world = caller.data().world().await;
+        base = world.get::<&BaseObject>(entity).unwrap().record;
+    }
+
+    let scripts = caller.data().get_or_create_record(base).await?;
+    Ok(scripts.get("Form").unwrap().get().object.addr())
 }
 
 /// `GetBaseValue`
