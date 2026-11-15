@@ -3,6 +3,7 @@ mod cell;
 mod components;
 mod config;
 mod events;
+mod input;
 mod interval;
 mod loader;
 mod render;
@@ -19,6 +20,7 @@ use std::sync::Arc;
 
 use clap::Parser;
 use glam::IVec2;
+use glam::Quat;
 use glam::UVec2;
 use glam::Vec3;
 use openfo4_config::ConfigSection;
@@ -27,6 +29,8 @@ use openfo4_crash_handler::main;
 use openfo4_egui::EguiContext;
 use openfo4_esp::FormId;
 use openfo4_gizmos::Gizmos;
+use openfo4_input::keyboard::KeyCode;
+use openfo4_input::keyboard::KeyboardInput;
 use openfo4_render::RenderTarget;
 use openfo4_render::Renderer;
 use openfo4_render::RendererConfig;
@@ -46,6 +50,8 @@ use crate::cell::CellId;
 use crate::components::NiTransform;
 use crate::components::WorldSpace;
 use crate::config::Config;
+use crate::input::EventMode;
+use crate::input::KeyMap;
 use crate::loader::FileLoader;
 use crate::render::physics_debug::{
     draw_doors, draw_hitscan_markers, draw_light_markers, draw_navmesh,
@@ -56,6 +62,8 @@ use crate::state::esp::EspLoaderBuilder;
 use crate::state::hardcoded;
 use crate::state::hardcoded::ACTOR_PLAYER;
 use crate::state::hardcoded::HARDCODED_MODULE_ID;
+use crate::state::inputs::ActorInputEvent;
+use crate::state::inputs::Direction;
 use crate::systems::inventory::AddItemEventAsync;
 use crate::systems::inventory::EquipItemEvent;
 use crate::time::Time;
@@ -142,6 +150,9 @@ fn main() -> ExitCode {
         egui_ctx,
         ui_state: ui::UiState::default(),
         ui_renderer,
+        keymap: build_default_keymap(),
+        key_events: Vec::new(),
+        turn_events: Vec::new(),
     };
 
     wm.run(app);
@@ -252,6 +263,9 @@ struct App {
     egui_ctx: EguiContext,
     ui_state: ui::UiState,
     ui_renderer: Arc<UiRenderer>,
+    keymap: KeyMap,
+    key_events: Vec<KeyboardInput>,
+    turn_events: Vec<ActorInputEvent>,
 }
 
 impl openfo4_window::App for App {
@@ -292,7 +306,21 @@ impl openfo4_window::App for App {
             return;
         }
 
-        self.game.send_event(event);
+        match event {
+            WindowEvent::KeyboardInput(event) => {
+                self.key_events.push(event);
+            }
+            WindowEvent::MouseMotion(event) => {
+                let yaw = event.delta.x * 0.001;
+                let pitch = event.delta.y * 0.001;
+
+                let yaw = Quat::from_axis_angle(Vec3::Y, -yaw);
+                let pitch = Quat::from_axis_angle(Vec3::X, -pitch);
+                self.turn_events.push(ActorInputEvent::TurnYaw(yaw));
+                self.turn_events.push(ActorInputEvent::TurnPitch(pitch));
+            }
+            _ => {}
+        }
     }
 
     fn update(&mut self, _ctx: WindowManagerContext<'_>) {
@@ -306,6 +334,13 @@ impl openfo4_window::App for App {
         });
 
         self.time.update();
+
+        let inputs = self.keymap.process(self.key_events.drain(..));
+        if let Some(player) = self.game.get_player() {
+            for input in inputs.chain(self.turn_events.drain(..)) {
+                self.game.send_actor_input(player, input);
+            }
+        }
 
         self.game.update(&self.time, &self.state.gizmos);
         self.state.sync(self.game.world());
@@ -358,4 +393,78 @@ impl openfo4_window::App for App {
         self.game.event_bus.clear();
         self.game.world.clear_trackers();
     }
+}
+
+fn build_default_keymap() -> KeyMap {
+    let mut keymap = KeyMap::default();
+    keymap.insert(
+        KeyCode::W,
+        EventMode::Continous,
+        ActorInputEvent::Move {
+            direction: Direction::FRONT,
+            speed: 1.0,
+        },
+    );
+    keymap.insert(
+        KeyCode::S,
+        EventMode::Continous,
+        ActorInputEvent::Move {
+            direction: Direction::BACK,
+            speed: 1.0,
+        },
+    );
+    keymap.insert(
+        KeyCode::A,
+        EventMode::Continous,
+        ActorInputEvent::Move {
+            direction: Direction::LEFT,
+            speed: 1.0,
+        },
+    );
+    keymap.insert(
+        KeyCode::D,
+        EventMode::Continous,
+        ActorInputEvent::Move {
+            direction: Direction::RIGHT,
+            speed: 1.0,
+        },
+    );
+    keymap.insert(
+        KeyCode::Q,
+        EventMode::OnKeyDown,
+        ActorInputEvent::WeaponDraw,
+    );
+    keymap.insert(
+        KeyCode::R,
+        EventMode::OnKeyDown,
+        ActorInputEvent::WeaponReload,
+    );
+    keymap.insert(KeyCode::F, EventMode::OnKeyDown, ActorInputEvent::Activate);
+    keymap.insert(
+        KeyCode::T,
+        EventMode::OnKeyDown,
+        ActorInputEvent::WeaponAttack,
+    );
+    keymap.insert(
+        KeyCode::Key1,
+        EventMode::OnKeyDown,
+        ActorInputEvent::ToggleWalk,
+    );
+    keymap.insert(
+        KeyCode::LControl,
+        EventMode::OnKeyDown,
+        ActorInputEvent::ToggleSneak,
+    );
+    keymap.insert(
+        KeyCode::LShift,
+        EventMode::OnKeyDown,
+        ActorInputEvent::ToggleSprint,
+    );
+    keymap.insert(
+        KeyCode::Tab,
+        EventMode::OnKeyDown,
+        ActorInputEvent::ToggleFreeCamera,
+    );
+
+    keymap
 }

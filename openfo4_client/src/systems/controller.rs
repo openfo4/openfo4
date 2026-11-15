@@ -4,28 +4,30 @@ use openfo4_core::Frozen;
 use openfo4_core::ecs::{CommandBuffer, Entity, World};
 use openfo4_core::events::EventBus;
 use openfo4_core::transform::ConvertCoordinateSystem;
-use openfo4_input::keyboard::KeyCode;
 use openfo4_physics::components::ColliderShape;
-use openfo4_window::events::WindowEvent;
 use slab::Slab;
 
 use crate::components::{Camera, MovementState, Player};
 use crate::state::actions::Action;
 use crate::state::anim_starter::AnimationSystem;
+use crate::state::inputs::ActorInputEvent;
 use crate::state::npc::ActorMovementSpeeds;
 use crate::systems::camera::{CameraMode, CameraOffset, PlayerControlled};
 use crate::systems::movement::{MovementDirection, MovementSpeed};
 use crate::systems::quests::QuestManager;
 use crate::systems::scripting::Executor;
-use crate::systems::{FacingDirection, GunFireEvent, PlayerControlState};
+use crate::systems::{
+    FacingDirection, GunFireRequest, GunReloadRequest, PlayerControlState, WeaponDrawRequest,
+};
 
 pub fn handle_inputs(
     world: &mut World,
-    event: &WindowEvent,
     events: &mut EventBus,
     animation: &AnimationSystem,
     executor: &mut Executor,
     quests: &mut QuestManager,
+    actor: Entity,
+    input: ActorInputEvent,
 ) {
     for camera in world.query_mut::<&Camera>() {
         if matches!(camera.mode, CameraMode::Free) {
@@ -54,81 +56,54 @@ pub fn handle_inputs(
         )>()
         .iter()
     {
-        match event {
-            WindowEvent::MouseMotion(event) => {
-                let yaw = event.delta.x * 0.001;
-                let pitch = event.delta.y * 0.001;
-
-                let q1 = Quat::from_axis_angle(Vec3::Y, -yaw);
-                let q2 = Quat::from_axis_angle(Vec3::X, -pitch);
-
-                transform.rotation = (q1 * transform.rotation).normalize();
-                offset.rotation = (offset.rotation * q2).normalize();
+        match input {
+            ActorInputEvent::Move { direction, speed } => {
+                state.move_direction += direction.to_vec3() * speed;
             }
-            WindowEvent::KeyboardInput(event) => match event.key_code {
-                Some(KeyCode::W) => {
-                    state.moving_front = event.state.is_pressed();
-                }
-                Some(KeyCode::S) => {
-                    state.moving_back = event.state.is_pressed();
-                }
-                Some(KeyCode::A) => {
-                    state.moving_left = event.state.is_pressed();
-                }
-                Some(KeyCode::D) => {
-                    state.moving_right = event.state.is_pressed();
-                }
-                Some(KeyCode::LControl) => {
-                    if !event.state.is_pressed() {
-                        continue;
-                    }
+            ActorInputEvent::TurnYaw(yaw) => {
+                transform.rotation = (yaw * transform.rotation).normalize();
+            }
+            ActorInputEvent::TurnPitch(pitch) => {
+                offset.rotation = (offset.rotation * pitch).normalize();
+            }
+            ActorInputEvent::ToggleSneak => {
+                let action = if state.sneaking {
+                    DeferredAction::StopSneak
+                } else {
+                    DeferredAction::StartSneak
+                };
 
-                    let action = if state.sneaking {
-                        DeferredAction::StopSneak
-                    } else {
-                        DeferredAction::StartSneak
-                    };
+                actions.push((entity, action));
 
-                    actions.push((entity, action));
-
-                    state.sneaking ^= true;
+                state.sneaking ^= true;
+            }
+            ActorInputEvent::ToggleSprint => {
+                // Stop sneaking when we start sprinting.
+                // When we stop sprinting this is already false.
+                if state.sneaking {
+                    actions.push((entity, DeferredAction::StopSneak));
                 }
-                Some(KeyCode::LShift) => {
-                    // Stop sneaking when we start sprinting.
-                    // When we stop sprinting this is already false.
-                    if state.sneaking {
-                        actions.push((entity, DeferredAction::StopSneak));
-                    }
 
-                    let action = if state.sprinting {
-                        DeferredAction::StopSprint
-                    } else {
-                        DeferredAction::StartSprint
-                    };
+                let action = if state.sprinting {
+                    DeferredAction::StopSprint
+                } else {
+                    DeferredAction::StartSprint
+                };
 
-                    actions.push((entity, action));
-                }
-                Some(KeyCode::Space) => {
-                    if !event.state.is_pressed() {
-                        continue;
-                    }
-
-                    let action = if state.jumping {
-                        DeferredAction::Land
-                    } else {
-                        DeferredAction::Jump
-                    };
-
-                    actions.push((entity, action));
-                }
-                Some(KeyCode::Key1) if event.state.is_pressed() => {
-                    state.walking ^= true;
-                }
-                Some(KeyCode::Key2) if event.state.is_pressed() => {
-                    events.send(GunFireEvent { actor: entity });
-                }
-                _ => continue,
-            },
+                actions.push((entity, action));
+            }
+            ActorInputEvent::ToggleWalk => {
+                state.walking ^= true;
+            }
+            ActorInputEvent::WeaponDraw => {
+                events.send(WeaponDrawRequest { actor });
+            }
+            ActorInputEvent::WeaponReload => {
+                events.send(GunReloadRequest { actor });
+            }
+            ActorInputEvent::WeaponAttack => {
+                events.send(GunFireRequest { actor });
+            }
             _ => (),
         }
     }
@@ -171,9 +146,9 @@ pub fn update_facing_direction(world: &mut World) {
 pub fn apply_player_movements(world: &mut World) {
     let mut buffer = CommandBuffer::new();
 
-    for (entity, state, speeds, frozen, _) in world.query_mut::<(
+    for (entity, mut state, speeds, frozen, _) in world.query_mut::<(
         Entity,
-        &PlayerControlState,
+        &mut PlayerControlState,
         &ActorMovementSpeeds,
         Option<&Frozen>,
         &Player,
@@ -183,22 +158,10 @@ pub fn apply_player_movements(world: &mut World) {
             continue;
         }
 
-        let mut direction = Vec3::ZERO;
+        let direction = state.move_direction.normalize_or_zero();
 
-        if state.moving_front {
-            direction -= Vec3::Z;
-        }
-        if state.moving_back {
-            direction += Vec3::Z;
-        }
-        if state.moving_left {
-            direction -= Vec3::X;
-        }
-        if state.moving_right {
-            direction += Vec3::X;
-        }
-
-        direction = direction.normalize_or_zero();
+        // Clear for next iteration.
+        state.move_direction = Vec3::ZERO;
 
         let f_forward = f32::from(direction.z < 0.0) * direction.z * direction.z;
         let f_backward = f32::from(direction.z > 0.0) * direction.z * direction.z;

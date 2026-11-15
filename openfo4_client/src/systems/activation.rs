@@ -14,6 +14,7 @@ use openfo4_window::events::WindowEvent;
 use crate::assets::nif::NIF_TO_METERS;
 use crate::components::{Camera, LookingAtTarget, Player, RootParent};
 use crate::render::physics_debug::{DespawnAt, HitscanRaycast};
+use crate::state::inputs::ActorInputEvent;
 use crate::systems::ActivationEvent;
 use crate::systems::camera::{CameraMode, CameraOffset};
 
@@ -21,19 +22,9 @@ const ACTIVATION_REACH: f32 = 10.0;
 
 pub fn handle_activation_inputs(
     world: &mut World,
-    event: &WindowEvent,
     events: &mut EventBus,
     physics_pipeline: &PhysicsPipeline,
 ) {
-    match event {
-        WindowEvent::KeyboardInput(event) => {
-            if event.key_code != Some(KeyCode::F) || !event.state.is_pressed() {
-                return;
-            }
-        }
-        _ => return,
-    }
-
     // // Disable activation in free cam mode.
     // for (_, camera) in world.query_mut::<&Camera>() {
     //     if matches!(camera.mode, CameraMode::Free) {

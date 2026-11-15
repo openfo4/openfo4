@@ -11,6 +11,7 @@ const CAMERA_DISTANCE_MAX: f32 = 400.0;
 
 use crate::assets::nif::NIF_TO_METERS;
 use crate::components::{Camera, WorldSpace};
+use crate::state::inputs::ActorInputEvent;
 
 #[derive(Copy, Clone, Debug)]
 pub struct CameraOffset {
@@ -56,7 +57,7 @@ pub fn attach_camera(world: &mut World, entity: Entity) {
     world.insert_one(entity, PlayerControlled).unwrap();
 }
 
-pub fn handle_free_camera(world: &mut World, event: &WindowEvent) {
+pub fn handle_free_camera(world: &mut World, event: ActorInputEvent) {
     let entity = world
         .query_mut::<(Entity, &PlayerControlled)>()
         .into_iter()
@@ -69,57 +70,28 @@ pub fn handle_free_camera(world: &mut World, event: &WindowEvent) {
         let transform = &mut *transform;
 
         match &event {
-            WindowEvent::MouseMotion(event) => {
-                let yaw = event.delta.x * 0.001;
-                let pitch = event.delta.y * 0.001;
-
-                let q1 = Quat::from_axis_angle(Vec3::Y, -yaw);
-                let q2 = Quat::from_axis_angle(Vec3::X, -pitch);
-
-                transform.rotation = q1 * transform.rotation;
-                transform.rotation = transform.rotation * q2;
+            ActorInputEvent::TurnYaw(yaw) => {
+                transform.rotation = yaw * transform.rotation;
                 transform.rotation = transform.rotation.normalize();
             }
-            WindowEvent::MouseWheel(event) => match &mut camera.mode {
-                CameraMode::Third {
-                    entity: _,
-                    distance,
-                } => {
-                    *distance =
-                        (*distance + event.y * 2.0).clamp(CAMERA_DISTANCE_MIN, CAMERA_DISTANCE_MAX);
-                }
-                _ => (),
-            },
-            WindowEvent::KeyboardInput(event) => {
-                let mut direction = Vec3::ZERO;
-                if event.key_code == Some(KeyCode::W) {
-                    direction -= Vec3::Z;
-                }
-                if event.key_code == Some(KeyCode::S) {
-                    direction += Vec3::Z;
-                }
-                if event.key_code == Some(KeyCode::A) {
-                    direction -= Vec3::X;
-                }
-                if event.key_code == Some(KeyCode::D) {
-                    direction += Vec3::X;
-                }
-                if event.key_code == Some(KeyCode::Tab) && event.state.is_pressed() {
-                    match camera.mode {
-                        CameraMode::Free => {
-                            if let Some(entity) = entity {
-                                camera.mode = CameraMode::Third {
-                                    entity,
-                                    distance: CAMERA_DISTANCE_MIN,
-                                };
-                            }
-                        }
-                        _ => camera.mode = CameraMode::Free,
+            ActorInputEvent::TurnPitch(pitch) => {
+                transform.rotation = transform.rotation * pitch;
+                transform.rotation = transform.rotation.normalize();
+            }
+            ActorInputEvent::Move { direction, speed } => {
+                transform.translation += transform.rotation * (direction.to_vec3() * speed);
+            }
+            ActorInputEvent::ToggleFreeCamera => match camera.mode {
+                CameraMode::Free => {
+                    if let Some(entity) = entity {
+                        camera.mode = CameraMode::Third {
+                            entity,
+                            distance: CAMERA_DISTANCE_MIN,
+                        };
                     }
                 }
-
-                transform.translation += transform.rotation * direction;
-            }
+                _ => camera.mode = CameraMode::Free,
+            },
             _ => (),
         }
     }

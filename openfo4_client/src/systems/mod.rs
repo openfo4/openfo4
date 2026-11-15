@@ -1,4 +1,4 @@
-use glam::Quat;
+use glam::{Quat, Vec3};
 use hashbrown::HashMap;
 use openfo4_core::ecs::Entity;
 use openfo4_core::record::RecordId;
@@ -35,10 +35,7 @@ pub mod weather;
 
 #[derive(Clone, Debug, Default)]
 pub struct PlayerControlState {
-    pub moving_front: bool,
-    pub moving_back: bool,
-    pub moving_left: bool,
-    pub moving_right: bool,
+    pub move_direction: Vec3,
     pub sneaking: bool,
     pub sprinting: bool,
     pub walking: bool,
