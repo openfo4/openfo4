@@ -3,9 +3,8 @@ use std::fmt::{Debug, Write};
 use openfo4_core::ecs::{Entity, World};
 use openfo4_core::events::EventBus;
 use openfo4_egui::egui::{Context, RichText, Window};
-
-use crate::components::Player;
-use crate::systems::inventory::{EquipItemEvent, Inventory, UnequipItemEvent};
+use openfo4_game::components::Player;
+use openfo4_game::systems::inventory::{EquipItemEvent, Inventory, UnequipItemEvent};
 
 #[derive(Clone, Debug, Default)]
 pub struct InventoryState {}

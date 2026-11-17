@@ -13,7 +13,7 @@ use openfo4_window::events::WindowEvent;
 
 use crate::assets::nif::NIF_TO_METERS;
 use crate::components::{Camera, LookingAtTarget, Player, RootParent};
-use crate::render::physics_debug::{DespawnAt, HitscanRaycast};
+use crate::render::{DespawnAt, HitscanRaycast};
 use crate::state::inputs::ActorInputEvent;
 use crate::systems::ActivationEvent;
 use crate::systems::camera::{CameraMode, CameraOffset};

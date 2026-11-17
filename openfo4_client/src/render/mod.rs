@@ -13,17 +13,16 @@ use openfo4_common::components::{GlobalTransform, Transform};
 use openfo4_core::ecs::{Entity, World};
 use openfo4_core_pipeline::camera::{Camera, Projection};
 use openfo4_core_pipeline::entities::{
-    CameraHandle, Entities, LightHandle, MaterialHandle, MeshHandle, Object, ObjectHandle,
-    SceneHandle,
+    CameraHandle, Entities, LightHandle, Object, ObjectHandle, SceneHandle,
 };
 use openfo4_core_pipeline::lights::{AmbientLight, DirectionalLight, Light, PointLight};
+use openfo4_game::components::{Camera as CameraComp, WorldSpace};
+use openfo4_game::render::RenderObject;
+use openfo4_game::shared::SharedState;
 use openfo4_gizmos::Gizmos;
 use openfo4_render::RenderTarget;
 use openfo4_render::Renderer;
 use openfo4_tracing::trace_span;
-
-use crate::components::{Camera as CameraComp, WorldSpace};
-use crate::shared::SharedState;
 
 pub struct RenderState {
     entities: Entities,
@@ -293,10 +292,4 @@ impl RenderState {
         // may still be incomplete.
         self.entities.barrier();
     }
-}
-
-#[derive(Clone, Debug)]
-pub struct RenderObject {
-    pub mesh: MeshHandle,
-    pub material: MaterialHandle,
 }

@@ -12,7 +12,7 @@ use openfo4_physics::{PhysicsPipeline, QueryFilter};
 
 use crate::components::{Camera, Player};
 use crate::events::combat::{BodyPartCrippleEvent, ReachedZeroHealthEvent};
-use crate::render::physics_debug::{DespawnAt, HitscanRaycast};
+use crate::render::{DespawnAt, HitscanRaycast};
 use crate::state::actions::Action;
 use crate::state::anim_starter::AnimationSystem;
 use crate::state::hardcoded::fallout4::{ACTOR_VALUE_HEALTH, apply_weapon_damage};

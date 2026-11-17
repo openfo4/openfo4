@@ -1,20 +1,18 @@
 use std::f32::consts::PI;
-use std::time::Instant;
 
 use glam::{Quat, Vec3};
 use openfo4_animation::skeleton::BoneMarker;
 use openfo4_common::components::{Axis, Color, GlobalTransform, PointLight, Transform};
 use openfo4_common::math::Ray;
-use openfo4_core::ecs::{CommandBuffer, Entity, World};
+use openfo4_core::ecs::World;
 use openfo4_core::hierarchy::Children;
+use openfo4_game::cell::CellId;
+use openfo4_game::components::{Camera, NiTransform, Player, TriggerBox, WorldSpace};
+use openfo4_game::state::npc::BodyPartBone;
+use openfo4_game::systems::ai::AiSystem;
+use openfo4_game::systems::door::{AUTOLOAD_DOOR_RADIUS, Door};
 use openfo4_gizmos::Gizmos;
 use openfo4_physics::components::{Collider, ColliderShape};
-
-use crate::cell::CellId;
-use crate::components::{Camera, NiTransform, Player, TriggerBox, WorldSpace};
-use crate::state::npc::BodyPartBone;
-use crate::systems::ai::AiSystem;
-use crate::systems::door::{AUTOLOAD_DOOR_RADIUS, Door};
 
 const COLOR: Color = Color::RED;
 
@@ -32,23 +30,6 @@ pub struct HitscanRaycast {
     pub ray: Ray,
     pub max_toi: f32,
     pub impact_toi: Option<f32>,
-}
-
-/// Entities with this component are despawned when the time is reached.
-#[derive(Copy, Clone, Debug)]
-pub struct DespawnAt(pub Instant);
-
-pub fn despawn_expired(world: &mut World) {
-    let mut commands = CommandBuffer::new();
-
-    let now = Instant::now();
-    for (entity, expires) in world.query::<(Entity, &DespawnAt)>().iter() {
-        if now >= expires.0 {
-            commands.despawn(entity);
-        }
-    }
-
-    commands.run_on(world);
 }
 
 pub fn draw_colliers(world: &World, gizmos: &Gizmos) {

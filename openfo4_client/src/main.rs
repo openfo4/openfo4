@@ -1,16 +1,5 @@
-mod assets;
-mod cell;
-mod components;
-mod config;
-mod events;
 mod input;
-mod interval;
-mod loader;
 mod render;
-mod shared;
-mod state;
-mod systems;
-mod time;
 mod ui;
 
 use std::num::NonZeroUsize;
@@ -28,6 +17,23 @@ use openfo4_core::record::RecordId;
 use openfo4_crash_handler::main;
 use openfo4_egui::EguiContext;
 use openfo4_esp::FormId;
+use openfo4_game::cell::CellId;
+use openfo4_game::components::NiTransform;
+use openfo4_game::components::WorldSpace;
+use openfo4_game::config::Config;
+use openfo4_game::loader::FileLoader;
+use openfo4_game::shared::SharedState;
+use openfo4_game::state::GameState;
+use openfo4_game::state::data;
+use openfo4_game::state::esp::EspLoaderBuilder;
+use openfo4_game::state::hardcoded;
+use openfo4_game::state::hardcoded::ACTOR_PLAYER;
+use openfo4_game::state::hardcoded::HARDCODED_MODULE_ID;
+use openfo4_game::state::inputs::ActorInputEvent;
+use openfo4_game::state::inputs::Direction;
+use openfo4_game::systems::inventory::AddItemEventAsync;
+use openfo4_game::systems::inventory::EquipItemEvent;
+use openfo4_game::time::Time;
 use openfo4_gizmos::Gizmos;
 use openfo4_input::keyboard::KeyCode;
 use openfo4_input::keyboard::KeyboardInput;
@@ -43,30 +49,13 @@ use render::RenderState;
 use render::physics_debug::{
     draw_cell_boundaries, draw_colliers, draw_skeletons, draw_translations,
 };
-use shared::SharedState;
-use state::GameState;
 
-use crate::cell::CellId;
-use crate::components::NiTransform;
-use crate::components::WorldSpace;
-use crate::config::Config;
 use crate::input::EventMode;
 use crate::input::KeyMap;
-use crate::loader::FileLoader;
 use crate::render::physics_debug::{
     draw_doors, draw_hitscan_markers, draw_light_markers, draw_navmesh,
     draw_planned_ai_agent_paths, draw_trigger_boxes,
 };
-use crate::state::data;
-use crate::state::esp::EspLoaderBuilder;
-use crate::state::hardcoded;
-use crate::state::hardcoded::ACTOR_PLAYER;
-use crate::state::hardcoded::HARDCODED_MODULE_ID;
-use crate::state::inputs::ActorInputEvent;
-use crate::state::inputs::Direction;
-use crate::systems::inventory::AddItemEventAsync;
-use crate::systems::inventory::EquipItemEvent;
-use crate::time::Time;
 
 #[derive(Clone, Debug, Parser)]
 #[command(version, about, long_about = None)]
