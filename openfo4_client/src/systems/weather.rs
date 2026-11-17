@@ -472,7 +472,7 @@ async fn load_worldspace_weather_props(
     if let Some(path) = &climate.sun_texture {
         let img = loader
             .load::<FileImage, _>(&FileImageKey {
-                path: DataPathBuf::new(path.as_bytes()),
+                path: DataPathBuf::new(path),
                 force_srgb: None,
             })
             .await
@@ -544,7 +544,7 @@ async fn load_worldspace_weather_props(
                 continue;
             };
 
-            let mut path = DataPathBuf::new(path.as_bytes());
+            let mut path = DataPathBuf::new(path);
             path.push_front("textures");
 
             let Ok(img) = loader

@@ -4,13 +4,13 @@ use openfo4_esp_derive::{BinaryStruct, Record};
 use crate::conditions::Conditions;
 use crate::fields::SubRecordArray;
 use crate::records::impl_decode_bitflags;
-use crate::{FormId, LString, ZString};
+use crate::{BString, FormId, LString};
 
 #[derive(Clone, Debug, Record)]
 #[record(ordered)]
 pub struct Faction {
     #[record("EDID")]
-    pub id: Option<ZString>,
+    pub id: Option<BString>,
     #[record("FULL")]
     pub full_name: Option<LString>,
     #[record("XNAM")]
@@ -122,7 +122,7 @@ pub struct FactionRank {
     #[record("FNAM")]
     pub female_title: Option<LString>,
     #[record("INAM")]
-    pub insignia: Option<ZString>,
+    pub insignia: Option<BString>,
 }
 
 #[derive(Copy, Clone, Debug, BinaryStruct)]

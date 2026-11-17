@@ -1,7 +1,7 @@
 use openfo4_esp_derive::{BinaryStruct, ConditionFunction};
 
 use crate::fields::{FieldMap, Read};
-use crate::{Error, FormId, Text, ZString};
+use crate::{BString, Error, FormId, Text};
 
 #[derive(Clone, Debug)]
 pub struct Conditions {
@@ -614,7 +614,7 @@ pub enum ConditionFunction {
     #[tag(446)]
     GetVelocity { axis: i32 },
     #[tag(447)]
-    GetGraphVariableFloat { name: ZString },
+    GetGraphVariableFloat { name: BString },
     #[tag(448)]
     HasPerk { perk: FormId },
     #[tag(449)]
@@ -847,7 +847,7 @@ pub enum ConditionFunction {
     #[tag(627)]
     IsDualCasting,
     #[tag(629)]
-    GetVmQuestVariable(FormId, ZString),
+    GetVmQuestVariable(FormId, BString),
     #[tag(630)]
     GetCombatAudioDetection,
     #[tag(631)]
@@ -895,9 +895,9 @@ pub enum ConditionFunction {
     #[tag(657)]
     GetArrestingActor,
     #[tag(659)]
-    HasVmScript(ZString),
+    HasVmScript(BString),
     #[tag(660)]
-    GetVmScriptVariable(ZString, ZString),
+    GetVmScriptVariable(BString, BString),
     #[tag(661)]
     GetWorkshopResourceDamage(FormId),
     #[tag(664)]
@@ -909,7 +909,7 @@ pub enum ConditionFunction {
     #[tag(674)]
     IsLastHostileActor,
     #[tag(675)]
-    GetGraphVariableInt(ZString),
+    GetGraphVariableInt(BString),
     #[tag(678)]
     ShouldAttackKill(FormId),
     #[tag(680)]
@@ -1143,35 +1143,35 @@ pub enum ConditionFunction {
 }
 
 trait ConditionParameter: Sized {
-    fn parse(raw: u32, cis: Option<ZString>) -> Result<Self, Error>;
+    fn parse(raw: u32, cis: Option<BString>) -> Result<Self, Error>;
 }
 
 impl ConditionParameter for u32 {
-    fn parse(raw: u32, _cis: Option<ZString>) -> Result<Self, Error> {
+    fn parse(raw: u32, _cis: Option<BString>) -> Result<Self, Error> {
         Ok(raw)
     }
 }
 
 impl ConditionParameter for i32 {
-    fn parse(raw: u32, _cis: Option<ZString>) -> Result<Self, Error> {
+    fn parse(raw: u32, _cis: Option<BString>) -> Result<Self, Error> {
         Ok(raw.cast_signed())
     }
 }
 
 impl ConditionParameter for f32 {
-    fn parse(raw: u32, _cis: Option<ZString>) -> Result<Self, Error> {
+    fn parse(raw: u32, _cis: Option<BString>) -> Result<Self, Error> {
         Ok(f32::from_bits(raw))
     }
 }
 
 impl ConditionParameter for FormId {
-    fn parse(raw: u32, _cis: Option<ZString>) -> Result<Self, Error> {
+    fn parse(raw: u32, _cis: Option<BString>) -> Result<Self, Error> {
         Ok(FormId(raw))
     }
 }
 
-impl ConditionParameter for ZString {
-    fn parse(_raw: u32, cis: Option<ZString>) -> Result<Self, Error> {
+impl ConditionParameter for BString {
+    fn parse(_raw: u32, cis: Option<BString>) -> Result<Self, Error> {
         match cis {
             Some(s) => Ok(s),
             None => Err(Error::Other(

@@ -13,6 +13,7 @@ glam = { workspace = true, features = ["bytemuck"] }
 thiserror = { workspace = true }
 hashbrown = { workspace = true }
 flate2 = { workspace = true }
+bstr = "1.13.1"
 
 openfo4_io = { version = "0.1.0", path = "../openfo4_io" }
 

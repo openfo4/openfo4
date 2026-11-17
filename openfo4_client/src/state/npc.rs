@@ -8,10 +8,11 @@ use openfo4_core::ecs::{Entity, World};
 use openfo4_core::events::EventBus;
 use openfo4_core::path::DataPathBuf;
 use openfo4_core::record::RecordId;
+use openfo4_esp::bstr::BString;
 use openfo4_esp::records::{
     Class, MovementSpeeds, NpcBaseFlags, NpcTemplateFlags, Race, RaceDataFlags, SubgraphFlags,
 };
-use openfo4_esp::{RecordData, RecordKind, ZString};
+use openfo4_esp::{RecordData, RecordKind};
 use openfo4_physics::components::{Collider, CollisionLayer, RigidBody};
 use openfo4_physics::controller::CharacterController;
 
@@ -333,7 +334,7 @@ pub async fn spawn_actor(
         for (id, part) in body_part_data.parts.iter().enumerate() {
             body_parts.push(BodyPartBoneProps {
                 id: id as u32,
-                start_bone: part.part_node.as_str().unwrap().to_owned(),
+                start_bone: std::str::from_utf8(&part.part_node).unwrap().to_owned(),
             });
 
             let condition = esp_loader
@@ -356,13 +357,13 @@ pub async fn spawn_actor(
         let search_paths = subgraph
             .animation_paths
             .iter()
-            .map(|v| DataPathBuf::new(v.as_bytes()))
+            .map(DataPathBuf::new)
             .collect::<Vec<_>>();
 
         subgraphs.push(ActorAnimationGraph {
             // graph: Arc::new(behavior.graph),
             // animation: behavior.clips,
-            behavior: DataPathBuf::new(subgraph.behavior_graph.as_bytes()),
+            behavior: DataPathBuf::new(&subgraph.behavior_graph),
             actor_keywords: subgraph.actor_keywords.clone(),
             target_keywords: subgraph.target_keywords.clone(),
             flags: subgraph.flags,
@@ -776,8 +777,8 @@ async fn load_subgraphs(
 pub struct RaceSubgraphData {
     pub actor_keywords: Vec<RecordId>,
     pub target_keywords: Vec<RecordId>,
-    pub behavior_graph: ZString,
-    pub animation_paths: Vec<ZString>,
+    pub behavior_graph: BString,
+    pub animation_paths: Vec<BString>,
     pub flags: SubgraphFlags,
 }
 

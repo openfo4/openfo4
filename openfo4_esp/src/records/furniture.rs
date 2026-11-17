@@ -9,13 +9,13 @@ use crate::records::{
     Rgba, impl_decode_bitflags,
 };
 use crate::vmad::VirtualMachineAdapter;
-use crate::{FormId, LString, ZString};
+use crate::{BString, FormId, LString};
 
 #[derive(Clone, Debug, Record)]
 #[record(ordered)]
 pub struct Furniture {
     #[record("EDID")]
-    pub id: Option<ZString>,
+    pub id: Option<BString>,
     #[record("VMAD")]
     pub virtual_machine_adapter: Option<VirtualMachineAdapter>,
     #[record("OBND")]
@@ -77,7 +77,7 @@ pub struct Furniture {
     #[record("FNPR")]
     pub marker_entry_points: Vec<FurnitureMarkerEntryPoint>,
     #[record("XMRK")]
-    pub marker_model: Option<ZString>,
+    pub marker_model: Option<BString>,
     #[record("SNAM")]
     pub marker_parameters: Vec<MarkerParameters>,
     #[record("APPR")]

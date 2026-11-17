@@ -4,6 +4,7 @@ use glam::{UVec2, Vec3};
 use openfo4_asset::{AssetLoader, Handle};
 use openfo4_core::path::DataPathBuf;
 use openfo4_core::record::RecordId;
+use openfo4_esp::bstr::{BStr, ByteSlice};
 use openfo4_esp::records::{Land, LandLandTexture, LandTextureAlphaLayerPoint, Quadrant};
 use openfo4_esp::{RecordData, RecordKind};
 use openfo4_nif::bgsm::Bgsm;
@@ -270,7 +271,7 @@ async fn load_terrain_material_from_form(
 
     let bgsm = match &texture_set.material {
         Some(path) => {
-            let mut path = DataPathBuf::new(path.as_bytes());
+            let mut path = DataPathBuf::new(path);
             path.push_front("materials");
 
             let bgsm = loader.load::<DataFile<Bgsm>, _>(&path).await.unwrap();
@@ -280,9 +281,9 @@ async fn load_terrain_material_from_form(
     };
 
     let diffuse_path = match &bgsm {
-        Some(bgsm) => Some(bgsm.diffuse_texture.as_bytes()),
+        Some(bgsm) => Some(BStr::new(bgsm.diffuse_texture.as_bytes())),
         None => match &texture_set.diffuse_texture {
-            Some(path) => Some(path.as_bytes()),
+            Some(path) => Some(path.as_bstr()),
             None => None,
         },
     }
@@ -293,9 +294,9 @@ async fn load_terrain_material_from_form(
     });
 
     let normal_path = match &bgsm {
-        Some(bgsm) => Some(bgsm.normal_texture.as_bytes()),
+        Some(bgsm) => Some(BStr::new(bgsm.normal_texture.as_bytes())),
         None => match &texture_set.normal_texture {
-            Some(path) => Some(path.as_bytes()),
+            Some(path) => Some(path.as_bstr()),
             None => None,
         },
     }
@@ -306,9 +307,9 @@ async fn load_terrain_material_from_form(
     });
 
     let smooth_spec_path = match &bgsm {
-        Some(bgsm) => Some(bgsm.smooth_spec_texture.as_bytes()),
+        Some(bgsm) => Some(BStr::new(bgsm.smooth_spec_texture.as_bytes())),
         None => match &texture_set.smooth_spec_texture {
-            Some(path) => Some(path.as_bytes()),
+            Some(path) => Some(path.as_bstr()),
             None => None,
         },
     }

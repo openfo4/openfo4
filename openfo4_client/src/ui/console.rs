@@ -164,7 +164,7 @@ async fn center_on_cell(
                     RecordData::Cell(cell) => cell
                         .id
                         .as_ref()
-                        .and_then(|s| s.as_str())
+                        .and_then(|s| std::str::from_utf8(s).ok())
                         .is_some_and(|s| Lowercase::new(s) == name),
                     _ => false,
                 })
