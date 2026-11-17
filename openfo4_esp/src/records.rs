@@ -2,6 +2,7 @@ pub mod faction;
 pub mod furniture;
 pub mod ingredient;
 pub mod magic_effect;
+pub mod misc_object;
 pub mod object_modification;
 pub mod package;
 
@@ -208,7 +209,7 @@ pub struct Component {
     pub mod_scrap_scalar: Option<FormId>,
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, BinaryStruct)]
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Hash, BinaryStruct)]
 pub struct Bounds {
     pub min_x: i16,
     pub min_y: i16,
@@ -376,7 +377,7 @@ pub enum HeadPartAssetType {
     ChargenMorph = 2,
 }
 
-#[derive(Clone, Debug, Record)]
+#[derive(Clone, Debug, Default, Record)]
 #[record(ordered)]
 pub struct Model {
     #[record("MODL")]
@@ -1723,58 +1724,6 @@ bitflags! {
 }
 
 impl_decode_bitflags!(LightDataFlags: u32);
-
-/// A miscellaneous item.
-#[derive(Clone, Debug, Record)]
-pub struct MiscObject {
-    #[record("EDID")]
-    pub id: BString,
-    #[record("VMAD")]
-    pub virtual_machine_adapter: Option<VirtualMachineAdapter>,
-    #[record("PTRN")]
-    pub preview_tranform: Option<FormId>,
-    #[record("OBND")]
-    pub object_bounds: Bounds,
-    /// The localized name of the record.
-    #[record("FULL")]
-    pub name: Option<LString>,
-    /// The worldspace model of the record.
-    #[record("MODL")]
-    pub model: Model,
-    #[record("ICON")]
-    pub inventory_image: Option<BString>,
-    #[record("MICO")]
-    pub message_icon: Option<BString>,
-    // TODO
-    #[record("DEST")]
-    pub dest: Option<()>,
-    #[record("YNAM")]
-    pub sound_pickup: Option<FormId>,
-    #[record("ZNAM")]
-    pub sound_drop: Option<FormId>,
-    #[record("KSIZ")]
-    _keyword_count: Option<u32>,
-    #[record("KWDA")]
-    pub keywords: Option<Array<FormId>>,
-    #[record("DATA")]
-    pub data: MiscObjectData,
-    #[record("CVPA")]
-    pub components: Option<Array<MiscObjectComponents>>,
-    #[record("CDIX")]
-    pub component_display_indices: Option<Array<u8>>,
-}
-
-#[derive(Copy, Clone, Debug, BinaryStruct)]
-pub struct MiscObjectData {
-    pub value: u32,
-    pub weight: f32,
-}
-
-#[derive(Copy, Clone, Debug, BinaryStruct)]
-pub struct MiscObjectComponents {
-    pub component: FormId,
-    pub count: u32,
-}
 
 #[derive(Clone, Debug, Record)]
 pub struct STAT {
