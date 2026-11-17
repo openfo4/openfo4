@@ -2,7 +2,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use glam::{FloatExt, Quat, Vec2, Vec3, Vec4};
-use hashbrown::HashMap;
+use hashbrown::{HashMap, HashSet};
 use openfo4_asset::AssetLoader;
 use openfo4_common::color::{LinearRgb, Rgb};
 use openfo4_common::components::{AmbientLight, Color, DirectionalLight, Transform};
@@ -13,20 +13,21 @@ use openfo4_core::record::RecordId;
 use openfo4_core::transform::ConvertCoordinateSystem;
 use openfo4_core_pipeline::entities::Entities;
 use openfo4_core_pipeline::sky::SkyMaterial;
-use openfo4_esp::records::{Rgba, TimeOfDaySetExtended};
-use openfo4_esp::{FormId, RecordData, RecordKind};
+use openfo4_esp::records::{ParentWorldspaceFlags, Rgba, TimeOfDaySetExtended};
+use openfo4_esp::{RecordData, RecordKind};
 use openfo4_nif::{Block, Nif};
 use openfo4_render::mesh::{Indices, Mesh};
 use openfo4_render::texture::image::MipImage;
-use openfo4_tasks::TaskPool;
+use openfo4_tasks::{Task, TaskPool};
+use thiserror::Error;
 
 use crate::assets::data_file::DataFile;
 use crate::assets::texture::{FileImage, FileImageKey};
 use crate::components::{Player, WorldSpace};
 use crate::shared::SharedState;
-use crate::state::esp::EspLoader;
+use crate::state::esp::{self, EspLoader};
 use crate::state::hardcoded::{
-    DIRECTIONAL_LIGHT_ILLUMINANCE_FACTOR, HARDCODED_MODULE_ID, PATH_SKY_ATMOSPHERE, PATH_SKY_CLOUDS,
+    DIRECTIONAL_LIGHT_ILLUMINANCE_FACTOR, PATH_SKY_ATMOSPHERE, PATH_SKY_CLOUDS,
 };
 use crate::systems::time::GameTime;
 
@@ -35,35 +36,37 @@ use crate::systems::time::GameTime;
 const SUNLIGHT_BASE_ILLUMINANCE: f32 = 1.0 / 4.5 * DIRECTIONAL_LIGHT_ILLUMINANCE_FACTOR;
 
 pub struct WeatherSystem {
+    /// Climate for every worldspace.
     climates: HashMap<RecordId, WorldspaceClimate>,
     ambient_light: Option<Entity>,
     sun_light: Option<Entity>,
     entities: Entities,
     cloud_offsets: [Vec2; 32],
+    /// Current worldspace that the player is in.
+    cur_worldspace: Option<WorldSpace>,
+    load_sun: Option<Task<Option<MipImage>>>,
 }
 
 impl WeatherSystem {
-    pub fn new(
+    pub async fn new(
         esp_loader: Arc<EspLoader>,
-        pool: Arc<TaskPool>,
         asset_loader: &AssetLoader,
         shared: &SharedState,
     ) -> Self {
-        let mut climate = futures_lite::future::block_on(load_worldspace_weather_props(
-            asset_loader,
-            &esp_loader,
-            WorldSpace {
-                record: RecordId::new(HARDCODED_MODULE_ID, FormId(0x3c)),
-                is_interior: false,
-            },
-        ));
+        let mut climates = HashMap::new();
+
+        for record in esp_loader
+            .lookup_all(Some(RecordKind::Worldspace))
+            .await
+            .unwrap()
+        {
+            let climate = load_worldspace_weather_props(asset_loader, &esp_loader, record.id).await;
+
+            climates.insert(record.id, climate);
+        }
 
         let mesh = futures_lite::future::block_on(load_sky_mesh(asset_loader));
         shared.entities.set_sky_mesh(mesh);
-
-        if let Some(sun) = climate.sun.take() {
-            shared.entities.set_sun_texture(sun);
-        }
 
         let meshes = futures_lite::future::block_on(load_cloud_meshes(asset_loader));
         shared.entities.set_clouds_meshes(meshes);
@@ -77,9 +80,6 @@ impl WeatherSystem {
             sun_position: Vec3::Y,
             sky_scale: 1.0,
         });
-
-        let mut climates = HashMap::new();
-        climates.insert(RecordId::new(HARDCODED_MODULE_ID, FormId(0x3c)), climate);
 
         let lut =
             futures_lite::future::block_on(asset_loader.load::<FileImage, _>(&FileImageKey {
@@ -95,10 +95,18 @@ impl WeatherSystem {
             sun_light: None,
             entities: shared.entities.clone(),
             cloud_offsets: [Vec2::ZERO; 32],
+            cur_worldspace: None,
+            load_sun: None,
         }
     }
 
-    pub fn update(&mut self, world: &mut World, delta: Duration) {
+    pub fn update(
+        &mut self,
+        world: &mut World,
+        pool: &TaskPool,
+        loader: &AssetLoader,
+        delta: Duration,
+    ) {
         let Some(time) = world
             .query_mut::<&GameTime>()
             .into_iter()
@@ -120,6 +128,43 @@ impl WeatherSystem {
         let Some(climate) = self.climates.get_mut(&worldspace.record) else {
             return;
         };
+
+        // Climate changed.
+        if Some(worldspace) != self.cur_worldspace {
+            self.load_sun = None;
+
+            if let Some(path) = climate.sun.clone() {
+                let loader = loader.clone();
+                let task = pool.spawn(async move {
+                    let key = FileImageKey::new(path).with_force_srgb(true);
+                    match loader.load::<FileImage, _>(&key).await {
+                        Ok(img) => Some(img.0.clone()),
+                        Err(err) => {
+                            tracing::error!(
+                                "failed to load sun texture from {}: {}",
+                                key.path,
+                                err
+                            );
+                            None
+                        }
+                    }
+                });
+
+                self.load_sun = Some(task);
+            }
+
+            self.cur_worldspace = Some(worldspace);
+        }
+
+        if let Some(task) = &mut self.load_sun
+            && let Some(texture) = task.get_output()
+        {
+            self.load_sun = None;
+
+            if let Some(texture) = texture {
+                self.entities.set_sun_texture(texture);
+            }
+        }
 
         let mut weather_changed = false;
         let active_weather = *climate.active_weather.get_or_insert_with(|| {
@@ -199,7 +244,7 @@ impl WeatherSystem {
 }
 
 struct WorldspaceClimate {
-    sun: Option<MipImage>,
+    sun: Option<DataPathBuf>,
     weathers: Vec<Weather>,
     active_weather: Option<usize>,
 }
@@ -443,21 +488,10 @@ async fn load_cloud_meshes(loader: &AssetLoader) -> Vec<Mesh> {
 async fn load_worldspace_weather_props(
     loader: &AssetLoader,
     esp_loader: &EspLoader,
-    worldspace: WorldSpace,
+    worldspace_id: RecordId,
 ) -> WorldspaceClimate {
-    let worldspace_record = esp_loader
-        .lookup(Some(RecordKind::Worldspace), worldspace.record)
+    let climate = load_climate_from_worldspace(esp_loader, worldspace_id)
         .await
-        .unwrap();
-    let RecordData::Worldspace(worldspace) = &worldspace_record.local.data else {
-        todo!();
-    };
-
-    let Some(climate) = &worldspace.climate else {
-        todo!();
-    };
-    let climate = esp_loader
-        .resolve_form(*climate, worldspace_record.id)
         .unwrap();
 
     let climate_record = esp_loader
@@ -470,15 +504,7 @@ async fn load_worldspace_weather_props(
 
     let mut sun = None;
     if let Some(path) = &climate.sun_texture {
-        let img = loader
-            .load::<FileImage, _>(&FileImageKey {
-                path: DataPathBuf::new(path),
-                force_srgb: None,
-            })
-            .await
-            .unwrap();
-
-        sun = Some(img.0.clone());
+        sun = Some(DataPathBuf::new(path));
     }
 
     let mut weathers = Vec::new();
@@ -758,6 +784,55 @@ async fn load_worldspace_weather_props(
         sun,
         weathers,
         active_weather: None,
+    }
+}
+
+#[derive(Debug, Error)]
+enum LoadClimateError {
+    #[error(transparent)]
+    Esp(#[from] esp::Error),
+    #[error("worldspace parents form a cycle")]
+    ParentCycle,
+    #[error("worldspace has no climate")]
+    NoClimate,
+}
+
+async fn load_climate_from_worldspace(
+    loader: &EspLoader,
+    mut id: RecordId,
+) -> Result<RecordId, LoadClimateError> {
+    let mut visited = HashSet::new();
+
+    loop {
+        if visited.contains(&id) {
+            return Err(LoadClimateError::ParentCycle);
+        }
+
+        let worldspace = loader.lookup(Some(RecordKind::Worldspace), id).await?;
+        let RecordData::Worldspace(data) = worldspace.local.data else {
+            unreachable!();
+        };
+
+        if let Some(id) = data.climate {
+            let id = loader.resolve_form(id, worldspace.id).unwrap();
+            return Ok(id);
+        }
+
+        visited.insert(worldspace.id);
+
+        let Some(parent) = data.parent_worldspace else {
+            return Err(LoadClimateError::NoClimate);
+        };
+
+        if data
+            .parent_worldspace_flags
+            .is_none_or(|flags| !flags.contains(ParentWorldspaceFlags::USE_CLIMATE_DATA))
+        {
+            return Err(LoadClimateError::NoClimate);
+        }
+
+        let parent = loader.resolve_form(parent, worldspace.id).unwrap();
+        id = parent;
     }
 }
 
