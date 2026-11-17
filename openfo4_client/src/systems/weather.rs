@@ -65,11 +65,17 @@ impl WeatherSystem {
             climates.insert(record.id, climate);
         }
 
-        let mesh = futures_lite::future::block_on(load_sky_mesh(asset_loader));
-        shared.entities.set_sky_mesh(mesh);
+        if let Ok(mesh) = load_sky_mesh(asset_loader).await.inspect_err(|err| {
+            tracing::error!("failed to load sky mesh: {}", err);
+        }) {
+            shared.entities.set_sky_mesh(mesh);
+        }
 
-        let meshes = futures_lite::future::block_on(load_cloud_meshes(asset_loader));
-        shared.entities.set_clouds_meshes(meshes);
+        if let Ok(meshes) = load_cloud_meshes(asset_loader).await.inspect_err(|err| {
+            tracing::error!("failed to load cloud meshes: {}", err);
+        }) {
+            shared.entities.set_clouds_meshes(meshes);
+        }
 
         shared.entities.set_sky_material(SkyMaterial {
             sky_lower: LinearRgb::WHITE,
@@ -81,13 +87,18 @@ impl WeatherSystem {
             sky_scale: 1.0,
         });
 
-        let lut =
-            futures_lite::future::block_on(asset_loader.load::<FileImage, _>(&FileImageKey {
+        if let Ok(lut) = asset_loader
+            .load::<FileImage, _>(&FileImageKey {
                 path: DataPathBuf::new("textures/effects/luts/lut_cw_clearday.dds"),
                 force_srgb: None,
-            }))
-            .unwrap();
-        shared.entities.set_lut(lut.0.clone());
+            })
+            .await
+            .inspect_err(|err| {
+                tracing::error!("failed to load lut: {}", err);
+            })
+        {
+            shared.entities.set_lut(lut.0.clone());
+        }
 
         Self {
             climates,
@@ -345,11 +356,11 @@ impl WeatherParams {
     }
 }
 
-async fn load_sky_mesh(loader: &AssetLoader) -> Mesh {
+async fn load_sky_mesh(loader: &AssetLoader) -> Result<Mesh, String> {
     let file = loader
         .load::<DataFile<Nif>, _>(PATH_SKY_ATMOSPHERE)
         .await
-        .unwrap();
+        .map_err(|err| err.to_string())?;
 
     for block in file.iter() {
         match block {
@@ -403,20 +414,20 @@ async fn load_sky_mesh(loader: &AssetLoader) -> Mesh {
                         .collect(),
                 ));
 
-                return mesh;
+                return Ok(mesh);
             }
             _ => {}
         }
     }
 
-    todo!("no BSTriShape in atmosphere.nif")
+    Err(format!("{} has no BSTriShape", PATH_SKY_ATMOSPHERE))
 }
 
-async fn load_cloud_meshes(loader: &AssetLoader) -> Vec<Mesh> {
+async fn load_cloud_meshes(loader: &AssetLoader) -> Result<Vec<Mesh>, String> {
     let file = loader
         .load::<DataFile<Nif>, _>(PATH_SKY_CLOUDS)
         .await
-        .unwrap();
+        .map_err(|err| err.to_string())?;
 
     let mut meshes = Vec::new();
     for block in file.iter() {
@@ -482,7 +493,7 @@ async fn load_cloud_meshes(loader: &AssetLoader) -> Vec<Mesh> {
         }
     }
 
-    meshes
+    Ok(meshes)
 }
 
 async fn load_worldspace_weather_props(
