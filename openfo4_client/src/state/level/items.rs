@@ -68,7 +68,7 @@ pub async fn resolve_item(
 
                 items.push(ItemStack {
                     item: record_id,
-                    name: data.id.to_string(),
+                    name: data.id.clone().unwrap().to_string(),
                     hidden: false,
                     kind: ItemKind::Misc,
                     count,
