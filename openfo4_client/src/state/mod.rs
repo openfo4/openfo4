@@ -177,7 +177,7 @@ impl GameState {
         let audio = AudioManager::new(DefaultBackend::new());
 
         Self {
-            weather: WeatherSystem::new(loader.clone(), pool.clone(), &asset_loader, &shared),
+            weather: WeatherSystem::new(loader.clone(), &asset_loader, &shared).await,
             inventory: InventorySystem::new(pool.clone(), asset_loader.clone(), loader.clone()),
             pool,
             world,
@@ -230,8 +230,12 @@ impl GameState {
         self.ai.run_events(&mut self.world, &mut self.event_bus);
 
         update_time(&mut self.world, Duration::from_secs_f32(1.0 / UPS as f32));
-        self.weather
-            .update(&mut self.world, self.interval.timestep());
+        self.weather.update(
+            &mut self.world,
+            &self.pool,
+            &self.asset_loader,
+            self.interval.timestep(),
+        );
 
         despawn_expired(&mut self.world);
 
