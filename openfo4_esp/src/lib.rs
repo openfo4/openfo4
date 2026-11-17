@@ -790,6 +790,10 @@ pub struct Record {
     pub data: RecordData,
 }
 
+/// The data that a [`Record`] carries.
+///
+/// You can use the [`TryFrom`] implementation to access a specific data type without using a
+/// `match` expression.
 #[derive(Clone, Debug)]
 #[non_exhaustive]
 pub enum RecordData {
@@ -934,112 +938,216 @@ pub enum RecordData {
 }
 
 impl RecordData {
-    pub fn as_variant<T>(&self) -> Option<&T>
+    pub fn as_variant<'a, T>(&'a self) -> Option<&'a T>
     where
-        T: AsRecordKind,
+        &'a T: TryFrom<&'a Self, Error = ()>,
     {
-        T::from_data(self)
+        <&'a T>::try_from(self).ok()
     }
 
     pub fn into_variant<T>(self) -> Option<T>
     where
-        T: AsRecordKind,
+        T: TryFrom<Self, Error = ()>,
     {
-        T::from_data_owned(self)
+        T::try_from(self).ok()
     }
 }
 
-pub trait AsRecordKind: Sized {
-    const KIND: RecordKind;
-
-    #[doc(hidden)]
-    fn from_data(data: &RecordData) -> Option<&Self>;
-
-    #[doc(hidden)]
-    fn from_data_owned(data: RecordData) -> Option<Self>;
-}
-
-macro_rules! as_record_kind_impl {
-    ($($t:tt => $kind:expr),*,) => {
+macro_rules! impl_record {
+    ($($ty:ty, $kind:tt, $data:tt),*$(,)?) => {
         $(
-            impl AsRecordKind for $t {
-                const KIND: RecordKind = $kind;
+            impl From<$ty> for RecordData {
+                fn from(value: $ty) -> Self {
+                    Self::$data(value)
+                }
+            }
 
-                fn from_data(data: &RecordData) -> Option<&Self> {
-                    match data {
-                        RecordData::$t(v) => Some(v),
-                        _ => None,
+            impl TryFrom<RecordData> for $ty {
+                type Error = ();
+
+                fn try_from(value: RecordData) -> Result<Self, Self::Error> {
+                    match value {
+                        RecordData::$data(value) => Ok(value),
+                        _ => Err(()),
                     }
                 }
+            }
 
-                fn from_data_owned(data: RecordData) -> Option<Self> {
-                    match data {
-                        RecordData::$t(v) => Some(v),
-                        _ => None,
+            impl<'a> TryFrom<&'a RecordData> for &'a $ty {
+                type Error = ();
+
+                fn try_from(value: &'a RecordData) -> Result<Self, Self::Error> {
+                    match value {
+                        RecordData::$data(value) => Ok(value),
+                        _ => Err(()),
+                    }
+                }
+            }
+
+            impl<'a> TryFrom<&'a mut RecordData> for &'a mut $ty {
+                type Error = ();
+
+                fn try_from(value: &'a mut RecordData) -> Result<Self, Self::Error> {
+                    match value {
+                        RecordData::$data(value) => Ok(value),
+                        _ => Err(()),
                     }
                 }
             }
         )*
+
+        impl RecordData {
+            /// Returns the kind of the data that this [`RecordData`] carries.
+            pub const fn kind(&self) -> RecordKind {
+                match self {
+                    $(
+                        Self::$data(_) => RecordKind::$kind,
+                    )*
+                }
+            }
+        }
     };
 }
 
-as_record_kind_impl! {
-    Tes4 => RecordKind::Tes4,
-    GameSetting => RecordKind::GameSetting,
-    Keyword => RecordKind::Keyword,
-    LocationReferenceType => RecordKind::LocationReferenceType,
-    Action => RecordKind::Action,
-    TRNS => RecordKind::Transform,
-    Component => RecordKind::Component,
-    TextureSet => RecordKind::TextureSet,
-    GLOB => RecordKind::GlobalVariable,
-    DMGT => RecordKind::DamageType,
-    Class => RecordKind::Class,
-    Faction => RecordKind::Faction,
-    HeadPart => RecordKind::HeadPart,
-    Race => RecordKind::Race,
-    SOUN => RecordKind::Sound,
-    AcousticSpace => RecordKind::AcousticSpace,
-    MagicEffect => RecordKind::MagicEffect,
-    LandTexture => RecordKind::LandTexture,
-    ENCH => RecordKind::Enchantment,
-    SPEL => RecordKind::Spell,
-    Activator => RecordKind::Activator,
-    TACT => RecordKind::TalkingActivator,
-    Armor => RecordKind::Armor,
-    Book => RecordKind::Book,
-    Container => RecordKind::Container,
-    Ingredient => RecordKind::Ingredient,
-    Light => RecordKind::Light,
-    MiscObject => RecordKind::MiscObject,
-    STAT => RecordKind::Static,
-    StaticCollection => RecordKind::StaticCollection,
-    MovableStatic => RecordKind::MovableStatic,
-    GRAS => RecordKind::Grass,
-    FLOR => RecordKind::Flora,
-    Furniture => RecordKind::Furniture,
-    Ammo => RecordKind::Ammo,
-    Npc => RecordKind::Npc,
-    LeveledActor => RecordKind::LeveledActor,
-    Key => RecordKind::Key,
-    Ingestible => RecordKind::Ingestible,
-    IdleMarker => RecordKind::IdleMarker,
-    Note => RecordKind::Note,
-    Projectile => RecordKind::Projectile,
-    Hazard => RecordKind::Hazard,
-    LeveledItem => RecordKind::LeveledItem,
-    Weather => RecordKind::Weather,
-    Climate => RecordKind::Climate,
-    ShaderParticleGeometry => RecordKind::ShaderParticleGeometry,
-    VisualEffect => RecordKind::VisualEffect,
-    Cell => RecordKind::Cell,
-    PlacedNpc => RecordKind::PlacedNpc,
-    PlacedObject => RecordKind::PlacedObject,
-    // NAVMESH
-    PlacedGrenade => RecordKind::PlacedGrenade,
-    PlacedHazard => RecordKind::PlacedHazard,
-    Worldspace => RecordKind::Worldspace,
-    Land => RecordKind::Land,
+impl_record! {
+    Tes4, Tes4, Tes4,
+    GameSetting, GameSetting, GameSetting,
+    Keyword, Keyword, Keyword,
+    LocationReferenceType, LocationReferenceType, LocationReferenceType,
+    Action, Action, Action,
+    TRNS, Transform, TRNS,
+    Component, Component, Component,
+    TextureSet, TextureSet, TextureSet,
+    GLOB, GlobalVariable, GLOB,
+    DMGT, DamageType, DMGT,
+    Class, Class, Class,
+    Faction, Faction, Faction,
+    HeadPart, HeadPart, HeadPart,
+    Race, Race, Race,
+    SOUN, Sound, SOUN,
+    AcousticSpace, AcousticSpace, AcousticSpace,
+    MagicEffect, MagicEffect, MagicEffect,
+    LandTexture, LandTexture, LandTexture,
+    ENCH, Enchantment, ENCH,
+    SPEL, Spell, SPEL,
+    Activator, Activator, Activator,
+    TACT, TalkingActivator, TACT,
+    Armor, Armor, Armor,
+    Book, Book, Book,
+    Container, Container, Container,
+    Door, Door, Door,
+    Ingredient, Ingredient, Ingredient,
+    Light, Light, Light,
+    MiscObject, MiscObject, MiscObject,
+    STAT, Static, STAT,
+    StaticCollection, StaticCollection, StaticCollection,
+    MovableStatic, MovableStatic, MovableStatic,
+    GRAS, Grass, GRAS,
+    FLOR, Flora, FLOR,
+    Furniture, Furniture, Furniture,
+    Weapon, Weapon, Weapon,
+    Ammo, Ammo, Ammo,
+    Npc, Npc, Npc,
+    LeveledActor, LeveledActor, LeveledActor,
+    Key, Key, Key,
+    Ingestible, Ingestible, Ingestible,
+    IdleMarker, IdleMarker, IdleMarker,
+    Note, Note, Note,
+    Projectile, Projectile, Projectile,
+    Hazard, Hazard, Hazard,
+    BlendableSpline, BlendableSpline, BlendableSpline,
+    Terminal, Terminal, Terminal,
+    Tree, Tree, Tree,
+    LeveledItem, LeveledItem, LeveledItem,
+    Weather, Weather, Weather,
+    Climate, Climate, Climate,
+    ShaderParticleGeometry, ShaderParticleGeometry, ShaderParticleGeometry,
+    VisualEffect, VisualEffect, VisualEffect,
+    Region, Region, Region,
+    NAVI, NavMeshInfo, NavMeshInfo,
+    Cell, Cell, Cell,
+    PlacedNpc, PlacedNpc, PlacedNpc,
+    PlacedObject, PlacedObject, PlacedObject,
+    NavMesh, NavMesh, NavMesh,
+    PlacedGrenade, PlacedGrenade, PlacedGrenade,
+    PlacedHazard, PlacedHazard, PlacedHazard,
+    Worldspace, Worldspace, Worldspace,
+    Land, Land, Land,
+    PlacedMissile, PlacedMissile, PlacedMissile,
+    Quest, Quest, Quest,
+    DialogueBranch, DialogueBranch, DialogueBranch,
+    DialogueTopic, DialogueTopic, DialogueTopic,
+    Scene, Scene, Scene,
+    DialogueInfo, DialogueInfo, DialogueInfo,
+    Animation, Animation, Animation,
+    Package, Package, Package,
+    CombatStyle, CombatStyle, CombatStyle,
+    LoadScreen, LoadScreen, LoadScreen,
+    AnimatedObject, AnimatedObject, AnimatedObject,
+    Water, Water, Water,
+    EffectShader, EffectShader, EffectShader,
+    Explosion, Explosion, Explosion,
+    Debris, Debris, Debris,
+    ImageSpace, ImageSpace, ImageSpace,
+    ImageSpaceAdapter, ImageSpaceAdapter, ImageSpaceAdapter,
+    FormList, FormList, FormList,
+    Perk, Perk, Perk,
+    BodyPartData, BodyPartData, BodyPartData,
+    AddonNode, AddonNode, AddonNode,
+    ActorValueInfo, ActorValueInfo, ActorValueInfo,
+    CameraShot, CameraShot, CameraShot,
+    CameraPath, CameraPath, CameraPath,
+    VoiceType, VoiceType, VoiceType,
+    MaterialType, MaterialType, MaterialType,
+    Impact, Impact, Impact,
+    ImpactDataSet, ImpactDataSet, ImpactDataSet,
+    ArmorAddon, ArmorAddon, ArmorAddon,
+    EncounterZone, EncounterZone, EncounterZone,
+    Location, Location, Location,
+    Message, Message, Message,
+    DefaultObjectManager, DefaultObjectManager, DefaultObjectManager,
+    DefaultObject, DefaultObject, DefaultObject,
+    LightingTemplate, LightingTemplate, LightingTemplate,
+    MusicType, MusicType, MusicType,
+    Footstep, Footstep, Footstep,
+    FootstepSet, FootstepSet, FootstepSet,
+    StoryManagerBranchNode, StoryManagerBranchNode, StoryManagerBranchNode,
+    StoryManagerQuestNode, StoryManagerQuestNode, StoryManagerQuestNode,
+    StoryManagerEventNode, StoryManagerEventNode, StoryManagerEventNode,
+    MusicTrack, MusicTrack, MusicTrack,
+    DialogueView, DialogueView, DialogueView,
+    EquipType, EquipType, EquipType,
+    Relationship, Relationship, Relationship,
+    AssocationType, AssocationType, AssocationType,
+    Outfit, Outfit, Outfit,
+    ArtObject, ArtObject, ArtObject,
+    MaterialObject, MaterialObject, MaterialObject,
+    MovementType, MovementType, MovementType,
+    SoundDescriptor, SoundDescriptor, SoundDescriptor,
+    SoundCategory, SoundCategory, SoundCategory,
+    SoundOutputModel, SoundOutputModel, SoundOutputModel,
+    CollisionLayer, CollisionLayer, CollisionLayer,
+    Color, Color, Color,
+    ReverbParameters, ReverbParameters, ReverbParameters,
+    PackIn, PackIn, PackIn,
+    ReferenceGroup, ReferenceGroup, ReferenceGroup,
+    AimModel, AimModel, AimModel,
+    Layer, Layer, Layer,
+    ConstructibleObject, ConstructibleObject, ConstructibleObject,
+    ObjectModification, ObjectModification, ObjectModification,
+    MaterialSwap, MaterialSwap, MaterialSwap,
+    Zoom, Zoom, Zoom,
+    InstanceNamingRules, InstanceNamingRules, InstanceNamingRules,
+    SoundKeywordMapping, SoundKeywordMapping, SoundKeywordMapping,
+    AudioEffectChain, AudioEffectChain, AudioEffectChain,
+    SceneCollection, SceneCollection, SceneCollection,
+    AttractionRule, AttractionRule, AttractionRule,
+    AudioCategorySnapshot, AudioCategorySnapshot, AudioCategorySnapshot,
+    AnimationSoundTagSet, AnimationSoundTagSet, AnimationSoundTagSet,
+    NavigationMeshObstacleManager, NavigationMeshObstacleManager, NavigationMeshObstacleManager,
+    LensFlare, LensFlare, LensFlare,
+    GodRays, GodRays, GodRays,
+    ObjectVisibilityManager, ObjectVisibilityManager, ObjectVisibilityManager,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
