@@ -59,6 +59,15 @@ impl Gizmos {
         }
     }
 
+    /// Creates a new `Gizmos` instance that will not render anything.
+    pub fn dummy() -> Self {
+        Self {
+            camera: Arc::default(),
+            current: Arc::default(),
+            next: Mutex::default(),
+        }
+    }
+
     /// Draw a line from `start` to `end`.
     pub fn line(&self, start: Vec3, end: Vec3, color: Color) {
         self.next.lock().push(DrawCommand { start, end, color });

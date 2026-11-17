@@ -83,6 +83,12 @@ impl FileLoader {
         Self { sources, files }
     }
 
+    pub fn add_memory(&mut self, path: DataPathBuf, data: Vec<u8>) {
+        let index = self.sources.len();
+        self.sources.push(Source::Memory(data));
+        self.files.insert(path, index);
+    }
+
     pub async fn read(&self, path: &DataPath) -> Result<Vec<u8>, Error> {
         tracing::debug!("loading {}", path);
 
@@ -104,6 +110,7 @@ impl FileLoader {
                 let buf = archive.read(&path).await.map_err(Error::Ba2)?;
                 Ok(buf)
             }
+            Source::Memory(buf) => Ok(buf.clone()),
         }
     }
 
@@ -117,6 +124,7 @@ enum Source {
     /// A filesystem root directory.
     Directory(DirectorySource),
     Archive(Archive<File>),
+    Memory(Vec<u8>),
 }
 
 #[derive(Debug)]

@@ -57,5 +57,9 @@ rstar = "0.13.0"
 
 serde = { version = "1.0.228", features = ["derive"] }
 
+[dev-dependencies]
+pscc = { git = "https://github.com/openfo4/psc-tools", rev = "ec8ebcb59b9f861242a022c370554f5a804a6847" }
+pex = { git = "https://github.com/openfo4/psc-tools", rev = "ec8ebcb59b9f861242a022c370554f5a804a6847" }
+
 [lints]
 workspace = true
