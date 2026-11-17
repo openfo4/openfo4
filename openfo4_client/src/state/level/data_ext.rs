@@ -1,13 +1,14 @@
+use openfo4_esp::bstr::BString;
 use openfo4_esp::records::{Array, Bounds, PositionRotation};
 use openfo4_esp::vmad::VirtualMachineAdapter;
-use openfo4_esp::{FormId, RecordData, ZString};
+use openfo4_esp::{FormId, RecordData};
 
 use crate::state::level::partial::LodLevel;
 
 pub trait RecordDataExt {
     fn position(&self) -> Option<PositionRotation>;
 
-    fn model(&self, lod: LodLevel) -> Option<&ZString>;
+    fn model(&self, lod: LodLevel) -> Option<&BString>;
 
     fn object_bounds(&self) -> Option<Bounds>;
 
@@ -28,7 +29,7 @@ impl RecordDataExt for RecordData {
         }
     }
 
-    fn model(&self, lod: LodLevel) -> Option<&ZString> {
+    fn model(&self, lod: LodLevel) -> Option<&BString> {
         match self {
             Self::STAT(data) => match lod {
                 LodLevel::Normal => data.modl.model.as_ref(),

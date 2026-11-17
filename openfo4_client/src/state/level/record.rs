@@ -603,7 +603,7 @@ impl SpawnEntity {
 
         let scene = match model {
             Some(model) if flags.scene => {
-                let mut path = DataPathBuf::new(model.as_bytes());
+                let mut path = DataPathBuf::new(model);
                 path.push_front("meshes");
 
                 match ctx
@@ -759,7 +759,7 @@ impl SpawnEntity {
 
         let scene = match model {
             Some(model) if flags.scene => {
-                let mut path = DataPathBuf::new(model.as_bytes());
+                let mut path = DataPathBuf::new(model);
                 path.push_front("meshes");
 
                 match ctx

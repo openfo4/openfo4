@@ -219,12 +219,12 @@ fn lower_condition(translator: &mut Translator, condition: &Condition) -> Value 
         }
         // Animation
         ConditionFunction::GetGraphVariableInt(name) => {
-            let name = Value::String(name.as_str().unwrap().to_string());
+            let name = Value::String(std::str::from_utf8(name).unwrap().to_string());
             let value = translator.call(entity, "GetAnimationVariableInt", &[name], Type::Int);
             (value, Type::Int)
         }
         ConditionFunction::GetGraphVariableFloat { name } => {
-            let name = Value::String(name.as_str().unwrap().to_string());
+            let name = Value::String(std::str::from_utf8(name).unwrap().to_string());
             let value = translator.call(entity, "GetAnimationVariableFloat", &[name], Type::Float);
             (value, Type::Float)
         }

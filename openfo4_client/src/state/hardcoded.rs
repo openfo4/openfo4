@@ -8,8 +8,9 @@ use std::num::NonZeroU32;
 use hashbrown::HashMap;
 use openfo4_core::path::DataPath;
 use openfo4_core::record::{ModuleId, RecordId};
+use openfo4_esp::bstr::BString;
 use openfo4_esp::records::{ActorValueInfo, PlacedNpc, PositionRotation};
-use openfo4_esp::{FormId, Record, RecordData, RecordHeaderFlags, ZString};
+use openfo4_esp::{FormId, Record, RecordData, RecordHeaderFlags};
 
 pub const HARDCODED_MODULE_ID: ModuleId = ModuleId(NonZeroU32::MIN);
 
@@ -77,7 +78,7 @@ pub fn load_hardcoded_forms() -> HashMap<RecordId, Record> {
                 id,
                 flags: RecordHeaderFlags::empty(),
                 data: RecordData::ActorValueInfo(ActorValueInfo {
-                    id: Some(ZString::new(name.as_bytes().to_vec())),
+                    id: Some(BString::new(name.as_bytes().to_vec())),
                     full_name: None,
                     description: None,
                     abbreviation: None,
@@ -148,7 +149,7 @@ pub fn load_hardcoded_forms() -> HashMap<RecordId, Record> {
                 id: PLACED_ACTOR_PLAYER_REF.form,
                 flags: RecordHeaderFlags::empty(),
                 data: RecordData::PlacedNpc(PlacedNpc {
-                    id: Some(ZString::new(b"PlayerRef".to_vec())),
+                    id: Some(BString::new(b"PlayerRef".to_vec())),
                     virtual_machine_adapter: None,
                     base_npc: ACTOR_PLAYER.form,
                     encounter_zone: None,

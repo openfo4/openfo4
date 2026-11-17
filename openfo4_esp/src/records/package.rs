@@ -6,14 +6,14 @@ use crate::conditions::Conditions;
 use crate::fields::{SubField, SubRecordArray};
 use crate::records::{Array, impl_decode_bitflags};
 use crate::vmad::VirtualMachineAdapter;
-use crate::{Decode, Error, FormId, Text, ZString};
+use crate::{BString, Decode, Error, FormId, Text};
 
 /// An AI package.
 #[derive(Clone, Debug, Record)]
 #[record(ordered)]
 pub struct Package {
     #[record("EDID")]
-    pub id: Option<ZString>,
+    pub id: Option<BString>,
     #[record("VMAD")]
     pub virtual_machine_adapter: Option<VirtualMachineAdapter>,
     #[record("PKDT")]
@@ -148,7 +148,7 @@ pub struct PackageCounter {
 #[derive(Clone, Debug, Record)]
 pub struct PackageDataInputValue {
     #[record("ANAM")]
-    pub ty: ZString,
+    pub ty: BString,
     #[record("CNAM")]
     pub value: Option<Array<u8>>,
     #[record("BNAM")]
@@ -420,7 +420,7 @@ pub struct PackageDataInput {
     #[record("UNAM")]
     pub index: u8,
     #[record("BNAM")]
-    pub name: Option<ZString>,
+    pub name: Option<BString>,
     #[record("PNAM")]
     pub flags: Option<PackageDataInputFlags>,
 }
@@ -443,7 +443,7 @@ pub struct PackageProcedureTree {
 #[derive(Clone, Debug, Record)]
 pub struct PackageProcedureNode {
     #[record("ANAM")]
-    pub ty: ZString,
+    pub ty: BString,
     #[record("CITC")]
     _condition_count: u32,
     #[record("CTDA")]
@@ -451,7 +451,7 @@ pub struct PackageProcedureNode {
     #[record("PRCB")]
     pub children: Option<PackageProcedureNodeChildren>,
     #[record("PNAM")]
-    pub procedure: Option<ZString>,
+    pub procedure: Option<BString>,
     #[record("FNAM")]
     pub flags: Option<PackageProcedureNodeFlags>,
     #[record("PKC2")]

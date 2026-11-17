@@ -4,12 +4,12 @@ use openfo4_esp_derive::{BinaryStruct, Record};
 use crate::conditions::Conditions;
 use crate::records::{Array, impl_decode_bitflags};
 use crate::vmad::VirtualMachineAdapter;
-use crate::{FormId, LString, ZString};
+use crate::{BString, FormId, LString};
 
 #[derive(Clone, Debug, Record)]
 pub struct MagicEffect {
     #[record("EDID")]
-    pub id: ZString,
+    pub id: BString,
     #[record("VMAD")]
     pub virtual_machine_adpater: Option<VirtualMachineAdapter>,
     #[record("FULL")]

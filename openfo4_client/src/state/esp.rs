@@ -84,7 +84,7 @@ impl EspLoaderBuilder {
             let deps = header
                 .master_files
                 .iter()
-                .map(|v| v.file_name.as_str().unwrap().to_lowercase())
+                .map(|v| std::str::from_utf8(&v.file_name).unwrap().to_lowercase())
                 .collect::<Vec<_>>();
 
             entries.insert(
@@ -166,6 +166,7 @@ impl EspLoaderBuilder {
 
 #[derive(Debug)]
 pub struct EspLoader {
+    /// The plugin files in topological order, i.e. master plugins are found before their users.
     files: Vec<PluginFile>,
     plugins: Box<[u32]>,
     cache: RwLock<LruCache<RecordId, GlobalRecord>>,

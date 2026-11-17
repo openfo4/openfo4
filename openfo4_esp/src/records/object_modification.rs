@@ -2,16 +2,16 @@ use bytes::Buf;
 use openfo4_esp_derive::{BinaryStruct, Record};
 
 use crate::records::{Array, Model, SoundLevel};
-use crate::{Decode, Error, FormId, LString, ZString};
+use crate::{BString, Decode, Error, FormId, LString};
 
 #[derive(Clone, Debug, Record)]
 pub struct ObjectModification {
     #[record("EDID")]
-    pub id: Option<ZString>,
+    pub id: Option<BString>,
     #[record("FULL")]
     pub full_name: Option<LString>,
     #[record("DESC")]
-    pub description: Option<ZString>,
+    pub description: Option<BString>,
     #[record("MODL")]
     pub model: Model,
     #[record("DATA")]

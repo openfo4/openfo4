@@ -68,7 +68,7 @@ pub async fn resolve_item(
 
                 items.push(ItemStack {
                     item: record_id,
-                    name: data.id.as_str().unwrap().to_owned(),
+                    name: data.id.to_string(),
                     hidden: false,
                     kind: ItemKind::Misc,
                     count,
@@ -137,7 +137,7 @@ pub async fn resolve_item(
 
                 items.push(ItemStack {
                     item: record_id,
-                    name: data.id.as_str().unwrap().to_string(),
+                    name: data.id.to_string(),
                     hidden: false,
                     kind: ItemKind::Ammo,
                     count,
@@ -166,7 +166,7 @@ pub async fn resolve_item(
 
                 items.push(ItemStack {
                     item: record_id,
-                    name: data.id.as_str().unwrap().to_string(),
+                    name: data.id.to_string(),
                     hidden: false,
                     kind: ItemKind::Aid,
                     count,
@@ -195,7 +195,7 @@ pub async fn resolve_item(
 
                 items.push(ItemStack {
                     item: record_id,
-                    name: data.id.as_str().unwrap().to_string(),
+                    name: data.id.to_string(),
                     hidden: false,
                     kind: ItemKind::Misc,
                     count,
@@ -224,7 +224,7 @@ pub async fn resolve_item(
 
                 items.push(ItemStack {
                     item: record_id,
-                    name: data.id.as_str().unwrap().to_string(),
+                    name: data.id.to_string(),
                     hidden: false,
                     kind: ItemKind::Misc,
                     count,
@@ -246,7 +246,7 @@ pub async fn resolve_item(
 
                 items.push(ItemStack {
                     item: record_id,
-                    name: data.id.as_str().unwrap().to_string(),
+                    name: data.id.to_string(),
                     hidden: false,
                     kind: ItemKind::Junk,
                     count,
@@ -268,7 +268,7 @@ pub async fn resolve_item(
 
                 items.push(ItemStack {
                     item: record_id,
-                    name: data.id.as_str().unwrap().to_string(),
+                    name: data.id.to_string(),
                     hidden: false,
                     kind: ItemKind::Misc,
                     count,
@@ -288,7 +288,7 @@ pub async fn resolve_item(
             RecordData::HeadPart(data) => {
                 items.push(ItemStack {
                     item: record_id,
-                    name: data.id.as_str().unwrap().to_string(),
+                    name: data.id.to_string(),
                     hidden: false,
                     kind: ItemKind::HeadPart,
                     count,

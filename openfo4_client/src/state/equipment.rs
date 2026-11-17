@@ -131,7 +131,7 @@ impl EquipmentItemModels {
                 if let Some(model) = &weapon.model.model {
                     let scene = loader
                         .load::<NifScene, _>(&NifKey {
-                            path: DataPathBuf::new(model.as_bytes()),
+                            path: DataPathBuf::new(model),
                             flags: NIF_FLAGS,
                         })
                         .await
@@ -151,7 +151,7 @@ impl EquipmentItemModels {
                 if let Some(model) = &data.model.model {
                     let scene = loader
                         .load::<NifScene, _>(&NifKey {
-                            path: DataPathBuf::new(model.as_bytes()),
+                            path: DataPathBuf::new(model),
                             flags: NIF_FLAGS,
                         })
                         .await
@@ -217,7 +217,7 @@ impl EquipmentItemModels {
             for path in paths {
                 let scene = loader
                     .load::<NifScene, _>(&NifKey {
-                        path: DataPathBuf::new(path.as_bytes()),
+                        path: DataPathBuf::new(&path),
                         flags: NIF_FLAGS,
                     })
                     .await
@@ -242,7 +242,7 @@ impl EquipmentItemModels {
             let model_index = if let Some(model) = &attachment.model.model {
                 let scene = loader
                     .load::<NifScene, _>(&NifKey {
-                        path: DataPathBuf::new(model.as_bytes()),
+                        path: DataPathBuf::new(model),
                         flags: NIF_FLAGS,
                     })
                     .await
@@ -402,7 +402,7 @@ pub async fn load_equipment_item(
 
     let kind = match esp_loader.lookup(None, record).await.unwrap().local.data {
         RecordData::Armor(armor) => {
-            name = armor.id.as_str().unwrap().to_owned();
+            name = armor.id.to_string();
 
             base_props.weight = armor.data.weight;
             base_props.value = armor.data.value as f32;
@@ -443,7 +443,7 @@ pub async fn load_equipment_item(
             ItemKind::Armor
         }
         RecordData::Weapon(weapon) => {
-            name = weapon.id.as_str().unwrap().to_owned();
+            name = weapon.id.to_string();
 
             base_props.weight = weapon.data.weight;
             base_props.value = weapon.data.value as f32;
@@ -527,7 +527,7 @@ pub async fn load_equipment_item(
             ItemKind::Weapon
         }
         RecordData::Ammo(ammo) => {
-            name = ammo.id.as_str().unwrap().to_owned();
+            name = ammo.id.to_string();
             ItemKind::Ammo
         }
         _ => unreachable!(),

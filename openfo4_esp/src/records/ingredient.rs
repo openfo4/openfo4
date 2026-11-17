@@ -3,13 +3,13 @@ use openfo4_esp_derive::{BinaryStruct, Record};
 use crate::fields::{SubField, SubRecordArray};
 use crate::records::{Array, Bounds, Destruction, Effect, Model};
 use crate::vmad::VirtualMachineAdapter;
-use crate::{FormId, LString, ZString};
+use crate::{BString, FormId, LString};
 
 #[derive(Clone, Debug, Record)]
 #[record(ordered)]
 pub struct Ingredient {
     #[record("EDID")]
-    pub id: Option<ZString>,
+    pub id: Option<BString>,
     #[record("VMAD")]
     pub virtual_machine_adapter: Option<VirtualMachineAdapter>,
     #[record("OBND")]
@@ -25,9 +25,9 @@ pub struct Ingredient {
     #[record("MODL")]
     pub model: Model,
     #[record("ICON")]
-    pub inventory_image: Option<ZString>,
+    pub inventory_image: Option<BString>,
     #[record("MICO")]
-    pub message_icon: Option<ZString>,
+    pub message_icon: Option<BString>,
     #[record("DEST")]
     pub destruction: Option<SubField<Destruction>>,
     #[record("ETYP")]

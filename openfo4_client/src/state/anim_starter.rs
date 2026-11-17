@@ -49,12 +49,10 @@ impl AnimationSystem {
                 continue;
             };
 
-            let behavior_graph = behavior_graph.as_str().unwrap();
-
             let event = anim
                 .animation_event
                 .as_ref()
-                .map(|e| e.as_str().unwrap().to_owned());
+                .map(|e| std::str::from_utf8(e).unwrap().to_owned());
 
             let parent = esp.resolve_form(anim.relations.parent, record.id).unwrap();
 

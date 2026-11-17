@@ -90,7 +90,7 @@ pub fn derive_condition_function(input: TokenStream) -> TokenStream {
 
             quote! {
                 impl #enum_id {
-                    fn parse(data: RawConditionData, mut cis: [Option<ZString>; 2]) -> Result<Self, Error> {
+                    fn parse(data: RawConditionData, mut cis: [Option<BString>; 2]) -> Result<Self, Error> {
                         match data.function {
                             #output
                             val => Err(Error::BadEnumValue("ConditionFunction", val.into())),

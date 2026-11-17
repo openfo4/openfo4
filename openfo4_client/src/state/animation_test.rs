@@ -70,15 +70,8 @@ pub async fn load_character(
             .ok_or(Error::NoHkxProject)?;
     };
 
-    let nif_skeleton = DataPathBuf::new(nif_skeleton.0.path.as_ref().unwrap().as_bytes());
-    let hkx_project = DataPathBuf::new(
-        hkx_project
-            .0
-            .model
-            .as_ref()
-            .ok_or(Error::NoHkxProject)?
-            .as_bytes(),
-    );
+    let nif_skeleton = DataPathBuf::new(nif_skeleton.0.path.as_ref().unwrap());
+    let hkx_project = DataPathBuf::new(hkx_project.0.model.as_ref().ok_or(Error::NoHkxProject)?);
 
     let skeleton = ActorSkeleton::load(
         loader,

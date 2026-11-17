@@ -8,6 +8,7 @@ pub mod package;
 use std::ops::{Deref, DerefMut};
 
 use bitflags::bitflags;
+use bstr::BString;
 use bytes::Buf;
 use glam::Vec3;
 use openfo4_esp_derive::{BinaryStruct, Record};
@@ -15,7 +16,7 @@ use openfo4_esp_derive::{BinaryStruct, Record};
 use crate::conditions::Conditions;
 use crate::fields::{FieldMap, Read, SubField, SubRecordArray, SubRecordSection};
 use crate::vmad::{QuestFragments, VirtualMachineAdapter};
-use crate::{Decode, Error, FixedString, FormId, LString, Rgb, RgbPadded, Text, ZString};
+use crate::{Decode, Error, FixedString, FormId, LString, Rgb, RgbPadded, Text};
 
 macro_rules! impl_decode_bitflags {
     ($($t:ty:$i:ty),*) => {
@@ -53,9 +54,9 @@ pub struct Tes4 {
     #[record("DELE")]
     _unknown_dele: Option<()>,
     #[record("CNAM")]
-    pub author: Option<ZString>,
+    pub author: Option<BString>,
     #[record("SNAM")]
-    pub description: Option<ZString>,
+    pub description: Option<BString>,
     #[record("MAST")]
     pub master_files: SubRecordArray<MasterFile>,
     #[record("INTV")]
@@ -67,7 +68,7 @@ pub struct Tes4 {
 #[derive(Clone, Debug, Record)]
 pub struct MasterFile {
     #[record("MAST")]
-    pub file_name: ZString,
+    pub file_name: BString,
     #[record("DATA")]
     _unknown_data: Option<()>,
 }
@@ -81,7 +82,7 @@ pub struct Tes4Header {
 
 #[derive(Clone, Debug)]
 pub struct GameSetting {
-    pub id: ZString,
+    pub id: BString,
     pub data: TypedValue,
 }
 
@@ -89,8 +90,8 @@ impl Read for GameSetting {
     type Error = Error;
 
     fn read(mut map: &mut FieldMap, _key: Text<4>) -> Result<Self, Self::Error> {
-        let id = ZString::read(&mut map, Text::EDID)?;
-        let data = match id.as_bytes().get(0) {
+        let id = BString::read(&mut map, Text::EDID)?;
+        let data = match id.get(0) {
             Some(b'b') => {
                 let value = u32::read(&mut map, Text::DATA)?;
                 TypedValue::Boolean(value == 0)
@@ -141,11 +142,11 @@ pub enum TypedValue {
 pub struct Keyword {
     /// The unique editor ID.
     #[record("EDID")]
-    pub id: Option<ZString>,
+    pub id: Option<BString>,
     #[record("CNAM")]
     pub color: Option<RgbPadded<u8>>,
     #[record("DNAM")]
-    pub notes: Option<ZString>,
+    pub notes: Option<BString>,
     #[record("TNAM")]
     pub r#type: Option<u32>,
     #[record("DATA")]
@@ -157,7 +158,7 @@ pub struct Keyword {
 #[derive(Clone, Debug, Record)]
 pub struct LocationReferenceType {
     #[record("EDID")]
-    pub id: ZString,
+    pub id: BString,
     #[record("CNAM")]
     pub color: Option<RgbPadded<u8>>,
     #[record("TNAM")]
@@ -168,11 +169,11 @@ pub struct LocationReferenceType {
 pub struct Action {
     /// The editor ID of this record.
     #[record("EDID")]
-    pub id: Option<ZString>,
+    pub id: Option<BString>,
     #[record("CNAM")]
     pub color: Option<RgbPadded<u8>>,
     #[record("DNAM")]
-    pub notes: Option<ZString>,
+    pub notes: Option<BString>,
     #[record("TNAM")]
     pub type_: Option<u32>,
     #[record("DATA")]
@@ -184,7 +185,7 @@ pub struct Action {
 #[derive(Clone, Debug, Record)]
 pub struct TRNS {
     #[record("EDID")]
-    pub edid: ZString,
+    pub edid: BString,
     #[record("DATA")]
     pub data: Vec<u8>,
 }
@@ -192,7 +193,7 @@ pub struct TRNS {
 #[derive(Clone, Debug, Record)]
 pub struct Component {
     #[record("EDID")]
-    pub id: ZString,
+    pub id: BString,
     #[record("OBND")]
     pub object_bounds: Bounds,
     #[record("FULL")]
@@ -220,31 +221,31 @@ pub struct Bounds {
 #[derive(Clone, Debug, Record)]
 pub struct TextureSet {
     #[record("EDID")]
-    pub id: ZString,
+    pub id: BString,
     #[record("OBND")]
     pub object_bounds: Bounds,
     #[record("TX00")]
-    pub diffuse_texture: Option<ZString>,
+    pub diffuse_texture: Option<BString>,
     #[record("TX01")]
-    pub normal_texture: Option<ZString>,
+    pub normal_texture: Option<BString>,
     #[record("TX03")]
-    pub emissive_texture: Option<ZString>,
+    pub emissive_texture: Option<BString>,
     #[record("TX04")]
-    pub height_texture: Option<ZString>,
+    pub height_texture: Option<BString>,
     #[record("TX05")]
-    pub environment_texture: Option<ZString>,
+    pub environment_texture: Option<BString>,
     #[record("TX02")]
-    pub wrinkles_texture: Option<ZString>,
+    pub wrinkles_texture: Option<BString>,
     #[record("TX06")]
-    pub multilayer_texture: Option<ZString>,
+    pub multilayer_texture: Option<BString>,
     #[record("TX07")]
-    pub smooth_spec_texture: Option<ZString>,
+    pub smooth_spec_texture: Option<BString>,
     #[record("DODT")]
     pub dodt: Option<DecalData>,
     #[record("DNAM")]
     pub flags: TextureSetFlags,
     #[record("MNAM")]
-    pub material: Option<ZString>,
+    pub material: Option<BString>,
 }
 
 #[derive(Copy, Clone, Debug, BinaryStruct)]
@@ -276,7 +277,7 @@ impl_decode_bitflags!(TextureSetFlags: u16);
 #[derive(Clone, Debug, Record)]
 pub struct GLOB {
     #[record("EDID")]
-    pub edid: ZString,
+    pub edid: BString,
     #[record("FNAM")]
     pub fnam: Option<u8>,
     #[record("FLTV")]
@@ -286,7 +287,7 @@ pub struct GLOB {
 #[derive(Clone, Debug, Record)]
 pub struct DMGT {
     #[record("EDID")]
-    pub edid: ZString,
+    pub edid: BString,
     #[record("DNAM")]
     pub dnam: u64,
 }
@@ -294,13 +295,13 @@ pub struct DMGT {
 #[derive(Clone, Debug, Record)]
 pub struct Class {
     #[record("EDID")]
-    pub id: ZString,
+    pub id: BString,
     #[record("FULL")]
     pub full_name: Option<LString>,
     #[record("DESC")]
     pub description: Option<LString>,
     #[record("ICON")]
-    pub inventory_image: Option<ZString>,
+    pub inventory_image: Option<BString>,
     #[record("PRPS")]
     pub properties: Array<Property>,
 }
@@ -308,7 +309,7 @@ pub struct Class {
 #[derive(Clone, Debug, Record)]
 pub struct HeadPart {
     #[record("EDID")]
-    pub id: ZString,
+    pub id: BString,
     #[record("FULL")]
     pub full_name: Option<LString>,
     #[record("MODL")]
@@ -364,7 +365,7 @@ pub struct HeadPartAsset {
     #[record("NAM0")]
     pub r#type: HeadPartAssetType,
     #[record("NAM1")]
-    pub file_name: ZString,
+    pub file_name: BString,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, BinaryStruct)]
@@ -379,7 +380,7 @@ pub enum HeadPartAssetType {
 #[record(ordered)]
 pub struct Model {
     #[record("MODL")]
-    pub model: Option<ZString>,
+    pub model: Option<BString>,
     #[record("MODT")]
     pub info: Option<ModelInfo>,
     #[record("MODC")]
@@ -393,7 +394,7 @@ pub struct Model {
 #[derive(Clone, Debug, Record)]
 pub struct DestructionModel {
     #[record("DMDL")]
-    pub model: Option<ZString>,
+    pub model: Option<BString>,
     #[record("DMDT")]
     pub info: Option<ModelInfo>,
     #[record("DMDC")]
@@ -466,7 +467,7 @@ pub struct ModelFileInfo {
 pub struct Race {
     /// The editor ID.
     #[record("EDID")]
-    pub id: ZString,
+    pub id: BString,
     #[record("STCP")]
     pub animation_sound: Option<FormId>,
     /// The localized name of the record.
@@ -474,7 +475,7 @@ pub struct Race {
     pub full_name: Option<LString>,
     /// The description of the record.
     #[record("DESC")]
-    pub description: Option<ZString>,
+    pub description: Option<BString>,
     #[record("SPCT")]
     _effects_len: Option<u32>,
     #[record("SPLO")]
@@ -544,7 +545,7 @@ pub struct Race {
     #[record("LNAM")]
     pub sound_close_corpse: Option<FormId>,
     #[record("NAME")]
-    pub biped_object_names: SubRecordArray<ZString>,
+    pub biped_object_names: SubRecordArray<BString>,
     #[record("RBPC")]
     pub biped_object_conditions: Option<Array<FormId>>,
     // movement_data_overrides
@@ -556,7 +557,7 @@ pub struct Race {
     #[record("UNWP")]
     pub unarmed_weapon: Option<FormId>,
     #[record("PHTN")]
-    pub phoneme_target_names: SubRecordArray<ZString>,
+    pub phoneme_target_names: SubRecordArray<BString>,
     #[record("PHWT")]
     pub phonemes: SubRecordArray<()>,
     /// Reference to [`MovementType`] that is active by default.
@@ -613,9 +614,9 @@ pub struct RaceSubgraphData {
     #[record("STKD")]
     pub target_keywords: Vec<FormId>,
     #[record("SGNM")]
-    pub behavior_graph: ZString,
+    pub behavior_graph: BString,
     #[record("SAPT")]
-    pub animation_paths: Vec<ZString>,
+    pub animation_paths: Vec<BString>,
     #[record("SRAF")]
     pub flags: SubgraphFlags,
 }
@@ -784,7 +785,7 @@ pub enum RaceDataSize {
 #[derive(Clone, Debug, Record)]
 pub struct RaceSkeletalModel {
     #[record("ANAM")]
-    pub path: Option<ZString>,
+    pub path: Option<BString>,
     #[record("MODT")]
     pub info: Option<ModelInfo>,
 }
@@ -822,7 +823,7 @@ pub struct RaceAttack {
     #[record("ATKD")]
     pub data: RaceAttackData,
     #[record("ATKE")]
-    pub event: Option<ZString>,
+    pub event: Option<BString>,
     #[record("ATKW")]
     _atkw: Option<()>,
     #[record("ATKS")]
@@ -884,7 +885,7 @@ pub struct RaceMaleCustomization {
     #[record("FMRI")]
     pub face_morphs: SubRecordArray<RaceFaceMorph>,
     #[record("WMAP")]
-    pub wrinke_map_path: Option<ZString>,
+    pub wrinke_map_path: Option<BString>,
 }
 
 #[derive(Clone, Debug, Record)]
@@ -908,7 +909,7 @@ pub struct RaceFemaleCustomization {
     #[record("FMRI")]
     pub face_morphs: SubRecordArray<RaceFaceMorph>,
     #[record("WMAP")]
-    pub wrinke_map_path: Option<ZString>,
+    pub wrinke_map_path: Option<BString>,
 }
 
 #[derive(Clone, Debug, Record)]
@@ -940,7 +941,7 @@ pub struct RaceTintLayerGroupOption {
     #[record("CTDA")]
     pub conditions: Conditions,
     #[record("TTET")]
-    pub textures: SubRecordArray<ZString>,
+    pub textures: SubRecordArray<BString>,
     #[record("TTEB")]
     pub blend_operation: Option<()>,
     #[record("TTEC")]
@@ -966,7 +967,7 @@ pub struct RaceTintLayerTemplateColor {
 #[derive(Clone, Debug, Record)]
 pub struct RaceMorphGroup {
     #[record("MPGN")]
-    pub name: ZString,
+    pub name: BString,
     #[record("MPPC")]
     _presets_len: Option<u32>,
     #[record("MPPI")]
@@ -984,7 +985,7 @@ pub struct RaceMorphGroupPreset {
     #[record("MPPN")]
     pub name: LString,
     #[record("MPPM")]
-    pub morph: ZString,
+    pub morph: BString,
     #[record("MPPT")]
     pub texture: FormId,
     #[record("MPPF")]
@@ -1002,7 +1003,7 @@ pub struct RaceFaceMorph {
 #[derive(Clone, Debug, Record)]
 pub struct SOUN {
     #[record("EDID")]
-    pub edid: ZString,
+    pub edid: BString,
     #[record("OBND")]
     pub obnd: Bounds,
     #[record("SDSC")]
@@ -1013,7 +1014,7 @@ pub struct SOUN {
 #[derive(Clone, Debug, Record)]
 pub struct AcousticSpace {
     #[record("EDID")]
-    pub id: ZString,
+    pub id: BString,
     #[record("OBND")]
     pub object_bounds: Bounds,
     /// Looping ambient sound.
@@ -1041,7 +1042,7 @@ pub struct AcousticSpace {
 #[derive(Clone, Debug, Record)]
 pub struct LandTexture {
     #[record("EDID")]
-    pub id: ZString,
+    pub id: BString,
     #[record("TNAM")]
     pub texture_set: FormId,
     #[record("MNAM")]
@@ -1063,7 +1064,7 @@ pub struct LandTextureHavokData {
 #[derive(Clone, Debug, Record)]
 pub struct ENCH {
     #[record("EDID")]
-    pub edid: ZString,
+    pub edid: BString,
     #[record("OBND")]
     pub obnd: Bounds,
     #[record("FULL")]
@@ -1102,7 +1103,7 @@ pub struct EffectItem {
 #[derive(Clone, Debug, Record)]
 pub struct SPEL {
     #[record("EDID")]
-    pub edid: ZString,
+    pub edid: BString,
     #[record("OBND")]
     pub obnd: Bounds,
     #[record("FULL")]
@@ -1112,7 +1113,7 @@ pub struct SPEL {
     #[record("ETYP")]
     pub etyp: FormId,
     #[record("DESC")]
-    pub desc: Option<ZString>,
+    pub desc: Option<BString>,
     #[record("SPIT")]
     pub spit: SpellItem,
     // TODO
@@ -1135,7 +1136,7 @@ pub struct SpellItem {
 #[derive(Clone, Debug, Record)]
 pub struct Activator {
     #[record("EDID")]
-    pub id: ZString,
+    pub id: BString,
     // TODO
     #[record("VMAD")]
     pub virtual_machine_adapter: Option<VirtualMachineAdapter>,
@@ -1188,7 +1189,7 @@ impl_decode_bitflags!(ActivatorFlags: u16);
 #[derive(Clone, Debug, Record)]
 pub struct TACT {
     #[record("EDID")]
-    pub edid: ZString,
+    pub edid: BString,
     // TODO
     #[record("VMAD")]
     pub vmad: Option<VirtualMachineAdapter>,
@@ -1215,7 +1216,7 @@ pub struct TACT {
 #[record(ordered)]
 pub struct Armor {
     #[record("EDID")]
-    pub id: ZString,
+    pub id: BString,
     #[record("VMAD")]
     pub virtual_machine_adapter: Option<VirtualMachineAdapter>,
     #[record("OBND")]
@@ -1229,15 +1230,15 @@ pub struct Armor {
     #[record("MOD2")]
     pub male_world_model: ArmorMaleModel,
     #[record("ICON")]
-    pub male_inventory_image: Option<ZString>,
+    pub male_inventory_image: Option<BString>,
     #[record("MICO")]
-    pub male_message_icon: Option<ZString>,
+    pub male_message_icon: Option<BString>,
     #[record("MOD4")]
     pub female_world_model: ArmorFemaleModel,
     #[record("ICO2")]
-    pub female_inventory_image: Option<ZString>,
+    pub female_inventory_image: Option<BString>,
     #[record("MIC2")]
-    pub female_message_icon: Option<ZString>,
+    pub female_message_icon: Option<BString>,
     #[record("BOD2")]
     pub biped_body_template: BipedObjectFlags,
     #[record("DEST")]
@@ -1263,7 +1264,7 @@ pub struct Armor {
     #[record("KWDA")]
     pub keywords: Option<Array<FormId>>,
     #[record("DESC")]
-    pub description: Option<ZString>,
+    pub description: Option<BString>,
     #[record("INRD")]
     pub instance_naming: Option<FormId>,
     #[record("INDX")]
@@ -1286,7 +1287,7 @@ pub struct Armor {
 #[derive(Clone, Debug, Record)]
 pub struct ArmorMaleModel {
     #[record("MOD2")]
-    pub model: Option<ZString>,
+    pub model: Option<BString>,
     #[record("MO2T")]
     pub model_info: Option<ModelInfo>,
     #[record("MODC")]
@@ -1298,7 +1299,7 @@ pub struct ArmorMaleModel {
 #[derive(Clone, Debug, Record)]
 pub struct ArmorFemaleModel {
     #[record("MOD4")]
-    pub model: Option<ZString>,
+    pub model: Option<BString>,
     #[record("MO4T")]
     pub model_info: Option<ModelInfo>,
     #[record("MODC")]
@@ -1388,7 +1389,7 @@ pub struct Resistance {
 #[derive(Clone, Debug, Record)]
 pub struct Book {
     #[record("EDID")]
-    pub id: ZString,
+    pub id: BString,
     #[record("VMAD")]
     pub virtual_machine_adapter: Option<VirtualMachineAdapter>,
     #[record("OBND")]
@@ -1400,9 +1401,9 @@ pub struct Book {
     #[record("MODL")]
     pub model: Model,
     #[record("ICON")]
-    pub inventory_image: Option<ZString>,
+    pub inventory_image: Option<BString>,
     #[record("MICO")]
-    pub message_icon: Option<ZString>,
+    pub message_icon: Option<BString>,
     #[record("DESC")]
     pub description: Option<LString>,
     // TODO
@@ -1459,7 +1460,7 @@ impl_decode_bitflags!(BookFlags: u8);
 #[derive(Clone, Debug, Record)]
 pub struct Container {
     #[record("EDID")]
-    pub id: ZString,
+    pub id: BString,
     #[record("VMAD")]
     pub virtual_machine_adapter: Option<VirtualMachineAdapter>,
     #[record("OBND")]
@@ -1533,7 +1534,7 @@ impl_decode_bitflags!(ContainerDataFlags: u8);
 #[derive(Clone, Debug, Record)]
 pub struct Door {
     #[record("EDID")]
-    pub id: ZString,
+    pub id: BString,
     #[record("VMAD")]
     pub virtual_machine_adapter: Option<VirtualMachineAdapter>,
     #[record("OBND")]
@@ -1636,7 +1637,7 @@ impl<T> IntoIterator for Array<T> {
 #[derive(Clone, Debug, Record)]
 pub struct Light {
     #[record("EDID")]
-    pub id: ZString,
+    pub id: BString,
     #[record("VMAD")]
     pub virtual_machine_adapter: Option<VirtualMachineAdapter>,
     #[record("OBND")]
@@ -1658,9 +1659,9 @@ pub struct Light {
     #[record("FULL")]
     pub name: Option<LString>,
     #[record("ICON")]
-    pub inventory_image: Option<ZString>,
+    pub inventory_image: Option<BString>,
     #[record("MICO")]
-    pub message_icon: Option<ZString>,
+    pub message_icon: Option<BString>,
     #[record("DATA")]
     pub data: LightData,
     #[record("FNAM")]
@@ -1727,7 +1728,7 @@ impl_decode_bitflags!(LightDataFlags: u32);
 #[derive(Clone, Debug, Record)]
 pub struct MiscObject {
     #[record("EDID")]
-    pub id: ZString,
+    pub id: BString,
     #[record("VMAD")]
     pub virtual_machine_adapter: Option<VirtualMachineAdapter>,
     #[record("PTRN")]
@@ -1741,9 +1742,9 @@ pub struct MiscObject {
     #[record("MODL")]
     pub model: Model,
     #[record("ICON")]
-    pub inventory_image: Option<ZString>,
+    pub inventory_image: Option<BString>,
     #[record("MICO")]
-    pub message_icon: Option<ZString>,
+    pub message_icon: Option<BString>,
     // TODO
     #[record("DEST")]
     pub dest: Option<()>,
@@ -1778,7 +1779,7 @@ pub struct MiscObjectComponents {
 #[derive(Clone, Debug, Record)]
 pub struct STAT {
     #[record("EDID")]
-    pub id: ZString,
+    pub id: BString,
     #[record("OBND")]
     pub object_bounds: Bounds,
     #[record("VMAD")]
@@ -1799,10 +1800,10 @@ pub struct STAT_DNAM {
 
 #[derive(Clone, Debug)]
 pub struct DistantLods {
-    pub level0: ZString,
-    pub level1: ZString,
-    pub level2: ZString,
-    pub level3: ZString,
+    pub level0: BString,
+    pub level1: BString,
+    pub level2: BString,
+    pub level3: BString,
 }
 
 impl Decode for DistantLods {
@@ -1828,7 +1829,7 @@ impl Decode for DistantLods {
 #[derive(Clone, Debug, Record)]
 pub struct StaticCollection {
     #[record("EDID")]
-    pub id: ZString,
+    pub id: BString,
     #[record("OBND")]
     pub object_bounds: Bounds,
     #[record("PTRN")]
@@ -1838,7 +1839,7 @@ pub struct StaticCollection {
     #[record("FULL")]
     pub full_name: Option<LString>,
     #[record("FLTR")]
-    pub filter: Option<ZString>,
+    pub filter: Option<BString>,
     #[record("ONAM")]
     pub parts: SubRecordArray<StaticCollectionPart>,
 }
@@ -1865,7 +1866,7 @@ pub struct StaticCollectionPartPlacement {
 #[derive(Clone, Debug, Record)]
 pub struct MovableStatic {
     #[record("EDID")]
-    pub id: ZString,
+    pub id: BString,
     #[record("VMAD")]
     pub virtual_machine_adapter: Option<VirtualMachineAdapter>,
     #[record("OBND")]
@@ -1894,7 +1895,7 @@ pub struct MovableStatic {
 #[derive(Clone, Debug, Record)]
 pub struct GRAS {
     #[record("EDID")]
-    pub edid: ZString,
+    pub edid: BString,
     #[record("OBND")]
     pub obnd: Bounds,
     // TODO
@@ -1925,7 +1926,7 @@ pub struct GRAS_DATA {
 #[derive(Clone, Debug, Record)]
 pub struct FLOR {
     #[record("EDID")]
-    pub edid: ZString,
+    pub edid: BString,
     #[record("VMAD")]
     pub vmad: Option<VirtualMachineAdapter>,
     #[record("OBND")]
@@ -1959,7 +1960,7 @@ pub struct FLOR {
 #[derive(Clone, Debug, Record)]
 pub struct Weapon {
     #[record("EDID")]
-    pub id: ZString,
+    pub id: BString,
     #[record("VMAD")]
     pub virtual_machine_adapter: Option<VirtualMachineAdapter>,
     #[record("OBND")]
@@ -1973,9 +1974,9 @@ pub struct Weapon {
     #[record("MODL")]
     pub model: Model,
     #[record("ICON")]
-    pub inventory_icon: Option<ZString>,
+    pub inventory_icon: Option<BString>,
     #[record("MICO")]
-    pub message_icon: Option<ZString>,
+    pub message_icon: Option<BString>,
     #[record("EITM")]
     pub object_effect: Option<FormId>,
     #[record("EAMT")]
@@ -2022,7 +2023,7 @@ pub struct Weapon {
     #[record("DAMA")]
     pub damage_types: Option<Array<WeaponDamageType>>,
     #[record("FLTR")]
-    pub filter: Option<ZString>,
+    pub filter: Option<BString>,
     #[record("MASE")]
     pub melee_speed: Option<MeleeSpeed>,
 }
@@ -2257,7 +2258,7 @@ pub enum MeleeSpeed {
 pub struct Ammo {
     /// The editor name of the record.
     #[record("EDID")]
-    pub id: ZString,
+    pub id: BString,
     #[record("OBND")]
     pub object_bounds: Bounds,
     #[record("PTRN")]
@@ -2296,7 +2297,7 @@ pub struct Ammo {
     #[record("ONAM")]
     pub short_name: Option<LString>,
     #[record("NAM1")]
-    pub casing_model: Option<ZString>,
+    pub casing_model: Option<BString>,
     #[record("NAM2")]
     pub casing_model_info: Option<ModelInfo>,
 }
@@ -2327,7 +2328,7 @@ pub struct DEST {}
 #[derive(Clone, Debug, Record)]
 pub struct Npc {
     #[record("EDID")]
-    pub id: ZString,
+    pub id: BString,
     #[record("VMAD")]
     pub virtual_machine_adapter: Option<VirtualMachineAdapter>,
     #[record("OBND")]
@@ -2652,7 +2653,7 @@ pub struct NpcWeight {
 #[derive(Clone, Debug, Record)]
 pub struct LeveledActor {
     #[record("EDID")]
-    pub id: ZString,
+    pub id: BString,
     #[record("OBND")]
     pub object_bounds: Bounds,
     /// The chance of this `LeveledActor` to evaluate to no actor.
@@ -2714,7 +2715,7 @@ pub struct FilterKeywordChances {
 #[derive(Clone, Debug, Record)]
 pub struct Key {
     #[record("EDID")]
-    pub id: ZString,
+    pub id: BString,
     #[record("VMAD")]
     pub virtual_machine_adapter: Option<VirtualMachineAdapter>,
     #[record("OBND")]
@@ -2724,9 +2725,9 @@ pub struct Key {
     #[record("MODL")]
     pub model: Model,
     #[record("ICON")]
-    pub inventory_image: Option<ZString>,
+    pub inventory_image: Option<BString>,
     #[record("MICO")]
-    pub message_icon: Option<ZString>,
+    pub message_icon: Option<BString>,
     //DEST
     #[record("YNAM")]
     pub sound_pick_up: Option<FormId>,
@@ -2749,7 +2750,7 @@ pub struct KeyData {
 #[derive(Clone, Debug, Record)]
 pub struct Ingestible {
     #[record("EDID")]
-    pub id: ZString,
+    pub id: BString,
     #[record("OBND")]
     pub object_bounds: Bounds,
     #[record("PTRN")]
@@ -2764,9 +2765,9 @@ pub struct Ingestible {
     pub keywords: Option<Array<FormId>>,
     //model
     #[record("ICON")]
-    pub inventory_image: Option<ZString>,
+    pub inventory_image: Option<BString>,
     #[record("MICO")]
-    pub message_icon: Option<ZString>,
+    pub message_icon: Option<BString>,
     #[record("YNAM")]
     pub sound_pick_up: Option<FormId>,
     #[record("ZNAM")]
@@ -2783,7 +2784,7 @@ pub struct Ingestible {
     #[record("ENIT")]
     pub effect_data: EffectData,
     #[record("DNAM")]
-    pub addiction_name: Option<ZString>,
+    pub addiction_name: Option<BString>,
     //effects
 }
 
@@ -2811,7 +2812,7 @@ impl_decode_bitflags!(EffectDataFlags: u32);
 #[derive(Clone, Debug, Record)]
 pub struct IdleMarker {
     #[record("EDID")]
-    pub id: ZString,
+    pub id: BString,
     #[record("OBND")]
     pub object_bounds: Bounds,
     #[record("KSIZ")]
@@ -2842,7 +2843,7 @@ impl_decode_bitflags!(IdleMarkerFlags: u8);
 #[derive(Clone, Debug, Record)]
 pub struct Note {
     #[record("EDID")]
-    pub id: ZString,
+    pub id: BString,
     #[record("VMAD")]
     pub virtual_machine_adapter: Option<VirtualMachineAdapter>,
     #[record("OBND")]
@@ -2854,7 +2855,7 @@ pub struct Note {
     #[record("MODL")]
     pub model: Model,
     #[record("ICON")]
-    pub inventory_image: Option<ZString>,
+    pub inventory_image: Option<BString>,
     #[record("YNAM")]
     pub sound_pick_up: Option<FormId>,
     #[record("ZNAM")]
@@ -2887,7 +2888,7 @@ pub struct NoteData {
 #[derive(Clone, Debug, Record)]
 pub struct Projectile {
     #[record("EDID")]
-    pub id: ZString,
+    pub id: BString,
     #[record("OBND")]
     pub object_bounds: Bounds,
     #[record("FULL")]
@@ -2967,7 +2968,7 @@ pub enum ProjectileType {
 #[derive(Clone, Debug, Record)]
 pub struct ProjectileMuzzleFlashModel {
     #[record("NAM1")]
-    pub model: Option<ZString>,
+    pub model: Option<BString>,
     #[record("NAM2")]
     pub model_info: Option<ModelInfo>,
 }
@@ -2975,7 +2976,7 @@ pub struct ProjectileMuzzleFlashModel {
 #[derive(Clone, Debug, Record)]
 pub struct Hazard {
     #[record("EDID")]
-    pub id: ZString,
+    pub id: BString,
     #[record("OBND")]
     pub object_bounds: Bounds,
     #[record("FULL")]
@@ -3027,7 +3028,7 @@ pub struct HazardTaperEffectiveness {
 #[derive(Clone, Debug, Record)]
 pub struct BlendableSpline {
     #[record("EDID")]
-    pub id: Option<ZString>,
+    pub id: Option<BString>,
     #[record("OBND")]
     pub object_bounds: Option<Bounds>,
     #[record("DNAM")]
@@ -3049,7 +3050,7 @@ pub struct BlendableSplineData {
 #[derive(Clone, Debug, Record)]
 pub struct Terminal {
     #[record("EDID")]
-    pub id: Option<ZString>,
+    pub id: Option<BString>,
     #[record("VMAD")]
     pub virtual_machine_adapter: Option<VirtualMachineAdapter>,
     #[record("OBND")]
@@ -3088,7 +3089,7 @@ pub struct TerminalHolotape {
 #[derive(Clone, Debug, Record)]
 pub struct Tree {
     #[record("EDID")]
-    pub id: Option<ZString>,
+    pub id: Option<BString>,
     #[record("VMAD")]
     pub virtual_machine_adapter: Option<VirtualMachineAdapter>,
     #[record("OBND")]
@@ -3134,7 +3135,7 @@ pub struct TreeData {
 #[derive(Clone, Debug, Record)]
 pub struct LeveledItem {
     #[record("EDID")]
-    pub id: ZString,
+    pub id: BString,
     #[record("OBND")]
     pub object_bounds: Bounds,
     #[record("LVLD")]
@@ -3161,71 +3162,71 @@ pub struct LeveledItem {
 #[derive(Clone, Debug, Record)]
 pub struct Weather {
     #[record("EDID")]
-    pub id: ZString,
+    pub id: BString,
     #[record("00TX")]
-    pub cloud_texture_layer00: Option<ZString>,
+    pub cloud_texture_layer00: Option<BString>,
     #[record("10TX")]
-    pub cloud_texture_layer01: Option<ZString>,
+    pub cloud_texture_layer01: Option<BString>,
     #[record("20TX")]
-    pub cloud_texture_layer02: Option<ZString>,
+    pub cloud_texture_layer02: Option<BString>,
     #[record("30TX")]
-    pub cloud_texture_layer03: Option<ZString>,
+    pub cloud_texture_layer03: Option<BString>,
     #[record("40TX")]
-    pub cloud_texture_layer04: Option<ZString>,
+    pub cloud_texture_layer04: Option<BString>,
     #[record("50TX")]
-    pub cloud_texture_layer05: Option<ZString>,
+    pub cloud_texture_layer05: Option<BString>,
     #[record("60TX")]
-    pub cloud_texture_layer06: Option<ZString>,
+    pub cloud_texture_layer06: Option<BString>,
     #[record("70TX")]
-    pub cloud_texture_layer07: Option<ZString>,
+    pub cloud_texture_layer07: Option<BString>,
     #[record("80TX")]
-    pub cloud_texture_layer08: Option<ZString>,
+    pub cloud_texture_layer08: Option<BString>,
     #[record("90TX")]
-    pub cloud_texture_layer09: Option<ZString>,
+    pub cloud_texture_layer09: Option<BString>,
     #[record(":0TX")]
-    pub cloud_texture_layer10: Option<ZString>,
+    pub cloud_texture_layer10: Option<BString>,
     #[record(";0TX")]
-    pub cloud_texture_layer11: Option<ZString>,
+    pub cloud_texture_layer11: Option<BString>,
     #[record("<0TX")]
-    pub cloud_texture_layer12: Option<ZString>,
+    pub cloud_texture_layer12: Option<BString>,
     #[record("=0TX")]
-    pub cloud_texture_layer13: Option<ZString>,
+    pub cloud_texture_layer13: Option<BString>,
     #[record(">0TX")]
-    pub cloud_texture_layer14: Option<ZString>,
+    pub cloud_texture_layer14: Option<BString>,
     #[record("?0TX")]
-    pub cloud_texture_layer15: Option<ZString>,
+    pub cloud_texture_layer15: Option<BString>,
     #[record("@0TX")]
-    pub cloud_texture_layer16: Option<ZString>,
+    pub cloud_texture_layer16: Option<BString>,
     #[record("A0TX")]
-    pub cloud_texture_layer17: Option<ZString>,
+    pub cloud_texture_layer17: Option<BString>,
     #[record("B0TX")]
-    pub cloud_texture_layer18: Option<ZString>,
+    pub cloud_texture_layer18: Option<BString>,
     #[record("C0TX")]
-    pub cloud_texture_layer19: Option<ZString>,
+    pub cloud_texture_layer19: Option<BString>,
     #[record("D0TX")]
-    pub cloud_texture_layer20: Option<ZString>,
+    pub cloud_texture_layer20: Option<BString>,
     #[record("E0TX")]
-    pub cloud_texture_layer21: Option<ZString>,
+    pub cloud_texture_layer21: Option<BString>,
     #[record("F0TX")]
-    pub cloud_texture_layer22: Option<ZString>,
+    pub cloud_texture_layer22: Option<BString>,
     #[record("G0TX")]
-    pub cloud_texture_layer23: Option<ZString>,
+    pub cloud_texture_layer23: Option<BString>,
     #[record("H0TX")]
-    pub cloud_texture_layer24: Option<ZString>,
+    pub cloud_texture_layer24: Option<BString>,
     #[record("I0TX")]
-    pub cloud_texture_layer25: Option<ZString>,
+    pub cloud_texture_layer25: Option<BString>,
     #[record("J0TX")]
-    pub cloud_texture_layer26: Option<ZString>,
+    pub cloud_texture_layer26: Option<BString>,
     #[record("K0TX")]
-    pub cloud_texture_layer27: Option<ZString>,
+    pub cloud_texture_layer27: Option<BString>,
     #[record("L0TX")]
-    pub cloud_texture_layer28: Option<ZString>,
+    pub cloud_texture_layer28: Option<BString>,
     #[record("M0TX")]
-    pub cloud_texture_layer29: Option<ZString>,
+    pub cloud_texture_layer29: Option<BString>,
     #[record("N0TX")]
-    pub cloud_texture_layer30: Option<ZString>,
+    pub cloud_texture_layer30: Option<BString>,
     #[record("O0TX")]
-    pub cloud_texture_layer31: Option<ZString>,
+    pub cloud_texture_layer31: Option<BString>,
     #[record("MNAM")]
     pub precipitation_type: FormId,
     #[record("NNAM")]
@@ -3448,13 +3449,13 @@ pub struct WeatherMagic {
 #[derive(Clone, Debug, Record)]
 pub struct Climate {
     #[record("EDID")]
-    pub id: ZString,
+    pub id: BString,
     #[record("WLST")]
     pub weathers: Array<ClimateWeather>,
     #[record("FNAM")]
-    pub sun_texture: Option<ZString>,
+    pub sun_texture: Option<BString>,
     #[record("GNAM")]
-    pub sun_glare_texture: Option<ZString>,
+    pub sun_glare_texture: Option<BString>,
     //model
     #[record("TNAM")]
     pub timing: ClimateTiming,
@@ -3513,11 +3514,11 @@ impl Decode for ClimateTime {
 #[derive(Clone, Debug, Record)]
 pub struct ShaderParticleGeometry {
     #[record("EDID")]
-    pub id: ZString,
+    pub id: BString,
     #[record("DATA")]
     pub data: ShaderParticleGeometryData,
     #[record("MNAM")]
-    pub particle_texture: ZString,
+    pub particle_texture: BString,
 }
 
 #[derive(Copy, Clone, Debug, BinaryStruct)]
@@ -3539,7 +3540,7 @@ pub struct ShaderParticleGeometryData {
 #[derive(Clone, Debug, Record)]
 pub struct VisualEffect {
     #[record("EDID")]
-    pub id: ZString,
+    pub id: BString,
     #[record("DATA")]
     pub data: VisualEffectData,
 }
@@ -3565,7 +3566,7 @@ impl_decode_bitflags!(VisualEffectFlags: u32);
 #[derive(Clone, Debug, Record)]
 pub struct Region {
     #[record("EDID")]
-    pub id: Option<ZString>,
+    pub id: Option<BString>,
     #[record("RCLR")]
     pub map_color: Option<Rgb<u8>>,
     #[record("WNAM")]
@@ -3580,7 +3581,7 @@ pub struct NAVI {}
 #[derive(Clone, Debug, Record)]
 pub struct Cell {
     #[record("EDID")]
-    pub id: Option<ZString>,
+    pub id: Option<BString>,
     #[record("FULL")]
     pub full_name: Option<LString>,
     #[record("DATA")]
@@ -3745,7 +3746,7 @@ pub struct Vec3Padded<T> {
 #[derive(Clone, Debug, Record)]
 pub struct PlacedNpc {
     #[record("EDID")]
-    pub id: Option<ZString>,
+    pub id: Option<BString>,
     #[record("VMAD")]
     pub virtual_machine_adapter: Option<VirtualMachineAdapter>,
     #[record("NAME")]
@@ -3817,7 +3818,7 @@ pub struct PositionRotation {
 #[derive(Clone, Debug, Record)]
 pub struct PlacedObject {
     #[record("EDID")]
-    pub id: Option<ZString>,
+    pub id: Option<BString>,
     #[record("VMAD")]
     pub virtual_machine_adapter: Option<VirtualMachineAdapter>,
     #[record("NAME")]
@@ -4103,7 +4104,7 @@ pub enum LockLevel {
 #[derive(Clone, Debug, Record)]
 pub struct NavMesh {
     #[record("EDID")]
-    pub id: Option<ZString>,
+    pub id: Option<BString>,
     #[record("NVNM")]
     pub geometry: NavMeshGeometry,
 }
@@ -4223,7 +4224,7 @@ pub struct NavMeshGeometryEdgeLink {
 #[derive(Clone, Debug, Record)]
 pub struct PlacedGrenade {
     #[record("EDID")]
-    pub id: Option<ZString>,
+    pub id: Option<BString>,
     #[record("NAME")]
     pub base_hazard: FormId,
     #[record("XOWN")]
@@ -4235,7 +4236,7 @@ pub struct PlacedGrenade {
 #[derive(Clone, Debug, Record)]
 pub struct PlacedHazard {
     #[record("EDID")]
-    pub id: Option<ZString>,
+    pub id: Option<BString>,
     #[record("VMAD")]
     pub virtual_machine_adapter: Option<VirtualMachineAdapter>,
     #[record("DATA")]
@@ -4245,7 +4246,7 @@ pub struct PlacedHazard {
 #[derive(Clone, Debug, Record)]
 pub struct Worldspace {
     #[record("EDID")]
-    pub id: ZString,
+    pub id: BString,
     #[record("FULL")]
     pub full_name: Option<LString>,
     #[record("WCTR")]
@@ -4271,7 +4272,7 @@ pub struct Worldspace {
     #[record("DNAM")]
     pub land_data: Option<WorldspaceLandData>,
     #[record("ICON")]
-    pub map_image: Option<ZString>,
+    pub map_image: Option<BString>,
     #[record("MNAM")]
     pub map_data: Option<WorldspaceMapData>,
     #[record("ONAM")]
@@ -4285,11 +4286,11 @@ pub struct Worldspace {
     #[record("ZNAM")]
     pub music: Option<FormId>,
     #[record("XWEM")]
-    pub water_environment_map: Option<ZString>,
+    pub water_environment_map: Option<BString>,
     #[record("TNAM")]
-    pub hd_lod_diffuse_texture: Option<ZString>,
+    pub hd_lod_diffuse_texture: Option<BString>,
     #[record("UNAM")]
-    pub hd_lod_normal_texture: Option<ZString>,
+    pub hd_lod_normal_texture: Option<BString>,
     // #[record("WLEV")]
     // pub dimensions: Option<WorldspaceDimensions>,
 }
@@ -4458,7 +4459,7 @@ impl Decode for LandVertexHeight {
 #[derive(Clone, Debug, Record)]
 pub struct PlacedMissile {
     #[record("EDID")]
-    pub id: Option<ZString>,
+    pub id: Option<BString>,
     #[record("VMAD")]
     pub virtual_machine_adapter: Option<VirtualMachineAdapter>,
     #[record("NAME")]
@@ -4519,7 +4520,7 @@ impl_decode_bitflags!(EnableParentFlags: u8);
 #[record(ordered)]
 pub struct Quest {
     #[record("EDID")]
-    pub id: Option<ZString>,
+    pub id: Option<BString>,
     #[record("VMAD")]
     pub virtual_machine_adapter: Option<VirtualMachineAdapter<QuestFragments>>,
     #[record("FULL")]
@@ -4535,7 +4536,7 @@ pub struct Quest {
     #[record("QTGL")]
     pub text_display_globals: Vec<FormId>,
     #[record("FLTR")]
-    pub filter: Option<ZString>,
+    pub filter: Option<BString>,
     #[record("CTDA")]
     pub quest_dialogue_conditions: Conditions,
     #[record("NEXT")]
@@ -4551,11 +4552,11 @@ pub struct Quest {
     #[record("????")] // Ignored
     pub aliases: QuestAliases,
     #[record("NNAM")]
-    pub description: Option<ZString>,
+    pub description: Option<BString>,
     #[record("GNAM")]
     pub quest_group: Option<FormId>,
     #[record("SNAM")]
-    pub swf_file: Option<ZString>,
+    pub swf_file: Option<BString>,
 }
 
 #[derive(Copy, Clone, Debug, BinaryStruct)]
@@ -4647,7 +4648,7 @@ pub struct QuestStageLogEntry {
     #[record("CTDA")]
     pub conditions: Conditions,
     #[record("NAM2")]
-    pub note: Option<ZString>,
+    pub note: Option<BString>,
     #[record("CNAM")]
     pub log_entry: Option<LString>,
     #[record("NAM0")]
@@ -4765,7 +4766,7 @@ pub struct QuestReferenceAlias {
     #[record("ALST")]
     pub id: u32,
     #[record("ALID")]
-    pub name: Option<ZString>,
+    pub name: Option<BString>,
     #[record("FNAM")]
     pub flags: QuestAliasFlags,
     #[record("ALFI")]
@@ -4870,7 +4871,7 @@ pub struct QuestLocationAlias {
     #[record("ALLS")]
     pub id: u32,
     #[record("ALID")]
-    pub name: Option<ZString>,
+    pub name: Option<BString>,
     #[record("FNAM")]
     pub flags: QuestAliasFlags,
     #[record("ALFI")]
@@ -4989,13 +4990,13 @@ pub struct QuestAliasRefCollectionAlias {
 #[derive(Clone, Debug, Record)]
 pub struct DialogueBranch {
     #[record("EDID")]
-    pub id: Option<ZString>,
+    pub id: Option<BString>,
 }
 
 #[derive(Clone, Debug, Record)]
 pub struct DialogueTopic {
     #[record("EDID")]
-    pub id: Option<ZString>,
+    pub id: Option<BString>,
     #[record("FULL")]
     pub full_name: Option<LString>,
     #[record("PNAM")]
@@ -5028,7 +5029,7 @@ pub struct DialogueTopicData {
 #[record(ordered)]
 pub struct Scene {
     #[record("EDID")]
-    pub id: Option<ZString>,
+    pub id: Option<BString>,
     // TODO: Fragments
     #[record("VMAD")]
     pub virtual_machine_adapter: Option<VirtualMachineAdapter>,
@@ -5061,7 +5062,7 @@ pub struct Scene {
     #[record("SCQS")]
     pub set_parent_quest_stage: Option<SceneSetStage>,
     #[record("NNAM")]
-    pub notes: Option<ZString>,
+    pub notes: Option<BString>,
     #[record("TNAM")]
     pub template_scene: Option<FormId>,
     #[record("XNAM")]
@@ -5092,7 +5093,7 @@ pub struct ScenePhase {
     #[record("HNAM")]
     _marker_start: (),
     #[record("NAM0")]
-    pub name: Option<ZString>,
+    pub name: Option<BString>,
     #[record("CTDA")]
     pub start_conditions: Conditions,
     #[record("NEXT")]
@@ -5170,7 +5171,7 @@ impl_decode_bitflags!(SceneActorBehaviorFlags: u32);
 
 #[derive(Clone, Debug)]
 pub struct SceneAction {
-    pub name: Option<ZString>,
+    pub name: Option<BString>,
     pub actor: i32,
     pub index: u32,
     pub flags: Option<SceneActionFlags>,
@@ -5407,7 +5408,7 @@ pub struct SceneActionStartSceneDataScene {
     #[record("INTT")]
     pub phase_index: u16,
     #[record("SSPN")]
-    pub start_phase_for_scene: Option<ZString>,
+    pub start_phase_for_scene: Option<BString>,
     #[record("CITC")]
     _condition_count: Option<u32>,
     // CITC
@@ -5491,7 +5492,7 @@ impl Decode for SceneActorBehavior {
 #[record(ordered)]
 pub struct DialogueInfo {
     #[record("EDID")]
-    pub id: Option<ZString>,
+    pub id: Option<BString>,
     // TODO: Fragments
     #[record("VMAD")]
     pub virtual_machine_adapter: Option<VirtualMachineAdapter>,
@@ -5507,7 +5508,7 @@ pub struct DialogueInfo {
     #[record("GNAM")]
     pub info_group: Option<FormId>,
     #[record("IOVR")]
-    pub override_filename: Option<ZString>,
+    pub override_filename: Option<BString>,
     #[record("TRDA")]
     pub responses: SubRecordArray<DialogueInfoResponse>,
     #[record("CTDA")]
@@ -5533,7 +5534,7 @@ pub struct DialogueInfo {
     #[record("TIQS")]
     pub set_parent_quest_stage: Option<SceneSetStage>,
     #[record("NAM0")]
-    pub start_scene_phase: Option<ZString>,
+    pub start_scene_phase: Option<BString>,
     #[record("INCC")]
     pub challenge: Option<DialogueInfoChallenge>,
     #[record("MODQ")]
@@ -5549,11 +5550,11 @@ pub struct DialogueInfoResponse {
     #[record("NAM1")]
     pub response_text: Option<LString>,
     #[record("NAM2")]
-    pub script_notes: Option<ZString>,
+    pub script_notes: Option<BString>,
     #[record("NAM3")]
-    pub edits: Option<ZString>,
+    pub edits: Option<BString>,
     #[record("NAM4")]
-    pub alternate_lip_text: Option<ZString>,
+    pub alternate_lip_text: Option<BString>,
     #[record("SNAM")]
     pub idle_animation_speaker: Option<FormId>,
     #[record("LNAM")]
@@ -5604,19 +5605,19 @@ pub enum DialogueInfoSubtitlePriority {
 #[derive(Clone, Debug, Record)]
 pub struct Animation {
     #[record("EDID")]
-    pub id: Option<ZString>,
+    pub id: Option<BString>,
     #[record("CTDA")]
     pub conditions: Conditions,
     #[record("DNAM")]
-    pub behavior_graph: Option<ZString>,
+    pub behavior_graph: Option<BString>,
     #[record("ENAM")]
-    pub animation_event: Option<ZString>,
+    pub animation_event: Option<BString>,
     #[record("ANAM")]
     pub relations: AnimationRelations,
     #[record("DATA")]
     pub data: AnimationData,
     #[record("GNAM")]
-    pub animation_file: Option<ZString>,
+    pub animation_file: Option<BString>,
 }
 
 #[derive(Copy, Clone, Debug, BinaryStruct)]
@@ -5649,53 +5650,53 @@ impl_decode_bitflags!(AnimationFlags: u8);
 #[derive(Clone, Debug, Record)]
 pub struct CombatStyle {
     #[record("EDID")]
-    pub id: Option<ZString>,
+    pub id: Option<BString>,
 }
 
 #[derive(Clone, Debug, Record)]
 pub struct LoadScreen {
     #[record("EDID")]
-    pub id: Option<ZString>,
+    pub id: Option<BString>,
 }
 
 #[derive(Clone, Debug, Record)]
 pub struct AnimatedObject {
     #[record("EDID")]
-    pub id: Option<ZString>,
+    pub id: Option<BString>,
     #[record("MODL")]
     pub model: Model,
     #[record("BNAM")]
-    pub unload_event: ZString,
+    pub unload_event: BString,
 }
 
 #[derive(Clone, Debug, Record)]
 pub struct Water {
     #[record("EDID")]
-    pub id: Option<ZString>,
+    pub id: Option<BString>,
 }
 
 #[derive(Clone, Debug, Record)]
 pub struct EffectShader {
     #[record("EDID")]
-    pub id: Option<ZString>,
+    pub id: Option<BString>,
 }
 
 #[derive(Clone, Debug, Record)]
 pub struct Explosion {
     #[record("EDID")]
-    pub id: Option<ZString>,
+    pub id: Option<BString>,
 }
 
 #[derive(Clone, Debug, Record)]
 pub struct Debris {
     #[record("EDID")]
-    pub id: Option<ZString>,
+    pub id: Option<BString>,
 }
 
 #[derive(Clone, Debug, Record)]
 pub struct ImageSpace {
     #[record("EDID")]
-    pub id: Option<ZString>,
+    pub id: Option<BString>,
     #[record("ENAM")]
     pub data: Option<ImageSpaceData>,
     #[record("HNAM")]
@@ -5707,7 +5708,7 @@ pub struct ImageSpace {
     #[record("DNAM")]
     pub depth_of_field: Option<ImageSpaceDepthOfField>,
     #[record("TX00")]
-    pub lut: Option<ZString>,
+    pub lut: Option<BString>,
 }
 
 #[derive(Copy, Clone, Debug, BinaryStruct)]
@@ -5768,13 +5769,13 @@ pub struct ImageSpaceDepthOfField {
 #[derive(Clone, Debug, Record)]
 pub struct ImageSpaceAdapter {
     #[record("EDID")]
-    pub id: Option<ZString>,
+    pub id: Option<BString>,
 }
 
 #[derive(Clone, Debug, Record)]
 pub struct FormList {
     #[record("EDID")]
-    pub id: Option<ZString>,
+    pub id: Option<BString>,
     #[record("FULL")]
     pub full_name: Option<LString>,
     #[record("LNAM")]
@@ -5784,7 +5785,7 @@ pub struct FormList {
 #[derive(Clone, Debug, Record)]
 pub struct Perk {
     #[record("EDID")]
-    pub id: Option<ZString>,
+    pub id: Option<BString>,
     #[record("VMAD")]
     pub virtual_machine_adapter: Option<VirtualMachineAdapter>,
 }
@@ -5793,7 +5794,7 @@ pub struct Perk {
 #[record(ordered)]
 pub struct BodyPartData {
     #[record("EDID")]
-    pub id: Option<ZString>,
+    pub id: Option<BString>,
     #[record("MODL")]
     pub skeleton_model: BodyPartDataSkeletonModel,
     #[record("BPNN")]
@@ -5807,21 +5808,21 @@ pub struct BodyPartDataBodyPart {
     #[record("BPTN")]
     pub part_name: Option<LString>,
     #[record("BPNN")]
-    pub part_node: ZString,
+    pub part_node: BString,
     #[record("BPNT")]
-    pub vats_target: ZString,
+    pub vats_target: BString,
     #[record("BPND")]
     pub data: BodyPartNodeData,
     #[record("NAM1")]
-    pub limb_replacement_model: Option<ZString>,
+    pub limb_replacement_model: Option<BString>,
     #[record("NAM4")]
-    pub gore_effects_target_bone: Option<ZString>,
+    pub gore_effects_target_bone: Option<BString>,
     #[record("NAM5")]
     pub model_info: Option<()>,
     #[record("ENAM")]
-    pub hit_reaction_start: Option<ZString>,
+    pub hit_reaction_start: Option<BString>,
     #[record("FNAM")]
-    pub hit_reaction_end: Option<ZString>,
+    pub hit_reaction_end: Option<BString>,
     #[record("BNAM")]
     pub gore_effects_dismember_blood_art: Option<FormId>,
     #[record("INAM")]
@@ -5833,13 +5834,13 @@ pub struct BodyPartDataBodyPart {
     #[record("NAM2")]
     pub collar_texture_set: Option<FormId>,
     #[record("DNAM")]
-    pub twist_variable_prefix: Option<ZString>,
+    pub twist_variable_prefix: Option<BString>,
 }
 
 #[derive(Clone, Debug, Record)]
 pub struct BodyPartDataSkeletonModel {
     #[record("MODL")]
-    pub model: Option<ZString>,
+    pub model: Option<BString>,
     #[record("MODT")]
     pub info: Option<ModelInfo>,
     #[record("MODC")]
@@ -5892,17 +5893,17 @@ pub struct BodyPartNodeData {
 #[derive(Clone, Debug, Record)]
 pub struct AddonNode {
     #[record("EDID")]
-    pub id: Option<ZString>,
+    pub id: Option<BString>,
 }
 
 #[derive(Clone, Debug, Record)]
 pub struct ActorValueInfo {
     #[record("EDID")]
-    pub id: Option<ZString>,
+    pub id: Option<BString>,
     #[record("FULL")]
     pub full_name: Option<LString>,
     #[record("DESC")]
-    pub description: Option<ZString>,
+    pub description: Option<BString>,
     #[record("ANAM")]
     pub abbreviation: Option<LString>,
     #[record("NAM0")]
@@ -5916,44 +5917,44 @@ pub struct ActorValueInfo {
 #[derive(Clone, Debug, Record)]
 pub struct CameraShot {
     #[record("EDID")]
-    pub id: Option<ZString>,
+    pub id: Option<BString>,
 }
 
 #[derive(Clone, Debug, Record)]
 pub struct CameraPath {
     #[record("EDID")]
-    pub id: Option<ZString>,
+    pub id: Option<BString>,
 }
 
 #[derive(Clone, Debug, Record)]
 pub struct VoiceType {
     #[record("EDID")]
-    pub id: Option<ZString>,
+    pub id: Option<BString>,
 }
 
 #[derive(Clone, Debug, Record)]
 pub struct MaterialType {
     #[record("EDID")]
-    pub id: Option<ZString>,
+    pub id: Option<BString>,
 }
 
 #[derive(Clone, Debug, Record)]
 pub struct Impact {
     #[record("EDID")]
-    pub id: Option<ZString>,
+    pub id: Option<BString>,
 }
 
 #[derive(Clone, Debug, Record)]
 pub struct ImpactDataSet {
     #[record("EDID")]
-    pub id: Option<ZString>,
+    pub id: Option<BString>,
 }
 
 #[derive(Clone, Debug, Record)]
 #[record(ordered)]
 pub struct ArmorAddon {
     #[record("EDID")]
-    pub id: Option<ZString>,
+    pub id: Option<BString>,
     #[record("BOD2")]
     pub biped_body_template: BipedObjectFlags,
     /// Reference to [`Race`].
@@ -5991,7 +5992,7 @@ pub struct ArmorAddon {
 #[derive(Clone, Debug, Record)]
 pub struct ArmorAddonMaleModel {
     #[record("MOD2")]
-    pub model: Option<ZString>,
+    pub model: Option<BString>,
     #[record("MO2T")]
     pub model_info: Option<ModelInfo>,
     #[record("MO2C")]
@@ -6005,7 +6006,7 @@ pub struct ArmorAddonMaleModel {
 #[derive(Clone, Debug, Record)]
 pub struct ArmorAddonFemaleModel {
     #[record("MOD3")]
-    pub model: Option<ZString>,
+    pub model: Option<BString>,
     #[record("MO3T")]
     pub model_info: Option<ModelInfo>,
     #[record("MO3C")]
@@ -6019,7 +6020,7 @@ pub struct ArmorAddonFemaleModel {
 #[derive(Clone, Debug, Record)]
 pub struct ArmorAddonMaleFirstPersonModel {
     #[record("MOD4")]
-    pub model: Option<ZString>,
+    pub model: Option<BString>,
     #[record("MO4T")]
     pub model_info: Option<ModelInfo>,
     #[record("MO4C")]
@@ -6033,7 +6034,7 @@ pub struct ArmorAddonMaleFirstPersonModel {
 #[derive(Clone, Debug, Record)]
 pub struct ArmorAddonFemaleFirstPersonModel {
     #[record("MOD5")]
-    pub model: Option<ZString>,
+    pub model: Option<BString>,
     #[record("MO5T")]
     pub model_info: Option<ModelInfo>,
     #[record("MO5C")]
@@ -6047,13 +6048,13 @@ pub struct ArmorAddonFemaleFirstPersonModel {
 #[derive(Clone, Debug, Record)]
 pub struct EncounterZone {
     #[record("EDID")]
-    pub id: Option<ZString>,
+    pub id: Option<BString>,
 }
 
 #[derive(Clone, Debug, Record)]
 pub struct Location {
     #[record("EDID")]
-    pub id: Option<ZString>,
+    pub id: Option<BString>,
     #[record("ACPR")]
     pub added_persistent_refs: Option<Array<LocationPersistentReference>>,
     #[record("LCPR")]
@@ -6118,97 +6119,97 @@ pub struct LocationSpecialReference {
 #[derive(Clone, Debug, Record)]
 pub struct Message {
     #[record("EDID")]
-    pub id: Option<ZString>,
+    pub id: Option<BString>,
 }
 
 #[derive(Clone, Debug, Record)]
 pub struct DefaultObjectManager {
     #[record("EDID")]
-    pub id: Option<ZString>,
+    pub id: Option<BString>,
 }
 
 #[derive(Clone, Debug, Record)]
 pub struct DefaultObject {
     #[record("EDID")]
-    pub id: Option<ZString>,
+    pub id: Option<BString>,
 }
 
 #[derive(Clone, Debug, Record)]
 pub struct LightingTemplate {
     #[record("EDID")]
-    pub id: Option<ZString>,
+    pub id: Option<BString>,
 }
 
 #[derive(Clone, Debug, Record)]
 pub struct MusicType {
     #[record("EDID")]
-    pub id: Option<ZString>,
+    pub id: Option<BString>,
 }
 
 #[derive(Clone, Debug, Record)]
 pub struct Footstep {
     #[record("EDID")]
-    pub id: Option<ZString>,
+    pub id: Option<BString>,
 }
 
 #[derive(Clone, Debug, Record)]
 pub struct FootstepSet {
     #[record("EDID")]
-    pub id: Option<ZString>,
+    pub id: Option<BString>,
 }
 
 #[derive(Clone, Debug, Record)]
 pub struct StoryManagerBranchNode {
     #[record("EDID")]
-    pub id: Option<ZString>,
+    pub id: Option<BString>,
 }
 
 #[derive(Clone, Debug, Record)]
 pub struct StoryManagerQuestNode {
     #[record("EDID")]
-    pub id: Option<ZString>,
+    pub id: Option<BString>,
 }
 
 #[derive(Clone, Debug, Record)]
 pub struct StoryManagerEventNode {
     #[record("EDID")]
-    pub id: Option<ZString>,
+    pub id: Option<BString>,
 }
 
 #[derive(Clone, Debug, Record)]
 pub struct MusicTrack {
     #[record("EDID")]
-    pub id: Option<ZString>,
+    pub id: Option<BString>,
 }
 
 #[derive(Clone, Debug, Record)]
 pub struct DialogueView {
     #[record("EDID")]
-    pub id: Option<ZString>,
+    pub id: Option<BString>,
 }
 
 #[derive(Clone, Debug, Record)]
 pub struct EquipType {
     #[record("EDID")]
-    pub id: Option<ZString>,
+    pub id: Option<BString>,
 }
 
 #[derive(Clone, Debug, Record)]
 pub struct Relationship {
     #[record("EDID")]
-    pub id: Option<ZString>,
+    pub id: Option<BString>,
 }
 
 #[derive(Clone, Debug, Record)]
 pub struct AssocationType {
     #[record("EDID")]
-    pub id: Option<ZString>,
+    pub id: Option<BString>,
 }
 
 #[derive(Clone, Debug, Record)]
 pub struct Outfit {
     #[record("EDID")]
-    pub id: Option<ZString>,
+    pub id: Option<BString>,
     /// Equipment items that are part of the outfit.
     ///
     /// References to [`Armor`] or [`LeveledItem`] forms.
@@ -6219,21 +6220,21 @@ pub struct Outfit {
 #[derive(Clone, Debug, Record)]
 pub struct ArtObject {
     #[record("EDID")]
-    pub id: Option<ZString>,
+    pub id: Option<BString>,
 }
 
 #[derive(Clone, Debug, Record)]
 pub struct MaterialObject {
     #[record("EDID")]
-    pub id: Option<ZString>,
+    pub id: Option<BString>,
 }
 
 #[derive(Clone, Debug, Record)]
 pub struct MovementType {
     #[record("EDID")]
-    pub id: Option<ZString>,
+    pub id: Option<BString>,
     #[record("MNAM")]
-    pub name: Option<ZString>,
+    pub name: Option<BString>,
     #[record("SPED")]
     pub speeds: MovementSpeeds,
     #[record("JNAM")]
@@ -6260,55 +6261,55 @@ pub struct MovementSpeed {
 #[derive(Clone, Debug, Record)]
 pub struct SoundDescriptor {
     #[record("EDID")]
-    pub id: Option<ZString>,
+    pub id: Option<BString>,
 }
 
 #[derive(Clone, Debug, Record)]
 pub struct SoundCategory {
     #[record("EDID")]
-    pub id: Option<ZString>,
+    pub id: Option<BString>,
 }
 
 #[derive(Clone, Debug, Record)]
 pub struct SoundOutputModel {
     #[record("EDID")]
-    pub id: Option<ZString>,
+    pub id: Option<BString>,
 }
 
 #[derive(Clone, Debug, Record)]
 pub struct CollisionLayer {
     #[record("EDID")]
-    pub id: Option<ZString>,
+    pub id: Option<BString>,
 }
 
 #[derive(Clone, Debug, Record)]
 pub struct Color {
     #[record("EDID")]
-    pub id: Option<ZString>,
+    pub id: Option<BString>,
 }
 
 #[derive(Clone, Debug, Record)]
 pub struct ReverbParameters {
     #[record("EDID")]
-    pub id: Option<ZString>,
+    pub id: Option<BString>,
 }
 
 #[derive(Clone, Debug, Record)]
 pub struct PackIn {
     #[record("EDID")]
-    pub id: Option<ZString>,
+    pub id: Option<BString>,
 }
 
 #[derive(Clone, Debug, Record)]
 pub struct ReferenceGroup {
     #[record("EDID")]
-    pub id: Option<ZString>,
+    pub id: Option<BString>,
 }
 
 #[derive(Clone, Debug, Record)]
 pub struct AimModel {
     #[record("EDID")]
-    pub id: Option<ZString>,
+    pub id: Option<BString>,
     #[record("DNAM")]
     pub data: AimModelData,
 }
@@ -6336,19 +6337,19 @@ pub struct AimModelData {
 #[derive(Clone, Debug, Record)]
 pub struct Layer {
     #[record("EDID")]
-    pub id: Option<ZString>,
+    pub id: Option<BString>,
 }
 
 #[derive(Clone, Debug, Record)]
 pub struct ConstructibleObject {
     #[record("EDID")]
-    pub id: Option<ZString>,
+    pub id: Option<BString>,
 }
 
 #[derive(Clone, Debug, Record)]
 pub struct MaterialSwap {
     #[record("EDID")]
-    pub id: Option<ZString>,
+    pub id: Option<BString>,
     #[record("BNAM")]
     pub replacements: SubRecordArray<MaterialSwapReplacement>,
 }
@@ -6356,15 +6357,15 @@ pub struct MaterialSwap {
 #[derive(Clone, Debug, Record)]
 pub struct MaterialSwapReplacement {
     #[record("BNAM")]
-    pub original_material: ZString,
+    pub original_material: BString,
     #[record("SNAM")]
-    pub replacement_material: ZString,
+    pub replacement_material: BString,
 }
 
 #[derive(Clone, Debug, Record)]
 pub struct Zoom {
     #[record("EDID")]
-    pub id: Option<ZString>,
+    pub id: Option<BString>,
     #[record("GNAM")]
     pub data: ZoomData,
 }
@@ -6381,67 +6382,67 @@ pub struct ZoomData {
 #[derive(Clone, Debug, Record)]
 pub struct InstanceNamingRules {
     #[record("EDID")]
-    pub id: Option<ZString>,
+    pub id: Option<BString>,
 }
 
 #[derive(Clone, Debug, Record)]
 pub struct SoundKeywordMapping {
     #[record("EDID")]
-    pub id: Option<ZString>,
+    pub id: Option<BString>,
 }
 
 #[derive(Clone, Debug, Record)]
 pub struct AudioEffectChain {
     #[record("EDID")]
-    pub id: Option<ZString>,
+    pub id: Option<BString>,
 }
 
 #[derive(Clone, Debug, Record)]
 pub struct SceneCollection {
     #[record("EDID")]
-    pub id: Option<ZString>,
+    pub id: Option<BString>,
 }
 
 #[derive(Clone, Debug, Record)]
 pub struct AttractionRule {
     #[record("EDID")]
-    pub id: Option<ZString>,
+    pub id: Option<BString>,
 }
 
 #[derive(Clone, Debug, Record)]
 pub struct AudioCategorySnapshot {
     #[record("EDID")]
-    pub id: Option<ZString>,
+    pub id: Option<BString>,
 }
 
 #[derive(Clone, Debug, Record)]
 pub struct AnimationSoundTagSet {
     #[record("EDID")]
-    pub id: Option<ZString>,
+    pub id: Option<BString>,
 }
 
 #[derive(Clone, Debug, Record)]
 pub struct NavigationMeshObstacleManager {
     #[record("EDID")]
-    pub id: Option<ZString>,
+    pub id: Option<BString>,
 }
 
 #[derive(Clone, Debug, Record)]
 pub struct LensFlare {
     #[record("EDID")]
-    pub id: Option<ZString>,
+    pub id: Option<BString>,
 }
 
 #[derive(Clone, Debug, Record)]
 pub struct GodRays {
     #[record("EDID")]
-    pub id: Option<ZString>,
+    pub id: Option<BString>,
 }
 
 #[derive(Clone, Debug, Record)]
 pub struct ObjectVisibilityManager {
     #[record("EDID")]
-    pub id: Option<ZString>,
+    pub id: Option<BString>,
 }
 
 #[derive(Clone, Debug, Record)]
@@ -6468,7 +6469,7 @@ pub struct DestructionStage {
     #[record("DSTD")]
     pub data: DestructionStageData,
     #[record("DSTA")]
-    pub sequence_name: Option<ZString>,
+    pub sequence_name: Option<BString>,
     #[record("DMDL")]
     pub model: DestructionModel,
     #[record("DSTF")]

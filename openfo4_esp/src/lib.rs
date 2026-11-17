@@ -4,6 +4,9 @@ pub mod vmad;
 
 mod fields;
 
+pub use bstr;
+
+use bstr::BString;
 use fields::FieldMap;
 use flate2::bufread::ZlibDecoder;
 use glam::Vec3;
@@ -1701,34 +1704,7 @@ bitflags::bitflags! {
     }
 }
 
-#[derive(Clone, PartialEq, Eq)]
-pub struct ZString(Vec<u8>);
-
-impl ZString {
-    pub fn new(bytes: Vec<u8>) -> Self {
-        Self(bytes)
-    }
-
-    pub fn as_bytes(&self) -> &[u8] {
-        &self.0
-    }
-
-    pub fn as_str(&self) -> Option<&str> {
-        std::str::from_utf8(&self.0).ok()
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.as_bytes().is_empty()
-    }
-}
-
-impl Debug for ZString {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        Debug::fmt(&String::from_utf8_lossy(&self.0), f)
-    }
-}
-
-impl Decode for ZString {
+impl Decode for BString {
     type Error = Error;
 
     fn decode<B>(mut buf: B) -> Result<Self, Error>
@@ -1748,7 +1724,7 @@ impl Decode for ZString {
             s.push(char);
         }
 
-        Ok(Self(s))
+        Ok(Self::new(s))
     }
 }
 
@@ -2080,7 +2056,7 @@ impl IndexTable {
 }
 
 #[derive(Clone, Debug)]
-struct FixedString<const SIZE: usize>(ZString);
+struct FixedString<const SIZE: usize>(BString);
 
 impl<const SIZE: usize> Decode for FixedString<SIZE> {
     type Error = Error;
@@ -2102,7 +2078,7 @@ impl<const SIZE: usize> Decode for FixedString<SIZE> {
         }
 
         buf.advance(buf.remaining().min(remaining));
-        Ok(Self(ZString(bytes)))
+        Ok(Self(BString::new(bytes)))
     }
 }
 

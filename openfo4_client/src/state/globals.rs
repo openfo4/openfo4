@@ -103,7 +103,7 @@ pub async fn load_voice_types(esp_loader: &EspLoader) -> HashMap<RecordId, Lower
             continue;
         };
 
-        let name = data.id.as_ref().unwrap().as_str().unwrap();
+        let name = std::str::from_utf8(&data.id.as_ref().unwrap()).unwrap();
         types.insert(record.id, Lowercase::new(name));
     }
 
