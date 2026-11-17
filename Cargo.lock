@@ -587,6 +587,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "codespan-reporting"
+version = "0.13.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "af491d569909a7e4dee0ad7db7f5341fef5c614d5b8ec8cf765732aba3cff681"
+dependencies = [
+ "serde",
+ "termcolor",
+ "unicode-width",
+]
+
+[[package]]
 name = "colorchoice"
 version = "1.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1852,7 +1863,7 @@ dependencies = [
  "bitflags 2.13.2",
  "cfg-if",
  "cfg_aliases 0.2.1",
- "codespan-reporting",
+ "codespan-reporting 0.12.0",
  "half",
  "hashbrown 0.16.1",
  "hexf-parse",
@@ -2408,6 +2419,8 @@ dependencies = [
  "openfo4_ui_render",
  "openfo4_window",
  "parking_lot 0.13.0",
+ "pex",
+ "pscc",
  "rand",
  "rstar 0.13.0",
  "serde",
@@ -2804,6 +2817,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "pex"
+version = "0.1.0"
+source = "git+https://github.com/openfo4/psc-tools?rev=ec8ebcb59b9f861242a022c370554f5a804a6847#ec8ebcb59b9f861242a022c370554f5a804a6847"
+dependencies = [
+ "bstr",
+ "bytes",
+]
+
+[[package]]
 name = "pin-project"
 version = "1.1.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2933,6 +2955,17 @@ checksum = "52717f9a02b6965224f95ca2a81e2e0c5c43baacd28ca057577988930b6c3d5b"
 dependencies = [
  "quote",
  "syn 2.0.117",
+]
+
+[[package]]
+name = "pscc"
+version = "0.1.0"
+source = "git+https://github.com/openfo4/psc-tools?rev=ec8ebcb59b9f861242a022c370554f5a804a6847#ec8ebcb59b9f861242a022c370554f5a804a6847"
+dependencies = [
+ "clap",
+ "codespan-reporting 0.13.1",
+ "pex",
+ "thiserror 2.0.21",
 ]
 
 [[package]]
@@ -3579,6 +3612,15 @@ name = "target-lexicon"
 version = "0.13.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "adb6935a6f5c20170eeceb1a3835a49e12e19d792f6dd344ccc76a985ca5a6ca"
+
+[[package]]
+name = "termcolor"
+version = "1.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "06794f8f6c5c898b3275aebefa6b8a1cb24cd2c6c79397ab15774837a0bc5755"
+dependencies = [
+ "winapi-util",
+]
 
 [[package]]
 name = "thiserror"

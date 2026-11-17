@@ -49,6 +49,27 @@ impl Entities {
         )
     }
 
+    /// Creates a new `Entities` handle that will discard all events.
+    pub fn dummy() -> Self {
+        let (tx, _rx) = crossbeam::channel::bounded(0);
+        let (atx, _arx) = crossbeam::channel::bounded(0);
+        Self {
+            inner: Arc::new(Inner {
+                events: tx,
+                async_events: atx,
+                scenes: Mutex::new(Slab::new()),
+                meshes: Mutex::new(Slab::new()),
+                materials: Mutex::new(Slab::new()),
+                images: Mutex::new(Slab::new()),
+                cameras: Mutex::new(Slab::new()),
+                objects: Mutex::new(Slab::new()),
+                lights: Mutex::new(Slab::new()),
+            }),
+            sky: Arc::default(),
+            new_lut: Arc::default(),
+        }
+    }
+
     #[must_use = "the entity will get destroyed immediately when the object is dropped"]
     pub fn create_scene(&self) -> SceneHandle {
         let mut scenes = self.inner.scenes.lock();
