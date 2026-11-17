@@ -1,7 +1,6 @@
 use openfo4_egui::egui::{Context, Window};
-
-use crate::state::GameState;
-use crate::systems::quests::dialogue::PlayerDialogueQueue;
+use openfo4_game::state::GameState;
+use openfo4_game::systems::quests::dialogue::PlayerDialogueQueue;
 
 pub fn draw(ctx: &Context, state: &mut GameState) {
     Window::new("Dialogue").show(ctx, |ui| {

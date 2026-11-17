@@ -7,12 +7,11 @@ use openfo4_core::ecs::{Entity, World};
 use openfo4_core::record::RecordId;
 use openfo4_egui::egui::{Context, Key, Window};
 use openfo4_esp::{RecordData, RecordKind};
-
-use crate::cell::CellId;
-use crate::components::{NiTransform, Player};
-use crate::state::GameState;
-use crate::systems::inventory::AddItemEventAsync;
-use crate::systems::time::GameTime;
+use openfo4_game::cell::CellId;
+use openfo4_game::components::{NiTransform, Player};
+use openfo4_game::state::GameState;
+use openfo4_game::systems::inventory::AddItemEventAsync;
+use openfo4_game::systems::time::GameTime;
 
 #[derive(Clone, Debug, Default)]
 pub struct ConsoleState {

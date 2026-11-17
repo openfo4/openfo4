@@ -29,6 +29,13 @@ impl Value {
             _ => None,
         }
     }
+
+    pub fn as_int(&self) -> Option<i32> {
+        match self {
+            Self::Int(v) => Some(*v),
+            _ => None,
+        }
+    }
 }
 
 #[derive(Clone, Debug)]

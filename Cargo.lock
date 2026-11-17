@@ -118,9 +118,9 @@ dependencies = [
 
 [[package]]
 name = "anstream"
-version = "0.6.19"
+version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "301af1932e46185686725e0fad2f8f2aa7da69dd70bf6ecc44d6b703844a3933"
+checksum = "824a212faf96e9acacdbd09febd34438f8f711fb84e09a8916013cd7815ca28d"
 dependencies = [
  "anstyle",
  "anstyle-parse",
@@ -133,15 +133,15 @@ dependencies = [
 
 [[package]]
 name = "anstyle"
-version = "1.0.11"
+version = "1.0.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "862ed96ca487e809f1c8e5a8447f6ee2cf102f846893800b20cebdf541fc6bbd"
+checksum = "940b3a0ca603d1eade50a4846a2afffd5ef57a9feac2c0e2ec2e14f9ead76000"
 
 [[package]]
 name = "anstyle-parse"
-version = "0.2.7"
+version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4e7644824f0aa2c7b9384579234ef10eb7efb6a0deb83f9630a49594dd9c15c2"
+checksum = "52ce7f38b242319f7cabaa6813055467063ecdc9d355bbb4ce0c68908cd8130e"
 dependencies = [
  "utf8parse",
 ]
@@ -367,13 +367,13 @@ dependencies = [
 
 [[package]]
 name = "bstr"
-version = "1.12.1"
+version = "1.13.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "63044e1ae8e69f3b5a92c736ca6269b8d12fa7efe39bf34ddb06d102cf0e2cab"
+checksum = "6bb31b46c14244e20ee9984b11bf5c992b91fb6939fea616e3512c8baecdbe5f"
 dependencies = [
  "memchr",
  "regex-automata 0.4.9",
- "serde",
+ "serde_core",
 ]
 
 [[package]]
@@ -539,9 +539,9 @@ dependencies = [
 
 [[package]]
 name = "clap"
-version = "4.5.54"
+version = "4.6.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c6e6ff9dcd79cff5cd969a17a545d79e84ab086e444102a591e288a8aa3ce394"
+checksum = "ac230478587d0269d8d6998b82ae69ea51509d55df66d9e92edd1f986904cd4a"
 dependencies = [
  "clap_builder",
  "clap_derive",
@@ -549,9 +549,9 @@ dependencies = [
 
 [[package]]
 name = "clap_builder"
-version = "4.5.54"
+version = "4.6.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fa42cf4d2b7a41bc8f663a7cab4031ebafa1bf3875705bfaf8466dc60ab52c00"
+checksum = "ec0797fb7aeb1406c84efac526901f7ec3ead2124f946b494e72879d4b54704d"
 dependencies = [
  "anstream",
  "anstyle",
@@ -561,21 +561,21 @@ dependencies = [
 
 [[package]]
 name = "clap_derive"
-version = "4.5.49"
+version = "4.6.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2a0b5487afeab2deb2ff4e03a807ad1a03ac532ff5a2cee5d86884440c7f7671"
+checksum = "895c9d8d2ac2dd8b8a29f3724a14e72aaaa6debcf8c38c82f97305c6a172767a"
 dependencies = [
  "heck",
  "proc-macro2",
  "quote",
- "syn 2.0.117",
+ "syn 3.0.10",
 ]
 
 [[package]]
 name = "clap_lex"
-version = "0.7.4"
+version = "1.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f46ad14479a25103f283c0f10005961cf086d8dc42205bb44c46ac563475dca6"
+checksum = "e0921b3876b3a1df8a1c9f912e7f94342458022c2e84288015893d83c4d62a79"
 
 [[package]]
 name = "codespan-reporting"
@@ -2205,55 +2205,29 @@ dependencies = [
 name = "openfo4_client"
 version = "0.1.0"
 dependencies = [
- "async-channel",
- "async-io",
- "async-lock",
- "bitflags 2.13.2",
- "bytemuck",
- "bytes",
  "clap",
- "crossbeam",
- "event-listener",
- "futures",
  "futures-lite",
  "glam 0.33.3",
  "hashbrown 0.16.1",
- "hecs",
- "indexmap",
- "nohash-hasher",
- "openfo4_ai",
  "openfo4_animation",
- "openfo4_asset",
  "openfo4_audio",
- "openfo4_ba2",
  "openfo4_common",
  "openfo4_config",
  "openfo4_core",
  "openfo4_core_pipeline",
  "openfo4_crash_handler",
- "openfo4_dds",
  "openfo4_egui",
  "openfo4_esp",
+ "openfo4_game",
  "openfo4_gizmos",
- "openfo4_gltf",
- "openfo4_hkx",
  "openfo4_input",
- "openfo4_io",
- "openfo4_nif",
- "openfo4_pex",
  "openfo4_physics",
  "openfo4_render",
- "openfo4_script",
  "openfo4_tasks",
  "openfo4_tracing",
  "openfo4_ui_render",
  "openfo4_window",
  "parking_lot 0.13.0",
- "rand",
- "rstar 0.13.0",
- "serde",
- "slab",
- "thiserror 2.0.21",
  "tracing",
 ]
 
@@ -2367,6 +2341,7 @@ name = "openfo4_esp"
 version = "0.1.0"
 dependencies = [
  "bitflags 2.13.2",
+ "bstr",
  "bytemuck",
  "bytes",
  "flate2",
@@ -2386,6 +2361,59 @@ dependencies = [
  "quote",
  "syn 2.0.117",
  "thiserror 2.0.21",
+]
+
+[[package]]
+name = "openfo4_game"
+version = "0.1.0"
+dependencies = [
+ "async-channel",
+ "async-io",
+ "async-lock",
+ "bitflags 2.13.2",
+ "bytemuck",
+ "bytes",
+ "crossbeam",
+ "event-listener",
+ "futures",
+ "futures-lite",
+ "glam 0.33.3",
+ "hashbrown 0.16.1",
+ "hecs",
+ "indexmap",
+ "nohash-hasher",
+ "openfo4_ai",
+ "openfo4_animation",
+ "openfo4_asset",
+ "openfo4_audio",
+ "openfo4_ba2",
+ "openfo4_common",
+ "openfo4_config",
+ "openfo4_core",
+ "openfo4_core_pipeline",
+ "openfo4_dds",
+ "openfo4_esp",
+ "openfo4_gizmos",
+ "openfo4_gltf",
+ "openfo4_hkx",
+ "openfo4_input",
+ "openfo4_io",
+ "openfo4_nif",
+ "openfo4_pex",
+ "openfo4_physics",
+ "openfo4_render",
+ "openfo4_script",
+ "openfo4_tasks",
+ "openfo4_tracing",
+ "openfo4_ui_render",
+ "openfo4_window",
+ "parking_lot 0.13.0",
+ "rand",
+ "rstar 0.13.0",
+ "serde",
+ "slab",
+ "thiserror 2.0.21",
+ "tracing",
 ]
 
 [[package]]
@@ -2881,9 +2909,9 @@ dependencies = [
 
 [[package]]
 name = "proc-macro2"
-version = "1.0.95"
+version = "1.0.107"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "02b3e5e68a3a1a02aad3ec490a98007cbc13c37cbe84a3cd7b8e406d76e7f778"
+checksum = "985e7ec9bb745e6ce6535b544d84d6cd6f7ad8bd711c398938ae983b91a766d9"
 dependencies = [
  "unicode-ident",
 ]
@@ -2918,9 +2946,9 @@ dependencies = [
 
 [[package]]
 name = "quote"
-version = "1.0.40"
+version = "1.0.47"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1885c039570dc00dcb4ff087a89e185fd56bae234ddc7f056a945bf36467248d"
+checksum = "1fbf4db142a473a8d80c26bbf18454ed458bf8d26c8219c331daecfdbd079001"
 dependencies = [
  "proc-macro2",
 ]
@@ -3275,7 +3303,7 @@ checksum = "e7a5d71263a5a7d47b41f6b3f06ba276f10cc18b0931f1799f710578e2309348"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 3.0.9",
+ "syn 3.0.10",
 ]
 
 [[package]]
@@ -3537,9 +3565,9 @@ dependencies = [
 
 [[package]]
 name = "syn"
-version = "3.0.9"
+version = "3.0.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d78c8dee4c7bf0e14673097256fed6142ce9d3b85a408189d07482442145823b"
+checksum = "4ae9ccbea3a7b0b09443036490c8f34a8b1b760fd345e5c0dae0aac718faea79"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -3589,7 +3617,7 @@ checksum = "fe5197923287db20a58125f0bc85c062f7f2c892de97b18c356f9efb14b28524"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 3.0.9",
+ "syn 3.0.10",
 ]
 
 [[package]]

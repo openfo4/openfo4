@@ -3,10 +3,9 @@ use openfo4_animation::skeleton::SkeletonInstance;
 use openfo4_common::components::Transform;
 use openfo4_core::ecs::{Entity, World};
 use openfo4_core_pipeline::entities::ObjectHandle;
+use openfo4_game::shared::SharedState;
+use openfo4_game::systems::equipment::Equipment;
 use openfo4_tracing::trace_span;
-
-use crate::shared::SharedState;
-use crate::systems::equipment::Equipment;
 
 pub fn mesh_skinning(world: &World, objects: &HashMap<Entity, ObjectHandle>, shared: &SharedState) {
     let _span = trace_span!("mesh_skinning").entered();

@@ -1,7 +1,6 @@
 use hashbrown::HashMap;
+use openfo4_game::state::inputs::ActorInputEvent;
 use openfo4_input::keyboard::{KeyCode, KeyboardInput};
-
-use crate::state::inputs::ActorInputEvent;
 
 #[derive(Clone, Debug, Default)]
 pub struct KeyMap {

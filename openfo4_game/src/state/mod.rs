@@ -43,7 +43,7 @@ use crate::components::{
 use crate::config::Config;
 use crate::interval::Interval;
 use crate::loader::FileLoader;
-use crate::render::physics_debug::despawn_expired;
+use crate::render::despawn_expired;
 use crate::shared::SharedState;
 use crate::state::anim_starter::AnimationSystem;
 use crate::state::animation::update_actor_animation_graphs;

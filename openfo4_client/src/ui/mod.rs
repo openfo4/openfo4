@@ -1,7 +1,7 @@
 use openfo4_egui::egui::Context;
+use openfo4_game::state::GameState;
 use openfo4_render::Renderer;
 
-use crate::state::GameState;
 use crate::ui::console::ConsoleState;
 use crate::ui::debug::DebugState;
 use crate::ui::hud::HudState;

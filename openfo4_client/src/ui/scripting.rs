@@ -1,6 +1,5 @@
 use openfo4_egui::egui::{CollapsingHeader, Context, ScrollArea, Window};
-
-use crate::state::GameState;
+use openfo4_game::state::GameState;
 
 #[derive(Clone, Debug, Default)]
 pub struct State {

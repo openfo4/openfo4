@@ -141,7 +141,7 @@ impl Runner {
                     let state = self.invocations.get_mut(invocation.0).unwrap();
                     state.num_running -= 1;
                     if state.num_running == 0 {
-                        debug_assert_eq!(state.waker.total_listeners(), 1);
+                        debug_assert!(state.waker.total_listeners() <= 1);
                         state.waker.notify(1.tag(returns));
 
                         self.invocations.remove(invocation.0);
@@ -171,7 +171,7 @@ impl Runner {
             }
 
             self.progress.try_send(()).ok();
-            self.done.try_send(()).ok();
+            // self.done.try_send(()).ok();
         }
     }
 

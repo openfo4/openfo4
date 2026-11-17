@@ -5,12 +5,13 @@ use openfo4_core::events::EventBus;
 use openfo4_egui::egui::{
     Color32, Context, CornerRadius, Frame, Key, LayerId, Painter, Pos2, Rect, RichText, Window,
 };
-
-use crate::components::{ActorMarker, DeadActor, LookingAtTarget, PlacedItem, Player, RootParent};
-use crate::state::hardcoded::fallout4::ACTOR_VALUE_HEALTH;
-use crate::systems::actor_value::ActorValueProperties;
-use crate::systems::inventory::Inventory;
-use crate::systems::{PickupItemEvent, TransferItemEvent};
+use openfo4_game::components::{
+    ActorMarker, DeadActor, LookingAtTarget, PlacedItem, Player, RootParent,
+};
+use openfo4_game::state::hardcoded::fallout4::ACTOR_VALUE_HEALTH;
+use openfo4_game::systems::actor_value::ActorValueProperties;
+use openfo4_game::systems::inventory::Inventory;
+use openfo4_game::systems::{PickupItemEvent, TransferItemEvent};
 
 const HP_HEIGHT: f32 = 10.0;
 const HP_WIDTH: f32 = 200.0;
