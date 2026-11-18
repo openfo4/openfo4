@@ -99,11 +99,6 @@ impl State {
         Borrow::map(s, |state| unsafe { &*state.world })
     }
 
-    pub async fn quests(&mut self) -> BorrowMut<'_, QuestManager> {
-        let s = self.borrowed.borrow_mut().await;
-        BorrowMut::map(s, |state| unsafe { &mut *state.quests })
-    }
-
     /// Loads the [`RecordId`] for the given `object`.
     ///
     /// # Panics
@@ -497,7 +492,6 @@ impl<'a, T> DerefMut for BorrowMut<'a, T> {
 #[derive(Debug)]
 pub struct BorrowedState {
     pub world: *mut World,
-    pub quests: *mut QuestManager,
     pub events: *mut EventBus,
 }
 

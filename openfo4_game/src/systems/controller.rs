@@ -14,7 +14,6 @@ use crate::state::inputs::ActorInputEvent;
 use crate::state::npc::ActorMovementSpeeds;
 use crate::systems::camera::{CameraMode, CameraOffset, PlayerControlled};
 use crate::systems::movement::{MovementDirection, MovementSpeed};
-use crate::systems::quests::QuestManager;
 use crate::systems::scripting::Executor;
 use crate::systems::{
     FacingDirection, GunFireRequest, GunReloadRequest, PlayerControlState, WeaponDrawRequest,
@@ -25,7 +24,6 @@ pub fn handle_inputs(
     events: &mut EventBus,
     animation: &AnimationSystem,
     executor: &mut Executor,
-    quests: &mut QuestManager,
     actor: Entity,
     input: ActorInputEvent,
 ) {
@@ -117,7 +115,7 @@ pub fn handle_inputs(
             DeferredAction::Land => Action::Land,
         };
 
-        animation.send_action(world, entity, anim_action, executor, events, quests);
+        animation.send_action(world, entity, anim_action, executor, events);
 
         let Ok(mut state) = world.get::<&mut PlayerControlState>(entity) else {
             continue;

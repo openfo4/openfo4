@@ -1,10 +1,12 @@
 pub mod dialogue;
+mod loader;
 mod scene;
 
 use std::collections::VecDeque;
-use std::sync::{Arc, Once};
+use std::sync::Arc;
 
 use crossbeam::queue::SegQueue;
+use event_listener::IntoNotification;
 use hashbrown::{HashMap, HashSet};
 use indexmap::IndexMap;
 use openfo4_asset::AssetLoader;
@@ -12,39 +14,39 @@ use openfo4_audio::AudioManager;
 use openfo4_core::ecs::{Entity, World};
 use openfo4_core::events::EventBus;
 use openfo4_core::record::RecordId;
-use openfo4_esp::records::{QuestAliasFlags, QuestDataFlags, QuestReferenceAlias, QuestStageFlags};
-use openfo4_esp::{FormId, RecordChildren, RecordData, RecordKind};
+use openfo4_esp::records::{QuestAliasFlags, QuestReferenceAlias};
+use openfo4_esp::{RecordData, RecordKind};
 use openfo4_tasks::{Task, TaskPool};
 use openfo4_tracing::trace_span;
 
 use crate::events::quest::{StartQuestScene, StopQuestScene};
 use crate::state::esp::EspLoader;
-use crate::state::hardcoded::HARDCODED_MODULE_ID;
 use crate::state::level::loader::{EntityLoader, EntityRef};
 use crate::state::level::partial::PartialEntityFlags;
 use crate::systems::conditions::ConditionCompiler;
-use crate::systems::global::GlobalProperties;
-use crate::systems::quests::scene::{DialogueTopicAction, SceneInfo, SceneState};
+use crate::systems::global::{self, GlobalProperties, QuestEvent};
+use crate::systems::quests::loader::QuestLoader;
+use crate::systems::quests::scene::{DialogueTopicAction, SceneState};
 use crate::systems::scripting::invocations::{
     AliasInit, AliasShutdown, Init, QuestFragmentSetStage, QuestInit, QuestSetStage, QuestShutdown,
 };
-use crate::systems::scripting::loader::{ScriptLoader, ScriptObject};
+use crate::systems::scripting::loader::ScriptObject;
 use crate::systems::scripting::{Executor, Invocation};
-
-static ONCE: Once = Once::new();
 
 #[derive(Debug)]
 pub struct QuestManager {
     pool: Arc<TaskPool>,
     esp_loader: Arc<EspLoader>,
-    script_loader: Arc<ScriptLoader>,
     entity_loader: Arc<EntityLoader>,
     events: Arc<SegQueue<Event>>,
     quests: HashMap<RecordId, Quest>,
     scenes_to_quest: HashMap<RecordId, RecordId>,
-    condition_compiler: Arc<ConditionCompiler>,
     loader: AssetLoader,
     topics: DialogueTopics,
+    quest_loader: Arc<QuestLoader>,
+    wakers: Wakers,
+    quests_loading: HashMap<RecordId, Task<()>>,
+    deferred_actions: HashMap<RecordId, Vec<QuestAction>>,
 }
 
 impl QuestManager {
@@ -60,13 +62,19 @@ impl QuestManager {
             pool,
             quests: HashMap::new(),
             esp_loader: esp_loader.clone(),
-            script_loader: executor.loader().clone(),
             entity_loader: loader.clone(),
             events: Arc::default(),
             scenes_to_quest: HashMap::new(),
-            condition_compiler,
+            quest_loader: Arc::new(QuestLoader::new(
+                esp_loader.clone(),
+                condition_compiler,
+                executor.loader().clone(),
+            )),
             loader: asset_loader,
             topics: DialogueTopics::default(),
+            wakers: Wakers::default(),
+            quests_loading: HashMap::new(),
+            deferred_actions: HashMap::new(),
         }
     }
 
@@ -80,33 +88,192 @@ impl QuestManager {
     ) {
         let _span = trace_span!("QuestManager::update").entered();
 
-        ONCE.call_once(|| {
-            let events = self.events.clone();
-            let esp_loader = self.esp_loader.clone();
-            let script_loader = self.script_loader.clone();
-            let condition_compiler = self.condition_compiler.clone();
+        while let Some(event) = globals.quests.events.pop() {
+            match event {
+                QuestEvent::Start { quest, waker } => {
+                    let quest_id = quest;
 
-            self.pool.spawn(async move {
-                let id = RecordId::new(HARDCODED_MODULE_ID, FormId(0x1069a9));
-                load_quest(
-                    &esp_loader,
-                    &script_loader,
-                    &condition_compiler,
-                    &events,
-                    id,
-                )
-                .await;
-            });
-        });
+                    if let Some(quest) = self.quests.get_mut(&quest) {
+                        if matches!(quest.state, QuestState::Running) {
+                            waker.notify(waker.total_listeners().tag(true));
+                            continue;
+                        }
+
+                        self.wakers
+                            .on_quest_start
+                            .entry(quest_id)
+                            .or_default()
+                            .push(waker);
+
+                        // Start the quest if it is not already starting.
+                        if !matches!(quest.state, QuestState::Starting(_)) {
+                            quest.actions.push_back(QuestAction::Start);
+                        }
+
+                        continue;
+                    }
+
+                    self.wakers
+                        .on_quest_start
+                        .entry(quest_id)
+                        .or_default()
+                        .push(waker);
+
+                    if self.quests_loading.contains_key(&quest_id) {
+                        continue;
+                    }
+
+                    let loader = self.quest_loader.clone();
+                    let events = self.events.clone();
+                    let task = self.pool.spawn(async move {
+                        let quest = match loader.load(quest).await {
+                            Ok(mut quest) => {
+                                quest.actions.push_back(QuestAction::Start);
+                                Some(quest)
+                            }
+                            Err(err) => {
+                                tracing::error!("failed to load quest {quest}: {err}");
+                                None
+                            }
+                        };
+
+                        events.push(Event::Discover(quest_id, quest));
+                    });
+
+                    debug_assert!(!self.quests_loading.contains_key(&quest_id));
+                    self.quests_loading.insert(quest_id, task);
+                }
+                QuestEvent::Stop { quest, waker } => {
+                    let quest_id = quest;
+
+                    // A quest that is currently loading is queued to be started.
+                    if self.quests_loading.contains_key(&quest) {
+                        self.wakers
+                            .on_quest_stop
+                            .entry(quest_id)
+                            .or_default()
+                            .push(waker);
+
+                        self.deferred_actions
+                            .entry(quest)
+                            .or_default()
+                            .push(QuestAction::Stop);
+
+                        continue;
+                    }
+
+                    // A quest that was not loaded yet is stopped.
+                    let Some(quest) = self.quests.get_mut(&quest) else {
+                        waker.notify(waker.total_listeners());
+                        continue;
+                    };
+
+                    if matches!(quest.state, QuestState::Stopped) {
+                        waker.notify(waker.total_listeners());
+                        continue;
+                    }
+
+                    self.wakers
+                        .on_quest_stop
+                        .entry(quest_id)
+                        .or_default()
+                        .push(waker);
+
+                    if !matches!(quest.state, QuestState::Stopping(_)) {
+                        quest.actions.push_back(QuestAction::Stop);
+                    }
+                }
+                QuestEvent::SetStage {
+                    quest: quest_id,
+                    stage,
+                    waker,
+                } => {
+                    self.wakers
+                        .on_quest_set_stage
+                        .entry((quest_id, stage))
+                        .or_default()
+                        .push(waker);
+
+                    if let Some(quest) = self.quests.get_mut(&quest_id) {
+                        // We always need to ensure the quest is running before
+                        // setting the stage.
+                        quest.actions.push_back(QuestAction::Start);
+                        quest.actions.push_back(QuestAction::SetStage(stage));
+                        continue;
+                    }
+
+                    if self.quests_loading.contains_key(&quest_id) {
+                        self.deferred_actions
+                            .entry(quest_id)
+                            .or_default()
+                            .extend([QuestAction::Start, QuestAction::SetStage(stage)]);
+                        continue;
+                    }
+
+                    let loader = self.quest_loader.clone();
+                    let events = self.events.clone();
+                    let task = self.pool.spawn(async move {
+                        let quest = match loader.load(quest_id).await {
+                            Ok(mut quest) => {
+                                quest.actions.push_back(QuestAction::Start);
+                                quest.actions.push_back(QuestAction::SetStage(stage));
+                                Some(quest)
+                            }
+                            Err(err) => {
+                                tracing::error!("failed to load quest {quest_id}: {err}");
+                                None
+                            }
+                        };
+
+                        events.push(Event::Discover(quest_id, quest));
+                    });
+
+                    debug_assert!(!self.quests_loading.contains_key(&quest_id));
+                    self.quests_loading.insert(quest_id, task);
+                }
+            }
+        }
 
         while let Some(event) = self.events.pop() {
             match event {
                 Event::Discover(id, quest) => {
-                    for scene in quest.scenes.keys() {
-                        self.scenes_to_quest.insert(*scene, id);
+                    self.quests_loading.remove(&id);
+                    let actions = self.deferred_actions.remove(&id).unwrap_or_default();
+
+                    if let Some(mut quest) = quest {
+                        for scene in quest.scenes.keys() {
+                            self.scenes_to_quest.insert(*scene, id);
+                        }
+
+                        quest.actions.extend(actions);
+                        self.quests.insert(id, quest);
+                        continue;
                     }
 
-                    self.quests.insert(id, quest);
+                    // Quest failed to load.
+                    for waker in self.wakers.on_quest_start.remove(&id).unwrap_or_default() {
+                        waker.notify(waker.total_listeners().tag(false));
+                    }
+
+                    for waker in self.wakers.on_quest_stop.remove(&id).unwrap_or_default() {
+                        waker.notify(waker.total_listeners());
+                    }
+
+                    for action in actions {
+                        match action {
+                            QuestAction::SetStage(stage) => {
+                                for waker in self
+                                    .wakers
+                                    .on_quest_set_stage
+                                    .remove(&(id, stage))
+                                    .unwrap_or_default()
+                                {
+                                    waker.notify(waker.total_listeners().tag(false));
+                                }
+                            }
+                            _ => {}
+                        }
+                    }
                 }
             }
         }
@@ -131,7 +298,22 @@ impl QuestManager {
             quest.actions.push_back(QuestAction::StopScene(event.scene));
         }
 
+        self.advance_quests(executor, globals);
+        self.advance_scenes(world, events, executor);
+        dialogue::play_actor_dialogue(world, audio, globals, self);
+        dialogue::initiate_player_npc_interactions(world, events, self, executor);
+    }
+
+    fn advance_quests(&mut self, executor: &mut Executor, globals: &GlobalProperties) {
         for (id, quest) in &mut self.quests {
+            let mut quests = globals.quests.quests.lock();
+            let global = quests.entry(*id).or_insert_with(|| global::Quest {
+                cur_stage: 0,
+                state: global::QuestState::Stopped,
+                is_active: false,
+                stages_done: HashSet::new(),
+            });
+
             loop {
                 match &mut quest.state {
                     QuestState::PreInit => {
@@ -153,6 +335,10 @@ impl QuestManager {
                         quest.state = QuestState::Stopped;
                     }
                     QuestState::Stopped => {
+                        for waker in self.wakers.on_quest_stop.remove(id).unwrap_or_default() {
+                            waker.notify(waker.total_listeners());
+                        }
+
                         if quest
                             .actions
                             .pop_front_if(|action| *action == QuestAction::Start)
@@ -235,15 +421,17 @@ impl QuestManager {
                         quest.state = QuestState::Running;
                     }
                     QuestState::Running => {
+                        for waker in self.wakers.on_quest_start.remove(id).unwrap_or_default() {
+                            waker.notify(waker.total_listeners().tag(true));
+                        }
+
                         let Some(action) = quest.actions.pop_front() else {
                             break;
                         };
 
-                        debug_assert_ne!(
-                            action,
-                            QuestAction::Start,
-                            "received QuestAction::Start on quest that is already running"
-                        );
+                        if action == QuestAction::Start {
+                            continue;
+                        }
 
                         match action {
                             QuestAction::Start => {}
@@ -275,13 +463,42 @@ impl QuestManager {
                             }
                             QuestAction::SetStage(stage_id) => {
                                 let Some(stage) = quest.stages.get_mut(&stage_id) else {
+                                    for waker in self
+                                        .wakers
+                                        .on_quest_set_stage
+                                        .remove(&(*id, stage_id))
+                                        .unwrap_or_default()
+                                    {
+                                        waker.notify(waker.total_listeners().tag(false));
+                                    }
                                     continue;
                                 };
 
                                 if stage.is_done {
+                                    for waker in self
+                                        .wakers
+                                        .on_quest_set_stage
+                                        .remove(&(*id, stage_id))
+                                        .unwrap_or_default()
+                                    {
+                                        waker.notify(waker.total_listeners().tag(false));
+                                    }
+
                                     continue;
                                 }
+
+                                global.stages_done.insert(stage_id);
                                 stage.is_done = true;
+                                quest.active_stage = stage_id;
+
+                                for waker in self
+                                    .wakers
+                                    .on_quest_set_stage
+                                    .remove(&(*id, stage_id))
+                                    .unwrap_or_default()
+                                {
+                                    waker.notify(waker.total_listeners().tag(true));
+                                }
 
                                 tracing::debug!(
                                     "advancing quest {:?} from stage {:?} to {}",
@@ -355,11 +572,17 @@ impl QuestManager {
                     }
                 }
             }
-        }
 
-        self.advance_scenes(world, events, executor);
-        dialogue::play_actor_dialogue(world, audio, globals, self);
-        dialogue::initiate_player_npc_interactions(world, events, self, executor);
+            global.cur_stage = quest.active_stage;
+            global.state = match quest.state {
+                QuestState::Init(_) | QuestState::PreInit | QuestState::Stopped => {
+                    global::QuestState::Stopped
+                }
+                QuestState::Running => global::QuestState::Running,
+                QuestState::Starting(_) => global::QuestState::Starting,
+                QuestState::Stopping(_) => global::QuestState::Stopping,
+            }
+        }
     }
 
     fn advance_scenes(
@@ -370,36 +593,30 @@ impl QuestManager {
     ) {
         let _span = trace_span!("QuestManager::advance_scenes").entered();
 
-        let mut scenes = Vec::new();
+        let mut set_stages = Vec::new();
 
-        for (quest_id, quest) in &self.quests {
-            for (scene_id, scene) in &quest.scenes {
+        for (quest_id, quest) in &mut self.quests {
+            for (scene_id, scene) in &mut quest.scenes {
                 if !scene.is_playing {
                     continue;
                 }
 
-                scenes.push((*quest_id, *scene_id, scene.clone(), quest.aliases.clone()))
+                let is_done = scene.advance(world, events, executor, &quest.aliases, *quest_id);
+                if is_done {
+                    tracing::debug!("scene {scene_id} of quest {quest_id} is done");
+                    scene.is_playing = false;
+                }
+
+                if let Some(stage) = scene.info.set_stage_end
+                    && is_done
+                {
+                    set_stages.push((*quest_id, stage));
+                }
             }
         }
 
-        for (quest_id, scene_id, mut scene, aliases) in scenes {
-            let is_done = scene.advance(world, events, executor, self, &aliases, quest_id);
-            if is_done {
-                tracing::debug!("scene {scene_id} of quest {quest_id} is done");
-                scene.is_playing = false;
-            }
-
-            if let Some(stage) = scene.info.set_stage_end
-                && is_done
-            {
-                self.set_quest_stage(quest_id, stage);
-            }
-
-            self.quests
-                .get_mut(&quest_id)
-                .unwrap()
-                .scenes
-                .insert(scene_id, scene);
+        for (quest, stage) in set_stages {
+            self.set_quest_stage(quest, stage);
         }
     }
 
@@ -413,14 +630,6 @@ impl QuestManager {
         self.quests.get(&quest)
     }
 
-    pub fn start_quest(&mut self, quest: RecordId) {
-        let Some(quest) = self.quests.get_mut(&quest) else {
-            return;
-        };
-
-        quest.actions.push_back(QuestAction::Start);
-    }
-
     pub fn start_scene(&mut self, scene: RecordId) {
         let Some(quest) = self.scenes_to_quest.get(&scene) else {
             return;
@@ -430,15 +639,7 @@ impl QuestManager {
         quest.actions.push_back(QuestAction::StartScene(scene));
     }
 
-    pub fn stop_quest(&mut self, quest: RecordId) {
-        let Some(quest) = self.quests.get_mut(&quest) else {
-            return;
-        };
-
-        quest.actions.push_back(QuestAction::Stop);
-    }
-
-    pub fn set_quest_stage(&mut self, quest: RecordId, id: StageId) {
+    fn set_quest_stage(&mut self, quest: RecordId, id: StageId) {
         let Some(quest) = self.quests.get_mut(&quest) else {
             return;
         };
@@ -502,7 +703,7 @@ enum QuestAction {
 
 #[derive(Debug)]
 enum Event {
-    Discover(RecordId, Quest),
+    Discover(RecordId, Option<Quest>),
 }
 
 pub type StageId = u16;
@@ -513,114 +714,6 @@ pub struct QuestStage {
     pub run_on_stop: bool,
     pub is_done: bool,
     pub fragment_functions: HashSet<String>,
-}
-
-async fn load_quest(
-    esp_loader: &EspLoader,
-    script_loader: &ScriptLoader,
-    compiler: &ConditionCompiler,
-    events: &SegQueue<Event>,
-    id: RecordId,
-) {
-    let Ok(quest) = esp_loader.lookup(Some(RecordKind::Quest), id).await else {
-        tracing::warn!("failed to load test quest");
-        return;
-    };
-
-    let RecordData::Quest(data) = &quest.local.data else {
-        todo!();
-    };
-
-    let mut script = script_loader.load(quest.id).await;
-
-    let mut stages = IndexMap::new();
-    for stage in &*data.stages {
-        stages.insert(
-            stage.index.stage_index,
-            QuestStage {
-                run_on_start: stage.index.flags.contains(QuestStageFlags::RUN_ON_START),
-                run_on_stop: stage.index.flags.contains(QuestStageFlags::RUN_ON_STOP),
-                is_done: false,
-                fragment_functions: HashSet::new(),
-            },
-        );
-    }
-
-    if let Some(vmad) = &data.virtual_machine_adapter
-        && let Some(fragments) = &vmad.fragments
-    {
-        for stage in &fragments.fragments {
-            let Some(s) = stages.get_mut(&stage.quest_stage) else {
-                continue;
-            };
-
-            // FIXME: This will call ALL scripts with the name,
-            // however we only want to call the fragment script.
-            s.fragment_functions.insert(stage.fragment_name.clone());
-        }
-    }
-
-    let mut aliases = HashMap::new();
-    if let Some(script) = &mut script {
-        for (key, script) in script.aliases.drain() {
-            // TODO: Figure out what happens when we touch aliases from
-            // other quests.
-            assert_eq!(key.accessor, quest.id);
-            assert_eq!(key.owner, quest.id);
-
-            aliases.insert(
-                key.id,
-                AliasState {
-                    entity: None,
-                    script: Some(script),
-                },
-            );
-        }
-    }
-
-    let mut actions = VecDeque::new();
-    if data.data.flags.contains(QuestDataFlags::START_GAME_ENABLED) {
-        actions.push_back(QuestAction::Start);
-    }
-
-    let scenes = load_scenes(esp_loader, script_loader, compiler, id).await;
-
-    let mut hello_topics = Vec::new();
-
-    for topic in esp_loader
-        .children(RecordChildren::DialogueTopics, id)
-        .await
-        .unwrap()
-    {
-        let RecordData::DialogueTopic(data) = &topic.local.data else {
-            continue;
-        };
-
-        match data.subtype_name {
-            Some(v) if v.as_bytes() == b"HELO" => {
-                let topic = DialogueTopicAction::load(esp_loader, compiler, topic.id)
-                    .await
-                    .unwrap();
-
-                hello_topics.push(topic);
-            }
-            _ => continue,
-        }
-    }
-
-    events.push(Event::Discover(
-        quest.id,
-        Quest {
-            state: QuestState::PreInit,
-            stages,
-            active_stage: 0,
-            script: script.map(|v| v.object),
-            aliases: HashMap::new(),
-            actions,
-            scenes,
-            hello_topics,
-        },
-    ));
 }
 
 #[tracing::instrument(skip_all)]
@@ -719,33 +812,6 @@ async fn load_reference_alias(
     todo!("TODO: {:?}", alias)
 }
 
-async fn load_scenes(
-    esp_loader: &EspLoader,
-    script_loader: &ScriptLoader,
-    compiler: &ConditionCompiler,
-    quest: RecordId,
-) -> HashMap<RecordId, SceneState> {
-    let records = esp_loader
-        .children(RecordChildren::Scenes, quest)
-        .await
-        .unwrap();
-
-    let mut scenes = HashMap::new();
-    for record in records {
-        let RecordData::Scene(data) = &record.local.data else {
-            continue;
-        };
-
-        let info = SceneInfo::load(esp_loader, compiler, data, record.id)
-            .await
-            .unwrap();
-        let state = SceneState::new(info);
-        scenes.insert(record.id, state);
-    }
-
-    scenes
-}
-
 #[derive(Clone, Debug)]
 enum AliasLoadError {
     NoLocation,
@@ -760,4 +826,11 @@ struct AliasState {
 #[derive(Clone, Debug, Default)]
 struct DialogueTopics {
     hello: HashMap<Entity, Vec<RecordId>>,
+}
+
+#[derive(Debug, Default)]
+struct Wakers {
+    on_quest_start: HashMap<RecordId, Vec<event_listener::Event<bool>>>,
+    on_quest_stop: HashMap<RecordId, Vec<event_listener::Event>>,
+    on_quest_set_stage: HashMap<(RecordId, StageId), Vec<event_listener::Event<bool>>>,
 }

@@ -17,7 +17,6 @@ use tracing::instrument;
 
 use crate::state::esp::EspLoader;
 use crate::systems::conditions::compiler::build_func;
-use crate::systems::quests::QuestManager;
 use crate::systems::scripting::invocations::EventInvocation;
 use crate::systems::scripting::loader::{ScriptLoader, ScriptObject, ScriptObjectId};
 use crate::systems::scripting::{Executor, invocations};
@@ -167,7 +166,6 @@ impl CompiledCondition {
         executor: &mut Executor,
         world: &mut World,
         events: &mut EventBus,
-        quests: &mut QuestManager,
         subject: ScriptObjectId,
         target: Option<ScriptObjectId>,
     ) -> bool {
@@ -212,7 +210,7 @@ impl CompiledCondition {
                 Poll::Ready(returns) => break returns,
                 Poll::Pending => {
                     // We only want to drive the task containing our condition.
-                    executor.update(world, events, quests, Duration::ZERO);
+                    executor.update(world, events, Duration::ZERO);
                 }
             }
         };
@@ -229,13 +227,12 @@ impl CompiledCondition {
         executor: &mut Executor,
         world: &mut World,
         events: &mut EventBus,
-        quests: &mut QuestManager,
         subject: Entity,
         target: Option<Entity>,
     ) -> bool {
         let subject = futures_lite::future::block_on(executor.get_or_load(world, subject));
         let target = target
             .map(|target| futures_lite::future::block_on(executor.get_or_load(world, target)));
-        self.eval(executor, world, events, quests, subject, target)
+        self.eval(executor, world, events, subject, target)
     }
 }

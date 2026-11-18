@@ -1,3 +1,4 @@
+use std::borrow::Borrow;
 use std::num::NonZeroU32;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -92,11 +93,15 @@ impl TestRunner {
         scripts.get(class).unwrap().get().object.clone()
     }
 
-    pub fn call(&mut self, receiver: ScriptObject, func: &str, args: Vec<Value>) -> Vec<Value> {
+    pub fn call<T, R>(&mut self, receiver: R, func: &str, args: T) -> Vec<Value>
+    where
+        T: Into<Vec<Value>>,
+        R: Borrow<ScriptObject>,
+    {
         let mut invocation = self.game.executor.invoke(EventInvocation {
-            receiver,
+            receiver: receiver.borrow().clone(),
             name: func.to_owned().into(),
-            args,
+            args: args.into(),
         });
 
         let waker = std::task::Waker::noop();
@@ -113,12 +118,13 @@ impl TestRunner {
     }
 
     #[track_caller]
-    pub fn call_assert<T, U>(&mut self, receiver: ScriptObject, func: &str, args: T, expect: U)
+    pub fn call_assert<T, U, R>(&mut self, receiver: R, func: &str, args: T, expect: U)
     where
         T: Into<Vec<Value>>,
         U: Into<Value>,
+        R: Borrow<ScriptObject>,
     {
-        let res = self.call(receiver, func, args.into());
+        let res = self.call(receiver, func, args);
         assert_eq!(
             res,
             vec![expect.into()],

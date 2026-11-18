@@ -3,7 +3,7 @@ use openfo4_esp_derive::{BinaryStruct, ConditionFunction};
 use crate::fields::{FieldMap, Read};
 use crate::{BString, Error, FormId, Text};
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct Conditions {
     pub conditions: Vec<Condition>,
 }

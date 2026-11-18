@@ -18,7 +18,6 @@ use crate::state::npc::ObjectKeywords;
 use crate::systems::FacingDirection;
 use crate::systems::animation_sync::AnimationParameters;
 use crate::systems::controller::ControllerShape;
-use crate::systems::quests::QuestManager;
 use crate::systems::scripting::Executor;
 
 #[derive(Copy, Clone, Debug, Default)]
@@ -53,7 +52,6 @@ pub fn apply_movement(
     pipeline: &mut PhysicsPipeline,
     executor: &mut Executor,
     events: &mut EventBus,
-    quests: &mut QuestManager,
     anim: &mut AnimationSystem,
 ) {
     let mut buffer = CommandBuffer::new();
@@ -189,7 +187,7 @@ pub fn apply_movement(
     }
 
     for (entity, action) in anim_events {
-        anim.send_action(world, entity, action, executor, events, quests);
+        anim.send_action(world, entity, action, executor, events);
     }
 
     buffer.run_on(world);

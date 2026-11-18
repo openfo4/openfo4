@@ -43,7 +43,6 @@ use crate::state::esp::EspLoader;
 use crate::state::level::loader::EntityLoader;
 use crate::systems::DeathStartEvent;
 use crate::systems::global::GlobalProperties;
-use crate::systems::quests::QuestManager;
 use crate::systems::scripting::events::queue::EventQueueProducer;
 use crate::systems::scripting::invocations::EventInvocation;
 use crate::systems::scripting::loader::{ScriptLoader, ScriptObject, ScriptObjectId};
@@ -173,20 +172,13 @@ impl Executor {
         self.handle.push_invocation(invocation.into())
     }
 
-    pub fn update(
-        &mut self,
-        world: &mut World,
-        events: &mut EventBus,
-        quests: &mut QuestManager,
-        budget: Duration,
-    ) {
+    pub fn update(&mut self, world: &mut World, events: &mut EventBus, budget: Duration) {
         let _span = trace_span!("Executor::update").entered();
 
         self.handle.tick();
 
         self.handle.cell.set(BorrowedState {
             world: world,
-            quests: quests,
             events,
         });
 
