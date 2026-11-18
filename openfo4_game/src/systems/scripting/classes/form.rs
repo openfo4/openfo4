@@ -51,7 +51,10 @@ fn has_keyword(caller: Caller<'_, State>, self_ptr: Object, keyword: Object) -> 
     }
 
     let form = caller.data().objects.get_by_addr(self_ptr).unwrap();
-    let form = form.data().form().unwrap();
+    let Some(keywords) = form.data().keywords() else {
+        return false;
+    };
+
     let keyword = caller
         .data()
         .objects
@@ -59,7 +62,7 @@ fn has_keyword(caller: Caller<'_, State>, self_ptr: Object, keyword: Object) -> 
         .and_then(|s| s.record())
         .unwrap();
 
-    form.keywords.contains(&keyword)
+    keywords.contains(&keyword)
 }
 
 /// `HasKeywordInFormList`
@@ -73,7 +76,10 @@ fn has_keyword_in_form_list(caller: Caller<'_, State>, self_ptr: Object, formlis
     }
 
     let form = caller.data().objects.get_by_addr(self_ptr).unwrap();
-    let form = form.data().form().unwrap();
+    let Some(keywords) = form.data().keywords() else {
+        return false;
+    };
+
     let list = caller
         .data()
         .objects
@@ -83,7 +89,7 @@ fn has_keyword_in_form_list(caller: Caller<'_, State>, self_ptr: Object, formlis
     let lists = caller.data().globals.form_lists.lock();
     let list = lists.get(&list).unwrap();
 
-    list.iter().any(|keyword| form.keywords.contains(&keyword))
+    list.iter().any(|keyword| keywords.contains(&keyword))
 }
 
 /// `PlayerKnows`

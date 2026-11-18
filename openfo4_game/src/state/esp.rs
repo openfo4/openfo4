@@ -8,6 +8,7 @@ use openfo4_common::string::Lowercase;
 use openfo4_core::record::{ModuleId, RecordId};
 use openfo4_esp::{EspFile, FormId, Record, RecordChildren, RecordData, RecordKind};
 use openfo4_io::fs::File;
+use thiserror::Error;
 
 #[derive(Debug)]
 pub struct EspLoaderBuilder {
@@ -194,10 +195,13 @@ impl EspLoader {
             }
         }
 
-        let index = self.plugins[id.module.0.get() as usize];
+        let Some(index) = self.plugins.get(id.module.0.get() as usize).copied() else {
+            return Err(Error::NoRecord(id))?;
+        };
+
         let file = &self.files[index as usize];
         let Some(index) = file.dependencies.iter().position(|v| *v == id.module) else {
-            return Err(Error::EndOfFile);
+            return Err(Error::NoRecord(id));
         };
 
         // The plugin index refering to the file itself is the index
@@ -216,7 +220,14 @@ impl EspLoader {
     pub async fn lookup_all(&self, kind: Option<RecordKind>) -> Result<Vec<GlobalRecord>, Error> {
         let mut records = Vec::new();
 
-        // TODO: We should also yield hardcoded forms here.
+        for (id, record) in &self.hardcoded {
+            if kind.is_none_or(|kind| kind == record.data.kind()) {
+                records.push(GlobalRecord {
+                    id: *id,
+                    local: record.clone(),
+                });
+            }
+        }
 
         for file in &self.files {
             let local_records = file.file.lookup_all(kind).collect::<Result<Vec<_>, _>>()?;
@@ -256,8 +267,8 @@ impl EspLoader {
                 Ok(v) => v,
                 // EOF means the file does not contain the record to query
                 // children of.
-                Err(Error::EndOfFile) => continue,
-                Err(err) => return Err(err),
+                Err(openfo4_esp::Error::EndOfFile) => continue,
+                Err(err) => return Err(err.into()),
             };
 
             records.reserve(local_records.len());
@@ -282,6 +293,12 @@ impl EspLoader {
     ///
     /// The `origin` is the [`RecordId`] where the [`FormId`] was defined.
     pub fn resolve_form(&self, form: FormId, origin: RecordId) -> Option<RecordId> {
+        // Hardcoded forms can only reference other hardcoded forms from the
+        // same plugin.
+        if self.hardcoded.contains_key(&origin) && form.plugin() == 0 {
+            return Some(RecordId::new(origin.module, form));
+        }
+
         self.resolve_form_from_module(form, origin.module)
     }
 
@@ -338,4 +355,10 @@ pub struct GlobalRecord {
     pub local: Record,
 }
 
-pub type Error = openfo4_esp::Error;
+#[derive(Debug, Error)]
+pub enum Error {
+    #[error("record {0} does not exist")]
+    NoRecord(RecordId),
+    #[error(transparent)]
+    Esp(#[from] openfo4_esp::Error),
+}
