@@ -20,6 +20,7 @@ use openfo4_game::systems::scripting::invocations::{EventInvocation, Value};
 use openfo4_game::systems::scripting::loader::ScriptObject;
 use openfo4_game::time::Time;
 use openfo4_gizmos::Gizmos;
+use openfo4_script::runtime::object::ObjectHandle;
 use openfo4_tasks::TaskPool;
 use pscc::Compiler;
 
@@ -79,6 +80,11 @@ impl TestRunner {
         block_on(self.game.executor.loader().load(id))
             .unwrap()
             .object
+    }
+
+    pub fn script(&mut self, object: &ScriptObject, class: &str) -> ObjectHandle {
+        let scripts = self.game.executor.objects().get_by_id(object.id()).unwrap();
+        scripts.get(class).unwrap().get().object.clone()
     }
 
     pub fn call(&mut self, receiver: ScriptObject, func: &str, args: Vec<Value>) -> Vec<Value> {

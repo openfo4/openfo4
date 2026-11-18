@@ -522,10 +522,10 @@ async fn load_quest(
     events: &SegQueue<Event>,
     id: RecordId,
 ) {
-    let quest = esp_loader
-        .lookup(Some(RecordKind::Quest), id)
-        .await
-        .unwrap();
+    let Ok(quest) = esp_loader.lookup(Some(RecordKind::Quest), id).await else {
+        tracing::warn!("failed to load test quest");
+        return;
+    };
 
     let RecordData::Quest(data) = &quest.local.data else {
         todo!();

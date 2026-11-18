@@ -138,7 +138,7 @@ pub enum TypedValue {
 }
 
 /// A keyword.
-#[derive(Clone, Debug, Record)]
+#[derive(Clone, Debug, Default, Record)]
 #[non_exhaustive]
 pub struct Keyword {
     /// The unique editor ID.
@@ -1430,7 +1430,7 @@ pub struct Book {
     pub inventory_art: Option<FormId>,
 }
 
-#[derive(Copy, Clone, Debug, BinaryStruct)]
+#[derive(Copy, Clone, Debug, Default, BinaryStruct)]
 pub struct BookData {
     pub value: u32,
     pub weight: f32,
@@ -4251,7 +4251,7 @@ bitflags! {
         const USE_LOD_DATA = 0x02;
         const USE_MAP_DATA = 0x04;
         const USE_WATER_DATA = 0x08;
-        const USE_CLIMATE_DATA = 0x20;
+        const USE_CLIMATE_DATA = 0x10;
         const USE_SKY_CELL = 0x40;
     }
 }
@@ -5721,7 +5721,7 @@ pub struct ImageSpaceAdapter {
     pub id: Option<BString>,
 }
 
-#[derive(Clone, Debug, Record)]
+#[derive(Clone, Debug, Default, Record)]
 pub struct FormList {
     #[record("EDID")]
     pub id: Option<BString>,
