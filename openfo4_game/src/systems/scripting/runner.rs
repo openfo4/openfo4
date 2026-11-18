@@ -327,8 +327,12 @@ impl Runner {
                             .map(|val| match val {
                                 Val::Bool(v) => Value::Bool(*v),
                                 Val::I32(v) => Value::Int(*v),
-                                _ => {
-                                    todo!("non bool/int returns are not yet supported");
+                                Val::Object(addr) => {
+                                    let handle = engine.object_pool().get(*addr).unwrap();
+                                    Value::Object(handle)
+                                }
+                                Val::F32(_) => {
+                                    todo!("f32 returns are not yet supported");
                                 }
                             })
                             .collect();

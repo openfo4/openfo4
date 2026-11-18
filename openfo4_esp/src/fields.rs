@@ -183,6 +183,12 @@ where
     }
 }
 
+impl<T> Default for SubRecordArray<T> {
+    fn default() -> Self {
+        Self(Vec::new())
+    }
+}
+
 impl<T> Deref for SubRecordArray<T> {
     type Target = Vec<T>;
 

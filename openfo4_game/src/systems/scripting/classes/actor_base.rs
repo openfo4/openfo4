@@ -3,6 +3,7 @@ use openfo4_script::runtime::{Caller, Error};
 
 use crate::systems::scripting::EngineExt;
 use crate::systems::scripting::classes::Object;
+use crate::systems::scripting::object_data::Sex;
 use crate::systems::scripting::state::State;
 
 #[rustfmt::skip]
@@ -92,8 +93,10 @@ fn get_level(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<i32, Error
 /// ```text
 /// int Function GetLevelExact() native
 /// ```
-fn get_level_exact(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<i32, Error> {
-    todo!()
+fn get_level_exact(caller: Caller<'_, State>, self_ptr: Object) -> i32 {
+    let actor = caller.data().objects.get_by_addr(self_ptr).unwrap();
+    let data = actor.data().actor_base().unwrap();
+    data.base_level.into()
 }
 
 /// `GetSex`
@@ -101,8 +104,14 @@ fn get_level_exact(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<i32,
 /// ```text
 /// int Function GetSex() native
 /// ```
-fn get_sex(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<i32, Error> {
-    todo!()
+fn get_sex(caller: Caller<'_, State>, self_ptr: Object) -> i32 {
+    let actor = caller.data().objects.get_by_addr(self_ptr).unwrap();
+    let data = actor.data().actor_base().unwrap();
+
+    match data.sex {
+        Sex::Male => 0,
+        Sex::Female => 1,
+    }
 }
 
 /// `GetUniqueActor`

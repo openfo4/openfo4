@@ -293,10 +293,10 @@ pub struct DMGT {
     pub dnam: u64,
 }
 
-#[derive(Clone, Debug, Record)]
+#[derive(Clone, Debug, Default, Record)]
 pub struct Class {
     #[record("EDID")]
-    pub id: BString,
+    pub id: Option<BString>,
     #[record("FULL")]
     pub full_name: Option<LString>,
     #[record("DESC")]
@@ -463,12 +463,13 @@ pub struct ModelFileInfo {
     pub directory_hash: u32,
 }
 
-#[derive(Clone, Debug, Record)]
+#[derive(Clone, Debug, Default, Record)]
 #[record(ordered)]
+#[non_exhaustive]
 pub struct Race {
     /// The editor ID.
     #[record("EDID")]
-    pub id: BString,
+    pub id: Option<BString>,
     #[record("STCP")]
     pub animation_sound: Option<FormId>,
     /// The localized name of the record.
@@ -645,7 +646,7 @@ pub enum SubgraphPerspective {
     First = 1,
 }
 
-#[derive(Copy, Clone, Debug, BinaryStruct)]
+#[derive(Copy, Clone, Debug, Default, BinaryStruct)]
 pub struct RaceData {
     pub male_height: f32,
     pub female_height: f32,
@@ -699,7 +700,7 @@ pub struct RaceData {
     pub orientation_limits_roll: f32,
 }
 
-#[derive(Copy, Clone, Debug, BinaryStruct)]
+#[derive(Copy, Clone, Debug, Default, BinaryStruct)]
 pub struct RaceDefaultWeight {
     pub thin: f32,
     pub muscular: f32,
@@ -707,7 +708,7 @@ pub struct RaceDefaultWeight {
 }
 
 bitflags! {
-    #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+    #[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Hash)]
     pub struct RaceDataFlags: u32 {
         const PLAYABLE = 0x00000001;
         const FACEGEN_HEAD = 0x00000002;
@@ -747,7 +748,7 @@ bitflags! {
 impl_decode_bitflags!(RaceDataFlags: u32);
 
 bitflags! {
-    #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+    #[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Hash)]
     pub struct RaceDataFlags2: u32 {
         const USE_ADVANCED_AVOIDANCE = 0x00000001;
         const NON_HOSTILE = 0x00000002;
@@ -774,9 +775,10 @@ bitflags! {
 
 impl_decode_bitflags!(RaceDataFlags2: u32);
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, BinaryStruct)]
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Hash, BinaryStruct)]
 #[primitive(u32)]
 pub enum RaceDataSize {
+    #[default]
     Small = 0,
     Medium = 1,
     Large = 2,
@@ -1571,7 +1573,7 @@ bitflags! {
 
 impl_decode_bitflags!(DoorFlags: u8);
 
-#[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Array<T>(pub Vec<T>);
 
 impl<T> Decode for Array<T>
@@ -1590,6 +1592,12 @@ where
         }
 
         Ok(Self(arr))
+    }
+}
+
+impl<T> Default for Array<T> {
+    fn default() -> Self {
+        Self(Vec::new())
     }
 }
 
@@ -2274,10 +2282,11 @@ pub struct AmmoProjectileData {
 #[derive(Clone, Debug, Record)]
 pub struct DEST {}
 
-#[derive(Clone, Debug, Record)]
+#[derive(Clone, Debug, Default, Record)]
+#[non_exhaustive]
 pub struct Npc {
     #[record("EDID")]
-    pub id: BString,
+    pub id: Option<BString>,
     #[record("VMAD")]
     pub virtual_machine_adapter: Option<VirtualMachineAdapter>,
     #[record("OBND")]
@@ -2391,7 +2400,7 @@ pub struct Npc {
     // face morphs
 }
 
-#[derive(Copy, Clone, Debug, BinaryStruct)]
+#[derive(Copy, Clone, Debug, Default, BinaryStruct)]
 pub struct NpcBaseStats {
     pub flags: NpcBaseFlags,
     pub xp_value_offset: i16,
@@ -2405,7 +2414,7 @@ pub struct NpcBaseStats {
 }
 
 bitflags! {
-    #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+    #[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Hash)]
     pub struct NpcBaseFlags: u32 {
         const FEMALE = 0x01;
         const ESSENTIAL = 0x02;
@@ -2425,7 +2434,7 @@ bitflags! {
 impl_decode_bitflags!(NpcBaseFlags: u32);
 
 bitflags! {
-    #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+    #[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Hash)]
     pub struct NpcTemplateFlags: u16 {
         const TRAITS = 0x0001;
         const STATS = 0x0002;
@@ -2560,7 +2569,7 @@ bitflags! {
 
 impl_decode_bitflags! { NpcAiDataFlags: u8 }
 
-#[derive(Copy, Clone, Debug, BinaryStruct)]
+#[derive(Copy, Clone, Debug, Default, BinaryStruct)]
 pub struct NpcStats {
     pub calculated_health: u16,
     pub calculated_action_points: u16,
@@ -2569,10 +2578,11 @@ pub struct NpcStats {
     _pad0: [u8; 1],
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, BinaryStruct)]
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Hash, BinaryStruct)]
 #[primitive(u32)]
 pub enum SoundLevel {
     Loud = 0,
+    #[default]
     Normal = 1,
     Silent = 2,
     VeryLoud = 3,
@@ -2592,7 +2602,7 @@ impl SoundLevel {
     }
 }
 
-#[derive(Copy, Clone, Debug, BinaryStruct)]
+#[derive(Copy, Clone, Debug, Default, BinaryStruct)]
 pub struct NpcWeight {
     pub thin: f32,
     pub muscular: f32,
