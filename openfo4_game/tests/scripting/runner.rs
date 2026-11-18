@@ -7,6 +7,8 @@ use std::task::Poll;
 use futures::FutureExt;
 use futures_lite::future::block_on;
 use hashbrown::HashMap;
+use openfo4_audio::AudioManager;
+use openfo4_audio::backend::{DefaultBackend, StubBackend};
 use openfo4_core::path::DataPathBuf;
 use openfo4_core::record::{ModuleId, RecordId};
 use openfo4_core_pipeline::entities::Entities;
@@ -46,12 +48,15 @@ impl TestRunnerBuilder {
         let file_loader = create_file_loader(self.compiler);
         let loader = self.esp.build();
 
+        let audio = AudioManager::new(DefaultBackend::Stub(StubBackend));
+
         let game = block_on(GameState::new(
             shared,
             pool,
             file_loader,
             loader,
             Config::default(),
+            audio,
         ));
 
         TestRunner {
