@@ -12,6 +12,8 @@ use glam::IVec2;
 use glam::Quat;
 use glam::UVec2;
 use glam::Vec3;
+use openfo4_audio::AudioManager;
+use openfo4_audio::backend::DefaultBackend;
 use openfo4_config::ConfigSection;
 use openfo4_core::record::RecordId;
 use openfo4_crash_handler::main;
@@ -188,7 +190,9 @@ async fn create_game(
     let file_loader = Arc::new(FileLoader::new(sources));
     let loader = Arc::new(loader.finalize());
 
-    let mut game = GameState::new(shared, pool, file_loader, loader, config).await;
+    let audio = AudioManager::new(DefaultBackend::default());
+
+    let mut game = GameState::new(shared, pool, file_loader, loader, config, audio).await;
     spawn_player(&mut game).await;
 
     game

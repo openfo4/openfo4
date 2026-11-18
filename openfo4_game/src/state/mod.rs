@@ -22,7 +22,6 @@ use glam::{IVec2, Vec3};
 use level::Level;
 use openfo4_asset::AssetLoader;
 use openfo4_audio::AudioManager;
-use openfo4_audio::backend::DefaultBackend;
 use openfo4_common::components::Transform;
 use openfo4_core::Frozen;
 use openfo4_core::ecs::{Entity, World};
@@ -112,6 +111,7 @@ impl GameState {
         file_loader: Arc<FileLoader>,
         loader: Arc<EspLoader>,
         config: Config,
+        audio: AudioManager,
     ) -> Self {
         let asset_loader = init_asset_loader(&file_loader, &shared.entities);
 
@@ -173,8 +173,6 @@ impl GameState {
         let door = DoorSystem::new(pool.clone(), level.loader().clone());
 
         let animation = AnimationSystem::new(&loader, &conditions).await;
-
-        let audio = AudioManager::new(DefaultBackend::new());
 
         Self {
             weather: WeatherSystem::new(loader.clone(), &asset_loader, &shared).await,
