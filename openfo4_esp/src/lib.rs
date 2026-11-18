@@ -1911,7 +1911,7 @@ impl<T> From<RgbPadded<T>> for Rgb<T> {
     }
 }
 
-#[derive(Copy, Clone, PartialEq, Eq, Hash)]
+#[derive(Copy, Clone, Default, PartialEq, Eq, Hash)]
 pub struct FormId(pub u32);
 
 impl FormId {

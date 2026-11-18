@@ -32,6 +32,7 @@ impl ObjectData {
     pub fn keywords(&self) -> Option<&HashSet<RecordId>> {
         match self {
             Self::Item(item) => Some(&item.form.keywords),
+            Self::ActorBase(base) => Some(&base.form.keywords),
             _ => None,
         }
     }
@@ -52,6 +53,8 @@ pub struct ActorBase {
     pub is_essential: bool,
     pub is_protected: bool,
     pub is_invulnerable: bool,
+    pub base_level: i16,
+    pub sex: Sex,
 }
 
 #[derive(Clone, Debug)]
@@ -62,25 +65,35 @@ pub struct Item {
 
 pub fn load_record_object_data(esp_loader: &EspLoader, record: &GlobalRecord) -> ObjectData {
     match &record.local.data {
-        RecordData::Npc(data) => ObjectData::ActorBase(ActorBase {
-            form: Form {
-                keywords: data
-                    .keywords
-                    .iter()
-                    .flatten()
-                    .map(|id| esp_loader.resolve_form(*id, record.id).unwrap())
-                    .collect(),
-                value: 0,
-            },
-            class: data
-                .class
-                .map(|id| esp_loader.resolve_form(id, record.id).unwrap()),
-            race: esp_loader.resolve_form(data.race, record.id).unwrap(),
-            is_unique: data.base_stats.flags.contains(NpcBaseFlags::UNIQUE),
-            is_essential: data.base_stats.flags.contains(NpcBaseFlags::ESSENTIAL),
-            is_protected: data.base_stats.flags.contains(NpcBaseFlags::PROTECTED),
-            is_invulnerable: data.base_stats.flags.contains(NpcBaseFlags::INVULNERABLE),
-        }),
+        RecordData::Npc(data) => {
+            let sex = if data.base_stats.flags.contains(NpcBaseFlags::FEMALE) {
+                Sex::Female
+            } else {
+                Sex::Male
+            };
+
+            ObjectData::ActorBase(ActorBase {
+                form: Form {
+                    keywords: data
+                        .keywords
+                        .iter()
+                        .flatten()
+                        .map(|id| esp_loader.resolve_form(*id, record.id).unwrap())
+                        .collect(),
+                    value: 0,
+                },
+                class: data
+                    .class
+                    .map(|id| esp_loader.resolve_form(id, record.id).unwrap()),
+                race: esp_loader.resolve_form(data.race, record.id).unwrap(),
+                is_unique: data.base_stats.flags.contains(NpcBaseFlags::UNIQUE),
+                is_essential: data.base_stats.flags.contains(NpcBaseFlags::ESSENTIAL),
+                is_protected: data.base_stats.flags.contains(NpcBaseFlags::PROTECTED),
+                is_invulnerable: data.base_stats.flags.contains(NpcBaseFlags::INVULNERABLE),
+                base_level: data.base_stats.level,
+                sex,
+            })
+        }
 
         RecordData::Armor(data) => {
             let keywords = data
@@ -219,4 +232,10 @@ pub fn load_record_object_data(esp_loader: &EspLoader, record: &GlobalRecord) ->
         }),
         _ => ObjectData::None,
     }
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub enum Sex {
+    Male,
+    Female,
 }

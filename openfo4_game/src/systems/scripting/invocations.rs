@@ -14,7 +14,7 @@ pub struct EventInvocation {
     pub args: Vec<Value>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum Value {
     Bool(bool),
     Int(i32),
@@ -35,6 +35,31 @@ impl Value {
             Self::Int(v) => Some(*v),
             _ => None,
         }
+    }
+
+    pub fn as_object(&self) -> Option<&ObjectHandle> {
+        match self {
+            Self::Object(v) => Some(v),
+            _ => None,
+        }
+    }
+}
+
+impl From<bool> for Value {
+    fn from(value: bool) -> Self {
+        Self::Bool(value)
+    }
+}
+
+impl From<i32> for Value {
+    fn from(value: i32) -> Self {
+        Self::Int(value)
+    }
+}
+
+impl From<ObjectHandle> for Value {
+    fn from(value: ObjectHandle) -> Self {
+        Self::Object(value)
     }
 }
 

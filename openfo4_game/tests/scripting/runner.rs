@@ -111,6 +111,20 @@ impl TestRunner {
             }
         }
     }
+
+    #[track_caller]
+    pub fn call_assert<T, U>(&mut self, receiver: ScriptObject, func: &str, args: T, expect: U)
+    where
+        T: Into<Vec<Value>>,
+        U: Into<Value>,
+    {
+        let res = self.call(receiver, func, args.into());
+        assert_eq!(
+            res,
+            vec![expect.into()],
+            "unexpected return value in function {func}"
+        );
+    }
 }
 
 fn create_file_loader(scripts: ScriptCompiler) -> Arc<FileLoader> {
@@ -209,3 +223,16 @@ impl ScriptCompiler {
         Self { modules }
     }
 }
+
+pub trait DefaultExt: Default {
+    fn default_with<F>(f: F) -> Self
+    where
+        F: FnOnce(&mut Self),
+    {
+        let mut value = Self::default();
+        f(&mut value);
+        value
+    }
+}
+
+impl<T: Default> DefaultExt for T {}

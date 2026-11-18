@@ -999,6 +999,18 @@ impl Debug for ObjectHandle {
     }
 }
 
+impl PartialEq for ObjectHandle {
+    fn eq(&self, other: &Self) -> bool {
+        // The two objects are equal by reference if both objects
+        // point to the same allocated object and the same index
+        // into the allocated object array.
+        // Note that only a single `Arc<Object>` can exist for an allocation
+        // at any time, so `Arc::ptr_eq` is equivalent to checking the actual
+        // pointer of the allocation, but allows us to skip a pointer dereference.
+        Arc::ptr_eq(&self.object, &other.object) && self.index == other.index
+    }
+}
+
 /// A reference to a [`ObjectHandle`].
 #[derive(Copy, Clone)]
 pub struct ObjectHandleRef<'a> {
