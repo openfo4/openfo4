@@ -9,7 +9,6 @@ use openfo4_esp::{RecordData, RecordKind};
 use crate::state::actions::{Action, Actions};
 use crate::state::esp::EspLoader;
 use crate::systems::conditions::{CompiledCondition, ConditionCompiler};
-use crate::systems::quests::QuestManager;
 use crate::systems::scripting::Executor;
 
 #[derive(Clone, Debug)]
@@ -82,7 +81,6 @@ impl AnimationSystem {
         action: Action,
         executor: &mut Executor,
         event_bus: &mut EventBus,
-        quests: &mut QuestManager,
     ) {
         let Some(action) = self.actions.0.get(&action) else {
             return;
@@ -106,7 +104,7 @@ impl AnimationSystem {
                 let subject = futures_lite::future::block_on(executor.get_or_load(world, entity));
                 let res = reaction
                     .condition
-                    .eval(executor, world, event_bus, quests, subject, None);
+                    .eval(executor, world, event_bus, subject, None);
 
                 tracing::trace!("condition for {} evaluated to {}", reaction.id, res);
                 if !res {

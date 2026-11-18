@@ -184,8 +184,17 @@ impl Runner {
             let entry = self.invocations.vacant_entry();
             let key = InvocationId(entry.key());
 
+            let mut visited = HashSet::new();
+
             let mut num_running = 0;
             for script in scripts.iter() {
+                // We only want to emit one event for every object.
+                // That is if there is a inheritance hierarchy like A->B->C
+                // we only emit one event for all of A, B and C, not for each class.
+                if !visited.insert(script.get().object.addr()) {
+                    continue;
+                }
+
                 self.queue.push_back(ScheduledTask {
                     object: event.receiver.id(),
                     invocation_id: Some(key),
@@ -284,6 +293,9 @@ impl Runner {
 
             let instance = script.get().instance.clone();
             if instance.get_func(&task.func).is_none() {
+                self.tasks
+                    .push(Box::pin(async move { (task.invocation_id, None) }));
+
                 continue;
             }
 

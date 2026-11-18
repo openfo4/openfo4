@@ -20,7 +20,6 @@ use crate::state::npc::{ActorBodyParts, BodyPartBone};
 use crate::systems::actor_value::ActorValueProperties;
 use crate::systems::global::GlobalProperties;
 use crate::systems::inventory::{Inventory, ItemData};
-use crate::systems::quests::QuestManager;
 use crate::systems::scripting::Executor;
 use crate::systems::{
     FacingDirection, GunFireEvent, GunFireRequest, GunReloadEvent, GunReloadRequest,
@@ -32,7 +31,6 @@ pub fn handle_weapon_fire_requests(
     events: &mut EventBus,
     anim: &AnimationSystem,
     executor: &mut Executor,
-    quests: &mut QuestManager,
 ) {
     let mut anim_events = Vec::new();
 
@@ -61,7 +59,7 @@ pub fn handle_weapon_fire_requests(
     }
 
     for entity in anim_events {
-        anim.send_action(world, entity, Action::FireSingle, executor, events, quests);
+        anim.send_action(world, entity, Action::FireSingle, executor, events);
     }
 }
 
@@ -70,7 +68,6 @@ pub fn handle_weapon_reload_requests(
     events: &mut EventBus,
     anim: &AnimationSystem,
     executor: &mut Executor,
-    quests: &mut QuestManager,
 ) {
     let mut anim_events = Vec::new();
 
@@ -113,7 +110,7 @@ pub fn handle_weapon_reload_requests(
     }
 
     for entity in anim_events {
-        anim.send_action(world, entity, Action::Reload, executor, events, quests);
+        anim.send_action(world, entity, Action::Reload, executor, events);
     }
 }
 

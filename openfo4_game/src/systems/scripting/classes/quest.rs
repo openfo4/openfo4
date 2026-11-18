@@ -1,7 +1,9 @@
+use event_listener::Event;
 use openfo4_script::engine::Engine;
 use openfo4_script::runtime::{Caller, Error};
 
-use crate::systems::quests::QuestState;
+use crate::systems::global::{QuestEvent, QuestState};
+use crate::systems::quests::StageId;
 use crate::systems::scripting::EngineExt;
 use crate::systems::scripting::state::State;
 
@@ -78,12 +80,15 @@ fn get_alias(_caller: Caller<'_, State>, _quest: Object, _alias_id: Int) -> Resu
 /// ```text
 /// int Function GetCurrentStageID() native
 /// ```
-async fn get_current_stage_id(mut caller: Caller<'_, State>, quest: Object) -> Result<Int, Error> {
-    let id = caller.data().record(quest);
+fn get_current_stage_id(caller: Caller<'_, State>, quest: Object) -> i32 {
+    let quest = caller.data().record(quest);
 
-    let quests = caller.data_mut().quests().await;
-    let quest = quests.get(id).ok_or_else(|| todo!())?;
-    Ok(quest.active_stage.into())
+    let quests = caller.data().globals.quests.quests.lock();
+    match quests.get(&quest) {
+        Some(quest) => quest.cur_stage.into(),
+        // Quest is not loaded, meaning it is stopped.
+        None => 0,
+    }
 }
 
 /// `HasObjective`
@@ -104,8 +109,15 @@ fn has_objective(
 /// ```text
 /// bool Function IsActive() native
 /// ```
-fn is_active(_caller: Caller<'_, State>, _quest: Object) -> Result<bool, Error> {
-    todo!()
+fn is_active(caller: Caller<'_, State>, quest: Object) -> bool {
+    let quest = caller.data().record(quest);
+
+    let quests = caller.data().globals.quests.quests.lock();
+    match quests.get(&quest) {
+        Some(quest) => quest.is_active,
+        // Quest is not loaded, meaning it is stopped.
+        None => false,
+    }
 }
 
 /// `IsCompleted`
@@ -161,12 +173,15 @@ fn is_objective_failed(
 /// ```text
 /// bool Function IsRunning() native
 /// ```
-async fn is_running(mut caller: Caller<'_, State>, quest: Object) -> Result<bool, Error> {
-    let id = caller.data().record(quest);
+fn is_running(caller: Caller<'_, State>, quest: Object) -> bool {
+    let quest = caller.data().record(quest);
 
-    let quests = caller.data_mut().quests().await;
-    let quest = quests.get(id).ok_or_else(|| todo!())?;
-    Ok(matches!(quest.state, QuestState::Running))
+    let quests = caller.data().globals.quests.quests.lock();
+    match quests.get(&quest) {
+        Some(quest) => quest.state == QuestState::Running,
+        // Quest is not loaded, meaning it is stopped.
+        None => false,
+    }
 }
 
 /// `IsStageDone`
@@ -174,25 +189,19 @@ async fn is_running(mut caller: Caller<'_, State>, quest: Object) -> Result<bool
 /// ```text
 /// bool Function IsStageDone(int aiStage) native
 /// ```
-async fn is_stage_done(
-    mut caller: Caller<'_, State>,
-    quest: Object,
-    stage: Int,
-) -> Result<bool, Error> {
-    let id = caller.data().record(quest);
+fn is_stage_done(caller: Caller<'_, State>, quest: Object, stage: Int) -> bool {
+    let quest = caller.data().record(quest);
 
-    let quests = caller.data_mut().quests().await;
-    let quest = quests.get(id).ok_or_else(|| Error::msg("no quest"))?;
-
-    let Ok(stage) = u16::try_from(stage) else {
-        return Ok(false);
+    let Ok(stage) = StageId::try_from(stage) else {
+        return false;
     };
 
-    let Some(stage) = quest.stages.get(&stage) else {
-        return Ok(false);
-    };
-
-    Ok(stage.is_done)
+    let quests = caller.data().globals.quests.quests.lock();
+    match quests.get(&quest) {
+        Some(quest) => quest.stages_done.contains(&stage),
+        // Quest is not loaded, meaning it is stopped.
+        None => false,
+    }
 }
 
 /// `IsStarting`
@@ -200,12 +209,15 @@ async fn is_stage_done(
 /// ```text
 /// bool Function IsStarting() native
 /// ```
-async fn is_starting(mut caller: Caller<'_, State>, quest: Object) -> Result<bool, Error> {
-    let id = caller.data().record(quest);
+fn is_starting(caller: Caller<'_, State>, quest: Object) -> bool {
+    let quest = caller.data().record(quest);
 
-    let quests = caller.data_mut().quests().await;
-    let quest = quests.get(id).ok_or_else(|| todo!())?;
-    Ok(matches!(quest.state, QuestState::Starting(_)))
+    let quests = caller.data().globals.quests.quests.lock();
+    match quests.get(&quest) {
+        Some(quest) => quest.state == QuestState::Starting,
+        // Quest is not loaded, meaning it is stopped.
+        None => false,
+    }
 }
 
 /// `IsStopping`
@@ -213,12 +225,15 @@ async fn is_starting(mut caller: Caller<'_, State>, quest: Object) -> Result<boo
 /// ```text
 /// bool Function IsStopping() native
 /// ```
-async fn is_stopping(mut caller: Caller<'_, State>, quest: Object) -> Result<bool, Error> {
-    let id = caller.data().record(quest);
+fn is_stopping(caller: Caller<'_, State>, quest: Object) -> bool {
+    let quest = caller.data().record(quest);
 
-    let quests = caller.data_mut().quests().await;
-    let quest = quests.get(id).ok_or_else(|| todo!())?;
-    Ok(matches!(quest.state, QuestState::Stopping(_)))
+    let quests = caller.data().globals.quests.quests.lock();
+    match quests.get(&quest) {
+        Some(quest) => quest.state == QuestState::Stopping,
+        // Quest is not loaded, meaning it is stopped.
+        None => false,
+    }
 }
 
 /// `IsStopped`
@@ -226,12 +241,15 @@ async fn is_stopping(mut caller: Caller<'_, State>, quest: Object) -> Result<boo
 /// ```text
 /// bool Function IsStopped() native
 /// ```
-async fn is_stopped(mut caller: Caller<'_, State>, quest: Object) -> Result<bool, Error> {
-    let id = caller.data().record(quest);
+fn is_stopped(caller: Caller<'_, State>, quest: Object) -> bool {
+    let quest = caller.data().record(quest);
 
-    let quests = caller.data_mut().quests().await;
-    let quest = quests.get(id).ok_or_else(|| todo!())?;
-    Ok(matches!(quest.state, QuestState::Stopped))
+    let quests = caller.data().globals.quests.quests.lock();
+    match quests.get(&quest) {
+        Some(quest) => quest.state == QuestState::Stopped,
+        // Quest is not loaded, meaning it is stopped.
+        None => true,
+    }
 }
 
 /// `Reset`
@@ -266,24 +284,33 @@ fn set_active(_caller: Caller<'_, State>, _quest: Object, _active: bool) -> Resu
 /// ```text
 /// bool Function SetCurrentStageID(int aiStageID) native
 /// ```
-async fn set_current_stage_id(
-    mut caller: Caller<'_, State>,
-    quest: Object,
-    stage: Int,
-) -> Result<bool, Error> {
-    let Ok(stage_id) = stage.try_into() else {
-        return Ok(false);
+async fn set_current_stage_id(caller: Caller<'_, State>, quest: Object, stage: i32) -> bool {
+    let quest = caller.data().record(quest);
+
+    let Ok(stage) = StageId::try_from(stage) else {
+        return false;
     };
 
-    let id = caller.data().record(quest);
-    let mut quests = caller.data_mut().quests().await;
-    let quest = quests.get(id).ok_or_else(|| todo!())?;
-    if !quest.stages.contains_key(&stage_id) {
-        return Ok(false);
-    }
+    // Note that calling this function while the quest is stopped will
+    // start it before setting the stage.
+    // We cannot do this ourselves because this is an asynchronous operation
+    // and another thread may immediately stop the quest again before we
+    // submit our `SetStage` event.
+    // The `QuestManager` needs to start the quest for us.
+    let waker = Event::with_tag();
+    let listen = waker.listen();
+    caller
+        .data()
+        .globals
+        .quests
+        .events
+        .push(QuestEvent::SetStage {
+            quest,
+            stage,
+            waker,
+        });
 
-    quests.set_quest_stage(id, stage_id);
-    Ok(true)
+    listen.await
 }
 
 /// `SetObjectiveCompleted`
@@ -334,13 +361,20 @@ fn set_objective_failed(
 /// ```text
 /// bool Function Start() native
 /// ```
-async fn start(mut caller: Caller<'_, State>, quest: Object) -> Result<bool, Error> {
-    let id = caller.data().record(quest);
+async fn start(caller: Caller<'_, State>, quest: Object) -> bool {
+    let quest = caller.data().record(quest);
 
-    let mut quests = caller.data_mut().quests().await;
-    quests.start_quest(id);
-    // FIXME: Should we returns false if quest already running?
-    Ok(true)
+    let waker = Event::with_tag();
+    let listen = waker.listen();
+    caller
+        .data()
+        .globals
+        .quests
+        .events
+        .push(QuestEvent::Start { quest, waker });
+
+    let res = listen.await;
+    res
 }
 
 /// `Stop`
@@ -348,12 +382,19 @@ async fn start(mut caller: Caller<'_, State>, quest: Object) -> Result<bool, Err
 /// ```text
 /// Function Stop() native
 /// ```
-async fn stop(mut caller: Caller<'_, State>, quest: Object) -> Result<(), Error> {
-    let id = caller.data().record(quest);
+async fn stop(caller: Caller<'_, State>, quest: Object) {
+    let quest = caller.data().record(quest);
 
-    let mut quests = caller.data_mut().quests().await;
-    quests.stop_quest(id);
-    Ok(())
+    let waker = Event::new();
+    let listen = waker.listen();
+    caller
+        .data()
+        .globals
+        .quests
+        .events
+        .push(QuestEvent::Stop { quest, waker });
+
+    listen.await;
 }
 
 /// `UpdateCurrentInstanceGlobal`

@@ -15,7 +15,7 @@ use crate::systems::quests::dialogue::{
     DialogueDescriptor, DialogueQueue, DialogueSound, DialogueTriggers, PlayerDialogue,
     PlayerDialogueQueue,
 };
-use crate::systems::quests::{AliasState, QuestManager, StageId};
+use crate::systems::quests::{AliasState, StageId};
 use crate::systems::scripting::Executor;
 
 #[derive(Clone, Debug)]
@@ -196,13 +196,12 @@ impl SceneState {
         world: &mut World,
         events: &mut EventBus,
         executor: &mut Executor,
-        quests: &mut QuestManager,
         aliases: &HashMap<u32, AliasState>,
         quest: RecordId,
     ) -> bool {
         for (index, state) in &mut self.active_actions {
             let action = self.info.actions.get(index).unwrap();
-            state.update(action, world, events, executor, quests, quest);
+            state.update(action, world, events, executor, quest);
         }
 
         self.active_actions.retain(|_, action| !action.is_done());
@@ -240,15 +239,9 @@ impl SceneState {
                         continue;
                     };
 
-                    let Some(action) = PlayingDialogue::new(
-                        actor.entity(),
-                        topic,
-                        world,
-                        events,
-                        executor,
-                        quests,
-                        quest,
-                    ) else {
+                    let Some(action) =
+                        PlayingDialogue::new(actor.entity(), topic, world, events, executor, quest)
+                    else {
                         continue;
                     };
 
@@ -314,7 +307,6 @@ impl PlayingAction {
         world: &mut World,
         events: &mut EventBus,
         executor: &mut Executor,
-        quests: &mut QuestManager,
         quest: RecordId,
     ) {
         match (self, action) {
@@ -332,7 +324,6 @@ impl PlayingAction {
                             world,
                             events,
                             executor,
-                            quests,
                             quest,
                         ) else {
                             action.done = true;
@@ -357,7 +348,6 @@ impl PlayingAction {
                             world,
                             events,
                             executor,
-                            quests,
                             quest,
                         ) else {
                             action.done = true;
@@ -399,12 +389,11 @@ impl PlayingDialogue {
         world: &mut World,
         events: &mut EventBus,
         executor: &mut Executor,
-        quests: &mut QuestManager,
         quest: RecordId,
     ) -> Option<Self> {
         let opt = topic.options.iter().find(|opt| {
             opt.condition
-                .eval_entity(executor, world, events, quests, actor, None)
+                .eval_entity(executor, world, events, actor, None)
         })?;
 
         if world.get::<&DialogueQueue>(actor).is_err() {

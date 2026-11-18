@@ -72,27 +72,8 @@ fn is_playing(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<bool, Err
 /// ```text
 /// Quest Function() native
 /// ```
-async fn get_owning_quest(
-    mut caller: Caller<'_, State>,
-    self_ptr: Object,
-) -> Result<Object, Error> {
-    let scene = caller.data().record(self_ptr);
-
-    let data = caller.data_mut();
-
-    let quests = data.quests().await;
-    let scene = quests.get_scene(scene).ok_or_else(|| todo!())?;
-    let quest = scene.info.quest;
-
-    drop(quests);
-
-    let quest = data
-        .objects
-        .get_by_record(quest)
-        .and_then(|s| s.get("Quest"))
-        .ok_or_else(|| todo!())?;
-
-    Ok(quest.get().object.addr())
+fn get_owning_quest(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<Object, Error> {
+    todo!()
 }
 
 /// `IsActionComplete`

@@ -4475,8 +4475,9 @@ bitflags! {
 
 impl_decode_bitflags!(EnableParentFlags: u8);
 
-#[derive(Clone, Debug, Record)]
+#[derive(Clone, Debug, Default, Record)]
 #[record(ordered)]
+#[non_exhaustive]
 pub struct Quest {
     #[record("EDID")]
     pub id: Option<BString>,
@@ -4518,7 +4519,7 @@ pub struct Quest {
     pub swf_file: Option<BString>,
 }
 
-#[derive(Copy, Clone, Debug, BinaryStruct)]
+#[derive(Copy, Clone, Debug, Default, BinaryStruct)]
 pub struct QuestData {
     pub flags: QuestDataFlags,
     pub priority: u8,
@@ -4529,7 +4530,7 @@ pub struct QuestData {
 }
 
 bitflags! {
-    #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+    #[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Hash)]
     pub struct QuestDataFlags: u16 {
         const START_GAME_ENABLED = 0x0001;
         const COMPLETED = 0x0002;
@@ -4552,9 +4553,10 @@ bitflags! {
 
 impl_decode_bitflags!(QuestDataFlags: u16);
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, BinaryStruct)]
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Hash, BinaryStruct)]
 #[primitive(u8)]
 pub enum QuestDataType {
+    #[default]
     None = 0,
     MainQuest = 1,
     BrotherhoodOfSteel = 2,
@@ -4572,7 +4574,7 @@ pub enum QuestDataType {
     Dlc7 = 14,
 }
 
-#[derive(Clone, Debug, Record)]
+#[derive(Clone, Debug, Default, Record)]
 #[record(ordered)]
 pub struct QuestStage {
     #[record("INDX")]
@@ -4581,7 +4583,7 @@ pub struct QuestStage {
     pub log_entries: SubRecordArray<QuestStageLogEntry>,
 }
 
-#[derive(Clone, Debug, BinaryStruct)]
+#[derive(Clone, Debug, Default, BinaryStruct)]
 pub struct QuestStageIndex {
     pub stage_index: u16,
     pub flags: QuestStageFlags,
@@ -4589,7 +4591,7 @@ pub struct QuestStageIndex {
 }
 
 bitflags! {
-    #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+    #[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Hash)]
     pub struct QuestStageFlags: u8 {
         const RUN_ON_START = 0x02;
         const RUN_ON_STOP = 0x04;
@@ -4674,7 +4676,7 @@ bitflags! {
 
 impl_decode_bitflags!(QuestObjectiveTargetDataFlags: u32);
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct QuestAliases {
     pub references: Vec<QuestReferenceAlias>,
     pub locations: Vec<QuestLocationAlias>,

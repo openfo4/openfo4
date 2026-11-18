@@ -95,7 +95,7 @@ pub struct GameState {
     weather: WeatherSystem,
     inventory: InventorySystem,
     pub executor: Executor,
-    quests: QuestManager,
+    pub quests: QuestManager,
     globals: Arc<GlobalProperties>,
     pub ai: AiSystem,
     real_time_elapsed: Duration,
@@ -130,6 +130,7 @@ impl GameState {
             playtime: PlayTime::default(),
             settings: GameSettings::load(&loader).await.unwrap(),
             voice_types: globals::load_voice_types(&loader).await,
+            quests: Default::default(),
         });
 
         let executor = ExecutorBuilder::new(
@@ -246,7 +247,6 @@ impl GameState {
             &mut self.physics,
             &mut self.executor,
             &mut self.event_bus,
-            &mut self.quests,
             &mut self.animation,
         );
 
@@ -257,7 +257,6 @@ impl GameState {
         self.executor.update(
             &mut self.world,
             &mut self.event_bus,
-            &mut self.quests,
             Duration::from_millis(1),
         );
         self.quests.update(
@@ -298,14 +297,12 @@ impl GameState {
             &mut self.event_bus,
             &self.animation,
             &mut self.executor,
-            &mut self.quests,
         );
         handle_weapon_reload_requests(
             &mut self.world,
             &mut self.event_bus,
             &self.animation,
             &mut self.executor,
-            &mut self.quests,
         );
         handle_weapon_fire_events(&mut self.world, &self.physics, &mut self.event_bus);
         handle_weapon_reload_events(&mut self.world, &mut self.event_bus);
@@ -357,7 +354,6 @@ impl GameState {
             &mut self.event_bus,
             &self.animation,
             &mut self.executor,
-            &mut self.quests,
             actor,
             event,
         );

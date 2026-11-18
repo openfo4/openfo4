@@ -194,7 +194,7 @@ pub fn initiate_player_npc_interactions(
 
     for (actor, quest, topic) in topics {
         // Run until completion.
-        PlayingDialogue::new(actor, &topic, world, events, executor, quests, quest);
+        PlayingDialogue::new(actor, &topic, world, events, executor, quest);
     }
 }
 

@@ -1,6 +1,8 @@
 use std::iter::FusedIterator;
 use std::time::Duration;
 
+use crossbeam::queue::SegQueue;
+use event_listener::Event;
 use hashbrown::{HashMap, HashSet};
 use indexmap::IndexSet;
 use openfo4_common::string::Lowercase;
@@ -10,6 +12,7 @@ use openfo4_esp::{RecordData, RecordKind};
 use parking_lot::Mutex;
 
 use crate::state::esp::{self, EspLoader};
+use crate::systems::quests::StageId;
 
 /// Globals valid across the entire game state.
 #[derive(Debug)]
@@ -23,6 +26,7 @@ pub struct GlobalProperties {
     pub playtime: PlayTime,
     pub settings: GameSettings,
     pub voice_types: HashMap<RecordId, Lowercase<String>>,
+    pub quests: QuestSystemState,
 }
 
 /// Set of game rules.
@@ -245,4 +249,46 @@ impl GameSettingValue {
             _ => None,
         }
     }
+}
+
+#[derive(Debug, Default)]
+pub struct QuestSystemState {
+    pub events: SegQueue<QuestEvent>,
+    pub quests: Mutex<HashMap<RecordId, Quest>>,
+}
+
+#[derive(Clone, Debug)]
+pub struct Quest {
+    pub state: QuestState,
+    /// Whether the quest is currently tracked by the player.
+    pub is_active: bool,
+    /// The set of stages that are complete.
+    pub stages_done: HashSet<StageId>,
+    /// The current stage id.
+    pub cur_stage: StageId,
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub enum QuestState {
+    Stopped,
+    Starting,
+    Running,
+    Stopping,
+}
+
+#[derive(Debug)]
+pub enum QuestEvent {
+    Start {
+        quest: RecordId,
+        waker: Event<bool>,
+    },
+    Stop {
+        quest: RecordId,
+        waker: Event,
+    },
+    SetStage {
+        quest: RecordId,
+        stage: StageId,
+        waker: Event<bool>,
+    },
 }
