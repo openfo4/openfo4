@@ -568,6 +568,7 @@ impl InventorySystem {
                 let female = world
                     .get::<&ObjectKeywords>(entity)
                     .is_ok_and(|kw| kw.contains(KEYWORD_FEMALE));
+                let keywords = item.combined_keywords.clone();
 
                 let loader = self.loader.clone();
                 let esp_loader = self.esp_loader.clone();
@@ -582,6 +583,7 @@ impl InventorySystem {
                         &attachments,
                         female,
                         &visible,
+                        &keywords,
                     )
                     .await;
                     (entity, key, models, visible)

@@ -20,6 +20,7 @@ use crate::assets::nif::{LoadNifFlags, NifKey, NifScene};
 use crate::components::WorldSpace;
 use crate::state::esp::EspLoader;
 use crate::state::hardcoded::DAMAGE_TYPE_PHYSICAL;
+use crate::state::hardcoded::fallout4::KEYWORD_REMAP_MUZZLE_TO_PROJECTILE_NODE;
 use crate::state::level::items::{LoadItemProps, resolve_item};
 use crate::systems::equipment::{Equipment, EquipmentKey, equip_item};
 use crate::systems::inventory::{
@@ -32,6 +33,9 @@ const PLAYER_LEVEL: u16 = 1000;
 
 // Note: The "P-" prefix is already stripped in the NifScene.
 const PROJECTILE_NODE_NAME: &str = "ProjectileNode";
+
+// Note: The "P-" prefix is already stripped in the NifScene.
+const MUZZLE_NODE_NAME: &str = "Muzzle";
 
 /// Flags used when loading attachable equipment scenes.
 // We don't want collisions on attached nodes.
@@ -74,6 +78,7 @@ impl EquipmentItemModels {
         attachments: &[RecordId],
         female: bool,
         visible_slots: &HashSet<u32>,
+        keywords: &HashSet<RecordId>,
     ) -> Self {
         let mut models = Vec::new();
         let mut attachment_point_parents = HashMap::new();
@@ -266,8 +271,11 @@ impl EquipmentItemModels {
             }
         }
 
-        let projectile_node =
-            find_deepest_scene_with_attachment(&models, &attachment_parents, PROJECTILE_NODE_NAME);
+        let projectile_node = if keywords.contains(&KEYWORD_REMAP_MUZZLE_TO_PROJECTILE_NODE) {
+            find_deepest_scene_with_attachment(&models, &attachment_parents, MUZZLE_NODE_NAME)
+        } else {
+            find_deepest_scene_with_attachment(&models, &attachment_parents, PROJECTILE_NODE_NAME)
+        };
 
         Self {
             models,
@@ -327,7 +335,10 @@ impl EquipmentItemModels {
         let projectile_node = self.projectile_node.map(|index| {
             let key = keys.get(&index).unwrap();
             let item = equipment.get(*key).unwrap();
-            let attachment = item.attachment(PROJECTILE_NODE_NAME).unwrap();
+            let attachment = item
+                .attachment(PROJECTILE_NODE_NAME)
+                .or_else(|| item.attachment(MUZZLE_NODE_NAME))
+                .unwrap();
             WeaponProjectileNode {
                 entity: attachment.entity,
                 offset: attachment.offset,
