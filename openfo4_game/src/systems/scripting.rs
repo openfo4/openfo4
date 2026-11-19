@@ -49,9 +49,7 @@ use crate::systems::scripting::loader::{ScriptLoader, ScriptObject, ScriptObject
 use crate::systems::scripting::objects::ScriptObjects;
 use crate::systems::scripting::registration::RegistrationSet;
 use crate::systems::scripting::runner::{Runner, RunnerHandle};
-use crate::systems::scripting::state::{
-    AliasSet, BorrowedState, CoreObjects, SharedBorrowCell, State,
-};
+use crate::systems::scripting::state::{BorrowedState, CoreObjects, SharedBorrowCell, State};
 
 pub use runner::Invocation;
 
@@ -319,7 +317,6 @@ fn core_actor_values(
         game_timers: Default::default(),
         objects,
         registration,
-        aliases: AliasSet::default(),
         effects: Arc::default(),
         borrowed: Arc::new(SharedBorrowCell::new()),
         loader,

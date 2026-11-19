@@ -12,6 +12,7 @@ use openfo4_esp::{RecordData, RecordKind};
 use parking_lot::Mutex;
 
 use crate::state::esp::{self, EspLoader};
+use crate::state::level::loader::EntityRef;
 use crate::systems::quests::StageId;
 
 /// Globals valid across the entire game state.
@@ -255,6 +256,16 @@ impl GameSettingValue {
 pub struct QuestSystemState {
     pub events: SegQueue<QuestEvent>,
     pub quests: Mutex<HashMap<RecordId, Quest>>,
+    pub aliases: Mutex<HashMap<AliasKey, Alias>>,
+}
+
+impl QuestSystemState {
+    pub fn ref_alias(&self, quest: RecordId, alias: u32) -> Option<EntityRef> {
+        let aliases = self.aliases.lock();
+        let alias = aliases.get(&AliasKey { quest, alias })?;
+        let alias = alias.data.as_ref()?;
+        alias.clone()
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -291,4 +302,54 @@ pub enum QuestEvent {
         stage: StageId,
         waker: Event<bool>,
     },
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub struct AliasKey {
+    pub quest: RecordId,
+    pub alias: u32,
+}
+
+#[derive(Clone, Debug)]
+pub struct Alias {
+    pub is_optional: bool,
+    pub data: AliasData,
+}
+
+#[derive(Clone, Debug)]
+pub enum AliasData {
+    Ref(Option<EntityRef>),
+    RefCollection(Vec<EntityRef>),
+    Location(Option<RecordId>),
+}
+
+impl AliasData {
+    pub const fn as_ref(&self) -> Option<&Option<EntityRef>> {
+        match self {
+            Self::Ref(v) => Some(v),
+            _ => None,
+        }
+    }
+
+    pub const fn as_mut_ref(&mut self) -> Option<&mut Option<EntityRef>> {
+        match self {
+            Self::Ref(v) => Some(v),
+            _ => None,
+        }
+    }
+
+    pub const fn as_mut_ref_collection(&mut self) -> Option<&mut Vec<EntityRef>> {
+        match self {
+            Self::RefCollection(v) => Some(v),
+            _ => None,
+        }
+    }
+
+    pub fn clear(&mut self) {
+        match self {
+            Self::Ref(v) => *v = None,
+            Self::RefCollection(v) => v.clear(),
+            Self::Location(v) => *v = None,
+        }
+    }
 }

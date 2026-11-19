@@ -17,9 +17,8 @@ pub fn register(engine: &mut Engine) {
 /// ```text
 /// Function Clear() native
 /// ```
-fn clear(mut caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Error> {
-    caller.data_mut().aliases.set(self_ptr, None);
-    Ok(())
+fn clear(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<(), Error> {
+    todo!()
 }
 
 /// `GetLocation`
@@ -27,20 +26,8 @@ fn clear(mut caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Error> {
 /// ```text
 /// Location Function GetLocation() native
 /// ```
-fn get_location(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Error> {
-    let alias = caller.data().aliases.get(self_ptr).ok_or_else(|| todo!())?;
-
-    let Some(object) = alias.object else {
-        return Ok(Object::NULL);
-    };
-
-    let script = caller
-        .data()
-        .objects
-        .get_by_addr(object)
-        .ok_or_else(|| todo!())?;
-
-    Ok(script.get().object.addr())
+fn get_location(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<Object, Error> {
+    todo!()
 }
 
 /// `ForceLocationTo`
@@ -49,11 +36,9 @@ fn get_location(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, E
 /// Function ForceLocationTo(Location akNewLocation) native
 /// ```
 fn force_location_to(
-    mut caller: Caller<'_, State>,
-    self_ptr: Object,
-    new_location: Object,
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _new_location: Object,
 ) -> Result<(), Error> {
-    let new_location = (!new_location.is_null()).then_some(new_location);
-    caller.data_mut().aliases.set(self_ptr, new_location);
-    Ok(())
+    todo!()
 }

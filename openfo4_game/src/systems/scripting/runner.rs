@@ -261,25 +261,6 @@ impl Runner {
                         }
                     },
                 );
-
-                for alias in self
-                    .state
-                    .aliases
-                    .get_alises_for_object(script.get().object.addr())
-                {
-                    let alias = self.objects.get_by_addr(alias).unwrap();
-
-                    let mut args = dispatch.args.to_vec();
-                    args.insert(0, Value::Object(script.get().object.clone()));
-
-                    self.queue.push_back(ScheduledTask {
-                        object: alias.id(),
-                        class: alias.name().to_owned(),
-                        invocation_id: None,
-                        func: dispatch.kind.remote_ref_alias_func_name().to_owned(),
-                        args,
-                    });
-                }
             }
         }
     }
@@ -339,6 +320,7 @@ impl Runner {
                             .map(|val| match val {
                                 Val::Bool(v) => Value::Bool(*v),
                                 Val::I32(v) => Value::Int(*v),
+                                Val::Object(addr) if addr.is_null() => Value::Null,
                                 Val::Object(addr) => {
                                     let handle = engine.object_pool().get(*addr).unwrap();
                                     Value::Object(handle)

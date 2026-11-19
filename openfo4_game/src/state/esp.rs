@@ -15,6 +15,7 @@ pub struct EspLoaderBuilder {
     files: Vec<EspFile<File>>,
     file_names: Vec<String>,
     hardcoded: HashMap<RecordId, Record>,
+    hardcoded_parents: HashMap<RecordId, RecordId>,
 }
 
 impl EspLoaderBuilder {
@@ -23,6 +24,7 @@ impl EspLoaderBuilder {
             files: Vec::new(),
             file_names: Vec::new(),
             hardcoded: HashMap::new(),
+            hardcoded_parents: HashMap::new(),
         }
     }
 
@@ -47,6 +49,10 @@ impl EspLoaderBuilder {
 
     pub fn set_hardcoded(&mut self, hardcoded: HashMap<RecordId, Record>) {
         self.hardcoded = hardcoded;
+    }
+
+    pub fn set_hardcoded_parents(&mut self, parents: HashMap<RecordId, RecordId>) {
+        self.hardcoded_parents = parents;
     }
 
     pub fn finalize(self) -> EspLoader {
@@ -161,6 +167,7 @@ impl EspLoaderBuilder {
             cache: RwLock::new(LruCache::new(65_536)),
             plugin_file_names,
             hardcoded: self.hardcoded,
+            hardcoded_parents: self.hardcoded_parents,
         }
     }
 }
@@ -172,6 +179,7 @@ pub struct EspLoader {
     plugins: Box<[u32]>,
     cache: RwLock<LruCache<RecordId, GlobalRecord>>,
     hardcoded: HashMap<RecordId, Record>,
+    hardcoded_parents: HashMap<RecordId, RecordId>,
     plugin_file_names: HashMap<Lowercase<String>, ModuleId>,
 }
 
@@ -327,7 +335,11 @@ impl EspLoader {
     ///
     /// If the given `id` has no parent `None` is returned.
     pub fn parent(&self, id: RecordId) -> Option<RecordId> {
-        let index = self.plugins[id.module.0.get() as usize] as usize;
+        if let Some(parent) = self.hardcoded_parents.get(&id) {
+            return Some(*parent);
+        }
+
+        let index = *self.plugins.get(id.module.0.get() as usize)? as usize;
         let parent = self.files[index].file.parent(id.form)?;
         self.resolve_form(parent, id)
     }
