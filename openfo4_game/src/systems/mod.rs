@@ -50,6 +50,12 @@ pub struct GunFireEvent {
     pub actor: Entity,
 }
 
+#[derive(Copy, Clone, Debug)]
+pub struct TargetedGunFireEvent {
+    pub actor: Entity,
+    pub target: Vec3,
+}
+
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct GunReloadEvent {
     pub actor: Entity,

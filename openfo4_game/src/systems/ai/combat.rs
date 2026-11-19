@@ -12,8 +12,8 @@ use crate::systems::ai::movement::MoveTo;
 use crate::systems::ai::{Behavior, Context, Status};
 use crate::systems::inventory::{EquipItemEvent, Inventory, InventoryKey, ItemData};
 use crate::systems::{
-    FacingDirection, GunFireRequest, GunReloadEvent, GunReloadRequest, WeaponDrawRequest,
-    WeaponDrawnEvent,
+    FacingDirection, GunFireRequest, GunReloadEvent, GunReloadRequest, TargetedGunFireEvent,
+    WeaponDrawRequest, WeaponDrawnEvent,
 };
 
 /// Below this distance NPCs with guns seem to consistently backoff until they reach this distance.
@@ -129,7 +129,7 @@ impl Behavior for CombatBehavior {
                 return Status::Running;
             }
 
-            self.shoot(ctx);
+            self.shoot(ctx, target);
         }
 
         // let fallback_distance = f32::min(SHORT_DISTANCE - distance, 300.0 * NIF_TO_METERS);
@@ -317,10 +317,15 @@ impl CombatBehavior {
             transform.looking_at(target, Vec3::Y).rotation * Quat::IDENTITY.to_opengl();
     }
 
-    fn shoot(&mut self, ctx: &mut Context<'_>) {
+    fn shoot(&mut self, ctx: &mut Context<'_>, target: Entity) {
+        let transform = *ctx.world.get::<&Transform>(target).unwrap();
+
         if self.last_attack.elapsed() > Duration::from_secs(5) {
             self.last_attack = Instant::now();
-            ctx.send_event(GunFireRequest { actor: ctx.entity });
+            ctx.send_event(TargetedGunFireEvent {
+                actor: ctx.entity,
+                target: transform.translation + Vec3::Y,
+            });
         }
     }
 
