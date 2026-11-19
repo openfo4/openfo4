@@ -69,8 +69,9 @@ use crate::systems::scripting::{Executor, ExecutorBuilder};
 use crate::systems::time::{init_time, update_time};
 use crate::systems::trigger_box::update_trigger_box_contacts;
 use crate::systems::weapon::{
-    handle_weapon_draw_events, handle_weapon_fire_events, handle_weapon_fire_requests,
-    handle_weapon_hit_damage, handle_weapon_reload_events, handle_weapon_reload_requests,
+    handle_targeted_gun_fire_events, handle_weapon_draw_events, handle_weapon_fire_events,
+    handle_weapon_fire_requests, handle_weapon_hit_damage, handle_weapon_reload_events,
+    handle_weapon_reload_requests,
 };
 use crate::systems::weather::WeatherSystem;
 use crate::systems::{self, PlayerControlState, combat};
@@ -305,6 +306,7 @@ impl GameState {
             &mut self.executor,
         );
         handle_weapon_fire_events(&mut self.world, &self.physics, &mut self.event_bus);
+        handle_targeted_gun_fire_events(&mut self.world, &mut self.event_bus, &self.physics);
         handle_weapon_reload_events(&mut self.world, &mut self.event_bus);
         handle_weapon_hit_damage(&mut self.world, &mut self.event_bus, &self.globals);
         handle_weapon_draw_events(&mut self.world, &mut self.event_bus);

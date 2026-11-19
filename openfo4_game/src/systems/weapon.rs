@@ -2,7 +2,7 @@ use std::f32::consts::PI;
 use std::time::{Duration, Instant};
 
 use glam::{Quat, Vec2, Vec3};
-use openfo4_common::components::GlobalTransform;
+use openfo4_common::components::{GlobalTransform, Transform};
 use openfo4_common::math::Ray;
 use openfo4_core::ecs::{CommandBuffer, World};
 use openfo4_core::events::EventBus;
@@ -23,7 +23,8 @@ use crate::systems::inventory::{Inventory, ItemData};
 use crate::systems::scripting::Executor;
 use crate::systems::{
     FacingDirection, GunFireEvent, GunFireRequest, GunReloadEvent, GunReloadRequest,
-    ProjectileHitEvent, WeaponDrawRequest, WeaponDrawnEvent, WeaponSheathEvent,
+    ProjectileHitEvent, TargetedGunFireEvent, WeaponDrawRequest, WeaponDrawnEvent,
+    WeaponSheathEvent,
 };
 
 pub fn handle_weapon_fire_requests(
@@ -121,7 +122,7 @@ pub fn handle_weapon_fire_events(
 ) {
     let mut commands = CommandBuffer::new();
 
-    let mut hit_events = Vec::new();
+    let mut targeted_events = Vec::new();
 
     for event in events.read::<GunFireEvent>() {
         let Ok(entity) = world.entity(event.actor) else {
@@ -214,6 +215,69 @@ pub fn handle_weapon_fire_events(
                 DespawnAt(Instant::now() + Duration::from_secs(5)),
             ));
 
+            targeted_events.push(TargetedGunFireEvent {
+                actor: event.actor,
+                target,
+            });
+        }
+    }
+
+    for event in targeted_events {
+        events.send(event);
+    }
+
+    commands.run_on(world);
+}
+
+pub fn handle_targeted_gun_fire_events(
+    world: &mut World,
+    events: &mut EventBus,
+    physics: &PhysicsPipeline,
+) {
+    let mut hit_events = Vec::new();
+    let mut commands = CommandBuffer::new();
+
+    for event in events.read::<TargetedGunFireEvent>() {
+        let Ok(entity) = world.entity(event.actor) else {
+            continue;
+        };
+
+        let transform = *entity.get::<&Transform>().unwrap();
+        let mut inventory = entity.get::<&mut Inventory>().unwrap();
+
+        for (_, item) in inventory.items_mut() {
+            let ItemData::Weapon(weapon) = &mut item.data else {
+                continue;
+            };
+
+            if !weapon.drawn {
+                debug_assert!(!item.equipped);
+                continue;
+            }
+
+            // Don't trigger weapons with no ammo.
+            if weapon.current_ammo == 0 {
+                continue;
+            }
+
+            weapon.current_ammo -= 1;
+
+            // We must exclude the actor itself, otherwise we're just gonna
+            // hit ourselves immediately.
+            let mut exclude_colliders = Vec::new();
+            let mut queue = vec![event.actor];
+            while let Some(entity) = queue.pop() {
+                if world.entity(entity).unwrap().has::<Collider>() {
+                    exclude_colliders.push(entity);
+                }
+
+                if let Some(children) = world.entity(entity).unwrap().get::<&Children>() {
+                    queue.extend_from_slice(&children.0);
+                }
+            }
+
+            let max_toi = 1000.0;
+
             // Compute worldspace point that we weapon will hit.
             let weapon_translation = weapon
                 .projectile_node
@@ -222,12 +286,12 @@ pub fn handle_weapon_fire_events(
                     let transform = world.get::<&GlobalTransform>(node.entity).unwrap();
                     (transform.0 * node.offset).translation
                 })
-                .unwrap_or(camera_transform.0.translation);
+                .unwrap_or(transform.translation);
 
             let weapon_hit = physics.cast_ray(
                 Ray {
                     origin: weapon_translation,
-                    direction: (target - weapon_translation).normalize_or_zero(),
+                    direction: (event.target - weapon_translation).normalize_or_zero(),
                 },
                 max_toi,
                 QueryFilter {
@@ -240,7 +304,7 @@ pub fn handle_weapon_fire_events(
                 HitscanRaycast {
                     ray: Ray {
                         origin: weapon_translation,
-                        direction: (target - weapon_translation).normalize_or_zero(),
+                        direction: (event.target - weapon_translation).normalize_or_zero(),
                     },
                     max_toi,
                     impact_toi: weapon_hit.map(|v| v.toi),
