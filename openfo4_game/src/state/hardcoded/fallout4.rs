@@ -75,6 +75,8 @@ define_forms! {
     DAMAGE_TYPE_RADIATION_EXPOSURE => 0x60a85, // dtRadiationExposure
     DAMAGE_TYPE_RADIATION_INGESTION => 0x60a86, // dtRadiationIngestion
     DAMAGE_TYPE_PHYSICAL => 0x60a87, // dtPhysical
+
+    KEYWORD_REMAP_MUZZLE_TO_PROJECTILE_NODE => 0x4f62c, // remapNode
 }
 
 pub fn apply_weapon_damage(
