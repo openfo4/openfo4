@@ -24,7 +24,7 @@ use crate::state::esp::EspLoader;
 use crate::state::level::loader::{EntityLoader, EntityRef};
 use crate::state::level::partial::PartialEntityFlags;
 use crate::systems::conditions::ConditionCompiler;
-use crate::systems::global::{self, GlobalProperties, QuestEvent};
+use crate::systems::global::{self, Alias, AliasData, AliasKey, GlobalProperties, QuestEvent};
 use crate::systems::quests::loader::QuestLoader;
 use crate::systems::quests::scene::{DialogueTopicAction, SceneState};
 use crate::systems::scripting::invocations::{
@@ -299,15 +299,15 @@ impl QuestManager {
         }
 
         self.advance_quests(executor, globals);
-        self.advance_scenes(world, events, executor);
+        self.advance_scenes(world, events, executor, globals);
         dialogue::play_actor_dialogue(world, audio, globals, self);
         dialogue::initiate_player_npc_interactions(world, events, self, executor);
     }
 
     fn advance_quests(&mut self, executor: &mut Executor, globals: &GlobalProperties) {
-        for (id, quest) in &mut self.quests {
+        for (quest_id, quest) in &mut self.quests {
             let mut quests = globals.quests.quests.lock();
-            let global = quests.entry(*id).or_insert_with(|| global::Quest {
+            let global = quests.entry(*quest_id).or_insert_with(|| global::Quest {
                 cur_stage: 0,
                 state: global::QuestState::Stopped,
                 is_active: false,
@@ -335,7 +335,12 @@ impl QuestManager {
                         quest.state = QuestState::Stopped;
                     }
                     QuestState::Stopped => {
-                        for waker in self.wakers.on_quest_stop.remove(id).unwrap_or_default() {
+                        for waker in self
+                            .wakers
+                            .on_quest_stop
+                            .remove(quest_id)
+                            .unwrap_or_default()
+                        {
                             waker.notify(waker.total_listeners());
                         }
 
@@ -347,9 +352,9 @@ impl QuestManager {
                             break;
                         }
 
-                        tracing::debug!("starting quest {:?}", id);
+                        tracing::debug!("starting quest {:?}", quest_id);
 
-                        let id = *id;
+                        let id = *quest_id;
                         let esp_loader = self.esp_loader.clone();
                         let entity_loader = self.entity_loader.clone();
 
@@ -373,8 +378,28 @@ impl QuestManager {
                             break;
                         };
 
+                        let mut global_aliases = globals.quests.aliases.lock();
                         for (id, entity) in aliases {
-                            quest.aliases.entry(id).or_default().entity = Some(entity);
+                            let Some(alias) = quest.aliases.get(&id) else {
+                                continue;
+                            };
+
+                            self.topics
+                                .hello
+                                .entry(entity.entity())
+                                .or_default()
+                                .push(*quest_id);
+
+                            global_aliases.insert(
+                                AliasKey {
+                                    quest: *quest_id,
+                                    alias: id,
+                                },
+                                Alias {
+                                    is_optional: alias.is_optional,
+                                    data: AliasData::Ref(Some(entity)),
+                                },
+                            );
                         }
 
                         let mut invocations = Vec::new();
@@ -384,14 +409,6 @@ impl QuestManager {
                                     object: script.clone(),
                                 });
                                 invocations.push(id);
-                            }
-
-                            if let Some(entity) = &alias.entity {
-                                self.topics
-                                    .hello
-                                    .entry(entity.entity())
-                                    .or_default()
-                                    .push(*id);
                             }
                         }
 
@@ -421,7 +438,12 @@ impl QuestManager {
                         quest.state = QuestState::Running;
                     }
                     QuestState::Running => {
-                        for waker in self.wakers.on_quest_start.remove(id).unwrap_or_default() {
+                        for waker in self
+                            .wakers
+                            .on_quest_start
+                            .remove(quest_id)
+                            .unwrap_or_default()
+                        {
                             waker.notify(waker.total_listeners().tag(true));
                         }
 
@@ -436,7 +458,7 @@ impl QuestManager {
                         match action {
                             QuestAction::Start => {}
                             QuestAction::Stop => {
-                                tracing::debug!("stopping quest {:?}", id);
+                                tracing::debug!("stopping quest {:?}", quest_id);
 
                                 if let Some(script) = &quest.script {
                                     let id = executor.invoke(QuestShutdown {
@@ -466,7 +488,7 @@ impl QuestManager {
                                     for waker in self
                                         .wakers
                                         .on_quest_set_stage
-                                        .remove(&(*id, stage_id))
+                                        .remove(&(*quest_id, stage_id))
                                         .unwrap_or_default()
                                     {
                                         waker.notify(waker.total_listeners().tag(false));
@@ -478,7 +500,7 @@ impl QuestManager {
                                     for waker in self
                                         .wakers
                                         .on_quest_set_stage
-                                        .remove(&(*id, stage_id))
+                                        .remove(&(*quest_id, stage_id))
                                         .unwrap_or_default()
                                     {
                                         waker.notify(waker.total_listeners().tag(false));
@@ -494,7 +516,7 @@ impl QuestManager {
                                 for waker in self
                                     .wakers
                                     .on_quest_set_stage
-                                    .remove(&(*id, stage_id))
+                                    .remove(&(*quest_id, stage_id))
                                     .unwrap_or_default()
                                 {
                                     waker.notify(waker.total_listeners().tag(true));
@@ -523,7 +545,11 @@ impl QuestManager {
                                 }
                             }
                             QuestAction::StartScene(scene) => {
-                                tracing::debug!("starting scene {:?} of quest {:?}", scene, id);
+                                tracing::debug!(
+                                    "starting scene {:?} of quest {:?}",
+                                    scene,
+                                    quest_id
+                                );
 
                                 if let Some(scene) = quest.scenes.get_mut(&scene) {
                                     if let Some(stage) = scene.info.set_stage_begin
@@ -536,7 +562,11 @@ impl QuestManager {
                                 }
                             }
                             QuestAction::StopScene(scene) => {
-                                tracing::debug!("stopping scene {:?} of quest {:?}", scene, id);
+                                tracing::debug!(
+                                    "stopping scene {:?} of quest {:?}",
+                                    scene,
+                                    quest_id
+                                );
 
                                 if let Some(scene) = quest.scenes.get_mut(&scene) {
                                     scene.is_playing = false;
@@ -568,6 +598,16 @@ impl QuestManager {
                             break;
                         }
 
+                        let mut aliases = globals.quests.aliases.lock();
+                        for id in quest.aliases.keys() {
+                            if let Some(alias) = aliases.get_mut(&global::AliasKey {
+                                quest: *quest_id,
+                                alias: *id,
+                            }) {
+                                alias.data.clear();
+                            }
+                        }
+
                         quest.state = QuestState::Stopped;
                     }
                 }
@@ -590,6 +630,7 @@ impl QuestManager {
         world: &mut World,
         events: &mut EventBus,
         executor: &mut Executor,
+        globals: &GlobalProperties,
     ) {
         let _span = trace_span!("QuestManager::advance_scenes").entered();
 
@@ -601,7 +642,7 @@ impl QuestManager {
                     continue;
                 }
 
-                let is_done = scene.advance(world, events, executor, &quest.aliases, *quest_id);
+                let is_done = scene.advance(world, events, executor, *quest_id, globals);
                 if is_done {
                     tracing::debug!("scene {scene_id} of quest {quest_id} is done");
                     scene.is_playing = false;
@@ -819,7 +860,7 @@ enum AliasLoadError {
 
 #[derive(Clone, Debug, Default)]
 struct AliasState {
-    entity: Option<EntityRef>,
+    is_optional: bool,
     script: Option<ScriptObject>,
 }
 

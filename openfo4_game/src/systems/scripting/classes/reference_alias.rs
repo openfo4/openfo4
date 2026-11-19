@@ -32,8 +32,20 @@ fn apply_to_ref(
 /// ```text
 /// Function Clear() native
 /// ```
-fn clear(mut caller: Caller<'_, State>, self_ptr: Object) {
-    caller.data_mut().aliases.set(self_ptr, None);
+fn clear(caller: Caller<'_, State>, self_ptr: Object) -> Result<(), Error> {
+    let alias = caller.data().objects.get_by_addr(self_ptr).unwrap();
+    let alias = alias.data().alias().unwrap();
+
+    let mut aliases = caller.data().globals.quests.aliases.lock();
+    let alias = aliases.get_mut(alias).unwrap();
+
+    if !alias.is_optional {
+        return Err(Error::msg("cannot clear non-optional alias"));
+    }
+
+    let ref_ = alias.data.as_mut_ref().unwrap();
+    *ref_ = None;
+    Ok(())
 }
 
 /// `ForceRefTo`
@@ -41,14 +53,12 @@ fn clear(mut caller: Caller<'_, State>, self_ptr: Object) {
 /// ```text
 /// Function ForceRefTo(ObjectReference akNewRef) native
 /// ```
-fn force_ref_to(
-    mut caller: Caller<'_, State>,
-    self_ptr: Object,
-    new_ref: Object,
+async fn force_ref_to(
+    _caller: Caller<'_, State>,
+    _self_ptr: Object,
+    _new_ref: Object,
 ) -> Result<(), Error> {
-    let new_ref = (!new_ref.is_null()).then_some(new_ref);
-    caller.data_mut().aliases.set(self_ptr, new_ref);
-    Ok(())
+    todo!()
 }
 
 /// `GetReference`
@@ -56,20 +66,28 @@ fn force_ref_to(
 /// ```text
 /// ObjectReference Function GetReference() native
 /// ```
-fn get_reference(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Error> {
-    let alias = caller.data().aliases.get(self_ptr).ok_or_else(|| todo!())?;
+async fn get_reference(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Error> {
+    let alias = caller.data().objects.get_by_addr(self_ptr).unwrap();
+    let alias = alias.data().alias().unwrap();
 
-    let Some(object) = alias.object else {
-        return Ok(Object::NULL);
-    };
+    let entity;
+    {
+        let aliases = caller.data().globals.quests.aliases.lock();
 
-    let script = caller
-        .data()
-        .objects
-        .get_by_addr(object)
-        .ok_or_else(|| todo!())?;
+        // The quest did not fill the alias yet.
+        let Some(alias) = aliases.get(alias) else {
+            return Ok(Object::NULL);
+        };
 
-    Ok(script.get().object.addr())
+        let Some(e) = alias.data.as_ref().unwrap() else {
+            return Ok(Object::NULL);
+        };
+
+        entity = e.clone();
+    }
+
+    let scripts = caller.data().get_or_create_entity(entity.entity()).await?;
+    Ok(scripts.get("ObjectReference").unwrap().get().object.addr())
 }
 
 /// `RemoveFromRef`

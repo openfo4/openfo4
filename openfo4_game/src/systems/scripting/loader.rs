@@ -13,6 +13,7 @@ use parking_lot::Mutex;
 use thiserror::Error;
 
 use crate::state::esp::EspLoader;
+use crate::systems::global;
 use crate::systems::scripting::object_builder::build_script_object;
 use crate::systems::scripting::object_data::{ObjectData, load_record_object_data};
 use crate::systems::scripting::objects::ScriptObjects;
@@ -458,7 +459,16 @@ where
                 });
             }
 
-            built_objects.push((final_instances, None, Some(key), false, ObjectData::None));
+            built_objects.push((
+                final_instances,
+                None,
+                Some(key),
+                false,
+                ObjectData::Alias(global::AliasKey {
+                    quest: key.owner,
+                    alias: key.id,
+                }),
+            ));
         }
 
         {

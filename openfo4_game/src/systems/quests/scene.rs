@@ -11,11 +11,12 @@ use openfo4_esp::{RecordChildren, RecordData};
 use crate::components::Player;
 use crate::state::esp::{self, EspLoader};
 use crate::systems::conditions::{CompiledCondition, ConditionCompiler};
+use crate::systems::global::GlobalProperties;
+use crate::systems::quests::StageId;
 use crate::systems::quests::dialogue::{
     DialogueDescriptor, DialogueQueue, DialogueSound, DialogueTriggers, PlayerDialogue,
     PlayerDialogueQueue,
 };
-use crate::systems::quests::{AliasState, StageId};
 use crate::systems::scripting::Executor;
 
 #[derive(Clone, Debug)]
@@ -196,8 +197,8 @@ impl SceneState {
         world: &mut World,
         events: &mut EventBus,
         executor: &mut Executor,
-        aliases: &HashMap<u32, AliasState>,
         quest: RecordId,
+        globals: &GlobalProperties,
     ) -> bool {
         for (index, state) in &mut self.active_actions {
             let action = self.info.actions.get(index).unwrap();
@@ -234,8 +235,7 @@ impl SceneState {
 
             match action {
                 Action::PlayDialogue { actor, topic } => {
-                    let Some(actor) = aliases.get(actor).and_then(|alias| alias.entity.as_ref())
-                    else {
+                    let Some(actor) = globals.quests.ref_alias(quest, *actor) else {
                         continue;
                     };
 
@@ -249,8 +249,7 @@ impl SceneState {
                         .insert(*action_id, PlayingAction::Dialogue(action));
                 }
                 Action::PlayerDialogue { actor, options } => {
-                    let Some(actor) = aliases.get(actor).and_then(|alias| alias.entity.as_ref())
-                    else {
+                    let Some(actor) = globals.quests.ref_alias(quest, *actor) else {
                         continue;
                     };
 

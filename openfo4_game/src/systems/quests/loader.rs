@@ -4,7 +4,7 @@ use std::sync::Arc;
 use hashbrown::{HashMap, HashSet};
 use indexmap::IndexMap;
 use openfo4_core::record::RecordId;
-use openfo4_esp::records::{QuestDataFlags, QuestStageFlags};
+use openfo4_esp::records::{QuestAliasFlags, QuestDataFlags, QuestStageFlags};
 use openfo4_esp::{RecordChildren, RecordData, RecordKind};
 use thiserror::Error;
 
@@ -79,6 +79,40 @@ impl QuestLoader {
         }
 
         let mut aliases = HashMap::new();
+
+        // The script loader may return `None` for aliases that do not
+        // have scripts attached, but we still need to know that these
+        // aliases may exist.
+        for alias in &data.aliases.references {
+            aliases.insert(
+                alias.id,
+                AliasState {
+                    script: None,
+                    is_optional: alias.flags.contains(QuestAliasFlags::OPTIONAL),
+                },
+            );
+        }
+
+        for alias in &data.aliases.ref_collections {
+            aliases.insert(
+                alias.id,
+                AliasState {
+                    script: None,
+                    is_optional: true,
+                },
+            );
+        }
+
+        for alias in &data.aliases.locations {
+            aliases.insert(
+                alias.id,
+                AliasState {
+                    script: None,
+                    is_optional: alias.flags.contains(QuestAliasFlags::OPTIONAL),
+                },
+            );
+        }
+
         if let Some(script) = &mut script {
             for (key, script) in script.aliases.drain() {
                 // TODO: Figure out what happens when we touch aliases from
@@ -86,13 +120,9 @@ impl QuestLoader {
                 assert_eq!(key.accessor, quest.id);
                 assert_eq!(key.owner, quest.id);
 
-                aliases.insert(
-                    key.id,
-                    AliasState {
-                        entity: None,
-                        script: Some(script),
-                    },
-                );
+                if let Some(alias) = aliases.get_mut(&key.id) {
+                    alias.script = Some(script);
+                }
             }
         }
 
@@ -130,7 +160,7 @@ impl QuestLoader {
             stages,
             active_stage: 0,
             script: script.map(|v| v.object),
-            aliases: HashMap::new(),
+            aliases,
             actions,
             scenes,
             hello_topics,

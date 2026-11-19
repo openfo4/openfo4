@@ -13,6 +13,7 @@ use openfo4_audio::backend::{DefaultBackend, StubBackend};
 use openfo4_core::path::DataPathBuf;
 use openfo4_core::record::{ModuleId, RecordId};
 use openfo4_core_pipeline::entities::Entities;
+use openfo4_esp::records::Cell;
 use openfo4_esp::{FormId, Record, RecordData, RecordHeaderFlags};
 use openfo4_game::config::Config;
 use openfo4_game::loader::FileLoader;
@@ -20,7 +21,7 @@ use openfo4_game::shared::SharedState;
 use openfo4_game::state::GameState;
 use openfo4_game::state::esp::{EspLoader, EspLoaderBuilder};
 use openfo4_game::systems::scripting::invocations::{EventInvocation, Value};
-use openfo4_game::systems::scripting::loader::ScriptObject;
+use openfo4_game::systems::scripting::loader::{LoadResult, ScriptObject};
 use openfo4_game::time::Time;
 use openfo4_gizmos::Gizmos;
 use openfo4_script::runtime::object::ObjectHandle;
@@ -30,6 +31,7 @@ use pscc::Compiler;
 pub struct TestRunnerBuilder {
     compiler: ScriptCompiler,
     esp: StaticEspLoaderBuilder,
+    cell: Option<RecordId>,
 }
 
 impl TestRunnerBuilder {
@@ -38,6 +40,18 @@ impl TestRunnerBuilder {
         T: Into<RecordData>,
     {
         self.esp.insert(data)
+    }
+
+    pub fn add_reference_record<T>(&mut self, data: T) -> RecordId
+    where
+        T: Into<RecordData>,
+    {
+        let id = self.add_record(data);
+        let cell = self
+            .cell
+            .get_or_insert_with(|| self.esp.insert(Cell::default()));
+        self.esp.parents.insert(id, *cell);
+        id
     }
 
     pub fn build(self) -> TestRunner {
@@ -79,13 +93,16 @@ impl TestRunner {
         TestRunnerBuilder {
             compiler: ScriptCompiler::new(),
             esp: StaticEspLoaderBuilder::default(),
+            cell: None,
         }
     }
 
     pub fn load(&mut self, id: RecordId) -> ScriptObject {
-        block_on(self.game.executor.loader().load(id))
-            .unwrap()
-            .object
+        self.load_with_aliases(id).object
+    }
+
+    pub fn load_with_aliases(&mut self, id: RecordId) -> LoadResult {
+        block_on(self.game.executor.loader().load(id)).unwrap()
     }
 
     pub fn script(&mut self, object: &ScriptObject, class: &str) -> ObjectHandle {
@@ -94,6 +111,17 @@ impl TestRunner {
     }
 
     pub fn call<T, R>(&mut self, receiver: R, func: &str, args: T) -> Vec<Value>
+    where
+        T: Into<Vec<Value>>,
+        R: Borrow<ScriptObject>,
+    {
+        self.call_fallible(receiver, func, args).unwrap()
+    }
+
+    /// Calls a function that may return with an error.
+    ///
+    /// On error `None` is returned.
+    pub fn call_fallible<T, R>(&mut self, receiver: R, func: &str, args: T) -> Option<Vec<Value>>
     where
         T: Into<Vec<Value>>,
         R: Borrow<ScriptObject>,
@@ -112,7 +140,7 @@ impl TestRunner {
                     self.time.update();
                     self.game.update(&self.time, &self.gizmos);
                 }
-                Poll::Ready(res) => return res.unwrap(),
+                Poll::Ready(res) => return res,
             }
         }
     }
@@ -150,6 +178,7 @@ const MODULE_ID: ModuleId = ModuleId(NonZeroU32::MIN);
 #[derive(Clone, Debug, Default)]
 struct StaticEspLoaderBuilder {
     records: HashMap<RecordId, Record>,
+    parents: HashMap<RecordId, RecordId>,
     next_id: u32,
 }
 
@@ -176,6 +205,7 @@ impl StaticEspLoaderBuilder {
     pub fn build(self) -> Arc<EspLoader> {
         let mut builder = EspLoaderBuilder::new();
         builder.set_hardcoded(self.records);
+        builder.set_hardcoded_parents(self.parents);
         Arc::new(builder.finalize())
     }
 }

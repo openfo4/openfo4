@@ -4,6 +4,7 @@ use openfo4_esp::RecordData;
 use openfo4_esp::records::NpcBaseFlags;
 
 use crate::state::esp::{EspLoader, GlobalRecord};
+use crate::systems::global::AliasKey;
 
 #[derive(Clone, Debug)]
 pub enum ObjectData {
@@ -11,6 +12,7 @@ pub enum ObjectData {
     InputEnableLayer { layer: usize },
     ActorBase(ActorBase),
     Item(Item),
+    Alias(AliasKey),
 }
 
 impl ObjectData {
@@ -33,6 +35,13 @@ impl ObjectData {
         match self {
             Self::Item(item) => Some(&item.form.keywords),
             Self::ActorBase(base) => Some(&base.form.keywords),
+            _ => None,
+        }
+    }
+
+    pub fn alias(&self) -> Option<&AliasKey> {
+        match self {
+            Self::Alias(key) => Some(key),
             _ => None,
         }
     }

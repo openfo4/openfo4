@@ -3537,7 +3537,7 @@ pub struct Region {
 #[derive(Clone, Debug, Record)]
 pub struct NAVI {}
 
-#[derive(Clone, Debug, Record)]
+#[derive(Clone, Debug, Default, Record)]
 pub struct Cell {
     #[record("EDID")]
     pub id: Option<BString>,
@@ -3598,7 +3598,7 @@ pub struct Cell {
 }
 
 bitflags! {
-    #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+    #[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Hash)]
     pub struct CellFlags: u16 {
         const INTERIOR = 0x0001;
         const HAS_WATER = 0x0002;
@@ -3764,7 +3764,7 @@ pub struct ActivateParent {
     pub delay: f32,
 }
 
-#[derive(Copy, Clone, Debug, BinaryStruct)]
+#[derive(Copy, Clone, Debug, Default, BinaryStruct)]
 pub struct PositionRotation {
     pub position_x: f32,
     pub position_y: f32,
@@ -3774,7 +3774,7 @@ pub struct PositionRotation {
     pub rotation_z: f32,
 }
 
-#[derive(Clone, Debug, Record)]
+#[derive(Clone, Debug, Default, Record)]
 pub struct PlacedObject {
     #[record("EDID")]
     pub id: Option<BString>,
@@ -4721,7 +4721,7 @@ impl Read for QuestAliases {
     }
 }
 
-#[derive(Clone, Debug, Record)]
+#[derive(Clone, Debug, Default, Record)]
 #[record(ordered)]
 pub struct QuestReferenceAlias {
     #[record("ALST")]
@@ -4900,7 +4900,7 @@ pub struct QuestAliasLinkedAlias {
 }
 
 bitflags! {
-    #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+    #[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Hash)]
     pub struct QuestAliasFlags: u32 {
         const RESERVES = 0x00000001;
         /// Allow nothing to be selected.

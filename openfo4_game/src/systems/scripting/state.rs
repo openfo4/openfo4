@@ -1,5 +1,5 @@
 use std::collections::BTreeMap;
-use std::ops::{Deref, DerefMut};
+use std::ops::Deref;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -10,16 +10,13 @@ use openfo4_core::events::EventBus;
 use openfo4_core::record::RecordId;
 use openfo4_script::runtime::object::ObjectHandle;
 use openfo4_script::runtime::{Error, ObjectAddr};
-use parking_lot::{
-    MappedRwLockReadGuard, MappedRwLockWriteGuard, Mutex, RwLock, RwLockReadGuard, RwLockWriteGuard,
-};
+use parking_lot::{MappedRwLockReadGuard, Mutex, RwLock, RwLockReadGuard};
 use slab::Slab;
 
 use crate::state::esp::EspLoader;
 use crate::state::level::loader::EntityLoader;
 use crate::state::level::partial::PartialEntityFlags;
 use crate::systems::global::GlobalProperties;
-use crate::systems::quests::QuestManager;
 use crate::systems::scripting::classes::{Int, Object};
 use crate::systems::scripting::effects::{Effect, EffectId, Effects};
 use crate::systems::scripting::loader::ScriptLoader;
@@ -35,7 +32,6 @@ pub struct State {
     pub borrowed: Arc<SharedBorrowCell<BorrowedState>>,
     pub registration: Arc<RegistrationSet>,
     pub objects: Arc<ScriptObjects>,
-    pub aliases: AliasSet,
     pub effects: Arc<Mutex<Effects>>,
     pub loader: Arc<ScriptLoader>,
     pub globals: Arc<GlobalProperties>,
@@ -44,53 +40,6 @@ pub struct State {
     pub deletion: HashSet<Entity>,
     pub entity_loader: Arc<EntityLoader>,
     pub entities: Arc<ScriptEntities>,
-}
-
-#[derive(Clone, Debug, Default)]
-pub struct AliasSet {
-    aliases: HashMap<ObjectAddr, AliasState>,
-    /// Maps "real" objects to aliases.
-    objects: HashMap<ObjectAddr, HashSet<ObjectAddr>>,
-}
-
-impl AliasSet {
-    pub fn get(&self, addr: ObjectAddr) -> Option<AliasState> {
-        self.aliases.get(&addr).copied()
-    }
-
-    pub fn set(&mut self, alias: ObjectAddr, object: Option<ObjectAddr>) {
-        if let Some(state) = self.aliases.get_mut(&alias) {
-            if state.object == object {
-                return;
-            }
-
-            if let Some(prev_object) = state.object {
-                self.objects.get_mut(&prev_object).unwrap().remove(&alias);
-            }
-
-            state.object = object;
-
-            if let Some(object) = object {
-                self.objects.entry(object).or_default().insert(alias);
-            }
-        }
-    }
-
-    /// Returns all alias objects that point to the given object.
-    pub fn get_alises_for_object(
-        &self,
-        object: ObjectAddr,
-    ) -> impl Iterator<Item = ObjectAddr> + '_ {
-        self.objects.get(&object).into_iter().flatten().copied()
-    }
-}
-
-#[derive(Copy, Clone, Debug)]
-pub struct AliasState {
-    /// The quest that owns this alias.
-    pub quest: RecordId,
-    /// The real object that this alias points to.
-    pub object: Option<ObjectAddr>,
 }
 
 impl State {
@@ -404,37 +353,6 @@ impl<T> SharedBorrowCell<T> {
         let guard = RwLockReadGuard::map(guard, |value| value.as_ref().unwrap());
         Some(Borrow { guard })
     }
-
-    /// Borrows the current value. If not value currently exists, this function will wait until
-    /// some value is provided.
-    pub async fn borrow_mut(&self) -> BorrowMut<'_, T> {
-        if let Some(guard) = self.try_borrow_mut() {
-            return guard;
-        }
-
-        loop {
-            let listen = self.event.listen();
-
-            // We need to recheck whether a value became available
-            // between our last check and the time we registered the listener.
-            if let Some(guard) = self.try_borrow_mut() {
-                return guard;
-            }
-
-            listen.await;
-        }
-    }
-
-    /// Borrows the current value, if it exists. Returns `None` if not value is set currently.
-    pub fn try_borrow_mut(&self) -> Option<BorrowMut<'_, T>> {
-        let guard = self.value.write();
-        if guard.is_none() {
-            return None;
-        }
-
-        let guard = RwLockWriteGuard::map(guard, |value| value.as_mut().unwrap());
-        Some(BorrowMut { guard })
-    }
 }
 
 #[derive(Debug)]
@@ -457,35 +375,6 @@ impl<'a, T> Deref for Borrow<'a, T> {
 
     fn deref(&self) -> &Self::Target {
         &*self.guard
-    }
-}
-
-#[derive(Debug)]
-pub struct BorrowMut<'a, T> {
-    guard: MappedRwLockWriteGuard<'a, T>,
-}
-
-impl<'a, T> BorrowMut<'a, T> {
-    pub fn map<U, F>(s: Self, f: F) -> BorrowMut<'a, U>
-    where
-        F: FnOnce(&mut T) -> &mut U,
-    {
-        let guard = MappedRwLockWriteGuard::map(s.guard, f);
-        BorrowMut { guard }
-    }
-}
-
-impl<'a, T> Deref for BorrowMut<'a, T> {
-    type Target = T;
-
-    fn deref(&self) -> &Self::Target {
-        &*self.guard
-    }
-}
-
-impl<'a, T> DerefMut for BorrowMut<'a, T> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut *self.guard
     }
 }
 

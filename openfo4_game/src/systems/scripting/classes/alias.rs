@@ -17,18 +17,15 @@ pub fn register(engine: &mut Engine) {
 /// ```text
 /// Quest Function() native
 /// ```
-fn get_owning_quest(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Error> {
-    let alias = caller
+async fn get_owning_quest(caller: Caller<'_, State>, self_ptr: Object) -> Result<Object, Error> {
+    let alias = caller.data().objects.get_by_addr(self_ptr).unwrap();
+    let alias = alias.data().alias().unwrap();
+
+    let script = caller
         .data()
-        .aliases
-        .get(self_ptr)
-        .ok_or_else(|| Error::msg("no alias"))?;
-    let quest = caller
-        .data()
-        .objects
-        .get_by_record(alias.quest)
-        .ok_or_else(|| Error::msg("no quest"))?;
-    let script = quest.get("Quest").ok_or_else(|| Error::msg("no quest"))?;
+        .get_or_create_record_class(alias.quest, "Quest")
+        .await?;
+
     Ok(script.get().object.addr())
 }
 
