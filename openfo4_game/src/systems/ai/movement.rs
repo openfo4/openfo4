@@ -9,7 +9,7 @@ use crate::systems::FacingDirection;
 use crate::systems::ai::{Behavior, Context, Status};
 use crate::systems::movement::{MovementDirection, MovementSpeed};
 
-const TARGET_REACHED_THRESHOLD: f32 = 0.05;
+const TARGET_REACHED_THRESHOLD: f32 = 0.2;
 
 #[derive(Clone, Debug)]
 pub struct MoveTo {
@@ -128,6 +128,10 @@ impl Behavior for MoveTo {
             ctx.paths.remove(*index);
             self.state = PathState::None;
         }
+
+        ctx.world
+            .insert_one(ctx.entity, MovementDirection::ZERO)
+            .ok();
     }
 }
 

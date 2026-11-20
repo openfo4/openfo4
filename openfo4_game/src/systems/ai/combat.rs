@@ -1,4 +1,4 @@
-use std::f32::consts::FRAC_PI_2;
+use std::f32::consts::{FRAC_PI_2, FRAC_PI_4};
 use std::time::{Duration, Instant};
 
 use glam::{Quat, Vec3};
@@ -12,8 +12,8 @@ use crate::systems::ai::movement::MoveTo;
 use crate::systems::ai::{Behavior, Context, Status};
 use crate::systems::inventory::{EquipItemEvent, Inventory, InventoryKey, ItemData};
 use crate::systems::{
-    FacingDirection, GunFireRequest, GunReloadEvent, GunReloadRequest, TargetedGunFireEvent,
-    WeaponDrawRequest, WeaponDrawnEvent,
+    FacingDirection, GunReloadEvent, GunReloadRequest, TargetedGunFireEvent, WeaponDrawRequest,
+    WeaponDrawnEvent,
 };
 
 /// Below this distance NPCs with guns seem to consistently backoff until they reach this distance.
@@ -24,6 +24,19 @@ const LONG_DISTANCE: f32 = 2048.0 * NIF_TO_METERS;
 
 /// Minimum distance we must travel if we decide to move.
 const MIN_STEP_DIST: f32 = 20.0 * NIF_TO_METERS;
+
+const MIN_FALLBACK_DISTANCE: f32 = SHORT_DISTANCE * 0.3;
+const MAX_FALLBACK_DISTANCE: f32 = SHORT_DISTANCE * 1.5;
+const MAX_FALLBACK_ANGLE: f32 = FRAC_PI_4;
+
+const MIN_STEP_DISTANCE: f32 = 50.0;
+const MAX_STEP_DISTANCE: f32 = 200.0;
+
+const MIN_MOVE_INTERRUPT_TIME: Duration = Duration::from_secs(3);
+const MAX_MOVE_INTERRUPT_TIME: Duration = Duration::from_secs(10);
+
+const MIN_MOVE_IDLE_TIME: Duration = Duration::from_secs(0);
+const MAX_MOVE_IDLE_TIME: Duration = Duration::from_secs(1);
 
 #[derive(Copy, Clone, Debug, Default)]
 pub struct DefaultCombatPackageConfig {
@@ -94,79 +107,44 @@ impl CombatBehavior {
             last_attack: Instant::now(),
             movement: MovementStrategy {
                 movement: None,
-                target: Vec3::ZERO,
                 last_action: Instant::now(),
+                idle_until: Instant::now(),
+                interrupt_at: Instant::now(),
             },
         }
     }
 }
 
 impl Behavior for CombatBehavior {
-    fn start(&mut self, ctx: &mut Context<'_>) {}
+    fn start(&mut self, _ctx: &mut Context<'_>) {}
 
     fn update(&mut self, ctx: &mut Context<'_>) -> Status {
         let Some(target) = self.select_target() else {
             return Status::Success;
         };
 
-        let pos = *ctx.world.get::<&Transform>(ctx.entity).unwrap();
         let target_pos = *ctx.world.get::<&Transform>(target).unwrap();
-
-        let distance = target_distance(ctx, target);
 
         self.apply_movement(ctx, target);
 
         self.equip_best_weapon(ctx);
 
-        if distance < SHORT_DISTANCE {
-            self.look_at(ctx, target_pos.translation);
+        self.look_at(ctx, target_pos.translation);
 
-            if !self.draw_weapon(ctx) {
-                return Status::Running;
-            }
-
-            if !self.reload_weapon(ctx) {
-                return Status::Running;
-            }
-
-            self.shoot(ctx, target);
+        if !self.draw_weapon(ctx) {
+            return Status::Running;
         }
 
-        // let fallback_distance = f32::min(SHORT_DISTANCE - distance, 300.0 * NIF_TO_METERS);
-        // if fallback_distance > 0.0 {
-        //     let fallback =
-        //         (pos.translation - target_pos.translation).normalize() * fallback_distance;
-        //     let mut fallback_point = pos.translation + fallback;
+        if !self.reload_weapon(ctx) {
+            return Status::Running;
+        }
 
-        //     let navmesh = ctx.navmeshes.get(&ctx.worldspace).unwrap();
-
-        //     if let Some(toi) = navmesh.cast_ray(Ray::new(fallback_point, Vec3::Y), f32::MAX) {
-        //         fallback_point = fallback_point + toi * Vec3::Y;
-        //     } else if let Some(toi) = navmesh.cast_ray(Ray::new(fallback_point, -Vec3::Y), f32::MAX)
-        //     {
-        //         fallback_point = fallback_point - toi * Vec3::Y;
-        //     }
-
-        //     let mut movement = MoveTo::new(fallback_point, Face::Forward);
-        //     movement.start(ctx);
-        //     self.movement = Some(movement);
-        // }
-
-        // match distance {
-        //     TargetDistance::Short => {
-        //         let fallback = 0.0;
-
-        //         let nm = ctx.navmeshes.get(&ctx.worldspace).unwrap();
-        //         nm.cast_ray(ray, max_toi);
-        //     }
-        //     TargetDistance::Medium => {}
-        //     TargetDistance::Long => {}
-        // }
+        self.shoot(ctx, target);
 
         Status::Running
     }
 
-    fn finish(&mut self, ctx: &mut Context<'_>) {}
+    fn finish(&mut self, _ctx: &mut Context<'_>) {}
 }
 
 impl CombatBehavior {
@@ -331,48 +309,98 @@ impl CombatBehavior {
 
     fn apply_movement(&mut self, ctx: &mut Context<'_>, target: Entity) {
         if let Some(movement) = &mut self.movement.movement {
-            // Periodically chose a new action, even if we are still moving.
-            if self.movement.last_action.elapsed() < Duration::from_secs(10)
-                && matches!(movement.update(ctx), Status::Running)
-            {
-                return;
+            if movement.update(ctx) != Status::Running {
+                movement.finish(ctx);
+                self.movement.movement = None;
             }
-
-            movement.finish(ctx);
-            self.movement.movement = None;
         }
 
+        if self.movement.movement.is_some() && self.movement.interrupt_at > Instant::now() {
+            return;
+        }
+
+        if self.movement.idle_until > Instant::now() {
+            return;
+        }
+
+        // Cancel current movement.
+        if let Some(mut movement) = self.movement.movement.take() {
+            movement.finish(ctx);
+        }
+
+        self.movement.idle_until =
+            Instant::now() + rand::random_range(MIN_MOVE_IDLE_TIME..MAX_MOVE_IDLE_TIME);
+        self.movement.last_action = Instant::now();
         let pos = *ctx.world.get::<&Transform>(ctx.entity).unwrap();
         let target_pos = *ctx.world.get::<&Transform>(target).unwrap();
         let distance = target_distance(ctx, target);
 
-        // Backoff from the target.
+        // At short distances NPCs will typically backoff until they reach about
+        // 300-400 NIF units distance.
+        // Otherwise they may circle around the player in close proximity. If there
+        // is not enough space to backoff they will circle instead.
         if distance < SHORT_DISTANCE {
-            let fallback_distance = f32::min(SHORT_DISTANCE - distance, 300.0 * NIF_TO_METERS);
-            if fallback_distance > MIN_STEP_DIST {
-                let fallback =
-                    (pos.translation - target_pos.translation).normalize() * fallback_distance;
-                self.move_to(ctx, pos.translation + fallback);
-                return;
-            }
-        }
+            if rand::random_bool(0.8) {
+                let fallback_distance =
+                    rand::random_range(MIN_FALLBACK_DISTANCE..MAX_FALLBACK_DISTANCE);
+                let fallback_angle = rand::random_range(-MAX_FALLBACK_ANGLE..MAX_FALLBACK_ANGLE);
+                let fallback_dir = (pos.translation - target_pos.translation)
+                    .normalize()
+                    .rotate_y(fallback_angle)
+                    * fallback_distance;
+                let fallback_point = pos.translation + fallback_dir;
 
-        // return;
-
-        // Circle around the target.
-        if distance < MEDIUM_DISTANCE {
-            if rand::random_bool(0.3) {
-                let mut angle = rand::random_range(0.0..FRAC_PI_2);
-                if rand::random_bool(0.5) {
-                    angle = -angle;
+                if fallback_distance > MIN_STEP_DIST {
+                    self.move_to(ctx, fallback_point);
+                    return;
                 }
+            }
+
+            if rand::random_bool(0.8) {
+                let angle = rand::random_range(-FRAC_PI_2..FRAC_PI_2);
 
                 let p = Quat::from_rotation_y(angle) * Vec3::new(0.0, 0.0, -distance);
                 let dst = target_pos.translation + p;
 
-                if dst.distance_squared(pos.translation) < MIN_STEP_DIST * MIN_STEP_DIST {
+                if dst.distance_squared(pos.translation) > MIN_STEP_DIST * MIN_STEP_DIST {
+                    self.move_to(ctx, dst);
                     return;
                 }
+            }
+
+            return;
+        }
+
+        // Circle around the target.
+        if distance < MEDIUM_DISTANCE {
+            if rand::random_bool(0.3) {
+                let angle = rand::random_range(-FRAC_PI_2..FRAC_PI_2);
+
+                let p = Quat::from_rotation_y(angle) * Vec3::new(0.0, 0.0, -distance);
+                let dst = target_pos.translation + p;
+
+                if dst.distance_squared(pos.translation) > MIN_STEP_DIST * MIN_STEP_DIST {
+                    self.move_to(ctx, dst);
+                    return;
+                }
+            }
+
+            // Small step left or right.
+            if rand::random_bool(0.8) {
+                let dir = Vec3::cross(target_pos.translation - pos.translation, Vec3::Y)
+                    .normalize_or_zero();
+                let dst = pos.translation
+                    + dir * rand::random_range(MIN_STEP_DISTANCE..MAX_STEP_DISTANCE);
+
+                self.move_to(ctx, dst);
+                return;
+            }
+
+            // Move towards target.
+            if rand::random_bool(0.3) {
+                let dir = (target_pos.translation - pos.translation).normalize_or_zero();
+                let dst = pos.translation
+                    + dir * rand::random_range(MIN_STEP_DISTANCE..MAX_STEP_DISTANCE);
 
                 self.move_to(ctx, dst);
                 return;
@@ -381,6 +409,8 @@ impl CombatBehavior {
     }
 
     fn move_to(&mut self, ctx: &mut Context<'_>, mut target: Vec3) {
+        debug_assert!(self.movement.movement.is_none());
+
         let navmesh = ctx.navmeshes.get(&ctx.worldspace).unwrap();
 
         if let Some(toi) = navmesh.cast_ray(Ray::new(target, Vec3::Y), f32::MAX) {
@@ -393,6 +423,8 @@ impl CombatBehavior {
         moveto.start(ctx);
         self.movement.movement = Some(moveto);
         self.movement.last_action = Instant::now();
+        self.movement.interrupt_at =
+            Instant::now() + rand::random_range(MIN_MOVE_INTERRUPT_TIME..MAX_MOVE_INTERRUPT_TIME);
     }
 }
 
@@ -407,89 +439,10 @@ fn target_distance(ctx: &mut Context<'_>, target: Entity) -> f32 {
     }
 }
 
-fn has_weapon_los(ctx: &mut Context<'_>, target: Entity) -> bool {
-    todo!()
-}
-
-#[derive(Copy, Clone, Debug)]
-enum TargetDistance {
-    Short,
-    Medium,
-    Long,
-}
-
 #[derive(Clone, Debug)]
 struct MovementStrategy {
     movement: Option<MoveTo>,
-    target: Vec3,
     last_action: Instant,
-}
-
-impl From<f32> for TargetDistance {
-    fn from(value: f32) -> Self {
-        if value <= SHORT_DISTANCE {
-            Self::Short
-        } else if value <= MEDIUM_DISTANCE {
-            Self::Medium
-        } else {
-            Self::Long
-        }
-    }
-}
-
-#[derive(Clone, Debug)]
-struct DrawWeapon;
-
-impl Behavior for DrawWeapon {
-    fn start(&mut self, ctx: &mut Context<'_>) {
-        ctx.send_event(WeaponDrawRequest { actor: ctx.entity });
-    }
-
-    fn update(&mut self, ctx: &mut Context<'_>) -> Status {
-        for event in ctx.read_events::<WeaponDrawnEvent>() {
-            if event.actor == ctx.entity {
-                return Status::Success;
-            }
-        }
-
-        Status::Running
-    }
-
-    fn finish(&mut self, _ctx: &mut Context<'_>) {}
-}
-
-#[derive(Clone, Debug)]
-struct Reload;
-
-impl Behavior for Reload {
-    fn start(&mut self, ctx: &mut Context<'_>) {
-        ctx.send_event(GunReloadRequest { actor: ctx.entity });
-    }
-
-    fn update(&mut self, ctx: &mut Context<'_>) -> Status {
-        for event in ctx.read_events::<GunReloadEvent>() {
-            if event.actor == ctx.entity {
-                return Status::Success;
-            }
-        }
-
-        Status::Running
-    }
-
-    fn finish(&mut self, ctx: &mut Context<'_>) {}
-}
-
-#[derive(Clone, Debug)]
-struct Attack;
-
-impl Behavior for Attack {
-    fn start(&mut self, ctx: &mut Context<'_>) {
-        ctx.send_event(GunFireRequest { actor: ctx.entity });
-    }
-
-    fn update(&mut self, ctx: &mut Context<'_>) -> Status {
-        Status::Success
-    }
-
-    fn finish(&mut self, ctx: &mut Context<'_>) {}
+    interrupt_at: Instant,
+    idle_until: Instant,
 }
