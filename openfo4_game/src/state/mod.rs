@@ -97,7 +97,7 @@ pub struct GameState {
     inventory: InventorySystem,
     pub executor: Executor,
     pub quests: QuestManager,
-    globals: Arc<GlobalProperties>,
+    pub globals: Arc<GlobalProperties>,
     pub ai: AiSystem,
     real_time_elapsed: Duration,
     transform_hierarchy_cache: TransformHierarchyCache,

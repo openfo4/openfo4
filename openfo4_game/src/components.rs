@@ -1,7 +1,7 @@
 use std::ops::{Mul, MulAssign};
 
 use glam::{IVec3, Quat, Vec3};
-use hashbrown::HashSet;
+use hashbrown::{HashMap, HashSet};
 use openfo4_common::components::{Color, Transform};
 use openfo4_core::ecs::Entity;
 use openfo4_core::record::RecordId;
@@ -135,7 +135,7 @@ pub struct ActorProperties {
     /// The number of available perk points to spend.
     pub perk_points: u32,
     /// Factions that the actor is a member of.
-    pub factions: Vec<FactionMembership>,
+    pub factions: HashMap<RecordId, i32>,
     /// Whether the actor is currently dead.
     pub is_dead: bool,
     /// Whether the actor is classified as a child.

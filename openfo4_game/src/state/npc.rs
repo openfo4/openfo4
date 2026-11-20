@@ -219,7 +219,11 @@ impl Actor {
                         level: self.level,
                         bleedout_recovery: true,
                         perk_points: 0,
-                        factions: self.factions,
+                        factions: self
+                            .factions
+                            .into_iter()
+                            .map(|faction| (faction.faction, i32::from(faction.rank)))
+                            .collect(),
                         is_dead: self.dead,
                         is_child: self.is_child,
                         voice_type: self.voice_type,

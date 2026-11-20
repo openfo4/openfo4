@@ -6,7 +6,7 @@ use crate::fields::SubRecordArray;
 use crate::records::impl_decode_bitflags;
 use crate::{BString, FormId, LString};
 
-#[derive(Clone, Debug, Record)]
+#[derive(Clone, Debug, Default, Record)]
 #[record(ordered)]
 pub struct Faction {
     #[record("EDID")]
@@ -79,7 +79,7 @@ pub enum FactionCombatReaction {
 }
 
 bitflags! {
-    #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+    #[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Hash)]
     pub struct FactionFlags: u32 {
         const HIDDEN_FROM_NPC = 1 << 0;
         const SPECIAL_COMBAT = 1 << 1;

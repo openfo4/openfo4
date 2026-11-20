@@ -83,7 +83,7 @@ impl TestRunnerBuilder {
 }
 
 pub struct TestRunner {
-    game: GameState,
+    pub game: GameState,
     time: Time,
     gizmos: Gizmos,
 }

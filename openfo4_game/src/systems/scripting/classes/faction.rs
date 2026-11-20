@@ -221,50 +221,42 @@ fn send_player_to_jail(
 /// Function SetAlly(Faction akOther, bool abSelfIsFriendToOther, bool abOtherIsFriendToSelf) native
 /// ```
 fn set_ally(
-    mut caller: Caller<'_, State>,
+    caller: Caller<'_, State>,
     self_ptr: Object,
     other: Object,
     self_is_friend_to_other: bool,
     other_is_friend_to_self: bool,
 ) {
-    let Some(self_faction) = caller
-        .data()
-        .objects
-        .get_by_addr(self_ptr)
-        .and_then(|s| s.record())
-    else {
-        debug_assert!(self_ptr.is_null());
+    if other.is_null() {
         return;
-    };
-    let Some(other_faction) = caller
-        .data()
-        .objects
-        .get_by_addr(other)
-        .and_then(|s| s.record())
-    else {
-        debug_assert!(other.is_null());
-        return;
-    };
+    }
 
-    with_faction_mut(&mut caller, self_ptr, |faction| {
+    let faction = caller.data().record(self_ptr);
+    let other = caller.data().record(other);
+
+    let mut factions = caller.data().globals.factions.lock();
+
+    {
+        let faction = factions.get_mut(&faction).unwrap();
         let reaction = if self_is_friend_to_other {
             FactionReaction::Friend
         } else {
             FactionReaction::Ally
         };
 
-        faction.relations.insert(other_faction, reaction);
-    });
+        faction.relations.insert(other, reaction);
+    }
 
-    with_faction_mut(&mut caller, other, |faction| {
+    {
+        let other = factions.get_mut(&other).unwrap();
         let reaction = if other_is_friend_to_self {
             FactionReaction::Friend
         } else {
             FactionReaction::Ally
         };
 
-        faction.relations.insert(self_faction, reaction);
-    });
+        other.relations.insert(faction, reaction);
+    }
 }
 
 /// `SetCrimeGold`
@@ -299,50 +291,42 @@ fn set_crime_gold_violent(
 /// Function SetEnemy(Faction akOther, bool abSelfIsNeutralToOther, bool abOtherIsNeutralToSelf) native
 /// ```
 fn set_enemy(
-    mut caller: Caller<'_, State>,
+    caller: Caller<'_, State>,
     self_ptr: Object,
     other: Object,
     self_is_neutral_to_other: bool,
     other_is_neutral_to_self: bool,
 ) {
-    let Some(self_faction) = caller
-        .data()
-        .objects
-        .get_by_addr(self_ptr)
-        .and_then(|s| s.record())
-    else {
-        debug_assert!(self_ptr.is_null());
+    if other.is_null() {
         return;
-    };
-    let Some(other_faction) = caller
-        .data()
-        .objects
-        .get_by_addr(other)
-        .and_then(|s| s.record())
-    else {
-        debug_assert!(other.is_null());
-        return;
-    };
+    }
 
-    with_faction_mut(&mut caller, self_ptr, |faction| {
+    let faction = caller.data().record(self_ptr);
+    let other = caller.data().record(other);
+
+    let mut factions = caller.data().globals.factions.lock();
+
+    {
+        let faction = factions.get_mut(&faction).unwrap();
         let reaction = if self_is_neutral_to_other {
             FactionReaction::Neutral
         } else {
             FactionReaction::Enemy
         };
 
-        faction.relations.insert(other_faction, reaction);
-    });
+        faction.relations.insert(other, reaction);
+    }
 
-    with_faction_mut(&mut caller, other, |faction| {
+    {
+        let other = factions.get_mut(&other).unwrap();
         let reaction = if other_is_neutral_to_self {
             FactionReaction::Neutral
         } else {
             FactionReaction::Enemy
         };
 
-        faction.relations.insert(self_faction, reaction);
-    });
+        other.relations.insert(faction, reaction);
+    }
 }
 
 /// `SetPlayerEnemy`

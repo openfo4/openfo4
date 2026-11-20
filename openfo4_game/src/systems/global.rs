@@ -161,6 +161,15 @@ pub struct Faction {
     pub player_expelled: bool,
 }
 
+impl Faction {
+    pub fn relation(&self, other: RecordId) -> FactionReaction {
+        self.relations
+            .get(&other)
+            .copied()
+            .unwrap_or(FactionReaction::Neutral)
+    }
+}
+
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub enum FactionReaction {
     Neutral,
