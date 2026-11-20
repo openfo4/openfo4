@@ -35,7 +35,6 @@ use openfo4_game::state::inputs::ActorInputEvent;
 use openfo4_game::state::inputs::Direction;
 use openfo4_game::systems::inventory::AddItemEventAsync;
 use openfo4_game::systems::inventory::EquipItemEvent;
-use openfo4_game::time::Time;
 use openfo4_gizmos::Gizmos;
 use openfo4_input::keyboard::KeyCode;
 use openfo4_input::keyboard::KeyboardInput;
@@ -137,7 +136,6 @@ fn main() -> ExitCode {
         game,
         state,
         size: UVec2::ZERO,
-        time: Time::new(),
         egui_ctx,
         ui_state: ui::UiState::default(),
         ui_renderer,
@@ -252,7 +250,6 @@ struct App {
     game: GameState,
     state: RenderState,
     size: UVec2,
-    time: Time,
     egui_ctx: EguiContext,
     ui_state: ui::UiState,
     ui_renderer: Arc<UiRenderer>,
@@ -326,8 +323,6 @@ impl openfo4_window::App for App {
             )
         });
 
-        self.time.update();
-
         let inputs = self.keymap.process(self.key_events.drain(..));
         if let Some(player) = self.game.get_player() {
             for input in inputs.chain(self.turn_events.drain(..)) {
@@ -335,7 +330,7 @@ impl openfo4_window::App for App {
             }
         }
 
-        self.game.update(&self.time, &self.state.gizmos);
+        self.game.update();
         self.state.sync(self.game.world());
 
         if self.ui_state.debug.draw_colliders {
