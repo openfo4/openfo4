@@ -3,6 +3,7 @@
 mod lowering;
 mod text;
 
+use openfo4_common::collections::vec_map::Index;
 use openfo4_common::string::Lowercase;
 use openfo4_common::utils::vec_ext::VecExt;
 
@@ -269,27 +270,6 @@ struct ArrayRemove {
     elem_ty: TypeId,
 }
 
-#[derive(Clone, Debug)]
-struct ArrayFind {
-    array: Value<Null>,
-    start_index: Value<i32>,
-    searched_value: Value<Literal>,
-    scan_backwards: bool,
-    write_index: Value<i32>,
-    elem_ty: TypeId,
-}
-
-#[derive(Clone, Debug)]
-struct ArrayFindStruct {
-    array: Value<Null>,
-    start_index: Value<i32>,
-    searched_value: Value<Literal>,
-    scan_backwards: bool,
-    write_index: Value<i32>,
-    struct_ty: StructId,
-    struct_member: Lowercase<String>,
-}
-
 #[derive(Clone, Debug, PartialEq)]
 pub enum Value<T> {
     Const(T),
@@ -383,6 +363,12 @@ pub struct FunctionBuilder {
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Variable(usize);
+
+impl Index for Variable {
+    fn index(&self) -> usize {
+        self.0
+    }
+}
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Block(usize);

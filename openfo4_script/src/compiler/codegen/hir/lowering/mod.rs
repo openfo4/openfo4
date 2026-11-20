@@ -7,17 +7,17 @@ mod stack;
 mod string;
 
 use std::mem::offset_of;
-use std::num::NonZeroUsize;
 
-use hashbrown::HashMap;
 use openfo4_jit::{
     Block, FloatCompareOp, FunctionBuilder, IntCompareOp, SourceLoc, Type as JitType,
-    Value as JitValue, Variable,
+    Value as JitValue,
 };
 
 use crate::compiler::codegen::CodegenData;
 use crate::compiler::codegen::error::ErrorKind;
-use crate::compiler::codegen::hir::lowering::stack::{InstructionPosition, SuspensionPoint};
+use crate::compiler::codegen::hir::lowering::stack::{
+    InstructionPosition, StackFrameInfo, SuspensionPoint,
+};
 use crate::compiler::codegen::hir::{
     AddrCompareOp, Function, Instruction, Literal, Null, ScalarCompareOp, Value,
 };
@@ -57,23 +57,10 @@ pub fn lower_function(
             _ => unreachable!(),
         };
 
-        let default_value = match ty {
-            JitType::I8 | JitType::I16 | JitType::I32 | JitType::I64 | JitType::Isize => {
-                builder.iconst(ty, 0)
-            }
-            JitType::Pointer => builder.ptrconst(core::ptr::null::<()>()),
-            JitType::F32 | JitType::F64 => builder.fconst(ty, 0.0f32),
-        };
-
-        let var = builder.def_var(ty, default_value);
-        variables.push(Local { var, ty });
+        variables.push(Local { ty });
     }
 
-    let func_args = &builder.block_params(entry_block)[1..].to_vec();
-    for (var, value) in function.params.iter().zip(func_args) {
-        let local = variables.get(*var).unwrap();
-        builder.set_var(local.var, *value);
-    }
+    let stack_frame = stack::compute_suspension_points(&mut builder, function, &variables);
 
     let return_block = if let Some(ret_ty) = function.returns {
         let ty = data.resources.types.get(ret_ty).unwrap();
@@ -97,8 +84,6 @@ pub fn lower_function(
         .map(|_| builder.create_block(&[]))
         .collect();
 
-    let stack_frame = stack::compute_suspension_points(&mut builder, function, &variables);
-
     let stack_start_offset = builder.load(
         ISIZE_TYPE,
         ctx_ptr,
@@ -115,13 +100,14 @@ pub fn lower_function(
         ctx_ptr,
         stack_start_offset,
         span,
-        suspend_blocks: HashMap::new(),
+        stack: &stack_frame,
+        func: function,
     };
 
     // Resume from stack.
     let start_block = translator.builder.create_block(&[]);
     stack::resume(&mut translator, &stack_frame, start_block);
-    stack::generate_suspension_blocks(&mut translator, function, &stack_frame);
+    // stack::generate_suspension_blocks(&mut translator, function, &stack_frame);
 
     translator.builder.switch_to_block(start_block);
 
@@ -130,6 +116,7 @@ pub fn lower_function(
     // The caller already guarantees that we there is enough
     // free space for us to store our `usize` tag.
     translator.stack_alloc(stack_frame.size.saturating_sub(size_of::<usize>()));
+    load_func_params(&mut translator, entry_block);
 
     let mut next_srcloc = 0;
 
@@ -848,6 +835,7 @@ pub fn lower_function(
 }
 
 struct Translator<'a> {
+    func: &'a Function,
     builder: FunctionBuilder<'a>,
     data: &'a CodegenData,
     locals: Vec<Local>,
@@ -858,7 +846,7 @@ struct Translator<'a> {
     /// The starting offset where the stack for our current function starts.
     stack_start_offset: JitValue,
     span: Span,
-    suspend_blocks: HashMap<NonZeroUsize, Block>,
+    stack: &'a StackFrameInfo,
 }
 
 impl<'a> Translator<'a> {
@@ -870,15 +858,17 @@ impl<'a> Translator<'a> {
             Value::Const(val) => val.lower_literal(self),
             Value::Variable(var) => {
                 let local = *self.locals.get(var.0).unwrap();
-                self.builder.get_var(local.var)
+
+                let base = self.load_stack_ptr();
+                let offset = self.stack.variable_offset(*var);
+                self.builder.load(local.ty, base, offset)
             }
             Value::ClassVar {
                 object,
                 class,
                 field,
             } => {
-                let object = self.locals.get(object.0).unwrap();
-                let object = self.builder.get_var(object.var);
+                let object = self.load(&Value::<Null>::Variable(*object));
 
                 // Abort if object == null.
                 self.assert_true(object, ErrorKind::NullClass);
@@ -898,16 +888,16 @@ impl<'a> Translator<'a> {
     {
         match slot {
             Value::Variable(var) => {
-                let local = *self.locals.get(var.0).unwrap();
-                self.builder.set_var(local.var, value);
+                let base = self.load_stack_ptr();
+                let offset = self.stack.variable_offset(*var);
+                self.builder.store(value, base, offset);
             }
             Value::ClassVar {
                 object,
                 class,
                 field,
             } => {
-                let object = self.locals.get(object.0).unwrap();
-                let object = self.builder.get_var(object.var);
+                let object = self.load(&Value::<Null>::Variable(*object));
 
                 // Abort if object == null.
                 self.assert_true(object, ErrorKind::NullClass);
@@ -1048,8 +1038,16 @@ impl<'a> Translator<'a> {
     }
 
     pub fn suspend(&mut self, point: &SuspensionPoint, stack_ptr: JitValue, result: JitValue) {
-        let block = self.suspend_blocks.get(&point.tag).unwrap();
-        self.builder.jump(*block, &[stack_ptr, result]);
+        let tag = self.builder.iconst(ISIZE_TYPE, point.tag.get());
+        self.builder.store(tag, stack_ptr, 0);
+
+        if let Some(ty) = self.func.returns {
+            let ty = self.lowered_ty_from_id(ty);
+            let value = self.builder.uninit(ty);
+            self.builder.jump(self.return_block, &[result, value]);
+        } else {
+            self.builder.jump(self.return_block, &[result]);
+        }
     }
 }
 
@@ -1190,6 +1188,12 @@ fn generate_abort_block(
 
 #[derive(Copy, Clone, Debug)]
 struct Local {
-    var: Variable,
     ty: JitType,
+}
+
+fn load_func_params(translator: &mut Translator, entry_block: Block) {
+    let func_args = &translator.builder.block_params(entry_block)[1..].to_vec();
+    for (var, value) in translator.func.params.iter().zip(func_args) {
+        translator.store(&Value::<i32>::Variable(super::Variable(*var)), *value);
+    }
 }
