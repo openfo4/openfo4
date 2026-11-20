@@ -22,8 +22,6 @@ use openfo4_game::state::GameState;
 use openfo4_game::state::esp::{EspLoader, EspLoaderBuilder};
 use openfo4_game::systems::scripting::invocations::{EventInvocation, Value};
 use openfo4_game::systems::scripting::loader::{LoadResult, ScriptObject};
-use openfo4_game::time::Time;
-use openfo4_gizmos::Gizmos;
 use openfo4_script::runtime::object::ObjectHandle;
 use openfo4_tasks::TaskPool;
 use pscc::Compiler;
@@ -58,7 +56,6 @@ impl TestRunnerBuilder {
         let entities = Entities::dummy();
         let shared = Arc::new(SharedState { entities });
         let pool = Arc::new(TaskPool::new(1));
-        let gizmos = Gizmos::dummy();
 
         let file_loader = create_file_loader(self.compiler);
         let loader = self.esp.build();
@@ -74,18 +71,12 @@ impl TestRunnerBuilder {
             audio,
         ));
 
-        TestRunner {
-            game,
-            time: Time::new(),
-            gizmos,
-        }
+        TestRunner { game }
     }
 }
 
 pub struct TestRunner {
     pub game: GameState,
-    time: Time,
-    gizmos: Gizmos,
 }
 
 impl TestRunner {
@@ -137,8 +128,7 @@ impl TestRunner {
         loop {
             match invocation.poll_unpin(&mut cx) {
                 Poll::Pending => {
-                    self.time.update();
-                    self.game.update(&self.time, &self.gizmos);
+                    self.game.update();
                 }
                 Poll::Ready(res) => return res,
             }

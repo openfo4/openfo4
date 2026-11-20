@@ -27,7 +27,6 @@ use openfo4_core::Frozen;
 use openfo4_core::ecs::{Entity, World};
 use openfo4_core::events::EventBus;
 use openfo4_core::record::RecordId;
-use openfo4_gizmos::Gizmos;
 use openfo4_physics::PhysicsPipeline;
 use openfo4_tasks::TaskPool;
 use openfo4_tracing::trace_span;
@@ -90,7 +89,6 @@ pub struct GameState {
     asset_loader: AssetLoader,
     pub event_bus: EventBus,
     animation: AnimationSystem,
-    physics_debug: bool,
     interval: Interval,
     pub esp_loader: Arc<EspLoader>,
     weather: WeatherSystem,
@@ -103,6 +101,7 @@ pub struct GameState {
     transform_hierarchy_cache: TransformHierarchyCache,
     door: DoorSystem,
     audio: AudioManager,
+    time: Time,
 }
 
 impl GameState {
@@ -188,7 +187,6 @@ impl GameState {
             asset_loader,
             event_bus: EventBus::new(),
             animation,
-            physics_debug: false,
             interval: Interval::new(Duration::from_secs(1) / UPS),
             esp_loader: loader,
             executor,
@@ -199,6 +197,7 @@ impl GameState {
             transform_hierarchy_cache: TransformHierarchyCache::default(),
             door,
             audio,
+            time: Time::new(),
         }
     }
 
@@ -215,7 +214,7 @@ impl GameState {
         ));
     }
 
-    pub fn update(&mut self, time: &Time, gizmos: &Gizmos) {
+    pub fn update(&mut self) {
         let _span = trace_span!("GameState::update").entered();
 
         futures_lite::future::block_on(self.interval.wait(Instant::now()));
@@ -275,7 +274,7 @@ impl GameState {
             self.interval.timestep(),
         );
 
-        systems::lights::update_flickering_lights(&mut self.world, time.delta());
+        systems::lights::update_flickering_lights(&mut self.world, self.time.delta());
 
         self.inventory.handle_inventory_events(
             &mut self.world,
@@ -331,10 +330,6 @@ impl GameState {
 
         self.executor
             .pump_events(&mut self.world, &mut self.event_bus);
-
-        if self.physics_debug {
-            self.physics.render_debug(gizmos);
-        }
     }
 
     pub fn world(&self) -> &World {

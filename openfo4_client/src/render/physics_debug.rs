@@ -3,11 +3,11 @@ use std::f32::consts::PI;
 use glam::{Quat, Vec3};
 use openfo4_animation::skeleton::BoneMarker;
 use openfo4_common::components::{Axis, Color, GlobalTransform, PointLight, Transform};
-use openfo4_common::math::Ray;
 use openfo4_core::ecs::World;
 use openfo4_core::hierarchy::Children;
 use openfo4_game::cell::CellId;
 use openfo4_game::components::{Camera, NiTransform, Player, TriggerBox, WorldSpace};
+use openfo4_game::render::HitscanRaycast;
 use openfo4_game::state::npc::BodyPartBone;
 use openfo4_game::systems::ai::AiSystem;
 use openfo4_game::systems::door::{AUTOLOAD_DOOR_RADIUS, Door};
@@ -24,13 +24,6 @@ const AUTO_DOOR_COLOR: Color = Color::GREEN;
 
 const NAVMESH_TRIANGLE_COLOR: Color = Color::BLUE;
 const NAVMESH_PATH_COLOR: Color = Color::RED;
-
-#[derive(Copy, Clone, Debug)]
-pub struct HitscanRaycast {
-    pub ray: Ray,
-    pub max_toi: f32,
-    pub impact_toi: Option<f32>,
-}
 
 pub fn draw_colliers(world: &World, gizmos: &Gizmos) {
     for (transform, collider, body_part) in world

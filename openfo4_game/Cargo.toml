@@ -12,7 +12,6 @@ openfo4_common = { version = "0.1.0", path = "../openfo4_common" }
 openfo4_tracing = { version = "0.1.0", path = "../openfo4_tracing" }
 openfo4_input = { version = "0.1.0", path = "../openfo4_input" }
 openfo4_core_pipeline = { version = "0.1.0", path = "../openfo4_core_pipeline" }
-openfo4_gizmos = { version = "0.1.0", path = "../openfo4_gizmos" }
 openfo4_ui_render = { version = "0.1.0", path = "../openfo4_ui_render" }
 openfo4_gltf = { version = "0.1.0", path = "../openfo4_gltf" }
 openfo4_ai = { version = "0.1.0", path = "../openfo4_ai" }
