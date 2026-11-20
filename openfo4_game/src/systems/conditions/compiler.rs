@@ -393,6 +393,22 @@ fn lower_condition(translator: &mut Translator, condition: &Condition) -> Value 
             let value = translator.call(quest, "IsCompleted", &[], Type::Bool);
             (value, Type::Bool)
         }
+        // Scene
+        ConditionFunction::IsScenePlaying { scene } => {
+            let scene = translator.create_global(*scene, "Scene");
+            let value = translator.call(scene, "IsPlaying", &[], Type::Bool);
+            (value, Type::Bool)
+        }
+        ConditionFunction::IsSceneActionComplete { scene, action } => {
+            let scene = translator.create_global(*scene, "Scene");
+            let value = translator.call(
+                scene,
+                "IsActionComplete",
+                &[Value::Int(*action)],
+                Type::Bool,
+            );
+            (value, Type::Bool)
+        }
         // Faction
         ConditionFunction::CanPayCrimeGold { faction } => {
             let faction = translator.create_global(*faction, "Faction");
