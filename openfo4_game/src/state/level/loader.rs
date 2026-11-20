@@ -63,18 +63,8 @@ impl EntityLoader {
             drop(entities);
         }
 
-        self.wait_until_loaded(id, info.flags, listener).await;
-
-        let mut entities = self.state.entities.lock();
-        let state = entities.entities.get_mut(id).unwrap();
-        let entity = state.entity.unwrap();
-
-        Ok(EntityRef(Arc::new(EntityRefInner {
-            id,
-            entity,
-            flags: info.flags,
-            state: Arc::clone(&self.state),
-        })))
+        let entity = self.wait_until_loaded(id, info.flags, listener).await;
+        return Ok(entity);
     }
 
     /// Returns the entity of the given [`RecordId`].
