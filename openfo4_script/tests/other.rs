@@ -105,3 +105,44 @@ fn call_dynamic() {
         vec![Val::I32(42)]
     );
 }
+
+#[test]
+fn default_variable_value() {
+    let engine = Engine::new(COMPILER_OPTIONS);
+
+    let module = assemble(
+        r#"
+        class A:
+
+        function DefaultBool() -> bool static:
+        local v: bool
+        return v
+
+        function DefaultInt() -> int static:
+        local v: int
+        return v
+
+        function DefaultFloat() -> float static:
+        local v: float
+        return v
+        "#,
+    );
+
+    block_on(engine.register(&module));
+    let instance = block_on(engine.compile("A", &Options::default())).unwrap();
+
+    let mut stack = engine.create_stack();
+    let mut ctx = Context::new(&engine, &mut stack, ());
+
+    let f = instance.get_func("DefaultBool").unwrap();
+    let f = f.typed::<(), bool>().unwrap();
+    assert_eq!(f.call(&mut ctx, ()).now_or_never().unwrap(), false);
+
+    let f = instance.get_func("DefaultInt").unwrap();
+    let f = f.typed::<(), i32>().unwrap();
+    assert_eq!(f.call(&mut ctx, ()).now_or_never().unwrap(), 0);
+
+    let f = instance.get_func("DefaultFloat").unwrap();
+    let f = f.typed::<(), f32>().unwrap();
+    assert_eq!(f.call(&mut ctx, ()).now_or_never().unwrap(), 0.0);
+}

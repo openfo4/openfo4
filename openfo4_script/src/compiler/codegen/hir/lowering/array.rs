@@ -1,6 +1,5 @@
 use std::mem::offset_of;
 use std::ptr;
-use std::sync::Arc;
 
 use openfo4_jit::{IntCompareOp, Type as JitType, Value as JitValue};
 
