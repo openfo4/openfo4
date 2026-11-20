@@ -614,32 +614,18 @@ fn get_equipped_spell(
 /// ```text
 /// int Function(Faction akFaction) native
 /// ```
-async fn get_faction_rank(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    faction: Object,
-) -> Result<i32, Error> {
-    let Some(faction) = caller
-        .data()
-        .objects
-        .get_by_addr(faction)
-        .and_then(|s| s.record())
-    else {
-        debug_assert!(faction.is_null(),);
-
+async fn get_faction_rank(caller: Caller<'_, State>, self_ptr: Object, faction: Object) -> i32 {
+    if faction.is_null() {
         // Returns -2 if actor is not in faction.
-        return Ok(-2);
-    };
-
-    let entity = caller.data().entity(self_ptr).await.unwrap();
-    let world = caller.data().world().await;
-    let props = world.get::<&ActorProperties>(entity).unwrap();
-
-    match props.factions.iter().find(|f| f.faction == faction) {
-        Some(faction) => Ok(faction.rank.into()),
-        // Returns -2 if actor is not in faction.
-        None => Ok(-2),
+        return -2;
     }
+
+    let faction = caller.data().record(faction);
+    with_actor_props(caller, self_ptr, |props| {
+        // Returns -2 if actor is not in faction.
+        props.factions.get(&faction).copied().unwrap_or(-2)
+    })
+    .await
 }
 
 /// `GetFactionReaction`
@@ -1035,7 +1021,7 @@ fn is_bribed(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<bool, Erro
 /// ```text
 /// bool Function() native
 /// ```
-async fn is_child(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Error> {
+async fn is_child(caller: Caller<'_, State>, self_ptr: Object) -> bool {
     with_actor_props(caller, self_ptr, |actor| actor.is_child).await
 }
 
@@ -1053,7 +1039,7 @@ fn is_commanded_actor(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<b
 /// ```text
 /// bool Function() native
 /// ```
-async fn is_dead(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Error> {
+async fn is_dead(caller: Caller<'_, State>, self_ptr: Object) -> bool {
     with_actor_props(caller, self_ptr, |actor| actor.is_dead).await
 }
 
@@ -1129,7 +1115,7 @@ async fn is_equipped(
 /// ```text
 /// bool Function() native
 /// ```
-async fn is_essential(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Error> {
+async fn is_essential(caller: Caller<'_, State>, self_ptr: Object) -> bool {
     with_actor_props(caller, self_ptr, |actor| {
         actor.protection == ActorProtection::Essential
     })
@@ -1190,30 +1176,17 @@ fn is_in_combat(_caller: Caller<'_, State>, _self_ptr: Object) -> Result<bool, E
 /// ```text
 /// bool Function(Faction akFaction) native
 /// ```
-async fn is_in_faction(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    faction: Object,
-) -> Result<bool, Error> {
-    let Some(faction) = caller
-        .data()
-        .objects
-        .get_by_addr(faction)
-        .and_then(|s| s.record())
-    else {
-        debug_assert!(faction.is_null());
-        return Ok(false);
-    };
+async fn is_in_faction(caller: Caller<'_, State>, self_ptr: Object, faction: Object) -> bool {
+    if faction.is_null() {
+        return false;
+    }
 
-    let entity = caller.data().entity(self_ptr).await.unwrap();
-    let world = caller.data().world().await;
-    let props = world.get::<&ActorProperties>(entity).unwrap();
+    let faction = caller.data().record(faction);
 
-    Ok(props
-        .factions
-        .iter()
-        .find(|f| f.faction == faction)
-        .is_some())
+    with_actor_props(caller, self_ptr, |props| {
+        props.factions.contains_key(&faction)
+    })
+    .await
 }
 
 /// `IsInIronSights`
@@ -1551,27 +1524,16 @@ fn play_sub_graph_animation(
 /// ```text
 /// Function(Faction akFaction) native
 /// ```
-async fn remove_from_faction(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    faction: Object,
-) -> Result<(), Error> {
-    let Some(faction) = caller
-        .data()
-        .objects
-        .get_by_addr(faction)
-        .and_then(|s| s.record())
-    else {
-        debug_assert!(faction.is_null(),);
-        return Ok(());
-    };
+async fn remove_from_faction(caller: Caller<'_, State>, self_ptr: Object, faction: Object) {
+    if faction.is_null() {
+        return;
+    }
 
-    let entity = caller.data().entity(self_ptr).await.unwrap();
-    let world = caller.data().world().await;
-    let mut props = world.get::<&mut ActorProperties>(entity).unwrap();
-
-    props.factions.retain(|v| v.faction != faction);
-    Ok(())
+    let faction = caller.data().record(faction);
+    with_actor_props_mut(caller, self_ptr, |props| {
+        props.factions.remove(&faction);
+    })
+    .await;
 }
 
 /// `RemoveFromAllFactions`
@@ -1579,16 +1541,11 @@ async fn remove_from_faction(
 /// ```text
 /// Function() native
 /// ```
-async fn remove_from_all_factions(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-) -> Result<(), Error> {
-    let entity = caller.data().entity(self_ptr).await.unwrap();
-    let world = caller.data().world().await;
-    let mut props = world.get::<&mut ActorProperties>(entity).unwrap();
-
-    props.factions.clear();
-    Ok(())
+async fn remove_from_all_factions(caller: Caller<'_, State>, self_ptr: Object) {
+    with_actor_props_mut(caller, self_ptr, |props| {
+        props.factions.clear();
+    })
+    .await;
 }
 
 /// `RemovePerk`
@@ -1874,13 +1831,17 @@ async fn set_essential(
 /// ```text
 /// Function(Faction akFaction, int aiRank) native
 /// ```
-fn set_faction_rank(
-    _caller: Caller<'_, State>,
-    _self_ptr: Object,
-    _faction: Object,
-    _ai_rank: i32,
-) -> Result<(), Error> {
-    todo!()
+async fn set_faction_rank(caller: Caller<'_, State>, self_ptr: Object, faction: Object, rank: i32) {
+    if faction.is_null() {
+        return;
+    }
+
+    let faction = caller.data().record(faction);
+
+    with_actor_props_mut(caller, self_ptr, |props| {
+        props.factions.insert(faction, rank);
+    })
+    .await;
 }
 
 /// `SetForcedLandingMarker`
@@ -2683,25 +2644,31 @@ fn get_furniture_reference(_caller: Caller<'_, State>, _self_ptr: Object) -> Res
 /// ```text
 /// bool Function() native
 /// ```
-async fn is_protected(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Error> {
+async fn is_protected(caller: Caller<'_, State>, self_ptr: Object) -> bool {
     with_actor_props(caller, self_ptr, |actor| {
         actor.protection == ActorProtection::Protected
     })
     .await
 }
 
-async fn with_actor_props<T, F>(
-    caller: Caller<'_, State>,
-    self_ptr: Object,
-    f: F,
-) -> Result<T, Error>
+async fn with_actor_props<T, F>(caller: Caller<'_, State>, self_ptr: Object, f: F) -> T
 where
     F: FnOnce(&ActorProperties) -> T,
 {
     let entity = caller.data().entity(self_ptr).await.unwrap();
     let world = caller.data().world().await;
-    let props = world.get::<&ActorProperties>(entity).map_err(|_| todo!())?;
-    Ok(f(&props))
+    let props = world.get::<&ActorProperties>(entity).unwrap();
+    f(&props)
+}
+
+async fn with_actor_props_mut<T, F>(caller: Caller<'_, State>, self_ptr: Object, f: F) -> T
+where
+    F: FnOnce(&mut ActorProperties) -> T,
+{
+    let entity = caller.data().entity(self_ptr).await.unwrap();
+    let world = caller.data().world().await;
+    let mut props = world.get::<&mut ActorProperties>(entity).unwrap();
+    f(&mut props)
 }
 
 async fn with_inventory<T, F>(caller: Caller<'_, State>, self_ptr: Object, f: F) -> Result<T, Error>
