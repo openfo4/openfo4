@@ -2,36 +2,16 @@ use std::sync::Arc;
 
 use hashbrown::HashSet;
 use openfo4_animation::driver::AnimationDriver;
-use openfo4_asset::{AssetLoader, Handle};
+use openfo4_asset::AssetLoader;
 use openfo4_core::ecs::{CommandBuffer, Entity, World};
-use openfo4_core::path::DataPath;
 use openfo4_esp::records::{SubgraphPerspective, SubgraphRole};
 use openfo4_tasks::TaskPool;
 use openfo4_tracing::trace_span;
 
-use crate::assets::Error;
-use crate::assets::animation::FileAnimationClip;
+use crate::state::actor::behavior::{ActorBehaviorData, ActorBehaviorDescriptor};
 use crate::state::anim_starter::ActiveBehaviorGraphs;
-use crate::state::animation_test::load_behavior_data;
 use crate::state::npc::{ActorAnimationGraphData, ObjectKeywords};
 use crate::systems::inventory::{Inventory, ItemData};
-
-pub async fn load_anim(
-    loader: &AssetLoader,
-    search_paths: &[&DataPath],
-) -> Result<Handle<FileAnimationClip>, ()> {
-    for path in search_paths {
-        match loader.load::<FileAnimationClip, _>(*path).await {
-            Ok(clip) => return Ok(clip),
-            Err(Error::NotFound) => continue,
-            Err(err) => {
-                tracing::error!("failed to load animation clip: {}", err);
-            }
-        }
-    }
-
-    Err(())
-}
 
 pub fn update_actor_animation_graphs(world: &mut World, loader: &AssetLoader, pool: &TaskPool) {
     let _span = trace_span!("update_actor_animation_graphs").entered();
@@ -114,22 +94,31 @@ pub fn update_actor_animation_graphs(world: &mut World, loader: &AssetLoader, po
 
         let graph = &graphs.subgraphs[active_index];
 
-        let search_paths = graph
-            .search_paths
-            .iter()
-            .map(|v| v.as_ref())
-            .collect::<Vec<_>>();
-
-        let behavior = futures_lite::future::block_on(load_behavior_data(
-            &graphs.root_path,
-            &graphs.root_behavior_path,
-            &graph.behavior,
-            &graphs.character,
-            &search_paths,
+        let Ok(behavior) = futures_lite::future::block_on(ActorBehaviorData::load(
             loader,
             pool,
+            ActorBehaviorDescriptor {
+                root_path: &graphs.root_path,
+                behavior_path: graphs.root_behavior_path.clone(),
+                character: &graphs.character,
+                subgraph_path: graph.behavior.clone(),
+                search_paths: &graph.search_paths,
+            },
         ))
-        .unwrap();
+        .inspect_err(|err| {
+            tracing::error!(
+                "failed to load behavior graph {} with subgraph {}: {:?}",
+                graphs.root_behavior_path,
+                graph.behavior,
+                err
+            );
+        }) else {
+            // Continue as if we loaded the behavior files successfully,
+            // otherwise we would reload the same (broken) behavior every
+            // frame.
+            buffer.insert_one(entity, ActiveAnimationGraph(active_index));
+            continue;
+        };
 
         buffer.insert(
             entity,

@@ -1,25 +1,22 @@
 use std::collections::{HashMap, VecDeque};
 
 use glam::Vec3;
-use openfo4_animation::builder::{Builder, Hint};
 use openfo4_animation::skeleton::SkeletonInstance;
 use openfo4_animation::{AnimationGraph, Value};
 use openfo4_asset::AssetLoader;
 use openfo4_common::components::{Axis, Transform};
 use openfo4_core::ecs::{Entity, World};
 use openfo4_core::hierarchy::Children;
-use openfo4_core::path::{DataPath, DataPathBuf};
+use openfo4_core::path::DataPathBuf;
 use openfo4_esp::records::Race;
 use openfo4_hkx::behavior::VariableType;
 use openfo4_hkx::{HkObject, HkxFile};
 use openfo4_physics::components::{Capsule, ColliderShape};
-use openfo4_tasks::TaskPool;
 
 use crate::assets::animation::AnimationSet;
 use crate::assets::data_file::DataFile;
 use crate::assets::nif::NIF_TO_METERS;
 use crate::state::actor::skeleton::{ActorSkeleton, SkeletonConfig};
-use crate::state::animation::load_anim;
 use crate::state::npc::BodyPartBone;
 
 #[derive(Clone, Debug)]
@@ -313,183 +310,8 @@ pub enum LoadBehaviorGraphError {
     Build(openfo4_animation::builder::Error),
 }
 
-pub async fn load_behavior_graph(
-    loader: &AssetLoader,
-    root_path: &DataPath,
-    behavior_path: &DataPath,
-    subgraph_path: &DataPath,
-    character: &ActorCharacter,
-) -> Result<(AnimationGraph, Vec<DataPathBuf>), LoadBehaviorGraphError> {
-    let mut behavior_path = behavior_path.to_owned();
-    if !behavior_path.starts_with(DataPath::from_str("meshes")) {
-        behavior_path.push_front("meshes");
-    }
-
-    let mut subgraph_path = subgraph_path.to_owned();
-    if !subgraph_path.starts_with(DataPath::from_str("meshes")) {
-        subgraph_path.push_front("meshes");
-    }
-
-    let subgraph_root = extract_behavior_root_path(&subgraph_path);
-
-    let behavior_file = match loader.load::<DataFile<HkxFile>, _>(&behavior_path).await {
-        Ok(f) => f,
-        Err(err) => {
-            return Err(LoadBehaviorGraphError::Load(vec![(behavior_path, err)]));
-        }
-    };
-
-    let mut builder = Builder::new((**behavior_file).clone(), character.props.clone())
-        .map_err(LoadBehaviorGraphError::Build)?;
-
-    let mut behavior_files = Vec::new();
-
-    let graph = loop {
-        match builder.build().map_err(LoadBehaviorGraphError::Build)? {
-            Ok(graph) => break graph,
-            Err(Hint::NeedFile(path)) => {
-                let mut file_loaded = false;
-                let mut errors = Vec::new();
-
-                for p in [
-                    root_path.join(&*path),
-                    // Loading from the subgraph directory can also happen.
-                    subgraph_root.join(&*path),
-                    // The game seems to also load from this directory for all races.
-                    // This doesn't seem to be referenced anywhere, so it might be hardcoded?
-                    DataPath::from_str("meshes/actors/shared").join(&*path),
-                ] {
-                    match loader.load::<DataFile<HkxFile>, _>(&p).await {
-                        Ok(file) => {
-                            behavior_files.push(p);
-                            builder
-                                .register_file(&path, (**file).clone())
-                                .map_err(LoadBehaviorGraphError::Build)?;
-
-                            file_loaded = true;
-                            break;
-                        }
-                        Err(err) => {
-                            errors.push((p, err));
-                        }
-                    }
-                }
-
-                if !file_loaded {
-                    return Err(LoadBehaviorGraphError::Load(errors));
-                }
-            }
-            Err(Hint::NeedSwapGenerator) => {
-                let file = match loader.load::<DataFile<HkxFile>, _>(&subgraph_path).await {
-                    Ok(f) => f,
-                    Err(err) => {
-                        return Err(LoadBehaviorGraphError::Load(vec![(subgraph_path, err)]));
-                    }
-                };
-
-                builder
-                    .register_swap_generator((**file).clone())
-                    .map_err(LoadBehaviorGraphError::Build)?;
-            }
-        }
-    };
-
-    behavior_files.push(behavior_path);
-    behavior_files.push(subgraph_path);
-    for file in &mut behavior_files {
-        *file = file
-            .strip_prefix(DataPath::from_str("meshes"))
-            .unwrap_or(file)
-            .to_owned();
-    }
-
-    Ok((graph, behavior_files))
-}
-
-pub async fn load_behavior_data(
-    root_path: &DataPath,
-    behavior_path: &DataPath,
-    subgraph_path: &DataPath,
-    character: &ActorCharacter,
-    search_paths: &[&DataPath],
-    loader: &AssetLoader,
-    pool: &TaskPool,
-) -> Result<ActorBehaviorData, ()> {
-    let (graph, behavior_files) =
-        load_behavior_graph(loader, root_path, behavior_path, subgraph_path, character)
-            .await
-            .unwrap();
-
-    let animation_files = graph.animation_files();
-    let mut tasks = HashMap::with_capacity(animation_files.len());
-
-    for file in animation_files {
-        if tasks.contains_key(&file) {
-            continue;
-        }
-
-        let path = file.to_lowercase().replace("\\", "/").replace("hkt", "hkx");
-        let file_stem = path.split("/").last().unwrap_or(&path);
-        let search_paths: Vec<_> = search_paths
-            .iter()
-            .map(|v| {
-                let mut root = DataPath::from_str("meshes").join(v);
-                root.push(&*file_stem);
-                root
-            })
-            .collect();
-
-        let loader = loader.clone();
-        let task = pool.spawn(async move {
-            let search_paths: Vec<_> = search_paths.iter().map(|v| v.as_ref()).collect();
-            match load_anim(&loader, &search_paths).await {
-                Ok(clip) => Some(clip),
-                Err(err) => {
-                    tracing::warn!(
-                        "failed to load animation {} in searched paths {:?}",
-                        path,
-                        search_paths
-                    );
-                    None
-                }
-            }
-        });
-
-        tasks.insert(file, task);
-    }
-
-    let mut clips = HashMap::new();
-    for (file, task) in tasks {
-        if let Some(clip) = task.await {
-            clips.insert(file, clip);
-        }
-    }
-
-    Ok(ActorBehaviorData {
-        graph,
-        clips: AnimationSet(clips),
-        behavior_files,
-    })
-}
-
 #[derive(Clone, Debug)]
 pub struct BodyPartBoneProps {
     pub id: u32,
     pub start_bone: String,
-}
-
-fn extract_behavior_root_path(file_path: &DataPath) -> &DataPath {
-    let mut path = file_path;
-
-    // Remove file part (x.hkx).
-    if let Some(p) = path.parent() {
-        path = p;
-    }
-
-    // Remove behaviors section if present.
-    if path.components().last().is_some_and(|v| v == "behaviors") {
-        path = path.parent().unwrap();
-    }
-
-    path
 }
