@@ -10,7 +10,7 @@ use openfo4_tasks::TaskPool;
 use crate::assets::Error;
 use crate::assets::animation::{AnimationSet, FileAnimationClip};
 use crate::assets::data_file::DataFile;
-use crate::state::animation_test::ActorCharacter;
+use crate::state::actor::character::ActorCharacter;
 
 #[derive(Clone, Debug)]
 pub enum LoadBehaviorError {

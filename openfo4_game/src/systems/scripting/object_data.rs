@@ -3,6 +3,7 @@ use openfo4_core::record::RecordId;
 use openfo4_esp::RecordData;
 use openfo4_esp::records::NpcBaseFlags;
 
+use crate::components::Sex;
 use crate::state::esp::{EspLoader, GlobalRecord};
 use crate::systems::global::AliasKey;
 
@@ -241,10 +242,4 @@ pub fn load_record_object_data(esp_loader: &EspLoader, record: &GlobalRecord) ->
         }),
         _ => ObjectData::None,
     }
-}
-
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
-pub enum Sex {
-    Male,
-    Female,
 }

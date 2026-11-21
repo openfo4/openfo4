@@ -14,15 +14,17 @@ use openfo4_core::path::DataPathBuf;
 use openfo4_core::record::RecordId;
 use openfo4_core::transform::ConvertCoordinateSystem;
 use openfo4_esp::records::{DoorFlags, LightDataFlags, LockLevel, PositionRotation};
-use openfo4_esp::{RecordData, RecordHeaderFlags};
+use openfo4_esp::{RecordData, RecordHeaderFlags, RecordKind};
 use openfo4_physics::components::{Collider, RigidBody};
 
 use crate::assets::nif::{Instantiate, LoadNifFlags, NIF_TO_METERS, NifKey, NifScene};
 use crate::components::{
     ActorMarker, BaseObject, Disabled, NiTransform, ObjectBounds, ObjectLockData, ObjectLockLevel,
-    ObjectProperties, PlacedItem, PlacedReference, Root, RootParent, TriggerBox, WorldSpace,
+    ObjectProperties, PlacedItem, PlacedReference, Root, RootParent, Sex, TriggerBox, WorldSpace,
 };
 use crate::render::RenderObject;
+use crate::state::actor::ActorData;
+use crate::state::actor::scene::ActorScene;
 use crate::state::esp::GlobalRecord;
 use crate::state::hardcoded::PUNCTUAL_LIGHT_INTENSITY_FACTOR;
 use crate::state::level::LoadContext;
@@ -31,8 +33,9 @@ use crate::state::level::items::{LoadItemProps, resolve_item};
 use crate::state::level::navmesh::load_navmesh;
 use crate::state::level::partial::{LodLevel, PartialEntityFlags};
 use crate::state::level::terrain::load_land;
-use crate::state::npc::{Actor, ActorInstanceProps, ObjectKeywords};
+use crate::state::npc::ObjectKeywords;
 use crate::state::terrain::{TerrainManager, TerrainRegion};
+use crate::systems::ai::AiComponent;
 use crate::systems::door::{Door, DoorState, PortalDoor};
 use crate::systems::equipment::{Equipment, equip_item};
 use crate::systems::inventory::{Inventory, ItemStack};
@@ -54,7 +57,8 @@ pub struct SpawnEntity {
     pub rigid_body: Option<RigidBody>,
     pub light: Option<PointLight>,
     pub light_flicker: Option<LightFlicker>,
-    pub actor: Option<Actor>,
+    pub actor_data: Option<ActorData>,
+    pub actor_scene: Option<ActorScene>,
     pub worldspace: Option<WorldSpace>,
     pub form: Option<RecordId>,
     pub door: Option<Door>,
@@ -94,7 +98,8 @@ impl SpawnEntity {
             rigid_body,
             light,
             light_flicker,
-            actor,
+            actor_data,
+            actor_scene,
             worldspace,
             form,
             door,
@@ -114,7 +119,7 @@ impl SpawnEntity {
 
         debug_assert!(base.is_some() || form.is_some());
 
-        let is_actor = actor.is_some();
+        let is_actor = actor_data.is_some();
 
         // FIXME: Modify this such that both scene and actor are valid.
         if let Some(scene) = scene {
@@ -163,8 +168,15 @@ impl SpawnEntity {
 
                 world.insert(entity, (skeleton, equipment)).unwrap();
             }
-        } else if let Some(actor) = actor {
-            actor.instantiate(world, events, entity);
+        }
+
+        if let Some(scene) = actor_scene {
+            scene.instantiate(world, entity);
+            world.insert_one(entity, AiComponent).unwrap();
+        }
+
+        if let Some(data) = actor_data {
+            data.instantiate(world, events, entity);
         }
 
         world
@@ -297,7 +309,6 @@ impl SpawnEntity {
             rigid_body: None,
             light: None,
             light_flicker: None,
-            actor: None,
             worldspace: None,
             form: None,
             door: None,
@@ -313,6 +324,8 @@ impl SpawnEntity {
             disabled: false,
             base: None,
             initial_ragdoll_bone_transforms: None,
+            actor_data: None,
+            actor_scene: None,
         }
     }
 
@@ -475,8 +488,9 @@ impl SpawnEntity {
 
         let mut light = None;
         let mut light_flicker = None;
-        let mut actor = None;
         let mut inventory = None;
+        let mut actor_data = None;
+        let mut actor_scene = None;
 
         let mut keywords = HashSet::default();
         for keyword in base.local.data.keywords() {
@@ -531,26 +545,40 @@ impl SpawnEntity {
 
                 inventory = Some(inv);
             }
-            RecordData::Npc(_) => {
-                if flags.actor {
-                    let props = ActorInstanceProps {
-                        dead: record.local.flags.contains(RecordHeaderFlags::STARTS_DEAD),
+            RecordData::Npc(_) | RecordData::LeveledActor(_) => {
+                let is_dead = record.local.flags.contains(RecordHeaderFlags::STARTS_DEAD);
+
+                let mut data = ActorData::load(ctx.esp_loader, ctx.script_loader, &base, is_dead)
+                    .await
+                    .unwrap();
+
+                if let Some(race_id) = data.race
+                    && flags.actor
+                {
+                    let race = ctx
+                        .esp_loader
+                        .lookup(Some(RecordKind::Race), race_id)
+                        .await
+                        .unwrap();
+                    let RecordData::Race(race) = race.local.data else {
+                        todo!()
                     };
 
-                    if let Some(mut res) = crate::state::npc::spawn_actor(
-                        ctx.loader,
-                        ctx.esp_loader,
-                        ctx.script_loader,
-                        base.id,
-                        &props,
-                    )
-                    .await
-                    .ok()
-                    {
-                        keywords = core::mem::take(&mut res.keywords);
-                        actor = Some(res);
-                    }
+                    actor_scene = Some(
+                        ActorScene::load(
+                            ctx.esp_loader,
+                            ctx.loader,
+                            race_id,
+                            &race,
+                            data.sex == Sex::Female,
+                        )
+                        .await
+                        .unwrap(),
+                    );
                 }
+
+                keywords = core::mem::take(&mut data.keywords);
+                actor_data = Some(data);
             }
             RecordData::IdleMarker(_) => return None,
             RecordData::Light(data) => {
@@ -640,7 +668,6 @@ impl SpawnEntity {
             scene,
             light: flags.graphics.then_some(light).flatten(),
             light_flicker: flags.graphics.then_some(light_flicker).flatten(),
-            actor,
             rigid_body: flags.physics.then_some(RigidBody::FIXED),
             door,
             inventory,
@@ -653,6 +680,8 @@ impl SpawnEntity {
             form: Some(record.id),
             base: Some(base.id),
             initial_ragdoll_bone_transforms,
+            actor_data,
+            actor_scene,
             ..Default::default()
         })
     }
@@ -664,8 +693,9 @@ impl SpawnEntity {
     ) -> Option<Self> {
         let scale: f32 = 1.0;
 
-        let mut actor = None;
         let mut inventory = None;
+        let mut actor_data = None;
+        let mut actor_scene = None;
 
         let mut keywords = HashSet::default();
         for keyword in record.local.data.keywords() {
@@ -720,26 +750,40 @@ impl SpawnEntity {
 
                 inventory = Some(inv);
             }
-            RecordData::Npc(_) => {
-                if flags.actor {
-                    let props = ActorInstanceProps {
-                        dead: record.local.flags.contains(RecordHeaderFlags::STARTS_DEAD),
+            RecordData::Npc(_) | RecordData::LeveledActor(_) => {
+                let is_dead = record.local.flags.contains(RecordHeaderFlags::STARTS_DEAD);
+
+                let mut data = ActorData::load(ctx.esp_loader, ctx.script_loader, &record, is_dead)
+                    .await
+                    .unwrap();
+
+                if let Some(race_id) = data.race
+                    && flags.actor
+                {
+                    let race = ctx
+                        .esp_loader
+                        .lookup(Some(RecordKind::Race), race_id)
+                        .await
+                        .unwrap();
+                    let RecordData::Race(race) = race.local.data else {
+                        todo!()
                     };
 
-                    if let Some(mut res) = crate::state::npc::spawn_actor(
-                        ctx.loader,
-                        ctx.esp_loader,
-                        ctx.script_loader,
-                        record.id,
-                        &props,
-                    )
-                    .await
-                    .ok()
-                    {
-                        keywords = core::mem::take(&mut res.keywords);
-                        actor = Some(res);
-                    }
+                    actor_scene = Some(
+                        ActorScene::load(
+                            ctx.esp_loader,
+                            ctx.loader,
+                            race_id,
+                            &race,
+                            data.sex == Sex::Female,
+                        )
+                        .await
+                        .unwrap(),
+                    );
                 }
+
+                keywords = core::mem::take(&mut data.keywords);
+                actor_data = Some(data);
             }
             RecordData::IdleMarker(_) => return None,
             RecordData::Light(_data) => {
@@ -793,7 +837,6 @@ impl SpawnEntity {
 
         Some(SpawnEntity {
             scene,
-            actor,
             rigid_body: flags.physics.then_some(RigidBody::FIXED),
             inventory,
             placed_item: item.map(PlacedItem),
@@ -801,6 +844,8 @@ impl SpawnEntity {
             script,
             object_bounds,
             base: Some(record.id),
+            actor_data,
+            actor_scene,
             ..Default::default()
         })
     }

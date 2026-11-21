@@ -1,9 +1,9 @@
 use openfo4_script::engine::Engine;
 use openfo4_script::runtime::{Caller, Error};
 
+use crate::components::Sex;
 use crate::systems::scripting::EngineExt;
 use crate::systems::scripting::classes::Object;
-use crate::systems::scripting::object_data::Sex;
 use crate::systems::scripting::state::State;
 
 #[rustfmt::skip]
