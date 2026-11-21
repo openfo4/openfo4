@@ -1,8 +1,7 @@
 use std::collections::{HashMap, VecDeque};
 
 use glam::Vec3;
-use openfo4_animation::skeleton::SkeletonInstance;
-use openfo4_animation::{AnimationGraph, Value};
+use openfo4_animation::Value;
 use openfo4_asset::AssetLoader;
 use openfo4_common::components::{Axis, Transform};
 use openfo4_core::ecs::{Entity, World};
@@ -13,7 +12,6 @@ use openfo4_hkx::behavior::VariableType;
 use openfo4_hkx::{HkObject, HkxFile};
 use openfo4_physics::components::{Capsule, ColliderShape};
 
-use crate::assets::animation::AnimationSet;
 use crate::assets::data_file::DataFile;
 use crate::assets::nif::NIF_TO_METERS;
 use crate::state::actor::skeleton::{ActorSkeleton, SkeletonConfig};
@@ -209,7 +207,7 @@ pub struct ActorCharacter {
 }
 
 impl ActorCharacter {
-    pub fn instantiate(&self, root: Entity, world: &mut World) -> SpawnedActor {
+    pub fn instantiate(&self, root: Entity, world: &mut World) {
         let skeleton = self.skeleton.instantiate(root, world);
 
         let body_parts = self.build_body_parts(root);
@@ -239,8 +237,7 @@ impl ActorCharacter {
             }
         }
 
-        // FIXME: We will always just hide the bumper collider for now.
-        SpawnedActor { skeleton }
+        world.insert_one(root, skeleton).unwrap();
     }
 
     /// Returns the body parts for each bone.
@@ -291,23 +288,6 @@ impl ActorCharacter {
 
         body_parts
     }
-}
-
-#[derive(Clone, Debug)]
-pub struct SpawnedActor {
-    pub skeleton: SkeletonInstance,
-}
-
-pub struct ActorBehaviorData {
-    pub graph: AnimationGraph,
-    pub clips: AnimationSet,
-    pub behavior_files: Vec<DataPathBuf>,
-}
-
-#[derive(Clone, Debug)]
-pub enum LoadBehaviorGraphError {
-    Load(Vec<(DataPathBuf, crate::assets::Error)>),
-    Build(openfo4_animation::builder::Error),
 }
 
 #[derive(Clone, Debug)]

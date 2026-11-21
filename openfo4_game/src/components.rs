@@ -7,7 +7,6 @@ use openfo4_core::ecs::Entity;
 use openfo4_core::record::RecordId;
 use openfo4_core::transform::ConvertCoordinateSystem;
 
-use crate::state::npc::FactionMembership;
 use crate::systems::camera::CameraMode;
 use crate::systems::inventory::ItemStack;
 
@@ -206,4 +205,10 @@ pub struct MovementState {
     pub is_moving: bool,
     pub is_sneaking: bool,
     pub is_sprinting: bool,
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub enum Sex {
+    Male,
+    Female,
 }

@@ -10,7 +10,7 @@ use slab::Slab;
 
 use crate::assets::nif::{LoadNifFlags, NifScene};
 use crate::components::RootParent;
-use crate::state::animation_test::SkinInstance;
+use crate::state::actor::character::SkinInstance;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct EquipmentKey(usize);

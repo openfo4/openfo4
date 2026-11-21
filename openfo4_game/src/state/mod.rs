@@ -2,7 +2,6 @@ pub mod actions;
 pub mod actor;
 pub mod anim_starter;
 pub mod animation;
-pub mod animation_test;
 pub mod data;
 pub mod equipment;
 pub mod esp;
@@ -27,6 +26,7 @@ use openfo4_core::Frozen;
 use openfo4_core::ecs::{Entity, World};
 use openfo4_core::events::EventBus;
 use openfo4_core::record::RecordId;
+use openfo4_esp::RecordData;
 use openfo4_physics::PhysicsPipeline;
 use openfo4_tasks::TaskPool;
 use openfo4_tracing::trace_span;
@@ -43,12 +43,14 @@ use crate::interval::Interval;
 use crate::loader::FileLoader;
 use crate::render::despawn_expired;
 use crate::shared::SharedState;
+use crate::state::actor::ActorData;
+use crate::state::actor::scene::ActorScene;
 use crate::state::anim_starter::AnimationSystem;
 use crate::state::animation::update_actor_animation_graphs;
 use crate::state::hardcoded::{ACTOR_PLAYER, PLACED_ACTOR_PLAYER_REF};
 use crate::state::inputs::ActorInputEvent;
 use crate::state::level::Streamer;
-use crate::state::npc::{ActorInstanceProps, ObjectKeywords, spawn_actor};
+use crate::state::npc::ObjectKeywords;
 use crate::systems::accel::AccelerationStructure;
 use crate::systems::activation::update_player_looking_at_target;
 use crate::systems::ai::AiSystem;
@@ -371,26 +373,31 @@ impl GameState {
         worldspace: WorldSpace,
         transform: Transform,
     ) -> Entity {
-        let actor = spawn_actor(
-            &self.asset_loader,
-            &self.esp_loader,
-            self.executor.loader(),
-            id,
-            &ActorInstanceProps { dead: false },
-        )
-        .await
-        .unwrap();
-
         let root = self.world.reserve_entity();
 
-        actor
-            .clone()
+        let npc = self.esp_loader.lookup(None, id).await.unwrap();
+        let data = ActorData::load(&self.esp_loader, self.executor.loader(), &npc, false)
+            .await
+            .unwrap();
+        let race_id = data.race.unwrap();
+        let race = self.esp_loader.lookup(None, race_id).await.unwrap();
+        let RecordData::Race(race) = race.local.data else {
+            todo!();
+        };
+
+        let scene = ActorScene::load(&self.esp_loader, &self.asset_loader, race_id, &race, false)
+            .await
+            .unwrap();
+
+        data.clone()
             .instantiate(&mut self.world, &mut self.event_bus, root);
+        scene.instantiate(&mut self.world, root);
+
         self.world
             .insert(
                 root,
                 (
-                    ObjectKeywords::new(actor.keywords),
+                    ObjectKeywords::new(data.keywords),
                     Frozen::default(),
                     Root,
                     transform,
