@@ -190,6 +190,18 @@ pub fn initiate_player_npc_interactions(
                 topics.push((event.target, *id, topic.clone()));
             }
         }
+
+        let Some(ids) = quests.topics.greeting.get(&event.target) else {
+            continue;
+        };
+
+        for id in ids {
+            let quest = quests.quests.get(id).unwrap();
+
+            for topic in &quest.greeting_topics {
+                topics.push((event.target, *id, topic.clone()));
+            }
+        }
     }
 
     for (actor, quest, topic) in topics {

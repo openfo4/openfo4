@@ -389,6 +389,11 @@ impl QuestManager {
                                 .entry(entity.entity())
                                 .or_default()
                                 .push(*quest_id);
+                            self.topics
+                                .greeting
+                                .entry(entity.entity())
+                                .or_default()
+                                .push(*quest_id);
 
                             global_aliases.insert(
                                 AliasKey {
@@ -700,6 +705,8 @@ pub struct Quest {
     scenes: HashMap<RecordId, SceneState>,
     /// The topics when the player initiates dialogue with an actor.
     hello_topics: Vec<DialogueTopicAction>,
+    /// The topics that the actor will speak when the player approaches.
+    greeting_topics: Vec<DialogueTopicAction>,
 }
 
 #[derive(Debug)]
@@ -867,6 +874,7 @@ struct AliasState {
 #[derive(Clone, Debug, Default)]
 struct DialogueTopics {
     hello: HashMap<Entity, Vec<RecordId>>,
+    greeting: HashMap<Entity, Vec<RecordId>>,
 }
 
 #[derive(Debug, Default)]
