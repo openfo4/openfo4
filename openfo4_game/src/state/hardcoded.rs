@@ -9,7 +9,7 @@ use hashbrown::HashMap;
 use openfo4_core::path::DataPath;
 use openfo4_core::record::{ModuleId, RecordId};
 use openfo4_esp::bstr::BString;
-use openfo4_esp::records::{ActorValueInfo, PlacedNpc, PositionRotation};
+use openfo4_esp::records::{ActorValueInfo, PlacedNpc};
 use openfo4_esp::{FormId, Record, RecordData, RecordHeaderFlags};
 
 pub const HARDCODED_MODULE_ID: ModuleId = ModuleId(NonZeroU32::MIN);
@@ -160,14 +160,7 @@ pub fn load_hardcoded_forms() -> HashMap<RecordId, Record> {
                     linked_references: Vec::new(),
                     activate_parent: Vec::new(),
                     activation_parent_flags: None,
-                    position: PositionRotation {
-                        position_x: 0.0,
-                        position_y: 0.0,
-                        position_z: 0.0,
-                        rotation_x: 0.0,
-                        rotation_y: 0.0,
-                        rotation_z: 0.0,
-                    },
+                    position: None,
                     ragdoll_data: None,
                 }),
             },

@@ -3715,7 +3715,7 @@ pub struct PlacedNpc {
     pub activate_parent: Vec<ActivateParent>,
     // some things missing
     #[record("DATA")]
-    pub position: PositionRotation,
+    pub position: Option<PositionRotation>,
 }
 
 #[derive(Copy, Clone, Debug, BinaryStruct)]
@@ -3891,7 +3891,7 @@ pub struct PlacedObject {
     #[record("XLOD")]
     pub distant_lod_data: Option<()>,
     #[record("DATA")]
-    pub position: PositionRotation,
+    pub position: Option<PositionRotation>,
 }
 
 #[derive(Copy, Clone, Debug, BinaryStruct)]
@@ -4171,7 +4171,7 @@ pub struct PlacedGrenade {
     #[record("XOWN")]
     pub owner: Option<FormId>,
     #[record("DATA")]
-    pub position: PositionRotation,
+    pub position: Option<PositionRotation>,
 }
 
 #[derive(Clone, Debug, Record)]
@@ -4181,7 +4181,7 @@ pub struct PlacedHazard {
     #[record("VMAD")]
     pub virtual_machine_adapter: Option<VirtualMachineAdapter>,
     #[record("DATA")]
-    pub position: PositionRotation,
+    pub position: Option<PositionRotation>,
 }
 
 #[derive(Clone, Debug, Record)]
@@ -4439,7 +4439,7 @@ pub struct PlacedMissile {
     #[record("XSCL")]
     pub scale: Option<f32>,
     #[record("DATA")]
-    pub position: PositionRotation,
+    pub position: Option<PositionRotation>,
 }
 
 #[derive(Copy, Clone, Debug, BinaryStruct)]

@@ -81,7 +81,7 @@ impl EntityLoader {
 
         self.load_custom(id, flags, async move || {
             let record = self.state.esp_loader.lookup(None, id).await.unwrap();
-            let position = record.local.data.position().unwrap();
+            let position = record.local.data.position().unwrap_or_default();
             let translation = Vec3::new(
                 position.position_x,
                 position.position_y,
@@ -171,7 +171,9 @@ impl EntityLoader {
             let ctx = LoadContext::new(info.cell, &self.state);
             let mut entity = SpawnEntity::load(&ctx, &info.record, flags)
                 .await
-                .unwrap_or_else(|| SpawnEntity::null(info.record.local.data.position().unwrap()));
+                .unwrap_or_else(|| {
+                    SpawnEntity::null(info.record.local.data.position().unwrap_or_default())
+                });
             entity.worldspace = Some(info.worldspace);
             entity.form = Some(id);
             self.state.events.push(Event::Spawn {

@@ -378,9 +378,9 @@ impl SpawnEntity {
                             translation: Vec3::from_array(door_teleport.position),
                             rotation: Quat::from_euler(
                                 EulerRot::XYZ,
-                                -position.rotation_x,
-                                -position.rotation_y,
-                                -position.rotation_z,
+                                -object.position?.rotation_x,
+                                -object.position?.rotation_y,
+                                -object.position?.rotation_z,
                             ),
                             scale: Vec3::ONE,
                         }),
@@ -458,6 +458,8 @@ impl SpawnEntity {
             }
             _ => return None,
         }
+
+        let position = position?;
 
         let transform = Transform::from_esp_translation_rotation_scale(
             Vec3::new(
