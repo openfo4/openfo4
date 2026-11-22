@@ -20,11 +20,11 @@ pub trait RecordDataExt {
 impl RecordDataExt for RecordData {
     fn position(&self) -> Option<PositionRotation> {
         match self {
-            Self::PlacedObject(data) => Some(data.position),
-            Self::PlacedNpc(data) => Some(data.position),
-            Self::PlacedGrenade(data) => Some(data.position),
-            Self::PlacedHazard(data) => Some(data.position),
-            Self::PlacedMissile(data) => Some(data.position),
+            Self::PlacedObject(data) => data.position,
+            Self::PlacedNpc(data) => data.position,
+            Self::PlacedGrenade(data) => data.position,
+            Self::PlacedHazard(data) => data.position,
+            Self::PlacedMissile(data) => data.position,
             _ => None,
         }
     }
