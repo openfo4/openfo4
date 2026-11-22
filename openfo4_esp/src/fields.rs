@@ -3,7 +3,7 @@ use std::ops::{Deref, DerefMut};
 
 use bytes::Buf;
 
-use crate::{Decode, Error, Field, FieldHeader, GenericField, Text};
+use crate::{Decode, Field, FieldHeader, FormError, GenericField, Text};
 
 #[derive(Clone, Debug)]
 pub(crate) struct FieldMap {
@@ -21,7 +21,7 @@ impl FieldMap {
 
     /// Consumes the next field if it has the given key. Returns `None` if the next field does not
     /// match the given key.
-    pub(crate) fn consume<T>(&mut self, key: Text<4>) -> Result<Option<Field<T>>, T::Error>
+    pub(crate) fn consume<T>(&mut self, key: Text<4>) -> Result<Option<Field<T>>, FormError>
     where
         T: Decode,
     {
@@ -33,7 +33,7 @@ impl FieldMap {
         field.to_field().map(Some)
     }
 
-    pub(crate) fn consume_next<T>(&mut self, key: Text<4>) -> Result<Option<Field<T>>, T::Error>
+    pub(crate) fn consume_next<T>(&mut self, key: Text<4>) -> Result<Option<Field<T>>, FormError>
     where
         T: Decode,
     {
@@ -48,9 +48,7 @@ impl FieldMap {
 }
 
 impl Decode for FieldMap {
-    type Error = Error;
-
-    fn decode<B>(mut buf: B) -> Result<Self, Self::Error>
+    fn decode<B>(mut buf: B) -> Result<Self, FormError>
     where
         B: Buf,
     {
@@ -86,41 +84,33 @@ impl Decode for FieldMap {
 }
 
 pub(crate) trait Read: Sized {
-    type Error;
+    fn read(map: &mut FieldMap, key: Text<4>) -> Result<Self, FormError>;
 
-    fn read(map: &mut FieldMap, key: Text<4>) -> Result<Self, Self::Error>;
-
-    fn read_next(map: &mut FieldMap, key: Text<4>) -> Result<Self, Self::Error>;
+    fn read_next(map: &mut FieldMap, key: Text<4>) -> Result<Self, FormError>;
 }
 
 impl<T> Read for T
 where
     T: Decode,
-    Error: From<T::Error>,
 {
-    type Error = Error;
-
-    fn read(map: &mut FieldMap, key: Text<4>) -> Result<Self, Self::Error> {
-        Option::<T>::read(map, key)?.ok_or(Error::MissingFieldText(key))
+    fn read(map: &mut FieldMap, key: Text<4>) -> Result<Self, FormError> {
+        Option::<T>::read(map, key)?.ok_or(FormError::MissingFieldText(key))
     }
 
-    fn read_next(map: &mut FieldMap, key: Text<4>) -> Result<Self, Self::Error> {
-        Option::<T>::read_next(map, key)?.ok_or(Error::MissingFieldText(key))
+    fn read_next(map: &mut FieldMap, key: Text<4>) -> Result<Self, FormError> {
+        Option::<T>::read_next(map, key)?.ok_or(FormError::MissingFieldText(key))
     }
 }
 
 impl<T> Read for Option<T>
 where
     T: Decode,
-    Error: From<T::Error>,
 {
-    type Error = T::Error;
-
-    fn read(map: &mut FieldMap, key: Text<4>) -> Result<Self, Self::Error> {
+    fn read(map: &mut FieldMap, key: Text<4>) -> Result<Self, FormError> {
         map.consume(key).map(|f| f.map(|f| f.value))
     }
 
-    fn read_next(map: &mut FieldMap, key: Text<4>) -> Result<Self, Self::Error> {
+    fn read_next(map: &mut FieldMap, key: Text<4>) -> Result<Self, FormError> {
         map.consume_next(key).map(|f| f.map(|f| f.value))
     }
 }
@@ -128,11 +118,8 @@ where
 impl<T> Read for Vec<T>
 where
     T: Decode,
-    Error: From<T::Error>,
 {
-    type Error = T::Error;
-
-    fn read(map: &mut FieldMap, key: Text<4>) -> Result<Self, Self::Error> {
+    fn read(map: &mut FieldMap, key: Text<4>) -> Result<Self, FormError> {
         let mut fields = Vec::new();
         while let Some(field) = map.consume(key)? {
             fields.push(field.value);
@@ -141,7 +128,7 @@ where
         Ok(fields)
     }
 
-    fn read_next(map: &mut FieldMap, key: Text<4>) -> Result<Self, Self::Error> {
+    fn read_next(map: &mut FieldMap, key: Text<4>) -> Result<Self, FormError> {
         let mut fields = Vec::new();
         while let Some(field) = map.consume_next(key)? {
             fields.push(field.value);
@@ -158,11 +145,8 @@ pub struct SubRecordArray<T>(pub Vec<T>);
 impl<T> Read for SubRecordArray<T>
 where
     T: Read,
-    Error: From<T::Error>,
 {
-    type Error = T::Error;
-
-    fn read(map: &mut FieldMap, key: Text<4>) -> Result<Self, Self::Error> {
+    fn read(map: &mut FieldMap, key: Text<4>) -> Result<Self, FormError> {
         let mut elems = Vec::new();
         while map.next_keys().any(|k| k == key) {
             let elem = T::read(map, key)?;
@@ -172,7 +156,7 @@ where
         Ok(Self(elems))
     }
 
-    fn read_next(map: &mut FieldMap, key: Text<4>) -> Result<Self, Self::Error> {
+    fn read_next(map: &mut FieldMap, key: Text<4>) -> Result<Self, FormError> {
         let mut elems = Vec::new();
         while map.next_key().is_some_and(|k| k == key) {
             let elem = T::read_next(map, key)?;
@@ -224,11 +208,9 @@ pub struct SubRecordSection<T>(pub T);
 
 impl<T> Read for Option<SubRecordSection<T>>
 where
-    T: Read<Error = Error>,
+    T: Read,
 {
-    type Error = T::Error;
-
-    fn read(map: &mut FieldMap, key: Text<4>) -> Result<Self, Self::Error> {
+    fn read(map: &mut FieldMap, key: Text<4>) -> Result<Self, FormError> {
         match map.consume::<()>(key)? {
             Some(_) => {
                 let section = T::read(map, key)?;
@@ -238,7 +220,7 @@ where
         }
     }
 
-    fn read_next(map: &mut FieldMap, key: Text<4>) -> Result<Self, Self::Error> {
+    fn read_next(map: &mut FieldMap, key: Text<4>) -> Result<Self, FormError> {
         match map.consume_next::<()>(key)? {
             Some(_) => {
                 let section = T::read_next(map, key)?;
@@ -255,11 +237,9 @@ pub struct SubField<T>(pub T);
 
 impl<T> Read for Option<SubField<T>>
 where
-    T: Read<Error = Error>,
+    T: Read,
 {
-    type Error = T::Error;
-
-    fn read(map: &mut FieldMap, key: Text<4>) -> Result<Self, Self::Error> {
+    fn read(map: &mut FieldMap, key: Text<4>) -> Result<Self, FormError> {
         match map.next_key() {
             Some(next_key) if next_key == key => {
                 let section = T::read(map, key)?;
@@ -269,7 +249,7 @@ where
         }
     }
 
-    fn read_next(map: &mut FieldMap, key: Text<4>) -> Result<Self, Self::Error> {
+    fn read_next(map: &mut FieldMap, key: Text<4>) -> Result<Self, FormError> {
         match map.next_key() {
             Some(next_key) if next_key == key => {
                 let section = T::read_next(map, key)?;

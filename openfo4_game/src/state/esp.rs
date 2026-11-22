@@ -6,7 +6,7 @@ use hashbrown::{HashMap, HashSet};
 use openfo4_common::collections::lru::LruCache;
 use openfo4_common::string::Lowercase;
 use openfo4_core::record::{ModuleId, RecordId};
-use openfo4_esp::{EspFile, FormId, Record, RecordChildren, RecordData, RecordKind};
+use openfo4_esp::{ErrorKind, EspFile, FormId, Record, RecordChildren, RecordData, RecordKind};
 use openfo4_io::fs::File;
 use thiserror::Error;
 
@@ -204,19 +204,26 @@ impl EspLoader {
         }
 
         let Some(index) = self.plugins.get(id.module.0.get() as usize).copied() else {
-            return Err(Error::NoRecord(id))?;
+            return Err(Error::NotFound(id))?;
         };
 
         let file = &self.files[index as usize];
         let Some(index) = file.dependencies.iter().position(|v| *v == id.module) else {
-            return Err(Error::NoRecord(id));
+            return Err(Error::NotFound(id));
         };
 
         // The plugin index refering to the file itself is the index
         // after all dependencies.
         let form = FormId::new(index as u8, id.form.form());
 
-        let record = file.file.lookup(kind, form).await?;
+        let record = file
+            .file
+            .lookup(kind, form)
+            .await
+            .map_err(|err| match err.kind() {
+                ErrorKind::NotFound => Error::NotFound(id),
+                _ => Error::Esp(err),
+            })?;
 
         let record = GlobalRecord { id, local: record };
 
@@ -273,9 +280,7 @@ impl EspLoader {
             let form = FormId::new(index as u8, id.form.form());
             let local_records = match file.file.children(kind, form).await {
                 Ok(v) => v,
-                // EOF means the file does not contain the record to query
-                // children of.
-                Err(openfo4_esp::Error::EndOfFile) => continue,
+                Err(err) if err.kind() == ErrorKind::NotFound => continue,
                 Err(err) => return Err(err.into()),
             };
 
@@ -370,7 +375,7 @@ pub struct GlobalRecord {
 #[derive(Debug, Error)]
 pub enum Error {
     #[error("record {0} does not exist")]
-    NoRecord(RecordId),
+    NotFound(RecordId),
     #[error(transparent)]
     Esp(#[from] openfo4_esp::Error),
 }

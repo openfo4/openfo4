@@ -60,7 +60,6 @@ pub fn derive_condition_function(input: TokenStream) -> TokenStream {
                             .iter()
                             .enumerate()
                             .map(|(index, field)| {
-                                // let field_id = field.ident.as_ref().unwrap();
                                 let field_ty = &field.ty;
                                 let parameter =
                                     Ident::new(&format!("parameter{}", index), Span::call_site());
@@ -90,10 +89,10 @@ pub fn derive_condition_function(input: TokenStream) -> TokenStream {
 
             quote! {
                 impl #enum_id {
-                    fn parse(data: RawConditionData, mut cis: [Option<BString>; 2]) -> Result<Self, Error> {
+                    fn parse(data: RawConditionData, mut cis: [Option<BString>; 2]) -> Result<Self, FormError> {
                         match data.function {
                             #output
-                            val => Err(Error::BadEnumValue("ConditionFunction", val.into())),
+                            val => Err(FormError::BadEnumValue("ConditionFunction", val.into())),
                         }
                     }
                 }

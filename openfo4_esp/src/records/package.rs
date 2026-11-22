@@ -6,7 +6,7 @@ use crate::conditions::Conditions;
 use crate::fields::{SubField, SubRecordArray};
 use crate::records::{Array, impl_decode_bitflags};
 use crate::vmad::VirtualMachineAdapter;
-use crate::{BString, Decode, Error, FormId, Text};
+use crate::{BString, Decode, FormError, FormId, Text};
 
 /// An AI package.
 #[derive(Clone, Debug, Record)]
@@ -170,9 +170,7 @@ pub enum TopicData {
 }
 
 impl Decode for TopicData {
-    type Error = Error;
-
-    fn decode<B>(mut buf: B) -> Result<Self, Self::Error>
+    fn decode<B>(mut buf: B) -> Result<Self, FormError>
     where
         B: Buf,
     {
@@ -205,9 +203,7 @@ pub struct PackageDataLocation {
 }
 
 impl Decode for PackageDataLocation {
-    type Error = Error;
-
-    fn decode<B>(mut buf: B) -> Result<Self, Self::Error>
+    fn decode<B>(mut buf: B) -> Result<Self, FormError>
     where
         B: Buf,
     {
@@ -244,9 +240,7 @@ pub enum PackageDataLocationValue {
 }
 
 impl Decode for PackageDataLocationValue {
-    type Error = Error;
-
-    fn decode<B>(mut buf: B) -> Result<Self, Self::Error>
+    fn decode<B>(mut buf: B) -> Result<Self, FormError>
     where
         B: Buf,
     {
@@ -353,9 +347,7 @@ pub enum PackageTargetDataValue {
 }
 
 impl Decode for PackageTargetDataValue {
-    type Error = Error;
-
-    fn decode<B>(mut buf: B) -> Result<Self, Self::Error>
+    fn decode<B>(mut buf: B) -> Result<Self, FormError>
     where
         B: Buf,
     {

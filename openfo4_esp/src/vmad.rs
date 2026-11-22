@@ -1,6 +1,6 @@
 use bytes::Buf;
 
-use crate::{Decode, Error, FormId, U16String};
+use crate::{Decode, FormError, FormId, U16String};
 
 #[derive(Clone, Debug)]
 pub struct VirtualMachineAdapter<T = ()> {
@@ -20,11 +20,9 @@ impl<T> VirtualMachineAdapter<T> {
 
 impl<T> Decode for VirtualMachineAdapter<T>
 where
-    T: DecodeScriptSection<Error = Error>,
+    T: DecodeScriptSection,
 {
-    type Error = Error;
-
-    fn decode<B>(mut buf: B) -> Result<Self, Self::Error>
+    fn decode<B>(mut buf: B) -> Result<Self, FormError>
     where
         B: Buf,
     {
@@ -58,13 +56,11 @@ pub struct Script {
 }
 
 impl DecodeScriptSection for Script {
-    type Error = Error;
-
     fn decode_section<B>(
         mut buf: B,
         version: u16,
         object_format: ObjectFormat,
-    ) -> Result<Self, Error>
+    ) -> Result<Self, FormError>
     where
         B: Buf,
     {
@@ -91,13 +87,11 @@ pub struct Property {
 }
 
 impl DecodeScriptSection for Property {
-    type Error = Error;
-
     fn decode_section<B>(
         mut buf: B,
         version: u16,
         object_format: ObjectFormat,
-    ) -> Result<Self, Error>
+    ) -> Result<Self, FormError>
     where
         B: Buf,
     {
@@ -320,13 +314,11 @@ pub struct Object {
 }
 
 impl DecodeScriptSection for Object {
-    type Error = Error;
-
     fn decode_section<B>(
         mut buf: B,
         _version: u16,
         object_format: ObjectFormat,
-    ) -> Result<Self, Self::Error>
+    ) -> Result<Self, FormError>
     where
         B: Buf,
     {
@@ -374,13 +366,11 @@ enum ValueType {
 }
 
 trait DecodeScriptSection: Sized {
-    type Error;
-
     fn decode_section<B>(
         buf: B,
         version: u16,
         object_format: ObjectFormat,
-    ) -> Result<Self, Self::Error>
+    ) -> Result<Self, FormError>
     where
         B: Buf;
 }
@@ -389,13 +379,11 @@ impl<T> DecodeScriptSection for T
 where
     T: Decode,
 {
-    type Error = T::Error;
-
     fn decode_section<B>(
         buf: B,
         _version: u16,
         _object_format: ObjectFormat,
-    ) -> Result<Self, Self::Error>
+    ) -> Result<Self, FormError>
     where
         B: Buf,
     {
@@ -411,13 +399,11 @@ pub struct QuestFragments {
 }
 
 impl DecodeScriptSection for QuestFragments {
-    type Error = Error;
-
     fn decode_section<B>(
         mut buf: B,
         version: u16,
         object_format: ObjectFormat,
-    ) -> Result<Self, Self::Error>
+    ) -> Result<Self, FormError>
     where
         B: Buf,
     {
@@ -460,9 +446,7 @@ pub struct QuestFragment {
 }
 
 impl Decode for QuestFragment {
-    type Error = Error;
-
-    fn decode<B>(mut buf: B) -> Result<Self, Self::Error>
+    fn decode<B>(mut buf: B) -> Result<Self, FormError>
     where
         B: Buf,
     {
@@ -489,13 +473,11 @@ pub struct QuestAlias {
 }
 
 impl DecodeScriptSection for QuestAlias {
-    type Error = Error;
-
     fn decode_section<B>(
         mut buf: B,
         version: u16,
         object_format: ObjectFormat,
-    ) -> Result<Self, Self::Error>
+    ) -> Result<Self, FormError>
     where
         B: Buf,
     {

@@ -1,7 +1,7 @@
 use openfo4_esp_derive::{BinaryStruct, ConditionFunction};
 
 use crate::fields::{FieldMap, Read};
-use crate::{BString, Error, FormId, Text};
+use crate::{BString, FormError, FormId, Text};
 
 #[derive(Clone, Debug, Default)]
 pub struct Conditions {
@@ -9,9 +9,7 @@ pub struct Conditions {
 }
 
 impl Read for Conditions {
-    type Error = Error;
-
-    fn read(map: &mut FieldMap, _key: Text<4>) -> Result<Self, Self::Error> {
+    fn read(map: &mut FieldMap, _key: Text<4>) -> Result<Self, FormError> {
         let mut conditions = Vec::new();
 
         while let Some(data) = map.consume_next(Text::new(b"CTDA"))? {
@@ -28,7 +26,7 @@ impl Read for Conditions {
                 3 => Comparator::GreaterThanOrEqual,
                 4 => Comparator::LessThan,
                 5 => Comparator::LessThanOrEqual,
-                val => return Err(Error::BadEnumValue("Comparator", val.into())),
+                val => return Err(FormError::BadEnumValue("Comparator", val.into())),
             };
 
             let combinator = if data.comparator & 1 != 0 {
@@ -71,7 +69,7 @@ impl Read for Conditions {
         Ok(Self { conditions })
     }
 
-    fn read_next(map: &mut FieldMap, key: Text<4>) -> Result<Self, Self::Error> {
+    fn read_next(map: &mut FieldMap, key: Text<4>) -> Result<Self, FormError> {
         Self::read(map, key)
     }
 }
@@ -1143,38 +1141,38 @@ pub enum ConditionFunction {
 }
 
 trait ConditionParameter: Sized {
-    fn parse(raw: u32, cis: Option<BString>) -> Result<Self, Error>;
+    fn parse(raw: u32, cis: Option<BString>) -> Result<Self, FormError>;
 }
 
 impl ConditionParameter for u32 {
-    fn parse(raw: u32, _cis: Option<BString>) -> Result<Self, Error> {
+    fn parse(raw: u32, _cis: Option<BString>) -> Result<Self, FormError> {
         Ok(raw)
     }
 }
 
 impl ConditionParameter for i32 {
-    fn parse(raw: u32, _cis: Option<BString>) -> Result<Self, Error> {
+    fn parse(raw: u32, _cis: Option<BString>) -> Result<Self, FormError> {
         Ok(raw.cast_signed())
     }
 }
 
 impl ConditionParameter for f32 {
-    fn parse(raw: u32, _cis: Option<BString>) -> Result<Self, Error> {
+    fn parse(raw: u32, _cis: Option<BString>) -> Result<Self, FormError> {
         Ok(f32::from_bits(raw))
     }
 }
 
 impl ConditionParameter for FormId {
-    fn parse(raw: u32, _cis: Option<BString>) -> Result<Self, Error> {
+    fn parse(raw: u32, _cis: Option<BString>) -> Result<Self, FormError> {
         Ok(FormId(raw))
     }
 }
 
 impl ConditionParameter for BString {
-    fn parse(_raw: u32, cis: Option<BString>) -> Result<Self, Error> {
+    fn parse(_raw: u32, cis: Option<BString>) -> Result<Self, FormError> {
         match cis {
             Some(s) => Ok(s),
-            None => Err(Error::Other(
+            None => Err(FormError::Other(
                 "CIS missing to decode ZString for ConditionData".to_owned(),
             )),
         }

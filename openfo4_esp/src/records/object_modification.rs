@@ -2,7 +2,7 @@ use bytes::Buf;
 use openfo4_esp_derive::{BinaryStruct, Record};
 
 use crate::records::{Array, Model, SoundLevel};
-use crate::{BString, Decode, Error, FormId, LString};
+use crate::{BString, Decode, FormError, FormId, LString};
 
 #[derive(Clone, Debug, Record)]
 pub struct ObjectModification {
@@ -49,9 +49,7 @@ pub struct ObjectModificationData {
 }
 
 impl Decode for ObjectModificationData {
-    type Error = Error;
-
-    fn decode<B>(mut buf: B) -> Result<Self, Self::Error>
+    fn decode<B>(mut buf: B) -> Result<Self, FormError>
     where
         B: Buf,
     {
@@ -103,9 +101,7 @@ pub enum ObjectModificationFormType {
 }
 
 impl Decode for ObjectModificationFormType {
-    type Error = Error;
-
-    fn decode<B>(buf: B) -> Result<Self, Self::Error>
+    fn decode<B>(buf: B) -> Result<Self, FormError>
     where
         B: Buf,
     {
@@ -115,7 +111,7 @@ impl Decode for ObjectModificationFormType {
             b"NPC_" => Ok(Self::Npc),
             b"WEAP" => Ok(Self::Weapon),
             b"NONE" => Ok(Self::None),
-            _ => Err(Error::BadEnumValue(
+            _ => Err(FormError::BadEnumValue(
                 stringify!(ObjectModificationFormType),
                 u32::from_le_bytes(bytes).into(),
             )),
@@ -139,7 +135,7 @@ pub struct ObjectModificationProperty {
 }
 
 impl ObjectModificationProperty {
-    fn decode<B>(mut buf: B, form_type: ObjectModificationFormType) -> Result<Self, Error>
+    fn decode<B>(mut buf: B, form_type: ObjectModificationFormType) -> Result<Self, FormError>
     where
         B: Buf,
     {
@@ -154,7 +150,7 @@ impl ObjectModificationProperty {
                 1 => ObjectModificationFunctionType::MulAdd,
                 2 => ObjectModificationFunctionType::Add,
                 _ => {
-                    return Err(Error::BadEnumValue(
+                    return Err(FormError::BadEnumValue(
                         stringify!(ObjectModificationFunctionType),
                         function_type.into(),
                     ));
@@ -165,14 +161,14 @@ impl ObjectModificationProperty {
                 1 => ObjectModificationFunctionType::And,
                 2 => ObjectModificationFunctionType::Or,
                 _ => {
-                    return Err(Error::BadEnumValue(
+                    return Err(FormError::BadEnumValue(
                         stringify!(ObjectModificationFunctionType),
                         function_type.into(),
                     ));
                 }
             },
             ObjectModificationValueType::String => {
-                return Err(Error::BadEnumValue(
+                return Err(FormError::BadEnumValue(
                     stringify!(ObjectModificationFunctionType),
                     function_type.into(),
                 ));
@@ -180,7 +176,7 @@ impl ObjectModificationProperty {
             ObjectModificationValueType::Enum => match function_type {
                 0 => ObjectModificationFunctionType::Set,
                 _ => {
-                    return Err(Error::BadEnumValue(
+                    return Err(FormError::BadEnumValue(
                         stringify!(ObjectModificationFunctionType),
                         function_type.into(),
                     ));
@@ -192,7 +188,7 @@ impl ObjectModificationProperty {
                     1 => ObjectModificationFunctionType::Rem,
                     2 => ObjectModificationFunctionType::Add,
                     _ => {
-                        return Err(Error::BadEnumValue(
+                        return Err(FormError::BadEnumValue(
                             stringify!(ObjectModificationFunctionType),
                             function_type.into(),
                         ));
@@ -203,7 +199,7 @@ impl ObjectModificationProperty {
                 0 => ObjectModificationFunctionType::Set,
                 2 => ObjectModificationFunctionType::Add,
                 _ => {
-                    return Err(Error::BadEnumValue(
+                    return Err(FormError::BadEnumValue(
                         stringify!(ObjectModificationFunctionType),
                         function_type.into(),
                     ));
@@ -230,7 +226,7 @@ impl ObjectModificationProperty {
                 12 => ObjectModificationPropertyProperty::ColorRemappingIndex,
                 13 => ObjectModificationPropertyProperty::MaterialSwaps,
                 _ => {
-                    return Err(Error::BadEnumValue(
+                    return Err(FormError::BadEnumValue(
                         stringify!(ObjectModificationPropertyProperty),
                         property.into(),
                     ));
@@ -244,7 +240,7 @@ impl ObjectModificationProperty {
                 4 => ObjectModificationPropertyProperty::ColorRemappingIndex,
                 5 => ObjectModificationPropertyProperty::MaterialSwaps,
                 _ => {
-                    return Err(Error::BadEnumValue(
+                    return Err(FormError::BadEnumValue(
                         stringify!(ObjectModificationPropertyProperty),
                         property.into(),
                     ));
@@ -347,14 +343,14 @@ impl ObjectModificationProperty {
                 93 => ObjectModificationPropertyProperty::HasChargingAttack,
                 94 => ObjectModificationPropertyProperty::ActorValues,
                 _ => {
-                    return Err(Error::BadEnumValue(
+                    return Err(FormError::BadEnumValue(
                         stringify!(ObjectModificationPropertyProperty),
                         property.into(),
                     ));
                 }
             },
             ObjectModificationFormType::None => {
-                return Err(Error::BadEnumValue(
+                return Err(FormError::BadEnumValue(
                     stringify!(ObjectModificationPropertyProperty),
                     property.into(),
                 ));

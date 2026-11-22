@@ -15,7 +15,7 @@ use openfo4_io::fs::{AsyncReadAt, Cursor};
 use thiserror::Error;
 
 use std::fmt::Debug;
-use std::io::{self, ErrorKind, Read};
+use std::io::{self, Read};
 use std::mem::MaybeUninit;
 
 use bytes::Buf;
@@ -52,19 +52,63 @@ use crate::records::{
 
 #[derive(Debug, Error)]
 #[error("error reading field {field:?}: {error}")]
-pub struct RecordError {
-    pub field: Text<4>,
-    pub error: Error,
+struct RecordError {
+    field: Text<4>,
+    error: FormError,
 }
 
 #[derive(Debug, Error)]
-pub enum Error {
+#[error(transparent)]
+pub struct Error(#[from] ErrorRepr);
+
+impl Error {
+    /// Returns the [`FormId`] that this error is related to.
+    pub fn form(&self) -> Option<FormId> {
+        match &self.0 {
+            ErrorRepr::BadForm(form, _) => Some(*form),
+            ErrorRepr::NotFound(form) => Some(*form),
+            _ => None,
+        }
+    }
+
+    pub fn kind(&self) -> ErrorKind {
+        match &self.0 {
+            ErrorRepr::NotFound(_) => ErrorKind::NotFound,
+            _ => ErrorKind::Other,
+        }
+    }
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub enum ErrorKind {
+    /// The searched for record was not found.
+    NotFound,
+    Other,
+}
+
+#[derive(Debug, Error)]
+enum ErrorRepr {
+    #[error(transparent)]
+    Io(#[from] io::Error),
+    #[error("bad magic")]
+    BadMagic,
+    #[error("bad form header at offset {0}: {1}")]
+    BadFormHeader(u64, FormError),
+    #[error("bad form {0}: {1}")]
+    BadForm(FormId, FormError),
+    #[error("form {0} not found")]
+    NotFound(FormId),
+    #[error("missing file header")]
+    MissingHeader,
+}
+
+#[derive(Debug, Error)]
+enum FormError {
     #[error(transparent)]
     Io(#[from] io::Error),
     #[error("eof")]
     Eof,
-    #[error("bad magic")]
-    BadMagic,
     #[error("missing required field: {0}")]
     MissingField(&'static str),
     #[error("missing required field: {0:?}")]
@@ -79,9 +123,6 @@ pub enum Error {
     Other(String),
     #[error("unknown record type: {0:?}")]
     UnknownRecordType(Text<4>),
-    /// Reached end of file while searched for record.
-    #[error("end of file")]
-    EndOfFile,
 }
 
 #[derive(Debug)]
@@ -109,9 +150,13 @@ where
 
         let mut reader = Reader::new(&file.reader, &file.index);
 
-        let header = reader.read_record_header().await?;
+        let header = reader
+            .read_record_header()
+            .await?
+            .ok_or(Error(ErrorRepr::MissingHeader))?;
+
         if header.typ != Text::TES4 {
-            return Err(Error::BadMagic);
+            return Err(ErrorRepr::BadMagic.into());
         }
 
         let table = reader.scan_headers().await?;
@@ -122,7 +167,7 @@ where
 
     pub async fn lookup(&self, kind: Option<RecordKind>, id: FormId) -> Result<Record, Error> {
         let mut reader = Reader::new(&self.reader, &self.index);
-        reader.lookup(kind, id).await
+        reader.lookup(kind, id).await.map_err(|err| err.into())
     }
 
     /// Returns an `Iterator` over all [`Record`]s in this `EspFile` with the given `kind`, if any.
@@ -139,7 +184,7 @@ where
 
     pub async fn children(&self, kind: RecordChildren, id: FormId) -> Result<Vec<Record>, Error> {
         let mut reader = Reader::new(&self.reader, &self.index);
-        reader.children(kind, id).await
+        reader.children(kind, id).await.map_err(|err| err.into())
     }
 
     /// Returns the [`FormId`] that is the immediate parent of the given `id`.
@@ -167,7 +212,7 @@ where
         }
     }
 
-    async fn scan_headers(&mut self) -> Result<IndexTable, Error> {
+    async fn scan_headers(&mut self) -> Result<IndexTable, ErrorRepr> {
         let mut map = HashMap::new();
         let mut parents = Vec::new();
 
@@ -189,8 +234,8 @@ where
             let offset = self.cursor.position();
 
             let header = match self.read_record_header().await {
-                Ok(header) => header,
-                Err(Error::EndOfFile) => break,
+                Ok(Some(header)) => header,
+                Ok(None) => break,
                 Err(err) => return Err(err),
             };
 
@@ -264,29 +309,46 @@ where
         })
     }
 
-    async fn read_record_header(&mut self) -> Result<RecordHeader, Error> {
+    /// Reads the next [`RecordHeader`] from the current cursor position.
+    ///
+    /// If the end of file is reached, `None` is returned.
+    async fn read_record_header(&mut self) -> Result<Option<RecordHeader>, ErrorRepr> {
+        let offset = self.cursor.position();
         let mut buf = [0; RecordHeader::SIZE];
         match self.cursor.read_exact(&mut buf).await {
             Ok(()) => (),
-            Err(err) if err.kind() == ErrorKind::UnexpectedEof => return Err(Error::EndOfFile),
-            Err(err) => return Err(Error::Io(err)),
+            // FIXME: Ideally we would check if we read exactly zero bytes, in which case we have
+            // reached the end of file and can return `None`. If we read more than zero bytes we
+            // have a malformed file and should return an `Err`.
+            Err(err) if err.kind() == io::ErrorKind::UnexpectedEof => {
+                return Ok(None);
+            }
+            Err(err) => return Err(ErrorRepr::BadFormHeader(offset, FormError::Io(err))),
         }
 
         RecordHeader::decode(&buf[..])
+            .map(Some)
+            .map_err(|err| ErrorRepr::BadFormHeader(offset, err))
     }
 
     /// Look up a [`Record`] by its [`FormId`].
     ///
     /// A [`RecordKind`] can be provided optionally and may increase seeking performance.
-    async fn lookup(&mut self, kind: Option<RecordKind>, id: FormId) -> Result<Record, Error> {
+    async fn lookup(&mut self, kind: Option<RecordKind>, id: FormId) -> Result<Record, ErrorRepr> {
         let Some(position) = self.index.get(id) else {
-            return Err(Error::EndOfFile);
+            return Err(ErrorRepr::NotFound(id));
         };
 
         self.cursor.set_position(position.into());
 
-        self.lookup_next_from_position(kind, Some(id), &mut position.into())
+        match self
+            .lookup_next_from_position(kind, Some(id), &mut position.into())
             .await
+        {
+            Ok(Some(record)) => Ok(record),
+            Ok(None) => Err(ErrorRepr::NotFound(id)),
+            Err(err) => Err(err),
+        }
     }
 
     /// Search for the next [`Record`] matching the given criteria starting from the given
@@ -298,13 +360,16 @@ where
         kind: Option<RecordKind>,
         id: Option<FormId>,
         position: &mut u64,
-    ) -> Result<Record, Error> {
+    ) -> Result<Option<Record>, ErrorRepr> {
         loop {
             let header_position = *position;
 
             self.cursor.set_position(header_position);
 
-            let header = self.read_record_header().await?;
+            let Some(header) = self.read_record_header().await? else {
+                return Ok(None);
+            };
+
             *position += RecordHeader::SIZE as u64;
 
             if header.typ == Text::GRUP {
@@ -341,20 +406,24 @@ where
             let data = self.read_record_data(header).await?;
             *position += u64::from(header.size);
 
-            return Ok(Record {
+            return Ok(Some(Record {
                 id: header.form_id,
                 flags: header.flags,
                 data,
-            });
+            }));
         }
     }
 
-    async fn children(&mut self, kind: RecordChildren, id: FormId) -> Result<Vec<Record>, Error> {
+    async fn children(
+        &mut self,
+        kind: RecordChildren,
+        id: FormId,
+    ) -> Result<Vec<Record>, ErrorRepr> {
         // Lookup will scan exactly to the end of the record.
         // The next record will be a GRUP with the children if
         // the record has children.
         let Some(start_pos) = self.index.get(id) else {
-            return Err(Error::EndOfFile);
+            return Err(ErrorRepr::NotFound(id));
         };
         let mut start_pos = start_pos.into();
 
@@ -362,7 +431,10 @@ where
             .await?;
         self.cursor.set_position(start_pos.into());
 
-        let header = self.read_record_header().await?;
+        let Some(header) = self.read_record_header().await? else {
+            return Ok(Vec::new());
+        };
+
         if header.typ != Text::GRUP {
             return Ok(Vec::new());
         }
@@ -374,7 +446,12 @@ where
 
                     let mut bytes_remaining = header.into_group().size;
                     while bytes_remaining > 0 {
-                        let header = self.read_record_header().await?;
+                        let header = match self.read_record_header().await {
+                            Ok(Some(header)) => header,
+                            Ok(None) => return Ok(Vec::new()),
+                            Err(err) => return Err(err),
+                        };
+
                         bytes_remaining = bytes_remaining.saturating_sub(RecordHeader::SIZE as u32);
 
                         // Skip over the children of the cell.
@@ -402,8 +479,8 @@ where
                 }
                 RecordChildren::PersistentEntities | RecordChildren::TemporaryEntities => {
                     let header = match self.read_record_header().await {
-                        Ok(header) => header,
-                        Err(Error::EndOfFile) => return Ok(Vec::new()),
+                        Ok(Some(header)) => header,
+                        Ok(None) => return Ok(Vec::new()),
                         Err(err) => return Err(err),
                     };
 
@@ -433,7 +510,12 @@ where
 
                     let mut bytes_remaining = header.into_group().size;
                     while bytes_remaining > 0 {
-                        let header = self.read_record_header().await?;
+                        let header = match self.read_record_header().await {
+                            Ok(Some(header)) => header,
+                            Ok(None) => return Ok(Vec::new()),
+                            Err(err) => return Err(err),
+                        };
+
                         bytes_remaining = bytes_remaining.saturating_sub(RecordHeader::SIZE as u32);
 
                         // Skip over GRUPs for dialogue infos.
@@ -467,7 +549,12 @@ where
 
                     let mut bytes_remaining = header.into_group().size;
                     while bytes_remaining > 0 {
-                        let header = self.read_record_header().await?;
+                        let header = match self.read_record_header().await {
+                            Ok(Some(header)) => header,
+                            Ok(None) => return Ok(Vec::new()),
+                            Err(err) => return Err(err),
+                        };
+
                         bytes_remaining = bytes_remaining.saturating_sub(RecordHeader::SIZE as u32);
 
                         // Skip over GRUPs for dialogue infos.
@@ -501,7 +588,12 @@ where
 
                     let mut bytes_remaining = header.into_group().size;
                     while bytes_remaining > 0 {
-                        let header = self.read_record_header().await?;
+                        let header = match self.read_record_header().await {
+                            Ok(Some(header)) => header,
+                            Ok(None) => return Ok(Vec::new()),
+                            Err(err) => return Err(err),
+                        };
+
                         bytes_remaining = bytes_remaining.saturating_sub(RecordHeader::SIZE as u32);
 
                         if header.typ != RecordKind::DialogueInfo.label() {
@@ -526,13 +618,17 @@ where
         }
     }
 
-    async fn read_records(&mut self, header: GroupHeader) -> Result<Vec<Record>, Error> {
+    async fn read_records(&mut self, header: GroupHeader) -> Result<Vec<Record>, ErrorRepr> {
         let mut bytes_remaining = header.size;
 
         let mut records = Vec::new();
 
         while bytes_remaining > 0 {
-            let header = self.read_record_header().await?;
+            let header = match self.read_record_header().await {
+                Ok(Some(header)) => header,
+                Ok(None) => break,
+                Err(err) => return Err(err),
+            };
 
             let data = self.read_record_data(header).await?;
             records.push(Record {
@@ -548,7 +644,13 @@ where
         Ok(records)
     }
 
-    async fn read_record_data(&mut self, header: RecordHeader) -> Result<RecordData, Error> {
+    async fn read_record_data(&mut self, header: RecordHeader) -> Result<RecordData, ErrorRepr> {
+        self.read_record_data_in(header)
+            .await
+            .map_err(|err| ErrorRepr::BadForm(header.form_id, err))
+    }
+
+    async fn read_record_data_in(&mut self, header: RecordHeader) -> Result<RecordData, FormError> {
         debug_assert_ne!(header.typ, Text::GRUP);
 
         let mut buf = vec![0; header.size as usize];
@@ -571,7 +673,7 @@ where
                     $(
                         Some(RecordKind::$kind) => fields::Read::read(&mut map, Text([0; 4])).map(RecordData::$data),
                     )*
-                    None => return Err(Error::UnknownRecordType(header.typ)),
+                    None => Err(FormError::UnknownRecordType(header.typ)),
                 }
             };
         }
@@ -753,9 +855,9 @@ where
             None,
             &mut self.position,
         )) {
-            Ok(value) => Some(Ok(value)),
-            Err(Error::EndOfFile) => None,
-            Err(err) => Some(Err(err)),
+            Ok(Some(value)) => Some(Ok(value)),
+            Ok(None) => None,
+            Err(err) => Some(Err(err.into())),
         }
     }
 }
@@ -1479,17 +1581,13 @@ record_kind_label! {
 }
 
 trait Decode: Sized {
-    type Error;
-
-    fn decode<B>(buf: B) -> Result<Self, Self::Error>
+    fn decode<B>(buf: B) -> Result<Self, FormError>
     where
         B: Buf;
 }
 
 impl Decode for () {
-    type Error = Error;
-
-    fn decode<B>(_buf: B) -> Result<Self, Self::Error>
+    fn decode<B>(_buf: B) -> Result<Self, FormError>
     where
         B: Buf,
     {
@@ -1502,9 +1600,7 @@ macro_rules! impl_primitive {
         $(
 
             impl Decode for $t {
-                type Error = Error;
-
-                fn decode<B>(buf: B) -> Result<Self, Self::Error>
+                fn decode<B>(buf: B) -> Result<Self, FormError>
                 where
                     B: Buf,
                 {
@@ -1516,16 +1612,14 @@ macro_rules! impl_primitive {
 }
 
 impl Decode for u8 {
-    type Error = Error;
-
-    fn decode<B>(mut buf: B) -> Result<Self, Self::Error>
+    fn decode<B>(mut buf: B) -> Result<Self, FormError>
     where
         B: Buf,
     {
         if buf.has_remaining() {
             Ok(buf.get_u8())
         } else {
-            Err(Error::Eof)
+            Err(FormError::Eof)
         }
     }
 }
@@ -1533,11 +1627,8 @@ impl Decode for u8 {
 impl<T, const N: usize> Decode for [T; N]
 where
     T: Decode,
-    Error: From<T::Error>,
 {
-    type Error = Error;
-
-    fn decode<B>(mut buf: B) -> Result<Self, Self::Error>
+    fn decode<B>(mut buf: B) -> Result<Self, FormError>
     where
         B: Buf,
     {
@@ -1567,9 +1658,7 @@ where
 }
 
 impl Decode for bool {
-    type Error = Error;
-
-    fn decode<B>(buf: B) -> Result<Self, Self::Error>
+    fn decode<B>(buf: B) -> Result<Self, FormError>
     where
         B: Buf,
     {
@@ -1628,9 +1717,7 @@ impl RecordHeader {
 }
 
 impl Decode for RecordHeader {
-    type Error = Error;
-
-    fn decode<B>(mut buf: B) -> Result<Self, Self::Error>
+    fn decode<B>(mut buf: B) -> Result<Self, FormError>
     where
         B: Buf,
     {
@@ -1706,16 +1793,14 @@ bitflags::bitflags! {
 }
 
 impl Decode for BString {
-    type Error = Error;
-
-    fn decode<B>(mut buf: B) -> Result<Self, Error>
+    fn decode<B>(mut buf: B) -> Result<Self, FormError>
     where
         B: Buf,
     {
         let mut s = Vec::new();
         loop {
             if !buf.has_remaining() {
-                return Err(Error::Eof);
+                return Err(FormError::Eof);
             }
 
             let char = buf.get_u8();
@@ -1736,12 +1821,12 @@ struct FieldHeader {
 }
 
 impl FieldHeader {
-    fn read_value<B>(&self, mut buf: B) -> Result<GenericField, Error>
+    fn read_value<B>(&self, mut buf: B) -> Result<GenericField, FormError>
     where
         B: Buf,
     {
         if buf.remaining() < self.size as usize {
-            return Err(Error::Eof);
+            return Err(FormError::Eof);
         }
 
         let value = buf.copy_to_bytes(self.size as usize).to_vec();
@@ -1754,9 +1839,7 @@ impl FieldHeader {
 }
 
 impl Decode for FieldHeader {
-    type Error = Error;
-
-    fn decode<B>(mut buf: B) -> Result<Self, Self::Error>
+    fn decode<B>(mut buf: B) -> Result<Self, FormError>
     where
         B: Buf,
     {
@@ -1777,7 +1860,7 @@ struct GenericField {
 }
 
 impl GenericField {
-    fn to_field<T>(&self) -> Result<Field<T>, T::Error>
+    fn to_field<T>(&self) -> Result<Field<T>, FormError>
     where
         T: Decode,
     {
@@ -1803,11 +1886,8 @@ struct Field<T> {
 impl<T> Decode for Field<T>
 where
     T: Decode,
-    Error: From<T::Error>,
 {
-    type Error = Error;
-
-    fn decode<B>(mut buf: B) -> Result<Self, Self::Error>
+    fn decode<B>(mut buf: B) -> Result<Self, FormError>
     where
         B: Buf,
     {
@@ -1838,9 +1918,7 @@ impl Text<4> {
 }
 
 impl<const N: usize> Decode for Text<N> {
-    type Error = Error;
-
-    fn decode<B>(buf: B) -> Result<Self, Self::Error>
+    fn decode<B>(buf: B) -> Result<Self, FormError>
     where
         B: Buf,
     {
@@ -1858,9 +1936,7 @@ impl<const N: usize> Debug for Text<N> {
 pub struct LString(u32);
 
 impl Decode for LString {
-    type Error = Error;
-
-    fn decode<B>(buf: B) -> Result<Self, Self::Error>
+    fn decode<B>(buf: B) -> Result<Self, FormError>
     where
         B: Buf,
     {
@@ -1884,11 +1960,8 @@ pub struct RgbPadded<T> {
 impl<T> Decode for RgbPadded<T>
 where
     T: Decode,
-    Error: From<T::Error>,
 {
-    type Error = Error;
-
-    fn decode<B>(mut buf: B) -> Result<Self, Self::Error>
+    fn decode<B>(mut buf: B) -> Result<Self, FormError>
     where
         B: Buf,
     {
@@ -1952,9 +2025,7 @@ impl std::fmt::Display for FormId {
 }
 
 impl Decode for FormId {
-    type Error = Error;
-
-    fn decode<B>(buf: B) -> Result<Self, Self::Error>
+    fn decode<B>(buf: B) -> Result<Self, FormError>
     where
         B: Buf,
     {
@@ -1975,11 +2046,8 @@ pub struct Rgb<T> {
 impl<T> Decode for Rgb<T>
 where
     T: Decode,
-    Error: From<T::Error>,
 {
-    type Error = Error;
-
-    fn decode<B>(mut buf: B) -> Result<Self, Self::Error>
+    fn decode<B>(mut buf: B) -> Result<Self, FormError>
     where
         B: Buf,
     {
@@ -1992,9 +2060,7 @@ where
 }
 
 impl Decode for Vec3 {
-    type Error = Error;
-
-    fn decode<B>(buf: B) -> Result<Self, Self::Error>
+    fn decode<B>(buf: B) -> Result<Self, FormError>
     where
         B: Buf,
     {
@@ -2006,9 +2072,7 @@ impl Decode for Vec3 {
 pub(crate) struct U16String(pub String);
 
 impl Decode for U16String {
-    type Error = Error;
-
-    fn decode<B>(mut buf: B) -> Result<Self, Self::Error>
+    fn decode<B>(mut buf: B) -> Result<Self, FormError>
     where
         B: Buf,
     {
@@ -2018,7 +2082,7 @@ impl Decode for U16String {
             .collect::<Result<_, _>>()?;
         String::from_utf8(buf)
             .map(Self)
-            .map_err(Error::InvalidString)
+            .map_err(FormError::InvalidString)
     }
 }
 
@@ -2060,9 +2124,7 @@ impl IndexTable {
 struct FixedString<const SIZE: usize>(BString);
 
 impl<const SIZE: usize> Decode for FixedString<SIZE> {
-    type Error = Error;
-
-    fn decode<B>(mut buf: B) -> Result<Self, Self::Error>
+    fn decode<B>(mut buf: B) -> Result<Self, FormError>
     where
         B: Buf,
     {

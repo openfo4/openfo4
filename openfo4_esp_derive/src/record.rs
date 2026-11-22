@@ -66,15 +66,13 @@ pub fn derive_record_impl(input: DeriveInput) -> Result<TokenStream2, Error> {
     Ok(quote! {
         #[automatically_derived]
         impl crate::fields::Read for #struct_ident {
-            type Error = crate::Error;
-
-            fn read(_fields: &mut crate::fields::FieldMap, _: crate::Text<4>) -> ::core::result::Result<Self, Self::Error> {
+            fn read(_fields: &mut crate::fields::FieldMap, _: crate::Text<4>) -> ::core::result::Result<Self, crate::FormError> {
                 Ok(Self {
                     #read_impl
                 })
             }
 
-            fn read_next(_fields: &mut crate::fields::FieldMap, _: crate::Text<4>) -> ::core::result::Result<Self, Self::Error> {
+            fn read_next(_fields: &mut crate::fields::FieldMap, _: crate::Text<4>) -> ::core::result::Result<Self, crate::FormError> {
                 Ok(Self {
                     #read_next_impl
                 })
@@ -113,7 +111,7 @@ impl Field {
             match <#ty as crate::fields::Read>::read(_fields, #text) {
                 Ok(value) => value,
                 Err(err) => {
-                    return Err(crate::Error::Record(Box::new(crate::RecordError {
+                    return Err(crate::FormError::Record(Box::new(crate::RecordError {
                         field: #text,
                         error: err,
                     })));
@@ -151,7 +149,7 @@ impl Field {
             match <#ty as crate::fields::Read>::read_next(_fields, #text) {
                 Ok(value) => value,
                 Err(err) => {
-                    return Err(crate::Error::Record(Box::new(crate::RecordError {
+                    return Err(crate::FormError::Record(Box::new(crate::RecordError {
                         field: #text,
                         error: err,
                     })));
