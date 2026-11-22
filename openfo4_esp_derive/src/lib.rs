@@ -82,7 +82,6 @@ fn derive_binary_struct_struct(
             let id = &param.ident;
             quote! {
                 #id: crate::Decode,
-                crate::Error: From<<#id as crate::Decode>::Error>,
             }
         })
         .collect();
@@ -130,9 +129,7 @@ fn derive_binary_struct_struct(
         where
             #where_bounds
         {
-            type Error = crate::Error;
-
-            fn decode<__B>(mut buf: __B) -> ::core::result::Result<Self, Self::Error>
+            fn decode<__B>(mut buf: __B) -> ::core::result::Result<Self, crate::FormError>
             where
                 __B: bytes::Buf,
             {
@@ -191,15 +188,13 @@ fn derive_binary_struct_enum(
 
     quote! {
         impl crate::Decode for #enum_ident {
-            type Error = crate::Error;
-
-            fn decode<__B>(mut buf: __B) -> ::core::result::Result<Self, Self::Error>
+            fn decode<__B>(mut buf: __B) -> ::core::result::Result<Self, crate::FormError>
             where
                 __B: bytes::Buf,
             {
                 match <#ty as crate::Decode>::decode(buf) {
                     #match_branches
-                    Ok(v) => Err(crate::Error::BadEnumValue(stringify!(#enum_ident), v.into())),
+                    Ok(v) => Err(crate::FormError::BadEnumValue(stringify!(#enum_ident), v.into())),
                     Err(err) => Err(err),
                 }
             }

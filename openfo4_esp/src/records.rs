@@ -17,15 +17,13 @@ use openfo4_esp_derive::{BinaryStruct, Record};
 use crate::conditions::Conditions;
 use crate::fields::{FieldMap, Read, SubField, SubRecordArray, SubRecordSection};
 use crate::vmad::{QuestFragments, VirtualMachineAdapter};
-use crate::{Decode, Error, FixedString, FormId, LString, Rgb, RgbPadded, Text};
+use crate::{Decode, FixedString, FormError, FormId, LString, Rgb, RgbPadded, Text};
 
 macro_rules! impl_decode_bitflags {
     ($($t:ty:$i:ty),*) => {
         $(
             impl crate::Decode for $t {
-                type Error = <$i as crate::Decode>::Error;
-
-                fn decode<B>(buf: B) -> Result<Self, Self::Error>
+                fn decode<B>(buf: B) -> Result<Self, crate::FormError>
                 where
                     B: bytes::Buf,
                 {
@@ -88,9 +86,7 @@ pub struct GameSetting {
 }
 
 impl Read for GameSetting {
-    type Error = Error;
-
-    fn read(mut map: &mut FieldMap, _key: Text<4>) -> Result<Self, Self::Error> {
+    fn read(mut map: &mut FieldMap, _key: Text<4>) -> Result<Self, FormError> {
         let id = BString::read(&mut map, Text::EDID)?;
         let data = match id.get(0) {
             Some(b'b') => {
@@ -119,7 +115,7 @@ impl Read for GameSetting {
         Ok(Self { id, data })
     }
 
-    fn read_next(map: &mut FieldMap, key: Text<4>) -> Result<Self, Self::Error> {
+    fn read_next(map: &mut FieldMap, key: Text<4>) -> Result<Self, FormError> {
         Self::read(map, key)
     }
 }
@@ -414,9 +410,7 @@ pub struct ModelInfo {
 }
 
 impl Decode for ModelInfo {
-    type Error = Error;
-
-    fn decode<B>(mut buf: B) -> Result<Self, Self::Error>
+    fn decode<B>(mut buf: B) -> Result<Self, FormError>
     where
         B: Buf,
     {
@@ -1580,9 +1574,7 @@ impl<T> Decode for Array<T>
 where
     T: Decode,
 {
-    type Error = <T as Decode>::Error;
-
-    fn decode<B>(mut buf: B) -> Result<Self, Self::Error>
+    fn decode<B>(mut buf: B) -> Result<Self, FormError>
     where
         B: Buf,
     {
@@ -1764,9 +1756,7 @@ pub struct DistantLods {
 }
 
 impl Decode for DistantLods {
-    type Error = Error;
-
-    fn decode<B>(mut buf: B) -> Result<Self, Self::Error>
+    fn decode<B>(mut buf: B) -> Result<Self, FormError>
     where
         B: Buf,
     {
@@ -2019,9 +2009,7 @@ pub struct ObjectTemplateItem {
 }
 
 impl Decode for ObjectTemplateItem {
-    type Error = Error;
-
-    fn decode<B>(mut buf: B) -> Result<Self, Self::Error>
+    fn decode<B>(mut buf: B) -> Result<Self, FormError>
     where
         B: Buf,
     {
@@ -2590,14 +2578,14 @@ pub enum SoundLevel {
 }
 
 impl SoundLevel {
-    pub(crate) fn from_u32(v: u32) -> Result<Self, Error> {
+    pub(crate) fn from_u32(v: u32) -> Result<Self, FormError> {
         match v {
             0 => Ok(Self::Loud),
             1 => Ok(Self::Normal),
             2 => Ok(Self::Silent),
             3 => Ok(Self::VeryLoud),
             4 => Ok(Self::Quiet),
-            _ => Err(Error::BadEnumValue(stringify!(SoundLevel), v.into())),
+            _ => Err(FormError::BadEnumValue(stringify!(SoundLevel), v.into())),
         }
     }
 }
@@ -3238,9 +3226,7 @@ pub struct Weather {
 pub struct CloudSpeed(pub [f32; 32]);
 
 impl Decode for CloudSpeed {
-    type Error = Error;
-
-    fn decode<B>(buf: B) -> Result<Self, Self::Error>
+    fn decode<B>(buf: B) -> Result<Self, FormError>
     where
         B: Buf,
     {
@@ -3453,9 +3439,7 @@ impl ClimateTime {
 }
 
 impl Decode for ClimateTime {
-    type Error = Error;
-
-    fn decode<B>(buf: B) -> Result<Self, Self::Error>
+    fn decode<B>(buf: B) -> Result<Self, FormError>
     where
         B: Buf,
     {
@@ -4080,9 +4064,7 @@ pub struct NavMeshGeometry {
 }
 
 impl Decode for NavMeshGeometry {
-    type Error = Error;
-
-    fn decode<B>(mut buf: B) -> Result<Self, Self::Error>
+    fn decode<B>(mut buf: B) -> Result<Self, FormError>
     where
         B: Buf,
     {
@@ -4351,9 +4333,7 @@ pub struct LandVertexHeight {
 }
 
 impl Decode for LandVertexHeight {
-    type Error = Error;
-
-    fn decode<B>(mut buf: B) -> Result<Self, Self::Error>
+    fn decode<B>(mut buf: B) -> Result<Self, FormError>
     where
         B: Buf,
     {
@@ -4684,9 +4664,7 @@ pub struct QuestAliases {
 }
 
 impl Read for QuestAliases {
-    type Error = Error;
-
-    fn read(map: &mut FieldMap, key: Text<4>) -> Result<Self, Self::Error> {
+    fn read(map: &mut FieldMap, key: Text<4>) -> Result<Self, FormError> {
         let mut references = Vec::new();
         let mut locations = Vec::new();
         let mut ref_collections = Vec::new();
@@ -4716,7 +4694,7 @@ impl Read for QuestAliases {
         }
     }
 
-    fn read_next(map: &mut FieldMap, key: Text<4>) -> Result<Self, Self::Error> {
+    fn read_next(map: &mut FieldMap, key: Text<4>) -> Result<Self, FormError> {
         Self::read(map, key)
     }
 }
@@ -5142,13 +5120,11 @@ pub struct SceneAction {
 }
 
 impl Read for SceneAction {
-    type Error = Error;
-
-    fn read(map: &mut FieldMap, key: Text<4>) -> Result<Self, Self::Error> {
+    fn read(map: &mut FieldMap, key: Text<4>) -> Result<Self, FormError> {
         Self::read_next(map, key)
     }
 
-    fn read_next(map: &mut FieldMap, key: Text<4>) -> Result<Self, Self::Error> {
+    fn read_next(map: &mut FieldMap, key: Text<4>) -> Result<Self, FormError> {
         #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, BinaryStruct)]
         #[primitive(u16)]
         enum SceneActionType {
@@ -5162,25 +5138,25 @@ impl Read for SceneAction {
         }
 
         let ty = map.consume_next(Text::new(b"ANAM"))?;
-        let ty = ty.ok_or(Error::MissingField("ANAM"))?.value;
+        let ty = ty.ok_or(FormError::MissingField("ANAM"))?.value;
 
         let name = map.consume_next(Text::new(b"NAM0"))?;
         let name = name.map(|v| v.value);
 
         let actor = map.consume_next(Text::new(b"ALID"))?;
-        let actor = actor.ok_or(Error::MissingField("ALID"))?.value;
+        let actor = actor.ok_or(FormError::MissingField("ALID"))?.value;
 
         let index = map.consume_next(Text::new(b"INAM"))?;
-        let index = index.ok_or(Error::MissingField("INAM"))?.value;
+        let index = index.ok_or(FormError::MissingField("INAM"))?.value;
 
         let flags = map.consume_next(Text::new(b"FNAM"))?;
         let flags = flags.map(|v| v.value);
 
         let start_phase = map.consume_next(Text::new(b"SNAM"))?;
-        let start_phase = start_phase.ok_or(Error::MissingField("SNAM"))?.value;
+        let start_phase = start_phase.ok_or(FormError::MissingField("SNAM"))?.value;
 
         let end_phase = map.consume_next(Text::new(b"ENAM"))?;
-        let end_phase = end_phase.ok_or(Error::MissingField("ENAM"))?.value;
+        let end_phase = end_phase.ok_or(FormError::MissingField("ENAM"))?.value;
 
         let data = match ty {
             SceneActionType::Dialogue => {
@@ -5214,7 +5190,7 @@ impl Read for SceneAction {
         };
 
         map.consume_next::<()>(Text::new(b"ANAM"))?
-            .ok_or(Error::MissingField("ANAM"))?;
+            .ok_or(FormError::MissingField("ANAM"))?;
 
         Ok(Self {
             name,
@@ -5430,9 +5406,7 @@ pub enum SceneActorBehavior {
 }
 
 impl Decode for SceneActorBehavior {
-    type Error = Error;
-
-    fn decode<B>(buf: B) -> Result<Self, Self::Error>
+    fn decode<B>(buf: B) -> Result<Self, FormError>
     where
         B: Buf,
     {
