@@ -18,6 +18,7 @@ pub struct EventInvocation {
 pub enum Value {
     Bool(bool),
     Int(i32),
+    Float(f32),
     Object(ObjectHandle),
     Null,
 }
@@ -54,6 +55,12 @@ impl From<bool> for Value {
 impl From<i32> for Value {
     fn from(value: i32) -> Self {
         Self::Int(value)
+    }
+}
+
+impl From<f32> for Value {
+    fn from(value: f32) -> Self {
+        Self::Float(value)
     }
 }
 

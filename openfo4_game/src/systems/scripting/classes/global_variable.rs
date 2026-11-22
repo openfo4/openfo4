@@ -17,12 +17,7 @@ pub fn register(engine: &mut Engine) {
 /// float Function GetValue() native
 /// ```
 fn get_value(caller: Caller<'_, State>, self_ptr: Object) -> Result<Float, Error> {
-    let id = caller
-        .data()
-        .objects
-        .get_by_addr(self_ptr)
-        .and_then(|s| s.record())
-        .ok_or_else(|| todo!())?;
+    let id = caller.data().record(self_ptr);
     let variables = caller.data().globals.variables.lock();
     let value = *variables.get(&id).ok_or_else(|| todo!())?;
     Ok(value)
@@ -34,13 +29,7 @@ fn get_value(caller: Caller<'_, State>, self_ptr: Object) -> Result<Float, Error
 /// Function SetValue(float afNewValue) native
 /// ```
 fn set_value(caller: Caller<'_, State>, self_ptr: Object, value: Float) -> Result<(), Error> {
-    let id = caller
-        .data()
-        .objects
-        .get_by_addr(self_ptr)
-        .and_then(|s| s.record())
-        .ok_or_else(|| todo!())?;
-
+    let id = caller.data().record(self_ptr);
     let mut variables = caller.data().globals.variables.lock();
     variables.insert(id, value);
     Ok(())

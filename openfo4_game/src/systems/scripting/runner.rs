@@ -288,6 +288,7 @@ impl Runner {
                 .map(|value| match value {
                     Value::Bool(v) => Val::Bool(v),
                     Value::Int(v) => Val::I32(v),
+                    Value::Float(v) => Val::F32(v),
                     Value::Object(object) => Val::Object(object.addr()),
                     Value::Null => Val::Object(ObjectAddr::NULL),
                 })
@@ -320,13 +321,11 @@ impl Runner {
                             .map(|val| match val {
                                 Val::Bool(v) => Value::Bool(*v),
                                 Val::I32(v) => Value::Int(*v),
+                                Val::F32(v) => Value::Float(*v),
                                 Val::Object(addr) if addr.is_null() => Value::Null,
                                 Val::Object(addr) => {
                                     let handle = engine.object_pool().get(*addr).unwrap();
                                     Value::Object(handle)
-                                }
-                                Val::F32(_) => {
-                                    todo!("f32 returns are not yet supported");
                                 }
                             })
                             .collect();
