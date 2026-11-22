@@ -2404,7 +2404,6 @@ dependencies = [
  "openfo4_core_pipeline",
  "openfo4_dds",
  "openfo4_esp",
- "openfo4_gizmos",
  "openfo4_gltf",
  "openfo4_hkx",
  "openfo4_input",
