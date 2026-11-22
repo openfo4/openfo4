@@ -142,7 +142,7 @@ impl DecodeScriptSection for Property {
                 ParseCommand::Value => {
                     let name = U16String::decode(&mut buf)?;
                     let ty = u8::decode(&mut buf)?;
-                    let flags = u8::decode(&mut buf)?;
+                    let _flags = u8::decode(&mut buf)?;
 
                     let value = match ty {
                         // Object

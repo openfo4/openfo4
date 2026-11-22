@@ -15,7 +15,7 @@ pub async fn load_global_variables(esp_loader: &EspLoader) -> HashMap<RecordId, 
         .await
         .unwrap()
     {
-        let RecordData::GLOB(data) = record.local.data else {
+        let RecordData::Global(data) = record.local.data else {
             unreachable!();
         };
 

@@ -1,4 +1,4 @@
-use openfo4_esp::records::GLOB;
+use openfo4_esp::records::Global;
 use openfo4_game::systems::scripting::invocations::Value;
 
 use crate::runner::{DefaultExt, TestRunner};
@@ -7,7 +7,7 @@ use crate::runner::{DefaultExt, TestRunner};
 fn global_variable_get_value() {
     let mut builder = TestRunner::builder();
 
-    let global = builder.add_record(GLOB::default_with(|global| {
+    let global = builder.add_record(Global::default_with(|global| {
         global.fltv = 2.0;
     }));
 
@@ -21,7 +21,7 @@ fn global_variable_get_value() {
 fn global_variable_set_value() {
     let mut builder = TestRunner::builder();
 
-    let global = builder.add_record(GLOB::default());
+    let global = builder.add_record(Global::default());
 
     let mut runner = builder.build();
 
