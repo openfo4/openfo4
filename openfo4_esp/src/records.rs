@@ -275,7 +275,7 @@ bitflags! {
 
 impl_decode_bitflags!(TextureSetFlags: u16);
 
-#[derive(Clone, Debug, Record)]
+#[derive(Clone, Debug, Default, Record)]
 pub struct GLOB {
     #[record("EDID")]
     pub edid: BString,
