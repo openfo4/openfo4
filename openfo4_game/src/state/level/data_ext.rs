@@ -31,7 +31,7 @@ impl RecordDataExt for RecordData {
 
     fn model(&self, lod: LodLevel) -> Option<&BString> {
         match self {
-            Self::STAT(data) => match lod {
+            Self::Static(data) => match lod {
                 LodLevel::Normal => data.modl.model.as_ref(),
                 LodLevel::Distant0
                     if let Some(lods) = &data.lods
@@ -58,10 +58,10 @@ impl RecordDataExt for RecordData {
             Self::Key(data) => data.model.model.as_ref(),
             Self::ObjectModification(data) => data.model.model.as_ref(),
             Self::Projectile(data) => data.model.model.as_ref(),
-            Self::TACT(data) => data.model.model.as_ref(),
+            Self::TalkingActivator(data) => data.model.model.as_ref(),
             Self::Terminal(data) => data.model.model.as_ref(),
             Self::Tree(data) => data.model.model.as_ref(),
-            Self::GRAS(data) => data.model.model.as_ref(),
+            Self::Grass(data) => data.model.model.as_ref(),
             Self::Hazard(data) => data.model.model.as_ref(),
             Self::HeadPart(data) => data.model.model.as_ref(),
             Self::ArtObject(_) | Self::AddonNode(_) | Self::Impact(_) => todo!(),
@@ -71,7 +71,7 @@ impl RecordDataExt for RecordData {
 
     fn object_bounds(&self) -> Option<Bounds> {
         match self {
-            Self::STAT(data) => Some(data.object_bounds),
+            Self::Static(data) => Some(data.object_bounds),
             Self::StaticCollection(data) => Some(data.object_bounds),
             Self::MovableStatic(data) => Some(data.object_bounds),
             Self::Door(data) => Some(data.object_bounds),
@@ -88,7 +88,7 @@ impl RecordDataExt for RecordData {
             Self::Note(data) => Some(data.object_bounds),
             Self::Key(data) => Some(data.object_bounds),
             Self::Projectile(data) => Some(data.object_bounds),
-            Self::TACT(data) => Some(data.obnd),
+            Self::TalkingActivator(data) => Some(data.obnd),
             Self::Terminal(data) => data.object_bounds,
             Self::Tree(data) => data.object_bounds,
             Self::Hazard(data) => Some(data.object_bounds),
@@ -103,7 +103,7 @@ impl RecordDataExt for RecordData {
         }
 
         match self {
-            Self::STAT(_) => &[],
+            Self::Static(_) => &[],
             Self::StaticCollection(_) => &[],
             Self::MovableStatic(_) => &[],
             Self::Door(_) => &[],
@@ -126,14 +126,14 @@ impl RecordDataExt for RecordData {
 
     fn virtual_machine_adapter(&self) -> Option<&VirtualMachineAdapter> {
         match self {
-            Self::STAT(data) => data.virtual_machine_adapter.as_ref(),
+            Self::Static(data) => data.virtual_machine_adapter.as_ref(),
             Self::MovableStatic(data) => data.virtual_machine_adapter.as_ref(),
             Self::Door(data) => data.virtual_machine_adapter.as_ref(),
             Self::Container(data) => data.virtual_machine_adapter.as_ref(),
             Self::Npc(data) => data.virtual_machine_adapter.as_ref(),
             Self::MiscObject(data) => data.virtual_machine_adapter.as_ref(),
             Self::Activator(data) => data.virtual_machine_adapter.as_ref(),
-            Self::TACT(data) => data.vmad.as_ref(),
+            Self::TalkingActivator(data) => data.vmad.as_ref(),
             Self::Furniture(data) => data.virtual_machine_adapter.as_ref(),
             Self::Light(data) => data.virtual_machine_adapter.as_ref(),
             Self::Armor(data) => data.virtual_machine_adapter.as_ref(),

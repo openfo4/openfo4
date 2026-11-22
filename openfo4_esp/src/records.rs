@@ -159,7 +159,7 @@ pub struct LocationReferenceType {
     #[record("CNAM")]
     pub color: Option<RgbPadded<u8>>,
     #[record("TNAM")]
-    tnam_unknown: Option<u32>,
+    _unknown0: Option<u32>,
 }
 
 #[derive(Clone, Debug, Record)]
@@ -180,7 +180,7 @@ pub struct Action {
 }
 
 #[derive(Clone, Debug, Record)]
-pub struct TRNS {
+pub struct Transform {
     #[record("EDID")]
     pub edid: BString,
     #[record("DATA")]
@@ -272,7 +272,7 @@ bitflags! {
 impl_decode_bitflags!(TextureSetFlags: u16);
 
 #[derive(Clone, Debug, Default, Record)]
-pub struct GLOB {
+pub struct Global {
     #[record("EDID")]
     pub edid: BString,
     #[record("FNAM")]
@@ -282,7 +282,7 @@ pub struct GLOB {
 }
 
 #[derive(Clone, Debug, Record)]
-pub struct DMGT {
+pub struct DamageType {
     #[record("EDID")]
     pub edid: BString,
     #[record("DNAM")]
@@ -998,7 +998,7 @@ pub struct RaceFaceMorph {
 }
 
 #[derive(Clone, Debug, Record)]
-pub struct SOUN {
+pub struct Sound {
     #[record("EDID")]
     pub edid: BString,
     #[record("OBND")]
@@ -1059,7 +1059,7 @@ pub struct LandTextureHavokData {
 }
 
 #[derive(Clone, Debug, Record)]
-pub struct ENCH {
+pub struct Enchantment {
     #[record("EDID")]
     pub edid: BString,
     #[record("OBND")]
@@ -1098,7 +1098,7 @@ pub struct EffectItem {
 }
 
 #[derive(Clone, Debug, Record)]
-pub struct SPEL {
+pub struct Spell {
     #[record("EDID")]
     pub edid: BString,
     #[record("OBND")]
@@ -1184,7 +1184,7 @@ bitflags! {
 impl_decode_bitflags!(ActivatorFlags: u16);
 
 #[derive(Clone, Debug, Record)]
-pub struct TACT {
+pub struct TalkingActivator {
     #[record("EDID")]
     pub edid: BString,
     // TODO
@@ -1403,9 +1403,8 @@ pub struct Book {
     pub message_icon: Option<BString>,
     #[record("DESC")]
     pub description: Option<LString>,
-    // TODO
     #[record("DEST")]
-    dest: Option<()>,
+    pub destruction: Option<SubField<Destruction>>,
     #[record("YNAM")]
     pub sound_pick_up: Option<FormId>,
     #[record("ZNAM")]
@@ -1726,7 +1725,7 @@ bitflags! {
 impl_decode_bitflags!(LightDataFlags: u32);
 
 #[derive(Clone, Debug, Record)]
-pub struct STAT {
+pub struct Static {
     #[record("EDID")]
     pub id: BString,
     #[record("OBND")]
@@ -1736,15 +1735,21 @@ pub struct STAT {
     #[record("MODL")]
     pub modl: Model,
     #[record("DNAM")]
-    pub dnam: STAT_DNAM,
+    pub directional_material: Option<StaticDirectionalMaterial>,
     #[record("MNAM")]
     pub lods: Option<DistantLods>,
 }
 
-#[derive(Copy, Clone, Debug, BinaryStruct)]
-pub struct STAT_DNAM {
+#[derive(Copy, Clone, Debug, Default, BinaryStruct)]
+#[non_exhaustive]
+pub struct StaticDirectionalMaterial {
     pub max_angle: f32,
+    /// Reference to a [`MaterialObject`].
     pub directional_material: FormId,
+    #[default_value]
+    pub leaf_amplitude: f32,
+    #[default_value]
+    pub leaf_frequency: f32,
 }
 
 #[derive(Clone, Debug)]
@@ -1839,21 +1844,21 @@ pub struct MovableStatic {
     pub looping_sound: Option<FormId>,
 }
 
-#[derive(Clone, Debug, Record)]
-pub struct GRAS {
+#[derive(Clone, Debug, Default, Record)]
+#[non_exhaustive]
+pub struct Grass {
     #[record("EDID")]
-    pub edid: BString,
+    pub id: BString,
     #[record("OBND")]
-    pub obnd: Bounds,
-    // TODO
+    pub object_bounds: Bounds,
     #[record("MODL")]
     pub model: Model,
     #[record("DATA")]
-    pub data: GRAS_DATA,
+    pub data: GrassData,
 }
 
-#[derive(Copy, Clone, Debug, BinaryStruct)]
-pub struct GRAS_DATA {
+#[derive(Copy, Clone, Debug, Default, BinaryStruct)]
+pub struct GrassData {
     pub density: u8,
     pub min_slope: u8,
     pub max_slope: u8,
@@ -1871,7 +1876,7 @@ pub struct GRAS_DATA {
 }
 
 #[derive(Clone, Debug, Record)]
-pub struct FLOR {
+pub struct Flora {
     #[record("EDID")]
     pub edid: BString,
     #[record("VMAD")]
@@ -2014,7 +2019,7 @@ impl Decode for ObjectTemplateItem {
         B: Buf,
     {
         let include_count = u32::decode(&mut buf)?;
-        let property_count = u32::decode(&mut buf)?;
+        let _property_count = u32::decode(&mut buf)?;
         let min_level = u8::decode(&mut buf)?;
         u8::decode(&mut buf)?;
         let max_level = u8::decode(&mut buf)?;
@@ -2347,7 +2352,7 @@ pub struct Npc {
     #[record("SHRT")]
     pub short_name: Option<LString>,
     #[record("DATA")]
-    data: (),
+    _marker0: (),
     #[record("DNAM")]
     pub stats: NpcStats,
     #[record("PNAM")]
@@ -2361,7 +2366,7 @@ pub struct Npc {
     #[record("GNAM")]
     pub gift_filter: Option<FormId>,
     #[record("NAM5")]
-    unknown0: u16,
+    _unknown0: u16,
     #[record("NAM6")]
     pub height_min: f32,
     #[record("NAM4")]
@@ -3849,9 +3854,9 @@ pub struct PlacedObject {
     #[record("XIS2")]
     pub ignored_by_sandbox: Option<()>,
     #[record("XOWN")]
-    xown: Option<()>,
+    pub owner: Option<Owner>,
     #[record("XRNK")]
-    xrnk: Option<()>,
+    pub owner_faction_rank: Option<i32>,
     #[record("XCNT")]
     pub item_count: Option<i32>,
     #[record("XHLT")]
@@ -3892,6 +3897,19 @@ pub struct PlacedObject {
     pub distant_lod_data: Option<()>,
     #[record("DATA")]
     pub position: Option<PositionRotation>,
+}
+
+#[derive(Copy, Clone, Debug, Default, BinaryStruct)]
+pub struct Owner {
+    /// The owner of the reference.
+    ///
+    /// Reference to a [`Faction`] or [`Npc`].
+    ///
+    /// [`Faction`]: crate::Faction
+    pub owner: FormId,
+    _pad0: u32,
+    pub no_crime: bool,
+    _pad1: [u8; 3],
 }
 
 #[derive(Copy, Clone, Debug, BinaryStruct)]

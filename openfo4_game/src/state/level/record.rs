@@ -504,7 +504,7 @@ impl SpawnEntity {
 
         // Only Static records have LODs.
         // All other objects are not visible when LOD0 is not rendered.
-        if flags.lod != LodLevel::Normal && !matches!(base.local.data, RecordData::STAT(_)) {
+        if flags.lod != LodLevel::Normal && !matches!(base.local.data, RecordData::Static(_)) {
             return None;
         }
 
