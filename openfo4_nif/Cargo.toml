@@ -11,3 +11,6 @@ bitflags = { version = "2.9.0", features = [] }
 half = "2.5.0"
 thiserror = { workspace = true }
 bstr = "1.12.0"
+
+[lints]
+workspace = true
