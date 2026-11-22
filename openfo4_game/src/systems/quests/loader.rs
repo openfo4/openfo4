@@ -134,6 +134,7 @@ impl QuestLoader {
         let scenes = self.load_scenes(id).await?;
 
         let mut hello_topics = Vec::new();
+        let mut greeting_topics = Vec::new();
 
         for topic in self
             .esp
@@ -151,6 +152,12 @@ impl QuestLoader {
 
                     hello_topics.push(topic);
                 }
+                Some(v) if v.as_bytes() == b"GREE" => {
+                    let topic =
+                        DialogueTopicAction::load(&self.esp, &self.conditions, topic.id).await?;
+
+                    greeting_topics.push(topic);
+                }
                 _ => continue,
             }
         }
@@ -164,6 +171,7 @@ impl QuestLoader {
             actions,
             scenes,
             hello_topics,
+            greeting_topics,
         })
     }
 
