@@ -196,7 +196,7 @@ impl StaticEspLoaderBuilder {
         let mut builder = EspLoaderBuilder::new();
         builder.set_hardcoded(self.records);
         builder.set_hardcoded_parents(self.parents);
-        Arc::new(builder.finalize())
+        Arc::new(block_on(builder.finalize()))
     }
 }
 

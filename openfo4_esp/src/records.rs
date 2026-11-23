@@ -44,7 +44,7 @@ pub struct Rgba<T> {
     pub a: T,
 }
 
-#[derive(Clone, Debug, Record)]
+#[derive(Clone, Debug, Default, Record)]
 pub struct Tes4 {
     #[record("HEDR")]
     pub header: Tes4Header,
@@ -58,13 +58,15 @@ pub struct Tes4 {
     pub description: Option<BString>,
     #[record("MAST")]
     pub master_files: SubRecordArray<MasterFile>,
+    #[record("ONAM")]
+    pub overriden_forms: Option<Array<FormId>>,
     #[record("INTV")]
     pub intv: Option<u32>,
     #[record("INCC")]
     pub incc: Option<u32>,
 }
 
-#[derive(Clone, Debug, Record)]
+#[derive(Clone, Debug, Default, Record)]
 pub struct MasterFile {
     #[record("MAST")]
     pub file_name: BString,
@@ -72,7 +74,7 @@ pub struct MasterFile {
     _unknown_data: Option<()>,
 }
 
-#[derive(Copy, Clone, Debug, BinaryStruct)]
+#[derive(Copy, Clone, Debug, Default, BinaryStruct)]
 pub struct Tes4Header {
     pub version: f32,
     pub number_of_records: u32,
@@ -3691,7 +3693,7 @@ pub struct Vec3Padded<T> {
     _pad: T,
 }
 
-#[derive(Clone, Debug, Record)]
+#[derive(Clone, Debug, Default, Record)]
 pub struct PlacedNpc {
     #[record("EDID")]
     pub id: Option<BString>,

@@ -77,6 +77,10 @@ impl Error {
             _ => ErrorKind::Other,
         }
     }
+
+    pub fn new_not_found(id: FormId) -> Self {
+        Self(ErrorRepr::NotFound(id))
+    }
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
