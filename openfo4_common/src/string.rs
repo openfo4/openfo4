@@ -2,6 +2,8 @@ use std::borrow::Borrow;
 use std::fmt::{self, Debug, Display, Formatter};
 use std::ops::Deref;
 
+use bstr::{BStr, BString, ByteSlice};
+
 /// A string value that is guaranteed to be lowercase.
 ///
 /// Note that `Lowercase<T>` does not expose a [`Deref`] implementation, as this would make it easy
@@ -114,6 +116,14 @@ impl ToLowercase for &str {
     }
 }
 
+impl ToLowercase for &BStr {
+    type Target = BString;
+
+    fn to_lowercase(&self) -> Self::Target {
+        BString::new(ByteSlice::to_lowercase(&***self))
+    }
+}
+
 impl<T> AsRef<T> for Lowercase<T>
 where
     T: ?Sized,
@@ -179,5 +189,49 @@ impl ToOwned for Lowercase<str> {
     fn to_owned(&self) -> Self::Owned {
         let s = self.as_inner();
         Lowercase(s.to_owned())
+    }
+}
+
+impl Lowercase<BString> {
+    pub fn as_bstr(&self) -> &Lowercase<BStr> {
+        unsafe { Lowercase::<BStr>::from_bstr(self.0.as_bstr()) }
+    }
+}
+
+impl Lowercase<BStr> {
+    const unsafe fn from_bstr(s: &BStr) -> &Lowercase<BStr> {
+        // SAFETY: Lowercase<T> is repr(transparent) with contents T.
+        unsafe { core::mem::transmute::<&BStr, &Lowercase<BStr>>(s) }
+    }
+}
+
+impl Borrow<Lowercase<BStr>> for Lowercase<BString> {
+    fn borrow(&self) -> &Lowercase<BStr> {
+        self.as_bstr()
+    }
+}
+
+impl PartialEq<Lowercase<BStr>> for Lowercase<BString> {
+    fn eq(&self, other: &Lowercase<BStr>) -> bool {
+        self.as_bstr() == other
+    }
+}
+
+impl PartialEq<Lowercase<BString>> for Lowercase<BStr> {
+    fn eq(&self, other: &Lowercase<BString>) -> bool {
+        self == other.as_bstr()
+    }
+}
+
+impl AsRef<Lowercase<BStr>> for Lowercase<BStr> {
+    fn as_ref(&self) -> &Lowercase<BStr> {
+        self
+    }
+}
+
+impl AsRef<Lowercase<BStr>> for Lowercase<str> {
+    fn as_ref(&self) -> &Lowercase<BStr> {
+        // SAFETY: A `Lowercase<str>` is guaranteed to only contain lowercase bytes.
+        unsafe { Lowercase::from_bstr(self.as_inner().as_bytes().as_bstr()) }
     }
 }

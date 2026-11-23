@@ -105,7 +105,7 @@ pub fn play_actor_dialogue(
                 continue;
             };
 
-            path.push(plugin.as_ref());
+            path.push(plugin.as_inner());
             path.push(voice_type.as_str().as_inner());
             path.push(&*format!(
                 "00{}_{}.fuz",

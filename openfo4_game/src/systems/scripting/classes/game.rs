@@ -572,7 +572,7 @@ async fn get_form_from_file(caller: Caller<'_, State>, form: i32, file: Object) 
     let file = Lowercase::new(caller.string(file));
 
     // We should return `none` if the file is not loaded.
-    let Some(module) = caller.data().esp_loader.resolve_file(&file) else {
+    let Some(module) = caller.data().esp_loader.resolve_file(&*file) else {
         return Object::NULL;
     };
 
@@ -942,7 +942,7 @@ async fn is_movement_controls_enabled(caller: Caller<'_, State>) -> Result<bool,
 /// ```
 fn is_plugin_installed(caller: Caller<'_, State>, name: Object) -> bool {
     let name = Lowercase::new(&*caller.string(name));
-    caller.data().esp_loader.resolve_file(&name).is_some()
+    caller.data().esp_loader.resolve_file(&*name).is_some()
 }
 
 /// `IsPlayerInRadioRange`

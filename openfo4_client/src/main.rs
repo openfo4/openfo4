@@ -18,7 +18,10 @@ use openfo4_config::ConfigSection;
 use openfo4_core::record::RecordId;
 use openfo4_crash_handler::main;
 use openfo4_egui::EguiContext;
+use openfo4_esp::EspFile;
 use openfo4_esp::FormId;
+use openfo4_esp::bstr::BString;
+use openfo4_esp::bstr::ByteVec;
 use openfo4_game::cell::CellId;
 use openfo4_game::components::NiTransform;
 use openfo4_game::components::WorldSpace;
@@ -38,6 +41,7 @@ use openfo4_game::systems::inventory::EquipItemEvent;
 use openfo4_gizmos::Gizmos;
 use openfo4_input::keyboard::KeyCode;
 use openfo4_input::keyboard::KeyboardInput;
+use openfo4_io::fs::File;
 use openfo4_render::RenderTarget;
 use openfo4_render::Renderer;
 use openfo4_render::RendererConfig;
@@ -173,7 +177,13 @@ async fn create_game(
         };
 
         for path in contents.plugins {
-            loader.push(path);
+            let name = path.file_name().unwrap();
+            let name = Vec::from_os_string(name.to_owned()).unwrap();
+
+            let file = File::open(path).unwrap();
+            let file = EspFile::new(file).await.unwrap();
+
+            loader.push(BString::new(name), file);
         }
 
         for path in contents.archives {
@@ -186,7 +196,7 @@ async fn create_game(
     }
 
     let file_loader = Arc::new(FileLoader::new(sources));
-    let loader = Arc::new(loader.finalize());
+    let loader = Arc::new(loader.finalize().await);
 
     let audio = AudioManager::new(DefaultBackend::default());
 

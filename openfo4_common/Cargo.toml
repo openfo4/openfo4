@@ -20,3 +20,4 @@ parking_lot = { workspace = true }
 allocator-api2 = "0.2.21"
 hashbrown = { workspace = true }
 pin-project = "1.1.13"
+bstr = "1.14.0"
