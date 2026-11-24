@@ -8,7 +8,7 @@ use openfo4_core::record::RecordId;
 use openfo4_egui::egui::{Context, Key, Window};
 use openfo4_esp::{RecordData, RecordKind};
 use openfo4_game::cell::CellId;
-use openfo4_game::components::{NiTransform, Player};
+use openfo4_game::components::{NiTransform, Player, WorldSpace};
 use openfo4_game::state::GameState;
 use openfo4_game::systems::inventory::AddItemEventAsync;
 use openfo4_game::systems::time::GameTime;
@@ -171,17 +171,34 @@ async fn center_on_cell(
         }
     };
 
+    let worldspace = match game.esp_loader.parent(cell.id) {
+        Some(id) => WorldSpace {
+            record: id,
+            is_interior: false,
+        },
+        None => WorldSpace {
+            record: cell.id,
+            is_interior: true,
+        },
+    };
+
     let RecordData::Cell(cell) = cell.local.data else {
         return Err(format!("record {} is not a cell", cell.id).into());
     };
 
-    let grid = cell.grid.unwrap();
-    let cell = CellId::new(grid.x, grid.y);
+    let cell = cell
+        .grid
+        .map(|grid| CellId::new(grid.x, grid.y))
+        .unwrap_or_default();
     let transform = NiTransform::from_translation(cell.center().extend(8096.0));
     let transform = Transform::from(transform);
 
-    for (_, mut t) in game.world.query_mut::<(&Player, &mut Transform)>() {
+    for (_, mut t, mut ws) in game
+        .world
+        .query_mut::<(&Player, &mut Transform, &mut WorldSpace)>()
+    {
         *t = transform;
+        *ws = worldspace;
     }
 
     Ok(())
