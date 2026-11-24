@@ -4,7 +4,7 @@ use crate::components::NiTransform;
 
 pub const CELL_SIZE: UVec2 = UVec2::splat(4096);
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Hash)]
 pub struct CellId(pub IVec2);
 
 impl CellId {
