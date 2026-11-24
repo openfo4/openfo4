@@ -254,6 +254,7 @@ impl WeatherSystem {
     }
 }
 
+#[derive(Clone, Debug, Default)]
 struct WorldspaceClimate {
     sun: Option<DataPathBuf>,
     weathers: Vec<Weather>,
@@ -501,9 +502,14 @@ async fn load_worldspace_weather_props(
     esp_loader: &EspLoader,
     worldspace_id: RecordId,
 ) -> WorldspaceClimate {
-    let climate = load_climate_from_worldspace(esp_loader, worldspace_id)
+    let Ok(climate) = load_climate_from_worldspace(esp_loader, worldspace_id)
         .await
-        .unwrap();
+        .inspect_err(|err| {
+            tracing::warn!("failed to load climate for worldspace {worldspace_id}: {err}");
+        })
+    else {
+        return WorldspaceClimate::default();
+    };
 
     let climate_record = esp_loader
         .lookup(Some(RecordKind::Climate), climate)
