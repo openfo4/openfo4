@@ -37,6 +37,7 @@ pub struct ShadingParameters<'a> {
     pub shadow_maps: &'a [&'a TextureView],
     pub terrain_layers: &'a Buffer,
     pub clamped_sampler: &'a Sampler,
+    pub point_light_indices: &'a Buffer,
 }
 
 pub struct ShadingPipeline {
@@ -159,6 +160,11 @@ impl ShadingPipeline {
                         stages: ShaderStages::COMPUTE,
                         kind: DescriptorType::Sampler,
                     },
+                    PipelineBinding {
+                        name: "point_light_indices",
+                        stages: ShaderStages::COMPUTE,
+                        kind: DescriptorType::Storage,
+                    },
                 ],
                 builder: Box::new(|_queue, shaders, _ctx| {
                     let tile_size = shaders[0]
@@ -235,6 +241,11 @@ impl ShadingPipeline {
             "clamped_sampler",
             ShaderStages::COMPUTE,
             params.clamped_sampler,
+        );
+        pass.set(
+            "point_light_indices",
+            ShaderStages::COMPUTE,
+            params.point_light_indices,
         );
 
         let mut pass = pass.run_compute_pass(&ComputePassDescriptor {

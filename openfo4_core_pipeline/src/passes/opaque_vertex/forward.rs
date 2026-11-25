@@ -1,3 +1,4 @@
+use std::mem::offset_of;
 use std::sync::Arc;
 
 use bytemuck::{Pod, Zeroable};
@@ -20,6 +21,7 @@ use crate::entities::{CameraId, SceneId};
 use crate::passes::forward::ForwardParams;
 use crate::passes::forward::opaque::OpaqueForwardPass;
 use crate::passes::forward::transparent::TransparentForwardPass;
+use crate::passes::lightcull::{LightcullParams, LightcullPass};
 use crate::passes::mesh::Instance;
 use crate::passes::opaque_vertex::pipelines::visbuffer_shading::{
     ShadingParameters, ShadingPipeline,
@@ -40,6 +42,7 @@ pub struct OpaqueVertexForwardPass {
     opaque: Mutex<OpaqueForwardPass>,
     transparent: Mutex<TransparentForwardPass>,
     shadow_map: Mutex<ShadowMapPass>,
+    lightcull: Mutex<LightcullPass>,
 }
 
 impl OpaqueVertexForwardPass {
@@ -80,6 +83,7 @@ impl OpaqueVertexForwardPass {
             opaque: Mutex::new(OpaqueForwardPass::new()),
             transparent: Mutex::new(TransparentForwardPass::new()),
             shadow_map: Mutex::new(ShadowMapPass::new()),
+            lightcull: Mutex::new(LightcullPass::new()),
         }
     }
 
@@ -106,8 +110,9 @@ impl OpaqueVertexForwardPass {
         let textures = state.textures.views();
         let materials = state.material_slab.buffer(ctx.queue);
 
+        let num_point_lights = scene.lights.num_point_lights();
         let directional_lights = scene.directional_lights_buffer.buffer(ctx.queue);
-        let point_lights = scene.point_lights_buffer.buffer(ctx.queue);
+        let point_lights = scene.lights.point_lights.buffer(ctx.queue);
         let spot_lights = scene.spot_lights_buffer.buffer(ctx.queue);
 
         if state.mesh.instances.num_opaque == 0 && state.mesh.instances.num_transparent == 0 {
@@ -248,6 +253,32 @@ impl OpaqueVertexForwardPass {
 
         self.sky.run(ctx, camera, &output_texture);
 
+        let output_count = ctx.queue.create_buffer_init(&BufferInitDescriptor {
+            contents: bytemuck::bytes_of(&0_u32),
+            usage: BufferUsage::STORAGE | BufferUsage::TRANSFER_SRC,
+            flags: UsageFlags::empty(),
+        });
+        let point_light_indices = ctx.queue.create_buffer(&BufferDescriptor {
+            size: (num_point_lights as usize * size_of::<u32>()).max(1),
+            usage: BufferUsage::STORAGE,
+            flags: UsageFlags::empty(),
+        });
+        if num_point_lights != 0 {
+            let mut pipeline = self.lightcull.lock();
+
+            pipeline.run(
+                ctx.queue,
+                LightcullParams {
+                    frustum: camera.frustum(),
+                    view: camera.view_matrix(),
+                    input: scene.lights.point_lights_sphere.buffer(ctx.queue),
+                    input_count: num_point_lights,
+                    output: &point_light_indices,
+                    output_count: &output_count,
+                },
+            );
+        }
+
         {
             let mut pipeline = self.shading_pipeline.lock();
 
@@ -266,14 +297,22 @@ impl OpaqueVertexForwardPass {
                     scene: RawSceneData { ambient },
                     camera: CameraUniform::new(camera.transform, camera.projection),
                     num_directional_lights: scene.directional_lights.len() as u32,
-                    num_point_lights: scene.point_lights.len() as u32,
+                    num_point_lights,
                     num_spot_lights: scene.spot_lights.len() as u32,
                     _pad0: 0,
                     viewport_size: size,
                 }),
-                usage: BufferUsage::UNIFORM,
+                usage: BufferUsage::UNIFORM | BufferUsage::TRANSFER_DST,
                 flags: UsageFlags::empty(),
             });
+
+            ctx.queue.copy_buffer_to_buffer(
+                output_count,
+                constants.slice(
+                    offset_of!(ShadingPipelineConstants, num_point_lights)
+                        ..offset_of!(ShadingPipelineConstants, num_point_lights) + size_of::<u32>(),
+                ),
+            );
 
             if shadow_light_vps.is_empty() {
                 assert!(shadow_maps.is_empty());
@@ -323,6 +362,7 @@ impl OpaqueVertexForwardPass {
                     shadow_maps: &shadow_map_views,
                     terrain_layers,
                     clamped_sampler: &self.clamped_sampler,
+                    point_light_indices: &point_light_indices,
                 },
             );
         }

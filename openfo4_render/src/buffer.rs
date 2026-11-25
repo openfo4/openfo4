@@ -9,7 +9,7 @@ use std::marker::PhantomData;
 compile_error!("`DynamicBuffer` doesn't support big endian targets");
 
 use bytemuck::{Pod, Zeroable};
-use glam::{Mat3, Vec3};
+use glam::{Mat3, Vec3, Vec4};
 
 use crate::api::Buffer;
 use crate::backend::IndexFormat;
@@ -78,6 +78,11 @@ pub trait GpuBuffer: Zeroable + Pod {
         let size_rounded_up = (Self::SIZE + align_m1) & !align_m1;
         size_rounded_up
     }
+}
+
+impl GpuBuffer for Vec4 {
+    const SIZE: usize = size_of::<f32>() * 4;
+    const ALIGN: usize = align_of::<f32>() * 4;
 }
 
 ///

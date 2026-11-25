@@ -49,6 +49,8 @@ StructuredBuffer<TerrainLayer> terrain_layers;
 
 SamplerState clamped_sampler;
 
+StructuredBuffer<u32> point_light_indices;
+
 struct TerrainLayer {
     u32 material;
     u32 alpha_texture;
@@ -148,7 +150,8 @@ void main(
     }
 
     for (var i = 0; i < constants.num_point_lights; i++) {
-        let light = point_lights[i].eval(FragParams(world_position));
+        let index = point_light_indices[i];
+        let light = point_lights[index].eval(FragParams(world_position));
         luminance += pbr::surface_shading(pbr_material, view_dir, light);
     }
 

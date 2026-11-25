@@ -21,7 +21,7 @@ use parking_lot::Mutex;
 
 use crate::StandardMaterial;
 use crate::entities::{AsyncEvent, Event, ImageId, MaterialInner};
-use crate::lights::{DirectionalLightUniform, Light, PointLightUniform, SpotLightUniform};
+use crate::lights::{DirectionalLightUniform, Light, SpotLightUniform};
 use crate::material::AlphaMode;
 use crate::passes::{DirectionalLightState, MaterialState, TerrainMaterialState};
 use crate::terrain::TerrainMaterial;
@@ -63,7 +63,7 @@ impl Node for UpdatePass {
         while let Ok(event) = self.events.try_recv() {
             match event {
                 Event::CreateScene(id) => {
-                    state.scenes.insert(id, SceneData::new());
+                    state.scenes.insert(id, SceneData::new(ctx.queue));
                 }
                 Event::DestroyScene(id) => {
                     state.scenes.remove(id);
@@ -215,10 +215,7 @@ impl Node for UpdatePass {
                         continue;
                     };
 
-                    let index = scene
-                        .point_lights_buffer
-                        .insert(&PointLightUniform::new(&light));
-                    scene.point_lights.insert(id, index);
+                    scene.lights.create_point_light(id, light);
                 }
                 Event::CreateLight(id, Light::Spot(light)) => {
                     let Some(scene) = state.scenes.get_mut(light.scene.id()) else {
@@ -246,9 +243,7 @@ impl Node for UpdatePass {
                         scene.directional_lights_buffer.remove(state.index);
                     }
 
-                    if let Some(index) = scene.point_lights.remove(&id) {
-                        scene.point_lights_buffer.remove(index);
-                    }
+                    scene.lights.destroy_point_light(id);
 
                     if let Some(index) = scene.spot_lights.remove(&id) {
                         scene.spot_lights_buffer.remove(index);
