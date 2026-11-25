@@ -63,7 +63,7 @@ impl Node for UpdatePass {
         while let Ok(event) = self.events.try_recv() {
             match event {
                 Event::CreateScene(id) => {
-                    state.scenes.insert(id, SceneData::new(ctx.queue));
+                    state.scenes.insert(id, SceneData::new());
                 }
                 Event::DestroyScene(id) => {
                     state.scenes.remove(id);

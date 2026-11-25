@@ -1,10 +1,8 @@
-mod forward;
-mod lightcull;
 mod lights;
+mod main_pass;
 mod mesh;
 mod opaque_vertex;
 mod post_process;
-mod shadow_map;
 mod skinning;
 pub mod sky;
 mod transparent_vertex;
@@ -236,7 +234,7 @@ struct DirectionalLightState {
 }
 
 impl SceneData {
-    fn new(queue: &CommandQueue<'_>) -> Self {
+    fn new() -> Self {
         Self {
             cameras: HashMap::new(),
             objects: HashMap::new(),
@@ -245,7 +243,7 @@ impl SceneData {
             ambient_lights: HashMap::new(),
             directional_lights_buffer: CompactSlabBuffer::new(BufferUsage::STORAGE),
             spot_lights_buffer: CompactSlabBuffer::new(BufferUsage::STORAGE),
-            lights: LightState::new(queue),
+            lights: LightState::new(),
         }
     }
 }

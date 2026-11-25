@@ -11,8 +11,8 @@ use openfo4_shaderlib::pipeline::{Pipeline, PipelineBinding, PipelineConfig, Sha
 use openfo4_shaderlib::{ShaderSource, include_shader};
 
 use crate::passes::DEPTH_FORMAT;
-use crate::passes::forward::ForwardParams;
-use crate::passes::forward::drawgen::{DrawcallGenParams, DrawcallGenPipeline};
+use crate::passes::main_pass::forward::ForwardParams;
+use crate::passes::main_pass::forward::drawgen::{DrawcallGenParams, DrawcallGenPipeline};
 
 static VS_SHADER: ShaderSource =
     include_shader!("/openfo4_core_pipeline/shaders/opaque_vertex/visbuffer_vert.slang");

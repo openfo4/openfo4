@@ -1,6 +1,6 @@
 use openfo4_render::api::{
-    BufferDescriptor, CommandQueue, DepthStencilAttachment, FragmentStage, PipelineStage,
-    RenderPassDescriptor, VertexStage,
+    BindingResource, BufferDescriptor, CommandQueue, DepthStencilAttachment, FragmentStage,
+    PipelineStage, RenderPassDescriptor, VertexStage,
 };
 use openfo4_render::backend::allocator::UsageFlags;
 use openfo4_render::backend::{
@@ -10,20 +10,20 @@ use openfo4_render::backend::{
 use openfo4_shaderlib::pipeline::{Pipeline, PipelineBinding, PipelineConfig, ShaderConfig};
 use openfo4_shaderlib::{ShaderSource, include_shader};
 
-use crate::passes::forward::drawgen::{DrawcallGenParams, DrawcallGenPipeline};
-use crate::passes::shadow_map::{SHADOW_MAP_FORMAT, ShadowMapParamsInner};
+use crate::passes::main_pass::forward::drawgen::{DrawcallGenParams, DrawcallGenPipeline};
+use crate::passes::main_pass::shadow_map::{SHADOW_MAP_FORMAT, ShadowMapParamsInner};
 
 static VS_SHADER: ShaderSource =
-    include_shader!("/openfo4_core_pipeline/shaders/shadows/shadow_map_vs.slang");
+    include_shader!("/openfo4_core_pipeline/shaders/shadows/transparent_vs.slang");
 static FS_SHADER: ShaderSource =
-    include_shader!("/openfo4_core_pipeline/shaders/shadows/shadow_map_fs.slang");
+    include_shader!("/openfo4_core_pipeline/shaders/shadows/transparent_fs.slang");
 
-pub struct OpaqueShadowMapPass {
+pub struct TransparentShadowMapPass {
     drawcall_gen: DrawcallGenPipeline,
     pipeline: Pipeline,
 }
 
-impl OpaqueShadowMapPass {
+impl TransparentShadowMapPass {
     pub fn new() -> Self {
         Self {
             drawcall_gen: DrawcallGenPipeline::new(),
@@ -49,8 +49,18 @@ impl OpaqueShadowMapPass {
                         kind: DescriptorType::Storage,
                     },
                     PipelineBinding {
-                        name: "instances",
+                        name: "uvs",
                         stages: ShaderStages::VERTEX,
+                        kind: DescriptorType::Storage,
+                    },
+                    PipelineBinding {
+                        name: "colors",
+                        stages: ShaderStages::VERTEX,
+                        kind: DescriptorType::Storage,
+                    },
+                    PipelineBinding {
+                        name: "instances",
+                        stages: ShaderStages::VERTEX | ShaderStages::FRAGMENT,
                         kind: DescriptorType::Storage,
                     },
                     PipelineBinding {
@@ -60,8 +70,18 @@ impl OpaqueShadowMapPass {
                     },
                     PipelineBinding {
                         name: "materials",
-                        stages: ShaderStages::VERTEX,
+                        stages: ShaderStages::VERTEX | ShaderStages::FRAGMENT,
                         kind: DescriptorType::Storage,
+                    },
+                    PipelineBinding {
+                        name: "textures",
+                        stages: ShaderStages::FRAGMENT,
+                        kind: DescriptorType::Texture,
+                    },
+                    PipelineBinding {
+                        name: "sampler",
+                        stages: ShaderStages::FRAGMENT,
+                        kind: DescriptorType::Sampler,
                     },
                 ],
                 builder: Box::new(|_queue, shaders, _ctx| {
@@ -92,18 +112,18 @@ impl OpaqueShadowMapPass {
     }
 
     pub fn run(&mut self, queue: &CommandQueue<'_>, params: ShadowMapParamsInner<'_>) {
-        if params.mesh.instances.num_opaque == 0 {
+        if params.mesh.instances.num_transparent == 0 {
             return;
         }
 
-        let instances_in = params.mesh.instances.opaque.buffer(queue);
+        let instances_in = params.mesh.instances.transparent.buffer(queue);
         let instances_out = queue.create_buffer(&BufferDescriptor {
             size: instances_in.size(),
             usage: BufferUsage::STORAGE,
             flags: UsageFlags::empty(),
         });
         let draws = queue.create_buffer(&BufferDescriptor {
-            size: params.mesh.instances.num_opaque as usize * size_of::<DrawIndirectCommand>(),
+            size: params.mesh.instances.num_transparent as usize * size_of::<DrawIndirectCommand>(),
             usage: BufferUsage::STORAGE | BufferUsage::INDIRECT,
             flags: UsageFlags::empty(),
         });
@@ -111,7 +131,7 @@ impl OpaqueShadowMapPass {
         self.drawcall_gen.run(
             queue,
             DrawcallGenParams {
-                instance_count: params.mesh.instances.num_opaque,
+                instance_count: params.mesh.instances.num_transparent,
                 instances_in,
                 instances_out: instances_out.slice(..),
                 draws: &draws,
@@ -121,17 +141,35 @@ impl OpaqueShadowMapPass {
         let positions = params.mesh.positions.buffer();
         let offsets = params.mesh.mesh_offsets.buffer(queue);
         let indices = params.mesh.indices.buffer();
+        let uvs = params.mesh.uvs.buffer();
+        let colors = params.mesh.colors.buffer();
 
         let mut pass = self.pipeline.prepare(queue);
         pass.set("light_view_proj", ShaderStages::VERTEX, params.camera);
         pass.set("positions", ShaderStages::VERTEX, positions);
         pass.set("offsets", ShaderStages::VERTEX, offsets);
-        pass.set("instances", ShaderStages::VERTEX, &instances_out);
+        pass.set(
+            "instances",
+            ShaderStages::VERTEX | ShaderStages::FRAGMENT,
+            &instances_out,
+        );
         pass.set("index_buffer", ShaderStages::VERTEX, indices);
-        pass.set("materials", ShaderStages::VERTEX, params.materials);
+        pass.set("uvs", ShaderStages::VERTEX, uvs);
+        pass.set("colors", ShaderStages::VERTEX, colors);
+        pass.set(
+            "materials",
+            ShaderStages::VERTEX | ShaderStages::FRAGMENT,
+            params.materials,
+        );
+        pass.set(
+            "textures",
+            ShaderStages::FRAGMENT,
+            BindingResource::TextureArray(params.textures),
+        );
+        pass.set("sampler", ShaderStages::FRAGMENT, params.sampler);
 
         let mut pass = pass.run_render_pass(&RenderPassDescriptor {
-            name: "Shadow Map Generation (Opaque)",
+            name: "Shadow Map Generation (Transparent)",
             color_attachments: &[],
             depth_stencil_attachment: Some(&DepthStencilAttachment {
                 texture: params.depth,
