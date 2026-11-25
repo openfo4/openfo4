@@ -236,7 +236,9 @@ impl MainPass {
                     size: cascade.size,
                     mip_levels: 1,
                     format: TextureFormat::Depth32Float,
-                    usage: TextureUsage::RENDER_ATTACHMENT | TextureUsage::TEXTURE_BINDING,
+                    usage: TextureUsage::RENDER_ATTACHMENT
+                        | TextureUsage::TEXTURE_BINDING
+                        | TextureUsage::TRANSFER_DST,
                 });
 
                 self.shadow_map.run(
