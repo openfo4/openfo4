@@ -364,8 +364,9 @@ impl TransparentVertexPass {
 
             let textures = state.textures.views();
 
+            let num_point_lights = scene.lights.num_point_lights();
             let directional_lights = scene.directional_lights_buffer.buffer(ctx.queue);
-            let point_lights = scene.point_lights_buffer.buffer(ctx.queue);
+            let point_lights = scene.lights.point_lights.buffer(ctx.queue);
             let spot_lights = scene.spot_lights_buffer.buffer(ctx.queue);
 
             let mut ambient = RawAmbientLight::zeroed();
@@ -445,8 +446,7 @@ impl TransparentVertexPass {
             )));
             push_constants[80..84]
                 .copy_from_slice(&(scene.directional_lights.len() as u32).to_ne_bytes());
-            push_constants[84..88]
-                .copy_from_slice(&(scene.point_lights.len() as u32).to_ne_bytes());
+            push_constants[84..88].copy_from_slice(&num_point_lights.to_ne_bytes());
             push_constants[88..92].copy_from_slice(&(scene.spot_lights.len() as u32).to_ne_bytes());
 
             let push_constants = ctx.queue.create_buffer_init(&BufferInitDescriptor {

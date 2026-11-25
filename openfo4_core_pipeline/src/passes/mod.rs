@@ -1,4 +1,6 @@
 mod forward;
+mod lightcull;
+mod lights;
 mod mesh;
 mod opaque_vertex;
 mod post_process;
@@ -34,8 +36,9 @@ use crate::camera::Camera;
 use crate::entities::{
     AsyncEvent, CameraId, Event, ImageId, LightId, MaterialId, MeshId, ObjectId, SceneId,
 };
-use crate::lights::{AmbientLight, DirectionalLightUniform, PointLightUniform, SpotLightUniform};
+use crate::lights::{AmbientLight, DirectionalLightUniform, SpotLightUniform};
 use crate::material::AlphaMode;
+use crate::passes::lights::LightState;
 use crate::passes::mesh::{InstanceKey, MeshKey, MeshState};
 use crate::passes::skinning::SkinningPass;
 use crate::passes::sky::SkyState;
@@ -216,13 +219,13 @@ struct SceneData {
     cameras: HashMap<CameraId, Camera>,
     objects: HashMap<ObjectId, ObjectState>,
     directional_lights: HashMap<LightId, DirectionalLightState>,
-    point_lights: HashMap<LightId, SlabIndex>,
     spot_lights: HashMap<LightId, SlabIndex>,
     ambient_lights: HashMap<LightId, AmbientLight>,
 
     directional_lights_buffer: CompactSlabBuffer<DirectionalLightUniform>,
-    point_lights_buffer: CompactSlabBuffer<PointLightUniform>,
     spot_lights_buffer: CompactSlabBuffer<SpotLightUniform>,
+
+    lights: LightState,
 }
 
 #[derive(Copy, Clone, Debug)]
@@ -233,17 +236,16 @@ struct DirectionalLightState {
 }
 
 impl SceneData {
-    fn new() -> Self {
+    fn new(queue: &CommandQueue<'_>) -> Self {
         Self {
             cameras: HashMap::new(),
             objects: HashMap::new(),
             directional_lights: HashMap::new(),
-            point_lights: HashMap::new(),
             spot_lights: HashMap::new(),
             ambient_lights: HashMap::new(),
             directional_lights_buffer: CompactSlabBuffer::new(BufferUsage::STORAGE),
-            point_lights_buffer: CompactSlabBuffer::new(BufferUsage::STORAGE),
             spot_lights_buffer: CompactSlabBuffer::new(BufferUsage::STORAGE),
+            lights: LightState::new(queue),
         }
     }
 }

@@ -71,6 +71,23 @@ impl Camera {
     pub(crate) fn view_projection_matrix(&self) -> Mat4 {
         REVERSE_Z * self.projection_matrix() * self.view_matrix()
     }
+
+    pub(crate) fn frustum(&self) -> Frustum {
+        let proj = self.projection_matrix();
+        let proj_t = proj.transpose();
+
+        let frustum_x = (proj_t.w_axis + proj_t.x_axis).normalize();
+        let frustum_y = (proj_t.w_axis + proj_t.y_axis).normalize();
+
+        Frustum {
+            cos_v: frustum_x.x,
+            sin_v: frustum_x.z,
+            cos_h: frustum_y.y,
+            sin_h: frustum_y.z,
+            znear: self.projection.near,
+            zfar: self.projection.far,
+        }
+    }
 }
 
 /// Perspective camera projection paramters
@@ -133,4 +150,16 @@ impl Default for CameraUniform {
     fn default() -> Self {
         Self::new(Transform::default(), Projection::default())
     }
+}
+
+/// The frustum of a [`Camera`] in view space.
+#[derive(Copy, Clone, Debug, Zeroable, Pod)]
+#[repr(C)]
+pub(crate) struct Frustum {
+    cos_v: f32,
+    sin_v: f32,
+    cos_h: f32,
+    sin_h: f32,
+    znear: f32,
+    zfar: f32,
 }
