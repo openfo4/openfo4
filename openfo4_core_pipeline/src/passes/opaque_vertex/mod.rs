@@ -11,9 +11,7 @@ use crate::passes::{HDR_TEXTURE, OPAQUE_DEPTH, SKINNING_PASS};
 
 use super::State;
 
-mod forward;
-mod pipelines;
-mod shadow;
+pub mod forward;
 
 const FORWARD_PASS: NodeLabel = NodeLabel::new("opaque_vertex_forward_pass");
 

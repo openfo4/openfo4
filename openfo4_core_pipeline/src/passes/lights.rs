@@ -1,6 +1,5 @@
 use glam::Vec4;
 use hashbrown::HashMap;
-use openfo4_render::api::CommandQueue;
 use openfo4_render::backend::BufferUsage;
 use openfo4_render::buffer::slab::{CompactSlabBuffer, SlabIndex};
 
@@ -16,7 +15,7 @@ pub struct LightState {
 }
 
 impl LightState {
-    pub fn new(queue: &CommandQueue<'_>) -> Self {
+    pub fn new() -> Self {
         Self {
             point_light_ids: HashMap::new(),
             point_lights: CompactSlabBuffer::new(BufferUsage::STORAGE),
