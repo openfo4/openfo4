@@ -9,8 +9,10 @@ use hashbrown::HashMap;
 use openfo4_core::path::DataPath;
 use openfo4_core::record::{ModuleId, RecordId};
 use openfo4_esp::bstr::BString;
-use openfo4_esp::records::{ActorValueInfo, PlacedNpc};
+use openfo4_esp::records::{ActorValueInfo, Cell, PlacedNpc};
 use openfo4_esp::{FormId, Record, RecordData, RecordHeaderFlags};
+
+use crate::components::WorldSpace;
 
 pub const HARDCODED_MODULE_ID: ModuleId = ModuleId(NonZeroU32::MIN);
 
@@ -165,10 +167,24 @@ pub fn load_hardcoded_forms() -> HashMap<RecordId, Record> {
                 }),
             },
         ),
+        (
+            PLAYER_REF_HOLDING_CELL.form,
+            Record {
+                id: PLAYER_REF_HOLDING_CELL.form,
+                flags: RecordHeaderFlags::empty(),
+                data: RecordData::Cell(Cell::default()),
+            },
+        ),
     ]
     .into_iter()
     .map(|(form, record)| (RecordId::new(HARDCODED_MODULE_ID, form), record))
     .collect()
+}
+
+pub fn load_hardcoded_parents() -> HashMap<RecordId, RecordId> {
+    [(PLACED_ACTOR_PLAYER_REF, PLAYER_REF_HOLDING_CELL)]
+        .into_iter()
+        .collect()
 }
 
 /// Returns the cumulative XP required to reach the given level.
@@ -200,3 +216,14 @@ pub const DIRECTIONAL_LIGHT_ILLUMINANCE_FACTOR: f32 = PI * 3.0;
 // uses the value directly in the shader (i.e. the unit is candela in our PBR renderer).
 // Premultiply by 1sr (4PI) to go from candela to lumen.
 pub const PUNCTUAL_LIGHT_INTENSITY_FACTOR: f32 = (4.0 * PI) * DIRECTIONAL_LIGHT_ILLUMINANCE_FACTOR;
+
+pub const PLAYER_WORLDSPACE: WorldSpace = WorldSpace {
+    record: RecordId {
+        module: HARDCODED_MODULE_ID,
+        form: FormId(0),
+    },
+    is_interior: false,
+};
+
+/// The cell where we will mark the initial [`PLACED_ACTOR_PLAYER_REF`] as spawning.
+const PLAYER_REF_HOLDING_CELL: RecordId = RecordId::new(HARDCODED_MODULE_ID, FormId(0xff_00_00_00));

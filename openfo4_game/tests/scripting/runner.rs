@@ -128,7 +128,7 @@ impl TestRunner {
         loop {
             match invocation.poll_unpin(&mut cx) {
                 Poll::Pending => {
-                    self.game.update();
+                    block_on(self.game.update());
                 }
                 Poll::Ready(res) => return res,
             }

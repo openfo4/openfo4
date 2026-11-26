@@ -13,20 +13,20 @@ pub mod npc;
 pub mod terrain;
 
 use std::f32::consts::PI;
+use std::mem::DropGuard;
+use std::pin::pin;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use esp::EspLoader;
+use futures::{FutureExt, select_biased};
 use glam::{IVec2, Vec3};
 use level::Level;
 use openfo4_asset::AssetLoader;
 use openfo4_audio::AudioManager;
 use openfo4_common::components::Transform;
-use openfo4_core::Frozen;
 use openfo4_core::ecs::{Entity, World};
 use openfo4_core::events::EventBus;
-use openfo4_core::record::RecordId;
-use openfo4_esp::RecordData;
 use openfo4_physics::PhysicsPipeline;
 use openfo4_tasks::TaskPool;
 use openfo4_tracing::trace_span;
@@ -35,24 +35,18 @@ use parking_lot::Mutex;
 use crate::assets::animation::AnimationSet;
 use crate::assets::init_asset_loader;
 use crate::cell::CellId;
-use crate::components::{
-    ActorMarker, BaseObject, Camera, NiTransform, PlacedReference, Player, Root, WorldSpace,
-};
+use crate::components::{Camera, NiTransform, Player, WorldSpace};
 use crate::config::Config;
 use crate::interval::Interval;
 use crate::loader::FileLoader;
 use crate::render::despawn_expired;
 use crate::shared::SharedState;
-use crate::state::actor::ActorData;
-use crate::state::actor::scene::ActorScene;
 use crate::state::anim_starter::AnimationSystem;
 use crate::state::animation::update_actor_animation_graphs;
-use crate::state::hardcoded::{ACTOR_PLAYER, PLACED_ACTOR_PLAYER_REF};
+use crate::state::hardcoded::PLACED_ACTOR_PLAYER_REF;
 use crate::state::inputs::ActorInputEvent;
 use crate::state::level::Streamer;
-use crate::state::level::loader::SpawnEntityInfo;
 use crate::state::level::partial::PartialEntityFlags;
-use crate::state::npc::ObjectKeywords;
 use crate::systems::accel::AccelerationStructure;
 use crate::systems::activation::update_player_looking_at_target;
 use crate::systems::ai::AiSystem;
@@ -218,10 +212,10 @@ impl GameState {
         ));
     }
 
-    pub fn update(&mut self) {
+    pub async fn update(&mut self) {
         let _span = trace_span!("GameState::update").entered();
 
-        futures_lite::future::block_on(self.interval.wait(Instant::now()));
+        self.interval.wait(Instant::now()).await;
         self.real_time_elapsed += self.interval.timestep();
         self.globals.playtime.increase(self.interval.timestep());
 
@@ -369,73 +363,41 @@ impl GameState {
         }
     }
 
-    pub async fn spawn_actor(
-        &mut self,
-        id: RecordId,
-        worldspace: WorldSpace,
-        transform: Transform,
-    ) -> Entity {
-        let root = self.world.reserve_entity();
+    pub async fn spawn_player(&mut self, worldspace: WorldSpace, transform: Transform) -> Entity {
+        let loader = self.level.loader().clone();
+        let fut = loader.load(PLACED_ACTOR_PLAYER_REF, PartialEntityFlags::ALL);
+        let mut fut = pin!(fut.fuse());
 
-        let npc = self.esp_loader.lookup(None, id).await.unwrap();
-        let data = ActorData::load(&self.esp_loader, self.executor.loader(), &npc, false)
-            .await
-            .unwrap();
-        let race_id = data.race.unwrap();
-        let race = self.esp_loader.lookup(None, race_id).await.unwrap();
-        let RecordData::Race(race) = race.local.data else {
-            todo!();
+        let res = loop {
+            select_biased! {
+                res = fut => break res,
+                _ = self.update().fuse() => {}
+            }
         };
 
-        let scene = ActorScene::load(&self.esp_loader, &self.asset_loader, race_id, &race, false)
-            .await
-            .unwrap();
+        let entity = res.unwrap();
+        let e = entity.entity();
 
-        data.clone()
-            .instantiate(&mut self.world, &mut self.event_bus, root);
-        scene.instantiate(&mut self.world, root);
-
+        systems::camera::attach_camera(&mut self.world, entity.entity());
         self.world
             .insert(
-                root,
+                entity.entity(),
                 (
-                    ObjectKeywords::new(data.keywords),
-                    Frozen::default(),
-                    Root,
-                    transform,
+                    Player,
+                    PlayerControlState::default(),
+                    Streamer,
+                    InputControllerMask::default(),
                     worldspace,
-                    BaseObject { record: id },
+                    transform,
+                    DropGuard::new((), |()| panic!()),
                 ),
             )
             .unwrap();
 
-        if id == ACTOR_PLAYER {
-            if let Some(script) = self.executor.loader().load(PLACED_ACTOR_PLAYER_REF).await {
-                // self.executor
-                //     .entities()
-                //     .set(root, script.object.id())
-                //     .unwrap();
-                self.world.insert_one(root, script).unwrap();
-            } else {
-                tracing::warn!("cloud not load script for player");
-            }
+        // When the `EntityRef` is dropped, the player is unloaded,
+        // we do not want to ever unload the player.
+        core::mem::forget(entity);
 
-            systems::camera::attach_camera(&mut self.world, root);
-            self.world
-                .insert(
-                    root,
-                    (
-                        Player,
-                        PlayerControlState::default(),
-                        Streamer,
-                        ActorMarker,
-                        InputControllerMask::default(),
-                        PlacedReference(PLACED_ACTOR_PLAYER_REF),
-                    ),
-                )
-                .unwrap();
-        }
-
-        root
+        e
     }
 }

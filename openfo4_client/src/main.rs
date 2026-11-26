@@ -8,6 +8,7 @@ use std::process::ExitCode;
 use std::sync::Arc;
 
 use clap::Parser;
+use futures_lite::future::block_on;
 use glam::IVec2;
 use glam::Quat;
 use glam::UVec2;
@@ -32,7 +33,6 @@ use openfo4_game::state::GameState;
 use openfo4_game::state::data;
 use openfo4_game::state::esp::EspLoaderBuilder;
 use openfo4_game::state::hardcoded;
-use openfo4_game::state::hardcoded::ACTOR_PLAYER;
 use openfo4_game::state::hardcoded::HARDCODED_MODULE_ID;
 use openfo4_game::state::inputs::ActorInputEvent;
 use openfo4_game::state::inputs::Direction;
@@ -160,6 +160,7 @@ async fn create_game(
 ) -> GameState {
     let mut loader = EspLoaderBuilder::new();
     loader.set_hardcoded(hardcoded::load_hardcoded_forms());
+    loader.set_hardcoded_parents(hardcoded::load_hardcoded_parents());
 
     let mut sources = Vec::new();
 
@@ -223,9 +224,7 @@ async fn spawn_player(game: &mut GameState) {
         record: RecordId::new(HARDCODED_MODULE_ID, FormId(0x3c)),
         is_interior: false,
     };
-    let player = game
-        .spawn_actor(ACTOR_PLAYER, worldspace, transform.into())
-        .await;
+    let player = game.spawn_player(worldspace, transform.into()).await;
 
     game.event_bus.send(AddItemEventAsync {
         actor: player,
@@ -340,7 +339,7 @@ impl openfo4_window::App for App {
             }
         }
 
-        self.game.update();
+        block_on(self.game.update());
         self.state.sync(self.game.world());
 
         if self.ui_state.debug.draw_colliders {
