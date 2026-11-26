@@ -324,13 +324,12 @@ async fn add_keyword(
     self_ptr: Object,
     keyword: Object,
 ) -> Result<(), Error> {
-    let entity = caller.data().entity(self_ptr).await.unwrap();
-    let keyword = caller
-        .data()
-        .objects
-        .get_by_addr(keyword)
-        .and_then(|s| s.record())
-        .ok_or_else(|| todo!())?;
+    if keyword.is_null() {
+        return Ok(());
+    }
+
+    let entity = caller.data().entity(self_ptr).await?;
+    let keyword = caller.data().record(keyword);
 
     let world = caller.data().world().await;
     let mut keywords = world.get::<&mut ObjectKeywords>(entity.entity()).unwrap();
@@ -1798,13 +1797,12 @@ async fn has_keyword(
     self_ptr: Object,
     keyword: Object,
 ) -> Result<bool, Error> {
-    let entity = caller.data().entity(self_ptr).await.unwrap();
-    let keyword = caller
-        .data()
-        .objects
-        .get_by_addr(keyword)
-        .and_then(|s| s.record())
-        .ok_or_else(|| todo!())?;
+    if keyword.is_null() {
+        return Ok(false);
+    }
+
+    let entity = caller.data().entity(self_ptr).await?;
+    let keyword = caller.data().record(keyword);
 
     let world = caller.data().world().await;
     let keywords = world.get::<&ObjectKeywords>(entity.entity()).unwrap();
@@ -2698,13 +2696,12 @@ async fn remove_keyword(
     self_ptr: Object,
     keyword: Object,
 ) -> Result<(), Error> {
-    let entity = caller.data().entity(self_ptr).await.unwrap();
-    let keyword = caller
-        .data()
-        .objects
-        .get_by_addr(keyword)
-        .and_then(|s| s.record())
-        .ok_or_else(|| todo!())?;
+    if keyword.is_null() {
+        return Ok(());
+    }
+
+    let entity = caller.data().entity(self_ptr).await?;
+    let keyword = caller.data().record(keyword);
 
     let world = caller.data().world().await;
     let mut keywords = world.get::<&mut ObjectKeywords>(entity.entity()).unwrap();
@@ -2799,13 +2796,12 @@ async fn reset_keyword(
     self_ptr: Object,
     keyword: Object,
 ) -> Result<(), Error> {
-    let entity = caller.data().entity(self_ptr).await.unwrap();
-    let keyword = caller
-        .data()
-        .objects
-        .get_by_addr(keyword)
-        .and_then(|s| s.record())
-        .ok_or_else(|| todo!())?;
+    if keyword.is_null() {
+        return Ok(());
+    }
+
+    let entity = caller.data().entity(self_ptr).await?;
+    let keyword = caller.data().record(keyword);
 
     let world = caller.data().world().await;
     let mut keywords = world.get::<&mut ObjectKeywords>(entity.entity()).unwrap();

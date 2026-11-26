@@ -120,6 +120,8 @@ impl State {
             .await
             .unwrap();
 
+        self.entities.set(entity.clone(), object.id());
+
         Ok(entity)
     }
 
