@@ -10,6 +10,7 @@ use futures_lite::future::block_on;
 use hashbrown::HashMap;
 use openfo4_audio::AudioManager;
 use openfo4_audio::backend::{DefaultBackend, StubBackend};
+use openfo4_common::assert_approx_eq;
 use openfo4_core::path::DataPathBuf;
 use openfo4_core::record::{ModuleId, RecordId};
 use openfo4_core_pipeline::entities::Entities;
@@ -148,6 +149,28 @@ impl TestRunner {
             vec![expect.into()],
             "unexpected return value in function {func}"
         );
+    }
+
+    #[track_caller]
+    pub fn call_assert_approx<T, R>(&mut self, receiver: R, func: &str, args: T, expect: f32)
+    where
+        T: Into<Vec<Value>>,
+        R: Borrow<ScriptObject>,
+    {
+        let res = self.call(receiver, func, args);
+        if let Some(Value::Float(val)) = res.first()
+            && res.len() == 1
+        {
+            assert_approx_eq!(*val, expect, 0.001);
+            return;
+        }
+
+        assert_eq!(
+            res,
+            vec![expect.into()],
+            "unexpected return value in function {func}"
+        );
+        unreachable!();
     }
 }
 
