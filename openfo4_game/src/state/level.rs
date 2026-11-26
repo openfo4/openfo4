@@ -123,8 +123,9 @@ impl Level {
     ) {
         let _span = trace_span!("Level::sync_entities").entered();
 
-        let mut entities = self.loader.state.entities.lock();
         while let Some(event) = self.events.pop() {
+            let mut entities = self.loader.state.entities.lock();
+
             match event {
                 Event::Spawn { id, entity, index } => {
                     let state = entities.entities.get_mut(id).unwrap();
@@ -140,6 +141,9 @@ impl Level {
                         }
                     }
 
+                    state.flags += flags;
+                    drop(entities);
+
                     entity.instantiate(
                         world,
                         events,
@@ -150,7 +154,6 @@ impl Level {
                         id,
                     );
 
-                    state.flags += flags;
                     event.notify(event.total_listeners());
                 }
                 Event::Despawn { id } => {
