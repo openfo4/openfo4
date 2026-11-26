@@ -403,24 +403,25 @@ enum CellActivityMode {
 
 impl CellActivityMode {
     const fn flags(&self) -> PartialEntityFlags {
+        let mut flags = PartialEntityFlags::NONE;
+
         match self {
-            Self::Active => PartialEntityFlags {
-                graphics: true,
-                physics: true,
-                actor: true,
-                scene: true,
-                script: true,
-                lod: LodLevel::Normal,
-            },
-            Self::VisibleDistant => PartialEntityFlags {
-                graphics: true,
-                scene: true,
-                physics: false,
-                actor: false,
-                script: false,
-                lod: LodLevel::Distant0,
-            },
+            Self::Active => {
+                flags.graphics = true;
+                flags.physics = true;
+                flags.actor = true;
+                flags.scene = true;
+                flags.script = true;
+                flags.lod = LodLevel::Normal;
+            }
+            Self::VisibleDistant => {
+                flags.graphics = true;
+                flags.scene = true;
+                flags.lod = LodLevel::Distant0;
+            }
         }
+
+        flags
     }
 }
 

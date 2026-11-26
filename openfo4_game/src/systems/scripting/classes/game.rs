@@ -10,6 +10,7 @@ use openfo4_script::runtime::{Caller, Error};
 use crate::assets::nif::NIF_TO_METERS;
 use crate::components::{ActorMarker, ActorProperties, BaseObject, Player};
 use crate::state::hardcoded::cumulative_xp_for_level;
+use crate::state::level::TransientEntityId;
 use crate::systems::accel::{AccelerationStructure, IterElem};
 use crate::systems::controller::InputControllerMask;
 use crate::systems::scripting::EngineExt;
@@ -697,7 +698,8 @@ async fn get_player(mut caller: Caller<'_, State>) -> Result<Object, Error> {
             return Err(Error::msg("Game.GetPlayer found no player"));
         };
 
-        entity
+        let id = world.get::<&TransientEntityId>(entity).unwrap();
+        caller.data().entity_loader.get(*id).unwrap()
     };
 
     // We can assume here that the player always has a script attached here,
@@ -1449,8 +1451,11 @@ where
         let world = caller.data().world().await;
         find_entity_within_radius(&world, x, y, z, radius, |e| {
             if e.distance_squared() < dist_sq && filter(&world, e.entity()) {
-                closest = Some(e.entity());
                 dist_sq = e.distance_squared();
+
+                let id = world.get::<&TransientEntityId>(e.entity()).unwrap();
+                let entity = caller.data().entity_loader.get(*id).unwrap();
+                closest = Some(entity);
             }
         });
     }
@@ -1481,7 +1486,9 @@ where
         let world = caller.data().world().await;
         find_entity_within_radius(&world, x, y, z, radius, |e| {
             if filter(&world, e.entity()) {
-                entities.push(e.entity());
+                let id = world.get::<&TransientEntityId>(e.entity()).unwrap();
+                let entity = caller.data().entity_loader.get(*id).unwrap();
+                entities.push(entity);
             }
         });
     }
@@ -1491,7 +1498,7 @@ where
     }
 
     let index = rand::random_range(0..entities.len());
-    let entity = entities[index];
+    let entity = entities.remove(index);
 
     let scripts = caller.data().get_or_create_entity(entity).await?;
     let script = scripts.get("ObjectReference").unwrap();

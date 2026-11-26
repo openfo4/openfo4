@@ -14,7 +14,7 @@ use parking_lot::{MappedRwLockReadGuard, Mutex, RwLock, RwLockReadGuard};
 use slab::Slab;
 
 use crate::state::esp::EspLoader;
-use crate::state::level::loader::EntityLoader;
+use crate::state::level::loader::{EntityLoader, EntityRef};
 use crate::state::level::partial::PartialEntityFlags;
 use crate::systems::global::GlobalProperties;
 use crate::systems::scripting::classes::{Int, Object};
@@ -98,7 +98,7 @@ impl State {
     }
 
     /// Return the entity of the given object.
-    pub async fn entity(&self, addr: ObjectAddr) -> Result<Entity, Error> {
+    pub async fn entity(&self, addr: ObjectAddr) -> Result<EntityRef, Error> {
         let object = self.objects.get_by_addr(addr).unwrap();
         if let Some(entity) = self.entities.resolve(object.id()) {
             return Ok(entity);
@@ -120,11 +120,11 @@ impl State {
             .await
             .unwrap();
 
-        Ok(entity.entity())
+        Ok(entity)
     }
 
-    pub async fn get_or_create_entity(&self, entity: Entity) -> Result<ScriptsRef<'_>, Error> {
-        if let Some(id) = self.entities.get(entity)
+    pub async fn get_or_create_entity(&self, entity: EntityRef) -> Result<ScriptsRef<'_>, Error> {
+        if let Some(id) = self.entities.get(entity.entity())
             && let Some(object) = self.objects.get_by_id(id)
         {
             // The borrow checker is too conservative here and `self.objects` is
@@ -137,14 +137,12 @@ impl State {
             return Ok(object);
         }
 
-        let kind = { LoadRecordKind::extract(&*self.world().await, entity) };
+        let kind = { LoadRecordKind::extract(&*self.world().await, entity.entity()) };
 
         let object = kind.load(&self.loader).await;
 
-        let scripts = match self.entities.set(entity, object.id()) {
-            Ok(()) => self.objects.get_by_id(object.id()).unwrap(),
-            Err(id) => self.objects.get_by_id(id).unwrap(),
-        };
+        self.entities.set(entity, object.id());
+        let scripts = self.objects.get_by_id(object.id()).unwrap();
 
         Ok(scripts)
     }

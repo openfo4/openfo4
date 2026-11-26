@@ -27,12 +27,13 @@ use crate::state::actor::ActorData;
 use crate::state::actor::scene::ActorScene;
 use crate::state::esp::GlobalRecord;
 use crate::state::hardcoded::PUNCTUAL_LIGHT_INTENSITY_FACTOR;
-use crate::state::level::LoadContext;
 use crate::state::level::data_ext::RecordDataExt;
 use crate::state::level::items::{LoadItemProps, resolve_item};
+use crate::state::level::loader::EntityLoader;
 use crate::state::level::navmesh::load_navmesh;
 use crate::state::level::partial::{LodLevel, PartialEntityFlags};
 use crate::state::level::terrain::load_land;
+use crate::state::level::{LoadContext, TransientEntityId};
 use crate::state::npc::ObjectKeywords;
 use crate::state::terrain::{TerrainManager, TerrainRegion};
 use crate::systems::ai::AiComponent;
@@ -87,6 +88,8 @@ impl SpawnEntity {
         terrain_manager: &mut TerrainManager,
         script_entities: &ScriptEntities,
         entity: Entity,
+        loader: &EntityLoader,
+        id: TransientEntityId,
     ) -> Entity {
         // Destructure pattern so we get warned if we forget
         // to add new items here.
@@ -224,13 +227,8 @@ impl SpawnEntity {
         }
 
         if let Some(script) = script {
-            // We are creating this `entity` and have exclusive access to
-            // the `World`. It is not possible for another thread to observe
-            // the `entity` until we return.
-            script_entities.set(entity, script.id()).unwrap();
-
-            // Insert into entity to keep the script alive.
-            world.insert_one(entity, script).unwrap();
+            let ent = loader.get(id).unwrap();
+            script_entities.set(ent, script.id());
         }
 
         if let Some(props) = object_props {
@@ -247,6 +245,7 @@ impl SpawnEntity {
 
         world.insert_one(entity, LinkedRefs::default()).unwrap();
         world.insert_one(entity, keywords).unwrap();
+        world.insert_one(entity, id).unwrap();
 
         if let Some(base) = base {
             world
@@ -459,7 +458,7 @@ impl SpawnEntity {
             _ => return None,
         }
 
-        let position = position?;
+        let position = position.unwrap_or_default();
 
         let transform = Transform::from_esp_translation_rotation_scale(
             Vec3::new(

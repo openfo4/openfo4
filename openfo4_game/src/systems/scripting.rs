@@ -17,8 +17,7 @@ use std::time::Duration;
 use async_io::Timer;
 use futures::{FutureExt, select};
 use futures_lite::future::block_on;
-use hashbrown::HashSet;
-use openfo4_common::collections::bimap::BiMap;
+use hashbrown::{HashMap, HashSet};
 use openfo4_core::ecs::{Entity, World};
 use openfo4_core::events::EventBus;
 use openfo4_core::record::RecordId;
@@ -40,7 +39,8 @@ use crate::events::inventory::{ItemAddedEvent, ItemEquippedEvent};
 use crate::events::trigger::{TriggerEnter, TriggerLeave};
 use crate::loader::FileLoader;
 use crate::state::esp::EspLoader;
-use crate::state::level::loader::EntityLoader;
+use crate::state::level::TransientEntityId;
+use crate::state::level::loader::{EntityLoader, EntityRef};
 use crate::systems::DeathStartEvent;
 use crate::systems::global::GlobalProperties;
 use crate::systems::scripting::events::queue::EventQueueProducer;
@@ -130,7 +130,7 @@ impl ExecutorBuilder {
             self.loader.clone(),
             globals,
             self.loader.esp_loader.clone(),
-            entity_loader,
+            entity_loader.clone(),
             self.entities.clone(),
         );
 
@@ -141,6 +141,7 @@ impl ExecutorBuilder {
             loader: self.loader,
             handle,
             entities: self.entities,
+            entity_loader,
         }
     }
 }
@@ -149,6 +150,7 @@ pub struct Executor {
     loader: Arc<ScriptLoader>,
     handle: RunnerHandle,
     entities: Arc<ScriptEntities>,
+    entity_loader: Arc<EntityLoader>,
 }
 
 impl Executor {
@@ -245,6 +247,9 @@ impl Executor {
             return id;
         }
 
+        let id = world.get::<&TransientEntityId>(entity).unwrap();
+        let ent = self.entity_loader.get(*id).unwrap();
+
         if let Ok(refr) = world.get::<&PlacedReference>(entity) {
             if let Some(object) = self.objects().get_by_record(refr.0) {
                 debug_assert_eq!(object.record(), Some(refr.0));
@@ -252,13 +257,13 @@ impl Executor {
             }
 
             let res = self.loader().load(refr.0).await.unwrap();
-            self.entities().set(entity, res.object.id()).unwrap();
+            self.entities().set(ent, res.object.id());
             return res.object.id();
         }
 
         if let Ok(base) = world.get::<&BaseObject>(entity) {
             let obj = self.loader().load_instance(base.record).await.unwrap();
-            self.entities().set(entity, obj.id()).unwrap();
+            self.entities().set(ent, obj.id());
             return obj.id();
         }
 
@@ -394,25 +399,27 @@ impl LoadRecordKind {
 
 /// Maps [`ScriptObject`]s to game world [`Entity`].
 #[derive(Debug, Default)]
-pub struct ScriptEntities(Mutex<BiMap<ScriptObjectId, Entity>>);
+pub struct ScriptEntities(Mutex<ScriptEntitiesInner>);
 
 impl ScriptEntities {
     pub fn get(&self, entity: Entity) -> Option<ScriptObjectId> {
-        self.0.lock().get_right(&entity).copied()
+        self.0.lock().by_entity.get(&entity).copied()
     }
 
-    pub fn set(&self, entity: Entity, id: ScriptObjectId) -> Result<(), ScriptObjectId> {
+    pub fn set(&self, entity: EntityRef, id: ScriptObjectId) {
         let mut lock = self.0.lock();
-        match lock.get_right(&entity) {
-            Some(id) => Err(*id),
-            None => {
-                lock.insert(id, entity);
-                Ok(())
-            }
-        }
+
+        lock.by_entity.insert(entity.entity(), id);
+        lock.by_object.insert(id, entity);
     }
 
-    pub fn resolve(&self, id: ScriptObjectId) -> Option<Entity> {
-        self.0.lock().get_left(&id).copied()
+    pub fn resolve(&self, id: ScriptObjectId) -> Option<EntityRef> {
+        self.0.lock().by_object.get(&id).cloned()
     }
+}
+
+#[derive(Debug, Default)]
+struct ScriptEntitiesInner {
+    by_object: HashMap<ScriptObjectId, EntityRef>,
+    by_entity: HashMap<Entity, ScriptObjectId>,
 }

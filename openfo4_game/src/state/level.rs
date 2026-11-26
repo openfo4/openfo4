@@ -146,6 +146,8 @@ impl Level {
                         &mut self.terrain_manager,
                         script_entities,
                         root,
+                        &self.loader,
+                        id,
                     );
 
                     state.flags += flags;
@@ -250,12 +252,12 @@ impl<'a> LoadContext<'a> {
 #[derive(Debug)]
 enum Event {
     Spawn {
-        id: EntityId,
+        id: TransientEntityId,
         entity: SpawnEntity,
         index: usize,
     },
     Despawn {
-        id: EntityId,
+        id: TransientEntityId,
     },
 }
 
@@ -336,13 +338,13 @@ impl PersistentRecordStore {
 define_slab_key! {
     /// A unique ID for a entity in the world, including placed object from ESP files and entities
     /// spawned at runtime.
-    struct EntityId: usize;
+    pub struct TransientEntityId: usize;
 }
 
 #[derive(Debug, Default)]
 struct Entities {
-    entities: Slab<EntityId, EntityState>,
-    records: HashMap<RecordId, EntityId>,
+    entities: Slab<TransientEntityId, EntityState>,
+    records: HashMap<RecordId, TransientEntityId>,
 }
 
 #[derive(Debug)]
