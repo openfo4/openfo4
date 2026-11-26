@@ -15,7 +15,7 @@ use crate::state::level::data_ext::RecordDataExt;
 use crate::state::level::partial::PartialEntityFlags;
 use crate::state::level::record::SpawnEntity;
 use crate::state::level::{
-    EntityId, EntityState, Event, LoadContext, LoaderState, PartialEntityFlagCounts,
+    EntityState, Event, LoadContext, LoaderState, PartialEntityFlagCounts, TransientEntityId,
 };
 
 #[derive(Debug)]
@@ -96,6 +96,25 @@ impl EntityLoader {
             }
         })
         .await
+    }
+
+    /// Creates a new [`EntityRef`] to an entity that is already loaded.
+    ///
+    /// The returned [`EntityRef`] will have only the base flags associated.
+    pub fn get(&self, id: TransientEntityId) -> Option<EntityRef> {
+        let mut entities = self.state.entities.lock();
+        let state = entities.entities.get_mut(id)?;
+        let entity = state.entity?;
+
+        state.ref_count += 1;
+        state.flags += PartialEntityFlags::NONE;
+
+        Some(EntityRef(Arc::new(EntityRefInner {
+            id,
+            entity,
+            flags: PartialEntityFlags::default(),
+            state: self.state.clone(),
+        })))
     }
 
     pub(super) async fn load_custom<F, Fut>(
@@ -196,7 +215,7 @@ impl EntityLoader {
     /// [`Spawn`]: Event::Spawn
     fn wait_until_loaded(
         &self,
-        id: EntityId,
+        id: TransientEntityId,
         flags: PartialEntityFlags,
         listener: EventListener,
     ) -> impl Future<Output = EntityRef> {
@@ -238,7 +257,7 @@ impl EntityRef {
 
 #[derive(Debug)]
 pub struct EntityRefInner {
-    id: EntityId,
+    id: TransientEntityId,
     entity: Entity,
     flags: PartialEntityFlags,
     state: Arc<LoaderState>,
@@ -261,7 +280,7 @@ pub struct SpawnEntityInfo {
     pub flags: PartialEntityFlags,
 }
 
-fn discard_entity_ref(id: EntityId, flags: PartialEntityFlags, lstate: &LoaderState) {
+fn discard_entity_ref(id: TransientEntityId, flags: PartialEntityFlags, lstate: &LoaderState) {
     let mut entities = lstate.entities.lock();
     let state = entities.entities.get_mut(id).unwrap();
 

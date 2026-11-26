@@ -465,7 +465,10 @@ async fn equip_item(
 
     caller
         .data_mut()
-        .run_effect_and_wait(EquipItemEffect { actor, item })
+        .run_effect_and_wait(EquipItemEffect {
+            actor: actor.entity(),
+            item,
+        })
         .await?;
 
     Ok(())
@@ -709,7 +712,7 @@ async fn get_level(caller: Caller<'_, State>, self_ptr: Object) -> Result<i32, E
     let entity = caller.data().entity(self_ptr).await.unwrap();
 
     let world = caller.data().world().await;
-    let Ok(props) = world.get::<&ActorProperties>(entity) else {
+    let Ok(props) = world.get::<&ActorProperties>(entity.entity()) else {
         return Ok(0);
     };
 
@@ -757,7 +760,7 @@ async fn get_no_bleedout_recovery(
 ) -> Result<bool, Error> {
     let entity = caller.data().entity(self_ptr).await.unwrap();
     let world = caller.data().world().await;
-    let Ok(props) = world.get::<&ActorProperties>(entity) else {
+    let Ok(props) = world.get::<&ActorProperties>(entity.entity()) else {
         return Ok(false);
     };
 
@@ -773,7 +776,9 @@ async fn get_no_bleedout_recovery(
 async fn get_player_controls(caller: Caller<'_, State>, self_ptr: Object) -> Result<bool, Error> {
     let entity = caller.data().entity(self_ptr).await.unwrap();
     let world = caller.data().world().await;
-    let is_player = world.entity(entity).is_ok_and(|e| e.has::<Player>());
+    let is_player = world
+        .entity(entity.entity())
+        .is_ok_and(|e| e.has::<Player>());
     Ok(is_player)
 }
 
@@ -1097,7 +1102,7 @@ async fn is_equipped(
         .ok_or_else(|| todo!())?;
 
     let world = caller.data().world().await;
-    let Ok(inventory) = world.get::<&Inventory>(actor) else {
+    let Ok(inventory) = world.get::<&Inventory>(actor.entity()) else {
         return Ok(false);
     };
 
@@ -1295,7 +1300,7 @@ async fn is_sneaking(caller: Caller<'_, State>, self_ptr: Object) -> bool {
     let entity = caller.data().entity(self_ptr).await.unwrap();
 
     let world = caller.data().world().await;
-    let Ok(state) = world.get::<&MovementState>(entity) else {
+    let Ok(state) = world.get::<&MovementState>(entity.entity()) else {
         return false;
     };
 
@@ -1311,7 +1316,7 @@ async fn is_sprinting(caller: Caller<'_, State>, self_ptr: Object) -> bool {
     let entity = caller.data().entity(self_ptr).await.unwrap();
 
     let world = caller.data().world().await;
-    let Ok(state) = world.get::<&MovementState>(entity) else {
+    let Ok(state) = world.get::<&MovementState>(entity.entity()) else {
         return false;
     };
 
@@ -1809,7 +1814,7 @@ async fn set_essential(
     let entity = caller.data().entity(self_ptr).await.unwrap();
     let world = caller.data().world().await;
     let mut props = world
-        .get::<&mut ActorProperties>(entity)
+        .get::<&mut ActorProperties>(entity.entity())
         .map_err(|_| todo!())?;
 
     if essential {
@@ -1938,7 +1943,7 @@ async fn set_no_bleedout_recovery(
 
     let entity = caller.data().entity(self_ptr).await.unwrap();
     let world = caller.data().world().await;
-    let Ok(mut props) = world.get::<&mut ActorProperties>(entity) else {
+    let Ok(mut props) = world.get::<&mut ActorProperties>(entity.entity()) else {
         return Ok(());
     };
 
@@ -2272,7 +2277,7 @@ async fn unequip_item(
 
     let slot = {
         let world = caller.data().world().await;
-        let Ok(inventory) = world.get::<&Inventory>(actor) else {
+        let Ok(inventory) = world.get::<&Inventory>(actor.entity()) else {
             return Ok(());
         };
 
@@ -2285,7 +2290,10 @@ async fn unequip_item(
 
     caller
         .data_mut()
-        .run_effect_and_wait(UnequipItemEffect { actor, slot })
+        .run_effect_and_wait(UnequipItemEffect {
+            actor: actor.entity(),
+            slot,
+        })
         .await?;
 
     Ok(())
@@ -2351,7 +2359,7 @@ async fn worn_has_keyword(caller: Caller<'_, State>, self_ptr: Object, keyword: 
 
     let world = caller.data().world().await;
 
-    let Ok(inventory) = world.get::<&Inventory>(entity) else {
+    let Ok(inventory) = world.get::<&Inventory>(entity.entity()) else {
         return false;
     };
 
@@ -2657,7 +2665,7 @@ where
 {
     let entity = caller.data().entity(self_ptr).await.unwrap();
     let world = caller.data().world().await;
-    let props = world.get::<&ActorProperties>(entity).unwrap();
+    let props = world.get::<&ActorProperties>(entity.entity()).unwrap();
     f(&props)
 }
 
@@ -2667,7 +2675,7 @@ where
 {
     let entity = caller.data().entity(self_ptr).await.unwrap();
     let world = caller.data().world().await;
-    let mut props = world.get::<&mut ActorProperties>(entity).unwrap();
+    let mut props = world.get::<&mut ActorProperties>(entity.entity()).unwrap();
     f(&mut props)
 }
 
@@ -2677,6 +2685,8 @@ where
 {
     let entity = caller.data().entity(self_ptr).await.unwrap();
     let world = caller.data().world().await;
-    let inventory = world.get::<&Inventory>(entity).map_err(|_| todo!())?;
+    let inventory = world
+        .get::<&Inventory>(entity.entity())
+        .map_err(|_| todo!())?;
     Ok(f(&inventory))
 }

@@ -86,7 +86,7 @@ async fn get_reference(caller: Caller<'_, State>, self_ptr: Object) -> Result<Ob
         entity = e.clone();
     }
 
-    let scripts = caller.data().get_or_create_entity(entity.entity()).await?;
+    let scripts = caller.data().get_or_create_entity(entity).await?;
     Ok(scripts.get("ObjectReference").unwrap().get().object.addr())
 }
 

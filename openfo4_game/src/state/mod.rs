@@ -50,6 +50,8 @@ use crate::state::animation::update_actor_animation_graphs;
 use crate::state::hardcoded::{ACTOR_PLAYER, PLACED_ACTOR_PLAYER_REF};
 use crate::state::inputs::ActorInputEvent;
 use crate::state::level::Streamer;
+use crate::state::level::loader::SpawnEntityInfo;
+use crate::state::level::partial::PartialEntityFlags;
 use crate::state::npc::ObjectKeywords;
 use crate::systems::accel::AccelerationStructure;
 use crate::systems::activation::update_player_looking_at_target;
@@ -409,10 +411,10 @@ impl GameState {
 
         if id == ACTOR_PLAYER {
             if let Some(script) = self.executor.loader().load(PLACED_ACTOR_PLAYER_REF).await {
-                self.executor
-                    .entities()
-                    .set(root, script.object.id())
-                    .unwrap();
+                // self.executor
+                //     .entities()
+                //     .set(root, script.object.id())
+                //     .unwrap();
                 self.world.insert_one(root, script).unwrap();
             } else {
                 tracing::warn!("cloud not load script for player");
