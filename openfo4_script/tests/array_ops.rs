@@ -526,6 +526,25 @@ fn array_find_struct_on_null() {
     assert!(res.is_err());
 }
 
+#[test]
+fn array_of_objects_create() {
+    run_test::<_, (), ObjectAddr>(
+        r#"
+        class ArrayOfObjects:
+
+        function F() -> ArrayOfObjects[] static:
+        local arr: ArrayOfObjects[]
+        arr = array_create 1
+        return arr
+        "#,
+        "ArrayOfObjects",
+        "F",
+        |_| {},
+        (),
+    )
+    .unwrap();
+}
+
 fn run_test<F, I, O>(module: &str, class: &str, func: &str, setup: F, input: I) -> Result<O, Error>
 where
     F: FnOnce(&mut Engine),

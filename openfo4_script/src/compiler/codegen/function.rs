@@ -1384,7 +1384,7 @@ impl LowerInstruction for Instruction {
                 let Type::Array(elem_ty) = translator.type_of_value(&op.dst) else {
                     unreachable!();
                 };
-                let elem_ty = type_to_id(translator.data, &elem_ty);
+                let elem_ty = type_to_id_ptr(translator.data, &elem_ty);
 
                 let len = translator.load(&op.src);
                 let dst = translator.load(&op.dst);
@@ -1394,7 +1394,7 @@ impl LowerInstruction for Instruction {
                 let Type::Array(elem_ty) = translator.type_of_value(&op.array) else {
                     unreachable!();
                 };
-                let elem_ty = type_to_id(translator.data, &elem_ty);
+                let elem_ty = type_to_id_ptr(translator.data, &elem_ty);
 
                 let array = translator.load(&op.array);
                 let value = translator.load(&op.value);
@@ -1405,7 +1405,7 @@ impl LowerInstruction for Instruction {
                 let Type::Array(elem_ty) = translator.type_of_value(&op.array) else {
                     unreachable!();
                 };
-                let elem_ty = type_to_id(translator.data, &elem_ty);
+                let elem_ty = type_to_id_ptr(translator.data, &elem_ty);
 
                 let array = translator.load(&op.array);
                 let value = translator.load(&op.value);
@@ -1418,7 +1418,7 @@ impl LowerInstruction for Instruction {
                 let Type::Array(elem_ty) = translator.type_of_value(&op.array_value) else {
                     unreachable!();
                 };
-                let elem_ty = type_to_id(translator.data, &elem_ty);
+                let elem_ty = type_to_id_ptr(translator.data, &elem_ty);
 
                 let array = translator.load(&op.array_value);
                 let index = translator.load(&op.index);

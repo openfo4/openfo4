@@ -941,6 +941,7 @@ impl<'a> Translator<'a> {
             TypeRepr::Int { bits } if bits == 32 => INT_TYPE,
             TypeRepr::Float { bits } if bits == 32 => FLOAT_TYPE,
             TypeRepr::Composite(_) => PTR_TYPE,
+            TypeRepr::Pointer(_) => PTR_TYPE,
             _ => unreachable!(),
         }
     }
